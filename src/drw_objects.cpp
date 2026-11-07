@@ -29101,6 +29101,7 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
         && readObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
                                    &parsedParentHandle, &parsedReactors,
                                    &parsedXDictHandle, handleEndBit);
+    bool geomEdgeTailIncomplete = false;
     // AC1018 and earlier associative subclasses may place opaque extension
     // data before the legacy inline handles. Preserve that raw-shell path;
     // R2007+ has an addressable object-data boundary and can fail strictly.
@@ -29724,17 +29725,59 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
         bool enabled = false;
         bool dependentOnCompoundObject = false;
         UTF8STRING persistentSubentityClassName;
-        const bool complete =
+        std::int32_t persistentSubentityClassVersion = 0;
+        std::int32_t persistentSubentityIndex1 = 0;
+        std::int32_t persistentSubentityIndex2 = 0;
+        bool edgeTailParsed = false;
+        // The source-bounded AC1024 Edge profile has an additional BS/BL/BL
+        // tail before the compound flag. Keep the version gate narrow and
+        // preserve a raw/incomplete prefix if that candidate does not fit.
+        const bool decodeAc1024EdgeTail =
+            version == DRW::AC1024
+            && m_recordName == "ACDBASSOCGEOMDEPENDENCY";
+        bool complete =
             objectDataEndKnown
             && readBitShortWithinBody(&bodyProbe, version, objectDataEnd,
                                        geomClassVersion)
             && readBitWithinBody(&bodyProbe, version, objectDataEnd, enabled)
             && readVariableTextWithinBounds(
                 &bodyProbe, textProbe, version, boundedBodyEnd,
-                stringDataEnd, persistentSubentityClassName)
-            && readBitWithinBody(&bodyProbe, version, objectDataEnd,
-                                 dependentOnCompoundObject)
-            && bodyProbe.isGood() && textProbe->isGood()
+                stringDataEnd, persistentSubentityClassName);
+        const bool edgeTailExpected = complete && decodeAc1024EdgeTail
+            && persistentSubentityClassName == "AcDbAssocEdgePersSubentId";
+        if (edgeTailExpected) {
+            dwgBuffer edgeProbe = bodyProbe;
+            edgeTailParsed =
+                readBitShortWithinBody(&edgeProbe, version, objectDataEnd,
+                                       persistentSubentityClassVersion)
+                && persistentSubentityClassVersion >= 0
+                && persistentSubentityClassVersion
+                       <= std::numeric_limits<std::uint16_t>::max()
+                && readBitLongWithinBody(&edgeProbe, version, objectDataEnd,
+                                         persistentSubentityIndex1)
+                && readBitLongWithinBody(&edgeProbe, version, objectDataEnd,
+                                         persistentSubentityIndex2)
+                && readBitWithinBody(&edgeProbe, version, objectDataEnd,
+                                     dependentOnCompoundObject)
+                && edgeProbe.isGood()
+                && objectBodyFitsSize(currentObjectDwgBit(&edgeProbe),
+                                      objectDataEnd);
+            if (edgeTailParsed) {
+                bodyProbe = edgeProbe;
+            } else {
+                // Retain the common prefix for diagnostics/raw preservation,
+                // but never mark an unrecognized Edge tail complete.
+                geomEdgeTailIncomplete = true;
+                complete = readBitWithinBody(
+                    &bodyProbe, version, objectDataEnd,
+                    dependentOnCompoundObject);
+            }
+        } else if (complete) {
+            complete = readBitWithinBody(
+                &bodyProbe, version, objectDataEnd,
+                dependentOnCompoundObject);
+        }
+        complete = complete && bodyProbe.isGood() && textProbe->isGood()
             && objectBodyFitsSize(currentObjectDwgBit(&bodyProbe),
                                   objectDataEnd)
             && objectBodyFitsSize(currentObjectDwgBit(textProbe),
@@ -29749,6 +29792,15 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
         m_geomEnabled = enabled;
         m_geomPersistentSubentityClassName =
             std::move(persistentSubentityClassName);
+        if (edgeTailParsed
+            && m_geomPersistentSubentityClassName
+                == "AcDbAssocEdgePersSubentId") {
+            m_geomPersistentSubentityFieldsParsed = true;
+            m_geomPersistentSubentityClassVersion =
+                persistentSubentityClassVersion;
+            m_geomPersistentSubentityIndex1 = persistentSubentityIndex1;
+            m_geomPersistentSubentityIndex2 = persistentSubentityIndex2;
+        }
         m_geomDependentOnCompoundObject = dependentOnCompoundObject;
         appendPrefixStatus(
             DRW_AssociativePrefixStatus::Kind::AcDbAssocGeomDependency,
@@ -31551,7 +31603,8 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
         const bool bodyWireComplete = valueDependency
             ? m_valueDependencyFieldsParsed
                 && consumeZeroPaddingWithinBounds(buf, objectDataEnd, 7u)
-            : consumeZeroPaddingWithinBounds(buf, objectDataEnd, 7u);
+            : !geomEdgeTailIncomplete
+                && consumeZeroPaddingWithinBounds(buf, objectDataEnd, 7u);
         const bool stringWireComplete = valueDependency
             ? m_valueDependencyFieldsParsed
                 && consumeZeroPaddingWithinBounds(sBuf, stringDataEnd, 7u)

@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectContextData, PERSUBENTMGR, and TABLECONTENT shell recovery now reaches 842/842 published frames with zero entity/object parse failures; the PERSUBENTMGR/TABLECONTENT bodies remain disputed and raw-only; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; an unlocked Aqua session was observed, but the Launch Services attempt for ODA 27.1 failed with `kLSNoExecutableErr`; both the installed 27.1 bundle and a downloaded official ODA 27.10 ARM64 bundle fail local code-signature verification, while the 27.10 DMG's internal checksums pass, so 27.10 was not executed and no signature was modified ([package receipt](docs/research/p6-oda-27-10-official-arm64-package-signature-2026-11-07.json)); prior 27.1 attempts produced no document-processing result, converter output or suffix evidence; a further user-reported unlock is not yet a converter result—retry only if a changed launch path/environment can be used, and stop if document processing is not reached; continue local work until a publisher-verifiable executable or independent converter session is available; current strict `blocks_and_tables` diagnostic reaches 3,586/3,586 frames, and LibreDWG 0.14 repeats the unqualified FIELD child flag values without resolving their semantics, so strict FIELD/FIELDLIST output remains refused; ODA §2's detached-string rule conflicts with ACadSharp-derived TABLE value byte-count parsing, so the AC1032 TABLECONTENT candidate remains raw/refused with no parser change; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the focused named-resource import selector now passes after synthetic receipts stopped authorizing strict-complete DWG output, with destination-preserving refusals and no support-claim change; AC1024 mechanical physical selected-output routes now cover 17 associative dependency/body pairs, 399 constraint nodes, and 17 variables across two networks and 13 value-dependency children in ASCII/Binary; the DXF `AcDbAssocEdgePersSubentId` codec slice is complete and committed, while civil DWG body spans/roles remain unqualified; the viewport DWG debug trace now prints `centerPY` for its Y coordinate (diagnostic only; [receipt](docs/research/p6-viewport-debug-center-y-log-fix-2026-11-07.json)); a LibreCAD_3 persistence probe using raw include/library paths fails because the consumer compiles as C++14 while current upstream libdxfrw requires C++17, and this configuration bypasses libdxfrw's PUBLIC compile-feature propagation ([receipt](docs/research/p8-librecad3-cxx-standard-consumer-compat-2026-11-07.json)); broader source graph closure remains open). This file
+Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectContextData, PERSUBENTMGR, and TABLECONTENT shell recovery now reaches 842/842 published frames with zero entity/object parse failures; the PERSUBENTMGR/TABLECONTENT bodies remain disputed and raw-only; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; an unlocked Aqua session was observed, but the Launch Services attempt for ODA 27.1 failed with `kLSNoExecutableErr`; both the installed 27.1 bundle and a downloaded official ODA 27.10 ARM64 bundle fail local code-signature verification, while the 27.10 DMG's internal checksums pass, so 27.10 was not executed and no signature was modified ([package receipt](docs/research/p6-oda-27-10-official-arm64-package-signature-2026-11-07.json)); prior 27.1 attempts produced no document-processing result, converter output or suffix evidence; a further user-reported unlock is not yet a converter result—retry only if a changed launch path/environment can be used, and stop if document processing is not reached; continue local work until a publisher-verifiable executable or independent converter session is available; current strict `blocks_and_tables` diagnostic reaches 3,586/3,586 frames, and LibreDWG 0.14 repeats the unqualified FIELD child flag values without resolving their semantics, so strict FIELD/FIELDLIST output remains refused; ODA §2's detached-string rule conflicts with ACadSharp-derived TABLE value byte-count parsing, so the AC1032 TABLECONTENT candidate remains raw/refused with no parser change; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the focused named-resource import selector now passes after synthetic receipts stopped authorizing strict-complete DWG output, with destination-preserving refusals and no support-claim change; AC1024 mechanical physical selected-output routes now cover 17 associative dependency/body pairs, 399 constraint nodes, and 17 variables across two networks and 13 value-dependency children in ASCII/Binary; the DXF `AcDbAssocEdgePersSubentId` codec slice is complete, and ten AC1024 civil Edge bodies now decode to source-matched vertex-index cycles while selected output remains open ([receipt](docs/research/p4-ac1024-civil-assoc-edge-dwg-read-2026-11-07.json)); the viewport DWG debug trace now prints `centerPY` for its Y coordinate (diagnostic only; [receipt](docs/research/p6-viewport-debug-center-y-log-fix-2026-11-07.json)); a LibreCAD_3 persistence probe using raw include/library paths fails because the consumer compiles as C++14 while current upstream libdxfrw requires C++17, and this configuration bypasses libdxfrw's PUBLIC compile-feature propagation ([receipt](docs/research/p8-librecad3-cxx-standard-consumer-compat-2026-11-07.json)); broader source graph closure remains open). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -61,7 +61,7 @@ created locally from scratch for the specific control.
 
 ### Next work packets
 
-1. **P4 / source-qualified OBJECTS graph — next: independently bound the AC1024 civil associative body spans:** the
+1. **P4 / source-qualified OBJECTS graph — next: add selected ASCII/Binary output for the bounded AC1024 civil Edge profile:** the
    28-stream same-version census is complete; its four strict-output sources
    are already profiled (children-room, lineweights, mechanical, tablet). The
    exact children-room selected-output inventory is complete (112/112 standard
@@ -182,9 +182,10 @@ created locally from scratch for the specific control.
    ASCII/Binary import and writer controls pass, ASCII output survives typed
    re-import, incomplete input remains unqualified, and incomplete or
    mismatched payloads refuse output atomically.
-   This closes only the DXF codec slice.
-   It does not establish physical DWG spans or native meaning for the civil
-   source's Edge bodies, whose DWG route remains refused ([receipt](docs/research/p4-dxf-assoc-edge-pers-subent-id-codec-2026-11-07.json)).
+   This closes only the DXF codec slice. A separate AC1024 source-bound parser
+   slice now decodes ten civil Edge bodies and matches both endpoint-index
+   cycles to their target LWPOLYLINE vertex IDs; selected output and native
+   meaning remain unqualified ([DXF receipt](docs/research/p4-dxf-assoc-edge-pers-subent-id-codec-2026-11-07.json), [DWG receipt](docs/research/p4-ac1024-civil-assoc-edge-dwg-read-2026-11-07.json)).
    Keep broadening only where source evidence and dependencies are closed;
    otherwise retain refusal and continue to another ready packet. See the [AC1024 constraint
    group writer receipt](docs/research/p4-ac1024-associative-constraint-group-dxf-writer-2026-10-30.json)
@@ -330,26 +331,28 @@ created locally from scratch for the specific control.
    independent source-ready graph/codec packet and leave this bounded
    qualification gate open. See the updated [ODA differential receipt](docs/research/p6-ac1027-cover-tablestyle-oda-layout-differential-2026-11-07.json).
 
-   **Next implementation slice:** return to the AC1024 civil associative source
-   (`/Users/dli/doc/dwg/civil_example-imperial.dwg`, SHA-256
+   **Next implementation slice:** extend the selected physical-output route for
+   the ten source-bounded `AcDbAssocEdgePersSubentId` records in the AC1024 civil
+   witness (`/Users/dli/doc/dwg/civil_example-imperial.dwg`, SHA-256
    `45b419d0c7382eb271079b80c3237a52183f4fa09e7b495c3d7a65c6baa927dc`). The
-   generated DXF Edge codec is complete; do not repeat its serializer work. First
-   independently establish exact DWG body/string/handle spans and reference roles
-   for the one named `AcDbAssocEdgePersSubentId` body and the 11 incomplete
-   `AcDbAssocGeomDependency` bodies, using the ODA specification as layout
-   authority and peer/source bytes only as corroboration. Then reconcile action,
-   dependency and geometry targets. Reuse the existing civil readiness receipt
-   and mechanical selected-output controls; do not expand the mechanical-only
-   profile guard or alter the parser from class names or peer schema alone.
-   **Ready-to-code gate:** implement only fields whose spans and roles are
-   independently bounded. If the spec and source bytes still do not determine a
-   field boundary, record the unresolved field and move to another ready packet.
-   **Acceptance:** focused parser boundary/sentinel coverage, source-bound field
-   and target-role receipt, then selected ASCII/Binary output with fresh typed
-   readback plus atomic refusal/retry for the unsupported remainder. Keep the
-   civil source and whole-document conversion refused while its null LTYPE_CONTROL
-   member or any required graph edge remains unresolved. Do not add a source
-   drawing fixture.
+   DWG parser now decodes a nested BS/BL/BL tail before the compound flag only
+   for AC1024 Edge records, and full body/string/handle closure is required.
+   The ten decoded index pairs form two five-edge cycles matching the exact
+   vertex IDs on their two target LWPOLYLINEs. The DXF Edge codec is already
+   implemented; do not repeat its serializer work. See the [bounded decode
+   receipt](docs/research/p4-ac1024-civil-assoc-edge-dwg-read-2026-11-07.json).
+   The ODA v5.4.1 PDF has no class-specific grammar, and LibreDWG's generic
+   subentity route disagrees on the compound flag; keep this as one source-bound
+   profile and preserve that discrepancy. Handle `0xC55` (3157) uses the Edge
+   name in the dependency name field rather than the subentity class field and
+   remains wire-incomplete and excluded. **Ready-to-code gate:** close the ten
+   records' group/action membership, target entity roles, reactor backlinks,
+   and handle remapping without admitting `0xC55`. **Acceptance:** selected
+   ASCII/Binary serialization, exact Edge field and reference comparison after
+   fresh typed re-import, destination-preserving wrong-kind/late-mutation
+   refusal, and corrected same-adapter retry. Keep strict civil whole-source
+   conversion refused for its independent null LTYPE_CONTROL member and do not
+   add a source drawing fixture.
 
    An exploratory test-only projection reached preflight but correctly refused
    before serialization; that harness was removed because it had no
@@ -922,26 +925,22 @@ and [LEADER receipt](docs/research/p4-leader-dimstyle-reference-fail-closed-2026
    selected-output proof for 17 dependency/body pairs and all 399 constraint
    nodes, including ASCII/Binary typed readback, refusal, and same-adapter retry;
    this is not native constraint behavior or a whole-document claim ([receipt](docs/research/p4-ac1024-assoc-dependency-physical-selected-output-2026-11-07.json)).
-   The civil witness is not ready for the same route: it has 17 generic
-   dependencies, 29 geometry dependencies, 13 dimension-body records, and
-   three groups, while 11 geometry-dependency bodies remain wire-incomplete
-   and one carries a present edge-subentity class name. The existing
-   mechanical-only selector refuses it before serialization. Keep that
-   refusal. A diagnostic profile comparison confirms the mechanical source has
+   The civil witness is not ready for the same 17 dimension-dependency route: it
+   has 17 generic dependencies, 29 geometry dependencies, 13 dimension-body
+   records, and three groups. The AC1024 Edge source profile now closes ten
+   geometry-dependency bodies and their two target polyline vertex cycles. One
+   distinct geometry dependency (handle `0xC55`) remains wire-incomplete; strict
+   whole-source conversion also remains blocked by the separate null
+   LTYPE_CONTROL member. Keep both refusals. A diagnostic profile comparison
+   confirms the mechanical source has
    54 parsed and wire-complete geometry-dependency bodies named
    `AcDbAssocSingleEdgePersSubentId`; this does not prove their exact physical
    spans independently, does not extend its selected route beyond the 17
-   generic dependency/body pairs, and does not establish that the civil
-   `AcDbAssocEdgePersSubentId` body shares that layout. Make the next slice
-   evidence-first and narrow: trace the 11 civil body and detached-string spans
-   with source frame/class/version identity; independently bind the edge
-   subentity fields and handle roles; exercise only evidence-backed candidate
-   layouts with generated sentinels, truncation and transactional rollback.
-   Once the layout is independently bounded, decode one class/profile, close
-   its action/member graph, then add selected ASCII/Binary output with typed
-   readback, wrong-kind refusal and same-adapter retry. Keep strict civil
-   whole-source output refused for its separate null LTYPE_CONTROL member, and
-   do not broaden mechanical output or support claims. See the [readiness
+   generic dependency/body pairs, and does not establish a general
+   `AcDbAssocEdgePersSubentId` profile. Add output only for the ten source-bound
+   civil records after their graph membership and identity checks pass; keep
+   handle `0xC55` excluded. Do not broaden mechanical output or support claims.
+   See the [readiness
    receipt](docs/research/p4-ac1024-civil-assoc-output-readiness-2026-11-07.json)
    and [mechanical/civil wire-profile comparison](docs/research/p4-ac1024-mechanical-civil-assoc-wire-profile-comparison-2026-11-07.json).
    Neither source profile establishes native constraint behavior. See also the
