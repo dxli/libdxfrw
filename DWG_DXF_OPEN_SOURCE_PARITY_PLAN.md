@@ -1,6 +1,16 @@
 # DWG/DXF parity — remaining implementation plan
 
 Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectContextData, PERSUBENTMGR, and TABLECONTENT shell recovery now reaches 842/842 published frames with zero entity/object parse failures; generated AC1032 TABLECONTENT detached-TV controls publish complete typed values, while the alternative body-byte-count control stays raw-only and verifies rollback, retry, destination preservation and following-frame recovery; the PERSUBENTMGR/TABLECONTENT source bodies remain disputed and raw-only; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; an unlocked Aqua session was observed, but the Launch Services attempt for ODA 27.1 failed with `kLSNoExecutableErr`; both the installed 27.1 bundle and a downloaded official ODA 27.10 ARM64 bundle fail local code-signature verification, while the 27.10 DMG's internal checksums pass, so 27.10 was not executed and no signature was modified ([package receipt](docs/research/p6-oda-27-10-official-arm64-package-signature-2026-11-07.json)); repeated 27.1 attempts, including the latest user-reported unlock, produced no document-processing result, converter output or suffix evidence; the latest direct retry again aborted during Pasteboard/XPC initialization with matching source/converter hashes; do not repeat the unchanged launch method unless the invocation environment or available converter session changes; continue local work until a publisher-verifiable executable or independent converter session is available; current strict `blocks_and_tables` diagnostic reaches 3,586/3,586 frames, and LibreDWG 0.14 repeats the unqualified FIELD child flag values without resolving their semantics, so strict FIELD/FIELDLIST output remains refused; ODA §2's detached-string rule conflicts with ACadSharp-derived TABLE value byte-count parsing; a debug-only alternate body-string parse of both AC1032 TABLECONTENT objects reaches the exact body and detached-string boundaries; the 17-bit interval is the encoded string-size word plus presence bit, and the final handle bit is byte-alignment padding under ODA §20.1; the candidate still conflicts with the TABLECONTENT schema and remains semantically incomplete, so both objects stay raw/refused with no production parser interpretation change; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the focused named-resource import selector now passes after synthetic receipts stopped authorizing strict-complete DWG output, with destination-preserving refusals and no support-claim change; AC1024 mechanical physical selected-output routes now cover 17 associative dependency/body pairs, 399 constraint nodes, and 17 variables across two networks and 13 value-dependency children in ASCII/Binary; the DXF `AcDbAssocEdgePersSubentId` codec slice is complete, and ten AC1024 civil Edge bodies decode to source-matched vertex-index cycles and their bounded selected ASCII/Binary output/readback passes; whole-source conversion and native meaning remain open ([read receipt](docs/research/p4-ac1024-civil-assoc-edge-dwg-read-2026-11-07.json), [selected-route receipt](docs/research/p4-ac1024-civil-assoc-selected-route-readiness-2026-11-07.json)); the viewport DWG debug trace now prints `centerPY` for its Y coordinate (diagnostic only; [receipt](docs/research/p6-viewport-debug-center-y-log-fix-2026-11-07.json)); a LibreCAD_3 persistence probe using raw include/library paths fails because the consumer compiles as C++14 while current upstream libdxfrw requires C++17, and this configuration bypasses libdxfrw's PUBLIC compile-feature propagation ([receipt](docs/research/p8-librecad3-cxx-standard-consumer-compat-2026-11-07.json)); broader source graph closure remains open). This file
+**Current P8 verification (2026-11-07):** the current `c33edaa4` libdxfrw
+revision was installed into `/private/tmp/libdxfrw-install-current`, then a
+fresh out-of-tree LibreCAD_3 configure selected its exported CONFIG package.
+The persistence target built and its compile flags contain `-std=gnu++17`.
+The exact archive and consumer library hashes, command lines, and limits are in
+the [current-head build receipt](docs/research/p8-librecad3-current-head-package-build-2026-11-07.json).
+This refreshes package integration evidence only: the LibreCAD_3 checkout is
+dirty, and no application, focused consumer tests, ABI, Linux, or Windows
+qualification was run in this pass. Do not repeat this unchanged package build.
+
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -92,6 +102,10 @@ created locally from scratch for the specific control.
 - **External gates:** P7 ACIS/ACDS meaning, P8 native platform/consumer
   qualification, and P9's six advisory rows remain open. Local parser or codec
   controls cannot promote those claims.
+- **P8 current-head package build:** the fresh exported-CONFIG persistence
+  build passes and propagates C++17 from the libdxfrw target. Existing focused
+  consumer tests were not rerun; run them at the next pinned integration
+  checkpoint. The build emitted existing LibreCAD_3 warnings but linked.
 
 ### Next work packets
 
@@ -126,8 +140,11 @@ instead of repeating successful scans or controls.
    suffix until a materially changed converter launch route reaches document
    processing; the user's unlock alone did not change the prior result.
 4. **P7/P8/P9 / qualification gates.** P7 needs independent ACIS/ACDS semantic
-   evidence; P8 needs native Linux/Windows consumer runs, including FreeCAD and
-   LibreCAD/LibreCAD_3; P9 remains `DEFERRED_EXTERNAL` for J256, J260, J268,
+   evidence. P8's current-head LibreCAD_3 CONFIG-package persistence build is
+   refreshed; next qualify a clean consumer revision and focused application
+   behavior, then native Linux/Windows FreeCAD and LibreCAD/LibreCAD_3 runs.
+   Keep the dirty-checkout build as integration evidence only. P9 remains
+   `DEFERRED_EXTERNAL` for J256, J260, J268,
    J284, J293 and J295. These do not block independent local slices and cannot
    be promoted by generated controls, advisory reports, or transport-only
    evidence.
