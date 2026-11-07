@@ -611,14 +611,19 @@ created locally from scratch for the specific control.
    not proof of a producer's wrong handle role. They do not settle the schema:
    ODA v5.4.1 §2 requires modern strings in the detached stream and §20.4.99
    specifies type 4 as TV; the physical candidate conflicts with that account.
+   Source review also confirms the implementations disagree: ACadSharp reads
+   body byte-counted strings, while LibreDWG's TABLE macro uses detached
+   `FIELD_T`, suppresses type payload on `flags & 3`, and declares ATTDEF code 5.
+   LibreDWG does not successfully decode these frames, and `dwgTs` is
+   ACadSharp-derived; none of these peers is an independent adjudicator.
    See the expanded [TABLECONTENT receipt](docs/research/p6-ac1032-tablecontent-raw-only-shell-recovery-2026-11-07.json).
 
    Next, resolve the candidate's framing before any production parser change:
    (a) decode the 17-bit tail against the exact R2018 string/handle boundary and
    explain the remaining terminal handle bit for both objects; (b) research the
-   ODA rule against eligible producer/source evidence, including the ACadSharp
-   implementation note, without treating a shared parser assumption as an
-   independent oracle; (c) create generated in-memory controls for both
+   ODA rule against eligible producer/source evidence and the conflicting
+   ACadSharp/LibreDWG source profiles, without treating either implementation
+   or shared parser assumptions as an independent oracle; (c) create generated in-memory controls for both
    detached-TV and body-byte-count hypotheses, with exact stream ends,
    following-frame sentinel, rollback on truncation/refusal, and same-parser
    retry. Keep the external sample out of Git. Adopt a typed profile only after
