@@ -27503,7 +27503,7 @@ bool runDxfPolyfaceCompletedPool(bool binary,
     // coordinate32768, not an overflow or a negative array offset. This is a
     // validator control only, not a 32768-record file/consumer qualification.
     struct PolyfacePoolProbe : DRW_Polyline {
-        bool validPool() const { return validatePolyfaceDxf(); }
+        bool validPool() const { return validateVertexTypesDxf(); }
     } pool;
     pool.flags = 64;
     auto coordinate = std::make_shared<DRW_Vertex>();
