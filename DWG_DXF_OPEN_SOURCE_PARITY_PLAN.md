@@ -90,15 +90,14 @@ created locally from scratch for the specific control.
   nine checksum warnings while strict output still preserves its destination;
   these overlapping diagnostics do not form a semantic-loss total. See the
   [integrity projection receipt](docs/research/p6-cli-source-disposition-integrity-summary-2026-11-07.json).
-- **ODA suffix investigation is waiting on a changed launch condition:** the
-  latest direct ODA 27.1 invocation aborted during Pasteboard/XPC startup and
-  did not process the document. The user has said they are unlocking the Mac,
-  but that is not yet evidence of a successful unlocked launch. After unlock is
-  confirmed, use a functioning GUI-launched converter session or another
-  demonstrably changed launch environment; do not repeat the same direct CLI
-  invocation unchanged. If no changed launch path is available, leave the
-  suffix unclaimed and strict output refused, and proceed with independent local
-  work.
+- **ODA suffix investigation is waiting on a changed launch route:** the
+  latest fresh direct ODA 27.1 invocation after the user's unlock attempt
+  aborted during Pasteboard/XPC startup and did not process the document. This
+  confirms that unlock alone does not resolve the CLI launch failure; do not
+  repeat the same invocation. Resume only after a materially changed route
+  reaches document processing, such as a working GUI launch or another verified
+  converter environment. Until then, leave the suffix unclaimed and strict
+  output refused, and proceed with independent local implementation.
 - **Do not promote claims from the existing local controls:** P7 ACIS/ACDS
   meaning, P8 native Linux/Windows qualification, and all six P9 external rows
   remain open. P9 remains advisory/deferred until its specified independent
@@ -634,9 +633,17 @@ created locally from scratch for the specific control.
    document processing or output occurred. Source, copied source and app
    hashes, app metadata, exact command and empty output state are recorded in
    the [GUI launch receipt](docs/research/p6-ac1027-oda-header-suffix-gui-launch-2026-11-07.json).
-   After the user reported another unlock, the unchanged direct CLI was retried once more and again aborted before document processing with Pasteboard/XPC errors. The latest attempt is recorded separately. This exhausts the bounded retry path: do not repeat either unchanged launch method. Reopen converter work only if Launch Services registration or launch environment materially changes, or an independent converter session becomes available. No suffix evidence or support claim follows;
-   keep the AC1027 suffix unclaimed and strict export refused. See the
-   [latest direct CLI retry](docs/research/p6-ac1027-oda-header-suffix-after-latest-unlock-2026-11-07.json), plus the
+   After the user reported another unlock, the unchanged direct CLI was retried
+   again at 16:22 local time on 2026-11-07 using fresh input/output directories;
+   it aborted after about 0.5 seconds before document processing with
+   Pasteboard/XPC errors. The exact source and converter hashes were rechecked.
+   This makes one further unchanged retry unproductive: do not repeat either
+   direct CLI or Launch Services method until registration or launch environment
+   materially changes, or an independent converter session becomes available.
+   No suffix evidence or support claim follows; keep the AC1027 suffix
+   unclaimed and strict export refused. See the
+   [latest retry receipt](docs/research/p6-ac1027-oda-header-suffix-retry-2026-11-07b.json), the
+   [prior direct CLI retry](docs/research/p6-ac1027-oda-header-suffix-after-latest-unlock-2026-11-07.json), plus the
    [prior direct retry](docs/research/p6-ac1027-oda-header-suffix-after-user-unlock-2026-11-07.json),
    the [earlier same-day retry](docs/research/p6-ac1027-oda-header-suffix-current-unlock-retry-2026-11-07.json),
    and [prior retry history](docs/research/p6-ac1027-oda-header-suffix-post-unlock-retry-2026-11-06.json).
