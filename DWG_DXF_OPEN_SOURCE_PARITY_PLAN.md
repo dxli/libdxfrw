@@ -10,8 +10,11 @@ and basing raw TABLESTYLE identity/order checks on emitted remapped handles.
 The test verifies unchanged raw payload/spelling, Table-to-TABLESTYLE identity,
 following-object order, and malformed-record recovery for generated ASCII and
 Binary DXF. This is test-readiness evidence only; production behavior and support
-claims are unchanged. The independent `tablestyle_identity_domains` and
-`tablestyle_content_format_enum_domains` failures remain open. See the [nested
+claims are unchanged. Rebuilt focused reruns confirm two separate domain
+controls still fail: AC1024 identity vectors involving built-in ID 4 or a
+repeated style class 0, and the AC1032 content-format vector with unit type 16.
+These generated expectations need source/spec reconciliation before any codec
+change. See the [nested
 raw-net receipt](docs/research/p5-tablestyle-nested-raw-net-remapped-identity-fast-slice-2026-11-07.json).
 
 The local AC1018 `HatchG.dwg`
@@ -1509,7 +1512,11 @@ cells with explicit unit spans and uses the output's remapped raw-object handles
 for identity and order assertions. Its focused ASCII/Binary selector passes;
 this fixes a malformed test control and stale source-handle expectations, not a
 production codec defect. Other TABLESTYLE domain failures and physical producer
-coverage remain open ([receipt](docs/research/p5-tablestyle-nested-raw-net-remapped-identity-fast-slice-2026-11-07.json)).
+coverage remain open. Rebuilt targeted tests reproduce identity-domain failures
+for AC1024 cases involving built-in style ID 4 and repeated class 0, plus an
+AC1032 value-unit type 16 expectation; no parser change is justified until
+these generated controls are reconciled with authoritative wire evidence
+([receipt](docs/research/p5-tablestyle-nested-raw-net-remapped-identity-fast-slice-2026-11-07.json)).
 
 DXF SUN parsing retains a separately supplied RGB group regardless of the
 order of group 63, so the existing strict output refusal cannot be bypassed by
