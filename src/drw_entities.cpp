@@ -13666,6 +13666,15 @@ bool DRW_TableContentObject::parseDwg(DRW::Version version, dwgBuffer *buf, std:
         bool trailingHandleBitValue = false;
         const bool trailingHandleBitRead = readBoundedBit(
             trailingHandleProbe, handleEndBit, trailingHandleBitValue);
+        const std::uint64_t terminalHandleBits =
+            candidateHandleBit <= handleEndBit
+                ? handleEndBit - candidateHandleBit : 0;
+        const std::uint64_t expectedBytePaddingBits =
+            (8u - (candidateHandleBit & 7u)) & 7u;
+        const bool terminalBytePaddingMatches =
+            candidateHandleBit <= handleEndBit
+            && terminalHandleBits == expectedBytePaddingBits
+            && (handleEndBit & 7u) == 0u;
         DRW_DBG("TABLECONTENT body-string alternate parse complete=");
         DRW_DBG(candidateParseComplete ? 1 : 0);
         DRW_DBG(" semanticComplete=");
@@ -13690,6 +13699,10 @@ bool DRW_TableContentObject::parseDwg(DRW::Version version, dwgBuffer *buf, std:
         DRW_DBG(sourceStringLowSize); DRW_DBG(" highSize=");
         DRW_DBG(sourceStringHighSize); DRW_DBG(" present=");
         DRW_DBG(sourceStringPresent ? 1 : 0);
+        DRW_DBG(" terminalHandleBits=");
+        DRW_DBG(terminalHandleBits); DRW_DBG(" expectedBytePadding=");
+        DRW_DBG(expectedBytePaddingBits); DRW_DBG(" paddingMatches=");
+        DRW_DBG(terminalBytePaddingMatches ? 1 : 0);
         DRW_DBG(" trailingHandleBit=");
         DRW_DBG(trailingHandleBitRead ? 1 : 0);
         if (trailingHandleBitRead) {

@@ -10,7 +10,7 @@
     "provenance": "Tracked external ACadSharp sample; used read-only, not copied into this repository."
   },
   "authority": {
-    "oda": "ODA v5.4.1 \u00a72 requires R2007+ object Unicode strings in the detached string stream; \u00a720.4.99 describes TABLECONTENT value strings as TV. The peer's body-byte-count interpretation remains unreconciled.",
+    "oda": "ODA v5.4.1 §2 requires R2007+ object Unicode strings in the detached string stream; §20.4.99 describes TABLECONTENT value strings as TV. The peer's body-byte-count interpretation remains unreconciled.",
     "implementationPolicy": "Do not change TABLECONTENT field parsing or infer semantic values. Preserve only the common shell and exact raw frame when the typed parser fails and RawObjectShell validates."
   },
   "typedFailureTrace": {
@@ -94,7 +94,15 @@
             "footerLowSize": 14076,
             "footerHighSize": 0,
             "stringPresent": true,
-            "interpretation": "The previously reported 17-bit pre-handle gap is exactly the raw 16-bit string-size word plus the final string-present bit. The candidate cursor is at the ODA-defined string-data end."
+            "interpretation": "The previously reported 17-bit pre-handle gap is exactly the raw 16-bit string-size word plus the final string-present bit. The candidate cursor is at the ODA-defined string-data end.",
+            "terminalHandlePadding": {
+              "bits": 1,
+              "value": 1,
+              "candidateCursorBitModulo8": 7,
+              "handleEndBitModulo8": 0,
+              "requiredByteAlignmentBits": 1,
+              "matchesOdaObjectPadding": true
+            }
           }
         }
       },
@@ -150,12 +158,20 @@
             "footerLowSize": 13368,
             "footerHighSize": 0,
             "stringPresent": true,
-            "interpretation": "The previously reported 17-bit pre-handle gap is exactly the raw 16-bit string-size word plus the final string-present bit. The candidate cursor is at the ODA-defined string-data end."
+            "interpretation": "The previously reported 17-bit pre-handle gap is exactly the raw 16-bit string-size word plus the final string-present bit. The candidate cursor is at the ODA-defined string-data end.",
+            "terminalHandlePadding": {
+              "bits": 1,
+              "value": 1,
+              "candidateCursorBitModulo8": 7,
+              "handleEndBitModulo8": 0,
+              "requiredByteAlignmentBits": 1,
+              "matchesOdaObjectPadding": true
+            }
           }
         }
       }
     ],
-    "interpretation": "A debug-only alternate parse treats the type-4 value as a BL byte-counted body string, then reads unit 0, zero attributes, content-format fields and the observed code-0x5 text-style handle. Both records reach the exact body boundary, and a follow-up check applies the ODA R2007+ detached-stream footer rule: candidate string cursors equal the exact stream ends, the 14,076/13,368-bit stream sizes match their footer words, and the 17 following bits are each the raw size word plus string-present bit. The earlier failed trailing-TV probe had interpreted that footer as text. The candidate still consumes all but one terminal handle bit, remains semantically incomplete, and conflicts with ODA v5.4.1 \u00a7\u00a72 and 20.4.99; this does not independently establish its schema.",
+    "interpretation": "A debug-only alternate parse treats the type-4 value as a BL byte-counted body string, then reads unit 0, zero attributes, content-format fields and the observed code-0x5 text-style handle. Both records reach the exact body boundary, and the candidate string cursors equal the exact R2007+ detached-stream ends: the 14,076/13,368-bit spans match the footer size words and the following 17 bits are the size word plus string-present bit. The earlier failed trailing-TV probe had treated that footer as text. Each final unconsumed handle bit is exactly the padding needed to align the handle stream to a byte boundary, consistent with ODA v5.4.1 §20.1. The candidate remains semantically incomplete and conflicts with ODA v5.4.1 §§2 and 20.4.99; this does not independently establish its schema.",
     "implementationPolicy": "Keep the production interpretation, raw-only fallback and strict-output refusal unchanged. Resolve the candidate's complete string/handle framing and its conflict with the authoritative ODA text before adopting it."
   },
   "peerParserRecheck": {
@@ -266,12 +282,12 @@
     "stringFooterBoundaryDiagnostic": {
       "buildCommand": "cmake --build build --target dwg2dxf -j4",
       "buildResult": "PASS",
-      "physicalTraceCommand": "build/dwg2dxf/dwg2dxf /Users/dli/dev/ACadSharp/samples/sample_AC1032.dwg -y -d -v2018 /private/tmp/tablecontent-boundary.dxf",
+      "physicalTraceCommand": "build/dwg2dxf/dwg2dxf /Users/dli/dev/ACadSharp/samples/sample_AC1032.dwg -y -d -v2018 /private/tmp/tablecontent-boundary-final.dxf",
       "sourceSha256": "0e8faaca949c9429c92240082d9ea4d3524aca5baf7c7815ec439245c321b528",
-      "binarySha256": "f2889924cb197b2da5d887a5b3152964d2c6a2704b090576cf2838a56bd74e8c",
-      "logPath": "/private/tmp/tablecontent-boundary.log",
-      "logSha256": "c81fd0d69f9201cdf0d9e7c9e07fa29e29e0f8e09edb8a4b6340dfa97be3b6e6",
-      "result": "Both AC1032 candidate cursors equal the exact detached string-stream end calculated from the R2007+ footer. The low-size word matches the string-data span, high-size word is zero, and the presence bit is one. The parser still leaves one handle-tail bit and semanticComplete=false.",
+      "binarySha256": "85c20d6dd66c5bc32a37ce4ef1513a09f1570b8973ee717c2a01b9dc3aa8e77c",
+      "logPath": "/private/tmp/tablecontent-boundary-final.log",
+      "logSha256": "09ff2f6800668f29d7e97f187a290a08303becaf8bdfd9471e52f58b9f016e0a",
+      "result": "Both AC1032 candidate cursors equal the exact detached string-stream end calculated from the R2007+ footer. The low-size word matches the string-data span, high-size word is zero, and the presence bit is one. Each one-bit handle tail exactly aligns the decoded handle stream to the next byte boundary as specified by ODA §20.1; candidate semanticComplete remains false.",
       "observations": [
         {
           "handle": "0xE5F",
@@ -283,7 +299,15 @@
           "stringPresent": true,
           "candidateStringCursor": 26118,
           "handleStream": "26135..26584",
-          "candidateHandleCursor": 26583
+          "candidateHandleCursor": 26583,
+          "terminalHandlePadding": {
+            "bits": 1,
+            "value": 1,
+            "candidateCursorModulo8": 7,
+            "handleEndModulo8": 0,
+            "expectedBytePaddingBits": 1,
+            "matchesOdaPadding": true
+          }
         },
         {
           "handle": "0x747",
@@ -295,11 +319,44 @@
           "stringPresent": true,
           "candidateStringCursor": 53206,
           "handleStream": "53223..55080",
-          "candidateHandleCursor": 55079
+          "candidateHandleCursor": 55079,
+          "terminalHandlePadding": {
+            "bits": 1,
+            "value": 1,
+            "candidateCursorModulo8": 7,
+            "handleEndModulo8": 0,
+            "expectedBytePaddingBits": 1,
+            "matchesOdaPadding": true
+          }
         }
       ],
       "scope": "Debug-only diagnostics and source-bound span accounting; no parser interpretation, typed publication, output eligibility or support claim changed."
     }
   },
-  "scopeLimit": "This closes raw frame publication for the two current AC1032 TABLECONTENT objects only. The debug-only body-byte-count candidate reaches the exact body and detached-string boundaries, but remains in conflict with ODA v5.4.1 \u00a7\u00a72 and 20.4.99 and leaves one handle-tail bit per object unexplained. It does not recover production typed cell values, establish output support, qualify other versions or producers, or establish native TABLE rendering."
+  "scopeLimit": "This closes raw frame publication for the two current AC1032 TABLECONTENT objects only. The debug-only body-byte-count candidate reaches exact body, detached-string, and byte-aligned handle-stream boundaries, but remains in conflict with ODA v5.4.1 §§2 and 20.4.99 and its typed projection is semantically incomplete. The acadrust fixture is an unverified research lead only. No output support, other version/producer qualification, or native TABLE rendering is established.",
+  "externalResearchLead": {
+    "project": "acadrust",
+    "repository": "https://github.com/hakanaktt/acadrust",
+    "sourceRevision": "not pinned; inspected public main branch and docs.rs latest sources on 2026-11-07; pin exact commit before relying on this lead",
+    "testSource": "https://github.com/hakanaktt/acadrust/blob/main/tests/table_dwg_read.rs",
+    "writerSource": "https://docs.rs/acadrust/latest/src/acadrust/io/dwg/dwg_stream_writers/object_writer/entities.rs.html",
+    "observedClaims": [
+      "The test identifies tests/roundtrip/blocks_and_tables_metric.dwg as a real AutoCAD-authored R2007 fixture and asserts two ACAD_TABLE entities and known schedule cell values.",
+      "The test writes the parsed document to DWG and rereads it, then checks selected cell values; this self-roundtrip is not independent evidence.",
+      "The current writer source encodes R2007+ table string values as UTF-16LE with a trailing NUL, writes a BL byte count, then writes bytes to its merged writer; type code 4 takes this route."
+    ],
+    "status": "LEAD_UNVERIFIED",
+    "independenceLimits": [
+      "Fixture availability, provenance, checksum, AC code, and source object spans have not been locally verified.",
+      "The inspected writer is implementation evidence, not proof of what an external producer emitted.",
+      "Reader lineage and third-party code provenance have not yet been checked; do not assume this is independent of ACadSharp, LibreDWG, or ODA-derived material.",
+      "No TABLECONTENT support or schema claim is promoted."
+    ],
+    "boundedNextSteps": [
+      "Pin the acadrust commit and inspect its third-party notices and TABLE reader implementation.",
+      "Verify the fixture provenance, version and SHA-256 from the upstream repository without copying it into this repository.",
+      "If accessible, map one known type-4 cell value to exact body, detached-string and handle spans; compare with ODA v5.4.1 §§2, 20.1 and 20.4.99.",
+      "Stop this research pass if provenance or source-span evidence is unavailable; retain raw-only source behavior and continue the next local implementation packet."
+    ]
+  }
 }
