@@ -29,14 +29,22 @@
     "build": "cmake --build /private/tmp/librecad3-upstream-check --target persistence -j 4",
     "build_result": "failure while compiling persistence/file.cpp and persistence/libdxfrw/dxfimpl.cpp; public headers report no std::optional or std::nullopt under C++14, followed by cascading type errors"
   },
+  "config_package_recheck": {
+    "install": "cmake --install build-gcc --prefix /private/tmp/libdxfrw-p8-install",
+    "configure": "cmake -S ../LibreCAD_3 -B /private/tmp/librecad3-upstream-cxx17-check -DCMAKE_BUILD_TYPE=Release -DWITH_PERSISTENCE=ON -DWITH_PYTHONSCRIPT=OFF -DWITH_QT_UI=OFF -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON -Dlibdxfrw_DIR=/private/tmp/libdxfrw-p8-install/lib/cmake/libdxfrw -DEIGEN3_INCLUDE_DIR=/opt/homebrew/include/eigen3",
+    "consumer_compile_mode": "-std=gnu++17 in persistence/CMakeFiles/persistence.dir/flags.make",
+    "build": "cmake --build /private/tmp/librecad3-upstream-cxx17-check --target persistence -j 4",
+    "build_result": "success; LibreCAD_3 persistence linked against the installed upstream libdxfrw package target"
+  },
   "interpretation": "The observed failure is explained by the consumer compile mode and does not establish a source/API defect under the libdxfrw target's declared C++17 requirement. The repository AGENTS.md description of libdxfrw as C++14 is stale relative to CMakeLists.txt and must not be used as the current build contract.",
   "implementation_follow_up": [
-    "In the LibreCAD_3 integration, prefer linking the exported/imported dxfrw target so its PUBLIC cxx_std_17 requirement propagates; if that finder path cannot represent the target, explicitly raise the consumer target's standard to C++17.",
-    "Reconfigure from a clean build directory and confirm persistence compile commands use C++17 and the focused persistence target builds.",
-    "Run the existing focused DXF export and planar open/save/reopen checks against that same pinned library; leave full application and platform qualification as separate P8 gates."
+    "Prefer the installed CONFIG package in LibreCAD_3 with CMAKE_FIND_PACKAGE_PREFER_CONFIG=ON and libdxfrw_DIR set to the selected package, or update its module-mode imported interface target to publish cxx_std_17. Do not pass raw source include/library variables without a compile-feature contract.",
+    "The CONFIG-package path now configures and builds persistence in the temporary consumer build; rerun the focused export and planar open/save/reopen controls against this exact package revision to qualify behavior, not just compilation.",
+    "Keep the default module-mode failure, clean consumer revision, full application, ABI, and Linux/Windows qualification as separate remaining P8 gates."
   ],
   "limitations": [
     "The LibreCAD_3 checkout is dirty and was not modified.",
+    "No focused export or planar open/save/reopen test was run in the new package-config build; prior receipt evidence remains tied to a different pinned library build.",
     "No native application, ABI, Windows, or Linux qualification was performed.",
     "No DWG/DXF fixtures were added."
   ]

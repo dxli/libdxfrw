@@ -2408,15 +2408,16 @@ Native source-release builds and platform qualification remain open.
   `dwg2dxf` profiles without dropping required geometry.
   A dirty local LibreCAD_3 snapshot's native persistence target passes three
   existing DXF export tests and a planar LINE/CIRCLE open/save/reopen probe
-  against a pinned libdxfrw build. Its custom CMake finder needs a downstream
-  C++17 propagation fix: a fresh persistence probe using raw `LIBDXFRW_INCLUDE_DIR`
-  and `LIBDXFRW_LIBRARY` values compiles the consumer as C++14 and fails in
-  upstream public headers on `std::optional`; libdxfrw's canonical `dxfrw`
-  target already publishes `cxx_std_17`, so make the LibreCAD_3 finder/link path
-  consume that imported target (or explicitly set the persistence target to
-  C++17 if the finder cannot expose it), then rebuild the focused persistence
-  target and rerun its existing export plus planar open/save/reopen checks.
-  Do this in a clean consumer build and preserve the pinned libdxfrw revision.
+  against a pinned libdxfrw build. Its raw include/library finder route loses
+  the C++17 requirement: a fresh persistence probe compiles as C++14 and fails
+  in upstream public headers on `std::optional`. Installing the current
+  libdxfrw build and configuring LibreCAD_3 with
+  `CMAKE_FIND_PACKAGE_PREFER_CONFIG=ON` plus the installed `libdxfrw_DIR`
+  selects the exported package target, propagates C++17, and successfully
+  builds the persistence target. This is the fastest known integration route;
+  keep the default module-mode/raw-path failure recorded, and rerun the focused
+  export and planar open/save/reopen controls against this exact package before
+  treating behavior as qualified. Preserve the pinned libdxfrw revision.
   Its full test target has an unrelated Kaguya C++17
   failure, and a nonplanar LINE triggers its 2D geometry exception. Qualify a
   clean consumer revision and full application separately
