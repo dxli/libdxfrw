@@ -14491,6 +14491,97 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
             }
         }
     }
+
+    Options ac1032Source;
+    ac1032Source.version = DRW::AC1032;
+    ac1032Source.classNumber = 601u;
+    ac1032Source.singleCountBit = true;
+    Options ac1032Sentinel;
+    ac1032Sentinel.version = DRW::AC1032;
+    ac1032Sentinel.classNumber = ac1032Source.classNumber;
+    ac1032Sentinel.handle = 0xD64u;
+    ac1032Sentinel.hasSubentityCount = true;
+    Frame ac1032SourceObject, ac1032SentinelObject;
+    std::vector<std::uint8_t> ac1032SourceFrame, ac1032SentinelFrame;
+    const bool ac1032Built = makeFrame(ac1032Source, ac1032SourceObject)
+        && wrapFrame(ac1032Source, ac1032SourceObject, ac1032SourceFrame)
+        && makeFrame(ac1032Sentinel, ac1032SentinelObject)
+        && wrapFrame(ac1032Sentinel, ac1032SentinelObject,
+                     ac1032SentinelFrame);
+    t.expect(ac1032Built,
+             "AC1032 raw-only PERSUBENTMGR and following control are generated in memory");
+    if (ac1032Built) {
+        const auto nextOffset = static_cast<std::uint32_t>(
+            ac1032SourceFrame.size());
+        std::vector<std::uint8_t> bytes = ac1032SourceFrame;
+        bytes.insert(bytes.end(), ac1032SentinelFrame.begin(),
+                     ac1032SentinelFrame.end());
+        PersistentManagerDispatchReader reader(
+            bytes, DRW::AC1032, ac1032Source.classNumber);
+        PersistentManagerDispatchSink sink;
+        const bool read = reader.readObjects(
+            bytes, ac1032Source.handle, nextOffset, ac1032Sentinel.handle,
+            sink);
+        const auto rawSource = std::find_if(
+            sink.raw.begin(), sink.raw.end(),
+            [&ac1032Source](const DRW_UnsupportedObject& object) {
+                return object.m_handle == ac1032Source.handle;
+            });
+        const auto rawSentinel = std::find_if(
+            sink.raw.begin(), sink.raw.end(),
+            [&ac1032Sentinel](const DRW_UnsupportedObject& object) {
+                return object.m_handle == ac1032Sentinel.handle;
+            });
+        const auto sourcePublication = std::find_if(
+            sink.publications.begin(), sink.publications.end(),
+            [&ac1032Source](const DRW_DwgFramePublication& publication) {
+                return publication.m_handle == ac1032Source.handle;
+            });
+        const auto sentinelPublication = std::find_if(
+            sink.publications.begin(), sink.publications.end(),
+            [&ac1032Sentinel](const DRW_DwgFramePublication& publication) {
+                return publication.m_handle == ac1032Sentinel.handle;
+            });
+        const bool rawOnlyRecovery = read && reader.objectFailures() == 0u
+            && sink.typed.size() == 1u
+            && sink.typed.front().handle == ac1032Sentinel.handle
+            && sink.raw.size() == 2u
+            && rawSource != sink.raw.end()
+            && rawSource->m_rawBytes == ac1032SourceObject.payload
+            && rawSource->m_version == DRW::AC1032
+            && rawSource->m_recordName == "ACDBPERSSUBENTMANAGER"
+            && rawSource->m_className == "AcDbPersSubentManager"
+            && !rawSource->m_typedPayloadValidated
+            && rawSource->m_commonLinkEvidence
+                == DRW_DwgCommonLinkEvidence::Validated
+            && rawSource->m_parentHandle == 0xCu
+            && rawSource->m_reactorHandles
+                == std::vector<std::uint32_t>{0xCu}
+            && rawSentinel != sink.raw.end()
+            && sourcePublication != sink.publications.end()
+            && sourcePublication->m_carrier
+                == DRW_DwgFramePublication::Carrier::Raw
+            && sentinelPublication != sink.publications.end()
+            && sentinelPublication->m_carrier
+                == DRW_DwgFramePublication::Carrier::TypedAndRaw
+            && sink.publications.size() == 2u;
+        t.expect(rawOnlyRecovery,
+                 "AC1032 disputed PERSUBENTMGR body publishes only after raw-shell validation and preserves following-object recovery");
+        if (!rawOnlyRecovery) {
+            std::cerr << "AC1032 PERSUBENTMGR raw-only recovery: read="
+                      << read << " failures=" << reader.objectFailures()
+                      << " typed=" << sink.typed.size()
+                      << " raw=" << sink.raw.size()
+                      << " publications=" << sink.publications.size();
+            if (rawSource != sink.raw.end())
+                std::cerr << " sourceBytes=" << rawSource->m_rawBytes.size()
+                          << " sourceValidated="
+                          << rawSource->m_typedPayloadValidated
+                          << " owner=" << rawSource->m_parentHandle
+                          << " reactors=" << rawSource->m_reactorHandles.size();
+            std::cerr << '\n';
+        }
+    }
 }
 
 int runPersistentManagerSourcePrefix(const std::string& path) {

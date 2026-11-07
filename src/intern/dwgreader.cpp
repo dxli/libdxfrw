@@ -14172,6 +14172,14 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
               // params, value/variable deps) run the shared prefix and are
               // preserved byte-for-byte by the raw shelf below.
               DRW_AssociativeObject e(rn);
+              const bool ac1032BarePersistentManager =
+                  version == DRW::AC1032
+                  && rn == "ACDBPERSSUBENTMANAGER"
+                  && cit->second->className == "AcDbPersSubentManager";
+              // Keep a pristine cursor for the narrow raw-shell recovery.
+              // parseDwg invalidates its input when a class-specific body
+              // fails, so the shell must be checked on an independent cursor.
+              dwgBuffer persistentManagerShellProbe = buff.forkIndependent();
               ret = parseTableEntry(e);
               if (ret) {
                 intfa.addAssociativeObject(e);
@@ -14199,14 +14207,33 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                     oType, cit->second,
                     !partialPersistentPrefix && !partialConstraintGroupBody));
               } else {
-                // The outer OBJECTS frame and common handle tail were
-                // validated before dispatch. Preserve the bounded source
-                // bytes for consumers that can retain opaque records, but
-                // keep the typed parse failure visible: raw capture is not
-                // semantic success and must not make strict conversion pass.
+                const bool persistentManagerShellValid =
+                    ac1032BarePersistentManager
+                    && RawObjectShell().parseDwg(
+                        version, &persistentManagerShellProbe, bs)
+                    && persistentManagerShellProbe.isGood();
+                // The AC1032 bare manager body layout remains disputed. If
+                // only its class-specific body fails, publish the exact
+                // source frame through the validated raw shell. This is not
+                // typed-body success: the raw carrier is explicitly
+                // unvalidated and strict output continues to refuse it.
                 intfa.addUnsupportedObject(
                     makeRawObject(oType, cit->second, false));
-                if (version <= DRW::AC1018 && buff.isGood()) {
+                if (persistentManagerShellValid) {
+                  ret = true;
+                  const std::string &className = cit->second->className;
+                  const std::string &recordName = cit->second->recName;
+                  const std::string objectName =
+                      recordName.empty() ? className : recordName;
+                  ++m_skippedCustomClasses[className.empty()
+                      ? recordName.c_str() : className.c_str()];
+                  ++m_skippedUnsupportedObjects[objectName];
+                  DRW_DBG("[persistent-manager-raw-only class=");
+                  DRW_DBG(cit->second->className.c_str());
+                  DRW_DBG(" handle=");
+                  DRW_DBG(obj.handle);
+                  DRW_DBG("]\n");
+                } else if (version <= DRW::AC1018 && buff.isGood()) {
                   // Legacy associativity subclasses may have opaque
                   // suffixes and no addressable modern object-data boundary.
                   // Keep the historical soft fallback only when the bounded
