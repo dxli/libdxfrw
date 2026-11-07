@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-06 (next P4 OLE2FRAME source profile selected for screening). This file
+Updated 2026-11-06 (AC1018 OLE2FRAME candidate screened out). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -124,26 +124,25 @@ created locally from scratch for the specific control.
    [tablet XRECORD receipt](docs/research/p4-ac1021-tablet-ase-block-hierarchy-xrecord-target-screen-2026-11-06.json)
    and the generated control registered as
    `libdxfrw_ase_hierarchy_ac1021_insert_target_roundtrip`.
-   The next bounded screen is the AC1018 `Extruder2.dwg` OLE2FRAME named-block
-   profile. The local peer scan reports four OLE2FRAMEs: three are members of
-   `*Model_Space` BLOCK_HEADER `0x1F`; one, `0x4B4F`, is a member of named
-   BLOCK_HEADER `A$C33475CF6` (`0x4B1F`) and also carries that BLOCK_HEADER as
-   its direct owner. Its embedded OLE payload is 108,160 bytes. LibreDWG 0.14
-   minJSON independently records both membership and direct-owner edges; the
-   local source SHA-256 is
-   `fa44ada15684eecf46acc4ef095be2ed4793f438da6d570be46c828279aed21c`.
-   Treat this as a candidate only: first confirm libdxfrw's typed callback,
-   raw frame, exact BLOCK/BLOCK_RECORD mapping, and whether both readers agree
-   on this source's named-block ownership. Then add a narrowly keyed AC1018
-   adapter profile that stages the OLE2FRAME in the named block's BLOCKS
-   section, checks the remapped owner and complete OLE fields/payload, and
-   proves ASCII/Binary fresh readback plus destination-preserving wrong-owner
-   refusal and corrected same-adapter retry. Use the existing local source
-   only; author any generated regression control from scratch and keep all
-   source/output files outside Git. If source-frame or named-block mapping
-   cannot be bound exactly, close the screen as ineligible and move to the
-   next bounded graph without broadening the tablet profile. Do not claim
-   general AC1018 OLE support from this candidate.
+   The AC1018 `Extruder2.dwg` OLE2FRAME candidate is screened out for output.
+   LibreDWG 0.14 independently lists four OLE2FRAMEs: three in `*Model_Space`
+   BLOCK_HEADER `0x1F`; one, `0x4B4F`, in named BLOCK_HEADER
+   `A$C33475CF6` (`0x4B1F`) with the same direct owner. libdxfrw independently
+   delivers and retains all four typed/raw frames, and its typed named-block
+   member and owner agree with the peer graph. However, this source has 474
+   entity parse failures and the integrity ledger reports 476 rows, retains
+   only 16 and omits 460. Strict output refuses incomplete read disposition;
+   bounded-partial output also refuses because the integrity ledger is not
+   complete. Do not weaken either gate or add an output route for this source.
+   See the [candidate screen receipt](docs/research/p4-ac1018-extruder2-ole2frame-candidate-screen-2026-11-06.json).
+   Next, screen a source already admitted by strict or bounded-partial export,
+   then choose the smallest distinct rooted graph whose targets and owners are
+   typed and output-supported. Reject candidates immediately when reader
+   disposition, integrity completeness, source binding or output admission
+   fails; preserve the existing OLE2FRAME tablet profile unchanged. Keep all
+   local source/output files outside Git and author any generated controls
+   from scratch. Retain the screened-out candidate boundaries below; do not
+   reopen them without new source or admission evidence.
    The `truetype.dwg` candidate is screened out for now: XRECORD `0x5E3` contains
    four code-330 LAYER handles and four code-331 LTYPE handles, but its owner
    chain starts at the LAYER_CONTROL extension dictionary (`0x59B`), then
@@ -325,36 +324,17 @@ preservation, same-adapter retry and fresh readback pass
 ([receipt](docs/research/p4-ac1024-table-style-owned-dictionary-identity-bridge-2026-11-06.json)).
 This closes only the exact current AC1024 witness/control, not broader
 TABLESTYLE ownership profiles.
-The empty LAYER extension DICTIONARY `0x3B3D4`, owned by LAYER `0x3B3D3`,
-now has a finalized source-frame output proof. Selected ASCII/Binary
-output and fresh readback preserve the owner link and empty body; an
-invalid owner refuses atomically, and same-adapter retry succeeds
-([receipt](docs/research/p4-ac1021-layer-empty-extension-physical-selected-output-2026-11-06.json)).
-The Recompose Data selector now also explicitly finalizes output proof for
-empty layer extension DICTIONARY `0x13C`, uniquely owned by typed LAYER `0x10`,
-and verifies the remapped owner and empty body on fresh ASCII/Binary readback.
-This closes one standard-object frame and updates the inventory to 104/112;
-eight remain unqualified. The two AC1021 VIEWPORT annotation-scale XRECORDs
-`0x268` and `0x26C` now receive finalized standard-frame output proof after
-their group-340 references are mapped through the unchanged, inspected SCALE
-snapshot; fresh ASCII/Binary readback resolves each reference to the matching
-SCALE record. The existing AC1024 VIEWPORT compatibility witness still passes
-([receipt](docs/research/p4-ac1021-viewport-physical-selected-output-2026-11-06.json)).
-This adds two standard frames, bringing the inventory to 106/112; six remain
-unqualified at that checkpoint. The subsequent finalized proof census identifies
-109/112 qualified frames and the exact three TABLESTYLE/Recompose Data residuals
-(`0x7E`, `0x162`, `0x3C3F8`). The final Recompose Data proof census closes
-those three identities and confirms 112/112 standard-object frames for this
-source; no standard-frame residual remains in this bounded inventory. A focused audit also confirms the AC1021 LAYOUT extension
-DICTIONARY/XRECORD frames `0x205`, `0x288`, `0x3BF` and `0x3C0` already have
-finalized output proofs within that count, so they are not new residuals
-([receipt](docs/research/p4-ac1021-layout-physical-selected-output-2026-11-06.json)).
-The same-version whole-source
-recheck still stops at independent DBCOLOR and other document-wide gates. See
-the [same-version gate
-recheck](docs/research/p4-ac1021-children-room-same-version-output-gate-2026-11-05.json),
-[frame inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json),
-and [VisualStyle graph receipt](docs/research/p4-ac1021-visualstyle-extension-dictionary-xrecord-output-2026-11-06.json), the [SCALE graph receipt](docs/research/p4-ac1021-scale-physical-selected-output-2026-11-06.json), and the [DICTIONARYVAR graph receipt](docs/research/p4-ac1021-dictionaryvar-physical-selected-output-2026-11-06.json).
+The finalized selected-output census confirms all 112/112 standard-object
+frames and all 74/74 opaque carrier records for the AC1021 children-room
+source, including its LAYER extension dictionaries, VIEWPORT annotation-scale
+XRECORDs, TABLESTYLE/Recompose Data graph, and LAYOUT extension records. No
+standard-frame or opaque-carrier residual remains for this source. The
+same-version whole-source recheck still stops at independent DBCOLOR and other
+document-wide gates. See the current [frame inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json),
+[same-version gate recheck](docs/research/p4-ac1021-children-room-same-version-output-gate-2026-11-05.json),
+[VisualStyle graph receipt](docs/research/p4-ac1021-visualstyle-extension-dictionary-xrecord-output-2026-11-06.json),
+[SCALE graph receipt](docs/research/p4-ac1021-scale-physical-selected-output-2026-11-06.json), and
+[DICTIONARYVAR graph receipt](docs/research/p4-ac1021-dictionaryvar-physical-selected-output-2026-11-06.json).
 Source-origin admission outside witnessed tuples, broader graphs, physical
 whole-document output and native image behavior remain open. The DWG and DXF
 writers admit only Autodesk's frame/quality/unit domains (and DXF class version 0); input preserves
@@ -413,81 +393,13 @@ and [original receipt](docs/research/p4-ac1018-empty-style-dwg-bit-order-differe
 
 ## P4 — original bodies and complete document closure
 
-**Recently qualified bounded standard object:** the AC1021 children-room
-`ACAD_PLOTSETTINGS` NOD entry to empty DICTIONARY `0x19` now passes physical
-ASCII/Binary output and fresh readback. Its source frame is at offset 2817 and
-spans 16 bytes; the target is NOD-owned and reacts to NOD `0xC`. Late reactor
-mutation refuses atomically and the same adapter retries after restoration.
-This contributes one standard-object frame. With the following `ACAD_GROUP`
-route, 28 of 112 remain unqualified in the local source inventory. Export used `AllowPartial`: its 22-entry NOD and
-whole drawing remain unqualified ([receipt](docs/research/p4-ac1021-plotsettings-physical-selected-output-2026-11-06.json),
-[inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
-
-The same source's empty `ACAD_GROUP` DICTIONARY `0xD` now also passes
-ASCII/Binary output and fresh readback through the source-backed generated
-GROUP-root path. The source has zero GROUP callbacks; both generated-root
-proofs and the standard-object source-frame proof finalize. Late reactor
-mutation refuses atomically and the same adapter retries after restoration.
-This qualifies a second standard-object frame, leaving 28 of 112
-unqualified; populated GROUP membership and whole-source output remain open
-([receipt](docs/research/p4-ac1021-group-physical-selected-output-2026-11-06.json),
-[updated inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
-
-The same source's empty `ACAD_IMAGE_DICT` DICTIONARY `0x2D1` now passes
-selected ASCII/Binary output and fresh readback through the image-generated-root
-path. Its physical frame is at offset 1,990,495 and spans 17 bytes; the source
-has no IMAGEDEF or IMAGEDEF_REACTOR callbacks, and the dictionary has no
-entries or extension dictionary and reacts to NOD `0xC`. Both generated-root
-proofs and the standard-frame output proof finalize. A late reactor mutation
-preserves the destination sentinel on refusal, and restoration permits a retry
-on the same adapter. This is one additional bounded frame, leaving 27 of 112
-standard-object frames unqualified; unresolved sibling NOD entries, strict
-whole-source output, image semantics and producer qualification remain open
-([receipt](docs/research/p4-ac1021-image-dict-physical-selected-output-2026-11-06.json),
-[updated inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
-
-The empty NOD entry `AEC_PROPERTY_SET_DEFS` → DICTIONARY `0x745` also passes
-selected ASCII/Binary output and fresh readback through the regular
-source-backed dictionary path. Its physical frame is at offset 8,518 and spans
-17 bytes; it has no entries or extension dictionary and reacts to NOD `0xC`.
-The emitted NOD edge has the expected soft-owner DXF role. The generated NOD
-and GROUP proofs and the physical standard-frame output proof finalize. A late
-reactor mutation preserves the destination sentinel on refusal, and restoring
-the source permits same-adapter retry. This is selected output from one
-unauthenticated source; it leaves 26 of 112 standard-object frames unqualified
-and does not close the sibling NOD graph, whole-source output or producer/native
-semantics ([receipt](docs/research/p4-ac1021-aec-property-set-defs-physical-selected-output-2026-11-06.json),
-[updated inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
-
-The AC1021 `ASE_INDEX_DICTIONARY` root at `0x3B3C8` and its single
-`ASEBlockHierarchyIndexRecord` child XRECORD at `0x3B3C9` now pass selected
-ASCII/Binary output and fresh readback. The physical DICTIONARY frame spans 95
-bytes at offset 8,539; the XRECORD frame spans 18 bytes at offset 1,996,083.
-The dictionary and child each have the reciprocal owner/reactor links expected
-by the imported graph, and the XRECORD body is empty with a validated AC1021
-common-link tail. The dictionary EED carries APPID `DCO15` (source APPID handle
-`0x4C4`) and one code-1040 value; the test verifies the APPID row and exact
-source-to-DXF EED value preservation. The output dictionary child edge is
-soft-owner. Late mutation of the dictionary and child reactors refuses
-atomically, preserves the destination, and the same adapter retries after
-restoration. This is one selected source profile and does not independently
-prove the DWG dictionary edge's wire role, ASE semantics, whole-source output,
-or producer/native support; 24 of 112 standard-object frames remain unqualified
-([receipt](docs/research/p4-ac1021-ase-index-dictionary-physical-selected-output-2026-11-06.json),
-[updated inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
-
-The direct NOD XRECORD `ACAD_CIP_PREVIOUS_PRODUCT_INFO` at handle `0x216` now
-passes selected ASCII/Binary output and fresh readback. Its 57-byte physical
-frame is at offset 1,990,278; owner and sole reactor are NOD `0xC`, the common
-link tail is validated, and the body contains exactly three ordered code-300
-strings: `ACD`, `2016`, `ACD_F_S`. It has no EED, extension dictionary, handle
-values or retained raw block. The NOD edge is read back as soft-owner and the
-XRECORD source-frame proof finalizes. A late reactor mutation refuses
-atomically, preserves the destination, and succeeds after restoration on the
-same adapter. This selected record does not qualify native CIP behavior or the
-remaining NOD graph; 23 of 112 standard-object frames remain unqualified
-([receipt](docs/research/p4-ac1021-cip-physical-selected-output-2026-11-06.json),
-[updated inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
+The AC1021 children-room source's bounded selected-output census is complete:
+all 112/112 standard-object frames and 74/74 opaque carrier records have
+selected-output proof for that exact local source. The six previously listed
+NOD/DICTIONARY/XRECORD slices are therefore removed from the open queue. This
+does not close populated GROUP membership, whole-source conversion, native
+semantics, producer-wide coverage, or named-block SORTENTSTABLE ownership; see
+the current [inventory receipt](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json).
 
 **Open strict-output defect:** a CRC-resealed AC1027 source with layer 0's
 linetype handle changed to a missing target previously exported successfully
