@@ -1514,8 +1514,12 @@ selectors now pass: the generated repeated-style index matches its style ID,
 and DWG decoding accepts only the ODA §20.4.99 wire values 0/1/2/4/8. Autodesk's
 broader UnitType API values remain supported in the DXF/API value domain, but
 are not admitted as DWG wire values without a producer witness. The existing
-AC1024 producer-observed class 0 remains opaque. Physical producer breadth and
-the rest of P5 remain open ([domain receipt](docs/research/p5-tablestyle-dwg-unit-and-identity-domains-2026-11-07.json), [raw-net receipt](docs/research/p5-tablestyle-nested-raw-net-remapped-identity-fast-slice-2026-11-07.json)).
+AC1024 producer-observed class 0 remains opaque. After the legacy-row reader
+adopted the same wire-domain validator, the existing AC1021 `colorwh.dwg`
+source still completes strict conversion and a fresh same-version DXF read.
+That is regression evidence for one local profile, not field-semantic equality
+or producer qualification. Physical producer breadth and the rest of P5 remain
+open ([domain receipt](docs/research/p5-tablestyle-dwg-unit-and-identity-domains-2026-11-07.json), [raw-net receipt](docs/research/p5-tablestyle-nested-raw-net-remapped-identity-fast-slice-2026-11-07.json)).
 
 DXF SUN parsing retains a separately supplied RGB group regardless of the
 order of group 63, so the existing strict output refusal cannot be bypassed by
