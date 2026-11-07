@@ -75,9 +75,12 @@ created locally from scratch for the specific control.
    `tablet.dwg` XRECORD at `0x2BCF` is a promising bounded graph: its NOD-owned
    `ASEBlockHierarchyIndexRecord` dictionary route is identified, and LibreDWG
    independently resolves all 208 unique code-330 payloads as INSERT entities.
-   The local typed-model probe does not expose any of those targets, while the
-   strict graph gate refuses at target `0x1BE5`; resolve that local frame and
-   dispatcher identity mismatch before attempting output support. Keep strict
+   The local typed-model probe does not expose any of those targets. A fresh
+   debug trace does enter type-7 INSERT parsing for target `0x1BE5` twice, but
+   neither parse reaches the typed adapter inventory; trace whether this is
+   repeated parser traversal, a frame identity collision, bounded parse
+   failure, or identity normalization before attempting output support. The
+   strict graph gate still refuses at `0x1BE5`. Keep strict
    refusal. The source is unauthenticated and this is not a support claim (see
    the [tablet XRECORD screen receipt](docs/research/p4-ac1021-tablet-ase-block-hierarchy-xrecord-target-screen-2026-11-06.json)).
    The `truetype.dwg` candidate is screened out for now: XRECORD `0x5E3` contains

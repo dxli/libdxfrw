@@ -13,8 +13,9 @@
   "localReader": {
     "tool": "build/dwg2dxf/dwg2dxf",
     "sha256": "cbe1474b97de3786234d33f7be6c1287e2102b44023885626a94ead2b3d678e5",
-    "observation": "The trace reports 40 graph nodes, 314 edges, 40 staged handles, 479 source records and 456 XRECORD payload slots, then refuses at XRECORD 0x2BCF code 330 target 0x1BE5 (decimal 7141). The public typed-model probe imports XRECORD 0x2BCF with owner/reactor 0x2BCE and 208 ordered handle values; its entity callback inventory contains none of those 208 target handles. The NOD-owned dictionary 0x2BCE contains ASEBlockHierarchyIndexRecord -> 0x2BCF.",
+    "observation": "The graph trace reports 40 nodes, 314 edges, 40 staged handles, 479 source records and 456 XRECORD payload slots, then refuses at XRECORD 0x2BCF code 330 target 0x1BE5 (decimal 7141). The public typed-model probe imports XRECORD 0x2BCF with owner/reactor 0x2BCE and 208 ordered handle values; its entity callback inventory contains none of those 208 target handles. A fresh debug trace does encounter 0x1BE5 in two consecutive type-7 INSERT parse blocks, but the adapter does not publish it into the typed entity inventory; why that source frame is not emitted remains unresolved. The NOD-owned dictionary 0x2BCE contains ASEBlockHierarchyIndexRecord -> 0x2BCF.",
     "traceSha256": "e171157bef1eeec839b79cb78bd5636d7e20c4d8903c3f79e3d185498e8cee21",
+    "freshTraceSha256": "eaa82798c28eed9f95ab4449d986c75f3a29489ca124777f37a7c0cf0767d52c",
     "probeSourceSha256": "07d7a9ea85f5beef55a3a58f6ec0e1675abf546a279d8421823bd99fc5fb45e7",
     "probeBinarySha256": "23259ce1a29cbf1d5689f9207854b52c89936af3e9ff529084837726860d4efd"
   },
@@ -24,7 +25,7 @@
     "observation": "XRECORD 0x2BCF is owned by DICTIONARY 0x2BCE, has one reactor to that dictionary, and contains 208 unique code-330 references. All 208 targets exist in the peer object inventory and are INSERT entities. The owner dictionary belongs to NOD 0x0C and contains ASEBlockHierarchyIndexRecord -> 0x2BCF. The first checked target, 0x1BE5, is an INSERT owned by BLOCK_RECORD 0x1BEF."
   },
   "decision": "This is a promising bounded source candidate, but it is not implementation-ready: the local typed entity inventory does not expose the 208 peer-identified INSERT targets, so local source identity, frame classification, and output remapping cannot yet be proven. Keep strict refusal and do not add an XRECORD exception based only on peer semantics.",
-  "nextAction": "Trace the first target 0x1BE5 through the local source frame census and entity dispatcher; establish whether it is omitted, misclassified, or represented under a different identity. If local identities can be recovered and all 208 emitted/remapped INSERT references close, add a generated ASCII/Binary readback and rollback/retry control before considering a narrowly gated physical projection.",
+  "nextAction": "Trace why the type-7 frame 0x1BE5 is encountered twice but not published to the typed adapter inventory; establish whether this is repeated parser traversal, a frame identity collision, a bounded INSERT parse failure, or a different identity representation. If local identities can be recovered and all 208 emitted/remapped INSERT references close, add a generated ASCII/Binary readback and rollback/retry control before considering a narrowly gated physical projection.",
   "validation": {
     "fullSuites": "NOT RUN",
     "fixturesCommitted": false,
