@@ -200,47 +200,54 @@ assert_freecad_entity_refusal("${RTEXT_SAMPLE}" "rtext arctext"
 assert_freecad_entity_refusal("${MPOLYGON_SAMPLE}" "mpolygon"
     "${_strict_read_refusal}")
 
-# Unix command-line arguments are byte strings (UTF-8 on the supported host
-# environments exercised here). Keep Windows Unicode argv qualification
-# separate because the narrow main(argc, argv) entry point has a distinct
-# encoding contract there.
-if(NOT CMAKE_HOST_WIN32)
-    set(_unicode_dir "${_test_dir}/entrée café")
-    file(MAKE_DIRECTORY "${_unicode_dir}")
-    set(_unicode_input "${_unicode_dir}/drawing été.dwg")
-    set(_unicode_output "${_unicode_dir}/résultat été.dxf")
-    file(REMOVE "${_unicode_output}")
-    execute_process(
-        COMMAND "${DWG_SOURCE_GENERATOR}" --generate-cli-batch-source "${_unicode_input}" AC1021
-        RESULT_VARIABLE _generate_result
-        OUTPUT_VARIABLE _generate_stdout
-        ERROR_VARIABLE _generate_stderr
-        TIMEOUT 30
-    )
-    if(NOT "${_generate_result}" STREQUAL "0" OR NOT EXISTS "${_unicode_input}")
-        message(FATAL_ERROR
-            "Could not generate the Unicode-path AC1021 DWG (${_generate_result})\n"
-            "${_generate_stdout}\n${_generate_stderr}")
-    endif()
-    execute_process(
-        COMMAND "${DWG2DXF}" "${_unicode_input}" -o "${_unicode_output}"
-        RESULT_VARIABLE _result
-        OUTPUT_VARIABLE _stdout
-        ERROR_VARIABLE _stderr
-        TIMEOUT 60
-    )
-    if(NOT "${_result}" STREQUAL "0" OR NOT EXISTS "${_unicode_output}")
-        message(FATAL_ERROR
-            "FreeCAD-form conversion failed for UTF-8 paths (${_result})\n${_stdout}\n${_stderr}")
-    endif()
-    file(READ "${_unicode_output}" _unicode_header LIMIT 2048)
-    string(FIND "${_unicode_header}" "AC1021" _unicode_version_pos)
-    if(_unicode_version_pos EQUAL -1)
-        message(FATAL_ERROR "UTF-8-path output is not a valid AC1021 DXF")
-    endif()
-else()
-    message(STATUS
-        "Skipping non-ASCII argv test on Windows; narrow argv encoding needs native qualification")
+# Generate under an ASCII path, then let CMake copy the bytes into the Unicode
+# path. This isolates dwg2dxf's process-argument and filesystem handling from
+# the source generator's own Windows argv contract.
+set(_unicode_dir "${_test_dir}/entrée café")
+file(MAKE_DIRECTORY "${_unicode_dir}")
+set(_ascii_unicode_source "${_test_dir}/unicode source AC1021.dwg")
+set(_unicode_input "${_unicode_dir}/drawing été.dwg")
+set(_unicode_output "${_unicode_dir}/résultat été.dxf")
+execute_process(
+    COMMAND "${DWG_SOURCE_GENERATOR}" --generate-cli-batch-source "${_ascii_unicode_source}" AC1021
+    RESULT_VARIABLE _generate_result
+    OUTPUT_VARIABLE _generate_stdout
+    ERROR_VARIABLE _generate_stderr
+    TIMEOUT 30
+)
+if(NOT "${_generate_result}" STREQUAL "0" OR NOT EXISTS "${_ascii_unicode_source}")
+    message(FATAL_ERROR
+        "Could not generate the AC1021 DWG for Unicode-path testing (${_generate_result})\n"
+        "${_generate_stdout}\n${_generate_stderr}")
+endif()
+execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E copy "${_ascii_unicode_source}" "${_unicode_input}"
+    RESULT_VARIABLE _copy_unicode_result
+    OUTPUT_VARIABLE _copy_unicode_stdout
+    ERROR_VARIABLE _copy_unicode_stderr
+    TIMEOUT 15
+)
+if(NOT "${_copy_unicode_result}" STREQUAL "0" OR NOT EXISTS "${_unicode_input}")
+    message(FATAL_ERROR
+        "Could not stage the Unicode-path AC1021 DWG (${_copy_unicode_result})\n"
+        "${_copy_unicode_stdout}\n${_copy_unicode_stderr}")
+endif()
+file(REMOVE "${_unicode_output}")
+execute_process(
+    COMMAND "${DWG2DXF}" "${_unicode_input}" -o "${_unicode_output}"
+    RESULT_VARIABLE _result
+    OUTPUT_VARIABLE _stdout
+    ERROR_VARIABLE _stderr
+    TIMEOUT 60
+)
+if(NOT "${_result}" STREQUAL "0" OR NOT EXISTS "${_unicode_output}")
+    message(FATAL_ERROR
+        "FreeCAD-form conversion failed for Unicode paths (${_result})\n${_stdout}\n${_stderr}")
+endif()
+file(READ "${_unicode_output}" _unicode_header LIMIT 2048)
+string(FIND "${_unicode_header}" "AC1021" _unicode_version_pos)
+if(_unicode_version_pos EQUAL -1)
+    message(FATAL_ERROR "Unicode-path output is not a valid AC1021 DXF")
 endif()
 
 # Preserve the established positional form and its explicit-version behavior.

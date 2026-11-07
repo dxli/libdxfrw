@@ -15,9 +15,18 @@
 #include <filesystem>
 #include <set>
 #include <system_error>
-#include <sys/stat.h>
 #include <array>
 #include <cstdint>
+#include <string>
+#include <utility>
+#include <vector>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 
 #include "dx_iface.h"
 #include "dx_data.h"
@@ -205,9 +214,12 @@ bool convertFile(std::string inName, std::string outName, DRW::Version ver,
                  bool allowPartialDwgRead = false,
                  bool observeWholeDxfSource = false){
     bool badState = false;
+    namespace fs = std::filesystem;
+    const fs::path inputPath = fs::u8path(inName);
+    const fs::path outputPath = fs::u8path(outName);
     //verify if input file exist
     std::ifstream ifs;
-    ifs.open (inName.c_str(), std::ifstream::in);
+    ifs.open(inputPath, std::ifstream::in);
     badState = ifs.fail();
     ifs.close();
     if (badState) {
@@ -218,10 +230,7 @@ bool convertFile(std::string inName, std::string outName, DRW::Version ver,
     // its destination. Check filesystem identity before prompting or granting
     // overwrite authority; equivalent() also catches symlink and hard-link
     // aliases that lexical path comparisons miss.
-    namespace fs = std::filesystem;
     std::error_code identityError;
-    const fs::path inputPath = fs::u8path(inName);
-    const fs::path outputPath = fs::u8path(outName);
     const bool outputExists = fs::exists(outputPath, identityError);
     if (identityError) {
         std::cout << "Error: cannot safely inspect output identity for "
@@ -242,8 +251,7 @@ bool convertFile(std::string inName, std::string outName, DRW::Version ver,
         }
     }
     //verify if output file exist
-    struct stat outStat;
-    badState = stat(outName.c_str(), &outStat) != 0;
+    badState = !outputExists;
     if (!badState) {
         if (!overwrite){
             if (nonInteractive) {
@@ -314,7 +322,7 @@ bool convertFile(std::string inName, std::string outName, DRW::Version ver,
     return badState;
 }
 
-int main(int argc, char *argv[]) {
+int runCli(int argc, char *argv[]) {
     bool badState = false;
     dwg2dxfCli::Options options;
     std::string outName;
@@ -510,3 +518,49 @@ int main(int argc, char *argv[]) {
         return 2;
     }
 }
+
+#ifdef _WIN32
+int wmain(int argc, wchar_t *wideArgv[]) {
+    std::vector<std::string> utf8Arguments;
+    std::vector<char *> utf8Argv;
+    try {
+        utf8Arguments.reserve(static_cast<std::size_t>(argc));
+        utf8Argv.reserve(static_cast<std::size_t>(argc) + 1u);
+        for (int index = 0; index < argc; ++index) {
+            const wchar_t *argument = wideArgv[index];
+            if (argument == nullptr) {
+                std::cerr << "Error: invalid command-line argument\n";
+                return 2;
+            }
+            const int required = WideCharToMultiByte(
+                CP_UTF8, WC_ERR_INVALID_CHARS, argument, -1, nullptr, 0,
+                nullptr, nullptr);
+            if (required <= 0) {
+                std::cerr << "Error: command-line arguments must be valid Unicode\n";
+                return 2;
+            }
+            std::string encoded(static_cast<std::size_t>(required), '\0');
+            const int written = WideCharToMultiByte(
+                CP_UTF8, WC_ERR_INVALID_CHARS, argument, -1, &encoded[0],
+                required, nullptr, nullptr);
+            if (written != required) {
+                std::cerr << "Error: could not encode command-line argument as UTF-8\n";
+                return 2;
+            }
+            encoded.resize(static_cast<std::size_t>(required - 1));
+            utf8Arguments.push_back(std::move(encoded));
+        }
+        for (std::string &argument : utf8Arguments)
+            utf8Argv.push_back(const_cast<char *>(argument.c_str()));
+        utf8Argv.push_back(nullptr);
+    } catch (...) {
+        std::cerr << "Error: could not prepare command-line arguments\n";
+        return 2;
+    }
+    return runCli(argc, utf8Argv.data());
+}
+#else
+int main(int argc, char *argv[]) {
+    return runCli(argc, argv);
+}
+#endif

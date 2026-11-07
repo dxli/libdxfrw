@@ -1,0 +1,43 @@
+{
+  "title": "dwg2dxf Unicode argv and filesystem path fast slice",
+  "date": "2026-11-07",
+  "status": "implemented; current-host validation passed; native Windows qualification remains open",
+  "scope": [
+    "Use UTF-8 filesystem paths for dwg2dxf input preflight and output existence checks.",
+    "On Windows, accept wide process arguments and strictly encode them as UTF-8 before entering the shared CLI parser.",
+    "Exercise Unicode input and output paths in the FreeCAD CLI compatibility control on every host."
+  ],
+  "changes": {
+    "source": "dwg2dxf/main.cpp",
+    "source_sha256": "e1fe93c5f38e0263bdcfdf14b352a56e821714ec26a74ec988f8164af1a33b94",
+    "test": "tests/run_freecad_dwg2dxf_compat_test.cmake",
+    "test_sha256": "7e6b47eb8ba459e4f573063da20cd09d059a795f24028d8d17e12c39a6cbf976",
+    "plan": "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md",
+    "implementation_notes": [
+      "The Windows wmain bridge rejects invalid UTF-16 instead of substituting characters.",
+      "The CLI preflight now uses std::filesystem::u8path for both input and output.",
+      "The test source is generated at an ASCII path, then cmake -E copy stages the same bytes at a Unicode path; generated files remain in the build scratch directory."
+    ]
+  },
+  "validation": {
+    "host": "macOS ARM64",
+    "compiler": "/usr/bin/g++",
+    "build": {
+      "command": "cmake --build build-gcc --target dwg2dxf -j4",
+      "result": "passed"
+    },
+    "focused_test": {
+      "command": "ctest --test-dir build-gcc -R '^dwg2dxf_freecad_cli_compat$' --output-on-failure",
+      "result": "passed",
+      "test": "dwg2dxf_freecad_cli_compat",
+      "duration_seconds": 1.83
+    },
+    "diff_check": "passed: git diff --check; receipt parsed with python3 -m json.tool"
+  },
+  "limits": [
+    "The current host test does not compile or execute the Windows wmain branch.",
+    "Native Windows filesystem behavior, Qt-delivered argv, MSVC/DLL/shared/static/relocated packaging, and native FreeCAD open/insert remain unqualified.",
+    "This is CLI/path handling evidence only and does not promote DWG/DXF format support claims."
+  ],
+  "fixture_policy": "No DWG or DXF fixture was added to the repository; the generated source and converted output remain in build scratch space."
+}

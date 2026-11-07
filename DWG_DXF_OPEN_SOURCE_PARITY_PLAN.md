@@ -2946,6 +2946,14 @@ Native source-release builds and platform qualification remain open.
   the existing tracked `ordinary_enc_AC1027.dwg`; a registration-only configure
   lists the desktop, open, and insert controls. Native execution is still open;
   see the [tracked-sample binding receipt](docs/research/p8-freecad-tracked-sample-binding-2026-11-02.json).
+- `dwg2dxf` now uses `std::filesystem::u8path` for input/output preflight and
+  the Windows `wmain` entry point converts Unicode arguments strictly to UTF-8
+  before handing them to the shared CLI parser. The focused FreeCAD CLI
+  compatibility control now stages its generated source at an ASCII path and
+  copies it into Unicode paths, so it exercises Unicode input and output paths
+  on every host; build and focused CTest pass on the current host. Native
+  Windows compilation/runtime, Qt path delivery, and native FreeCAD qualification
+  remain open ([Unicode CLI slice receipt](docs/research/p8-dwg2dxf-windows-utf8-argv-fast-slice-2026-11-07.json)).
 - Complete native Linux/Windows FreeCAD qualification and bind the actual loaded
   library/converter child. Verify Windows UTF-8/Qt paths, filesystem collisions,
   MSVC/DLL/shared/static/relocated consumers and package/toolchain contracts.
