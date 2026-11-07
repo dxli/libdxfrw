@@ -13842,6 +13842,177 @@ void testDataStorageDefaultSchemaOnlySection(TestContext& t) {
     t.expect(rejectsMalformedAlternateTableRoles(
                  rejectedAlternateRolesAc1032),
              "DataStorage malformed AC1032 retained-profile references remain fail-closed");
+
+    // A second AC1032 producer profile splits schema roots and unknown-
+    // property headers across two schdat segments. Keep the exact role and
+    // per-segment offset checks while proving this bounded layout is accepted.
+    constexpr std::size_t multiIndexOffset = 64u;
+    constexpr std::size_t multiIndexSize = 128u;
+    constexpr std::size_t multiSchidxOffset = 192u;
+    constexpr std::size_t multiSchidxSize = 192u;
+    constexpr std::size_t multiSchdatAOffset = 384u;
+    constexpr std::size_t multiSchdatBOffset = 512u;
+    constexpr std::size_t multiSchdatSize = 128u;
+    constexpr std::size_t multiSearchOffset = 640u;
+    constexpr std::size_t multiSearchSize = 128u;
+    constexpr std::size_t multiSectionSize = 768u;
+    std::vector<std::uint8_t> multiSegmentRoles(multiSectionSize, 0u);
+    const auto putMultiU16 = [&multiSegmentRoles](std::size_t offset,
+                                                  std::uint16_t value) {
+        multiSegmentRoles[offset] = static_cast<std::uint8_t>(value);
+        multiSegmentRoles[offset + 1u] = static_cast<std::uint8_t>(value >> 8u);
+    };
+    const auto putMultiU32 = [&multiSegmentRoles](std::size_t offset,
+                                                  std::uint32_t value) {
+        for (unsigned byte = 0; byte < 4u; ++byte)
+            multiSegmentRoles[offset + byte] =
+                static_cast<std::uint8_t>(value >> (byte * 8u));
+    };
+    const auto putMultiU64 = [&putMultiU32](std::size_t offset,
+                                            std::uint64_t value) {
+        putMultiU32(offset, static_cast<std::uint32_t>(value));
+        putMultiU32(offset + 4u, static_cast<std::uint32_t>(value >> 32u));
+    };
+    const auto putMultiSegment = [&multiSegmentRoles, &putMultiU16,
+                                  &putMultiU32](std::size_t offset,
+                                                const char* name,
+                                                std::uint32_t index,
+                                                std::size_t size,
+                                                std::uint32_t systemOffset) {
+        putMultiU16(offset, DRW_DataStorageConst::SEGMENT_SIGNATURE);
+        for (std::size_t byte = 0; byte < 6u; ++byte)
+            multiSegmentRoles[offset + 2u + byte] =
+                static_cast<std::uint8_t>(name[byte]);
+        putMultiU32(offset + 8u, index);
+        putMultiU32(offset + 16u, static_cast<std::uint32_t>(size));
+        putMultiU32(offset + 24u, 1u);
+        putMultiU32(offset + 32u, systemOffset);
+    };
+
+    putMultiU32(0u, 1u);
+    putMultiU32(4u, DRW_DataStorageConst::HEADER_SIZE);
+    putMultiU32(12u, 1u);
+    putMultiU32(20u, 1u);
+    putMultiU32(24u, static_cast<std::uint32_t>(multiIndexOffset));
+    putMultiU32(32u, 5u);
+    putMultiU32(36u, 1u);
+    putMultiU32(40u, UINT32_MAX);
+    putMultiU32(44u, 4u);
+    putMultiU32(48u, UINT32_MAX);
+    putMultiU32(52u, static_cast<std::uint32_t>(multiSectionSize));
+    const std::array<std::pair<std::size_t, std::size_t>, 5> multiSegments{{
+        {multiIndexOffset, multiIndexSize},
+        {multiSchidxOffset, multiSchidxSize},
+        {multiSchdatAOffset, multiSchdatSize},
+        {multiSchdatBOffset, multiSchdatSize},
+        {multiSearchOffset, multiSearchSize}}};
+    const std::array<const char*, 5> multiNames{{
+        "segidx", "schidx", "schdat", "schdat", "search"}};
+    for (std::size_t index = 0; index < multiSegments.size(); ++index) {
+        const std::uint32_t systemOffset = index == 2u || index == 3u
+            ? 5u : 0u;
+        putMultiSegment(multiSegments[index].first, multiNames[index],
+                        static_cast<std::uint32_t>(index),
+                        multiSegments[index].second, systemOffset);
+        const std::size_t entry = multiIndexOffset
+            + DRW_DataStorageConst::SEGMENT_HEADER_SIZE
+            + index * DRW_DataStorageConst::SEGMENT_INDEX_ENTRY_SIZE;
+        putMultiU64(entry, multiSegments[index].first);
+        putMultiU32(entry + 8u,
+                    static_cast<std::uint32_t>(multiSegments[index].second));
+    }
+
+    const std::size_t multiSchemaIndexPayload = multiSchidxOffset
+        + DRW_DataStorageConst::SEGMENT_HEADER_SIZE;
+    putMultiU32(multiSchemaIndexPayload, 2u);
+    putMultiU32(multiSchemaIndexPayload + 4u, 0u);
+    const std::array<std::size_t, 2> multiSchdatOffsets{{
+        multiSchdatAOffset, multiSchdatBOffset}};
+    for (std::size_t index = 0; index < 2u; ++index) {
+        const std::size_t entry = multiSchemaIndexPayload + 8u + index * 12u;
+        putMultiU32(entry, static_cast<std::uint32_t>(index));
+        putMultiU32(entry + 4u, static_cast<std::uint32_t>(index + 2u));
+        putMultiU32(entry + 8u, 8u);
+
+        const std::size_t payload = multiSchdatOffsets[index]
+            + DRW_DataStorageConst::SEGMENT_HEADER_SIZE;
+        putMultiU32(payload, 8u);
+        putMultiU32(payload + 4u, 1u);
+        const std::size_t schema = payload + 8u;
+        putMultiU16(schema, 0u);
+        putMultiU16(schema + 2u, 1u);
+        putMultiU32(schema + 4u, 0u);
+        putMultiU32(schema + 8u,
+                    DRW_DataStorageConst::SCHEMA_PROPERTY_NO_NAME);
+        putMultiU32(schema + 12u, 1u);
+        putMultiU16(schema + 16u, 0u);
+        putMultiU32(multiSchdatOffsets[index] + 80u, 0u);
+    }
+
+    const std::size_t multiPropertiesHeader = multiSchemaIndexPayload
+        + 8u + 2u * DRW_DataStorageConst::SCHEMA_INDEX_ENTRY_SIZE;
+    putMultiU64(multiPropertiesHeader, 0x00000000000af10cull);
+    putMultiU32(multiPropertiesHeader + 8u, 2u);
+    putMultiU32(multiPropertiesHeader + 12u, 0u);
+    for (std::size_t index = 0; index < 2u; ++index) {
+        const std::size_t entry = multiPropertiesHeader + 16u + index * 12u;
+        putMultiU32(entry, static_cast<std::uint32_t>(index + 2u));
+        putMultiU32(entry + 4u, 0u);
+        putMultiU32(entry + 8u, static_cast<std::uint32_t>(index));
+    }
+
+    const DRW_DataStorageSection parsedMultiSegmentRoles =
+        DRW_parseDataStorage(multiSegmentRoles, DRW::AC1032);
+    const bool multiSegmentProfile =
+        parsedMultiSegmentRoles.structurallyValid
+        && parsedMultiSegmentRoles.replayAllowed
+        && parsedMultiSegmentRoles.schemaCount == 2u
+        && parsedMultiSegmentRoles.schemas.size() == 2u
+        && parsedMultiSegmentRoles.schemas[0].index == 0u
+        && parsedMultiSegmentRoles.schemas[1].index == 1u
+        && parsedMultiSegmentRoles.schemaUnknownProperties.size() == 2u
+        && parsedMultiSegmentRoles.schemaUnknownProperties[0].segmentIndex
+            == 2u
+        && parsedMultiSegmentRoles.schemaUnknownProperties[0].localOffset
+            == 0u
+        && parsedMultiSegmentRoles.schemaUnknownProperties[1].segmentIndex
+            == 3u
+        && parsedMultiSegmentRoles.schemaUnknownProperties[1].localOffset
+            == 0u;
+    t.expect(multiSegmentProfile,
+             "DataStorage accepts reversed schema-table roles partitioned across two schdat segments");
+
+    const DRW_DataStorageSection rejectedUnwitnessedAc1027MultiSegmentRoles =
+        DRW_parseDataStorage(multiSegmentRoles, DRW::AC1027);
+    const bool selectedUnwitnessedAc1027Compatibility = std::any_of(
+        rejectedUnwitnessedAc1027MultiSegmentRoles.diagnostics.cbegin(),
+        rejectedUnwitnessedAc1027MultiSegmentRoles.diagnostics.cend(),
+        [](const DRW_DataStorageDiagnostic& diagnostic) {
+            return diagnostic.code
+                == "datastorage-ac1027-schema-table-role-compatibility";
+        });
+    t.expect(!rejectedUnwitnessedAc1027MultiSegmentRoles.structurallyValid
+                 && !rejectedUnwitnessedAc1027MultiSegmentRoles.replayAllowed
+                 && !selectedUnwitnessedAc1027Compatibility,
+             "DataStorage keeps the multi-schdat reversed-role profile AC1032-specific");
+
+    std::vector<std::uint8_t> malformedMultiSegmentRoles = multiSegmentRoles;
+    for (unsigned byte = 0; byte < 4u; ++byte)
+        malformedMultiSegmentRoles[multiSchemaIndexPayload + 8u + 8u + byte]
+            = static_cast<std::uint8_t>(127u >> (byte * 8u));
+    const DRW_DataStorageSection rejectedMultiSegmentRoles =
+        DRW_parseDataStorage(malformedMultiSegmentRoles, DRW::AC1032);
+    const bool selectedMultiSegmentCompatibility = std::any_of(
+        rejectedMultiSegmentRoles.diagnostics.cbegin(),
+        rejectedMultiSegmentRoles.diagnostics.cend(),
+        [](const DRW_DataStorageDiagnostic& diagnostic) {
+            return diagnostic.code
+                == "datastorage-ac1027-schema-table-role-compatibility";
+        });
+    t.expect(!rejectedMultiSegmentRoles.structurallyValid
+                 && !rejectedMultiSegmentRoles.replayAllowed
+                 && !selectedMultiSegmentCompatibility,
+             "DataStorage rejects an out-of-segment multi-schdat schema root without selecting the compatibility profile");
 }
 
 void testFramePublicationContract(TestContext& t) {

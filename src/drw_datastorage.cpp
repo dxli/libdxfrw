@@ -776,72 +776,112 @@ bool hasAc1027ReversedSchemaTableRoles(
         return false;
     }
 
-    const DRW_DataStorageSegment* schemaSegment = nullptr;
-    for (const DRW_DataStorageSegment& segment : section.segments) {
-        if (segment.kind != DRW_DataStorageSegmentKind::SchemaData)
-            continue;
-        if (schemaSegment != nullptr)
-            return false;
-        schemaSegment = &segment;
-        schemaSegmentIndex = segment.index;
+    const std::size_t segmentCount = section.segments.size();
+    std::vector<std::uint32_t> unknownCounts;
+    std::vector<std::uint32_t> schemaCounts;
+    std::vector<std::uint64_t> firstSchemaOffsets;
+    std::vector<std::uint64_t> previousSchemaOffsets;
+    try {
+        unknownCounts.assign(segmentCount, 0u);
+        schemaCounts.assign(segmentCount, 0u);
+        firstSchemaOffsets.assign(
+            segmentCount, std::numeric_limits<std::uint64_t>::max());
+        previousSchemaOffsets.assign(segmentCount, 0u);
+    } catch (...) {
+        return false;
     }
-    if (schemaSegment == nullptr)
-        return false;
 
-    const std::uint64_t schemaCount =
-        static_cast<std::uint64_t>(section.schemaPropertyEntries.size());
-    const std::uint64_t unknownCount =
-        static_cast<std::uint64_t>(section.schemaIndexEntries.size());
-    std::uint64_t firstSchemaLocalOffset = 0;
-    if (!checkedMultiply(unknownCount, 8u, firstSchemaLocalOffset))
-        return false;
-
-    std::uint64_t previousSchemaOffset = 0;
+    // The alternate producer profile keeps schema roots in the first table
+    // and unknown-property headers in the second. Some sources put every
+    // root in one schdat segment; others partition both tables across several
+    // schdat segments. Count and validate each segment independently so a
+    // multi-segment profile cannot be mistaken for the ODA table ordering.
     for (std::size_t index = 0;
          index < section.schemaPropertyEntries.size(); ++index) {
         const DRW_DataStorageSchemaIndexEntry& reference =
             section.schemaPropertyEntries[index];
         if (reference.index != index
-            || reference.segmentIndex != schemaSegmentIndex
-            || reference.localOffset < firstSchemaLocalOffset
-            || (index != 0u
-                && reference.localOffset <= previousSchemaOffset)) {
+            || reference.segmentIndex >= segmentCount
+            || section.segments[reference.segmentIndex].index
+                   != reference.segmentIndex
+            || section.segments[reference.segmentIndex].kind
+                   != DRW_DataStorageSegmentKind::SchemaData) {
             return false;
         }
-        previousSchemaOffset = reference.localOffset;
+        const std::size_t segmentIndex = reference.segmentIndex;
+        if (schemaCounts[segmentIndex] != 0u
+            && reference.localOffset <= previousSchemaOffsets[segmentIndex]) {
+            return false;
+        }
+        ++schemaCounts[segmentIndex];
+        previousSchemaOffsets[segmentIndex] = reference.localOffset;
+        firstSchemaOffsets[segmentIndex] = std::min(
+            firstSchemaOffsets[segmentIndex],
+            static_cast<std::uint64_t>(reference.localOffset));
     }
 
-    for (std::size_t index = 0;
-         index < section.schemaIndexEntries.size(); ++index) {
-        const DRW_DataStorageSchemaIndexEntry& reference =
-            section.schemaIndexEntries[index];
-        std::uint64_t expectedOffset = 0;
-        if (!checkedMultiply(index, 8u, expectedOffset)
-            || reference.segmentIndex != schemaSegmentIndex
-            || reference.localOffset != expectedOffset
+    const std::uint64_t schemaCount =
+        static_cast<std::uint64_t>(section.schemaPropertyEntries.size());
+    for (const DRW_DataStorageSchemaIndexEntry& reference :
+         section.schemaIndexEntries) {
+        if (reference.segmentIndex >= segmentCount
+            || section.segments[reference.segmentIndex].index
+                   != reference.segmentIndex
+            || section.segments[reference.segmentIndex].kind
+                   != DRW_DataStorageSegmentKind::SchemaData
             || reference.index >= schemaCount) {
             return false;
         }
+        const std::size_t segmentIndex = reference.segmentIndex;
+        std::uint64_t expectedOffset = 0;
+        if (!checkedMultiply(unknownCounts[segmentIndex], 8u,
+                             expectedOffset)
+            || reference.localOffset != expectedOffset) {
+            return false;
+        }
+        ++unknownCounts[segmentIndex];
     }
 
-    std::uint64_t payloadStart = 0;
-    std::uint64_t segmentEnd = 0;
-    std::uint64_t systemDataEnd = 0;
-    std::uint64_t alignmentBytes = 0;
-    if (!getSegmentBounds(r, *schemaSegment, payloadStart, segmentEnd)
-        || !checkedMultiply(schemaSegment->systemDataAlignmentOffset, 16u,
-                            alignmentBytes)
-        || !checkedAdd(schemaSegment->offset, alignmentBytes,
-                       systemDataEnd)
-        || systemDataEnd < payloadStart || systemDataEnd > segmentEnd
-        || !isRangeWithin(payloadStart, firstSchemaLocalOffset,
-                          systemDataEnd)) {
-        return false;
+    bool haveSchemaSegment = false;
+    std::size_t usedSchemaSegmentCount = 0u;
+    for (std::size_t index = 0; index < segmentCount; ++index) {
+        if (schemaCounts[index] == 0u)
+            continue;
+        haveSchemaSegment = true;
+        ++usedSchemaSegmentCount;
+        if (unknownCounts[index] == 0u)
+            return false;
+        std::uint64_t firstSchemaLocalOffset = 0;
+        if (!checkedMultiply(unknownCounts[index], 8u,
+                             firstSchemaLocalOffset)
+            || firstSchemaOffsets[index] != firstSchemaLocalOffset) {
+            return false;
+        }
+
+        const DRW_DataStorageSegment& segment = section.segments[index];
+        std::uint64_t payloadStart = 0;
+        std::uint64_t systemDataEnd = 0;
+        std::uint64_t segmentEnd = 0;
+        std::uint64_t alignmentBytes = 0;
+        if (!getSegmentBounds(r, segment, payloadStart, segmentEnd)
+            || !checkedMultiply(segment.systemDataAlignmentOffset, 16u,
+                                alignmentBytes)
+            || !checkedAdd(segment.offset, alignmentBytes,
+                           systemDataEnd)
+            || systemDataEnd < payloadStart || systemDataEnd > segmentEnd
+            || !isRangeWithin(payloadStart, firstSchemaLocalOffset,
+                              systemDataEnd)) {
+            return false;
+        }
+        if (schemaSegmentIndex == 0u)
+            schemaSegmentIndex = segment.index;
     }
 
-    return !section.schemaPropertyEntries.empty()
-        && section.schemaPropertyEntries.front().localOffset
-            == firstSchemaLocalOffset;
+    // Multi-schdat splitting is observed on the AC1032 sample only. Retain
+    // the earlier single-segment AC1027 profile without widening its source
+    // qualification from a generated vector.
+    return haveSchemaSegment
+        && (section.m_version != DRW::AC1027 || usedSchemaSegmentCount == 1u);
 }
 
 void readSchemaNames(const ByteReader& r,
