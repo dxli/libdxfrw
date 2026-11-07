@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-06 (AC1018 OLE2FRAME candidate screened out). This file
+Updated 2026-11-06 (AC1021 TABLEGEOMETRY candidate screened out; P4 queue refreshed). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -59,154 +59,30 @@ generated controls should cover the ordinary edit/retry loop. Keep test DWG/DXF
 fixtures out of commits unless they already exist in LibreCAD/libdxfrw or were
 created locally from scratch for the specific control.
 
-### Next implementation-ready slices
+### Next work packets
 
-1. **P4 / select the next source-qualified mixed OBJECTS graph:** the AC1021
-   children-room DXF re-export slice is complete for its exact local source
-   profile; full strict same-version re-export and a second fresh import/export
-   now pass. Its DBCOLOR carrier is retained with a bounded baseline and replayed
-   raw, while its typed view drives graph validation. The locally authored fast
-   control checks non-handle payload/order, owner binding, ASCII/Binary
-   readback, mutation refusal with destination preservation, and same-adapter
-   retry. See the [current gap receipt](docs/research/p4-ac1021-children-room-strict-output-gaps-2026-11-06.json).
-   The 28-stream same-version local census is complete; it found no additional
-   strict-output source beyond children-room, lineweights, mechanical and
-   tablet. Do not repeat those sources as candidate discovery. Select the next
-   distinct bounded OBJECTS graph from prior selected-output or bounded-partial
-   evidence, and require independently checked owner/reference roles. The AC1021
-   `tablet.dwg` XRECORD at `0x2BCF` is a promising bounded graph: its NOD-owned
-   `ASEBlockHierarchyIndexRecord` dictionary route is identified, and LibreDWG
-   independently resolves all 208 unique code-330 payloads as INSERT entities.
-   The corrected inventory includes the separate `mBlock` model-space
-   container: all 208 unique code-330 targets occur once as typed INSERTs. A
-   narrow AC1021 NOD-owned `ASEBlockHierarchyIndexRecord` route now validates
-   that graph and passes generated ASCII/Binary readback with remapped entity
-   references, wrong-kind/dangling refusal, destination preservation, and
-   same-writer correction/retry. A same-version physical recheck now passes
-   the tablet's DICTIONARYVAR version/profile preflight (source AC1021,
-   requested AC1021; the earlier AC1024-target attempt was correctly refused
-   by its version gate). HATCH finalization then exposed a missing emitted-type
-   binding for a referenced CIRCLE; the mapping and locally authored regression
-   control are committed.
-   With it, the strict same-version conversion advances through the exact
-   three-layout tablet profile and the four type-34 VIEWPORTs. Staged output
-   proofs now qualify those seven source identities, moving the opaque callback
-   count from 43/51 to 50/51. The VIEWPORT route passes the physical ASCII and
-   Binary readback control, including typed fields, entity-container and
-   LAYOUT/BLOCK_RECORD membership, derived group 68/69, destination-preserving
-   refusal, and same-adapter correction/retry.
-   LibreDWG 0.14's minJSON identifies the OLE2FRAME as a member of the
-   `*Model_Space` BLOCK_HEADER list (source BLOCK_RECORD handle `0x1F`), even
-   though its entity `entmode` is 2 and it has no direct `ownerhandle`. The
-   local adapter delivers it into synthetic `mBlock` (`*U0`); that container
-   maps to the fixed model-space BLOCK_RECORD during DXF writing. The earlier
-   owner probe used the synthetic name as a table lookup and incorrectly got
-   handle zero. The exact AC1021/handle/layout profile now binds the typed
-   `mBlock` member to fixed model-space output owner `0x1F`, after matching the
-   immutable typed/payload snapshot to the OLE2FRAME type-74 raw callback and
-   source frame. Its staged ENTITIES proof decodes and checks identity, owner,
-   OLE fields, declared length and every payload byte. Physical ASCII/Binary
-   readback passes; a changed payload is refused with destination preservation
-   and no qualification publication, then succeeds after correction on the
-   same writer. The same-version strict `dwg2dxf` conversion now succeeds and
-   qualifies 51/51 callbacks for this exact local source profile. Do not infer
-   ownership from `entmode` or broaden the profile without new source evidence.
-   The HATCH/CIRCLE emitted-type fix has a locally generated AC1021 DWG regression control:
-   it writes and reads a HATCH whose external boundary is a CIRCLE, then
-   verifies ASCII and Binary DXF fresh readback resolves the remapped boundary
-   handle to that CIRCLE. The registered fast CTest
-   `dwg_hatch_circle_boundary_output` passes. Next ready work is to select the
-   next independently evidenced source/graph profile and continue P4 closure;
-   the tablet route qualifies only this exact selected source. The peer census provides
-   independent type/name and
-   handle inventory, not native semantic acceptance. Broader source-profile
-   output and support claims remain open. See the updated
-   [LAYOUT/VIEWPORT receipt](docs/research/p4-ac1021-tablet-layout-viewport-output-2026-11-06.json)
-   and the source graph's
-   [tablet XRECORD receipt](docs/research/p4-ac1021-tablet-ase-block-hierarchy-xrecord-target-screen-2026-11-06.json)
-   and the generated control registered as
-   `libdxfrw_ase_hierarchy_ac1021_insert_target_roundtrip`.
-   The AC1018 `Extruder2.dwg` OLE2FRAME candidate is screened out for output.
-   LibreDWG 0.14 independently lists four OLE2FRAMEs: three in `*Model_Space`
-   BLOCK_HEADER `0x1F`; one, `0x4B4F`, in named BLOCK_HEADER
-   `A$C33475CF6` (`0x4B1F`) with the same direct owner. libdxfrw independently
-   delivers and retains all four typed/raw frames, and its typed named-block
-   member and owner agree with the peer graph. However, this source has 474
-   entity parse failures and the integrity ledger reports 476 rows, retains
-   only 16 and omits 460. Strict output refuses incomplete read disposition;
-   bounded-partial output also refuses because the integrity ledger is not
-   complete. Do not weaken either gate or add an output route for this source.
-   See the [candidate screen receipt](docs/research/p4-ac1018-extruder2-ole2frame-candidate-screen-2026-11-06.json).
-   The fresh AC1024 architectural corpus candidate reaches strict finalization
-   at 484/490 callbacks; all six unresolved identities are named-block
-   SORTENTSTABLEs owned by Door/Window or anonymous BLOCK_RECORDs. Autodesk's
-   DXF record contract limits SORTENTSTABLE's owner to *MODEL_SPACE or
-   *PAPER_SPACE, so retain refusal and do not widen that schema from this
-   candidate. See the [owner-scope evidence](https://help.autodesk.com/cloudhelp/2015/ENU/AutoCAD-DXF/files/GUID-462F4378-F850-4E89-90F2-3C1880F55779.htm).
-   A distinct AC1021 source profile, `lineweights.dwg`, now completes strict
-   whole-source conversion after adding bounded admission for its empty
-   `ASEBlockHierarchyIndexRecord`: exact NOD `ASE_INDEX_DICTIONARY` root,
-   one dictionary child, empty XRECORD body, and retained DCO15 EED. The
-   focused physical selector verifies source frames, ASCII/Binary readback,
-   owner/reactor/EED links, mutation refusal and same-adapter retry; the
-   generated fast control covers wrong-root refusal and retry. Strict full-DWG
-   conversion and a fresh same-version DXF re-export pass for this exact local
-   source hash. Preserve the existing nonempty 208-reference tablet profile;
-   this does not qualify ASE semantics or another producer. See the
-   [empty-cache receipt](docs/research/p4-ac1021-lineweights-ase-empty-cache-strict-output-2026-11-06.json).
-   A same-version sweep of 28 unique local DWG byte streams found only four
-   strict-output successes, all already profiled: children-room, lineweights,
-   mechanical, and tablet. Do not repeat these as candidate discovery. Select
-   the next smallest distinct rooted graph from prior bounded-partial or
-   selected-graph evidence, requiring typed owners and supported target routes;
-   reject immediately when reader disposition, integrity completeness, source
-   binding or output admission fails. Preserve the existing OLE2FRAME tablet
-   profile unchanged. Keep all local source/output files outside Git and author
-   any generated controls from scratch. Retain the screened-out candidate
-   boundaries below; do not reopen them without new source or admission
-   evidence. See the [same-version corpus census](docs/research/p4-local-same-version-strict-output-census-2026-11-06.json).
-   The current `title_block-arch.dwg` AC1024 probe reads 501/501 frames with
-   zero entity/object parse failures and a finalized-complete frame report,
-   but strict and bounded-partial export correctly refuse its three null
-   ordinary BLOCK_CONTROL targets. The source trace, LibreDWG 0.14 JSON and
-   ODA v5.4.1 §20.4.51 agree that the slots carry soft-owner roles and that
-   separate model/paper-space hard-owner handles are present; ODA does not
-   document null ordinary entries. The prior `TableControlHandleRole` row
-   (`expected=2`, `observed=2`, no target handle) was misclassified: role
-   values match, while the target is null. It now reports
-   `TableControlNullMember`, names the control object, and remains an Error.
-   A generated fast regression control distinguishes null-target and wrong-
-   role diagnostics. This repairs diagnostic accuracy only; keep the physical
-   source out of output qualification and do not synthesize targets or relax
-   either export gate. See the [diagnostic receipt](docs/research/p4-ac1024-block-control-null-member-diagnostic-2026-11-06.json).
-   The `truetype.dwg` candidate is screened out for now: XRECORD `0x5E3` contains
-   four code-330 LAYER handles and four code-331 LTYPE handles, but its owner
-   chain starts at the LAYER_CONTROL extension dictionary (`0x59B`), then
-   `ACAD_LAYERSTATES` (`0x59C`) and `ACAD_VIEWS_default`. The existing
-   versioned LayerStates gate explicitly declines this AC1021 LAYER_CONTROL
-   root profile. Its four layer targets are source-present, but that alone does
-   not qualify the root owner or output route. The read reports zero entity and
-   object parse failures despite leftover-bit diagnostics; do not change the
-   reader or enable generic code-330-to-LAYER acceptance from this candidate.
-   Autodesk classifies XRECORD codes 330–339 as soft pointers, but the exact
-   record context and source owner route still govern admission. The larger
-   `plot_screening_and_fill_patterns.dwg` candidate has 240 XRECORD handle
-   references and also stops at an unresolved code-330 target; defer it pending
-   a bounded complete graph screen. The strict-converting AC1024
-   `mechanical_example-imperial.dwg` is already the existing profiled source,
-   not a distinct candidate. AC1027 `Cover.dwg` reads 111/111 frames with zero
-   entity/object parse failures, then strict output stops at the independent
-   “source references are not fully qualified” gate; keep it out of this
-   OBJECTS slice until its unresolved target set and owner roles are scoped.
-   Continue screening existing sources for a distinct, dependency-closed graph
-   with a supported root and emitted target route. For any selected candidate,
-   require exact source-frame and owner binding, ordered ASCII/Binary output and
-   fresh readback, wrong-kind/missing-target refusal with destination
-   preservation, and corrected same-adapter retry; create regression input
-   from scratch and keep corpus/output files outside Git. Corpus provenance is
-   unauthenticated and these observations do not promote support claims (see
-   the [candidate screen receipt](docs/research/p4-ac1021-xrecord-layer-target-candidate-screen-2026-11-06.json)).
-   Keep P4 aggregate closure and all general support claims open.
+1. **P4 / source-qualified OBJECTS graph — no new candidate ready:** the
+   28-stream same-version census is complete; its four strict-output sources
+   are already profiled (children-room, lineweights, mechanical, tablet). The
+   exact children-room selected-output inventory is complete (112/112 standard
+   objects and 74/74 carriers). Tablet's 51/51 callbacks and lineweights strict
+   conversion are source-bounded results, not general profiles. Do not repeat
+   these source scans.
+
+   Recent candidates remain refused for distinct reasons: AC1024 architectural
+   SORTENTSTABLE owner scope, title-block null BLOCK_CONTROL members, AC1021
+   truetype LayerStates owner route / plot-screening unresolved target, AC1027
+   Cover incomplete reference closure, and AC1018 Extruder2 incomplete parser
+   disposition. See the [same-version census](docs/research/p4-local-same-version-strict-output-census-2026-11-06.json),
+   [source inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json),
+   and linked candidate receipts below.
+
+   **Next action:** admit a P4 code slice only after a distinct source has
+   complete read disposition, an independently checked root/owner/reference
+   graph, and supported emitted routes. Screen one candidate at a time; stop
+   on the first unsatisfied gate, preserve strict refusal, and move to an
+   independent source-ready task. Keep test drawings outside Git unless they
+   already exist in LibreCAD/libdxfrw or were authored from scratch.
 2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
    the 15 complete physical `AcExpr` records are each one-member FIELDLIST
    entries and each is a child of a typed `_text` FIELD; all 15 parent-child
@@ -1379,6 +1255,13 @@ Strict output still fails, and no support claim is promoted.
    open. The parser validates cell soft-pointer roles and resolves relative
    handles; physical nonzero target closure remains open. See the [cell-reference
    receipt](docs/research/p5-tablegeometry-cell-soft-pointer-dwg-role-2026-11-03.json).
+   A local AC1021 metric TABLE candidate is screened out: the trace encounters
+   unsupported TABLE CadValue data type 48 (payload bits 278726 and 312907),
+   which is outside the ODA §20.4.99 documented flag set; the peer JSON exposes
+   TABLE entities but no direct TABLEGEOMETRY record. This source cannot establish
+   TABLEGEOMETRY source spans or graph closure. Do not broaden the type parser
+   from this candidate; reopen only with a complete, source-bound TABLE graph.
+   See the [candidate screen receipt](docs/research/p5-ac1021-metric-tablegeometry-candidate-screen-2026-11-06.json).
 4. Use the existing `p5-ac1027-*` receipts as the exclusion inventory. Implement
    only distinct uncovered source- or consumer-backed CONTENTFORMAT and
    CELLSTYLEMAP combinations, extended CMC/name-color or linetype profiles, and
