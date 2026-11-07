@@ -1,0 +1,54 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "title": "TABLESTYLE DWG unit wire domain and generated identity vectors",
+  "date": "2026-11-07",
+  "supportClaimEffect": "none",
+  "scope": {
+    "classes": ["DRW_TableStyle", "DRW_TableStyleContentFormat"],
+    "versions": ["AC1021", "AC1024", "AC1027", "AC1032"],
+    "productionChanges": ["src/drw_objects.cpp"],
+    "testControlChange": "tests/dwg_object_vectors_tests.cpp",
+    "fixturesAdded": false
+  },
+  "authorities": [
+    {
+      "title": "Open Design Specification for .dwg files v5.4.1",
+      "url": "https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf",
+      "sections": ["20.4.99 Value", "20.4.101.2 R24 TABLESTYLE format", "20.4.101.3 Content format"],
+      "finding": "§20.4.99 enumerates serialized DWG unit types 0=unitless, 1=distance, 2=angle, 4=area, and 8=volume. §20.4.101.3 points TABLESTYLE content unit type to that shared DWG value definition. §20.4.101.2 documents the R24 standard style IDs 1-4 and custom IDs starting at 101."
+    },
+    {
+      "title": "Autodesk AutoCAD DatabaseServices.UnitType Enumeration",
+      "url": "https://help.autodesk.com/cloudhelp/2026/ENU/OARX-ManagedRefGuide/files/OARX-ManagedRefGuide-Autodesk_AutoCAD_DatabaseServices_UnitType.html",
+      "finding": "The API additionally defines Currency=0x10, Percentage=0x20, and AngleNotTransformed=0x10000. This API enumeration alone does not qualify these values as serialized DWG values in the TABLESTYLE field."
+    },
+    {
+      "title": "Existing local AC1024 TABLESTYLE producer receipt",
+      "path": "docs/research/ac1024-tablestyle-standard-identities-fast-slice-2026-10-22.json",
+      "finding": "The physical architectural_example-imperial.dwg TABLESTYLE at handle 135 exposed repeated style ID 1 with raw class 0. Preserve class 0 as opaque compatibility state; do not assign it data/label meaning."
+    }
+  ],
+  "implementation": {
+    "unitTypePolicy": "DWG content-format and legacy-row readers now use the strict serialized-wire domain shared with DWG payload validation/output: versions AC1021+ and values 0, 1, 2, 4, 8. The broader API/DXF enum validator remains separate. Unsupported API-only values fail parsing atomically through the existing TABLESTYLE reset path.",
+    "identityControl": "The generated repeated-style frame now writes the repeated style index equal to the repeated style ID, satisfying the existing parser relation. The prior generated value zero caused all repeated-style identity vectors to be rejected before ID/class retention could be checked.",
+    "compatibility": "Class zero remains accepted only within the already established AC1024 repeated-style compatibility range and remains uninterpreted. This change does not broaden output qualification or support claims."
+  },
+  "verification": {
+    "build": {
+      "command": "cmake --build build --target dwg2dxf libdxfrw_dwg_object_vectors_tests -j4",
+      "result": "passed"
+    },
+    "focusedTests": {
+      "command": "ctest --test-dir build -R '^libdxfrw_tablestyle_(nested_raw_net|identity_domains|content_format_enum_domains)$' --output-on-failure",
+      "result": "passed, 3/3"
+    },
+    "diffCheck": "git diff --check passed",
+    "externalFixtures": "none added"
+  },
+  "limits": [
+    "Generated object vectors prove parser behavior for the specified values, not producer breadth.",
+    "No serialized DWG witness for the API-only unit values was found or claimed.",
+    "No native CAD semantic, graph-closure, or whole-file output qualification is added.",
+    "P5 and the overall DWG/DXF parity objective remain open."
+  ]
+}

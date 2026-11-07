@@ -2656,7 +2656,7 @@ bool makeTableStyleFrame(DRW::Version version, std::int32_t styleType,
     strings.putVariableText(version, "Table");
     body.putBitLong(includeRepeatedStyle ? 1 : 0);
     if (includeRepeatedStyle) {
-        body.putBitLong(0); // R24 cell-style index
+        body.putBitLong(repeatedStyleId); // R24 cell-style index matches ID
         body.putBitLong(1); // cell style type
         body.putBitShort(0u); // no data
         body.putBitLong(repeatedStyleId);

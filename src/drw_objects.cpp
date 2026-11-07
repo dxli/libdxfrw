@@ -2152,12 +2152,13 @@ bool validTableStyleValueUnitType(DRW::Version version,
         || value == 0x10 || value == 0x20 || value == 0x10000;
 }
 
-bool validTableStyleDwgWriteUnitType(DRW::Version version,
-                                     std::int32_t value) noexcept {
-    // Keep DWG emission to the explicitly enumerated R2007+ values in ODA
-    // §20.4.99 until an independent producer file establishes the API-only
-    // extensions in serialized DWG. Reading still retains documented API
-    // enum values; the writer fails closed rather than guessing wire support.
+bool validTableStyleDwgUnitType(DRW::Version version,
+                                std::int32_t value) noexcept {
+    // ODA §20.4.99 enumerates the serialized R2007+ DWG values. Autodesk's
+    // AcValue::UnitType API additionally defines Currency, Percentage, and
+    // AngleNotTransformed, but that API enum does not prove those values occur
+    // in this DWG field. Keep the wire reader and writer fail-closed until a
+    // producer-backed DWG witness establishes an extension.
     return version >= DRW::AC1021
         && (value == 0 || value == 1 || value == 2
             || value == 4 || value == 8);
@@ -2231,7 +2232,7 @@ bool readTableStyleContentFormat(DRW::Version version, dwgBuffer *buf,
         || !readInt(format.m_valueUnitType)
         || !(legacyCellStyleMap
                 ? format.m_valueUnitType == 0
-                : validTableStyleValueUnitType(version, format.m_valueUnitType)))
+                : validTableStyleDwgUnitType(version, format.m_valueUnitType)))
         return false;
     if (!readVariableTextWithinBounds(buf, textBuf, version, bodySize,
                                       stringSize, format.m_valueFormatString))
@@ -2558,7 +2559,7 @@ bool readLegacyTableStyleRowStyle(DRW::Version version, dwgBuffer *buf,
         if (!readBitLongWithinBody(buf, version, bodySize, valueDataType)
             || !validTableStyleValueDataType(version, valueDataType)
             || !readBitLongWithinBody(buf, version, bodySize, valueUnitType)
-            || !validTableStyleValueUnitType(version, valueUnitType))
+            || !validTableStyleDwgUnitType(version, valueUnitType))
             return false;
         rowStyle.m_valueDataType = valueDataType;
         rowStyle.m_valueUnitType = valueUnitType;
@@ -18055,7 +18056,7 @@ bool validCellStyleMapContentFormat(
         && (format.m_propertyFlags
             & ~format.m_propertyOverrideFlags) == 0u
         && validTableStyleValueDataType(version, format.m_valueDataType)
-        && validTableStyleDwgWriteUnitType(version, format.m_valueUnitType)
+        && validTableStyleDwgUnitType(version, format.m_valueUnitType)
         && std::isfinite(format.m_rotation)
         && std::isfinite(format.m_blockScale)
         && format.m_cellAlignment >= 1 && format.m_cellAlignment <= 9
@@ -18238,7 +18239,7 @@ bool DRW_TableStyle::validateDwgPayload(DRW::Version version) const {
             && (!validFinite(row.m_textHeight)
                 || !validTableStyleValueDataType(
                     version, row.m_valueDataType)
-                || !validTableStyleDwgWriteUnitType(
+                || !validTableStyleDwgUnitType(
                     version, row.m_valueUnitType)
                 || row.m_valueDataType < std::numeric_limits<std::int32_t>::min()
                 || row.m_valueDataType > std::numeric_limits<std::int32_t>::max()

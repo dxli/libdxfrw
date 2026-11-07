@@ -10,12 +10,10 @@ and basing raw TABLESTYLE identity/order checks on emitted remapped handles.
 The test verifies unchanged raw payload/spelling, Table-to-TABLESTYLE identity,
 following-object order, and malformed-record recovery for generated ASCII and
 Binary DXF. This is test-readiness evidence only; production behavior and support
-claims are unchanged. Rebuilt focused reruns confirm two separate domain
-controls still fail: AC1024 identity vectors involving built-in ID 4 or a
-repeated style class 0, and the AC1032 content-format vector with unit type 16.
-These generated expectations need source/spec reconciliation before any codec
-change. See the [nested
-raw-net receipt](docs/research/p5-tablestyle-nested-raw-net-remapped-identity-fast-slice-2026-11-07.json).
+claims are unchanged. The two adjacent domain controls now pass after correcting
+the generated repeated-style index and aligning DWG unit-type admission with the
+ODA wire enum. The existing AC1024 producer-observed class-0 value remains
+retained as opaque state. See the [TABLESTYLE domain receipt](docs/research/p5-tablestyle-dwg-unit-and-identity-domains-2026-11-07.json) and [nested raw-net receipt](docs/research/p5-tablestyle-nested-raw-net-remapped-identity-fast-slice-2026-11-07.json).
 
 The local AC1018 `HatchG.dwg`
 CellStyleMap typed parse failure now falls back to exact raw-only preservation
@@ -1511,12 +1509,13 @@ The generated nested TABLESTYLE raw-net control now models ordinary and covered
 cells with explicit unit spans and uses the output's remapped raw-object handles
 for identity and order assertions. Its focused ASCII/Binary selector passes;
 this fixes a malformed test control and stale source-handle expectations, not a
-production codec defect. Other TABLESTYLE domain failures and physical producer
-coverage remain open. Rebuilt targeted tests reproduce identity-domain failures
-for AC1024 cases involving built-in style ID 4 and repeated class 0, plus an
-AC1032 value-unit type 16 expectation; no parser change is justified until
-these generated controls are reconciled with authoritative wire evidence
-([receipt](docs/research/p5-tablestyle-nested-raw-net-remapped-identity-fast-slice-2026-11-07.json)).
+production codec defect. The adjacent AC1024 identity and AC1032 unit-domain
+selectors now pass: the generated repeated-style index matches its style ID,
+and DWG decoding accepts only the ODA §20.4.99 wire values 0/1/2/4/8. Autodesk's
+broader UnitType API values remain supported in the DXF/API value domain, but
+are not admitted as DWG wire values without a producer witness. The existing
+AC1024 producer-observed class 0 remains opaque. Physical producer breadth and
+the rest of P5 remain open ([domain receipt](docs/research/p5-tablestyle-dwg-unit-and-identity-domains-2026-11-07.json), [raw-net receipt](docs/research/p5-tablestyle-nested-raw-net-remapped-identity-fast-slice-2026-11-07.json)).
 
 DXF SUN parsing retains a separately supplied RGB group regardless of the
 order of group 63, so the existing strict output refusal cannot be bypassed by
