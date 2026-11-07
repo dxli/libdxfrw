@@ -10135,6 +10135,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
         std::unordered_map<std::uint32_t, const DRW_Dictionary*> generatedDictionaryOwners;
         std::map<dx_data::ImageDefinitionKey, dx_data::ImageDefinitionKey> sourceImageReactors;
         const DRW_Dictionary* rootedImageDictionary = nullptr;
+        const DRW_Dictionary* rootedGroupDictionary = nullptr;
         std::unordered_set<std::uint32_t> backgroundHandles;
         std::unordered_set<std::uint32_t> blockDelimiterHandles;
         std::unordered_set<std::uint32_t> blockRecordHandles;
@@ -10371,6 +10372,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     }
                 }
             }
+            rootedGroupDictionary = groupDictionary;
             std::unordered_map<std::uint32_t, const DRW_Dictionary::Entry*> entries;
             std::unordered_set<std::string> names;
             bool complete = groupDictionary != nullptr && !groupDictionary->countCap
@@ -14296,6 +14298,18 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                 if (reactor == 0u || reactor == DRW::NoHandle)
                     return reject(ExtensionGraphFailure::InvalidGraph,
                         "GROUP has a null reactor target");
+                // In the bounded DWG GROUP profile, the same rooted
+                // ACAD_GROUP dictionary is both the GROUP parent and its
+                // persistent reactor. The dictionary/root/key closure above
+                // already proves this target and its output route; do not
+                // traverse the protected NOD child as an ordinary extension
+                // object (queueTarget intentionally rejects root dictionaries).
+                if (data->sourceFormat == dx_source_format::DWG
+                    && rootedGroupDictionary != nullptr
+                    && group.parentHandle == rootedGroupDictionary->handle
+                    && reactor == rootedGroupDictionary->handle
+                    && groupReferenceHandles.count(group.handle) != 0u)
+                    continue;
                 if (groupReferenceHandles.count(reactor) != 0u
                     || linetypeHandles.count(reactor) != 0u
                     || blockDelimiterHandles.count(reactor) != 0u)

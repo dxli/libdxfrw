@@ -1487,6 +1487,15 @@ target_include_directories(libdxfrw_dwg2dxf_adapter_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src
 )
 target_link_libraries(libdxfrw_dwg2dxf_adapter_tests PRIVATE dxfrw)
+add_test(NAME dwg2dxf_generated_ac1021_group_parent_reactor_closure
+    COMMAND ${CMAKE_COMMAND}
+        "-DAUTHOR=$<TARGET_FILE:libdxfrw_dwg_ac1021_polyline_group_targets_tests>"
+        "-DADAPTER=$<TARGET_FILE:libdxfrw_dwg2dxf_adapter_tests>"
+        "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/run_ac1021_group_reactor_closure_test.cmake)
+set_tests_properties(dwg2dxf_generated_ac1021_group_parent_reactor_closure
+    PROPERTIES LABELS "fast;dwg;dxf;group;adapter;transaction;generated;AC1021"
+    TIMEOUT 45)
 add_test(NAME dwg2dxf_dimassoc_adapter_closure_refusal
     COMMAND ${CMAKE_COMMAND}
         "-DAUTHOR=$<TARGET_FILE:libdxfrw_dimassoc_physical_transport_tests>"

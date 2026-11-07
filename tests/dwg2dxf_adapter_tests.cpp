@@ -78101,6 +78101,43 @@ bool groupAdapterRoundTrip() {
     return true;
 }
 
+bool generatedAc1021GroupReactorClosure(
+        const std::filesystem::path& sourcePath) {
+    dx_data source;
+    dx_iface sourceReader;
+    if (!sourceReader.fileImport(sourcePath.string(), &source, false)
+        || source.sourceFormat != dx_source_format::DWG
+        || source.sourceVersion != DRW::AC1021
+        || source.groups.size() != 1u
+        || source.groupCaptureFailed || source.groupNameResolutionFailed)
+        return fail("generated AC1021 GROUP source did not import completely");
+    DRW_Group& group = source.groups.front();
+    if (group.parentHandle != DRW::DwgAcadGroupDictionaryHandle
+        || group.reactorHandles
+            != std::vector<std::uint32_t>{group.parentHandle}
+        || group.m_entityHandles.size() != 1u)
+        return fail("generated AC1021 GROUP owner/reactor/member profile changed");
+
+    dx_iface planner;
+    if (!DxIfaceExtensionGraphTestAccess::prepare(planner, source, true))
+        return fail(std::string("valid AC1021 GROUP parent-reactor root was rejected: ")
+            + planner.extensionGraphFailureDetail());
+    group.reactorHandles.front() = 0xDEADu;
+    if (DxIfaceExtensionGraphTestAccess::prepare(planner, source, true)
+        || planner.extensionGraphFailure()
+            != dx_iface::ExtensionGraphFailure::InvalidGraph)
+        return fail("unresolved AC1021 GROUP reactor target was not rejected");
+    group.reactorHandles.front() = group.parentHandle;
+    if (!DxIfaceExtensionGraphTestAccess::prepare(planner, source, true)
+        || planner.extensionGraphFailure()
+            != dx_iface::ExtensionGraphFailure::None)
+        return fail(std::string("corrected AC1021 GROUP graph did not retry: ")
+            + planner.extensionGraphFailureDetail());
+    std::cout << "Generated AC1021 GROUP rooted parent-reactor closure passed; "
+                 "unresolved target refused and same-planner retry succeeded.\n";
+    return true;
+}
+
 bool ucsBaseHeaderNameTargetClosure() {
     const auto nonce = static_cast<std::uint64_t>(
         std::chrono::steady_clock::now().time_since_epoch().count());
@@ -83328,6 +83365,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--group-empty-ac1021-output-readback")
         return physicalAc1021EmptyGroupDictionaryOutputReadback(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--generated-group-ac1021-reactor-closure")
+        return generatedAc1021GroupReactorClosure(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--image-dict-empty-ac1021-output-readback")
         return physicalAc1021NodDictionaryGraphOutputReadback(
