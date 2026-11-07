@@ -22,6 +22,14 @@
     "bundle": "/Applications/ODAFileConverter.app",
     "executable": "/Applications/ODAFileConverter.app/Contents/MacOS/ODAFileConverter",
     "sha256": "21a8f029e7d41af64088f65492404d97ffec0d2f7886703b3b725f5ac4a55783",
+    "signatureVerification": {
+      "command": "codesign --verify --deep --strict --verbose=2 /Applications/ODAFileConverter.app",
+      "valid": false,
+      "result": "invalid signature (code or signature have been modified)",
+      "teamIdentifier": "4SVB9F72E4",
+      "candidateCodeDirectoryHash": "909b0c308395c8f158ac0bb2412b79e9d8a5d632a7e0940503aade24d463eaf9",
+      "interpretation": "Launch Services kLSNoExecutableErr may be related to the invalid bundle signature; causation has not been established. Do not modify or re-sign the installed application as part of this plan update."
+    },
     "bundleMetadata": {
       "CFBundleIdentifier": "ODAFileConverter",
       "CFBundleExecutable": "ODAFileConverter",

@@ -29375,7 +29375,7 @@ bool DRW_Viewport::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
         DRW_DBG("\nfront Clip Z: "); DRW_DBG(frontClip);
         DRW_DBG(" back Clip Z: "); DRW_DBG(backClip);
         DRW_DBG("\n snap Angle: "); DRW_DBG(snapAngle);
-        DRW_DBG("\nview center X: "); DRW_DBG(centerPX); DRW_DBG(", Y: "); DRW_DBG(centerPX);
+        DRW_DBG("\nview center X: "); DRW_DBG(centerPX); DRW_DBG(", Y: "); DRW_DBG(centerPY);
         DRW_DBG("\nSnap base point X: "); DRW_DBG(snapPX); DRW_DBG(", Y: "); DRW_DBG(snapPY);
         DRW_DBG("\nSnap spacing X: "); DRW_DBG(snapSpPX); DRW_DBG(", Y: "); DRW_DBG(snapSpPY);
         std::uint16_t parsedCircleZoom = 0;
