@@ -836,6 +836,25 @@ and [LEADER receipt](docs/research/p4-leader-dimstyle-reference-fail-closed-2026
    typed output or a proven end-to-end replay path. Keep unresolved records
    refused. Never weaken the completeness predicate, emit a partial graph, or
    infer edges from adjacent handle values.
+   The AC1024 inline constraint-node dependency audit is already implemented;
+   do not reopen that parser/audit task from the earlier 2026-10-30 receipt.
+   Across the two identified physical sources, its local audit verifies all
+   29/29 and 31/31 non-null geometry-dependency references, dependency object
+   kinds, same-group ownership/action membership, dependent-on entity targets,
+   owner routes, and reactor backlinks. The AC1024 civil source additionally
+   verifies 18 non-null readdep/node links, including 16 same-group reciprocal
+   dependency edges and two entity targets. LibreDWG 0.14 independently
+   confirms the common dependency objects and links, but does not decode the
+   inline node bodies. This closes only source-link accounting for these two
+   profiles: no associative constraint graph is emitted or read back, and no
+   native constraint behavior is established. Next, select one bounded,
+   source-closed subgraph and bind source node/dependency/entity identities to
+   exact DXF records and handles, with ASCII/Binary fresh typed readback,
+   malformed-link destination preservation, and same-adapter correction
+   retry. Keep the physical source route refused until the source-specific
+   whole-file gate and this output proof both pass. See the [dependency-link
+   receipt](docs/research/p4-ac1024-assoc-node-dependency-source-links-2026-10-30.json)
+   and the [generated graph output control](tests/CMakeLists.txt).
    HATCH and MPOLYGON group-330 boundary references now reject zero and
    `DRW::NoHandle` sources and outputs. Generated ASCII/Binary controls cover
    mapped IDs, invalid remaps, rollback, and refusal before publishing a
