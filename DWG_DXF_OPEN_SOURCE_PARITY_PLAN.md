@@ -152,15 +152,17 @@ created locally from scratch for the specific control.
    source hash. Preserve the existing nonempty 208-reference tablet profile;
    this does not qualify ASE semantics or another producer. See the
    [empty-cache receipt](docs/research/p4-ac1021-lineweights-ase-empty-cache-strict-output-2026-11-06.json).
-   Continue the census with a source already admitted by strict or
-   bounded-partial export, then choose the smallest distinct rooted graph whose
-   targets and owners are typed and output-supported. Reject candidates
-   immediately when reader disposition, integrity completeness, source binding
-   or output admission fails; preserve the existing OLE2FRAME tablet profile
-   unchanged. Keep all local source/output files outside Git and author any
-   generated controls from scratch. Retain the screened-out candidate
+   A same-version sweep of 28 unique local DWG byte streams found only four
+   strict-output successes, all already profiled: children-room, lineweights,
+   mechanical, and tablet. Do not repeat these as candidate discovery. Select
+   the next smallest distinct rooted graph from prior bounded-partial or
+   selected-graph evidence, requiring typed owners and supported target routes;
+   reject immediately when reader disposition, integrity completeness, source
+   binding or output admission fails. Preserve the existing OLE2FRAME tablet
+   profile unchanged. Keep all local source/output files outside Git and author
+   any generated controls from scratch. Retain the screened-out candidate
    boundaries below; do not reopen them without new source or admission
-   evidence.
+   evidence. See the [same-version corpus census](docs/research/p4-local-same-version-strict-output-census-2026-11-06.json).
    The current `title_block-arch.dwg` AC1024 probe reads 501/501 frames with
    zero entity/object parse failures and a finalized-complete frame report,
    but strict and bounded-partial export correctly refuse its three null
