@@ -15,12 +15,36 @@
     "command": "/opt/homebrew/bin/dwgread -O minJSON /Users/dli/doc/dwg/lineweights.dwg",
     "minJsonSha256": "142376c790d1a4ab5b0bf2d4b00e5da8b5cb36d419b347d21d1184bee815b86a",
     "layoutGraph": [
-      {"handle": "0x22", "name": "Model", "blockRecord": "0x1f", "activeViewport": null, "viewports": []},
-      {"handle": "0x102", "name": "ISO A4 Size", "blockRecord": "0x103", "activeViewport": "0x104", "viewports": ["0x104", "0x105"]},
-      {"handle": "0x108", "name": "Letter Size", "blockRecord": "0x109", "activeViewport": "0x10a", "viewports": ["0x10a", "0x10b"]}
+      {
+        "handle": "0x22",
+        "name": "Model",
+        "blockRecord": "0x1f",
+        "activeViewport": null,
+        "viewports": []
+      },
+      {
+        "handle": "0x102",
+        "name": "ISO A4 Size",
+        "blockRecord": "0x103",
+        "activeViewport": "0x104",
+        "viewports": [
+          "0x104",
+          "0x105"
+        ]
+      },
+      {
+        "handle": "0x108",
+        "name": "Letter Size",
+        "blockRecord": "0x109",
+        "activeViewport": "0x10a",
+        "viewports": [
+          "0x10a",
+          "0x10b"
+        ]
+      }
     ],
     "root": "NOD 0x0c -> ACAD_LAYOUT DICTIONARY 0x1a -> the exact three named LAYOUT records; each BLOCK_RECORD links back to its LAYOUT.",
-    "authority": "ODA Open Design Specification v5.4.1 §20.4.84 governs the LAYOUT object body and its DWG common-link stream. LibreDWG JSON is a peer cross-check, not the byte-layout authority."
+    "authority": "ODA Open Design Specification v5.4.1 \u00a720.4.84 governs the LAYOUT object body and its DWG common-link stream. LibreDWG JSON is a peer cross-check, not the byte-layout authority."
   },
   "implementation": {
     "changes": [
@@ -58,5 +82,11 @@
   },
   "fixturesAdded": 0,
   "externalItemsPromoted": 0,
-  "nextAction": "Add exact AC1021 source/output binding for VIEWPORT callbacks 0x104, 0x105, 0x10a, and 0x10b. The LAYOUT selector has already established their owning layouts and ordered membership."
+  "nextAction": "The exact lineweights LAYOUT and four-VIEWPORT source/output profile is complete for this source. Continue only with a distinct source/profile gap; do not repeat this source as candidate discovery.",
+  "currentRecheck": {
+    "date": "2026-11-06",
+    "receipt": "docs/research/p4-ac1021-lineweights-viewport-physical-output-2026-11-06.json",
+    "result": "The exact four VIEWPORT callbacks listed in this LAYOUT profile now pass physical ASCII/Binary output and fresh typed readback, and the strict full-source AC1021 conversion succeeds with all 49 opaque callbacks qualified.",
+    "supportClaimEffect": "none"
+  }
 }

@@ -65,9 +65,11 @@ created locally from scratch for the specific control.
    28-stream same-version census is complete; its four strict-output sources
    are already profiled (children-room, lineweights, mechanical, tablet). The
    exact children-room selected-output inventory is complete (112/112 standard
-   objects and 74/74 carriers). Tablet's 51/51 callbacks and lineweights strict
-   conversion are source-bounded results, not general profiles. Do not repeat
-   these source scans.
+   objects and 74/74 carriers). Tablet's 51/51 callbacks and lineweights'
+   49/49 callbacks are source-bounded results, not general profiles;
+   lineweights' exact four-VIEWPORT ASCII/Binary readback and strict
+   same-version conversion now pass ([receipt](docs/research/p4-ac1021-lineweights-viewport-physical-output-2026-11-06.json)).
+   Do not repeat these source scans.
 
    Recent candidates remain refused for distinct reasons: AC1024 architectural
    SORTENTSTABLE owner scope, title-block null BLOCK_CONTROL members, AC1021
