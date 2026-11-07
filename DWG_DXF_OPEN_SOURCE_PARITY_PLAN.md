@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-06 (AC1021 LayerStates candidates screened). This file
+Updated 2026-11-06 (tablet AC1021 LAYOUT/VIEWPORT projection rechecked). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -80,11 +80,31 @@ created locally from scratch for the specific control.
    narrow AC1021 NOD-owned `ASEBlockHierarchyIndexRecord` route now validates
    that graph and passes generated ASCII/Binary readback with remapped entity
    references, wrong-kind/dangling refusal, destination preservation, and
-   same-writer correction/retry. The physical tablet source passes this graph
-   gate, then strict output stops at the independent DICTIONARYVAR DWG
-   source/output snapshot gate; therefore whole-source output and support
-   claims remain open. Next resolve that later gate or select another
-   dependency-closed source profile. The source is unauthenticated; see the
+   same-writer correction/retry. A same-version physical recheck now passes
+   the tablet's DICTIONARYVAR version/profile preflight (source AC1021,
+   requested AC1021; the earlier AC1024-target attempt was correctly refused
+   by its version gate). HATCH finalization then exposed a missing emitted-type
+   binding for a referenced CIRCLE; the local working change adds that mapping.
+   With it, the strict same-version conversion advances through the exact
+   three-layout tablet profile and the four type-34 VIEWPORTs. Staged output
+   proofs now qualify those seven source identities, moving the opaque callback
+   count from 43/51 to 50/51. The VIEWPORT route passes the physical ASCII and
+   Binary readback control, including typed fields, entity-container and
+   LAYOUT/BLOCK_RECORD membership, derived group 68/69, destination-preserving
+   refusal, and same-adapter correction/retry. The remaining callback is
+   OLE2FRAME handle `0x2B80` (11136); strict whole-source output still refuses.
+   Next: (a) baseline the source OLE2FRAME model and exact payload under bounded
+   retained-byte accounting; (b) inspect staged ASCII/Binary OLE2FRAME identity,
+   owner and every modeled field/payload byte against that baseline, then prove
+   fresh readback, atomic refusal and corrected same-writer retry; (c) add a
+   locally generated HATCH/CIRCLE-reference regression control for the newly
+   added CIRCLE emitted-type binding; (d) rerun same-version strict conversion
+   and whole-file fresh readback, preserving refusal if any other dependency
+   remains unqualified. The peer census provides independent type/name and
+   handle inventory, not native semantic acceptance. Whole-source output and
+   support claims remain open. See the new
+   [LAYOUT/VIEWPORT receipt](docs/research/p4-ac1021-tablet-layout-viewport-output-2026-11-06.json)
+   and the source graph's
    [tablet XRECORD receipt](docs/research/p4-ac1021-tablet-ase-block-hierarchy-xrecord-target-screen-2026-11-06.json)
    and the generated control registered as
    `libdxfrw_ase_hierarchy_ac1021_insert_target_roundtrip`.

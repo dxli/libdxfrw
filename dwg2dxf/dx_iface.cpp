@@ -29670,6 +29670,18 @@ bool dx_iface::prepareDwgDictionaryVars(DRW::Version version, bool binary,
     const DRW::Version expectedTargetVersion =
         cData->sourceVersion == DRW::AC1021
             ? DRW::AC1021 : DRW::AC1024;
+    if (debug)
+        std::cerr << "DICTIONARYVAR source gate details: source-version="
+                  << static_cast<int>(cData->sourceVersion)
+                  << " requested-version=" << static_cast<int>(version)
+                  << " expected-version="
+                  << static_cast<int>(expectedTargetVersion)
+                  << " one-import="
+                  << cData->hasSingleSuccessfulNamedResourceImport()
+                  << " has-nod=" << cData->hasNamedObjectDictionary
+                  << " records=" << cData->dictionaryVars.size()
+                  << " selected=" << m_extensionDictionaryVarHandles.size()
+                  << '\n';
     if (version != expectedTargetVersion
         || !cData->hasSingleSuccessfulNamedResourceImport()
         || !cData->hasNamedObjectDictionary
@@ -34869,6 +34881,11 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
         && hasLayoutIdentity(0x22u, "Model")
         && hasLayoutIdentity(0x102u, "ISO A4 Size")
         && hasLayoutIdentity(0x108u, "Letter Size");
+    const bool ac1021TabletProfile = ac1021Profile
+        && cData->layouts.size() == 3u
+        && hasLayoutIdentity(0x22u, "Model")
+        && hasLayoutIdentity(0x1B18u, "ISO A2 Plot")
+        && hasLayoutIdentity(0x2B16u, "ANSI C Plot");
     if (version != (ac1021Profile ? DRW::AC1021 : DRW::AC1024))
         return skip("target is outside the exact source-version DXF profile");
 
@@ -34878,7 +34895,8 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
     const bool ac1015Profile = cData->sourceVersion == DRW::AC1015;
     const bool ac1018Profile = cData->sourceVersion == DRW::AC1018;
     const std::size_t expectedLayoutCount =
-        (ac1018Profile || ac1021LineweightsProfile) ? 3u : 2u;
+        (ac1018Profile || ac1021LineweightsProfile
+            || ac1021TabletProfile) ? 3u : 2u;
     if (cData->layouts.size() != expectedLayoutCount
         || !cData->hasNamedObjectDictionary
         || cData->namedObjectDictionary.handle == 0u
@@ -34968,6 +34986,9 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
     const std::vector<const char*> expected = ac1021LineweightsProfile
         ? std::vector<const char*>{
             "Model", "ISO A4 Size", "Letter Size"}
+        : ac1021TabletProfile
+        ? std::vector<const char*>{
+            "Model", "ISO A2 Plot", "ANSI C Plot"}
         : std::vector<const char*>{
             "Model", "Layout1",
             ac1018Profile ? "Layout2"
@@ -35407,6 +35428,9 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
         const bool expectedPaperLayouts = ac1021LineweightsProfile
             ? selectedNames.count("ISO A4 Size") == 1u
                 && selectedNames.count("Letter Size") == 1u
+            : ac1021TabletProfile
+            ? selectedNames.count("ISO A2 Plot") == 1u
+                && selectedNames.count("ANSI C Plot") == 1u
             : ac1018Profile
             ? selectedNames.count("Layout1") == 1u
                 && selectedNames.count("Layout2") == 1u
@@ -36549,6 +36573,9 @@ bool dx_iface::inspectDwgLayouts(
         }
         if (!hasUnchangedDwgLayoutOutputSources())
             return reject("source changed during staged OBJECTS inspection");
+        for (const auto& row : m_dwgLayoutOutputSources)
+            if (!recordOpaqueDwgOutputQualification(row.first))
+                return reject("LAYOUT source callback identity qualification staging");
         m_dwgLayoutsObjectsInspected = true;
         return true;
     } catch (...) {
@@ -73312,6 +73339,11 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
         {0x105u, 2, 2, "ISO A4 Size"},
         {0x10Au, 1, 1, "Letter Size"},
         {0x10Bu, 2, 2, "Letter Size"}}};
+    constexpr std::array<ExpectedViewport, 4> ac1021TabletProfile{{
+        {0x1B1Au, 1, 1, "ISO A2 Plot"},
+        {0x1B1Bu, 2, 2, "ISO A2 Plot"},
+        {0x2B18u, 1, 1, "ANSI C Plot"},
+        {0x2B19u, 2, 2, "ANSI C Plot"}}};
     const auto matchesProfile = [&type34Entities](const auto& profile) {
         return type34Entities.size() == profile.size()
             && std::all_of(profile.begin(), profile.end(),
@@ -73324,6 +73356,8 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
     const bool ac1021LineweightsSource =
         cData->sourceVersion == DRW::AC1021
         && matchesProfile(ac1021LineweightsProfile);
+    const bool ac1021TabletSource = cData->sourceVersion == DRW::AC1021
+        && matchesProfile(ac1021TabletProfile);
     const bool mechanicalSource = cData->sourceVersion == DRW::AC1024
         && matchesProfile(mechanicalProfile);
     const bool titleBlockSource = matchesProfile(titleBlockProfile);
@@ -73331,16 +73365,18 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
     // accepted only without an extension dictionary; that would add an
     // unqualified child graph and must stay refused until separately proved.
     if (!ac1021Source && !ac1021LineweightsSource
-        && !mechanicalSource && !titleBlockSource)
+        && !ac1021TabletSource && !mechanicalSource && !titleBlockSource)
         return true;
     const ExpectedViewport* expected = ac1021Source
         ? ac1021Profile.data()
         : ac1021LineweightsSource ? ac1021LineweightsProfile.data()
+        : ac1021TabletSource ? ac1021TabletProfile.data()
         : mechanicalSource ? mechanicalProfile.data()
                            : titleBlockProfile.data();
     const std::size_t expectedCount = ac1021Source
         ? ac1021Profile.size()
         : ac1021LineweightsSource ? ac1021LineweightsProfile.size()
+        : ac1021TabletSource ? ac1021TabletProfile.size()
         : mechanicalSource ? mechanicalProfile.size()
                            : titleBlockProfile.size();
     const bool xrecordSource = ac1021Source || mechanicalSource;
@@ -74668,6 +74704,7 @@ bool dx_iface::finalizeDxfWrite() {
             return "ACAD_TABLE";
         switch (target.type) {
         case DRW::ARC: return "ARC";
+        case DRW::CIRCLE: return "CIRCLE";
         case DRW::ELLIPSE: return "ELLIPSE";
         case DRW::HATCH: return "HATCH";
         case DRW::INSERT: return "INSERT";
@@ -74699,12 +74736,27 @@ bool dx_iface::finalizeDxfWrite() {
             || !dxfW->dxfWriteSourceEntityHasIdentity(
                 target.first, target.second.emitted, recordName,
                 sectionName, ownerHandle)) {
+            if (m_debugDwgOutputQualification)
+                std::cerr << "HATCH source binding mismatch: source="
+                          << target.first << " emitted="
+                          << target.second.emitted << " type="
+                          << static_cast<int>(target.second.type)
+                          << " owner=" << target.second.owner
+                          << " owner-handle=" << ownerHandle
+                          << " record="
+                          << (recordName != nullptr ? recordName : "<none>")
+                          << " section=" << sectionName
+                          << " published=" << target.second.published
+                          << '\n';
             failHatchPublication();
             return false;
         }
     }
     for (const auto& block : m_hatchOwnerBlocks) {
         if (!block.second) {
+            if (m_debugDwgOutputQualification)
+                std::cerr << "HATCH owner block was not published: "
+                          << block.first << '\n';
             failHatchPublication();
             return false;
         }

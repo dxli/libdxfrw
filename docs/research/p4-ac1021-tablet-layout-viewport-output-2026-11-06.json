@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "date": "2026-11-06",
+  "scope": "selected AC1021 tablet.dwg LAYOUT and VIEWPORT source/output proof",
+  "source": {
+    "path": "/Users/dli/doc/dwg/tablet.dwg",
+    "sha256": "7f203649dc8434ef7cf7a46f7f6def2a0192a1163ba34ebcf88ebfe69635ccd4",
+    "provenance": "local corpus; producer provenance unauthenticated",
+    "version": "AC1021",
+    "opaque_callback_count": 51
+  },
+  "independent_peer_inventory": {
+    "tool": "LibreDWG 0.14.0 minJSON",
+    "path": "/private/tmp/tablet-libredwg.json",
+    "sha256": "54f69c22c8528f0d20f4c010446baecb581463c362430a413a40feeec5224f4d",
+    "layouts": [
+      {"handle": "0x22", "name": "Model", "type": "LAYOUT"},
+      {"handle": "0x1B18", "name": "ISO A2 Plot", "type": "LAYOUT"},
+      {"handle": "0x2B16", "name": "ANSI C Plot", "type": "LAYOUT"}
+    ],
+    "viewports": ["0x1B1A", "0x1B1B", "0x2B18", "0x2B19"],
+    "ole2frame": "0x2B80"
+  },
+  "implementation": {
+    "layout_profile": "Exact three-layout source inventory; existing proof validates rooted ACAD_LAYOUT dictionary, source fields, reciprocal BLOCK_RECORD identity/backlinks, and staged ASCII/Binary output fields before qualifying the three LAYOUT callback identities.",
+    "viewport_profile": "Exact four type-34 callback identities; existing proof validates typed VIEWPORT projection, unique paper-space LAYOUT membership, reciprocal BLOCK_RECORD ownership, emitted record identity/owner and derived DXF groups 68/69.",
+    "files": [
+      "dwg2dxf/dx_iface.cpp",
+      "tests/dwg2dxf_adapter_tests.cpp"
+    ]
+  },
+  "validation": {
+    "build": "cmake --build build --target dwg2dxf libdxfrw_dwg2dxf_adapter_tests -j4; passed with -Werror",
+    "focused_command": "build/tests/libdxfrw_dwg2dxf_adapter_tests --viewport-physical-output-readback /Users/dli/doc/dwg/tablet.dwg",
+    "result": "passed in ASCII and Binary; four VIEWPORT projections freshly read back with typed fields and container membership; invalid payload preserved destination and did not publish qualifications; correction and retry passed on the same adapter",
+    "qualified_opaque_callbacks": 50,
+    "source_opaque_callbacks": 51,
+    "strict_whole_source_conversion": "still refused; OLE2FRAME handle 0x2B80 (decimal 11136) remains unqualified"
+  },
+  "limitations": [
+    "Selected source/output transport evidence only; no native CAD consumer semantics or broad AC1021 producer claim.",
+    "The source has one remaining OLE2FRAME callback. Its payload and DXF output fields still need a bounded source snapshot, exact staged-output proof, readback, rollback and retry evidence.",
+    "The HATCH-to-CIRCLE emitted-type mapping still needs a dedicated generated regression control.",
+    "No DWG or DXF fixture was added to the repository."
+  ]
+}
