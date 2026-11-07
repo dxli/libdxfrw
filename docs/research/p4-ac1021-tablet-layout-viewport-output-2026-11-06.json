@@ -19,7 +19,11 @@
       {"handle": "0x2B16", "name": "ANSI C Plot", "type": "LAYOUT"}
     ],
     "viewports": ["0x1B1A", "0x1B1B", "0x2B18", "0x2B19"],
-    "ole2frame": "0x2B80"
+    "ole2frame": {
+      "handle": "0x2B80",
+      "model_space_block_header": "0x1F",
+      "membership": "listed in *Model_Space BLOCK_HEADER entities by LibreDWG minJSON"
+    }
   },
   "implementation": {
     "layout_profile": "Exact three-layout source inventory; existing proof validates rooted ACAD_LAYOUT dictionary, source fields, reciprocal BLOCK_RECORD identity/backlinks, and staged ASCII/Binary output fields before qualifying the three LAYOUT callback identities.",
@@ -43,9 +47,12 @@
     "staged_section": "ENTITIES",
     "emitted_block_record_handle": 0,
     "owner_identity_proved": false,
-    "independent_peer_membership": "LibreDWG 0.14 minJSON's two paper-space BLOCK_HEADER entity lists include the four VIEWPORT handles but not OLE2FRAME 0x2B80; the OLE2FRAME has entmode=2 but no ownerhandle.",
-    "disposition": "unresolved; retain strict refusal",
-    "note": "An experimental inspector was removed after it surfaced this missing owner binding; it rejected serialization before the existing strict-completeness gate and did not qualify the frame. Do not infer an owner from entmode. Seek a producer-valid source with closed ownership or authoritative orphan semantics."
+    "independent_peer_membership": "LibreDWG 0.14 minJSON lists OLE2FRAME 0x2B80 in the *Model_Space BLOCK_HEADER entity list (BLOCK_RECORD handle 0x1F). It is absent from both paper-space lists. The entity has entmode=2 and no direct ownerhandle; BLOCK_HEADER membership is the owner evidence.",
+    "local_adapter_mapping": "The reader callback places the entity in synthetic dx_data.mBlock (*U0), which is serialized as model space using the fixed model-space BLOCK_RECORD role. A temporary name-based lookup of *U0 returned zero and was an invalid owner probe.",
+    "emitted_block_record_handle": null,
+    "owner_identity_proved": false,
+    "disposition": "source membership evidence found; implementation and exact staged-output proof remain open; retain strict refusal",
+    "note": "Use BLOCK_HEADER membership and the local mBlock-to-fixed-model-space role mapping; do not derive ownership from entmode or look up synthetic *U0 as a BLOCK_RECORD name. Next implement a bounded immutable typed/payload snapshot and exact staged ASCII/Binary proof, then physical fresh readback, destination-preserving refusal and same-writer retry."
   },
   "hatch_circle_regression": {
     "source": "generated AC1021 DWG authored locally for the control; no fixture is committed",
@@ -55,7 +62,7 @@
   },
   "limitations": [
     "Selected source/output transport evidence only; no native CAD consumer semantics or broad AC1021 producer claim.",
-    "The source has one remaining OLE2FRAME callback. Its *U0 container has no established emitted BLOCK_RECORD owner; resolve the block/layout relation before snapshot, staged-output proof, readback, rollback and retry work.",
+    "The source has one remaining OLE2FRAME callback. Independent BLOCK_HEADER membership identifies model space and local mBlock maps to the fixed model-space output owner, but implementation-level owner binding, staged-output proof, readback, rollback and retry remain open.",
     "No DWG or DXF fixture was added to the repository."
   ]
 }

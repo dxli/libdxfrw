@@ -84,7 +84,8 @@ created locally from scratch for the specific control.
    the tablet's DICTIONARYVAR version/profile preflight (source AC1021,
    requested AC1021; the earlier AC1024-target attempt was correctly refused
    by its version gate). HATCH finalization then exposed a missing emitted-type
-   binding for a referenced CIRCLE; the local working change adds that mapping.
+   binding for a referenced CIRCLE; the mapping and locally authored regression
+   control are committed.
    With it, the strict same-version conversion advances through the exact
    three-layout tablet profile and the four type-34 VIEWPORTs. Staged output
    proofs now qualify those seven source identities, moving the opaque callback
@@ -93,26 +94,27 @@ created locally from scratch for the specific control.
    LAYOUT/BLOCK_RECORD membership, derived group 68/69, destination-preserving
    refusal, and same-adapter correction/retry. The remaining callback is
    OLE2FRAME handle `0x2B80` (11136); strict whole-source output still refuses.
-   The remaining OLE2FRAME is not an owner-ready output candidate in this
-   source. The local reader places handle `0x2B80` in synthetic `*U0` with no
-   BLOCK_RECORD handle/name or entity owner, and LibreDWG 0.14's minJSON lists
-   it in neither paper-space BLOCK_HEADER member list (those lists contain only
-   the four VIEWPORTs). The attempted output-proof probe returned no emitted
-   owner and was removed; strict refusal remains correct for this source. Do
-   not infer a paper-space owner from `entmode=2`. To resume OLE2FRAME output
-   work, first find an independently evidenced source whose BLOCK_HEADER and
-   entity ownership agree, or resolve this source's producer-valid orphan
-   semantics from authoritative evidence; then add a bounded immutable model
-   and payload snapshot, exact staged ASCII/Binary field/payload proof, fresh
-   readback, atomic refusal, and same-writer retry. The HATCH/CIRCLE
-   emitted-type fix now has a locally generated AC1021 DWG regression control:
+   LibreDWG 0.14's minJSON identifies the OLE2FRAME as a member of the
+   `*Model_Space` BLOCK_HEADER list (source BLOCK_RECORD handle `0x1F`), even
+   though its entity `entmode` is 2 and it has no direct `ownerhandle`. The
+   local adapter delivers it into synthetic `mBlock` (`*U0`); that container
+   maps to the fixed model-space BLOCK_RECORD during DXF writing. The earlier
+   owner probe used the synthetic name as a table lookup and incorrectly got
+   handle zero. Implement the source membership check against the peer-verified
+   model-space block list, bind `mBlock` to the fixed model-space output owner,
+   retain a bounded immutable typed/payload snapshot, then prove exact staged
+   ASCII/Binary fields and payload, fresh readback, atomic refusal and
+   same-writer retry. Do not infer the owner from `entmode`; use the
+   BLOCK_HEADER membership and local `mBlock` source association. The HATCH/CIRCLE
+   emitted-type fix has a locally generated AC1021 DWG regression control:
    it writes and reads a HATCH whose external boundary is a CIRCLE, then
    verifies ASCII and Binary DXF fresh readback resolves the remapped boundary
    handle to that CIRCLE. The registered fast CTest
-   `dwg_hatch_circle_boundary_output` passes. Next ready work is to find a
-   source-qualified OLE2FRAME with closed BLOCK_HEADER/BLOCK_RECORD ownership,
-   or continue another independent source profile; do not retry strict tablet
-   conversion until new evidence closes its orphan owner. The peer census provides
+   `dwg_hatch_circle_boundary_output` passes. Next ready work is to implement
+   the tablet OLE2FRAME route using the independently observed model-space
+   membership and the adapter's fixed model-space owner mapping; then add exact
+   staged output, fresh readback, rollback and retry proof. Do not retry strict
+   tablet conversion until that proof is implemented. The peer census provides
    independent type/name and
    handle inventory, not native semantic acceptance. Whole-source output and
    support claims remain open. See the new
