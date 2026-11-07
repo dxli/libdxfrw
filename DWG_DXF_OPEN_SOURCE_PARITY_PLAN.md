@@ -645,31 +645,35 @@ created locally from scratch for the specific control.
    2. **External schema decision (evidence-gated, short research pass):**
       reconcile ODA v5.4.1's detached-string/type-4-TV rule with eligible
       producer/source evidence and the conflicting ACadSharp/LibreDWG profiles.
-      A newly found acadrust lead has an ACAD_TABLE read test that claims a real
-      AutoCAD-authored R2007 fixture and checks schedule cell text plus
-      read/write/readback ([test source](https://github.com/hakanaktt/acadrust/blob/main/tests/table_dwg_read.rs));
-      its writer source also appears to encode type-4 cell strings in the body
-      as BL byte-counted UTF-16. This is not yet an independent schema oracle:
-      first record the exact repository revision, fixture provenance/hash and
-      ACAD_TABLE object offsets; then inspect the reader implementation and
-      third-party notices for shared lineage, and compare its parsed cells to
-      the fixture's source values. Prefer this existing fixture over obtaining
-      or committing another DWG. Do not count the test's self-roundtrip as
-      independent confirmation. If lineage/provenance or exact wire spans
-      cannot be established quickly, record the limitation and keep the
-      current source raw-only; proceed with the next ready implementation
-      packet rather than extending open-ended external research.
+      A newly found acadrust ACAD_TABLE test claims a real AutoCAD-authored R2007
+      fixture and checks schedule cell text plus read/write/readback
+      ([test source](https://github.com/hakanaktt/acadrust/blob/main/tests/table_dwg_read.rs)).
+      Its writer source encodes R2007+ type-4 cell strings as BL byte-counted
+      UTF-16 in the body. The lineage check is complete: acadrust's own
+      third-party notice says its DWG reader/writer code was ported and adapted
+      from ACadSharp, so neither its parser nor self-roundtrip is independent
+      evidence for this ACadSharp dispute. The only remaining value is the
+      claimed external producer fixture as raw bytes, if it is accessible.
+      Check whether the exact fixture is present in the acadrust repository or
+      available from an already-local/public corpus; record revision, source,
+      checksum and object offsets, then inspect the bytes directly against ODA.
+      Do not obtain or commit a new DWG for this pass. If the fixture is absent
+      or provenance/source spans cannot be checked quickly, close this lead as
+      unavailable and continue the next ready implementation packet with the
+      TABLECONTENT source raw-only.
 
-      **Decision sequence:** (a) confirm fixture existence, AC code, source,
-      checksum, and whether it is already in a public upstream repository;
-      (b) identify the R2007 TABLECONTENT equivalent in that fixture and trace
-      the relevant string payload, size field, detached stream and handle
-      stream directly; (c) compare acadrust's reader/writer paths with ODA
-      §§2, 20.1 and 20.4.99 and check provenance for shared code or assumptions;
-      (d) accept a production profile only if both decoded cell values and
-      exact source spans agree with independently attributable producer data
-      and do not contradict the normative rule. Otherwise retain raw-only
-      recovery and strict-output refusal. No external DWG enters this repo.
+      **Decision sequence:** (a) verify whether the claimed R2007 fixture is
+      accessible without adding it to this repository; capture its exact file
+      version, source, checksum and producer evidence; (b) if available, inspect
+      the raw TABLECONTENT object, exact value bytes, byte-count field, detached
+      string span and handle span directly, and compare them to ODA §§2, 20.1
+      and 20.4.99; (c) treat acadrust parsed values and write/readback only as
+      corroborating implementation observations because the DWG code derives
+      from ACadSharp; (d) change production parsing only if raw producer spans
+      and normative evidence jointly establish the field encoding and complete
+      cell semantics. Otherwise close this lead as unavailable, retain raw-only
+      recovery and strict-output refusal, and move on. No external DWG enters
+      this repo.
 
    A separate tracked external AC1032 ODA R2018 sample (`acad_table_cells.dwg`) exposed one `AcDbMentalRayRenderSettings` parse failure. The bounded parser now tries the observed base-field variants transactionally and accepts only the uniquely body/string-bounded layout. A current-code diagnostic publishes 182/182 frames with zero entity/object parse failures. Strict export remains refused by the sample's two HEADER integrity rows and 739 unclaimed bytes; this resolves one parser failure only. Independent producer evidence for the modern `hasPredefined` variants and HEADER-envelope meaning remain open. See the [fix receipt](docs/research/p6-ac1032-acad-table-cells-reader-fix-2026-11-07.json).
 

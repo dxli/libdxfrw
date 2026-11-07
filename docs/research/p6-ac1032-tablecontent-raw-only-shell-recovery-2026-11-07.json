@@ -337,7 +337,7 @@
   "externalResearchLead": {
     "project": "acadrust",
     "repository": "https://github.com/hakanaktt/acadrust",
-    "sourceRevision": "not pinned; inspected public main branch and docs.rs latest sources on 2026-11-07; pin exact commit before relying on this lead",
+    "sourceRevision": "dynamic public main branch as inspected 2026-11-07; exact tested commit still must be pinned if fixture bytes become available",
     "testSource": "https://github.com/hakanaktt/acadrust/blob/main/tests/table_dwg_read.rs",
     "writerSource": "https://docs.rs/acadrust/latest/src/acadrust/io/dwg/dwg_stream_writers/object_writer/entities.rs.html",
     "observedClaims": [
@@ -345,18 +345,19 @@
       "The test writes the parsed document to DWG and rereads it, then checks selected cell values; this self-roundtrip is not independent evidence.",
       "The current writer source encodes R2007+ table string values as UTF-16LE with a trailing NUL, writes a BL byte count, then writes bytes to its merged writer; type code 4 takes this route."
     ],
-    "status": "LEAD_UNVERIFIED",
+    "status": "PARSER_NOT_INDEPENDENT; PRODUCER_FIXTURE_UNVERIFIED",
     "independenceLimits": [
-      "Fixture availability, provenance, checksum, AC code, and source object spans have not been locally verified.",
+      "The acadrust THIRD_PARTY_NOTICES.md explicitly states its DWG reader and writer include code ported and adapted from ACadSharp. Its TABLECONTENT parser and self-roundtrip are therefore not independent evidence against the ACadSharp-derived profile.",
+      "The test claims its fixture is a real AutoCAD-authored R2007 drawing, but exact fixture availability, provenance, checksum, AC code and source object spans have not been locally verified.",
       "The inspected writer is implementation evidence, not proof of what an external producer emitted.",
-      "Reader lineage and third-party code provenance have not yet been checked; do not assume this is independent of ACadSharp, LibreDWG, or ODA-derived material.",
       "No TABLECONTENT support or schema claim is promoted."
     ],
     "boundedNextSteps": [
-      "Pin the acadrust commit and inspect its third-party notices and TABLE reader implementation.",
-      "Verify the fixture provenance, version and SHA-256 from the upstream repository without copying it into this repository.",
-      "If accessible, map one known type-4 cell value to exact body, detached-string and handle spans; compare with ODA v5.4.1 §§2, 20.1 and 20.4.99.",
-      "Stop this research pass if provenance or source-span evidence is unavailable; retain raw-only source behavior and continue the next local implementation packet."
-    ]
+      "Check whether the exact claimed fixture is accessible in the public upstream repository or an already-local corpus without copying it into this repository.",
+      "If accessible, pin the repository commit, record fixture provenance/version/SHA-256, and inspect one type-4 cell value plus exact body, detached-string and handle spans directly.",
+      "Compare raw producer spans with ODA v5.4.1 §§2, 20.1 and 20.4.99; treat acadrust parsed values and self-roundtrip as non-independent corroboration only.",
+      "If fixture/provenance/source-span evidence is unavailable, close this lead and continue with TABLECONTENT raw-only behavior and the next local implementation packet."
+    ],
+    "lineageEvidence": "https://raw.githubusercontent.com/hakanaktt/acadrust/main/THIRD_PARTY_NOTICES.md states that the DWG reader and writer include code ported and adapted from ACadSharp."
   }
 }
