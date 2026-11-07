@@ -2942,10 +2942,36 @@ Native source-release builds and platform qualification remain open.
   This guard is not output support and does not reduce the remaining
   qualification work.
   Keep unsupported DWG profiles refused until those gates pass.
-- The optional desktop and native Linux/Windows FreeCAD CMake gates now bind to
-  the existing tracked `ordinary_enc_AC1027.dwg`; a registration-only configure
-  lists the desktop, open, and insert controls. Native execution is still open;
-  see the [tracked-sample binding receipt](docs/research/p8-freecad-tracked-sample-binding-2026-11-02.json).
+- The optional desktop and native Linux/Windows FreeCAD CMake gates currently
+  bind to the tracked `ordinary_enc_AC1027.dwg`, but the first unlocked native
+  macOS desktop run proves that this is not a usable positive handoff sample:
+  FreeCAD 1.1.4 launches, then creates zero documents because the installed
+  `dwg2dxf` correctly refuses the source at strict output preflight
+  (`AC1027 DWG source references are not fully qualified`). Do not interpret
+  this as a FreeCAD dispatch defect or retry the same sample. The tracked
+  AC1015/AC1018/AC1021 samples and the existing locally generated AC1015 3D
+  LINE control also fail current strict-complete read disposition, so none is
+  an approved replacement yet. See the [desktop failure receipt](docs/research/p8-freecad-desktop-strict-source-blocker-2026-11-07.json).
+- **Next implementation slice — make a positive desktop source eligible before
+  rerunning FreeCAD:** (1) trace the strict-complete refusal on the existing
+  AC1015 `dwgadd` control using focused disposition diagnostics; (2) repair the
+  smallest source-read/graph-closure gap only when its DWG layout is supported
+  by the authoritative spec and generated-source evidence; (3) require the
+  installed converter's strict preflight and output to succeed on a locally
+  generated temporary DWG; (4) only then change the optional desktop harness
+  to accept `DWGADD` plus the tracked `.dwgadd` recipe, generate in its isolated
+  temp root, copy to the Unicode input path, and run separate actual FreeCAD
+  `open()` and `insert()` checks; (5) keep generated DWG/DXF artifacts outside
+  the repository and retain failure logs. The harness should fail early with
+  the converter's preflight reason if source eligibility regresses. This keeps
+  the native application test focused and avoids repeatedly launching FreeCAD
+  for an input that cannot produce DXF.
+- Until an eligible local source passes that gate, leave the desktop and native
+  Linux/Windows FreeCAD gates unqualified. The existing registration-only
+  configure and CLI subprocess contract remain useful fast checks, but they do
+  not establish a positive native open/insert path. The tracked-sample binding
+  receipt remains historical registration evidence only
+  ([receipt](docs/research/p8-freecad-tracked-sample-binding-2026-11-02.json)).
 - `dwg2dxf` now uses `std::filesystem::u8path` for input/output preflight and
   the Windows `wmain` entry point converts Unicode arguments strictly to UTF-8
   before handing them to the shared CLI parser; MinGW builds select Unicode
