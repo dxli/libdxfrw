@@ -62301,10 +62301,22 @@ void testPolylineVertexRoleClosure(TestContext& t) {
         t.expect(parentConflictRejected
                      && parentContents == "polyline vertex role sentinel\n",
                  "conflicting parent topology flags refuse atomically");
+
+        writeSentinel();
+        polyline->flags = 32; // Closed-N requires the polygon-mesh flag 16.
+        const bool closedNWithoutMeshRejected = !writer.fileExport(
+            output.string(), DRW::AC1021, binary, &data, false);
+        std::ifstream closedNInput(output, std::ios::binary);
+        const std::string closedNContents(
+            std::istreambuf_iterator<char>(closedNInput), {});
+        t.expect(closedNWithoutMeshRejected
+                     && closedNContents
+                         == "polyline vertex role sentinel\n",
+                 "closed-N modifier without polygon-mesh parent refuses atomically");
         polyline->flags = 8;
         t.expect(writer.fileExport(
                      output.string(), DRW::AC1021, binary, &data, false),
-                 "valid parent topology retries on the same adapter");
+                 "valid parent topology retries after both refusals on the same adapter");
         std::error_code error;
         std::filesystem::remove(output, error);
     }
@@ -62312,7 +62324,7 @@ void testPolylineVertexRoleClosure(TestContext& t) {
     for (const bool binary : {false, true}) {
         dx_data data;
         auto* mesh = new DRW_Polyline;
-        mesh->flags = 16;
+        mesh->flags = 48; // Polygon mesh plus closed-N modifier.
         mesh->vertexcount = 2;
         mesh->facecount = 1;
         for (const DRW_Coord& point : {DRW_Coord(1.0, 2.0, 3.0),
@@ -62336,7 +62348,7 @@ void testPolylineVertexRoleClosure(TestContext& t) {
         const auto* decoded = imported && readback.mBlock->ent.size() == 1u
             ? dynamic_cast<const DRW_Polyline*>(readback.mBlock->ent.front())
             : nullptr;
-        t.expect(decoded != nullptr && decoded->flags == 16
+        t.expect(decoded != nullptr && decoded->flags == 48
                      && decoded->vertlist.size() == 2u
                      && (decoded->vertlist[0]->flags & (32 | 64 | 128)) == 64
                      && (decoded->vertlist[1]->flags & (32 | 64 | 128)) == 64,

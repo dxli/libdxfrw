@@ -2077,6 +2077,15 @@ transaction controls pass ([identity receipt](docs/research/p8-render-settings-i
 This closes only identity transport; physical producer breadth and native
 rendering semantics remain open.
 
+**Classic POLYLINE closed-N topology guard:** DXF output now refuses parent
+flag bit 32 unless polygon-mesh bit 16 is also present. Without the mesh bit,
+the prior writer emitted an `AcDb2dPolyline` parent while tagging its vertices
+as polygon-mesh vertices. The ASCII/Binary fast control checks atomic
+destination preservation, same-adapter correction/retry, typed readback, and
+the valid 16|32 closed-N mesh profile. The neighboring WCS extrusion-loss
+guard still passes. This is output-field consistency evidence only; it does
+not qualify mesh geometry or native behavior ([receipt](docs/research/p6-dxf-polyline-closed-n-mesh-flag-guard-2026-11-07.json)).
+
 ## P7 — ACIS/ACDS and independent 3D meaning
 
 - Complete the original DWG entity → owner/key → AcDs segment → SAT/SAB join,

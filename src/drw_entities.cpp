@@ -18845,6 +18845,12 @@ bool DRW_Polyline::validateVertexTypesDxf() const noexcept {
     if (topologyFlags != 0u
         && (topologyFlags & (topologyFlags - 1u)) != 0u)
         return false;
+    // Bit 32 closes a polygon mesh in the N direction; it is a modifier for
+    // the polygon-mesh topology (bit 16), not an independent vertex family.
+    // Without bit 16 the writer would mark child VERTEX records as mesh while
+    // emitting an AcDb2dPolyline parent.
+    if ((flags & 32) != 0 && (flags & 16) == 0)
+        return false;
 
     if ((flags & 64) == 0) {
         const int expectedRole = (flags & 8) != 0 ? 32
