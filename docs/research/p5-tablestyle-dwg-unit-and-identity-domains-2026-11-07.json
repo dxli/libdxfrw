@@ -69,6 +69,11 @@
       "firstDxfSha256": "2fc4031c0000836fc2ffd4db7b1971fe09f1dcce62a12ea9019ec7357afbbd73",
       "roundtripDxfSha256": "03a955a9791fa51e6192f79743c54a513057a6a26b45a59b16c4f9a10ac13c41",
       "limits": "This is regression evidence for one existing local source. No field-by-field semantic comparator was run, and the source is not an authenticated independent producer witness."
+    },
+    "relatedCellStyleMapRegression": {
+      "command": "ctest --test-dir build -R '^libdxfrw_cellstylemap_(dwg_encode_roundtrip|identity_domains)$' --output-on-failure",
+      "result": "passed, 2/2",
+      "scope": "Confirms AC1021 CELLSTYLEMAP rejects API-only unit type 0x10 before mutating body, string, or handle buffers, while valid CELLSTYLEMAP encoding, readback, and identity-domain controls remain intact."
     }
   },
   "limits": [
