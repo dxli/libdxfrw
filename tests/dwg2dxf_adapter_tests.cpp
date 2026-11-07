@@ -22397,6 +22397,11 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
     std::cout << " typedBodyFrame type=TABLESTYLE handle=" << style.handle
               << " rows=" << style.m_rowStyles.size()
               << " cells=" << style.m_cellStyles.size()
+              << " commonReactors=" << style.reactorHandles.size()
+              << " commonOwner=" << style.parentHandle
+              << " xdict=" << style.xDictHandle
+              << " xdictFlag=" << static_cast<unsigned>(
+                     style.extensionDictionaryFlag())
               << " name=" << style.m_name
               << " prefix=" << style.m_r24PrefixPresent
               << " classVersion="
@@ -22524,6 +22529,22 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
           || rawFrame->m_bodyBitSize
               > static_cast<std::uint64_t>(rawFrame->m_rawBytes.size()) * 8u) {
         std::cerr << "AC1027 TABLESTYLE raw frame capture is incomplete\n";
+        return false;
+      }
+      dwgBuffer headerProbe(rawFrame->m_rawBytes.data(),
+                            rawFrame->m_rawBytes.size());
+      const std::uint16_t encodedType =
+          headerProbe.getObjType(DRW::AC1027);
+      const dwgHandle encodedHandle = headerProbe.getHandle();
+      const std::uint16_t eedBytes = headerProbe.getBitShort();
+      const std::int32_t commonReactors = headerProbe.getBitLong();
+      const std::uint8_t xdictFlag = headerProbe.getBit();
+      const std::uint8_t hasDataStorage = headerProbe.getBit();
+      if (!headerProbe.isGood() || encodedType != 504u
+          || encodedHandle.ref != style.handle || eedBytes != 0u
+          || commonReactors != 1 || xdictFlag != 1u
+          || hasDataStorage != 0u) {
+        std::cerr << "AC1027 TABLESTYLE raw object header is not independently readable\n";
         return false;
       }
       std::cout << " typedBodyRawFrame owner=" << style.handle

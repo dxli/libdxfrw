@@ -11,10 +11,10 @@
   },
   "localInventory": {
     "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --opaque-dwg-source-inventory /Users/dli/doc/dwg/Cover.dwg",
-    "binarySha256": "4ba1e7d9a4c9a32667d9520708ef34db3e8a9422dda4111a71fc7aa98ee5cfff",
+    "binarySha256": "06b49130c00c41aaaca57cdae8e99bb58aa429fcbfdbdf26f165c4ce36edcc82",
     "logPath": "/private/tmp/cover-field-span-raw-inventory.log",
-    "logSha256": "92f2ad4b3dd0baab4459cf17dd849094d22d99c7463154ecb86cbb9c7606e070",
-    "result": "88/88 opaque callbacks captured, with 75 retained opaque frames and 13 standard-object source frames. TABLESTYLE 0x6A parser ranges cover one Table and three repeated records, all 16 ID/class fields, four text-style handles and 24 border-linetype handles; all ranges are complete and nonempty. The captured 924-byte raw frame was independently decoded at all 40 reported spans. LibreDWG minJSON unknown_bits exactly matches the same source frame tail from bit 40 (7,352 significant bits plus zero alignment byte). Neither result independently discovers the parser-reported field boundaries."
+    "logSha256": "bf24d42735fb6acbbe7d87a4a70ee1e35bd0645b510db13449b292f07a83815a",
+    "result": "88/88 opaque callbacks captured, with 75 retained opaque frames and 13 standard-object source frames. TABLESTYLE 0x6A parser ranges cover one Table and three repeated records, all 16 ID/class fields, four text-style handles and 24 border-linetype handles; all ranges are complete and nonempty. Independent raw decoding derives the AC1027 prologue and R24 prefix through Table cell start bit 68, then validates Table cell type/data flags. The 924-byte captured frame exactly matches LibreDWG’s 7,352-bit unknown tail from bit 40 plus zero alignment byte; later identity/reference field coordinates still come from the local parser."
   },
   "independentPeerParse": {
     "tool": "LibreDWG 0.14 dwgread -O minJSON",
@@ -380,6 +380,6 @@
     "strictDxfPublished": false,
     "outputRouteQualified": false
   },
-  "nextAction": "Implement a separate ODA-schema-driven cursor over the byte-identical peer/raw frame tail. It must derive repeated record boundaries and sentinel positions without consuming local parser range coordinates, then compare all field values and edges. Preserve the unresolved ODA class/order discrepancy, strict refusal, null BLOCK_CONTROL error, aggregate guard and unclaimed HEADER suffix until the independent field walk and output-scope gates pass.",
+  "nextAction": "Extend the independent ODA-schema cursor from the derived bit-68 Table cell start across the Table cell and three repeated styles. Derive all body/string/handle positions, IDs, classes, names and following sentinels without local parser coordinates, then compare with local spans and LibreDWG raw tail. Keep the unresolved ODA class/order discrepancy, output refusal and aggregate gates.",
   "rawSpanCrossCheckReceipt": "docs/research/p6-ac1027-cover-tablestyle-raw-span-crosscheck-2026-11-07.json"
 }

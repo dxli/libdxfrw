@@ -161,6 +161,35 @@ def main():
     peer_bits = Bits(peer_unknown[:-1])
     peer_offset = 40
 
+    # Rebuild the AC1027 object prologue and R24 prefix from the raw bit
+    # cursor. These offsets are derived here from the versioned framing and
+    # field sequence; parser-reported ranges are only compared afterward.
+    type_tag = bits.read(0, 2)
+    require(type_tag == 1, "Cover does not use the expected AC1027 type tag")
+    encoded_type = 0x1F0 + bits.read(2, 8)
+    require(encoded_type == 504, "unexpected TABLESTYLE encoded type")
+    own_handle, cursor = bits.handle(10, 0)
+    eed_bytes, cursor = bits.bit_short(cursor)
+    common_reactors, cursor = bits.bit_long(cursor)
+    xdict_flag = bits.read(cursor, 1)
+    has_data_storage = bits.read(cursor + 1, 1)
+    cursor += 2
+    require(own_handle == 106 and eed_bytes == 0
+            and common_reactors == 1 and xdict_flag == 1
+            and has_data_storage == 0 and cursor == peer_offset,
+            "raw AC1027 object prologue did not close at peer tail offset")
+    class_version = bits.read(cursor, 8)
+    cursor += 8
+    r24_unknown1, cursor = bits.bit_long(cursor)
+    r24_unknown2, cursor = bits.bit_long(cursor)
+    table_cell_start = cursor
+    table_cell_type, cursor = bits.bit_long(cursor)
+    table_cell_data_flags, cursor = bits.bit_short(cursor)
+    require(table_cell_start == 68 and class_version == 0
+            and r24_unknown1 == 8 and r24_unknown2 == 101
+            and table_cell_type == 5 and table_cell_data_flags == 1,
+            "ODA R24 prefix/Table cell fields disagree with raw frame")
+
     def named(field):
         return sorted((row for row in rows if row["field"] == field),
                       key=lambda row: row["start"])
@@ -175,6 +204,10 @@ def main():
             and len(repeated_ids) == len(repeated_classes)
             == len(repeated_names) == 3,
             "expected one Table and three repeated identities")
+    table_record_rows = named("table-style-body-table-cell-record")
+    require(len(table_record_rows) == 1
+            and table_record_rows[0]["start"] == table_cell_start,
+            "independent R24 cursor disagrees with Table cell record start")
 
     decoded_ids = []
     for row in table_ids + repeated_ids:
@@ -250,6 +283,16 @@ def main():
         "verifierSha256": sha256(__file__),
         "rawFrameSha256": hashlib.sha256(raw).hexdigest(),
         "tableStyleHandle": 106,
+        "independentlyDerived": {
+            "encodedType": encoded_type,
+            "commonPrologueEndBit": peer_offset,
+            "commonReactorCount": common_reactors,
+            "r24PrefixClassVersion": class_version,
+            "r24UnknownValues": [r24_unknown1, r24_unknown2],
+            "tableCellRecordStartBit": table_cell_start,
+            "tableCellType": table_cell_type,
+            "tableCellDataFlags": table_cell_data_flags,
+        },
         "rawFrameBytes": raw_size,
         "dataStreamBits": data_bits,
         "handleStreamBits": handle_bits,
@@ -264,12 +307,18 @@ def main():
         "peerUnknownBits": peer_unknown_bits,
         "peerUnknownTailOffset": peer_offset,
         "peerUnknownTailMatchesRawFrame": True,
-        "result": "PASS parser-reported bit coordinates decode to the expected raw frame values",
+        "result": (
+            "PASS AC1027 prologue/R24 prefix independently derive Table cell "
+            "start at bit 68; parser-reported scalar/string/handle coordinates "
+            "decode to the expected raw frame values"
+        ),
         "limit": (
-            "The parser supplies field coordinates; this verifier decodes the "
-            "captured raw frame at those coordinates. It does not independently "
-            "discover field boundaries, prove physical compressed-file offsets, "
-            "or resolve ODA's repeated-order/class-meaning discrepancy."
+            "This verifier independently decodes the AC1027 object prologue "
+            "and R24 prefix through the Table cell start at bit 68. For later "
+            "cell IDs, classes, names and handles it still consumes parser-"
+            "reported coordinates. It does not yet derive those complete field "
+            "boundaries, prove compressed physical-file offsets, or resolve "
+            "ODA's repeated-order/class-meaning discrepancy."
         ),
     }
     print(json.dumps(report, indent=2, sort_keys=True))

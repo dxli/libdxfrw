@@ -229,11 +229,15 @@ created locally from scratch for the specific control.
    still consumes coordinates supplied by the parser. See the [raw-span
    cross-check receipt](docs/research/p6-ac1027-cover-tablestyle-raw-span-crosscheck-2026-11-07.json)
    and [verifier](tools/research/verify_cover_tablestyle_raw_spans.py).
-   **Next implementation slice:** add a separate ODA-schema-driven cursor over
-   the aligned raw frame tail that derives record boundaries, IDs, classes,
-   names, handles and following sentinels without consuming local parser span
-   coordinates. Compare that independent walk with the local ranges and the
-   specification. The ACadSharp sample shares the
+   The verifier now independently decodes the AC1027 common prologue, reaches
+   the peer's bit-40 class payload, walks the R24 prefix (RC plus the two BL
+   values), and derives the Table cell start at bit 68. It decodes the Table
+   cell type/data flags there and matches the reported Table record start.
+   **Next implementation slice:** extend this independent ODA-schema cursor
+   through the full Table cell style and all three repeated styles, deriving
+   identity/name/reference boundaries and following sentinels without using
+   local parser coordinates. Then compare every derived range/value with the
+   local parser and peer capture. The ACadSharp sample shares the
    library's own class/order convention and cannot settle normative correctness.
    If the class semantics remain disputed after field mapping, find a second
    producer or consumer witness. Change parser semantics only if independent
