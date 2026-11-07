@@ -45437,6 +45437,46 @@ bool associativeDxfCallbackContract() {
         }
     }
 
+    std::string incompleteEdgeDrawing = edgeGeomDependencyDrawing;
+    const std::string lastIndex = "90\n5678\n";
+    const std::size_t lastIndexPosition =
+        incompleteEdgeDrawing.find(lastIndex);
+    if (lastIndexPosition == std::string::npos)
+        return fail("could not prepare incomplete Edge dependency control");
+    incompleteEdgeDrawing.erase(lastIndexPosition, lastIndex.size());
+    for (const bool binary : {false, true}) {
+        const std::filesystem::path path = directory
+            / (binary ? "edge-geom-dependency-missing-index-binary.dxf"
+                      : "edge-geom-dependency-missing-index-ascii.dxf");
+        if (binary) {
+            if (!writeBinaryDxfControl(path.string(), incompleteEdgeDrawing))
+                return fail("could not create incomplete binary Edge dependency control");
+        } else {
+            std::ofstream output(path, std::ios::binary);
+            if (!output)
+                return fail("could not create incomplete ASCII Edge dependency control");
+            output.write(incompleteEdgeDrawing.data(),
+                         static_cast<std::streamsize>(
+                             incompleteEdgeDrawing.size()));
+            if (!output)
+                return fail("could not write incomplete ASCII Edge dependency control");
+        }
+        dx_data incompleteData;
+        CallbackProbe incompleteProbe;
+        if (!incompleteProbe.fileImport(path.string(), &incompleteData, false)
+            || incompleteData.associativeObjects.size() != 1u
+            || incompleteData.associativeObjects.front()
+                   .m_geomDependencyFieldsParsed
+            || incompleteData.associativeObjects.front()
+                   .m_geomPersistentSubentityFieldsParsed
+            || incompleteData.associativeObjects.front()
+                   .m_dependencyWireComplete) {
+            return fail(binary
+                ? "incomplete binary Edge payload was promoted as complete"
+                : "incomplete ASCII Edge payload was promoted as complete");
+        }
+    }
+
     const auto makeGroupLimitDrawing = [](bool overLimit) {
         std::string drawing =
             "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1027\n"

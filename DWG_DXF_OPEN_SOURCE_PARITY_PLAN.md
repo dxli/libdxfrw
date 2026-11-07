@@ -180,7 +180,8 @@ created locally from scratch for the specific control.
    DXF-side `AcDbAssocEdgePersSubentId` payloads now retain and emit class
    version plus both index values as three ordered group-90 values; generated
    ASCII/Binary import and writer controls pass, ASCII output survives typed
-   re-import, and incomplete or mismatched payloads refuse output atomically.
+   re-import, incomplete input remains unqualified, and incomplete or
+   mismatched payloads refuse output atomically.
    This closes only the DXF codec slice.
    It does not establish physical DWG spans or native meaning for the civil
    source's Edge bodies, whose DWG route remains refused ([receipt](docs/research/p4-dxf-assoc-edge-pers-subent-id-codec-2026-11-07.json)).

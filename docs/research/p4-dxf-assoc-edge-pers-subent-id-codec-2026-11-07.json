@@ -35,16 +35,21 @@
     "src/drw_objects.cpp": "8333c93d56dc9d4ff0e0766f0b8e7bda4454696e6a9a2fd7c4456751f120ae65",
     "src/libdxfrw.cpp": "fd0ea8562ea5f88dda3e0a2729bba4d6101782a2075b97828969aac442852605",
     "tests/wave1_tests.cpp": "22ae751c84b7765ade96f3b235da3a18a11be0a731b4a457b51b2b28f42be72c",
-    "tests/dwg2dxf_adapter_tests.cpp": "c21af6b220bf01834a3ab450adf62e2caa81bd73bb1dc010127f73f0002a1a10"
+    "tests/dwg2dxf_adapter_tests.cpp": "f94e6791713dae64fa6c000d1f1982d57547c7b7fa0a37b65ac43d719acecb87"
   },
   "validation": {
     "buildCommand": "cmake --build build-gcc --target libdxfrw_wave1_tests libdxfrw_dwg2dxf_adapter_tests -j6",
     "buildResult": "PASS with project -Werror configuration",
     "tests": [
       {
-        "command": "ctest --test-dir build-gcc -R '^(libdxfrw_associative_dependency_writer|dwg2dxf_associative_callback_contract)$' --output-on-failure",
-        "result": "PASS, 2/2 in 0.28 seconds",
-        "coverage": "ASCII/Binary writer field order, required-field refusal, mismatched SingleEdge refusal, ASCII/Binary generated DXF import retention, and ASCII writer output surviving typed dx_iface re-import."
+        "command": "ctest --test-dir build-gcc -R '^libdxfrw_associative_dependency_writer$' --output-on-failure",
+        "result": "PASS, 1/1 in 0.53 seconds",
+        "coverage": "ASCII/Binary writer field order, required-field refusal, mismatched SingleEdge refusal, and ASCII writer output surviving typed dx_iface re-import."
+      },
+      {
+        "command": "ctest --test-dir build-gcc -R '^(dwg2dxf_associative_callback_contract|dwg2dxf_associative_geometry_dependency_graph_export)$' --output-on-failure",
+        "result": "PASS, 2/2 in 0.82 seconds",
+        "coverage": "ASCII/Binary generated Edge DXF import retention, incomplete Edge payload refusal to promote complete typed fields, and unchanged generated associative geometry-dependency graph output."
       }
     ],
     "fullSuites": "NOT_RUN",
