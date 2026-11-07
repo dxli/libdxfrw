@@ -50753,6 +50753,12 @@ bool physicalViewportOutputReadback(
         && hasLayoutIdentity(0x6E6u, "AutoCAD Color Index")
         && hasLayoutIdentity(0x1DBDu, "True Color")
         && source.dwgReadOutcome.opaqueViewCallbacks == 52u;
+    const bool ac1021TrueTypeSource = ac1021Source
+        && source.layouts.size() == 3u
+        && hasLayoutIdentity(0x22u, "Model")
+        && hasLayoutIdentity(0x18Eu, "ANSI A Plot")
+        && hasLayoutIdentity(0x194u, "ISO A4 Plot")
+        && source.dwgReadOutcome.opaqueViewCallbacks == 53u;
     struct LocatedViewport {
         const DRW_Viewport* viewport{nullptr};
         std::string blockName;
@@ -50776,6 +50782,12 @@ bool physicalViewportOutputReadback(
         expectedOpaqueCallbacks = {
             {0x6A7u, 34}, {0x6A8u, 34}, {0x6AAu, 34}, {0x6ABu, 34},
             {0x1D7Eu, 34}, {0x1D81u, 34}};
+    } else if (ac1021TrueTypeSource) {
+        expectedHandles = {0x190u, 0x191u, 0x196u, 0x197u};
+        expectedOpaqueCallbacks = {
+            {0x22u, 82}, {0x18Eu, 82}, {0x194u, 82},
+            {0x190u, 34}, {0x191u, 34},
+            {0x196u, 34}, {0x197u, 34}};
     } else if (ac1021Source
         && source.dwgReadOutcome.opaqueViewCallbacks == 186u) {
         expectedHandles = {0x266u, 0x26Au};
@@ -51091,7 +51103,8 @@ bool physicalViewportOutputReadback(
         return matches == 1u ? found : LocatedCircle{};
     };
     if (ac1021Source && !ac1021LineweightsSource
-        && !ac1021TabletSource && !ac1021ColorwhSource) {
+        && !ac1021TabletSource && !ac1021ColorwhSource
+        && !ac1021TrueTypeSource) {
         const DRW_Layout* layout =
             uniqueLayoutByName(source, "dwgmodels.com");
         if (layout == nullptr || layout->handle != 0xD7u
@@ -51159,6 +51172,64 @@ bool physicalViewportOutputReadback(
                 return fail("AC1021 VIEWPORT extension graph is missing standard source-frame eligibility");
             if (styleMatches != 1u || layerMatches != 1u)
                 return fail("AC1021 VIEWPORT layer or visual-style dependency is missing/ambiguous");
+        }
+    } else if (ac1021TrueTypeSource) {
+        const auto verifyLayout = [&source, &uniqueLayoutByName,
+                                   &uniqueBlockRecord](
+                const char* name, std::uint32_t layoutHandle,
+                std::uint32_t blockHandle,
+                std::initializer_list<std::uint32_t> viewportHandles) {
+            const DRW_Layout* layout = uniqueLayoutByName(source, name);
+            const DRW_Block_Record* owner = layout == nullptr ? nullptr
+                : uniqueBlockRecord(source,
+                      layout->paperSpaceBlockRecordHandle.ref);
+            return layout != nullptr && layout->handle == layoutHandle
+                && layout->viewportCount
+                    == static_cast<std::int32_t>(viewportHandles.size())
+                && layout->viewportHandles
+                    == std::vector<std::uint32_t>(viewportHandles)
+                && owner != nullptr && owner->handle == blockHandle
+                && owner->layoutHandle == layoutHandle;
+        };
+        if (!verifyLayout("ANSI A Plot", 0x18Eu, 0x18Fu,
+                          {0x190u, 0x191u})
+            || !verifyLayout("ISO A4 Plot", 0x194u, 0x195u,
+                             {0x196u, 0x197u}))
+            return fail("AC1021 truetype LAYOUT/BLOCK_RECORD viewport lists are not exact and reciprocal");
+        for (const auto& located : sourceViewports) {
+            const DRW_Viewport& viewport = *located.viewport;
+            const DRW_Layout* layout = uniqueLayoutForViewport(
+                source, viewport.handle);
+            const DRW_Block_Record* owner = layout == nullptr ? nullptr
+                : uniqueBlockRecord(
+                      source, layout->paperSpaceBlockRecordHandle.ref);
+            const std::uint32_t expectedLayout =
+                viewport.handle == 0x190u || viewport.handle == 0x191u
+                    ? 0x18Eu : 0x194u;
+            const std::uint32_t expectedLayer =
+                viewport.handle == 0x190u || viewport.handle == 0x196u
+                    ? 0x10u : 0x18Cu;
+            const auto layer = std::find_if(
+                source.layers.begin(), source.layers.end(),
+                [expectedLayer, &viewport](const DRW_Layer& candidate) {
+                    return candidate.handle == expectedLayer
+                        && candidate.name == viewport.layer;
+                });
+            const auto style = std::find_if(
+                source.visualStyles.begin(), source.visualStyles.end(),
+                [&viewport](const DRW_VisualStyle& candidate) {
+                    return candidate.handle == 0x8F8u
+                        && candidate.handle == viewport.visualStyleHandle;
+                });
+            if (layout == nullptr || layout->handle != expectedLayout
+                || viewport.space != DRW::PaperSpace
+                || owner == nullptr || owner->layoutHandle != layout->handle
+                || viewport.xDictHandle != 0u
+                || !viewport.reactorHandles.empty()
+                || viewport.clipBoundaryHandle != 0u
+                || layer == source.layers.end()
+                || style == source.visualStyles.end())
+                return fail("AC1021 truetype VIEWPORT layout, layer/style, or optional-reference profile changed");
         }
     } else if (ac1021TabletSource) {
         const auto verifyLayout = [&source, &uniqueLayoutByName,
@@ -51467,7 +51538,8 @@ bool physicalViewportOutputReadback(
         if (!exportSelected())
             return fail("corrected physical VIEWPORT source could not retry on the same adapter");
         if (ac1021Source && !ac1021LineweightsSource
-            && !ac1021TabletSource && !ac1021ColorwhSource) {
+            && !ac1021TabletSource && !ac1021ColorwhSource
+            && !ac1021TrueTypeSource) {
             for (const std::uint32_t handle :
                     {0x267u, 0x268u, 0x26Bu, 0x26Cu}) {
                 if (!DxIfaceStandardDwgCaptureTestAccess::standardDwgOutputQualified(
@@ -51529,6 +51601,7 @@ bool physicalViewportOutputReadback(
             return fail("physical VIEWPORT retry did not qualify every source-bound callback in the admitted AC1024 witness");
         if (ac1021Source && !ac1021LineweightsSource
             && !ac1021TabletSource && !ac1021ColorwhSource
+            && !ac1021TrueTypeSource
             && source.dwgReadOutcome.opaqueViewCallbacks != 186u)
             return fail("physical AC1021 VIEWPORT source census changed during output");
         if (ac1021TabletSource
@@ -51542,6 +51615,11 @@ bool physicalViewportOutputReadback(
             && (source.dwgReadOutcome.opaqueViewCallbacks != 52u
                 || qualifiedOpaqueCallbacks != 52u))
             return fail("physical AC1021 colorwh VIEWPORT source census or selected callback proof count changed");
+        if (ac1021TrueTypeSource
+            && (source.dwgReadOutcome.opaqueViewCallbacks != 53u
+                || source.dwgReadOutcome.opaqueFramesOutputQualified != 53u
+                || qualifiedOpaqueCallbacks != 53u))
+            return fail("physical AC1021 truetype layout/viewport source census or strict callback proof count changed");
 
         dx_iface outputReader;
         dx_data output;

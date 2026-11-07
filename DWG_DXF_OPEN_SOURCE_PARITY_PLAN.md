@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-07 (qualified selected AC1021 `truetype.dwg` LayerStates XRECORD output; strict whole-source output remains refused at 46/53 opaque callbacks). This file
+Updated 2026-11-07 (AC1021 `truetype.dwg` now passes strict whole-source output and its selected LAYOUT/VIEWPORT profiles pass ASCII/Binary readback). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -123,18 +123,25 @@ created locally from scratch for the specific control.
    independent producer behavior, LibreCAD_3/FreeCAD acceptance or native
    geometry/group semantics ([receipt](docs/research/p4-ac1021-generated-group-2d-3d-strict-dxf-readback-2026-11-06.json)).
 
-   **Next implementation slice:** the AC1021 `truetype.dwg`
-   `ACAD_VIEWS_default` XRECORD now passes selected ASCII/Binary output,
-   exact 27-value readback, four LAYER/four LTYPE target resolution, atomic
-   refusal and same-adapter retry. Its source-bound group-370 compatibility
-   route and typed handling of remapped table references are recorded in the
-   [receipt](docs/research/p4-ac1021-truetype-layerstates-view-xrecord-selected-output-2026-11-07.json).
-   Whole-source strict conversion passes this graph's staged-output proof but
-   remains refused at 46/53 opaque callbacks; do not infer whole-source
-   support. Inventory only those seven unqualified callbacks next to find a
-   source-ready owner/reference graph, without repeating the 28-stream census.
-   The separate 240-handle AC1021 plot-screening XRECORD remains deferred until
-   its owner and target-role inventory is cheaper to establish. Other distinct
+   **Next implementation slice:** source-bound owner and target-role inventory
+   for the 240-handle AC1021 plot-screening XRECORD. Start with the existing
+   `plot_screening_and_fill_patterns.dwg` witness and its saved peer/source
+   receipts; establish its exact owner chain, ordered handle slots, target
+   kinds and source-frame identities before changing the writer. If those
+   references do not close cheaply and unambiguously, preserve refusal and move
+   to another candidate below. Do not repeat the 28-stream census.
+
+   The AC1021 `truetype.dwg` selected LayerStates and four-VIEWPORT routes are
+   complete for their exact source graph: ASCII/Binary typed readback, rollback
+   and same-adapter retry pass, and strict whole-source AC1021 conversion now
+   succeeds. The seven formerly unqualified callbacks are the three LAYOUTs
+   (`0x22`, `0x18E`, `0x194`) and four VIEWPORTs (`0x190`, `0x191`, `0x196`,
+   `0x197`); their bounded source/output proof is recorded in the [LAYOUT/
+   VIEWPORT receipt](docs/research/p4-ac1021-truetype-layout-viewport-strict-output-2026-11-07.json)
+   and the [LayerStates receipt](docs/research/p4-ac1021-truetype-layerstates-view-xrecord-selected-output-2026-11-07.json).
+   This removes only this one physical profile from the queue; it does not
+   establish producer-wide, native plotting, platform, or support claims. The
+   external source remains outside Git. Other distinct
    screens are AC1024 architectural named-block SORTENTSTABLE owner scope,
    title-block null BLOCK_CONTROL members, AC1027 Cover reference closure, and
    AC1018 Extruder2 incomplete parser disposition. Use each linked receipt to
@@ -160,9 +167,12 @@ created locally from scratch for the specific control.
    fifth bounded retry after the user's 2026-11-06 unlock report aborted during
    pasteboard/XPC initialization (SIGABRT, exit `-6`, 25-second bound) and
    produced no output. Source and converter hashes matched prior attempts.
-   Unlocking alone did not change the launch failure. Do not repeat direct CLI
-   retries until the launch environment or invocation method changes, or a
-   supported GUI/independent converter session becomes available. No suffix
+   The user has now said they are unlocking the Mac again; this is a pending
+   environment change, not evidence that the converter launched. Once the
+   unlocked session is available, make one bounded retry using the supported
+   invocation path and capture exit status/log/output. If it repeats the same
+   pasteboard/XPC abort, stop unchanged direct retries and wait for a changed
+   launch method or supported GUI/independent converter session. No suffix
    evidence or support claim follows; keep the AC1027 suffix unclaimed and
    strict export refused. Continue local implementation in parallel. See the
    [retry receipt](docs/research/p6-ac1027-oda-header-suffix-post-unlock-retry-2026-11-06.json).
