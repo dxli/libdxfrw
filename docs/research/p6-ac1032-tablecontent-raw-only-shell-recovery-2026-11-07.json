@@ -36,6 +36,32 @@
     "interpretation": "The current handle cursor reaches code 0x5 at the parser's first cell-attribute slot. A preceding body/handle slot may be misaligned; this does not establish a producer/spec role violation and does not qualify typed payload or output.",
     "codeChange": "Added debug-only boundary diagnostics in src/drw_entities.cpp; no parser interpretation or output behavior changed."
   },
+  "peerParserRecheck": {
+    "parser": "dwgTs",
+    "revision": "216e5c4ba744d753ebe3e6891712034bafd96de7",
+    "command": "node /Users/dli/dev/dwgTs/dist/cli/cad-to-json.cjs /Users/dli/dev/ACadSharp/samples/sample_AC1032.dwg -o /private/tmp/dwgt-sample-ac1032.json --pretty 2",
+    "outputSha256": "21817e9674a467b7dbcf79621ac8a0cbec688fd28099e6765b799a555ebba671",
+    "observations": [
+      {
+        "handle": "0x747",
+        "declaredRows": 7,
+        "declaredColumns": 3,
+        "firstCellDeclaredAttributes": 80,
+        "firstCellContentFormatOverrideFlag": 61199,
+        "firstCellStopBoundary": "cell-geometry"
+      },
+      {
+        "handle": "0xE5F",
+        "declaredRows": 4,
+        "declaredColumns": 5,
+        "firstCellDeclaredAttributes": 32,
+        "firstCellContentFormatOverrideFlag": 256,
+        "firstCellStopBoundary": "cell-geometry"
+      }
+    ],
+    "interpretation": "These malformed-looking nested values and premature geometry boundaries show that this local peer build is also desynchronized on the same sample. It is not independent field/span evidence and cannot resolve the ODA role mismatch.",
+    "fixturePolicy": "Input is the existing external ACadSharp sample; no file was copied into this repository."
+  },
   "implementation": {
     "baseRevision": "f8b8d5c7",
     "files": [
