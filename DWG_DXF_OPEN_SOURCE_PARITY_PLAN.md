@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-07 (AC1032 multi-schdat DataStorage advances reading to 837/842 frames; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; a fresh ODA retry after the latest unlock report again aborts before document processing; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032). This file
+Updated 2026-11-07 (AC1032 multi-schdat DataStorage advances reading to 837/842 frames; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; a fresh ODA retry after the latest unlock report again aborts before document processing; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -339,7 +339,8 @@ created locally from scratch for the specific control.
    three required cell styles, and text-style/linetype hard-pointer handles;
    malformed style counts and unsupported CMC forms refuse. The generated
    local encoder/readback control passes for all three versions, including
-   malformed refusal, unsupported CMC refusal, and later valid writes; the
+   malformed-count refusal and unsupported-CMC refusal followed by corrected
+   same-handle writes and typed/raw readback; the
    six-version local DWG roundtrip also verifies AC1032 raw-carrier pairing.
    This is local encoder/parser consistency only: no independent producer
    output, physical Cover projection, DXF schema closure, or native consumer

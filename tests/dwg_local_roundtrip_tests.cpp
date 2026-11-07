@@ -3672,6 +3672,20 @@ public:
                 tableStyleRegistration.handle = 0xCF00u;
                 registeredTableStyle_ = writer_->registerTableStyleObjectClass(
                     &tableStyleRegistration);
+                if (writer_->getVersion() == DRW::AC1024
+                    || writer_->getVersion() == DRW::AC1027
+                    || writer_->getVersion() == DRW::AC1032) {
+                    tableStyleRegistration.handle = 0xCF01u;
+                    registeredTableStyle_ =
+                        writer_->registerTableStyleObjectClass(
+                            &tableStyleRegistration)
+                        && registeredTableStyle_;
+                    tableStyleRegistration.handle = 0xCF02u;
+                    registeredTableStyle_ =
+                        writer_->registerTableStyleObjectClass(
+                            &tableStyleRegistration)
+                        && registeredTableStyle_;
+                }
             }
             if (writer_->getVersion() == DRW::AC1021) {
                 DRW_CellStyleMap cellStyleMapRegistration;
@@ -4900,6 +4914,13 @@ public:
             invalidTableStyle.m_rowStyles.pop_back();
             rejectedMalformedTableStyle_ =
                 !writer_->writeTableStyle(&invalidTableStyle);
+            if (r24TableStyle) {
+                DRW_TableStyle correctedTableStyle = tableStyle;
+                correctedTableStyle.handle = invalidTableStyle.handle;
+                retriedTableStyleAfterCountRefusal_ =
+                    rejectedMalformedTableStyle_
+                    && writer_->writeTableStyle(&correctedTableStyle);
+            }
             DRW_TableStyle invalidCmcTableStyle = tableStyle;
             invalidCmcTableStyle.handle = 0xCF02u;
           if (r24TableStyle)
@@ -4910,6 +4931,15 @@ public:
                 0xC5u;
             rejectedUnsupportedTableStyleColor_ =
                 !writer_->writeTableStyle(&invalidCmcTableStyle);
+            if (r24TableStyle) {
+                DRW_TableStyle correctedTableStyle = tableStyle;
+                correctedTableStyle.handle = invalidCmcTableStyle.handle;
+                const bool correctedWriteSucceeded =
+                    writer_->writeTableStyle(&correctedTableStyle);
+                retriedTableStyleAfterCmcRefusal_ =
+                    rejectedUnsupportedTableStyleColor_
+                    && correctedWriteSucceeded;
+            }
         } else {
             rejectedUnsupportedTableStyle_ =
                 !writer_->writeTableStyle(&tableStyle);
@@ -7577,8 +7607,43 @@ public:
                     == "black edge";
             }
         }
-        if (data.handle == 0xCF01u)
-            readMalformedTableStyleSeen_ = true;
+        if (data.handle == 0xCF01u) {
+            readCorrectedTableStyleAfterCountSeen_ =
+                data.parentHandle == 0xA601u
+                && data.m_name == "LOCAL_TABLESTYLE"
+                && data.m_r24PrefixPresent
+                && data.m_r24UnknownValue1 == 8
+                && data.m_r24UnknownValue2 == 101
+                && data.m_cellStyles.size() == 3u
+                && data.m_cellStyles[0].m_id == 1
+                && data.m_cellStyles[0].m_name == "_TITLE"
+                && data.m_cellStyles[1].m_id == 2
+                && data.m_cellStyles[1].m_name == "_HEADER"
+                && data.m_cellStyles[2].m_id == 3
+                && data.m_cellStyles[2].m_name == "_DATA";
+        }
+        if (data.handle == 0xCF02u) {
+            readRetriedTableStyleSeen_ = data.parentHandle == 0xA601u
+                && data.m_name == "LOCAL_TABLESTYLE"
+                && data.m_r24PrefixPresent && data.m_r24ClassVersion == 0u
+                && data.m_r24UnknownValue1 == 8
+                && data.m_r24UnknownValue2 == 101
+                && data.m_tableCellStyle.m_id == 4
+                && data.m_tableCellStyle.m_styleClass == 2
+                && data.m_tableCellStyle.m_name == "Table"
+                && data.m_cellStyles.size() == 3u
+                && data.m_cellStyles[0].m_id == 1
+                && data.m_cellStyles[0].m_name == "_TITLE"
+                && data.m_cellStyles[0].m_contentFormat.m_textStyleHandle
+                    == DRW::DwgStandardTextStyleHandle
+                && data.m_cellStyles[0].m_borders.size() == 6u
+                && data.m_cellStyles[0].m_borders[0].m_lineTypeHandle
+                    == DRW::DwgLtypeByBlockHandle
+                && data.m_cellStyles[1].m_id == 2
+                && data.m_cellStyles[1].m_name == "_HEADER"
+                && data.m_cellStyles[2].m_id == 3
+                && data.m_cellStyles[2].m_name == "_DATA";
+        }
     }
     void addCellStyleMap(const DRW_CellStyleMap& data) override {
         if (data.handle == 0xCF10u)
@@ -8591,7 +8656,7 @@ public:
           : expectedVersion_ == DRW::AC1021 ? 59u
           : (expectedVersion_ == DRW::AC1024 || expectedVersion_ == DRW::AC1027
               || expectedVersion_ == DRW::AC1032)
-              ? 57u
+              ? 59u
               : 56u;
       return readRawObjectInvariant_ &&
              readLocalRawObjectHandles_.size() == expected;
@@ -8698,6 +8763,18 @@ public:
     bool readSpatialIndexSeen() const { return readSpatialIndexSeen_; }
     bool readMalformedSpatialIndexSeen() const { return readMalformedSpatialIndexSeen_; }
     bool readTableStyleSeen() const { return readTableStyleSeen_; }
+    bool retriedTableStyleAfterCountRefusal() const {
+        return retriedTableStyleAfterCountRefusal_;
+    }
+    bool retriedTableStyleAfterCmcRefusal() const {
+        return retriedTableStyleAfterCmcRefusal_;
+    }
+    bool readCorrectedTableStyleAfterCountSeen() const {
+        return readCorrectedTableStyleAfterCountSeen_;
+    }
+    bool readRetriedTableStyleSeen() const {
+        return readRetriedTableStyleSeen_;
+    }
     bool readMalformedTableStyleSeen() const { return readMalformedTableStyleSeen_; }
     bool readSpatialFilterSeen() const { return readSpatialFilterSeen_; }
     bool readMalformedSpatialFilterSeen() const { return readMalformedSpatialFilterSeen_; }
@@ -8843,6 +8920,8 @@ private:
         case 0xCD00u:
         case 0xCE00u:
         case 0xCF00u:
+        case 0xCF01u:
+        case 0xCF02u:
         case 0xCF10u:
         case 0xCF20u:
         case 0xD000u:
@@ -9004,6 +9083,8 @@ private:
     bool wroteLayerIndex_ {false};
     bool wroteSpatialIndex_ {false};
     bool wroteTableStyle_ {false};
+    bool retriedTableStyleAfterCountRefusal_ {false};
+    bool retriedTableStyleAfterCmcRefusal_ {false};
     bool wroteCellStyleMap_ {false};
     bool wroteSpatialFilter_ {false};
     bool wroteGeoData_ {false};
@@ -9237,6 +9318,8 @@ private:
     bool readLayerIndexSeen_ {false};
     bool readSpatialIndexSeen_ {false};
     bool readTableStyleSeen_ {false};
+    bool readCorrectedTableStyleAfterCountSeen_ {false};
+    bool readRetriedTableStyleSeen_ {false};
     bool readCellStyleMapSeen_ {false};
     bool readTableStyleCellStyleMapDictionarySeen_ {false};
     bool readSpatialFilterSeen_ {false};
@@ -38052,12 +38135,24 @@ int main(int argc, char** argv) {
                 suffix)
                    .c_str(),
                failures);
+        expect(r24TableStyleVersion
+                   ? writeIface.retriedTableStyleAfterCountRefusal()
+                   : true,
+               ("local DWG TABLESTYLE same-handle corrected retry after count refusal" +
+                suffix).c_str(),
+               failures);
         expect(version <= DRW::AC1021 || r24TableStyleVersion
                    ? writeIface.rejectedUnsupportedTableStyleColor()
                    : true,
                ("local DWG writer rejects unsupported TABLESTYLE CMC method" +
                 suffix)
                    .c_str(),
+               failures);
+        expect(r24TableStyleVersion
+                   ? writeIface.retriedTableStyleAfterCmcRefusal()
+                   : true,
+               ("local DWG TABLESTYLE same-handle corrected retry after CMC refusal" +
+                suffix).c_str(),
                failures);
         expect(version == DRW::AC1021
                    ? writeIface.wroteCellStyleMap()
@@ -38529,6 +38624,17 @@ int main(int argc, char** argv) {
                    ? readIface.readTableStyleSeen()
                    : !readIface.readTableStyleSeen(),
                ("local DWG TABLESTYLE capability-gated self-read" + suffix).c_str(),
+               failures);
+        expect(r24TableStyleVersion
+                   ? readIface.readCorrectedTableStyleAfterCountSeen()
+                   : !readIface.readCorrectedTableStyleAfterCountSeen(),
+               ("local DWG TABLESTYLE count-refusal corrected retry self-read" +
+                suffix).c_str(),
+               failures);
+        expect(r24TableStyleVersion
+                   ? readIface.readRetriedTableStyleSeen()
+                   : !readIface.readRetriedTableStyleSeen(),
+               ("local DWG TABLESTYLE corrected retry self-read" + suffix).c_str(),
                failures);
         expect(version == DRW::AC1021
                    ? readIface.readTableStyleCellStyleMapGraphSeen()
