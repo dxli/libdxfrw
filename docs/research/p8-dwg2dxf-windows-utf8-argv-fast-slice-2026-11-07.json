@@ -14,6 +14,10 @@
     "cmake_sha256": "f2c780d4e27342deb80dbb1e34f1ac2da4d1c99bbf71706ae8083e529c8d2071",
     "native_qualification_workflow": ".github/workflows/freecad-platform-qualification.yml",
     "native_qualification_workflow_sha256": "76d38a0da4959ae5dde15fde6e9a8392069eee9bddcfb1a7ef35db404ac4263f",
+    "native_handoff_test": "tests/run_freecad_installed_3d_line_test.cmake",
+    "native_handoff_test_sha256": "c887034deb66af0801a7cff469e038b6154d180ad49f013b7ca7a03869da117e",
+    "native_handoff_macro": "tests/freecad_dwg2dxf_import_check.FCMacro",
+    "native_handoff_macro_sha256": "0c4e34f62edde13912dd2ce53fc675e855c6431dc7c70abcd2660d2660a1a859",
     "test": "tests/run_freecad_dwg2dxf_compat_test.cmake",
     "test_sha256": "7e6b47eb8ba459e4f573063da20cd09d059a795f24028d8d17e12c39a6cbf976",
     "plan": "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md",
@@ -21,6 +25,7 @@
       "The Windows wmain bridge rejects invalid UTF-16 instead of substituting characters.",
       "MinGW links with -municode so its console CRT selects wmain; MSVC uses its native wmain startup selection.",
       "The manually dispatched native FreeCAD workflow now builds the source generator and includes both build-tree and installed CLI compatibility tests, in addition to its tracked-file FreeCAD handoff control.",
+      "The tracked FreeCAD open/insert CTests set INPUT_PATH_UNICODE=ON, copy the pinned DWG under 'entrée café input with spaces', and exercise the actual FreeCAD-to-installed-converter subprocess path; this native workflow is configured but not yet executed for the current revision.",
       "The CLI preflight now uses std::filesystem::u8path for both input and output.",
       "The test source is generated at an ASCII path, then cmake -E copy stages the same bytes at a Unicode path; generated files remain in the build scratch directory."
     ]
