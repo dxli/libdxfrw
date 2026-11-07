@@ -596,6 +596,33 @@ created locally from scratch for the specific control.
 
    **TABLECONTENT string-carrier dispute — no parser change yet:** the same external AC1032 sample (`/Users/dli/dev/ACadSharp/samples/sample_AC1032.dwg`, SHA-256 `0e8faaca949c9429c92240082d9ea4d3524aca5baf7c7815ec439245c321b528`) reproduces failures at handles `0xE5F` and `0x747`. For `0xE5F`, libdxfrw's trace reads the first type-4 cell as unit 44, format `Hello this is a title`, and empty display string; ACadSharp and its ACadSharp-inspired `dwg-parser` peer read the value as a byte-counted body-stream string. That profile conflicts with ODA v5.4.1 §2, which states that all R2007+ object Unicode strings are in the detached string stream, and §20.4.99, which describes type 4 as TV. LibreDWG 0.14 also leaves these objects unknown. The local `dwgTs` parser is not a usable oracle for this sample either: it reports 32/80 first-cell attribute counts, format flags 256/61199, and premature `cell-geometry` stops, confirming a desynchronized peer parse rather than independent agreement ([recheck](docs/research/p6-ac1032-tablecontent-raw-only-shell-recovery-2026-11-07.json)). Treat the source/peer result as a real producer discrepancy, not authority to move this value into the body. Keep both frames raw/refused. Resolve only with exact independent decoding of the body/string/handle spans and an authoritative reconciliation of the apparent exception; generated ambiguity controls must prove both routes and fail closed before any code change. Do not commit this external DWG or broaden TABLECONTENT claims from it.
 
+   **Next bounded investigation, in implementation order:**
+   1. Add a debug-only, TABLECONTENT-scoped handle-slot trace that records each
+      handle cursor bit offset, encoded code/reference, expected role (where
+      specified), and body/string cursor positions at that read. Cover the
+      linked-data, content-type, content-format/style, ATTDEF, and geometry
+      reads up to the first failing ATTDEF slot for both `0xE5F` and `0x747`.
+      Keep normal parsing and output behavior unchanged.
+   2. Reconcile those observations against the exact R2018 frame boundary and
+      ODA v5.4.1 §§2, 20.4.97, and 20.4.99. First establish whether every
+      preceding body field and queued handle has a proven span; only then decide
+      whether the ATTDEF slot is actually code `0x5` or the cursor is displaced.
+      Do not infer role from a null target or from a peer's decoded tree.
+   3. Treat `dwgTs`'s current 32/80 attribute counts and LibreDWG's unknown
+      classification as non-oracle results. Accept another implementation as
+      corroboration only if it exposes source bit spans and independently maps
+      the same fields and handle roles.
+   4. Before changing a production parser, add locally generated in-memory
+      ambiguity controls for each candidate string carrier and handle ordering.
+      Require exact body/string/handle end positions, a following-object
+      sentinel, rollback on malformed or truncated input, and clean retry after
+      refusal. Do not add the external sample or a derivative as a fixture.
+   5. Promote the typed parser only when the two physical frames reconcile to
+      one spec-consistent layout and the controls pass. Otherwise retain the
+      current raw-only shell recovery and strict-output refusal, record the
+      unresolved boundary, and move to the next independently ready local
+      packet; this investigation must not stall implementation elsewhere.
+
    A separate tracked external AC1032 ODA R2018 sample (`acad_table_cells.dwg`) exposed one `AcDbMentalRayRenderSettings` parse failure. The bounded parser now tries the observed base-field variants transactionally and accepts only the uniquely body/string-bounded layout. A current-code diagnostic publishes 182/182 frames with zero entity/object parse failures. Strict export remains refused by the sample's two HEADER integrity rows and 739 unclaimed bytes; this resolves one parser failure only. Independent producer evidence for the modern `hasPredefined` variants and HEADER-envelope meaning remain open. See the [fix receipt](docs/research/p6-ac1032-acad-table-cells-reader-fix-2026-11-07.json).
 
 
