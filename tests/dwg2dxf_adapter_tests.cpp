@@ -22370,7 +22370,10 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
             << " dictionaryWithDefault=" << data.dictionaryWithDefaults.size()
             << " layouts=" << data.layouts.size()
             << " tableStyles=" << data.tableStyles.size()
-            << " mLeaderStyles=" << data.mLeaderStyles.size() << '\n';
+            << " mLeaderStyles=" << data.mLeaderStyles.size()
+            << " layers=" << data.layers.size()
+            << " dimStyles=" << data.dimStyles.size()
+            << " vports=" << data.VPorts.size() << '\n';
   for (const DRW_DictionaryWithDefault &dictionary :
        data.dictionaryWithDefaults) {
     std::cout << " typedBodyFrame type=DICTIONARYWDFLT"
@@ -22436,6 +22439,41 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
       std::cout << " typedBodyReference owner=" << style.handle
                 << " role=textStyle target=" << style.textStyleHandle.ref
                 << '\n';
+  }
+  const auto reportHandle = [](std::uint32_t owner, const char *role,
+                               std::uint32_t target) {
+    if (target != 0u)
+      std::cout << " typedBodyReference owner=" << owner << " role=" << role
+                << " target=" << target << '\n';
+  };
+  for (const DRW_Layer &layer : data.layers) {
+    std::cout << " typedBodyFrame type=LAYER handle=" << layer.handle << '\n';
+    reportHandle(layer.handle, "xrefBlock", layer.xrefBlockHandle.ref);
+    reportHandle(layer.handle, "plotStyle", layer.plotStyleHandle.ref);
+    reportHandle(layer.handle, "material", layer.materialHandle.ref);
+    reportHandle(layer.handle, "lineType", layer.lTypeH.ref);
+    reportHandle(layer.handle, "unknown", layer.unknownHandle.ref);
+  }
+  for (const DRW_Dimstyle &style : data.dimStyles) {
+    std::cout << " typedBodyFrame type=DIMSTYLE handle=" << style.handle
+              << '\n';
+    reportHandle(style.handle, "textStyle", style.dimtxstyH.ref);
+    reportHandle(style.handle, "leaderBlock", style.dimldrblkH.ref);
+    reportHandle(style.handle, "arrowBlock", style.dimblkH.ref);
+    reportHandle(style.handle, "firstArrowBlock", style.dimblk1H.ref);
+    reportHandle(style.handle, "secondArrowBlock", style.dimblk2H.ref);
+    reportHandle(style.handle, "dimensionLtype", style.dimltypeH.ref);
+    reportHandle(style.handle, "extension1Ltype", style.dimltex1H.ref);
+    reportHandle(style.handle, "extension2Ltype", style.dimltex2H.ref);
+  }
+  for (const DRW_Vport &vport : data.VPorts) {
+    std::cout << " typedBodyFrame type=VPORT handle=" << vport.handle << '\n';
+    reportHandle(vport.handle, "visualStyle", vport.visualStyleHandle);
+    reportHandle(vport.handle, "sun", vport.m_sunHandle);
+    reportHandle(vport.handle, "background", vport.backgroundHandle);
+    reportHandle(vport.handle, "namedUcs", vport.namedUcsHandle);
+    reportHandle(vport.handle, "baseUcs", vport.baseUcsHandle);
+    reportHandle(vport.handle, "xrefBlock", vport.xrefBlockHandle.ref);
   }
   std::vector<const dx_ifaceBlock *> bodyBlocks{data.mBlock};
   for (const dx_ifaceBlock *block : data.blocks)

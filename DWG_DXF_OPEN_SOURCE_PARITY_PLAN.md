@@ -152,15 +152,22 @@ created locally from scratch for the specific control.
    typed body edges include the dictionary default, two layout block-header
    links, and two MLEADERSTYLE links. The local 3DSOLID entity (handle `0x6F`)
    reports layer name `0`; that name uniquely resolves to LAYER handle `0x10`,
-   matching the independent peer edge. The inventory diagnostic itself is not
+   matching the independent peer edge. The diagnostic now also reports three
+   LAYER links (`0x10`→PLACEHOLDER `0x0F`, MATERIAL `0x46`, LTYPE `0x16`), the
+   DIMSTYLE text-style link (`0x27`→STYLE `0x11`), and VPORT visual-style and
+   sun links (`0x29`→VISUALSTYLE `0x2F`, SUN `0x6D`). Their targets and field
+   roles match LibreDWG 0.14 minJSON; ODA v5.4.1 §§20.4.54, 20.4.64 and 20.4.68
+   define the corresponding handle roles, including VPORT sun as hard-owner.
+   These additional checks cover only the locally typed LAYER, DIMSTYLE and
+   VPORT models. The inventory diagnostic itself is not
    complete or source-bound: it does not bind the source hash, inspect raw
    frame bodies generally, prove every owner role from source structure, or
    establish schema-valid DXF routes. The companion
    [body-reference receipt](docs/research/p6-ac1027-cover-body-reference-audit-2026-11-07.json)
    binds the exact source, inventory binary/log and independent peer JSON
-   hashes. It records the 75/75 frame-size join, all 21 locally parsed
-   TABLESTYLE edges, the peer's partial seven-edge TABLESTYLE coverage, and the
-   3DSOLID layer edge, independently matched to the unique local LAYER row.
+   hashes. It records the 75/75 frame-size join, the typed body references
+   inventoried so far, the peer's partial seven-edge TABLESTYLE coverage, and
+   the independently matched 3DSOLID layer edge.
    Hash binding and available typed body-reference reconciliation are complete
    as evidence capture; generic body scanning and role proof for every callback
    remain open. Keep `m_unqualifiedAc1027DwgImport` sticky. Next continue a
