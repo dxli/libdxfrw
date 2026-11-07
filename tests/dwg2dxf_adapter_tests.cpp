@@ -22396,7 +22396,51 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
   for (const DRW_TableStyle &style : data.tableStyles) {
     std::cout << " typedBodyFrame type=TABLESTYLE handle=" << style.handle
               << " rows=" << style.m_rowStyles.size()
-              << " cells=" << style.m_cellStyles.size() << '\n';
+              << " cells=" << style.m_cellStyles.size()
+              << " name=" << style.m_name
+              << " prefix=" << style.m_r24PrefixPresent
+              << " classVersion="
+              << static_cast<unsigned>(style.m_r24ClassVersion)
+              << " unknown=" << style.m_r24UnknownValue1 << '/'
+              << style.m_r24UnknownValue2
+              << " unknownHandle=" << style.m_unknownHandle << '\n';
+    const auto reportCellSummary = [&style](
+            const DRW_TableStyleCellStyle& cell, const std::string& path) {
+      std::cout << " typedBodyCellStyle owner=" << style.handle
+                << " path=" << path << " id=" << cell.m_id
+                << " class=" << cell.m_styleClass << " type=" << cell.m_type
+                << " hasData=" << cell.m_hasData << " name=" << cell.m_name
+                << " contentLayout=" << cell.m_contentLayout
+                << " background=" << cell.m_backgroundColor
+                << " contentColor=" << cell.m_contentFormat.m_contentColor
+                << " textStyle="
+                << cell.m_contentFormat.m_textStyleHandle
+                << " textHeight=" << cell.m_contentFormat.m_textHeight
+                << " alignment=" << cell.m_contentFormat.m_cellAlignment
+                << " valueType="
+                << cell.m_contentFormat.m_valueDataType
+                << " valueUnit="
+                << cell.m_contentFormat.m_valueUnitType
+                << " marginFlags=" << cell.m_marginOverrideFlags
+                << " borders=" << cell.m_borders.size() << '\n';
+      for (std::size_t index = 0u; index < cell.m_borders.size(); ++index) {
+        const DRW_TableStyleBorder& border = cell.m_borders[index];
+        std::cout << " typedBodyBorder owner=" << style.handle
+                  << " path=" << path << " index=" << index
+                  << " edge=" << border.m_edgeFlags
+                  << " type=" << border.m_borderType
+                  << " color=" << border.m_color
+                  << " lineWeight=" << border.m_lineWeight
+                  << " lineType=" << border.m_lineTypeHandle
+                  << " visible=" << border.m_visible
+                  << " doubleLineSpacing=" << border.m_doubleLineSpacing
+                  << '\n';
+      }
+    };
+    reportCellSummary(style.m_tableCellStyle, "tableCellStyle");
+    for (std::size_t index = 0u; index < style.m_cellStyles.size(); ++index)
+      reportCellSummary(style.m_cellStyles[index],
+                        "cellStyle[" + std::to_string(index) + "]");
     const auto reportCell = [&style](const DRW_TableStyleCellStyle &cell,
                                      const std::string &path) {
       if (cell.m_contentFormat.m_textStyleHandle != 0u)
@@ -22427,6 +22471,81 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
     for (std::size_t index = 0u; index < style.m_cellStyles.size(); ++index)
       reportCell(style.m_cellStyles[index],
                  "cellStyle[" + std::to_string(index) + "]");
+    if (style.m_r24PrefixPresent) {
+      const auto spanCount = [&style](const std::string& name) {
+        return static_cast<std::size_t>(std::count_if(
+            style.m_subrecordRanges.begin(), style.m_subrecordRanges.end(),
+            [&name](const DRW_DwgSubrecordRange& range) {
+              return range.m_name == name;
+            }));
+      };
+      const std::size_t borderHandleSpans = static_cast<std::size_t>(
+          std::count_if(
+              style.m_subrecordRanges.begin(), style.m_subrecordRanges.end(),
+              [](const DRW_DwgSubrecordRange& range) {
+                  return range.m_name.find(
+                      "table-style-handle-border-line-type[") == 0u;
+              }));
+      if (style.handle != 106u
+          || spanCount("table-style-body-table-cell-record") != 1u
+          || spanCount("table-style-body-repeated-cell-record") != 3u
+          || spanCount("table-style-body-table-cell-id") != 1u
+          || spanCount("table-style-body-table-cell-class") != 1u
+          || spanCount("table-style-body-cell-index") != 3u
+          || spanCount("table-style-body-cell-id") != 3u
+          || spanCount("table-style-body-cell-class") != 3u
+          || spanCount("table-style-string-table-cell-name") != 1u
+          || spanCount("table-style-string-cell-name") != 3u
+          || spanCount("table-style-handle-text-style") != 4u
+          || borderHandleSpans != 24u
+          || std::any_of(
+              style.m_subrecordRanges.begin(),
+              style.m_subrecordRanges.end(),
+              [](const DRW_DwgSubrecordRange& range) {
+                  return !range.m_parseComplete || range.m_bitSize == 0u;
+              })) {
+        std::cerr << "AC1027 TABLESTYLE field-span inventory is incomplete\n";
+        return false;
+      }
+      std::cout << " typedBodySpanCheck owner=" << style.handle
+                << " bodyRecords=4 identityFields=16 textStyleHandles=4"
+                   " borderLineTypeHandles=" << borderHandleSpans
+                << " complete=1\n";
+      const DRW_UnsupportedObject* rawFrame =
+          DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+              data, data.importGeneration, style.handle);
+      if (rawFrame == nullptr)
+        rawFrame = DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+            data, data.importGeneration, style.handle);
+      if (rawFrame == nullptr || rawFrame->m_version != DRW::AC1027
+          || rawFrame->m_handle != style.handle
+          || rawFrame->m_rawBytes.size() != rawFrame->m_objectSize
+          || rawFrame->m_rawBytes.empty()
+          || rawFrame->m_bodyBitSize
+              > static_cast<std::uint64_t>(rawFrame->m_rawBytes.size()) * 8u) {
+        std::cerr << "AC1027 TABLESTYLE raw frame capture is incomplete\n";
+        return false;
+      }
+      std::cout << " typedBodyRawFrame owner=" << style.handle
+                << " byteSize=" << rawFrame->m_objectSize
+                << " handleStreamBits=" << rawFrame->m_bodyBitSize
+                << " dataStreamBits="
+                << static_cast<std::uint64_t>(rawFrame->m_objectSize) * 8u
+                    - rawFrame->m_bodyBitSize
+                << " hex=";
+      for (std::uint8_t byte : rawFrame->m_rawBytes)
+        std::cout << std::hex << std::setw(2) << std::setfill('0')
+                  << static_cast<unsigned>(byte);
+      std::cout << std::dec << std::setfill(' ') << '\n';
+    }
+    for (const DRW_DwgSubrecordRange& range : style.m_subrecordRanges) {
+      std::cout << " typedBodySpan owner=" << style.handle
+                << " streamField=" << range.m_name
+                << " startBit=" << range.m_startBit
+                << " bitSize=" << range.m_bitSize
+                << " valueOrIndex=" << range.m_count
+                << " complete=" << range.m_parseComplete << '\n';
+    }
   }
   for (const DRW_MLeaderStyle &style : data.mLeaderStyles) {
     std::cout << " typedBodyFrame type=MLEADERSTYLE handle=" << style.handle

@@ -2,7 +2,7 @@
   "capturedFrameCount": 88,
   "coverageLimit": "This inventories handle tuples exposed by LibreDWG minJSON for the joined frames. It does not prove that minJSON decoded every source body field, and it is not a local raw-frame scanner or output proof.",
   "localLog": "/private/tmp/cover-opaque-source-inventory-body.log",
-  "localLogSha256": "4353ce24f011396480e1b9936a50d723230469b72d8be3ef2b68728dd3d0ac61",
+  "localLogSha256": "3e3fd440f709fb1db7494caff9a117b522034c79c3a7be193bc0690176712fab",
   "peerBodyHandleEdgeCount": 98,
   "peerBodyHandleEdges": [
     {

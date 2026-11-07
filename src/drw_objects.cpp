@@ -2240,12 +2240,21 @@ bool readTableStyleContentFormat(DRW::Version version, dwgBuffer *buf,
         || !readDouble(format.m_blockScale)
         || !readInt(format.m_cellAlignment)
         || format.m_cellAlignment < 1 || format.m_cellAlignment > 9
-        || !readColor(format.m_contentColor, format.m_contentColorCmc)
-        || (hdlBuf != nullptr
-            && !readObjectHandleRefTransactional(hdlBuf,
-                                                 format.m_textStyleHandle,
-                                                 handleEndBit))
-        || !readDouble(format.m_textHeight))
+        || !readColor(format.m_contentColor, format.m_contentColorCmc))
+        return false;
+    if (hdlBuf != nullptr) {
+        const std::uint64_t handleStartBit = currentObjectDwgBit(hdlBuf);
+        const bool handleRead = readObjectHandleRefTransactional(
+            hdlBuf, format.m_textStyleHandle, handleEndBit);
+        if (ranges != nullptr) {
+            ranges->push_back(makeObjectSubrecordRange(
+                "table-style-handle-text-style", handleStartBit,
+                currentObjectDwgBit(hdlBuf), version, 1u, handleRead));
+        }
+        if (!handleRead)
+            return false;
+    }
+    if (!readDouble(format.m_textHeight))
         return false;
     const bool good = buf->isGood() && textBuf->isGood()
         && (!hdlBuf || hdlBuf->isGood())
@@ -2408,11 +2417,29 @@ bool readTableStyleCellStyle(DRW::Version version, dwgBuffer *buf,
                     & ~std::uint32_t{0x3Fu}) != 0u
                 || !readInt(border.m_borderType)
                 || !readColor(border.m_color, border.m_colorCmc)
-                || !readInt(border.m_lineWeight)
-                || (hdlBuf != nullptr
-                    && !readObjectHandleRefTransactional(
-                        hdlBuf, border.m_lineTypeHandle, handleEndBit))
-                || !readInt(border.m_visible)
+                || !readInt(border.m_lineWeight)) {
+                DRW_DBG("TABLESTYLE cell-style border data invalid\n");
+                return false;
+            }
+            if (hdlBuf != nullptr) {
+                const std::uint64_t handleStartBit =
+                    currentObjectDwgBit(hdlBuf);
+                const bool handleRead = readObjectHandleRefTransactional(
+                    hdlBuf, border.m_lineTypeHandle, handleEndBit);
+                if (ranges != nullptr) {
+                    const UTF8STRING rangeName =
+                        "table-style-handle-border-line-type["
+                        + std::to_string(i) + "]";
+                    ranges->push_back(makeObjectSubrecordRange(
+                        rangeName.c_str(), handleStartBit,
+                        currentObjectDwgBit(hdlBuf), version, 1u, handleRead));
+                }
+                if (!handleRead) {
+                    DRW_DBG("TABLESTYLE cell-style border handle invalid\n");
+                    return false;
+                }
+            }
+            if (!readInt(border.m_visible)
                 || !readDouble(border.m_doubleLineSpacing)) {
                 DRW_DBG("TABLESTYLE cell-style border data invalid\n");
                 return false;
@@ -17642,6 +17669,8 @@ bool DRW_TableStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_
             return fail();
         }
         DRW_TableStyleCellStyle parsedTableCellStyle;
+        const std::uint64_t tableCellRecordStartBit =
+            currentObjectDwgBit(bodyBuf);
         if (!readTableStyleCellStyle(version, bodyBuf, bodySBuf, hBuf,
                                      bodyEnd, stringEnd,
                                      parsedTableCellStyle,
@@ -17649,21 +17678,49 @@ bool DRW_TableStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_
             DRW_DBG("TABLESTYLE table cell style parse incomplete\n");
             return fail();
         }
+        const std::uint64_t tableCellIdStartBit =
+            currentObjectDwgBit(bodyBuf);
         if (!readBitLongWithinBody(bodyBuf, version, bodyEnd,
                                    parsedTableCellStyle.m_id)
             || (parsedTableCellStyle.m_id < 1
                 || (parsedTableCellStyle.m_id > 4
-                    && parsedTableCellStyle.m_id < 101))
-            || !readBitLongWithinBody(bodyBuf, version, bodyEnd,
-                                      parsedTableCellStyle.m_styleClass)
+                    && parsedTableCellStyle.m_id < 101))) {
+            DRW_DBG("TABLESTYLE R24 table identity invalid\n");
+            return fail();
+        }
+        m_subrecordRanges.push_back(makeObjectSubrecordRange(
+            "table-style-body-table-cell-id", tableCellIdStartBit,
+            currentObjectDwgBit(bodyBuf), version,
+            static_cast<std::uint32_t>(parsedTableCellStyle.m_id), true));
+        const std::uint64_t tableCellClassStartBit =
+            currentObjectDwgBit(bodyBuf);
+        if (!readBitLongWithinBody(bodyBuf, version, bodyEnd,
+                                   parsedTableCellStyle.m_styleClass)
             || (parsedTableCellStyle.m_styleClass != 1
-                && parsedTableCellStyle.m_styleClass != 2)
-            || !readVariableTextWithinBounds(
+                && parsedTableCellStyle.m_styleClass != 2)) {
+            DRW_DBG("TABLESTYLE R24 table identity invalid\n");
+            return fail();
+        }
+        m_subrecordRanges.push_back(makeObjectSubrecordRange(
+            "table-style-body-table-cell-class", tableCellClassStartBit,
+            currentObjectDwgBit(bodyBuf), version,
+            static_cast<std::uint32_t>(parsedTableCellStyle.m_styleClass),
+            true));
+        const std::uint64_t tableCellNameStartBit =
+            currentObjectDwgBit(bodySBuf);
+        if (!readVariableTextWithinBounds(
                 bodyBuf, bodySBuf, version, bodyEnd, stringEnd,
                 parsedTableCellStyle.m_name)) {
             DRW_DBG("TABLESTYLE R24 table identity invalid\n");
             return fail();
         }
+        m_subrecordRanges.push_back(makeObjectSubrecordRange(
+            "table-style-string-table-cell-name", tableCellNameStartBit,
+            currentObjectDwgBit(bodySBuf), version, 1u, true));
+        m_subrecordRanges.push_back(makeObjectSubrecordRange(
+            "table-style-body-table-cell-record", tableCellRecordStartBit,
+            currentObjectDwgBit(bodyBuf), version,
+            static_cast<std::uint32_t>(parsedTableCellStyle.m_id), true));
 
         std::int32_t declaredCellStyleCount = 0;
         if (!readBitLongWithinBody(bodyBuf, version, bodyEnd,
@@ -17682,12 +17739,19 @@ bool DRW_TableStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_
         if (!DRW::reserve(parsedCellStyles, static_cast<int>(cellStyleCount)))
             return fail();
         for (std::uint32_t i = 0; i < cellStyleCount; ++i) {
+            const std::uint64_t cellRecordStartBit =
+                currentObjectDwgBit(bodyBuf);
             std::int32_t ignoredStyleIndex = 0;
             if (!readBitLongWithinBody(bodyBuf, version, bodyEnd,
                                        ignoredStyleIndex)) {
                 DRW_DBG("TABLESTYLE custom cell-style index incomplete\n");
                 return fail();
             }
+            m_subrecordRanges.push_back(makeObjectSubrecordRange(
+                "table-style-body-cell-index", cellRecordStartBit,
+                currentObjectDwgBit(bodyBuf), version,
+                ignoredStyleIndex < 0 ? 0u
+                    : static_cast<std::uint32_t>(ignoredStyleIndex), true));
             DRW_TableStyleCellStyle style;
             if (!readTableStyleCellStyle(version, bodyBuf, bodySBuf, hBuf,
                                          bodyEnd, stringEnd,
@@ -17696,12 +17760,25 @@ bool DRW_TableStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_
                 DRW_DBG("TABLESTYLE custom cell style parse incomplete\n");
                 return fail();
             }
+            const std::uint64_t cellIdStartBit =
+                currentObjectDwgBit(bodyBuf);
             if (!readBitLongWithinBody(bodyBuf, version, bodyEnd,
                                        style.m_id)
                 || (style.m_id < 1
-                    || (style.m_id > 4 && style.m_id < 101))
-                || !readBitLongWithinBody(bodyBuf, version, bodyEnd,
-                                          style.m_styleClass)
+                    || (style.m_id > 4 && style.m_id < 101))) {
+                DRW_DBG("TABLESTYLE repeated cell-style identity invalid id/class=");
+                DRW_DBG(style.m_id); DRW_DBG("/");
+                DRW_DBG(style.m_styleClass); DRW_DBG("\n");
+                return fail();
+            }
+            m_subrecordRanges.push_back(makeObjectSubrecordRange(
+                "table-style-body-cell-id", cellIdStartBit,
+                currentObjectDwgBit(bodyBuf), version,
+                static_cast<std::uint32_t>(style.m_id), true));
+            const std::uint64_t cellClassStartBit =
+                currentObjectDwgBit(bodyBuf);
+            if (!readBitLongWithinBody(bodyBuf, version, bodyEnd,
+                                       style.m_styleClass)
                 // The ODA profile documents classes 1/2, but existing R24
                 // input contains 0. Preserve it as an observed raw value
                 // without assigning it data/label semantics.
@@ -17711,6 +17788,12 @@ bool DRW_TableStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_
                 DRW_DBG(style.m_styleClass); DRW_DBG("\n");
                 return fail();
             }
+            m_subrecordRanges.push_back(makeObjectSubrecordRange(
+                "table-style-body-cell-class", cellClassStartBit,
+                currentObjectDwgBit(bodyBuf), version,
+                static_cast<std::uint32_t>(style.m_styleClass), true));
+            const std::uint64_t cellNameStartBit =
+                currentObjectDwgBit(bodySBuf);
             if (!readVariableTextWithinBounds(
                     bodyBuf, bodySBuf, version, bodyEnd, stringEnd,
                     style.m_name)) {
@@ -17723,10 +17806,17 @@ bool DRW_TableStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_
                 DRW_DBG(stringEnd); DRW_DBG("\n");
                 return fail();
             }
+            m_subrecordRanges.push_back(makeObjectSubrecordRange(
+                "table-style-string-cell-name", cellNameStartBit,
+                currentObjectDwgBit(bodySBuf), version, 1u, true));
             if (ignoredStyleIndex != style.m_id) {
                 DRW_DBG("TABLESTYLE R24 style index does not match style ID\n");
                 return fail();
             }
+            m_subrecordRanges.push_back(makeObjectSubrecordRange(
+                "table-style-body-repeated-cell-record", cellRecordStartBit,
+                currentObjectDwgBit(bodyBuf), version,
+                static_cast<std::uint32_t>(style.m_id), true));
             parsedCellStyles.push_back(std::move(style));
         }
 

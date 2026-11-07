@@ -2,7 +2,7 @@
   "exactMembershipMatch": true,
   "localEdgeRows": 86,
   "localLog": "/private/tmp/cover-opaque-source-inventory-body.log",
-  "localLogSha256": "4353ce24f011396480e1b9936a50d723230469b72d8be3ef2b68728dd3d0ac61",
+  "localLogSha256": "3e3fd440f709fb1db7494caff9a117b522034c79c3a7be193bc0690176712fab",
   "localMissingFromPeer": [],
   "matchedRows": 86,
   "nullSlots": 1,
