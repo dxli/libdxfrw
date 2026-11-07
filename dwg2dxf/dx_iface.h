@@ -3446,6 +3446,8 @@ private:
     void abortDwgClassEvidenceRead() noexcept;
     friend class DxIfaceExtensionGraphTestAccess;
     friend class DxIfaceStandardDwgCaptureTestAccess;
+    static bool testAc1024DynamicBlockOwnerDictionary(
+        const dx_data& data, std::uint32_t dictionaryHandle) noexcept;
     friend class DxIfaceTableSourceTestAccess;
     friend class DxIfaceMaterialReferenceTestAccess;
     void rejectStandardDwgObjectCapture() noexcept;

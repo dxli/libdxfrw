@@ -1,0 +1,144 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p4-ac1024-civil-assoc-selected-route-readiness-2026-11-07",
+  "date": "2026-11-07",
+  "title": "AC1024 civil associative Edge selected-route readiness",
+  "supportClaimEffect": "none",
+  "scope": "Identify the complete physical source graph and current production export gates for the ten bounded Edge dependencies; do not treat exploratory pruning as output qualification.",
+  "source": {
+    "path": "/Users/dli/doc/dwg/civil_example-imperial.dwg",
+    "sha256": "45b419d0c7382eb271079b80c3237a52183f4fa09e7b495c3d7a65c6baa927dc",
+    "version": "AC1024",
+    "provenanceLimit": "Existing local source; not an authenticated producer witness and not added as a fixture."
+  },
+  "observedGraph": {
+    "nodHandle": 12,
+    "nodAssociativeDictionary": 1768,
+    "rootNetwork": {
+      "handle": 1769,
+      "parentDictionary": 1768,
+      "networkOwner": 0,
+      "actions": [1771, 1905, 2493]
+    },
+    "selectedBranches": [
+      {
+        "network": 1771,
+        "parentDictionary": 1770,
+        "ownerNetwork": 1769,
+        "group": 1776,
+        "groupActionCount": 9,
+        "groupNodeCount": 43,
+        "geometryDependencies": [1777, 1778, 1797, 1798, 1799],
+        "targetPolyline": 1754,
+        "otherActions": [1773, 1774, 1789, 1790]
+      },
+      {
+        "network": 2493,
+        "parentDictionary": 2492,
+        "ownerNetwork": 1769,
+        "group": 2478,
+        "groupActionCount": 9,
+        "groupNodeCount": 43,
+        "geometryDependencies": [2482, 2483, 2487, 2488, 2489],
+        "targetPolyline": 2474,
+        "otherActions": [2479, 2480, 2484, 2485]
+      }
+    ],
+    "excludedBranch": {
+      "network": 1905,
+      "group": 1911,
+      "containsUnqualifiedHandle": 3157,
+      "mustRemainExcluded": true
+    },
+    "genericDependencyDynamicBlockClosure": [
+      {
+        "association": 1774,
+        "target": 1759,
+        "targetKind": "BLOCKVERTICALCONSTRAINTPARAMETER",
+        "targetOwnerEvaluationGraph": 1757,
+        "evaluationGraphOwnerDictionary": 1756,
+        "body": 1775,
+        "bodyKind": "BLOCKPARAMDEPENDENCYBODY",
+        "bodyOwner": 1774
+      },
+      {
+        "association": 1790,
+        "target": 1787,
+        "targetKind": "BLOCKHORIZONTALCONSTRAINTPARAMETER",
+        "targetOwnerEvaluationGraph": 1757,
+        "evaluationGraphOwnerDictionary": 1756,
+        "body": 1791,
+        "bodyKind": "BLOCKPARAMDEPENDENCYBODY",
+        "bodyOwner": 1790
+      },
+      {
+        "association": 2480,
+        "target": 1759,
+        "targetKind": "BLOCKVERTICALCONSTRAINTPARAMETER",
+        "targetOwnerEvaluationGraph": 1757,
+        "evaluationGraphOwnerDictionary": 1756,
+        "body": 2481,
+        "bodyKind": "BLOCKPARAMDEPENDENCYBODY",
+        "bodyOwner": 2480
+      },
+      {
+        "association": 2485,
+        "target": 1787,
+        "targetKind": "BLOCKHORIZONTALCONSTRAINTPARAMETER",
+        "targetOwnerEvaluationGraph": 1757,
+        "evaluationGraphOwnerDictionary": 1756,
+        "body": 2486,
+        "bodyKind": "BLOCKPARAMDEPENDENCYBODY",
+        "bodyOwner": 2485
+      }
+    ],
+    "note": "The four body records and two parameter targets are present as typed DRW_DynamicBlockObject records. Their inclusion requires the selected dynamic-block dictionary/source-output profile; they are not missing frames. The parameter targets are children of EvaluationGraph 1757 (0x6DD), whose owner dictionary is 1756 (0x6DC). The remaining dynamic objects in that graph and the two BlockRecord-rooted dictionary chains still need closure assessment."
+  },
+  "dynamicBlockOwnerDictionary": {
+    "handle": 1756,
+    "parentBlockRecord": 1703,
+    "blockName": "BLDG",
+    "entryCount": 3,
+    "entries": {
+      "ACAD_ENHANCEDBLOCK": 1757,
+      "ACAD_ASSOCNETWORK": 1770,
+      "AcDbDynamicBlockRoundTripPurgePreventer": 1802
+    },
+    "acadSortentsEntry": null,
+    "validationBlocker": "Current narrow AC1024 dynamic-block owner validator requires ACAD_SORTENTS and rejects this observed exact three-entry source profile at its mandatory sortEntry check."
+  },
+  "exportExperiments": {
+    "strictWholeSource": {
+      "command": "dwg2dxf civil_example-imperial.dwg -y -d -v2010 out.dxf",
+      "result": "Stopped before output preflight: strict-complete conversion requires successful, complete DWG read disposition.",
+      "knownSourceBlocker": "LTYPE_CONTROL handle 0x5 contains a null counted soft-owner slot."
+    },
+    "legacyWholeSource": {
+      "policy": "Legacy read completeness, normal fileExport path",
+      "priorResult": "Preflight stopped at dynamic-block objects outside the closed output profiles.",
+      "currentResult": "After optional-SORTENTS owner-profile admission, the probe passes dynamic-block output and stops at associative graph validation: root ACDBASSOCNETWORK 1769 has non-owned action target 1771, which is typed ACDBASSOCNETWORK but its parent dictionary 1770 is not in the validator's current SORTENTSTABLE-derived nested-network set.",
+      "probe": "Recompiled /private/tmp/civil-edge-full-probe.cpp against current build-gcc dwg2dxf objects and libdxfrw.a; output path /private/tmp/civil-edge-full-probe-current.dxf was not accepted."
+    },
+    "associativeOnlyPruningProbe": {
+      "policy": "Temporary local diagnostic removed all but the 27 selected typed associative records and removed the excluded 1905 root action.",
+      "result": "Preflight stopped at SORTENTSTABLE ACAD_ASSOCNETWORK typed nested-network route.",
+      "qualification": "No DXF output accepted. This was an exploratory diagnostic, not production selection and not a test bypass."
+    }
+  },
+  "implementationDecision": {
+    "completedSlice": "Admit the observed AC1024 graph/purge/network owner-dictionary profile without ACAD_SORTENTS while retaining the graph/sort/purge and graph/sort/purge/network profiles. Zero sortEntsHandle is treated as absent in route preparation, immutable source revalidation, and output handle mapping.",
+    "completedSliceControls": "Focused dwg2dxf_dynamic_block_visibility_composed_graph CTest passes. Generated owner-shape controls cover all three valid entry combinations, reject neither-sort-nor-network, unknown keys, and an orphan SORTENTSTABLE under the no-SORTENTS owner. Existing composed output/readback remains ASCII/Binary.",
+    "nextSlice": "Trace the source-bound network/dictionary profile for selected nested network targets 1771 and 2493; then implement an explicit immutable selected-graph output path that admits only these source-closed branches and excludes third branch 1905. Do not relax ordinary whole-document fileExport or use temporary source mutation.",
+    "mustPreserve": [
+      "Both selected nested networks and the root network relationship.",
+      "All nine actions and all 43 ordered nodes in each selected group.",
+      "Both target LWPOLYLINE records and reciprocal dependency reactor links.",
+      "All required dictionary/root edges and four value/generic action records per group; preserve the physical three-entry dynamic-block owner dictionary without synthesizing SORTENTSTABLE.",
+      "The source identity and exact Edge fields for all ten selected records."
+    ],
+    "mustExclude": "The third root-network branch containing group 1911 and handle 3157.",
+    "gate": "The normal full-file probe's current associative gate is specifically root network 1769 -> non-owned child network 1771, parent dictionary 1770. The selected route must retain complete group action/node lists, selected parameter and dependency-body records, both target polylines, reciprocal reactors, and required dictionary/network edges while excluding root target 1905. Then prove ASCII/Binary readback, mutation refusal, destination preservation, and same-adapter retry."
+  },
+  "fixturePolicy": "No DWG or DXF fixture added.",
+  "fullSuites": "NOT_RUN"
+}

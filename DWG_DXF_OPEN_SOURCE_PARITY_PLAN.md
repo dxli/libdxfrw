@@ -354,27 +354,76 @@ created locally from scratch for the specific control.
 
    The generated adapter field/snapshot/readback control is now complete; see
    the [receipt](docs/research/p4-ac1024-assoc-edge-generated-adapter-fields-2026-11-07.json).
-   **Remaining physical-output implementation:** close the selected source
-   graph before adding a source selector. The two candidate groups (2478 and
-   1776) each contain nine actions and 43 ordered constraint nodes; five Edge
-   dependencies in each group correspond to the two LWPOLYLINE vertex-index
-   cycles. The other four actions per group are value or generic dependencies
-   and remain part of the serialized group membership. Inventory their target,
-   owner, reactor, body and EED/XDATA dependencies, plus the root network and
-   dictionary membership, then include the complete required closure in the
-   selected projection. Do not trim group actions/nodes to force admission.
-   Keep the third group 1911, including unresolved handle `0xC55`, outside this
-   projection. If any required member is unsupported, implement its bounded
-   writer path or preserve atomic refusal and record the exact blocker.
+   **Next implementation slice — production selected-graph writer:** the normal
+   whole-document route cannot qualify this source: strict conversion stops at
+   the null LTYPE_CONTROL source disposition, while Legacy `fileExport` stops
+   at unqualified dynamic-block objects. A temporary associative-only pruning
+   probe then stopped at the existing SORTENTSTABLE nested-network route; it
+   did not emit output and is not an acceptable implementation. See the
+   [route-readiness receipt](docs/research/p4-ac1024-civil-assoc-selected-route-readiness-2026-11-07.json).
+   Add an explicit immutable selected-graph output path that does not mutate
+   `dx_data`, bypass only unrelated whole-document gates, and preserves the
+   ordinary full-file refusal behavior.
 
-   **Acceptance:** physical selected output in ASCII and Binary must preserve
-   all ten Edge class/version/index/compound fields, all required group action
-   and node membership, target LWPOLYLINE identities, reciprocal reactor
-   links, and remapped references on fresh typed re-import. Include
-   wrong-kind and post-plan field/target mutation refusal with destination
-   preservation, followed by corrected same-adapter retry. Keep strict civil
-   whole-source conversion refused for its independent null LTYPE_CONTROL
-   member and do not add a source drawing fixture.
+   The selected closure is rooted at NOD `0x0C` → dictionary `0x6E8` → network
+   `0x6E9`. Its selected child networks are `0x6EB` and `0x9BD`, owning groups
+   `0x6F0` and `0x9AE`, respectively; retain each group's nine actions and 43
+   ordered nodes, all four non-Edge dependency/value actions per group, and
+   target LWPOLYLINEs `0x6DA` and `0x9AA`. The generic dependency body handles
+   `0x6EF`, `0x6FF`, `0x9B1`, and `0x9B6` resolve to typed
+   `BLOCKPARAMDEPENDENCYBODY` dynamic-block records, owned by their four
+   generic dependency actions. Their target handles `0x6DF` and `0x6FB` resolve to
+   typed `BLOCKVERTICALCONSTRAINTPARAMETER` and
+   `BLOCKHORIZONTALCONSTRAINTPARAMETER` records, owned by EvaluationGraph
+   `0x6DD`; that graph is under owner dictionary `0x6DC`. The exact source
+   dictionary has three entries: `ACAD_ENHANCEDBLOCK` → graph `0x6DD`,
+   `ACAD_ASSOCNETWORK` → nested associative dictionary `0x6EA`, and
+   `AcDbDynamicBlockRoundTripPurgePreventer` → `0x70A`. It has no
+   `ACAD_SORTENTS` entry. Do not invent or require a SORTENTSTABLE owner path
+   for this graph. The optional-SORTENTS owner profile is now implemented in
+   owner validation, route preparation, and immutable source revalidation.
+   Handle zero means the source has no SORTENTS entry; it is ignored by
+   reference mapping and the source snapshot requires that entry to remain
+   absent. The existing graph/sort/purge and graph/sort/purge/network profiles
+   remain admitted. Generated controls cover those plus this exact
+   graph/purge/network profile in ASCII and Binary composed-graph
+   output/readback; negative controls reject a missing SORTENTS-and-network
+   pair, unknown dictionary keys, and an orphan SORTENTSTABLE below the
+   no-SORTENTS owner. The physical civil source now advances past dynamic-block
+   output and stops at the subsequent associative graph validator: root
+   network `0x6E9` (1769) has a non-owned action to nested network `0x6EB`
+   (1771), whose parent dictionary `0x6EA` is not in the current
+   SORTENTSTABLE-derived nested-network set. Trace the source-bound dictionary
+   profile for both selected child networks (`0x6EB` and `0x9BD`), then admit
+   them only in the immutable selected projection; keep third root target
+   `0x771` excluded. See the updated [route-readiness
+   receipt](docs/research/p4-ac1024-civil-assoc-selected-route-readiness-2026-11-07.json).
+   The complete EvaluationGraph has 14 dynamic-block objects, including the
+   referenced parameters and dependency bodies; inspect its remaining records
+   for closure before admitting selected output. Preserve the root and nested
+   dictionary links. Exclude the third network
+   branch through group `0x777` and unresolved handle `0xC55`; never trim
+   serialized group action/node lists. See the updated
+   [route-readiness receipt](docs/research/p4-ac1024-civil-assoc-selected-route-readiness-2026-11-07.json).
+
+   **Implementation order:** (1) complete — admit the observed three-entry
+   dynamic-block owner profile and retain the earlier SORTENTS profiles;
+   (2) close the selected dynamic-block records plus both selected associative
+   branches against the physical source and existing output validators;
+   (3) add the immutable selected-graph writer, then verify ASCII/Binary typed
+   readback, mutation refusal, destination preservation, and same-adapter
+   retry. Keep each code slice focused and use its direct named control before
+   a broad suite. Whole-source strict civil export remains independently
+   refused by its null counted LTYPE_CONTROL member.
+
+   **Acceptance:** selected ASCII/Binary output must preserve all ten Edge
+   fields, both complete group action/node lists, both target polylines,
+   reciprocal reactors, dictionary/network ownership and remapped references
+   on fresh typed readback. Include wrong-kind and post-plan field/target
+   mutation refusal with destination preservation, followed by corrected
+   same-adapter retry. Keep strict civil whole-source conversion refused for
+   its independent null LTYPE_CONTROL member and do not add a source drawing
+   fixture.
 
    An exploratory test-only projection reached preflight but correctly refused
    before serialization; that harness was removed because it had no

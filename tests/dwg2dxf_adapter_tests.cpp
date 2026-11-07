@@ -175,6 +175,11 @@ public:
 
 class DxIfaceStandardDwgCaptureTestAccess {
 public:
+    static bool dynamicBlockOwnerDictionaryProfile(
+            const dx_data& data, std::uint32_t handle) noexcept {
+        return dx_iface::testAc1024DynamicBlockOwnerDictionary(data, handle);
+    }
+
     static bool selectPhysicalAc1021RasterVariablesGraph(
             const dx_data& source, dx_data& projection,
             std::uint32_t handle) {
@@ -18278,6 +18283,117 @@ bool dynamicBlockVisibilityComposedGraphOutputProfile() {
         }
     }
 
+    return true;
+}
+
+bool dynamicBlockOwnerDictionaryOptionalSortEntsProfiles() {
+    const auto makeSource = [](bool includeSortEnts, bool includeNetwork,
+                               dx_data& data, dx_iface& iface) {
+        constexpr std::uint32_t blockHandle = 0x200u;
+        constexpr std::uint32_t ownerHandle = 0x201u;
+        constexpr std::uint32_t graphHandle = 0x202u;
+        constexpr std::uint32_t sortHandle = 0x203u;
+        constexpr std::uint32_t purgeHandle = 0x204u;
+        constexpr std::uint32_t nestedHandle = 0x205u;
+        data.sourceFormat = dx_source_format::DWG;
+        data.sourceVersion = DRW::AC1024;
+        iface.cData = &data;
+
+        DRW_Block_Record block;
+        block.handle = blockHandle;
+        block.name = "*U900";
+        block.xDictHandle = ownerHandle;
+        data.blockRecords.push_back(block);
+
+        DRW_Dictionary owner;
+        owner.handle = ownerHandle;
+        owner.parentHandle = blockHandle;
+        owner.hardOwner = 1;
+        owner.cloning = 1;
+        owner.m_entries.push_back({"ACAD_ENHANCEDBLOCK", graphHandle});
+        if (includeSortEnts)
+            owner.m_entries.push_back({"ACAD_SORTENTS", sortHandle});
+        owner.m_entries.push_back({
+            "AcDbDynamicBlockRoundTripPurgePreventer", purgeHandle});
+        if (includeNetwork)
+            owner.m_entries.push_back({"ACAD_ASSOCNETWORK", nestedHandle});
+        iface.addDictionary(owner);
+
+        DRW_EvaluationGraph graph;
+        graph.handle = graphHandle;
+        graph.parentHandle = ownerHandle;
+        graph.reactorHandles = {ownerHandle};
+        iface.addEvaluationGraph(graph);
+
+        DRW_DynamicBlockObject purge(
+            "ACDB_DYNAMICBLOCKPURGEPREVENTER_VERSION");
+        purge.handle = purgeHandle;
+        purge.parentHandle = ownerHandle;
+        purge.reactorHandles = {ownerHandle};
+        purge.m_purgeBlockHandle = blockHandle;
+        purge.m_bodyFullyDecoded = true;
+        iface.addDynamicBlockObject(purge);
+
+        if (includeSortEnts) {
+            DRW_SortEntsTable sort;
+            sort.handle = sortHandle;
+            sort.parentHandle = ownerHandle;
+            sort.m_blockOwnerHandle = blockHandle;
+            sort.reactorHandles = {ownerHandle};
+            iface.addSortEntsTable(sort);
+        }
+        if (includeNetwork) {
+            DRW_Dictionary nested;
+            nested.handle = nestedHandle;
+            nested.parentHandle = ownerHandle;
+            nested.reactorHandles = {ownerHandle};
+            nested.m_entries.push_back({"ACAD_ASSOCNETWORK", 0x206u});
+            iface.addDictionary(nested);
+        }
+        return !data.dynamicBlockCaptureFailed
+            && !data.evaluationGraphCaptureFailed
+            && !data.sortEntsCaptureFailed;
+    };
+
+    for (const auto& shape : std::array<std::pair<bool, bool>, 3>{{
+             {true, false}, {true, true}, {false, true}}}) {
+        dx_data data;
+        dx_iface iface;
+        if (!makeSource(shape.first, shape.second, data, iface)
+            || !DxIfaceStandardDwgCaptureTestAccess::
+                dynamicBlockOwnerDictionaryProfile(data, 0x201u))
+            return fail("valid AC1024 dynamic owner dictionary shape was rejected");
+    }
+
+    dx_data missingEntries;
+    dx_iface missingEntriesIface;
+    if (!makeSource(false, false, missingEntries, missingEntriesIface)
+        || DxIfaceStandardDwgCaptureTestAccess::
+            dynamicBlockOwnerDictionaryProfile(missingEntries, 0x201u))
+        return fail("owner dictionary without SORTENTS or network was admitted");
+
+    dx_data unknownEntry;
+    dx_iface unknownEntryIface;
+    if (!makeSource(true, false, unknownEntry, unknownEntryIface))
+        return fail("could not construct unknown-entry negative control");
+    unknownEntry.dictionaries.front().m_entries.push_back(
+        {"ACAD_UNQUALIFIED", 0x207u});
+    if (DxIfaceStandardDwgCaptureTestAccess::
+            dynamicBlockOwnerDictionaryProfile(unknownEntry, 0x201u))
+        return fail("unknown owner dictionary key was admitted");
+
+    dx_data staleSortTable;
+    dx_iface staleSortTableIface;
+    if (!makeSource(false, true, staleSortTable, staleSortTableIface))
+        return fail("could not construct stale-SORTENTS negative control");
+    DRW_SortEntsTable stale;
+    stale.handle = 0x208u;
+    stale.parentHandle = 0x201u;
+    stale.m_blockOwnerHandle = 0x200u;
+    staleSortTableIface.addSortEntsTable(stale);
+    if (DxIfaceStandardDwgCaptureTestAccess::
+            dynamicBlockOwnerDictionaryProfile(staleSortTable, 0x201u))
+        return fail("unreferenced SORTENTSTABLE under optional-SORTENTS owner was admitted");
     return true;
 }
 
@@ -84217,7 +84333,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1])
             == "--dynamic-block-visibility-composed-graph")
-        return dynamicBlockVisibilityComposedGraphOutputProfile() ? 0 : 1;
+        return dynamicBlockVisibilityComposedGraphOutputProfile()
+                && dynamicBlockOwnerDictionaryOptionalSortEntsProfiles()
+            ? 0 : 1;
     if (argc == 3
         && std::string(argv[1])
             == "--dynamic-block-graph-failure-readback")
