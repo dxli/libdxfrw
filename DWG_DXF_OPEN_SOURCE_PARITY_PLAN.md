@@ -75,14 +75,19 @@ created locally from scratch for the specific control.
    `tablet.dwg` XRECORD at `0x2BCF` is a promising bounded graph: its NOD-owned
    `ASEBlockHierarchyIndexRecord` dictionary route is identified, and LibreDWG
    independently resolves all 208 unique code-330 payloads as INSERT entities.
-   The local typed-model probe does not expose any of those targets. A fresh
-   debug trace does enter type-7 INSERT parsing for target `0x1BE5` twice, but
-   neither parse reaches the typed adapter inventory; trace whether this is
-   repeated parser traversal, a frame identity collision, bounded parse
-   failure, or identity normalization before attempting output support. The
-   strict graph gate still refuses at `0x1BE5`. Keep strict
-   refusal. The source is unauthenticated and this is not a support claim (see
-   the [tablet XRECORD screen receipt](docs/research/p4-ac1021-tablet-ase-block-hierarchy-xrecord-target-screen-2026-11-06.json)).
+   The corrected inventory includes the separate `mBlock` model-space
+   container: all 208 unique code-330 targets occur once as typed INSERTs. A
+   narrow AC1021 NOD-owned `ASEBlockHierarchyIndexRecord` route now validates
+   that graph and passes generated ASCII/Binary readback with remapped entity
+   references, wrong-kind/dangling refusal, destination preservation, and
+   same-writer correction/retry. The physical tablet source passes this graph
+   gate, then strict output stops at the independent DICTIONARYVAR DWG
+   source/output snapshot gate; therefore whole-source output and support
+   claims remain open. Next resolve that later gate or select another
+   dependency-closed source profile. The source is unauthenticated; see the
+   [tablet XRECORD receipt](docs/research/p4-ac1021-tablet-ase-block-hierarchy-xrecord-target-screen-2026-11-06.json)
+   and the generated control registered as
+   `libdxfrw_ase_hierarchy_ac1021_insert_target_roundtrip`.
    The `truetype.dwg` candidate is screened out for now: XRECORD `0x5E3` contains
    four code-330 LAYER handles and four code-331 LTYPE handles, but its owner
    chain starts at the LAYER_CONTROL extension dictionary (`0x59B`), then

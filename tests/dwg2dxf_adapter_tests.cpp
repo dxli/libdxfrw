@@ -55729,6 +55729,201 @@ bool physicalAc1021NodDictionaryGraphOutputReadback(
     return true;
 }
 
+bool generatedAc1021AseHierarchyEntityTargetRoundtrip() {
+    const auto base = std::filesystem::temp_directory_path()
+        / ("libdxfrw-ase-ac1021-insert-targets-"
+            + std::to_string(std::chrono::steady_clock::now()
+                .time_since_epoch().count()));
+    struct Cleanup {
+        std::vector<std::filesystem::path> paths;
+        ~Cleanup() {
+            for (const auto& path : paths) {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        }
+    } cleanup;
+    dx_data source;
+    source.sourceFormat = dx_source_format::DWG;
+    source.sourceVersion = DRW::AC1021;
+    source.hasNamedObjectDictionary = true;
+    source.namedObjectDictionary.handle = 0x400u;
+    source.namedObjectDictionary.hardOwner = 0;
+    source.namedObjectDictionary.cloning = 1;
+    source.namedObjectDictionary.m_entries.push_back(
+        {"ASE_INDEX_DICTIONARY", 0x401u});
+    DRW_Dictionary dictionary;
+    dictionary.handle = 0x401u;
+    dictionary.parentHandle = source.namedObjectDictionary.handle;
+    dictionary.reactorHandles = {source.namedObjectDictionary.handle};
+    dictionary.hardOwner = 0;
+    dictionary.cloning = 1;
+    dictionary.m_entries.push_back(
+        {"ASEBlockHierarchyIndexRecord", 0x402u});
+    source.dictionaries.push_back(dictionary);
+    DRW_XRecord cache;
+    cache.handle = 0x402u;
+    cache.parentHandle = dictionary.handle;
+    cache.reactorHandles = {dictionary.handle};
+    cache.m_cloning = 1;
+    constexpr std::uint32_t targetCount = 208u;
+    for (std::uint32_t index = 0u; index < targetCount; ++index) {
+        auto* insert = new DRW_Insert;
+        insert->handle = 0x600u + index;
+        insert->name = "ASE_PROFILE_BLOCK";
+        insert->blockRecH.ref = 0x500u;
+        insert->basePoint = DRW_Coord(index, 0.0, 0.0);
+        source.mBlock->ent.push_back(insert);
+        cache.m_handleValues.emplace_back(330, insert->handle);
+        cache.m_dataEntries.emplace_back(
+            330, static_cast<int>(insert->handle));
+    }
+    source.xRecords.push_back(cache);
+    DRW_Block_Record blockRecord;
+    blockRecord.handle = 0x500u;
+    blockRecord.name = "ASE_PROFILE_BLOCK";
+    source.blockRecords.push_back(blockRecord);
+    auto* targetBlock = new dx_ifaceBlock;
+    targetBlock->name = blockRecord.name;
+    targetBlock->handle = 0x501u;
+    targetBlock->parentHandle = blockRecord.handle;
+    source.blocks.push_back(targetBlock);
+
+    for (const bool binary : {false, true}) {
+        dx_iface writer;
+        const auto outputPath = std::filesystem::path(
+            base.string() + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        cleanup.paths.push_back(outputPath);
+        const auto write = [&]() {
+            return writer.fileExport(
+                outputPath.string(), DRW::AC1021, binary, &source,
+                false, false, dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::RequireComplete);
+        };
+        const std::string sentinel = "ASE cache output sentinel\n";
+        const auto seed = [&]() {
+            std::ofstream output(outputPath,
+                std::ios::binary | std::ios::trunc);
+            return output && static_cast<bool>(output << sentinel);
+        };
+        const auto stillSeeded = [&]() {
+            std::ifstream input(outputPath, std::ios::binary);
+            return std::string{std::istreambuf_iterator<char>(input), {}}
+                == sentinel;
+        };
+        auto target = source.mBlock->ent.begin();
+        if (target == source.mBlock->ent.end())
+            return fail("generated ASE profile has no model-space INSERTs");
+        DRW_Entity* original = *target;
+        auto* wrongKind = new DRW_Line;
+        wrongKind->handle = original->handle;
+        *target = wrongKind;
+        if (!seed() || write() || !stillSeeded()) {
+            *target = original;
+            delete wrongKind;
+            return fail("wrong-kind ASE target was published or changed the destination");
+        }
+        *target = original;
+        delete wrongKind;
+
+        const auto missingPosition = std::next(source.mBlock->ent.begin());
+        if (missingPosition == source.mBlock->ent.end())
+            return fail("generated ASE profile lacks its second target");
+        DRW_Entity* missing = *missingPosition;
+        const auto restorePosition = std::next(missingPosition);
+        source.mBlock->ent.erase(missingPosition);
+        if (!seed() || write() || !stillSeeded()) {
+            source.mBlock->ent.insert(restorePosition, missing);
+            return fail("dangling ASE target was published or changed the destination");
+        }
+        source.mBlock->ent.insert(restorePosition, missing);
+        if (!write())
+            return fail("corrected ASE target graph did not retry on the same writer");
+
+        dx_iface reader;
+        dx_data output;
+        const bool readbackOk = reader.fileImport(
+            outputPath.string(), &output, false);
+        if (!readbackOk
+            || output.sourceFormat != dx_source_format::DXF
+            || output.sourceVersion != DRW::AC1021
+            || !output.hasNamedObjectDictionary
+            || output.mBlock->ent.size() != targetCount
+            || output.xRecords.size() != 1u)
+            return fail("generated ASE cache output failed fresh ASCII/Binary readback");
+        const auto outputCache = std::find_if(
+            output.xRecords.begin(), output.xRecords.end(),
+            [](const DRW_XRecord& record) {
+                return record.m_handleValues.size() == targetCount;
+            });
+        const DRW_Dictionary* outputDictionary = nullptr;
+        if (outputCache != output.xRecords.end()) {
+            for (const DRW_Dictionary& candidate : output.dictionaries) {
+                if (candidate.handle != outputCache->parentHandle)
+                    continue;
+                if (outputDictionary != nullptr)
+                    return fail("ASE cache owner handle is ambiguous after readback");
+                outputDictionary = &candidate;
+            }
+        }
+        if (outputCache == output.xRecords.end()
+            || outputCache->m_dataEntries.size() != targetCount
+            || outputDictionary == nullptr
+            || outputDictionary->parentHandle
+                != output.namedObjectDictionary.handle
+            || outputDictionary->reactorHandles
+                != std::vector<std::uint32_t>{
+                    output.namedObjectDictionary.handle}
+            || outputDictionary->m_entries.size() != 1u
+            || outputDictionary->m_entries.front().m_name
+                != "ASEBlockHierarchyIndexRecord"
+            || outputDictionary->m_entries.front().m_handle
+                != outputCache->handle
+            || outputCache->reactorHandles
+                != std::vector<std::uint32_t>{outputDictionary->handle})
+            return fail("ASE cache readback changed its owner, reactor, or ordered payload");
+        const std::size_t outputRootMatches = static_cast<std::size_t>(
+            std::count_if(
+                output.namedObjectDictionary.m_entries.begin(),
+                output.namedObjectDictionary.m_entries.end(),
+                [outputDictionary](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "ASE_INDEX_DICTIONARY"
+                        && entry.m_handle == outputDictionary->handle;
+                }));
+        if (outputRootMatches != 1u
+            || outputCache->m_cloning != 1)
+            return fail("ASE cache NOD root or XRECORD cloning field changed on readback");
+        std::unordered_set<std::uint32_t> outputInsertHandles;
+        for (const DRW_Entity* entity : output.mBlock->ent) {
+            if (entity == nullptr || entity->eType != DRW::INSERT
+                || !outputInsertHandles.insert(entity->handle).second)
+                return fail("ASE output did not retain unique model-space INSERT handles");
+        }
+        for (std::size_t index = 0u; index < targetCount; ++index) {
+            const auto& reference = outputCache->m_handleValues[index];
+            const DRW_Variant& payload = outputCache->m_dataEntries[index];
+            const std::uint64_t payloadHandle =
+                payload.type() == DRW_Variant::INTEGER
+                    && payload.i_val() >= 0
+                ? static_cast<std::uint32_t>(payload.i_val())
+                : payload.type() == DRW_Variant::INTEGER64
+                    && payload.i64_val() >= 0
+                ? static_cast<std::uint64_t>(payload.i64_val())
+                : std::numeric_limits<std::uint64_t>::max();
+            if (reference.first != 330
+                || outputInsertHandles.count(reference.second) != 1u
+                || payload.code() != 330
+                || payloadHandle != reference.second) {
+                return fail("ASE output handle remapping or payload order did not read back");
+            }
+        }
+    }
+    std::cout << "Generated AC1021 ASE hierarchy cache: 208 model-space INSERT references round-trip in ASCII/Binary; wrong-kind and dangling targets preserve the destination; same-writer correction retries pass.\n";
+    return true;
+}
+
 bool inspectAc1021NodXRecordSourceProfile(
         const std::filesystem::path& sourcePath,
         const std::string& rootName,
@@ -82815,6 +83010,9 @@ int main(int argc, char** argv) {
         return physicalAc1021NodDictionaryGraphOutputReadback(
             argv[2], "ASE_INDEX_DICTIONARY", 242632u, false,
             "ASEBlockHierarchyIndexRecord", 242633u, "DCO15") ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--ase-hierarchy-generated-ac1021-insert-targets")
+        return generatedAc1021AseHierarchyEntityTargetRoundtrip() ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--ac1021-cip-source-profile")
         return inspectAc1021NodXRecordSourceProfile(

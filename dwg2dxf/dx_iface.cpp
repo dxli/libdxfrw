@@ -14953,6 +14953,116 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     targets.begin(), targets.end());
             }
         }
+        std::unordered_set<std::uint32_t>
+            preservedAseHierarchyIndexEntityTargets;
+        std::size_t aseHierarchyIndexEntityRecordCount = 0u;
+        if (data->sourceFormat == dx_source_format::DWG
+            && data->sourceVersion == DRW::AC1021
+            && data->hasNamedObjectDictionary) {
+            for (const std::uint32_t handle : m_extensionXRecordHandles) {
+                const auto record = xrecords.find(handle);
+                if (record == xrecords.end())
+                    return reject(ExtensionGraphFailure::InvalidGraph,
+                        "selected XRECORD disappeared during AC1021 ASE cache profile inspection");
+                const auto owner = dictionaries.find(
+                    record->second->parentHandle);
+                if (owner == dictionaries.end())
+                    continue;
+                const std::size_t matchingEntries =
+                    static_cast<std::size_t>(std::count_if(
+                        owner->second->m_entries.begin(),
+                        owner->second->m_entries.end(),
+                        [handle](const DRW_Dictionary::Entry& entry) {
+                            return asciiIdentifierEquals(entry.m_name,
+                                        "ASEBLOCKHIERARCHYINDEXRECORD")
+                                && entry.m_handle == handle;
+                        }));
+                if (matchingEntries == 0u)
+                    continue;
+                ++aseHierarchyIndexEntityRecordCount;
+                ++aseHierarchyIndexRecordCount;
+                const DRW_XRecord& cache = *record->second;
+                if (aseHierarchyIndexEntityRecordCount != 1u
+                    || owner->second->parentHandle
+                        != data->namedObjectDictionary.handle
+                    || owner->second->m_entries.size() != 1u
+                    || matchingEntries != 1u
+                    || cache.m_cloning != 1
+                    || !cache.m_values.empty()
+                    || cache.m_handleValues.empty()
+                    || cache.m_handleValues.size()
+                        > dwgSafety::MaxOwnedObjectCount
+                    || cache.m_dataEntries.size()
+                        != cache.m_handleValues.size()
+                    || data->mBlock == nullptr)
+                    return reject(ExtensionGraphFailure::InvalidGraph,
+                        "ASEBlockHierarchyIndexRecord is outside the selected AC1021 model-space INSERT profile");
+                std::unordered_map<std::uint32_t, bool> targetMatches;
+                targetMatches.reserve(cache.m_handleValues.size());
+                for (std::size_t index = 0u;
+                     index < cache.m_handleValues.size(); ++index) {
+                    const auto& reference = cache.m_handleValues[index];
+                    const std::uint32_t target = reference.second;
+                    const DRW_Variant& payload = cache.m_dataEntries[index];
+                    const bool payloadMatches = payload.code() == 330
+                        && ((payload.type() == DRW_Variant::INTEGER
+                                && payload.i_val() >= 0
+                                && static_cast<std::uint32_t>(
+                                    payload.i_val()) == target)
+                            || (payload.type() == DRW_Variant::INTEGER64
+                                && payload.i64_val() >= 0
+                                && static_cast<std::uint64_t>(
+                                    payload.i64_val()) == target));
+                    const bool validTarget = target != 0u
+                        && target != DRW::NoHandle;
+                    const bool duplicateTarget = validTarget
+                        && targetMatches.find(target) != targetMatches.end();
+                    const bool uniqueTarget = validTarget
+                        && !duplicateTarget
+                        && targetMatches.emplace(target, false).second;
+                    if (reference.first != 330 || !payloadMatches
+                        || !uniqueTarget) {
+                        return reject(ExtensionGraphFailure::InvalidGraph,
+                            "AC1021 ASEBlockHierarchyIndexRecord target "
+                                + std::to_string(target) + " at slot "
+                                + std::to_string(index)
+                                + " is not one unique non-null reference (code="
+                                + std::to_string(reference.first)
+                                + ", payload="
+                                + (payloadMatches ? "match" : "mismatch")
+                                + ", target="
+                                + (validTarget ? "valid" : "null-or-sentinel")
+                                + ", duplicate="
+                                + (duplicateTarget ? "yes" : "no") + ")");
+                    }
+                }
+                for (const DRW_Entity* entity : data->mBlock->ent) {
+                    if (entity == nullptr)
+                        continue;
+                    const auto target = targetMatches.find(entity->handle);
+                    if (target == targetMatches.end())
+                        continue;
+                    if (entity->eType != DRW::INSERT
+                        || dynamic_cast<const DRW_Insert*>(entity) == nullptr
+                        || target->second)
+                        return reject(ExtensionGraphFailure::InvalidGraph,
+                            "AC1021 ASEBlockHierarchyIndexRecord target "
+                                + std::to_string(entity->handle)
+                                + " is duplicated or is not a model-space INSERT");
+                    target->second = true;
+                }
+                for (const auto& target : targetMatches) {
+                    if (!target.second)
+                        return reject(ExtensionGraphFailure::InvalidGraph,
+                            "AC1021 ASEBlockHierarchyIndexRecord target "
+                                + std::to_string(target.first)
+                                + " is not present as a model-space INSERT");
+                }
+                for (const auto& target : targetMatches)
+                    preservedAseHierarchyIndexEntityTargets.insert(
+                        target.first);
+            }
+        }
         if (aseHierarchyIndexRecordCount > 1u)
             return reject(ExtensionGraphFailure::InvalidGraph,
                 "multiple ASEBlockHierarchyIndexRecord NOD cache profiles are selected");
@@ -14993,6 +15103,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                  &selectedLayerStateScaleDictionaryHandle,
                  &selectedLayerStateScaleFramesChecked,
                  &selectedLayerStateScaleFramesMatched,
+                 &preservedAseHierarchyIndexEntityTargets,
                  &sourceContainsEntityHandle,
                  &unresolvedHandleTargetDetail,
                  &preservedAseHierarchyIndexDanglingTargets, data, record](
@@ -15228,6 +15339,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         || (data->sourceFormat == dx_source_format::DXF
                             && sourceContainsEntityHandle(targetHandle));
                     if (resolved
+                        || preservedAseHierarchyIndexEntityTargets.count(
+                            targetHandle) != 0u
                         || preservedAseHierarchyIndexDanglingTargets.count(
                             targetHandle) != 0u)
                         return true;
