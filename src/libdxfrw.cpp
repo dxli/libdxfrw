@@ -36868,6 +36868,12 @@ bool dxfRW::writeAssociativeDependency(DRW_AssociativeObject *ent) {
     const char* recordName = nullptr;
     const bool geomDependency = dxfKeywordEquals(
         ent->m_recordName, "ACDBASSOCGEOMDEPENDENCY");
+    const bool edgeSubentity = geomDependency
+        && ent->m_geomPersistentSubentityClassName
+            == "AcDbAssocEdgePersSubentId";
+    const bool singleEdgeSubentity = geomDependency
+        && ent->m_geomPersistentSubentityClassName
+            == "AcDbAssocSingleEdgePersSubentId";
     const bool valueDependency = dxfKeywordEquals(
         ent->m_recordName, "ACDBASSOCVALUEDEPENDENCY");
     if (dxfKeywordEquals(ent->m_recordName, "ACDBASSOCDEPENDENCY"))
@@ -36878,8 +36884,16 @@ bool dxfRW::writeAssociativeDependency(DRW_AssociativeObject *ent) {
     else if (geomDependency
              && ent->m_geomDependencyFieldsParsed
              && ent->m_geomClassVersion == 0
-             && ent->m_geomPersistentSubentityClassName
-                    == "AcDbAssocSingleEdgePersSubentId")
+             && ((singleEdgeSubentity
+                  && !ent->m_geomPersistentSubentityFieldsParsed
+                  && ent->m_geomPersistentSubentityClassVersion == 0
+                  && ent->m_geomPersistentSubentityIndex1 == 0
+                  && ent->m_geomPersistentSubentityIndex2 == 0)
+                 || (edgeSubentity
+                     && ent->m_geomPersistentSubentityFieldsParsed
+                     && ent->m_geomPersistentSubentityClassVersion >= 0
+                     && ent->m_geomPersistentSubentityClassVersion
+                         <= std::numeric_limits<std::uint16_t>::max())))
         recordName = "ACDBASSOCGEOMDEPENDENCY";
     else
         return failDxfWrite();
@@ -36983,16 +36997,28 @@ bool dxfRW::writeAssociativeDependency(DRW_AssociativeObject *ent) {
                 : !writer->writeInt32(
                     90, ent->m_valueDependencyValueInt32))))
         return failDxfWrite();
-    if (geomDependency
-        && (!writer->writeString(100, "AcDbAssocGeomDependency")
-            || !writer->writeInt32(90, ent->m_geomClassVersion)
-            || !writer->writeBool(290, ent->m_geomEnabled)
-            || !writer->writeString(100, "AcDbAssocPersSubentId")
-            || !writer->writeUtf8String(
-                1, ent->m_geomPersistentSubentityClassName)
+    if (geomDependency) {
+        const bool wroteSubentityPrefix =
+            writer->writeString(100, "AcDbAssocGeomDependency")
+            && writer->writeInt32(90, ent->m_geomClassVersion)
+            && writer->writeBool(290, ent->m_geomEnabled)
+            && writer->writeString(100, "AcDbAssocPersSubentId")
+            && writer->writeUtf8String(
+                1, ent->m_geomPersistentSubentityClassName);
+        const bool wroteSubentityTail = edgeSubentity
+            ? wroteSubentityPrefix
+                && writer->writeInt32(
+                    90, ent->m_geomPersistentSubentityClassVersion)
+                && writer->writeInt32(
+                    90, ent->m_geomPersistentSubentityIndex1)
+                && writer->writeInt32(
+                    90, ent->m_geomPersistentSubentityIndex2)
+            : wroteSubentityPrefix;
+        if (!wroteSubentityTail
             || !writer->writeBool(
-                290, ent->m_geomDependentOnCompoundObject)))
-        return failDxfWrite();
+                290, ent->m_geomDependentOnCompoundObject))
+            return failDxfWrite();
+    }
     if ((!ent->extData.empty() && !writeExtData(ent->extData))
         || !preflightDxfWrite() || !record.commit())
         return failDxfWrite();

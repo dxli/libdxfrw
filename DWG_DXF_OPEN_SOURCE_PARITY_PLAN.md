@@ -177,6 +177,12 @@ created locally from scratch for the specific control.
    These two selected routes do not qualify arbitrary associative objects,
    whole-document output, independent application semantics or native update
    behavior.
+   DXF-side `AcDbAssocEdgePersSubentId` payloads now retain and emit class
+   version plus both index values as three ordered group-90 values; generated
+   ASCII/Binary import and writer controls pass, and incomplete or mismatched
+   payloads refuse output atomically. This closes only the DXF codec slice.
+   It does not establish physical DWG spans or native meaning for the civil
+   source's Edge bodies, whose DWG route remains refused ([receipt](docs/research/p4-dxf-assoc-edge-pers-subent-id-codec-2026-11-07.json)).
    Keep broadening only where source evidence and dependencies are closed;
    otherwise retain refusal and continue to another ready packet. See the [AC1024 constraint
    group writer receipt](docs/research/p4-ac1024-associative-constraint-group-dxf-writer-2026-10-30.json)

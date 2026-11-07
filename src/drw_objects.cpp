@@ -27402,6 +27402,10 @@ void DRW_AssociativeObject::reset() {
     m_geomClassVersion = 0;
     m_geomEnabled = false;
     m_geomPersistentSubentityClassName.clear();
+    m_geomPersistentSubentityFieldsParsed = false;
+    m_geomPersistentSubentityClassVersion = 0;
+    m_geomPersistentSubentityIndex1 = 0;
+    m_geomPersistentSubentityIndex2 = 0;
     m_geomDependentOnCompoundObject = false;
     m_associativeVariableFieldsParsed = false;
     m_associativeVariableWireComplete = false;
@@ -27520,6 +27524,8 @@ void DRW_AssociativeObject::reset() {
     m_dxfGeomClassVersionPresent = false;
     m_dxfGeomEnabledPresent = false;
     m_dxfGeomSubentityClassNamePresent = false;
+    m_dxfGeomSubentityTailCount = 0u;
+    m_dxfGeomSubentityUnexpectedField = false;
     m_dxfGeomDependentOnCompoundObjectPresent = false;
 }
 
@@ -27527,10 +27533,21 @@ bool DRW_AssociativeObject::parseCode(
     int code, const std::unique_ptr<dxfReader>& reader) {
     constexpr std::int32_t kMaxAssociativeDxfReferences = 100000;
     const auto updateGeomFieldStatus = [this]() {
+        const bool edgeSubentity =
+            m_geomPersistentSubentityClassName
+                == "AcDbAssocEdgePersSubentId";
+        const bool subentityTailComplete = edgeSubentity
+            ? m_dxfGeomSubentityTailCount == 3u
+            : m_dxfGeomSubentityTailCount == 0u;
         m_geomDependencyFieldsParsed = m_dxfGeomClassVersionPresent
             && m_dxfGeomEnabledPresent
             && m_dxfGeomSubentityClassNamePresent
-            && m_dxfGeomDependentOnCompoundObjectPresent;
+            && m_dxfGeomDependentOnCompoundObjectPresent
+            && subentityTailComplete
+            && !m_dxfGeomSubentityUnexpectedField;
+        m_geomPersistentSubentityFieldsParsed = edgeSubentity
+            && subentityTailComplete
+            && !m_dxfGeomSubentityUnexpectedField;
         if (m_geomDependencyFieldsParsed)
             m_dependencyWireComplete = m_dependencyFieldsParsed;
     };
@@ -27716,6 +27733,12 @@ bool DRW_AssociativeObject::parseCode(
         if (subclass == "AcDbAssocPersSubentId") {
             m_dxfAssociativeGeomSubclass = 2;
             m_dxfPersistentSubentityBody = false;
+            m_dxfGeomSubentityTailCount = 0u;
+            m_dxfGeomSubentityUnexpectedField = false;
+            m_geomPersistentSubentityFieldsParsed = false;
+            m_geomPersistentSubentityClassVersion = 0;
+            m_geomPersistentSubentityIndex1 = 0;
+            m_geomPersistentSubentityIndex2 = 0;
             return true;
         }
         if (subclass == "AcDbPersSubentManager") {
@@ -28934,12 +28957,63 @@ bool DRW_AssociativeObject::parseCode(
         }
     } else if (m_dxfAssociativeGeomSubclass == 2) {
         if (code == 1) {
+            if (m_dxfGeomSubentityClassNamePresent) {
+                m_dxfGeomSubentityUnexpectedField = true;
+                m_geomDependencyFieldsParsed = false;
+                m_dependencyWireComplete = false;
+                return true;
+            }
             m_geomPersistentSubentityClassName = reader->getUtf8String();
             m_dxfGeomSubentityClassNamePresent = true;
             updateGeomFieldStatus();
             return true;
         }
+        if (code == 90) {
+            const std::int32_t value = reader->getInt32();
+            if (m_geomPersistentSubentityClassName
+                    != "AcDbAssocEdgePersSubentId"
+                || m_dxfGeomSubentityTailCount >= 3u
+                || (m_dxfGeomSubentityTailCount == 0u
+                    && (value < 0
+                        || value > std::numeric_limits<std::uint16_t>::max()))) {
+                m_dxfGeomSubentityUnexpectedField = true;
+                m_geomDependencyFieldsParsed = false;
+                m_dependencyWireComplete = false;
+                return true;
+            }
+            switch (m_dxfGeomSubentityTailCount) {
+            case 0u:
+                m_geomPersistentSubentityClassVersion = value;
+                break;
+            case 1u:
+                m_geomPersistentSubentityIndex1 = value;
+                break;
+            case 2u:
+                m_geomPersistentSubentityIndex2 = value;
+                break;
+            default:
+                m_dxfGeomSubentityUnexpectedField = true;
+                break;
+            }
+            if (m_dxfGeomSubentityTailCount < 3u)
+                ++m_dxfGeomSubentityTailCount;
+            updateGeomFieldStatus();
+            return true;
+        }
         if (code == 290) {
+            if (!m_dxfGeomSubentityClassNamePresent
+                || (m_geomPersistentSubentityClassName
+                        == "AcDbAssocEdgePersSubentId"
+                    && m_dxfGeomSubentityTailCount != 3u)
+                || (m_geomPersistentSubentityClassName
+                        != "AcDbAssocEdgePersSubentId"
+                    && m_dxfGeomSubentityTailCount != 0u)
+                || m_dxfGeomDependentOnCompoundObjectPresent) {
+                m_dxfGeomSubentityUnexpectedField = true;
+                m_geomDependencyFieldsParsed = false;
+                m_dependencyWireComplete = false;
+                return true;
+            }
             m_geomDependentOnCompoundObject = reader->getBool();
             m_dxfGeomDependentOnCompoundObjectPresent = true;
             updateGeomFieldStatus();

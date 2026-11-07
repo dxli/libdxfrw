@@ -7450,6 +7450,8 @@ public:
       m_dxfGeomClassVersionPresent = false;
       m_dxfGeomEnabledPresent = false;
       m_dxfGeomSubentityClassNamePresent = false;
+      m_dxfGeomSubentityTailCount = 0u;
+      m_dxfGeomSubentityUnexpectedField = false;
       m_dxfGeomDependentOnCompoundObjectPresent = false;
       tType = DRW::ASSOCIATIVEOBJECT;
     }
@@ -7534,12 +7536,17 @@ public:
   EvalVariantKind m_valueDependencyValueKind = EvalVariantKind::Missing;
   double m_valueDependencyValueReal = 0.0;
   std::int32_t m_valueDependencyValueInt32 = 0;
-  // Exact AC1024 AcDbAssocGeomDependency subclass fields retained from the
-  // bounded DWG body or its DXF subclass sequence.
+  // AcDbAssocGeomDependency fields retained from the bounded DWG body or its
+  // DXF subclass sequence. The Edge persistent-subentity tail is DXF typed;
+  // its DWG field spans remain independently unqualified.
   bool m_geomDependencyFieldsParsed = false;
   std::int32_t m_geomClassVersion = 0;
   bool m_geomEnabled = false;
   UTF8STRING m_geomPersistentSubentityClassName;
+  bool m_geomPersistentSubentityFieldsParsed = false;
+  std::int32_t m_geomPersistentSubentityClassVersion = 0;
+  std::int32_t m_geomPersistentSubentityIndex1 = 0;
+  std::int32_t m_geomPersistentSubentityIndex2 = 0;
   bool m_geomDependentOnCompoundObject = false;
   // AC1024 AcDbAssocVariable body. The value kind is explicit because the
   // DWG EvalVariant payload depends on its signed group-code discriminator.
@@ -7648,6 +7655,12 @@ private:
     m_geomEnabled = o.m_geomEnabled;
     m_geomPersistentSubentityClassName =
         o.m_geomPersistentSubentityClassName;
+    m_geomPersistentSubentityFieldsParsed =
+        o.m_geomPersistentSubentityFieldsParsed;
+    m_geomPersistentSubentityClassVersion =
+        o.m_geomPersistentSubentityClassVersion;
+    m_geomPersistentSubentityIndex1 = o.m_geomPersistentSubentityIndex1;
+    m_geomPersistentSubentityIndex2 = o.m_geomPersistentSubentityIndex2;
     m_geomDependentOnCompoundObject = o.m_geomDependentOnCompoundObject;
     m_associativeVariableFieldsParsed = o.m_associativeVariableFieldsParsed;
     m_associativeVariableWireComplete =
@@ -7751,6 +7764,8 @@ private:
   bool m_dxfGeomClassVersionPresent = false;
   bool m_dxfGeomEnabledPresent = false;
   bool m_dxfGeomSubentityClassNamePresent = false;
+  std::uint8_t m_dxfGeomSubentityTailCount = 0u;
+  bool m_dxfGeomSubentityUnexpectedField = false;
   bool m_dxfGeomDependentOnCompoundObjectPresent = false;
 };
 

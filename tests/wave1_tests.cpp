@@ -8724,6 +8724,91 @@ void testAssociativeDependencyWriter(TestContext& t) {
         }
     }
 
+    for (const bool binary : {false, true}) {
+        std::ostringstream output(std::ios::out | std::ios::binary);
+        dxfRW owner("");
+        owner.version = DRW::AC1024;
+        owner.binFile = binary;
+        owner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&output));
+        DRW_AssociativeObject edge("ACDBASSOCGEOMDEPENDENCY");
+        edge.handle = 0x100u;
+        edge.parentHandle = 0x101u;
+        edge.m_dependencyFieldsParsed = true;
+        edge.m_dependencyWireComplete = true;
+        edge.m_geomDependencyFieldsParsed = true;
+        edge.m_geomClassVersion = 0;
+        edge.m_geomEnabled = true;
+        edge.m_geomPersistentSubentityClassName =
+            "AcDbAssocEdgePersSubentId";
+        edge.m_geomPersistentSubentityFieldsParsed = true;
+        edge.m_geomPersistentSubentityClassVersion = 2;
+        edge.m_geomPersistentSubentityIndex1 = 1234;
+        edge.m_geomPersistentSubentityIndex2 = 5678;
+        edge.m_geomDependentOnCompoundObject = true;
+
+        const bool wrote = owner.writeAssociativeDependency(&edge)
+            && owner.writer->writeString(0, "WIRE_END");
+        bool ended = false;
+        const auto tags = numericWireProjection(output.str(), binary, ended);
+        const std::vector<std::string> expectedTail{
+            "100:AcDbAssocGeomDependency", "90:0", "290:1",
+            "100:AcDbAssocPersSubentId",
+            "1:AcDbAssocEdgePersSubentId", "90:2", "90:1234",
+            "90:5678", "290:1", "0:WIRE_END"};
+        const auto tailMatches = [&]() {
+            if (tags.size() < expectedTail.size())
+                return false;
+            return std::equal(expectedTail.begin(), expectedTail.end(),
+                              tags.end()
+                                  - static_cast<std::ptrdiff_t>(expectedTail.size()));
+        };
+        t.expect(wrote && ended && tailMatches(),
+                 binary
+                     ? "Edge persistent-subentity typed fields serialize in binary DXF"
+                     : "Edge persistent-subentity typed fields serialize in ASCII DXF");
+    }
+
+    DRW_AssociativeObject missingEdgeFields("ACDBASSOCGEOMDEPENDENCY");
+    missingEdgeFields.handle = 0x100u;
+    missingEdgeFields.m_dependencyFieldsParsed = true;
+    missingEdgeFields.m_dependencyWireComplete = true;
+    missingEdgeFields.m_geomDependencyFieldsParsed = true;
+    missingEdgeFields.m_geomPersistentSubentityClassName =
+        "AcDbAssocEdgePersSubentId";
+    std::ostringstream missingEdgeOutput;
+    dxfRW missingEdgeWriter("");
+    missingEdgeWriter.version = DRW::AC1024;
+    missingEdgeWriter.writer = std::make_unique<dxfWriterAscii>(
+        &missingEdgeOutput);
+    t.expect(!missingEdgeWriter.writeAssociativeDependency(
+                 &missingEdgeFields)
+                 && missingEdgeOutput.str().empty(),
+             "Edge persistent-subentity output refuses missing typed indices atomically");
+
+    DRW_AssociativeObject mismatchedSingleEdge(
+        "ACDBASSOCGEOMDEPENDENCY");
+    mismatchedSingleEdge.handle = 0x100u;
+    mismatchedSingleEdge.m_dependencyFieldsParsed = true;
+    mismatchedSingleEdge.m_dependencyWireComplete = true;
+    mismatchedSingleEdge.m_geomDependencyFieldsParsed = true;
+    mismatchedSingleEdge.m_geomPersistentSubentityClassName =
+        "AcDbAssocSingleEdgePersSubentId";
+    mismatchedSingleEdge.m_geomPersistentSubentityFieldsParsed = true;
+    mismatchedSingleEdge.m_geomPersistentSubentityIndex1 = 1;
+    std::ostringstream mismatchedSingleEdgeOutput;
+    dxfRW mismatchedSingleEdgeWriter("");
+    mismatchedSingleEdgeWriter.version = DRW::AC1024;
+    mismatchedSingleEdgeWriter.writer = std::make_unique<dxfWriterAscii>(
+        &mismatchedSingleEdgeOutput);
+    t.expect(!mismatchedSingleEdgeWriter.writeAssociativeDependency(
+                 &mismatchedSingleEdge)
+                 && mismatchedSingleEdgeOutput.str().empty(),
+             "SingleEdge output refuses mismatched Edge index fields without output");
+
     const auto rejectedWithoutOutput = [](DRW::Version version,
                                           DRW_AssociativeObject dependency) {
         std::ostringstream output;

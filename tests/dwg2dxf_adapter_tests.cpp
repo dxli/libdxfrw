@@ -45382,6 +45382,61 @@ bool associativeDxfCallbackContract() {
         }
     }
 
+    const std::string edgeGeomDependencyDrawing =
+        "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1027\n"
+        "0\nENDSEC\n0\nSECTION\n2\nOBJECTS\n"
+        "0\nACDBASSOCGEOMDEPENDENCY\n5\n71\n330\n20\n"
+        "100\nAcDbAssocDependency\n90\n1\n90\n0\n"
+        "290\n1\n290\n1\n290\n1\n290\n1\n90\n-10000\n"
+        "330\n21\n290\n0\n330\n22\n330\n23\n360\n24\n90\n7\n"
+        "100\nAcDbAssocGeomDependency\n90\n0\n290\n1\n"
+        "100\nAcDbAssocPersSubentId\n"
+        "1\nAcDbAssocEdgePersSubentId\n90\n2\n90\n1234\n90\n5678\n"
+        "290\n1\n0\nENDSEC\n0\nEOF\n";
+    for (const bool binary : {false, true}) {
+        const std::filesystem::path path = directory
+            / (binary ? "edge-geom-dependency-binary.dxf"
+                      : "edge-geom-dependency-ascii.dxf");
+        if (binary) {
+            if (!writeBinaryDxfControl(path.string(),
+                                       edgeGeomDependencyDrawing))
+                return fail("could not create generated binary Edge dependency control");
+        } else {
+            std::ofstream output(path, std::ios::binary);
+            if (!output)
+                return fail("could not create generated ASCII Edge dependency control");
+            output.write(edgeGeomDependencyDrawing.data(),
+                         static_cast<std::streamsize>(
+                             edgeGeomDependencyDrawing.size()));
+            if (!output)
+                return fail("could not write generated ASCII Edge dependency control");
+        }
+        dx_data edgeData;
+        CallbackProbe edgeProbe;
+        if (!edgeProbe.fileImport(path.string(), &edgeData, false)
+            || edgeData.associativeObjects.size() != 1u
+            || edgeProbe.associative.size() != 1u) {
+            return fail(binary
+                ? "generated binary Edge dependency control was rejected"
+                : "generated ASCII Edge dependency control was rejected");
+        }
+        const DRW_AssociativeObject& edge =
+            edgeData.associativeObjects.front();
+        if (!edge.m_geomDependencyFieldsParsed
+            || !edge.m_dependencyWireComplete
+            || !edge.m_geomPersistentSubentityFieldsParsed
+            || edge.m_geomPersistentSubentityClassName
+                != "AcDbAssocEdgePersSubentId"
+            || edge.m_geomPersistentSubentityClassVersion != 2
+            || edge.m_geomPersistentSubentityIndex1 != 1234
+            || edge.m_geomPersistentSubentityIndex2 != 5678
+            || !edge.m_geomDependentOnCompoundObject) {
+            return fail(binary
+                ? "binary Edge persistent-subentity fields were not retained"
+                : "ASCII Edge persistent-subentity fields were not retained");
+        }
+    }
+
     const auto makeGroupLimitDrawing = [](bool overLimit) {
         std::string drawing =
             "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1027\n"
