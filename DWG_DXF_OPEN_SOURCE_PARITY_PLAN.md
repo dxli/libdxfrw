@@ -252,13 +252,26 @@ created locally from scratch for the specific control.
    data/title/header order and §20.4.101.4 defines class 1 as data and class 2
    as label. The physical values and normative interpretation conflict;
    ACadSharp agrees with the local named-role interpretation but exposes no
-   raw spans and its writer uses the same internal convention. **Next:** find
-   an eligible second producer or native consumer witness that exposes raw
-   order and named-role meaning. Until then keep Cover TABLESTYLE output
-   unqualified and make no parser/writer semantic change. Do not retry the
-   unchanged ODA CLI launch. If no witness is readily available, proceed with
-   another independent source-ready implementation packet while preserving
-   Cover's strict refusal. See the updated [ODA differential receipt](docs/research/p6-ac1027-cover-tablestyle-oda-layout-differential-2026-11-07.json).
+   raw spans and its writer uses the same internal convention. A second
+   cross-version physical witness is now available from the tracked AC1032
+   `acad_table_cells.dwg` corpus in `dwg-parser`. A raw cursor over LibreDWG
+   0.14's retained unknown-bit carrier independently derives its TABLESTYLE
+   body/string/handle boundaries and `_TITLE`, `_HEADER`, `_DATA` order, IDs
+   1/2/3 and classes 1/1/2; the tracked companion DXF CELLSTYLEMAP has the
+   same values. The sample provenance identifies an ODA R2018 export, so
+   this is not a second independent producer. It also uses LibreDWG's
+   retained frame metadata for the handle-stream start and does not recover
+   the compressed-page partition. See the [AC1032 peer-tail receipt](docs/research/p6-ac1032-tablestyle-libredwg-peer-tail-2026-11-07.json)
+   and [verifier](tools/research/verify_libredwg_tablestyle_peer_tail.py).
+   This corroborates cross-version serialized order only; the ODA v5.4.1
+   field/class conflict and native named-role meaning remain unresolved.
+   **Next implementation slice:** keep Cover's strict refusal and TABLESTYLE
+   output unqualified; do not alter parser/writer semantics or retry the
+   unchanged ODA CLI launch. Seek an eligible non-ODA producer or a native
+   consumer observation that distinguishes data/title/header roles. If none
+   is available from existing local or public evidence, continue the next
+   independent source-ready graph/codec packet and leave this bounded
+   qualification gate open. See the updated [ODA differential receipt](docs/research/p6-ac1027-cover-tablestyle-oda-layout-differential-2026-11-07.json).
 
    An exploratory test-only projection reached preflight but correctly refused
    before serialization; that harness was removed because it had no
