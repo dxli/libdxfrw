@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectContextData, PERSUBENTMGR, and TABLECONTENT shell recovery now reaches 842/842 published frames with zero entity/object parse failures; the PERSUBENTMGR/TABLECONTENT bodies remain disputed and raw-only; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; the last bounded ODA CLI retry still aborts before document processing during pasteboard/XPC initialization; the user's latest message says they are unlocking the Mac, but no new session-state or converter result has been observed; do not repeat the unchanged CLI launch, and continue local work while this platform gate is pending; current strict `blocks_and_tables` diagnostic reaches 3,586/3,586 frames, and LibreDWG 0.14 repeats the unqualified FIELD child flag values without resolving their semantics, so strict FIELD/FIELDLIST output remains refused; ODA §2's detached-string rule conflicts with ACadSharp-derived TABLE value byte-count parsing, so the AC1032 TABLECONTENT candidate remains raw/refused with no parser change; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the focused named-resource import selector now passes after synthetic receipts stopped authorizing strict-complete DWG output, with destination-preserving refusals and no support-claim change; the AC1024 mechanical physical selected-output routes now cover 17 dependency/body pairs, 399 constraint nodes and 17 variables/two networks/13 children in ASCII/Binary, with broader source graph closure still open). This file
+Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectContextData, PERSUBENTMGR, and TABLECONTENT shell recovery now reaches 842/842 published frames with zero entity/object parse failures; the PERSUBENTMGR/TABLECONTENT bodies remain disputed and raw-only; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; the user unlocked the Mac and an active Aqua session was observed, but the single changed Launch Services attempt failed before converter startup with `kLSNoExecutableErr`; no output or suffix evidence resulted, so do not retry unchanged CLI or Launch Services paths and continue local work while this platform gate is pending; current strict `blocks_and_tables` diagnostic reaches 3,586/3,586 frames, and LibreDWG 0.14 repeats the unqualified FIELD child flag values without resolving their semantics, so strict FIELD/FIELDLIST output remains refused; ODA §2's detached-string rule conflicts with ACadSharp-derived TABLE value byte-count parsing, so the AC1032 TABLECONTENT candidate remains raw/refused with no parser change; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the focused named-resource import selector now passes after synthetic receipts stopped authorizing strict-complete DWG output, with destination-preserving refusals and no support-claim change; AC1024 mechanical physical selected-output routes now cover 17 associative dependency/body pairs, 399 constraint nodes, and 17 variables across two networks and 13 value-dependency children in ASCII/Binary; broader source graph closure remains open). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -419,20 +419,20 @@ created locally from scratch for the specific control.
    candidate. Do not repeat conversions or guess flag meanings. See the
    [source/peer triage receipt](docs/research/p5-ac1021-blocks-tables-field-strict-triage-2026-11-07.json).
 3. **P6 / converter-dependent suffix:** the ODA File Converter 27.1.0.0
-   latest bounded CLI retry aborted during pasteboard/XPC initialization
-   (SIGABRT, return `-6`, 0.399 seconds), with matching source/copy/converter
-   hashes and no output. The user has said they are unlocking the Mac, but no
-   new session-state observation or converter result is recorded yet. The
-   earlier retry already shows that an unchanged direct CLI launch is not a
-   useful next action: retry at most once only after a functioning GUI/session
-   or a materially changed launch method is available, and only in a way that
-   reaches document processing. Record the exact invocation, hashes, process
-   exit and output state. If that attempt fails before document processing,
-   close this retry path and continue independent local work; reopen the gate
-   only when the launch environment or method changes. No suffix evidence or
-   support claim follows; keep the AC1027
-   suffix unclaimed and strict export refused. See the
-   [latest retry receipt](docs/research/p6-ac1027-oda-header-suffix-after-user-unlock-2026-11-07.json),
+   direct CLI attempt aborted during pasteboard/XPC initialization (SIGABRT,
+   return `-6`, 0.399 seconds). After the user unlocked the Mac, an active
+   `gui/502` Aqua session was observed and one materially different
+   Launch Services attempt was made against the same local Cover source. It
+   failed before converter startup with `kLSNoExecutableErr` (exit 1); no
+   document processing or output occurred. Source, copied source and app
+   hashes, app metadata, exact command and empty output state are recorded in
+   the [GUI launch receipt](docs/research/p6-ac1027-oda-header-suffix-gui-launch-2026-11-07.json).
+   This exhausts the bounded retry path: do not repeat either unchanged
+   launch method. Reopen converter work only if Launch Services registration
+   or launch environment materially changes, or an independent converter
+   session becomes available. No suffix evidence or support claim follows;
+   keep the AC1027 suffix unclaimed and strict export refused. See also the
+   [latest direct CLI retry](docs/research/p6-ac1027-oda-header-suffix-after-user-unlock-2026-11-07.json),
    the [earlier same-day retry](docs/research/p6-ac1027-oda-header-suffix-current-unlock-retry-2026-11-07.json),
    and [prior retry history](docs/research/p6-ac1027-oda-header-suffix-post-unlock-retry-2026-11-06.json).
 4. **P6 / AC1032 IMAGEDEF role conflict and remaining object frames:** the AC1032 DataStorage multi-schdat profile is implemented and independently bounded; the tracked sample now reads 837/842 frames with no entity failures or DataStorage link/orphan failures. The source blocker is isolated to IMAGEDEF `0x8c4`: its owner token is code `0xC`, offset 2, resolving to `0x8c2`. ODA §2.13 defines code `0xC` as a relative soft pointer, while ODA §20.4.81 specifies IMAGEDEF `parenthandle` as a hard owner. The bounded observer now retains this as `UnqualifiedOwnerRole`; strict export still stops before serialization with an explicit owner-role refusal. Do not relabel it as hard ownership or relax the output gate without eligible normative or producer evidence ([role receipt](docs/research/p6-ac1032-imagedef-relative-owner-unqualified-profile-2026-11-07.json)).
