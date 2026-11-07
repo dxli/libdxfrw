@@ -4117,18 +4117,12 @@ set_tests_properties(libdxfrw_tablecontent_multicell_block_reference PROPERTIES
     LABELS "fast;dxf;adapter;table;block;generated;transaction"
     TIMEOUT 30)
 
-# Shared tracked sample for the optional FreeCAD desktop and native-platform
-# open/insert controls. Keep this bound to the repository fixture so neither
-# gate depends on a local investigation drawing.
-set(_freecad_cli_sample
-    "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dwg/ordinary_enc_AC1027.dwg")
-
 # Optional test of the installed converter from FreeCAD's actual desktop
-# process. It uses only a tracked ordinary DWG and is deliberately disabled
-# by default; the normal inner loop remains the fast, FreeCAD-independent CLI
-# contract test above.
+# process. Generate its AC1021 LINE source locally with the existing writer
+# control, then require strict installed-converter preflight before launching
+# FreeCAD. Keep generated DWG/DXF files under the isolated test root.
 option(LIBDXFRW_ENABLE_FREECAD_DESKTOP_CONTROL
-    "Enable the opt-in FreeCAD GUI dwg2dxf open/insert smoke" OFF)
+    "Enable the opt-in FreeCAD GUI dwg2dxf generated-source open/insert control" OFF)
 set(LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE "" CACHE FILEPATH
     "Installed dwg2dxf executable to qualify inside FreeCAD")
 set(LIBDXFRW_FREECAD_GUI_EXECUTABLE "" CACHE FILEPATH
@@ -4156,7 +4150,7 @@ if(LIBDXFRW_ENABLE_FREECAD_DESKTOP_CONTROL)
         COMMAND ${CMAKE_COMMAND}
             -DFREECAD_DWG2DXF_EXECUTABLE=${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}
             -DBUILD_DWG2DXF_EXECUTABLE=$<TARGET_FILE:dwg2dxf>
-            -DSAMPLE=${_freecad_cli_sample}
+            "-DDWG_SOURCE_GENERATOR=$<TARGET_FILE:libdxfrw_dwg_local_roundtrip>"
             -DIMPORT_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_import_check.FCMacro
             -DDESKTOP_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_desktop_check.FCMacro
             -DFREECAD_GUI_EXECUTABLE=${LIBDXFRW_FREECAD_GUI_EXECUTABLE}
@@ -4358,15 +4352,14 @@ if(LIBDXFRW_ENABLE_FREECAD_INSTALLED_3D_LINE_CONTROL)
     endforeach()
 endif()
 
-# Native Linux/Windows qualification can reuse the exact LibreCAD-tracked
-# AC1027 three-LINE fixture. This avoids requiring an external dwgadd build or
-# adding another DWG to the repository. Keep it opt-in: it launches the pinned
-# FreeCAD consumer twice (open and insert) and is intended for manual platform
-# qualification, not every fast CI run.
-option(LIBDXFRW_ENABLE_FREECAD_TRACKED_AC1027_LINE_CONTROL
-    "Enable pinned FreeCAD checks using the tracked AC1027 three-LINE DWG" OFF)
-if(LIBDXFRW_ENABLE_FREECAD_TRACKED_AC1027_LINE_CONTROL)
-    libdxfrw_require_test_cli(LIBDXFRW_ENABLE_FREECAD_TRACKED_AC1027_LINE_CONTROL)
+# Native Linux/Windows qualification uses the same locally generated AC1021
+# 3D LINE source and strict converter preflight as the desktop control above.
+# Keep it opt-in: it launches the pinned FreeCAD consumer twice (open/insert)
+# and is intended for manual platform qualification, not every fast CI run.
+option(LIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_LINE_CONTROL
+    "Enable pinned FreeCAD checks using the generated AC1021 3D LINE control" OFF)
+if(LIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_LINE_CONTROL)
+    libdxfrw_require_test_cli(LIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_LINE_CONTROL)
     if(NOT EXISTS "${LIBDXFRW_FREECADCMD_EXECUTABLE}")
         message(FATAL_ERROR
             "Set LIBDXFRW_FREECADCMD_EXECUTABLE to FreeCAD's FreeCADCmd/freecadcmd")
@@ -4375,32 +4368,26 @@ if(LIBDXFRW_ENABLE_FREECAD_TRACKED_AC1027_LINE_CONTROL)
         message(FATAL_ERROR
             "Set LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE to the installed dwg2dxf")
     endif()
-    if(NOT EXISTS "${_freecad_cli_sample}")
-        message(FATAL_ERROR
-            "The tracked ordinary_enc_AC1027.dwg fixture is required")
-    endif()
-
     foreach(_operation IN ITEMS open insert)
         add_test(
-            NAME dwg2dxf_freecad_tracked_ac1027_line_${_operation}
+            NAME dwg2dxf_freecad_generated_ac1021_line_${_operation}
             COMMAND ${CMAKE_COMMAND}
                 "-DFREECADCMD=${LIBDXFRW_FREECADCMD_EXECUTABLE}"
                 "-DDWG2DXF=${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}"
                 "-DBUILD_DWG2DXF=$<TARGET_FILE:dwg2dxf>"
-                "-DSAMPLE=${_freecad_cli_sample}"
-                -DEXPECTED_INPUT_SHA256=a0ebf245e570bf0dc337c696330b7ea883feaebb7c4e781de8d77ac723815f83
-                -DEXPECTED_MAGIC_HEX=414331303237
+                "-DDWG_SOURCE_GENERATOR=$<TARGET_FILE:libdxfrw_dwg_local_roundtrip>"
+                -DEXPECTED_MAGIC_HEX=414331303231
                 "-DIMPORT_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_import_check.FCMacro"
                 "-DOPERATION=${_operation}"
                 -DINPUT_PATH_UNICODE=ON
                 -DEXPECTED_FREECAD_REVISION=145529fe741292ff0b3977a01195bf0247425794
-                -DEXPECTED_LINE_BOUNDS=[[1,2,0,3,4,0],[5,6,0,7,8,0],[9,10,0,11,12,0]]
-                -DEXPECTED_LINE_ENDPOINTS=[[[1,2,0],[3,4,0]],[[5,6,0],[7,8,0]],[[9,10,0],[11,12,0]]]
+                -DEXPECTED_LINE_BOUNDS=[[1,2,3,4,5,6]]
+                -DEXPECTED_LINE_ENDPOINTS=[[[1,2,3],[4,5,6]]]
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_installed_3d_line_test.cmake
         )
-        set_tests_properties(dwg2dxf_freecad_tracked_ac1027_line_${_operation}
+        set_tests_properties(dwg2dxf_freecad_generated_ac1021_line_${_operation}
             PROPERTIES
-                LABELS "freecad;installed;generated;integration;AC1027;platform"
+                LABELS "freecad;installed;generated;integration;AC1021;platform"
                 TIMEOUT 180)
     endforeach()
 endif()

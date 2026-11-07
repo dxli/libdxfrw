@@ -18,6 +18,13 @@ if(DEFINED SAMPLE)
     if(NOT EXISTS "${SAMPLE}")
         message(FATAL_ERROR "SAMPLE does not exist: ${SAMPLE}")
     endif()
+elseif(DEFINED DWG_SOURCE_GENERATOR)
+    if(NOT DEFINED EXPECTED_MAGIC_HEX)
+        message(FATAL_ERROR "EXPECTED_MAGIC_HEX is required with DWG_SOURCE_GENERATOR")
+    endif()
+    if(NOT EXISTS "${DWG_SOURCE_GENERATOR}")
+        message(FATAL_ERROR "DWG_SOURCE_GENERATOR does not exist: ${DWG_SOURCE_GENERATOR}")
+    endif()
 else()
     foreach(_required IN ITEMS DWGADD RECIPE)
         if(NOT DEFINED ${_required})
@@ -106,6 +113,8 @@ else()
 endif()
 if(DEFINED SAMPLE)
     set(_input "${_input_dir}/AC1027 tracked 3D LINE.dwg")
+elseif(DEFINED DWG_SOURCE_GENERATOR)
+    set(_input "${_input_dir}/AC1021 generated 3D LINE.dwg")
 else()
     set(_input "${_input_dir}/AC1015 generated 3D LINE.dwg")
 endif()
@@ -142,6 +151,35 @@ if(DEFINED SAMPLE)
             "Could not copy the tracked AC1027 LINE control (${_copy_result}).\n"
             "Evidence retained at ${_temp_parent}\n${_copy_stdout}\n${_copy_stderr}")
     endif()
+elseif(DEFINED DWG_SOURCE_GENERATOR)
+    set(_generated_source "${_test_root}/generated AC1021 3D LINE.dwg")
+    execute_process(
+        COMMAND "${DWG_SOURCE_GENERATOR}" --generate-cli-batch-source
+            "${_generated_source}" AC1021
+        RESULT_VARIABLE _generate_result
+        OUTPUT_VARIABLE _generate_stdout
+        ERROR_VARIABLE _generate_stderr
+        TIMEOUT 30
+    )
+    if(NOT "${_generate_result}" STREQUAL "0"
+            OR NOT EXISTS "${_generated_source}")
+        message(FATAL_ERROR
+            "Could not generate the local AC1021 LINE control (${_generate_result}).\n"
+            "Evidence retained at ${_temp_parent}\n"
+            "${_generate_stdout}\n${_generate_stderr}")
+    endif()
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" -E copy "${_generated_source}" "${_input}"
+        RESULT_VARIABLE _copy_result
+        OUTPUT_VARIABLE _copy_stdout
+        ERROR_VARIABLE _copy_stderr
+        TIMEOUT 60
+    )
+    if(NOT "${_copy_result}" STREQUAL "0" OR NOT EXISTS "${_input}")
+        message(FATAL_ERROR
+            "Could not stage the generated AC1021 LINE control (${_copy_result}).\n"
+            "Evidence retained at ${_temp_parent}\n${_copy_stdout}\n${_copy_stderr}")
+    endif()
 else()
     execute_process(
         COMMAND "${DWGADD}" --as r2000 -o "${_input}" "${RECIPE}"
@@ -167,6 +205,25 @@ if(NOT "${_magic_hex}" STREQUAL "${_expected_magic_hex}")
     message(FATAL_ERROR
         "The FreeCAD DWG control has unexpected version magic (${_magic_hex} != ${_expected_magic_hex}); "
         "evidence retained at ${_temp_parent}")
+endif()
+
+# A positive application check must start from a source accepted by the exact
+# installed converter FreeCAD will launch. Keep the strict-preflight DXF in
+# the isolated root as evidence until the application check completes.
+set(_strict_preflight_output "${_test_root}/strict preflight.dxf")
+execute_process(
+    COMMAND "${DWG2DXF}" "${_input}" -o "${_strict_preflight_output}"
+    RESULT_VARIABLE _preflight_result
+    OUTPUT_VARIABLE _preflight_stdout
+    ERROR_VARIABLE _preflight_stderr
+    TIMEOUT 60
+)
+if(NOT "${_preflight_result}" STREQUAL "0"
+        OR NOT EXISTS "${_strict_preflight_output}")
+    message(FATAL_ERROR
+        "Installed dwg2dxf strict preflight failed (${_preflight_result}); "
+        "FreeCAD was not launched.\nEvidence retained at ${_temp_parent}\n"
+        "${_preflight_stdout}\n${_preflight_stderr}")
 endif()
 
 file(WRITE "${_user_cfg}"

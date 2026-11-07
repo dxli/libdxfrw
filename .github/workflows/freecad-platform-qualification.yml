@@ -57,12 +57,12 @@ jobs:
           cmake --install build --prefix "$RUNNER_TEMP/libdxfrw install"
           installed="$RUNNER_TEMP/libdxfrw install/bin/dwg2dxf"
           cmake -S . -B build \
-            -DLIBDXFRW_ENABLE_FREECAD_TRACKED_AC1027_LINE_CONTROL=ON \
+            -DLIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_LINE_CONTROL=ON \
             -DLIBDXFRW_FREECADCMD_EXECUTABLE='${{ steps.freecad.outputs.cmd }}' \
             -DLIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE="$installed"
           cmake --build build --parallel 2 --target dwg2dxf
           ctest --test-dir build \
-            -R '^dwg2dxf_freecad_(tracked_ac1027_line_.*|cli_compat|installed_cli_compat)$' \
+            -R '^dwg2dxf_freecad_(generated_ac1021_line_.*|cli_compat|installed_cli_compat)$' \
             --output-on-failure --verbose
 
       - name: Preserve native test evidence
@@ -129,14 +129,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "CMake install failed: $LASTEXITCODE" }
           $installed = Join-Path $prefix 'bin/dwg2dxf.exe'
           cmake -S . -B build `
-            -DLIBDXFRW_ENABLE_FREECAD_TRACKED_AC1027_LINE_CONTROL=ON `
+            -DLIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_LINE_CONTROL=ON `
             "-DLIBDXFRW_FREECADCMD_EXECUTABLE=${{ steps.freecad.outputs.cmd }}" `
             "-DLIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE=$installed"
           if ($LASTEXITCODE -ne 0) { throw "CMake reconfigure failed: $LASTEXITCODE" }
           cmake --build build --config Release --parallel 2 --target dwg2dxf
           if ($LASTEXITCODE -ne 0) { throw "CMake rebuild failed: $LASTEXITCODE" }
           ctest --test-dir build -C Release `
-            -R '^dwg2dxf_freecad_(tracked_ac1027_line_.*|cli_compat|installed_cli_compat)$' `
+            -R '^dwg2dxf_freecad_(generated_ac1021_line_.*|cli_compat|installed_cli_compat)$' `
             --output-on-failure --verbose
           if ($LASTEXITCODE -ne 0) { throw "FreeCAD CTest qualification failed: $LASTEXITCODE" }
 
