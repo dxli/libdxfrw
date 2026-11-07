@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-06 (tablet AC1021 LAYOUT/VIEWPORT projection rechecked). This file
+Updated 2026-11-06 (next P4 OLE2FRAME source profile selected for screening). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -124,6 +124,26 @@ created locally from scratch for the specific control.
    [tablet XRECORD receipt](docs/research/p4-ac1021-tablet-ase-block-hierarchy-xrecord-target-screen-2026-11-06.json)
    and the generated control registered as
    `libdxfrw_ase_hierarchy_ac1021_insert_target_roundtrip`.
+   The next bounded screen is the AC1018 `Extruder2.dwg` OLE2FRAME named-block
+   profile. The local peer scan reports four OLE2FRAMEs: three are members of
+   `*Model_Space` BLOCK_HEADER `0x1F`; one, `0x4B4F`, is a member of named
+   BLOCK_HEADER `A$C33475CF6` (`0x4B1F`) and also carries that BLOCK_HEADER as
+   its direct owner. Its embedded OLE payload is 108,160 bytes. LibreDWG 0.14
+   minJSON independently records both membership and direct-owner edges; the
+   local source SHA-256 is
+   `fa44ada15684eecf46acc4ef095be2ed4793f438da6d570be46c828279aed21c`.
+   Treat this as a candidate only: first confirm libdxfrw's typed callback,
+   raw frame, exact BLOCK/BLOCK_RECORD mapping, and whether both readers agree
+   on this source's named-block ownership. Then add a narrowly keyed AC1018
+   adapter profile that stages the OLE2FRAME in the named block's BLOCKS
+   section, checks the remapped owner and complete OLE fields/payload, and
+   proves ASCII/Binary fresh readback plus destination-preserving wrong-owner
+   refusal and corrected same-adapter retry. Use the existing local source
+   only; author any generated regression control from scratch and keep all
+   source/output files outside Git. If source-frame or named-block mapping
+   cannot be bound exactly, close the screen as ineligible and move to the
+   next bounded graph without broadening the tablet profile. Do not claim
+   general AC1018 OLE support from this candidate.
    The `truetype.dwg` candidate is screened out for now: XRECORD `0x5E3` contains
    four code-330 LAYER handles and four code-331 LTYPE handles, but its owner
    chain starts at the LAYER_CONTROL extension dictionary (`0x59B`), then
