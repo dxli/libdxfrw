@@ -331,8 +331,9 @@ created locally from scratch for the specific control.
    independent source-ready graph/codec packet and leave this bounded
    qualification gate open. See the updated [ODA differential receipt](docs/research/p6-ac1027-cover-tablestyle-oda-layout-differential-2026-11-07.json).
 
-   **Next implementation slice:** extend the selected physical-output route for
-   the ten source-bounded `AcDbAssocEdgePersSubentId` records in the AC1024 civil
+   **Completed parser and selected-output slice (2026-11-07):** the bounded
+   physical route now exports the ten source-bounded `AcDbAssocEdgePersSubentId`
+   records in the AC1024 civil
    witness (`/Users/dli/doc/dwg/civil_example-imperial.dwg`, SHA-256
    `45b419d0c7382eb271079b80c3237a52183f4fa09e7b495c3d7a65c6baa927dc`). The
    DWG parser now decodes a nested BS/BL/BL tail before the compound flag only
@@ -345,16 +346,15 @@ created locally from scratch for the specific control.
    subentity route disagrees on the compound flag; keep this as one source-bound
    profile and preserve that discrepancy. Handle `0xC55` (3157) uses the Edge
    name in the dependency name field rather than the subentity class field and
-   remains wire-incomplete and excluded. The parser slice is complete; the
-   selected physical-output slice is not. The current source snapshot equality
-   and DXF readback proof compare the subentity class name and compound flag,
-   but not the newly decoded `fieldsParsed`, `classVersion`, `index1`, and
-   `index2` values. Close this exact proof gap first so a late mutation cannot
-   pass unnoticed.
+   remains wire-incomplete and excluded. Immutable source comparison and fresh
+   ASCII/Binary readback now verify `fieldsParsed`, `classVersion`, `index1`,
+   and `index2`, dependency roles, linked handles, and each remapped target's
+   polyline geometry. The ODA/LibreDWG grammar discrepancy remains unresolved;
+   do not generalize this one-source profile.
 
    The generated adapter field/snapshot/readback control is now complete; see
    the [receipt](docs/research/p4-ac1024-assoc-edge-generated-adapter-fields-2026-11-07.json).
-   **Next implementation slice — production selected-graph writer:** strict
+   **Completed production selected-graph writer:** strict
    whole-source conversion still stops at the null LTYPE_CONTROL source
    disposition. After commit `38067da2` admitted the exact optional-SORTENTS
    dynamic-block profile, Legacy whole-source `fileExport` advanced to the
@@ -372,18 +372,13 @@ created locally from scratch for the specific control.
    SORTENTSTABLE edge and unrelated dictionary content. See the [route-readiness
    receipt](docs/research/p4-ac1024-civil-assoc-selected-route-readiness-2026-11-07.json).
 
-   Implement an explicit selected-graph export API with immutable source
-   snapshots and staged output projections. Discover the selected child
-   network-to-parent-dictionary chains from source handles and roles; do not
-   hardcode this drawing's handle values. Project the root network to the
-   caller's selected child handles, and project only dictionary entries that
-   otherwise make excluded associative branches reachable. Preserve every
-   unrelated entry, including `ACAD_SORTENTS -> 0x3CD`, and leave the imported
-   `dx_data` untouched. Extension-graph traversal, source revalidation,
-   preflight, and serialization must all use the same frozen projection.
-   Ordinary whole-file export must retain its existing refusal behavior. The
-   earlier temporary pruning probes emitted no accepted output and are not
-   implementation evidence.
+   The production API now discovers selected child network/dictionary chains
+   from source handles and roles, freezes the root and dictionary projections,
+   preserves unrelated entries including `ACAD_SORTENTS -> 0x3CD`, and leaves
+   imported `dx_data` unchanged. Traversal, preflight, serialization, final
+   handle checks and source revalidation use the frozen projection. Ordinary
+   whole-file export retains its existing refusal behavior. The prior temporary
+   pruning probes remain non-evidence because they emitted no accepted output.
 
    The selected closure is rooted at NOD `0x0C` → dictionary `0x6E8` → network
    `0x6E9`. Its selected child networks are `0x6EB` and `0x9BD`, owning groups
@@ -409,30 +404,26 @@ created locally from scratch for the specific control.
    graph/purge/network profile in ASCII and Binary composed-graph
    output/readback; negative controls reject a missing SORTENTS-and-network
    pair, unknown dictionary keys, and an orphan SORTENTSTABLE below the
-   no-SORTENTS owner. The physical civil source now advances past dynamic-block
-   output and stops at the subsequent associative graph validator: root
-   network `0x6E9` (1769) has a non-owned action to nested network `0x6EB`
-   (1771), whose parent dictionary `0x6EA` is not in the current
-   SORTENTSTABLE-derived nested-network set. Trace the source-bound dictionary
-   profile for both selected child networks (`0x6EB` and `0x9BD`), then admit
-   them only in the immutable selected projection; keep third root target
-   `0x771` excluded. See the updated [route-readiness
+   no-SORTENTS owner. The selected route admits both source-bound child
+   dictionary chains (`0x6EB` and `0x9BD`) without requiring SORTENTSTABLE,
+   while retaining the distinct excluded owner route. The complete
+   EvaluationGraph has 14 dynamic-block objects, including the referenced
+   parameters and dependency bodies; the selected closure preserves that graph
+   and the root/nested dictionary links. See the updated [route-readiness
    receipt](docs/research/p4-ac1024-civil-assoc-selected-route-readiness-2026-11-07.json).
-   The complete EvaluationGraph has 14 dynamic-block objects, including the
-   referenced parameters and dependency bodies; inspect its remaining records
-   for closure before admitting selected output. Preserve the root and nested
-   dictionary links. Exclude the third network
-   branch through group `0x777` and unresolved handle `0xC55`; never trim
-   serialized group action/node lists. See the updated
+   The passing selected-output route preserves the full
+   selected group action/node lists and excludes the third network branch
+   through group `0x777` and unresolved handle `0xC55`. See the updated
    [route-readiness receipt](docs/research/p4-ac1024-civil-assoc-selected-route-readiness-2026-11-07.json).
 
    **Implementation order:** (1) complete — admit the observed three-entry
    dynamic-block owner profile and retain the earlier SORTENTS profiles;
    (2) complete — close the selected dynamic-block records plus both selected
    associative branches against the physical source and existing output
-   validators; (3) complete the Edge immutable-source comparison for
-   `fieldsParsed`, `classVersion`, `index1`, and `index2` before relying on late
-   mutation checks; (4) complete — selected dictionary/root projections route
+   validators; (3) complete — Edge immutable-source comparisons and fresh
+   output readback cover `fieldsParsed`, `classVersion`, `index1`, and `index2`;
+   deterministic post-plan field, target, and dictionary mutations are refused
+   atomically; (4) complete — selected dictionary/root projections route
    traversal, preflight, serialization and final handle-binding checks through
    the frozen projections while immutable source checks retain the full imported
    graph. The local physical AC1024 probe now passes selected ASCII/Binary
@@ -456,7 +447,7 @@ created locally from scratch for the specific control.
    export remains independently refused by its null counted LTYPE_CONTROL
    member.
 
-   **Acceptance:** selected ASCII/Binary output must preserve all ten Edge
+   **Acceptance verified:** selected ASCII/Binary output preserves all ten Edge
    fields, both complete group action/node lists, both target polylines,
    reciprocal reactors, dictionary/network ownership and remapped references
    on fresh typed readback. Only selected root actions may be emitted; the
