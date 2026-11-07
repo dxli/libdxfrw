@@ -10012,6 +10012,17 @@ bool dxfRW::writePolyline(DRW_Polyline *ent) {
         && std::any_of(ent->vertlist.cbegin(), ent->vertlist.cend(),
                        [](const auto& vertex) { return vertex->identifier != 0; }))
         return rejectUnsupportedDxfWrite("POLYLINE");
+    // The extrusion vector is meaningful for planar 2D POLYLINE vertices in
+    // OCS. Classic 3D polylines, polygon meshes and polyface meshes carry WCS
+    // vertices; silently dropping a caller/source-supplied non-default vector
+    // would lose a retained field without a qualified projection.
+    constexpr int wcsPolylineFlags = 8 | 16 | 64;
+    const bool usesWcsVertices = (ent->flags & wcsPolylineFlags) != 0;
+    if (usesWcsVertices
+        && (ent->extPoint.x != 0.0 || ent->extPoint.y != 0.0
+            || ent->extPoint.z != 1.0))
+        return rejectUnsupportedDxfWrite(
+            "POLYLINE WCS extrusion vector");
     RecordStateScope state(*this, ent);
     DxfWriterRecordScope record(*writer);
     // Child records share this parent transaction. Keep the existing minted
@@ -10076,8 +10087,6 @@ bool dxfRW::writePolyline(DRW_Polyline *ent) {
     // readers leave this unused field zero-initialized, which must not become
     // an explicit zero-length DXF extrusion vector. Preserve extrusion only
     // for the planar OCS polyline form.
-    constexpr int wcsPolylineFlags = 8 | 16 | 64;
-    const bool usesWcsVertices = (ent->flags & wcsPolylineFlags) != 0;
     if (!usesWcsVertices && (crd.x != 0 || crd.y != 0 || crd.z != 1)) {
         writer->writeDouble(210, crd.x);
         writer->writeDouble(220, crd.y);

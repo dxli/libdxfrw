@@ -565,6 +565,15 @@ add_test(NAME libdxfrw_mline_raw_section_geometry_guard
     COMMAND libdxfrw_mline_source_dependency_tests --mline-raw-section-geometry-guard)
 set_tests_properties(libdxfrw_mline_raw_section_geometry_guard PROPERTIES LABELS "dxf;fast;transaction" TIMEOUT 30)
 
+# A WCS POLYLINE cannot silently shed a non-default extrusion vector. The
+# runtime-authored ASCII/Binary control checks atomic refusal, corrected retry
+# on the same adapter, and typed vertex readback; no drawing fixture is added.
+add_test(NAME libdxfrw_polyline_wcs_extrusion_loss_guard
+    COMMAND libdxfrw_dxf_fixture_tests --polyline-wcs-extrusion-loss-guard)
+set_tests_properties(libdxfrw_polyline_wcs_extrusion_loss_guard PROPERTIES
+    LABELS "dxf;fast;transaction"
+    TIMEOUT 30)
+
 # The source and output are authored at runtime. This selected AC1027 profile
 # proves consumed MLINE group-41 reprojection in ASCII/binary, plus atomic
 # refusal and same-adapter retry controls; it adds no drawing fixture.

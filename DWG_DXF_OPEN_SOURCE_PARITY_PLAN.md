@@ -90,6 +90,13 @@ created locally from scratch for the specific control.
   nine checksum warnings while strict output still preserves its destination;
   these overlapping diagnostics do not form a semantic-loss total. See the
   [integrity projection receipt](docs/research/p6-cli-source-disposition-integrity-summary-2026-11-07.json).
+- **P6 classic WCS POLYLINE no-loss guard:** typed DXF output now refuses a
+  non-default extrusion vector on 3D POLYLINE, polygon-mesh, and polyface-mesh
+  records instead of silently omitting it. The AC1021 ASCII/Binary fast control
+  checks atomic refusal, unchanged caller geometry, corrected same-adapter
+  retry, and typed WCS-vertex readback. The default normal remains writable;
+  this generated control does not qualify physical producer or native consumer
+  semantics. See the [receipt](docs/research/p6-dxf-classic-polyline-wcs-extrusion-loss-guard-2026-11-07.json).
 - **ODA suffix investigation is waiting on a changed launch route:** the
   latest fresh direct ODA 27.1 invocation after the user's unlock attempt
   aborted during Pasteboard/XPC startup and did not process the document. This

@@ -62129,6 +62129,90 @@ void testClassicVertexXdata(TestContext& t) {
     }
 }
 
+void testPolylineWcsExtrusionLossGuard(TestContext& t) {
+    const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto output = std::filesystem::temp_directory_path()
+        / ("libdxfrw-polyline-wcs-extrusion-" + std::to_string(nonce) + ".dxf");
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() { std::error_code error; std::filesystem::remove(path, error); }
+    } cleanup{output};
+
+    for (const bool binary : {false, true}) {
+        dx_data data;
+        auto* polyline = new DRW_Polyline;
+        polyline->flags = 8; // 3D polyline; its vertices are WCS coordinates.
+        polyline->haveExtrusion = true;
+        polyline->extPoint = DRW_Coord(1.0, 0.0, 0.0);
+        for (const DRW_Coord& point : {DRW_Coord(1.0, 2.0, 3.0),
+                                       DRW_Coord(4.0, 6.0, 9.0)}) {
+            DRW_Vertex vertex;
+            vertex.flags = 32;
+            vertex.basePoint = point;
+            polyline->addVertex(vertex);
+        }
+        data.mBlock->ent.push_back(polyline);
+
+        {
+            std::ofstream sentinel(output, std::ios::binary | std::ios::trunc);
+            sentinel << "polyline destination sentinel\n";
+        }
+        dxf_identity_test::Exporter writer;
+        const bool rejected = !writer.fileExport(
+            output.string(), DRW::AC1021, binary, &data, false);
+        t.expect(rejected,
+                 "non-default WCS POLYLINE extrusion refuses typed output");
+        std::ifstream sentinelInput(output, std::ios::binary);
+        const std::string sentinelContents(
+            std::istreambuf_iterator<char>(sentinelInput), {});
+        t.expect(sentinelContents == "polyline destination sentinel\n",
+                 "WCS extrusion refusal preserves the destination");
+        t.expect(polyline->haveExtrusion && polyline->extPoint.x == 1.0
+                     && polyline->vertlist.size() == 2u
+                     && polyline->vertlist[0]->basePoint.z == 3.0
+                     && polyline->vertlist[1]->basePoint.z == 9.0,
+                 "WCS extrusion refusal leaves caller geometry unchanged");
+
+        // The standard default is equivalent to no extrusion and remains
+        // writable. Retry on the same adapter after correcting the source.
+        polyline->extPoint = DRW_Coord(0.0, 0.0, 1.0);
+        const bool retried = writer.fileExport(
+            output.string(), DRW::AC1021, binary, &data, false);
+        t.expect(retried, "corrected WCS POLYLINE retries on the same adapter");
+
+        dx_data readback;
+        dx_iface reader;
+        const bool imported = retried
+            && reader.fileImport(output.string(), &readback, false);
+        const auto* decoded = imported && readback.mBlock->ent.size() == 1u
+            ? dynamic_cast<const DRW_Polyline*>(readback.mBlock->ent.front())
+            : nullptr;
+        t.expect(decoded != nullptr && decoded->flags == 8
+                     && decoded->vertlist.size() == 2u
+                     && decoded->vertlist[0]->basePoint.x == 1.0
+                     && decoded->vertlist[0]->basePoint.y == 2.0
+                     && decoded->vertlist[0]->basePoint.z == 3.0
+                     && decoded->vertlist[1]->basePoint.x == 4.0
+                     && decoded->vertlist[1]->basePoint.y == 6.0
+                     && decoded->vertlist[1]->basePoint.z == 9.0,
+                 "corrected WCS POLYLINE geometry survives typed readback");
+        std::vector<TableOwnerRecord> records;
+        const bool framed = retried
+            && readTableOwnerRecords(output, binary, records);
+        const auto parent = std::find_if(records.begin(), records.end(),
+            [](const TableOwnerRecord& record) {
+                return record.kind == "POLYLINE";
+            });
+        t.expect(framed && parent != records.end()
+                     && !hasGroup(parent->groups, 210)
+                     && !hasGroup(parent->groups, 220)
+                     && !hasGroup(parent->groups, 230),
+                 "corrected WCS POLYLINE emits no non-default extrusion groups");
+        std::error_code error;
+        std::filesystem::remove(output, error);
+    }
+}
+
 void testInsertChildHandleRollback(TestContext& t) {
     const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
     const auto output = std::filesystem::temp_directory_path()
@@ -67103,6 +67187,14 @@ int main(int argc, char** argv) {
         return context.failures == 0 ? 0 : 1;
     }
     if (argc == 2
+        && std::string(argv[1]) == "--polyline-wcs-extrusion-loss-guard") {
+        TestContext context;
+        testPolylineWcsExtrusionLossGuard(context);
+        std::cout << "WCS POLYLINE extrusion loss guard: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--insert-child-handle-rollback") {
         TestContext context;
         testInsertChildHandleRollback(context);
@@ -67912,6 +68004,7 @@ int main(int argc, char** argv) {
     testHatchSplinePointComponentOrder(context);
     testDxfWriteAttemptFailure(context);
     testClassicVertexXdata(context);
+    testPolylineWcsExtrusionLossGuard(context);
     testBlockRecordXdataRoundTrip(context);
     testClassicVertexPresenceBoundaries(context);
     testClassicVertexIdentifierRetention(context);
