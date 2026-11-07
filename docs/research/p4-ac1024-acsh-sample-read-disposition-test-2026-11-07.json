@@ -19,11 +19,15 @@
       {
         "sample": "visualization_-_condominium_with_skylight.dwg",
         "expectedObjectParseFailures": 3,
+        "expectedUntypedLoftFrames": 2,
+        "expectedUntypedRevolveFrames": 1,
         "requiredRawOnlyClasses": ["ACSH_LOFT_CLASS/AcDbShLoft", "ACSH_REVOLVE_CLASS/AcDbShRevolve"]
       },
       {
         "sample": "visualization_-_conference_room.dwg",
         "expectedObjectParseFailures": 3,
+        "expectedUntypedLoftFrames": 0,
+        "expectedUntypedRevolveFrames": 3,
         "requiredRawOnlyClasses": ["ACSH_REVOLVE_CLASS/AcDbShRevolve"]
       }
     ],
@@ -32,6 +36,7 @@
       "Observed object parse failure count equals the declared sample-specific count.",
       "Every untyped AcSh frame is AC1024, custom-class defined, object-shaped, bounded by its retained raw bytes, and one of the exact LOFT/REVOLVE class pairs.",
       "Untyped AcSh frame count equals the visible object parse failure count.",
+      "The sample-specific LOFT/REVOLVE frame census matches its source receipt; unexpected AcSh classes or a nonzero raw-only census on other samples fails the probe.",
       "For the raw-only exception, source frame coverage is FinalizedComplete with zero failed frame dispositions and no AcDs history capture failure.",
       "Samples without the explicit exception continue to require zero entity and object parse failures."
     ],
@@ -41,7 +46,7 @@
     "build": "cmake --build build-gcc --target libdxfrw_dwg_reader_matrix_tests -j4",
     "buildResult": "passed",
     "focusedTest": "ctest --test-dir build-gcc -R '^(dwg_read_AC1024_|dwg_acsh_)' --output-on-failure",
-    "focusedResult": "passed: 13/13 in 6.08 seconds",
+    "focusedResult": "passed: 13/13 in 3.71 seconds with exact per-sample LOFT/REVOLVE census enforcement",
     "coverage": [
       "11 AC1024 sample/custom-object reader tests",
       "conference-room three-frame Revolve raw capture",

@@ -13,6 +13,16 @@ endif()
 if(NOT EXPECTED_OBJECT_PARSE_FAILURES MATCHES "^[0-9]+$")
     message(FATAL_ERROR "EXPECTED_OBJECT_PARSE_FAILURES must be a nonnegative integer")
 endif()
+foreach(_count IN ITEMS
+        EXPECTED_UNTYPED_ACSH_LOFT_FRAMES
+        EXPECTED_UNTYPED_ACSH_REVOLVE_FRAMES)
+    if(NOT DEFINED ${_count})
+        set(${_count} 0)
+    endif()
+    if(NOT "${${_count}}" MATCHES "^[0-9]+$")
+        message(FATAL_ERROR "${_count} must be a nonnegative integer")
+    endif()
+endforeach()
 
 # Check the sample's first 6 bytes against its declared AC version.
 file(READ "${SAMPLE}" _hdr LIMIT 6 HEX)
@@ -37,6 +47,8 @@ endif()
 execute_process(
     COMMAND "${READER_TEST}" --read-dwg-sample "${SAMPLE}"
         "${EXPECTED_OBJECT_PARSE_FAILURES}"
+        "${EXPECTED_UNTYPED_ACSH_LOFT_FRAMES}"
+        "${EXPECTED_UNTYPED_ACSH_REVOLVE_FRAMES}"
     RESULT_VARIABLE _rc
     OUTPUT_VARIABLE _stdout
     ERROR_VARIABLE _stderr

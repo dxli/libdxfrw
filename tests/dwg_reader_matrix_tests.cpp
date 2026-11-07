@@ -19228,7 +19228,9 @@ int runR2007SystemPageCrcDiagnostic(const std::string& path) {
 }
 
 int runDwgReadSample(const std::string& path,
-                     std::size_t expectedObjectParseFailures = 0u) {
+                     std::size_t expectedObjectParseFailures = 0u,
+                     std::size_t expectedUntypedLoftFrames = 0u,
+                     std::size_t expectedUntypedRevolveFrames = 0u) {
     dx_data data;
     dx_iface interface;
     const bool imported = interface.fileImport(path, &data, false);
@@ -19236,6 +19238,8 @@ int runDwgReadSample(const std::string& path,
     const dx_dwgReadOutcome& outcome = data.dwgReadOutcome;
     const DwgReadObservations& observations = outcome.observations;
     std::size_t untypedAcShFrames = 0u;
+    std::size_t untypedLoftFrames = 0u;
+    std::size_t untypedRevolveFrames = 0u;
     for (const DRW_UnsupportedObject& raw : data.acdsHistoryDwgFrames) {
         const bool acshFrame = raw.m_recordName.rfind("ACSH_", 0u) == 0u
             || raw.m_className.rfind("AcDbSh", 0u) == 0u;
@@ -19264,10 +19268,18 @@ int runDwgReadSample(const std::string& path,
                       << " class=" << raw.m_className << '\n';
             return 1;
         }
+        if (raw.m_recordName == "ACSH_LOFT_CLASS")
+            ++untypedLoftFrames;
+        else
+            ++untypedRevolveFrames;
     }
     const bool expectedRawOnlyAcShProfile =
         expectedObjectParseFailures != 0u
+        && expectedUntypedLoftFrames + expectedUntypedRevolveFrames
+            == expectedObjectParseFailures
         && expectedObjectParseFailures == untypedAcShFrames
+        && expectedUntypedLoftFrames == untypedLoftFrames
+        && expectedUntypedRevolveFrames == untypedRevolveFrames
         && observations.objectParseFailures == expectedObjectParseFailures
         && observations.frames.status
             == DRW_DwgFrameCoverageStatus::FinalizedComplete
@@ -19279,6 +19291,9 @@ int runDwgReadSample(const std::string& path,
         || outcome.error != DRW::BAD_NONE
         || observations.entityParseFailures != 0u
         || observations.objectParseFailures != expectedObjectParseFailures
+        || (expectedObjectParseFailures == 0u
+            && (expectedUntypedLoftFrames != 0u
+                || expectedUntypedRevolveFrames != 0u))
         || (expectedObjectParseFailures != 0u
             && !expectedRawOnlyAcShProfile)) {
         std::cerr << "DWG sample read probe failed: import=" << imported
@@ -19297,7 +19312,9 @@ int runDwgReadSample(const std::string& path,
     } else {
         std::cout << "DWG sample read probe: PASS ("
                   << expectedObjectParseFailures
-                  << " qualified AC1024 AcSh frames retained raw-only; "
+                  << " qualified AC1024 AcSh frames retained raw-only (Loft="
+                  << untypedLoftFrames << ", Revolve="
+                  << untypedRevolveFrames << "); "
                      "typed failures visible; source frame coverage complete)\n";
     }
     return 0;
@@ -19714,6 +19731,23 @@ int main(int argc, char** argv) {
             return runDwgReadSample(argv[2], expectedFailures);
         } catch (const std::exception& error) {
             std::cerr << "invalid expected DWG object parse failure count: "
+                      << error.what() << '\n';
+            return 2;
+        }
+    }
+    if (argc == 6 && std::string(argv[1]) == "--read-dwg-sample") {
+        try {
+            const std::size_t expectedFailures =
+                static_cast<std::size_t>(std::stoull(argv[3]));
+            const std::size_t expectedLoftFrames =
+                static_cast<std::size_t>(std::stoull(argv[4]));
+            const std::size_t expectedRevolveFrames =
+                static_cast<std::size_t>(std::stoull(argv[5]));
+            return runDwgReadSample(argv[2], expectedFailures,
+                                    expectedLoftFrames,
+                                    expectedRevolveFrames);
+        } catch (const std::exception& error) {
+            std::cerr << "invalid expected DWG AcSh disposition count: "
                       << error.what() << '\n';
             return 2;
         }

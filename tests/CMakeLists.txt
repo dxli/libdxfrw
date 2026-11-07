@@ -5144,14 +5144,21 @@ foreach(_ver IN LISTS _dwg_test_versions)
     foreach(_sample IN LISTS _samples)
         get_filename_component(_name "${_sample}" NAME_WE)
         set(_expected_object_parse_failures 0)
+        set(_expected_untyped_acsh_loft_frames 0)
+        set(_expected_untyped_acsh_revolve_frames 0)
         if(_ver STREQUAL "AC1024"
-                AND (_name STREQUAL "visualization_-_condominium_with_skylight"
-                    OR _name STREQUAL "visualization_-_conference_room"))
+                AND _name STREQUAL "visualization_-_condominium_with_skylight")
             # The three exact AC1024 AcSh failures have dedicated raw-frame
             # integrity controls below. The sample probe still requires each
             # failure to match one validated AC1024 AcSh frame and requires
             # complete source-frame disposition.
             set(_expected_object_parse_failures 3)
+            set(_expected_untyped_acsh_loft_frames 2)
+            set(_expected_untyped_acsh_revolve_frames 1)
+        elseif(_ver STREQUAL "AC1024"
+                AND _name STREQUAL "visualization_-_conference_room")
+            set(_expected_object_parse_failures 3)
+            set(_expected_untyped_acsh_revolve_frames 3)
         endif()
         add_test(
             NAME dwg_read_${_ver}_${_name}
@@ -5160,6 +5167,8 @@ foreach(_ver IN LISTS _dwg_test_versions)
                 -DSAMPLE=${_sample}
                 -DEXPECTED_VERSION=${_ver}
                 -DEXPECTED_OBJECT_PARSE_FAILURES=${_expected_object_parse_failures}
+                -DEXPECTED_UNTYPED_ACSH_LOFT_FRAMES=${_expected_untyped_acsh_loft_frames}
+                -DEXPECTED_UNTYPED_ACSH_REVOLVE_FRAMES=${_expected_untyped_acsh_revolve_frames}
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/run_dwg_read_test.cmake
         )
         set_tests_properties(dwg_read_${_ver}_${_name} PROPERTIES
