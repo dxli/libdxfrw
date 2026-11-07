@@ -11,7 +11,7 @@
     "provenance": "Existing local corpus candidate. Producer and redistribution status are unverified; the drawing remains outside the repository."
   },
   "libdxfrw": {
-    "sourceRevision": "4962d499e7360d02f9e951c268cf2dd4a9893ea9",
+    "sourceRevision": "bda4702f11cf9749804d0fcde6e6c7f6bc2a4fb1",
     "binarySha256": "317ae163e9ae748472b53e87ccf6280abc3fed7ce6aaefcc088a9e768643fa1a",
     "read": {
       "publishedFrames": 75,
