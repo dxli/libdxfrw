@@ -80,9 +80,14 @@
   "validation": {
     "build": [
       "cmake --build build --target dwg2dxf -j 4 — passed",
-      "cmake --build build --target libdxfrw_wave1_tests -j 4 — passed"
+      "cmake --build build --target libdxfrw_wave1_tests -j 4 — passed",
+      "cmake --build build --target libdxfrw_symbol_output_tests -j 4 — passed"
     ],
-    "focusedCheck": "/opt/homebrew/bin/python3.12 -B tests/dwg2dxf_cli_contract_tests.py --converter build/dwg2dxf/dwg2dxf --options-only — passed (103 controls)",
+    "focusedChecks": [
+      "/opt/homebrew/bin/python3.12 -B tests/dwg2dxf_cli_contract_tests.py --converter build/dwg2dxf/dwg2dxf --options-only — passed (103 controls)",
+      "ctest --test-dir build -R '^libdxfrw_dxf_tables_write_inspection$' --output-on-failure — passed (1/1); generated failures in both encodings report STYLE table, preserve the destination, and allow corrected same-codec retry"
+    ],
+    "testExecutableSha256": "4277c4e64546fccc361f336b2cf7354dc803fc953fa39d583321b410584e6b0a",
     "broaderCliCheck": "ctest --test-dir build -R '^dwg2dxf_cli_contract$' --output-on-failure — timed out at 25 seconds; it reported /bin/ps: Operation not permitted. This timeout is not treated as a passing validation.",
     "sourceReplay": "Direct strict replay exited 1 and reported 'DXF output generation failed during STYLE table'; no output file was published."
   }

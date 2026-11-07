@@ -953,6 +953,10 @@ proof. Resolve with a producer-backed source and an independent native consumer;
 only then bind the exact source identities, output references and readback and
 add a scoped serializer regression. Source provenance is unverified, so neither
 the DWG nor peer DXF is a fixture. See the [focused receipt](docs/research/p4-ac1015-entities3d-style-empty-name-output-blocker-2026-11-07.json).
+The existing generated TABLES inspection selector now also exercises STYLE
+stage diagnostics in ASCII/Binary, destination preservation, and same-codec
+retry; this verifies the diagnostic path without making the physical profile
+eligible.
 
 Common entity LAYER and explicit LTYPE lookups now report unresolved or
 truncated non-null handles to the integrity ledger while preserving tolerant

@@ -75,6 +75,13 @@ void testDxfTablesWriteInspection(TestContext& t) {
             DRW_Layer layer; layer.handle = 0xA770u; layer.name = "caf\xC3\xA9";
             (void)dxfW->writeLayer(&layer);
         }
+        void writeTextstyles() override {
+            if (failStyleCallback) {
+                (void)dxfW->writeTextstyle(nullptr);
+                return;
+            }
+            dx_iface::writeTextstyles();
+        }
         void writeAppId() override {
             DRW_AppId app; app.name = "caf\xC3\xA9_APP";
             (void)dxfW->writeAppId(&app);
@@ -104,6 +111,7 @@ void testDxfTablesWriteInspection(TestContext& t) {
         unsigned nestedFinalization{0};
         bool nestedRejected{true};
         bool lateObjectFailure{false}, rejectFinalization{false}, writeAtFinalization{false};
+        bool failStyleCallback{false};
     } iface;
     const auto path = std::filesystem::temp_directory_path() / ("libdxfrw-tables-inspection-"
         + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".dxf");
@@ -151,6 +159,26 @@ void testDxfTablesWriteInspection(TestContext& t) {
       }
     }
     codec.setDxfCompatibilityProfile(dxfRW::DxfCompatibilityProfile::StandaloneSafe);
+    codec.setDxfTablesWriteInspector({});
+    codec.setDxfObjectsWriteInspector({});
+    for (const bool binary : {false, true}) {
+        const std::string sentinel = "STYLE_TABLE_FAILURE_DESTINATION_UNCHANGED";
+        { std::ofstream previous(path, std::ios::binary); previous << sentinel; }
+        iface.failStyleCallback = true;
+        const bool wrote = codec.write(&iface, DRW::AC1024, binary);
+        const auto diagnostic = codec.getLastDiagnostic();
+        std::ifstream input(path, std::ios::binary);
+        const std::string retained((std::istreambuf_iterator<char>(input)),
+                                   std::istreambuf_iterator<char>());
+        input.close();
+        t.expect(!wrote && diagnostic.code == "emit-failure"
+                     && diagnostic.message.find("STYLE table") != std::string::npos
+                     && retained == sentinel,
+                 "STYLE callback failure reports its table and preserves the destination");
+        iface.failStyleCallback = false;
+        t.expect(codec.write(&iface, DRW::AC1024, binary),
+                 "STYLE callback failure permits same-codec corrected retry");
+    }
     for (const bool binary : {false, true}) for (unsigned fault = 0u; fault < 12u; ++fault) {
         const std::string sentinel = "TABLES_INSPECTOR_DESTINATION_UNCHANGED";
         { std::ofstream previous(path, std::ios::binary); previous << sentinel; }
