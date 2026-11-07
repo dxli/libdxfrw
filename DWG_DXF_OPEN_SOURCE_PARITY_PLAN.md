@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-07 (AC1032 multi-schdat DataStorage advances reading to 837/842 frames; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; a fresh ODA retry after the latest user-reported unlock still aborts before document processing; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the generated associative-geometry export selector was rechecked and remains green, so its physical-source gate—not another generated serializer pass—is the remaining work). This file
+Updated 2026-11-07 (AC1032 multi-schdat DataStorage advances reading to 837/842 frames; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; a fresh ODA retry after the latest user-reported unlock still aborts before document processing; current strict `blocks_and_tables` diagnostic reaches 3,586/3,586 frames but FIELD/FIELDLIST output remains refused on unqualified format flags and incomplete child profiles; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the generated associative-geometry export selector was rechecked and remains green, so its physical-source gate—not another generated serializer pass—is the remaining work). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -395,6 +395,20 @@ created locally from scratch for the specific control.
    remain excluded. Reopen this candidate only with a source/profile that
    supplies full membership and a consumer-visible root relation; see the
    [source-graph screen receipt](docs/research/p5-ac1021-acexpr-root-graph-output-readiness-2026-11-06.json).
+   A current strict diagnostic of the existing `blocks_and_tables_-_imperial.dwg`
+   reaches all 3,586 frames, then refuses FIELD/FIELDLIST serialization. The
+   trace includes an unsupported child `formatFlags` value `0x010801FC`,
+   invalid child-count profiles, and unmodeled FIELD tails; none by itself
+   proves a new wire layout or a safe widening of the accepted flags. Next,
+   make one bounded profile triage pass: bind the first failing FIELD handle
+   and its exact body/string/handle spans; compare those spans and decoded
+   fields with ODA v5.4.1 §§20.4.76/77/99 and an independent decoder; accept a
+   code change only if the same complete profile is uniquely bounded and its
+   references/root graph close. Otherwise retain raw/refused behavior, record
+   the exclusion, and move to another source-ready packet. Do not spend time
+   repeatedly converting this sample or guessing flag meanings. No fixture
+   was added; the source/tool-bound diagnostic and limits are in the [triage
+   receipt](docs/research/p5-ac1021-blocks-tables-field-strict-triage-2026-11-07.json).
 3. **P6 / converter-dependent suffix:** the ODA File Converter 27.1.0.0
    A further fresh bounded retry after the user reported unlocking the Mac
    aborted during pasteboard/XPC initialization (SIGABRT, return `-6`, 0.399
