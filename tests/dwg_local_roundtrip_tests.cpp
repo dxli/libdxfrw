@@ -9557,6 +9557,161 @@ private:
     bool wroteLine_ {false};
 };
 
+class Dwg3DFaceFlagWriter final : public dx_iface {
+public:
+    explicit Dwg3DFaceFlagWriter(dwgRW& writer, int firstFaceFlags)
+        : writer_(writer), firstFaceFlags_(firstFaceFlags) {}
+
+    void setFirstFaceFlags(int flags) noexcept { firstFaceFlags_ = flags; }
+    bool wroteAll() const noexcept {
+        return wroteFirstFace_ && wroteSecondFace_ && wroteFollowingLine_;
+    }
+
+    void writeHeader(DRW_Header& header) override { header.vars.clear(); }
+    void writeDwgClasses() override {}
+    void collectDwgAppIds() override {}
+    void writeBlocks() override {}
+    void writeBlockRecords() override {}
+    void writeEntities() override {
+        wroteFirstFace_ = false;
+        wroteSecondFace_ = false;
+        wroteFollowingLine_ = false;
+
+        DRW_3Dface tilted;
+        tilted.invisibleflag = firstFaceFlags_;
+        tilted.basePoint = {37.0, 38.0, 1.0};
+        tilted.secPoint = {39.0, 38.0, 1.0};
+        tilted.thirdPoint = {39.0, 40.0, 3.0};
+        tilted.fourPoint = {37.0, 40.0, 3.0};
+        wroteFirstFace_ = writer_.write3dface(&tilted) && tilted.handle != 0u;
+        if (!wroteFirstFace_)
+            return;
+
+        DRW_3Dface flat;
+        flat.basePoint = {5.0, 6.0, 0.0};
+        flat.secPoint = {8.0, 6.0, 0.0};
+        flat.thirdPoint = {8.0, 9.0, 0.0};
+        flat.fourPoint = {5.0, 9.0, 0.0};
+        wroteSecondFace_ = writer_.write3dface(&flat) && flat.handle != 0u;
+        if (!wroteSecondFace_)
+            return;
+
+        DRW_Line following;
+        following.basePoint = {101.0, 102.0, 103.0};
+        following.secPoint = {104.0, 105.0, 106.0};
+        wroteFollowingLine_ = writer_.writeLine(&following)
+            && following.handle != 0u;
+    }
+    void writeObjects() override {}
+    void writeLTypes() override {}
+    void writeLayers() override {}
+    void writeTextstyles() override {}
+    void writeVports() override {}
+    void writeDimstyles() override {}
+    void writeViews() override {}
+    void writeUCSs() override {}
+    void writeAppId() override {}
+    bool finalizeDwgWrite() override { return wroteAll(); }
+    bool finalizeDwgWriteStructure() override { return true; }
+
+private:
+    dwgRW& writer_;
+    int firstFaceFlags_;
+    bool wroteFirstFace_ {false};
+    bool wroteSecondFace_ {false};
+    bool wroteFollowingLine_ {false};
+};
+
+class Dwg3DFaceFlagReader final : public dx_iface {
+public:
+    explicit Dwg3DFaceFlagReader(int firstFaceFlags)
+        : firstFaceFlags_(firstFaceFlags) {}
+
+    void add3dFace(const DRW_3Dface& face) override {
+        const std::array<DRW_Coord, 4> expected = faceCount_ == 0u
+            ? std::array<DRW_Coord, 4>{{{37.0, 38.0, 1.0}, {39.0, 38.0, 1.0},
+                                        {39.0, 40.0, 3.0}, {37.0, 40.0, 3.0}}}
+            : std::array<DRW_Coord, 4>{{{5.0, 6.0, 0.0}, {8.0, 6.0, 0.0},
+                                        {8.0, 9.0, 0.0}, {5.0, 9.0, 0.0}}};
+        const std::array<DRW_Coord, 4> actual{{face.basePoint, face.secPoint,
+                                                face.thirdPoint, face.fourPoint}};
+        const int expectedFlags = faceCount_ == 0u
+            ? firstFaceFlags_ : DRW_3Dface::NoEdge;
+        if (faceCount_ >= 2u || face.invisibleflag != expectedFlags)
+            valid_ = false;
+        for (std::size_t i = 0; i < actual.size(); ++i) {
+            if (actual[i].x != expected[i].x || actual[i].y != expected[i].y
+                || actual[i].z != expected[i].z)
+                valid_ = false;
+        }
+        ++faceCount_;
+    }
+    void addLine(const DRW_Line& line) override {
+        sawFollowingLine_ = line.basePoint.x == 101.0
+            && line.basePoint.y == 102.0 && line.basePoint.z == 103.0
+            && line.secPoint.x == 104.0 && line.secPoint.y == 105.0
+            && line.secPoint.z == 106.0;
+    }
+    bool matches() const noexcept {
+        return valid_ && faceCount_ == 2u && sawFollowingLine_;
+    }
+
+private:
+    int firstFaceFlags_;
+    std::size_t faceCount_ {0};
+    bool valid_ {true};
+    bool sawFollowingLine_ {false};
+};
+
+bool runDwg3DFaceFlagDomain(const std::filesystem::path& directory) {
+    constexpr std::array<DRW::Version, 6> versions{{
+        DRW::AC1015, DRW::AC1018, DRW::AC1021,
+        DRW::AC1024, DRW::AC1027, DRW::AC1032}};
+    constexpr std::array<int, 3> invalidFlags{{-1, 16, 65536}};
+    constexpr std::array<int, 3> validFlags{{
+        DRW_3Dface::FirstEdge | DRW_3Dface::ThirdEdge,
+        DRW_3Dface::AllEdges,
+        DRW_3Dface::NoEdge}};
+    const auto readBytes = [](const std::filesystem::path& path) {
+        std::ifstream input(path, std::ios::binary);
+        if (!input)
+            return std::string{};
+        return std::string(std::istreambuf_iterator<char>(input),
+                           std::istreambuf_iterator<char>());
+    };
+    std::error_code ec;
+    for (const DRW::Version version : versions) {
+        const auto path = directory / ("libdxfrw-3dface-flags-"
+            + std::to_string(static_cast<int>(version)) + ".dwg");
+        std::ofstream sentinel(path, std::ios::binary | std::ios::trunc);
+        sentinel << "existing-dwg-destination";
+        sentinel.close();
+        dwgRW writer(path.string().c_str());
+        Dwg3DFaceFlagWriter source(writer, validFlags[0]);
+        for (std::size_t i = 0; i < invalidFlags.size(); ++i) {
+            const std::string before = readBytes(path);
+            source.setFirstFaceFlags(invalidFlags[i]);
+            if (writer.write(&source, version, false)
+                || before.empty() || readBytes(path) != before)
+                return false;
+
+            source.setFirstFaceFlags(validFlags[i]);
+            if (!writer.write(&source, version, false) || !source.wroteAll())
+                return false;
+            dwgRW reader(path.string().c_str());
+            Dwg3DFaceFlagReader capture(validFlags[i]);
+            dx_data readData;
+            capture.cData = &readData;
+            if (!reader.read(&capture, false) || !capture.matches()
+                || reader.getEntityParseFailures() != 0u
+                || reader.getObjectParseFailures() != 0u)
+                return false;
+        }
+        std::filesystem::remove(path, ec);
+    }
+    return true;
+}
+
 class LocalDwgHeaderCmColorInterface final : public dx_iface {
 public:
     explicit LocalDwgHeaderCmColorInterface(bool writeColors,
@@ -37042,6 +37197,12 @@ int main(int argc, char** argv) {
     } else if (argc == 2
         && std::string(argv[1]) == "--section-settings-cmc") {
         return runSectionSettingsCmColorRoundTrip(directory) ? 0 : 1;
+    } else if (argc == 2
+        && std::string(argv[1]) == "--dwg-3dface-flag-domain") {
+        const bool passed = runDwg3DFaceFlagDomain(directory);
+        std::cout << "DWG 3DFACE flag domain rollback/retry and version matrix: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
     } else if (argc == 2
         && std::string(argv[1]) == "--dwg-read-outcome") {
         const auto scratch = std::filesystem::temp_directory_path()

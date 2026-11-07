@@ -1650,6 +1650,18 @@ bool dwgRW::encodeEntityForWrite(DRW_Entity *ent,
         return recordWriteResult(WriteSkipKind::Entity, false);
     }
 
+    // 3DFACE stores its four edge-visibility flags in a bounded BS field.
+    // Keep this in the DWG route as well as the DXF writer: the encoder's
+    // unsigned narrowing cast must not turn invalid caller values into a
+    // different, apparently valid edge mask.
+    if (typeid(*ent) == typeid(DRW_3Dface)) {
+        const int flags = static_cast<const DRW_3Dface*>(ent)->invisibleflag;
+        if (flags < DRW_3Dface::NoEdge || flags > DRW_3Dface::AllEdges) {
+            markDwgWriteFailure();
+            return recordWriteResult(WriteSkipKind::Entity, false);
+        }
+    }
+
     // TEXT's active alignment point shares the encoded elevation.  Preserve
     // custom subclass codecs while latching refusal for the built-in codec,
     // including calls through the inherited point and line facade entries.

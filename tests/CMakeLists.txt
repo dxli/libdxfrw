@@ -3822,6 +3822,16 @@ set_tests_properties(dwg_layout_compound_insert_owner_roundtrip PROPERTIES
 # round-trip executable. The generated non-finite LINE is rejected while the
 # following valid LINE remains readable and produces finalized partial coverage.
 add_test(
+    NAME libdxfrw_dwg_3dface_flag_domain
+    COMMAND $<TARGET_FILE:libdxfrw_dwg_local_roundtrip>
+            --dwg-3dface-flag-domain
+)
+set_tests_properties(libdxfrw_dwg_3dface_flag_domain PROPERTIES
+    LABELS "fast;dwg;writer;reader;3dface;rollback"
+    TIMEOUT 30
+)
+
+add_test(
     NAME libdxfrw_dwg_read_outcome_policy
     COMMAND $<TARGET_FILE:libdxfrw_dwg_local_roundtrip> --dwg-read-outcome
 )
