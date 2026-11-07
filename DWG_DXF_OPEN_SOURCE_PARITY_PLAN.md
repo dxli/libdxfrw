@@ -134,23 +134,40 @@ created locally from scratch for the specific control.
    independent producer behavior, LibreCAD_3/FreeCAD acceptance or native
    geometry/group semantics ([receipt](docs/research/p4-ac1021-generated-group-2d-3d-strict-dxf-readback-2026-11-06.json)).
 
-   **Next implementation slice:** complete the source-bound AC1027 Cover
-   reference inventory using the existing local
+   **Next implementation slice:** finish the source-bound AC1027 Cover
+   reference-role inventory using the existing local
    `/Users/dli/doc/dwg/Cover.dwg` witness. A fast diagnostic extension now
    captures identity and common-header links for all 88 opaque callbacks and
    all 13 standard-object frames; every owner/reactor edge is accounted for
    (85 target captured frames, one owner to typed VPORT `0x29`), the sole
    block-owner edge targets model-space BLOCK_RECORD `0x1F`, and no extension
-   dictionary edge is present. This narrows the open work but is not yet a
-   complete source-bound inventory: the utility does not bind the source hash,
-   inspect any object-body references, prove owner roles from source structure,
-   or establish schema-valid DXF routes. Keep
-   `m_unqualifiedAc1027DwgImport` sticky. Next, bind the exact source hash in a
-   receipt and reconcile each callback identity/frame span with independently
-   decoded body references (start with the already captured LibreDWG minJSON
-   parse, then use the local trace/source fields for any peer omissions); classify
-   each target by record type and required role. A small script or extension to
-   the inventory utility is preferred over broad production changes. Only after
+   dictionary edge is present. The diagnostic now also prints typed body
+   references for DICTIONARYWDFLT, LAYOUT, TABLESTYLE and MLEADERSTYLE. The
+   source TABLESTYLE parser yields three cell styles with 21 text-style and
+   linetype handle edges; LibreDWG 0.14 minJSON exposes only seven from one
+   parsed cell-style block and retains 7,352 TABLESTYLE bits as unknown. ODA
+   v5.4.1 §20.4.101.2–.4 confirms the R24 Table plus three named cell-style
+   structures and hard-pointer text-style/linetype fields. Treat the peer's
+   seven edges as partial corroboration, not a complete body inventory. Other
+   typed body edges include the dictionary default, two layout block-header
+   links, and two MLEADERSTYLE links; the 3DSOLID layer reference remains
+   peer-only in this diagnostic. The inventory diagnostic itself is not
+   complete or source-bound: it does not bind the source hash, inspect raw
+   frame bodies generally, prove every owner role from source structure, or
+   establish schema-valid DXF routes. The companion
+   [body-reference receipt](docs/research/p6-ac1027-cover-body-reference-audit-2026-11-07.json)
+   binds the exact source, inventory binary/log and independent peer JSON
+   hashes. It records the 75/75 frame-size join, all 21 locally parsed
+   TABLESTYLE edges, the peer's partial seven-edge TABLESTYLE coverage, and the
+   unresolved 3DSOLID layer edge. Hash binding and available typed body-reference
+   reconciliation are complete as evidence capture; generic body scanning and
+   role proof for every callback remain open. Keep
+   `m_unqualifiedAc1027DwgImport` sticky. Next, capture the 3DSOLID layer target
+   in the local source inventory and classify its record type/required role;
+   then continue a source-ordered census for body edges on callbacks without a
+   typed local model, using the peer only where its decoded fields are complete.
+   Extend the small inventory diagnostic or a receipt generator rather than
+   broad production code. Only after
    every emitted and omitted edge has a disposition may a bounded output route
    replace the aggregate gate; prove it with output inspection, typed readback,
    atomic refusal and same-adapter retry. The independent 731-byte unclaimed
@@ -159,6 +176,16 @@ created locally from scratch for the specific control.
    unsupported or ambiguous, preserve refusal and move to an eligible source.
    See the [common-link inventory receipt](docs/research/p6-ac1027-cover-common-link-inventory-2026-11-07.json)
    and [current guard probe](docs/research/p6-ac1027-cover-current-guard-probe-2026-11-07.json).
+
+   In parallel, the DWG writer now has a bounded R24 TABLESTYLE encoder for
+   AC1024 and AC1027. It serializes the modeled R24 prefix, table cell style,
+   three required cell styles, and text-style/linetype hard-pointer handles;
+   malformed style counts and unsupported CMC forms refuse. The generated
+   local encoder/readback control passes for both versions, including malformed
+   refusal and retry. This is local encoder/parser consistency only: no
+   independent producer output, physical Cover projection, AC1032 route, DXF
+   schema closure, or native consumer qualification follows. See the
+   [R24 TABLESTYLE writer receipt](docs/research/p4-r24-tablestyle-dwg-writer-ac1024-ac1027-2026-11-07.json).
 
    The AC1021 `truetype.dwg` selected LayerStates and four-VIEWPORT routes are
    complete for their exact source graph: ASCII/Binary typed readback, rollback

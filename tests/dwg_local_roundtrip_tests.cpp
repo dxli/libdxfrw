@@ -3664,7 +3664,9 @@ public:
             spatialIndexRegistration.handle = 0xCE00u;
             registeredSpatialIndex_ = writer_->registerSpatialIndexObjectClass(
                 &spatialIndexRegistration);
-            if (writer_->getVersion() <= DRW::AC1021) {
+            if (writer_->getVersion() <= DRW::AC1021
+                || writer_->getVersion() == DRW::AC1024
+                || writer_->getVersion() == DRW::AC1027) {
                 DRW_TableStyle tableStyleRegistration;
                 tableStyleRegistration.handle = 0xCF00u;
                 registeredTableStyle_ = writer_->registerTableStyleObjectClass(
@@ -4794,6 +4796,37 @@ public:
             tableStyle.setDwgCommonObjectState(0, 0, false);
         }
         tableStyle.m_name = "LOCAL_TABLESTYLE";
+        if (writer_->getVersion() == DRW::AC1024 ||
+            writer_->getVersion() == DRW::AC1027) {
+          tableStyle.m_r24PrefixPresent = true;
+          tableStyle.m_r24ClassVersion = 0u;
+          tableStyle.m_r24UnknownValue1 = 8;
+          tableStyle.m_r24UnknownValue2 = 101;
+          tableStyle.m_tableCellStyle.m_type = 5;
+          tableStyle.m_tableCellStyle.m_id = 4;
+          tableStyle.m_tableCellStyle.m_styleClass = 2;
+          tableStyle.m_tableCellStyle.m_name = "Table";
+          constexpr int styleClasses[] = {1, 1, 2};
+          constexpr const char *styleNames[] = {"_TITLE", "_HEADER", "_DATA"};
+          for (int index = 0; index < 3; ++index) {
+            DRW_TableStyleCellStyle style;
+            style.m_type = 5;
+            style.m_hasData = true;
+            style.m_contentFormat.m_cellAlignment = 5;
+            style.m_contentFormat.m_textStyleHandle =
+                DRW::DwgStandardTextStyleHandle;
+            style.m_id = index + 1;
+            style.m_styleClass = styleClasses[index];
+            style.m_name = styleNames[index];
+            for (int edge = 0; edge < 6; ++edge) {
+              DRW_TableStyleBorder border;
+              border.m_edgeFlags = 1 << edge;
+              border.m_lineTypeHandle = DRW::DwgLtypeByBlockHandle;
+              style.m_borders.push_back(border);
+            }
+            tableStyle.m_cellStyles.push_back(std::move(style));
+          }
+        } else {
         tableStyle.m_flowDirection = 0;
         tableStyle.m_flags = 0;
         tableStyle.m_horizontalCellMargin = 0.1;
@@ -4839,22 +4872,33 @@ public:
             }
             tableStyle.m_rowStyles.push_back(row);
         }
-        const bool tableStyleSupported = writer_->getVersion() <= DRW::AC1021;
+        }
+        const bool r24TableStyle = writer_->getVersion() == DRW::AC1024 ||
+                                   writer_->getVersion() == DRW::AC1027;
+        const bool tableStyleSupported =
+            writer_->getVersion() <= DRW::AC1021 || r24TableStyle;
         if (tableStyleSupported) {
             wroteTableStyle_ = writer_->getVersion() == DRW::AC1021
                 ? false
-                : registeredTableStyle_
-                    && writer_->writeTableStyle(&tableStyle)
-                    && tableStyle.handle != 0;
+                                 : registeredTableStyle_ &&
+                                       writer_->writeTableStyle(&tableStyle) &&
+                                       tableStyle.handle != 0;
             DRW_TableStyle invalidTableStyle = tableStyle;
             invalidTableStyle.handle = 0xCF01u;
+          if (r24TableStyle)
+            invalidTableStyle.m_cellStyles.pop_back();
+          else
             invalidTableStyle.m_rowStyles.pop_back();
             rejectedMalformedTableStyle_ =
                 !writer_->writeTableStyle(&invalidTableStyle);
             DRW_TableStyle invalidCmcTableStyle = tableStyle;
             invalidCmcTableStyle.handle = 0xCF02u;
-            invalidCmcTableStyle.m_rowStyles.front()
-                .m_textColorCmc.m_method = 0xC5u;
+          if (r24TableStyle)
+            invalidCmcTableStyle.m_cellStyles.front()
+                .m_contentFormat.m_contentColorCmc.m_method = 0xC5u;
+          else
+            invalidCmcTableStyle.m_rowStyles.front().m_textColorCmc.m_method =
+                0xC5u;
             rejectedUnsupportedTableStyleColor_ =
                 !writer_->writeTableStyle(&invalidCmcTableStyle);
         } else {
@@ -7445,7 +7489,37 @@ public:
     }
     void addTableStyle(const DRW_TableStyle& data) override {
         if (data.handle == 0xCF00u) {
-            readTableStyleSeen_ = data.parentHandle == 0xA601u
+            if (expectedVersion_ == DRW::AC1024 ||
+                expectedVersion_ == DRW::AC1027) {
+                readTableStyleSeen_ = data.parentHandle == 0xA601u
+                    && data.m_name == "LOCAL_TABLESTYLE"
+                    && data.m_r24PrefixPresent && data.m_r24ClassVersion == 0u
+                    && data.m_r24UnknownValue1 == 8
+                    && data.m_r24UnknownValue2 == 101
+                    && data.m_unknownHandle == 0u
+                    && data.m_rowStyles.empty()
+                    && data.m_tableCellStyle.m_id == 4
+                    && data.m_tableCellStyle.m_styleClass == 2
+                    && data.m_tableCellStyle.m_name == "Table"
+                    && data.m_cellStyles.size() == 3u
+                    && data.m_cellStyles[0].m_id == 1
+                    && data.m_cellStyles[0].m_name == "_TITLE"
+                    && data.m_cellStyles[0].m_contentFormat.m_textStyleHandle
+                        == DRW::DwgStandardTextStyleHandle
+                    && data.m_cellStyles[0].m_borders.size() == 6u
+                    && data.m_cellStyles[0].m_borders[0].m_lineTypeHandle
+                        == DRW::DwgLtypeByBlockHandle
+                    && data.m_cellStyles[1].m_id == 2
+                    && data.m_cellStyles[1].m_name == "_HEADER"
+                    && data.m_cellStyles[1].m_borders.size() == 6u
+                    && data.m_cellStyles[2].m_id == 3
+                    && data.m_cellStyles[2].m_name == "_DATA"
+                    && data.m_cellStyles[2].m_borders.size() == 6u;
+                if (!readTableStyleSeen_)
+                    std::cerr << "R24 TABLESTYLE readback mismatch version="
+                              << static_cast<int>(expectedVersion_) << '\n';
+            } else {
+                readTableStyleSeen_ = data.parentHandle == 0xA601u
                 && (expectedVersion_ != DRW::AC1021
                     || (data.xDictHandle == 0xCF20u
                         && data.extensionDictionaryFlag() == 0u))
@@ -7487,6 +7561,7 @@ public:
                     == 0xC2u
                 && data.m_rowStyles.front().m_borders.front().m_colorCmc.m_name
                     == "black edge";
+            }
         }
         if (data.handle == 0xCF01u)
             readMalformedTableStyleSeen_ = true;
@@ -8496,62 +8571,51 @@ public:
             && readPlotSettingsRootEntrySeen_;
     }
     bool readObjectRawCarrierSetSeen() const {
-        const std::size_t expected = expectedVersion_ == DRW::AC1015
-            ? 54u : expectedVersion_ == DRW::AC1018
-                ? 55u : expectedVersion_ == DRW::AC1021 ? 59u : 56u;
-        return readRawObjectInvariant_
-            && readLocalRawObjectHandles_.size() == expected;
+      const std::size_t expected =
+          expectedVersion_ == DRW::AC1015   ? 54u
+          : expectedVersion_ == DRW::AC1018 ? 55u
+          : expectedVersion_ == DRW::AC1021 ? 59u
+          : (expectedVersion_ == DRW::AC1024 || expectedVersion_ == DRW::AC1027)
+              ? 57u
+              : 56u;
+      return readRawObjectInvariant_ &&
+             readLocalRawObjectHandles_.size() == expected;
     }
     bool readObjectSetSeen() const {
-        const bool result = readDictionarySeen_ && readLayoutDictionarySeen_
-            && readLayoutRootEntrySeen_ && readPlotSettingsRootEntrySeen_
-            && readPlotSettingsDictionarySeen_ && readXRecordSeen_
-            && readPlotSettingsSeen_ && readLayoutSeen_ && readMLineStyleSeen_
-            && readMLeaderStyleSeen_ && readDictionaryVarSeen_
-            && readDictionaryWithDefaultSeen_ && readSortEntsTableSeen_
-            && readFieldListSeen_ && readFieldSeen_ && readRasterVariablesSeen_
-            && readWipeoutVariablesSeen_ && readVisualStyleSeen_
-            && readRenderSettingsSeen_ && readRenderEnvironmentSeen_
-            && readRenderGlobalSeen_ && readRenderEntrySeen_
-            && readRenderRapidSeen_ && readRenderMentalSeen_
-            && readMaterialSeen_ && readLightListSeen_ && readScaleSeen_
-            && readIDBufferSeen_ && readLayerIndexSeen_ && readSpatialIndexSeen_
-            && (readTableStyleSeen_ || !tableStyleExpected_)
-            && (readCellStyleMapSeen_ || !cellStyleMapExpected_)
-            && (readTableStyleCellStyleMapDictionarySeen_
-                || !cellStyleMapExpected_)
-            && readSpatialFilterSeen_
-            && readGeoDataSeen_
-            && readGeoDataV2Seen_
-            && readPdfUnderlaySeen_
-            && readDgnUnderlaySeen_
-            && readDwfUnderlaySeen_
-            && readPointCloudDefinitionSeen_
-            && readPointCloudDefinitionExSeen_
-            && readPointCloudReactorSeen_
-            && readPointCloudReactorExSeen_
-            && readPointCloudColorMapSeen_
-            && readNavisworksModelDefSeen_
-            && readSunStudySeen_
-            && readMotionPathSeen_
-            && readCurvePathSeen_
-            && readPointPathSeen_
-            && readObjectPtrSeen_
-            && readPartialViewingIndexSeen_
-            && readSolidBackgroundSeen_
-            && readGradientBackgroundSeen_
-            && readGroundPlaneBackgroundSeen_
-            && readImageBackgroundSeen_
-            && readIblBackgroundSeen_
-            && readSkylightBackgroundSeen_
-            && (expectedVersion_ < DRW::AC1021 || readSectionSetSeen())
-            && (expectedVersion_ < DRW::AC1021 || readDimensionAssociationSeen_)
-            && (expectedVersion_ < DRW::AC1021 || readEvaluationGraphSeen_)
-            && readBlockRepresentationDataSeen_
-            && readTvDevicePropertiesSeen_
-            && readVxControlSeen_
-            && readVxTableRecordSeen_
-            && readGroupSeen_;
+      const bool result =
+          readDictionarySeen_ && readLayoutDictionarySeen_ &&
+          readLayoutRootEntrySeen_ && readPlotSettingsRootEntrySeen_ &&
+          readPlotSettingsDictionarySeen_ && readXRecordSeen_ &&
+          readPlotSettingsSeen_ && readLayoutSeen_ && readMLineStyleSeen_ &&
+          readMLeaderStyleSeen_ && readDictionaryVarSeen_ &&
+          readDictionaryWithDefaultSeen_ && readSortEntsTableSeen_ &&
+          readFieldListSeen_ && readFieldSeen_ && readRasterVariablesSeen_ &&
+          readWipeoutVariablesSeen_ && readVisualStyleSeen_ &&
+          readRenderSettingsSeen_ && readRenderEnvironmentSeen_ &&
+          readRenderGlobalSeen_ && readRenderEntrySeen_ &&
+          readRenderRapidSeen_ && readRenderMentalSeen_ && readMaterialSeen_ &&
+          readLightListSeen_ && readScaleSeen_ && readIDBufferSeen_ &&
+          readLayerIndexSeen_ && readSpatialIndexSeen_ &&
+          (readTableStyleSeen_ || !tableStyleExpected_) &&
+          (readCellStyleMapSeen_ || !cellStyleMapExpected_) &&
+          (readTableStyleCellStyleMapDictionarySeen_ ||
+           !cellStyleMapExpected_) &&
+          readSpatialFilterSeen_ && readGeoDataSeen_ && readGeoDataV2Seen_ &&
+          readPdfUnderlaySeen_ && readDgnUnderlaySeen_ &&
+          readDwfUnderlaySeen_ && readPointCloudDefinitionSeen_ &&
+          readPointCloudDefinitionExSeen_ && readPointCloudReactorSeen_ &&
+          readPointCloudReactorExSeen_ && readPointCloudColorMapSeen_ &&
+          readNavisworksModelDefSeen_ && readSunStudySeen_ &&
+          readMotionPathSeen_ && readCurvePathSeen_ && readPointPathSeen_ &&
+          readObjectPtrSeen_ && readPartialViewingIndexSeen_ &&
+          readSolidBackgroundSeen_ && readGradientBackgroundSeen_ &&
+          readGroundPlaneBackgroundSeen_ && readImageBackgroundSeen_ &&
+          readIblBackgroundSeen_ && readSkylightBackgroundSeen_ &&
+          (expectedVersion_ < DRW::AC1021 || readSectionSetSeen()) &&
+          (expectedVersion_ < DRW::AC1021 || readDimensionAssociationSeen_) &&
+          (expectedVersion_ < DRW::AC1021 || readEvaluationGraphSeen_) &&
+          readBlockRepresentationDataSeen_ && readTvDevicePropertiesSeen_ &&
+          readVxControlSeen_ && readVxTableRecordSeen_ && readGroupSeen_;
         return result;
     }
     bool readMalformedObjectSeen() const { return readMalformedObjectSeen_; }
@@ -37791,22 +37855,32 @@ int main(int argc, char** argv) {
         expect(writeIface.rejectedMalformedLayerIndex(),
                ("local DWG writer rejected malformed LAYER_INDEX transaction" + suffix).c_str(),
                failures);
-        expect(writeIface.rejectedMalformedSpatialIndex(),
-               ("local DWG writer rejected malformed SPATIAL_INDEX transaction" + suffix).c_str(),
+        expect(
+            writeIface.rejectedMalformedSpatialIndex(),
+            ("local DWG writer rejected malformed SPATIAL_INDEX transaction" +
+             suffix)
+                .c_str(),
                failures);
-        expect(version <= DRW::AC1021
+        const bool r24TableStyleVersion =
+            version == DRW::AC1024 || version == DRW::AC1027;
+        expect(version <= DRW::AC1021 || r24TableStyleVersion
                    ? writeIface.wroteTableStyle()
                    : writeIface.rejectedUnsupportedTableStyle(),
-               ("local DWG TABLESTYLE capability gate" + suffix).c_str(), failures);
-        expect(version <= DRW::AC1021
+               ("local DWG TABLESTYLE capability gate" + suffix).c_str(),
+               failures);
+        expect(version <= DRW::AC1021 || r24TableStyleVersion
                    ? writeIface.rejectedMalformedTableStyle()
                    : true,
-               ("local DWG writer rejected malformed TABLESTYLE transaction" + suffix).c_str(),
+               ("local DWG writer rejected malformed TABLESTYLE transaction" +
+                suffix)
+                   .c_str(),
                failures);
-        expect(version <= DRW::AC1021
+        expect(version <= DRW::AC1021 || r24TableStyleVersion
                    ? writeIface.rejectedUnsupportedTableStyleColor()
                    : true,
-               ("local DWG writer rejects unsupported TABLESTYLE CMC method" + suffix).c_str(),
+               ("local DWG writer rejects unsupported TABLESTYLE CMC method" +
+                suffix)
+                   .c_str(),
                failures);
         expect(version == DRW::AC1021
                    ? writeIface.wroteCellStyleMap()
@@ -37816,25 +37890,40 @@ int main(int argc, char** argv) {
         expect(version == DRW::AC1021
                    ? writeIface.rejectedMalformedCellStyleMapGraph()
                    : !writeIface.rejectedMalformedCellStyleMapGraph(),
-               ("local DWG CELLSTYLEMAP graph rejects malformed owner/key targets"
-                + suffix).c_str(), failures);
+               ("local DWG CELLSTYLEMAP graph rejects malformed owner/key "
+                "targets" +
+                suffix)
+                   .c_str(),
+               failures);
         expect(version == DRW::AC1021
                    ? writeIface.rejectedMalformedCellStyleMap()
                    : true,
-               ("local DWG writer rejected malformed CELLSTYLEMAP transaction"
-                + suffix).c_str(), failures);
-        expect(writeIface.rejectedMalformedSpatialFilter(),
-               ("local DWG writer rejected malformed SPATIAL_FILTER transaction" + suffix).c_str(),
+               ("local DWG writer rejected malformed CELLSTYLEMAP transaction" +
+                suffix)
+                   .c_str(),
+               failures);
+        expect(
+            writeIface.rejectedMalformedSpatialFilter(),
+            ("local DWG writer rejected malformed SPATIAL_FILTER transaction" +
+             suffix)
+                .c_str(),
                failures);
         expect(writeIface.wroteGeoData(),
-               ("local DWG writer emitted GEODATA object" + suffix).c_str(), failures);
-        expect(writeIface.wroteGeoDataV2(),
-               ("local DWG writer emitted GEODATA v2 object" + suffix).c_str(), failures);
-        expect(writeIface.geoDataV2DomainRetrySucceeded(),
-               ("local DWG GEODATA coordinate-type refusal preserves identity and supports same-writer retry" + suffix).c_str(),
+               ("local DWG writer emitted GEODATA object" + suffix).c_str(),
                failures);
-        expect(writeIface.rejectedMalformedGeoData(),
-               ("local DWG writer rejected malformed GEODATA transaction" + suffix).c_str(),
+        expect(writeIface.wroteGeoDataV2(),
+               ("local DWG writer emitted GEODATA v2 object" + suffix).c_str(),
+               failures);
+        expect(writeIface.geoDataV2DomainRetrySucceeded(),
+               ("local DWG GEODATA coordinate-type refusal preserves identity "
+                "and supports same-writer retry" +
+                suffix)
+                   .c_str(),
+               failures);
+        expect(
+            writeIface.rejectedMalformedGeoData(),
+            ("local DWG writer rejected malformed GEODATA transaction" + suffix)
+                .c_str(),
                failures);
         expect(writeIface.wrotePdfUnderlay(),
                ("local DWG writer emitted PDFDEFINITION" + suffix).c_str(), failures);
@@ -37964,16 +38053,17 @@ int main(int argc, char** argv) {
                    "AC1024 independent CLASSES raw parser succeeds", failures);
             expect(classes.maxClassNumber == 1328u,
                    "AC1024 CLASSES reaches class 1328", failures);
-            expect(classes.usedExtendedStringSize
-                       && classes.stringBitSize == 536310u
-                       && classes.completeStreams && classes.recordCount == 829u,
-                   "AC1024 CLASSES extended footer covers exact text bits with no rounded padding",
+            expect(classes.usedExtendedStringSize &&
+                       classes.stringBitSize == 536406u &&
+                       classes.completeStreams && classes.recordCount == 829u,
+                   "AC1024 CLASSES extended footer covers exact text bits with "
+                   "no rounded padding",
                    failures);
             expect(classes.declaredCrcOffset == classes.footerCrcOffset,
                    "AC1024 CLASSES RL and footer identify the same CRC byte",
                    failures);
-            expect(classes.storedCrc != 0u
-                       && classes.calculatedCrc == classes.storedCrc,
+            expect(classes.storedCrc != 0u &&
+                       classes.calculatedCrc == classes.storedCrc,
                    "AC1024 CLASSES stored CRC matches independent ODA CRC",
                    failures);
         }
@@ -37981,7 +38071,8 @@ int main(int argc, char** argv) {
         dwgRW reader(output.string().c_str());
         LocalDwgInterface readIface(nullptr, version, true,
                                     writeIface.outerAnnotativeAppIdHandle());
-        readIface.setTableStyleExpected(version <= DRW::AC1021);
+        readIface.setTableStyleExpected(version <= DRW::AC1021 ||
+                                        r24TableStyleVersion);
         readIface.setCellStyleMapExpected(version == DRW::AC1021);
         readIface.setExpectedPolylineHandleChains(
             writeIface.writtenPolylineHandleChains());
@@ -37989,13 +38080,17 @@ int main(int argc, char** argv) {
         expect(readOk, ("local DWG reader self-read succeeds" + suffix).c_str(),
                failures);
         expect(readIface.readNamedObjectDictionarySeen(),
-               ("local DWG self-read publishes the exact HEADER-selected root"
-                + suffix).c_str(), failures);
+               ("local DWG self-read publishes the exact HEADER-selected root" +
+                suffix)
+                   .c_str(),
+               failures);
         expect(reader.getVersion() == version,
-               ("local DWG self-read preserves version" + suffix).c_str(), failures);
+               ("local DWG self-read preserves version" + suffix).c_str(),
+               failures);
         if (version >= DRW::AC1021) {
             expect(reader.getClassesCrcMismatch() == 0u,
-                   ("local DWG self-read has no CLASSES CRC mismatch" + suffix).c_str(),
+                 ("local DWG self-read has no CLASSES CRC mismatch" + suffix)
+                     .c_str(),
                    failures);
             const std::vector<DwgIntegrityDiagnostic> diagnostics =
                 reader.getIntegrityDiagnostics();
@@ -38005,7 +38100,8 @@ int main(int argc, char** argv) {
                     return diagnostic.kind == DwgIntegrityCheckKind::ClassesCrc;
                 });
             expect(!hasClassesCrc,
-                   ("local DWG self-read has no CLASSES CRC diagnostic" + suffix).c_str(),
+                 ("local DWG self-read has no CLASSES CRC diagnostic" + suffix)
+                     .c_str(),
                    failures);
         }
         if (version == DRW::AC1024) {
@@ -38252,7 +38348,7 @@ int main(int argc, char** argv) {
         expect(readIface.readSpatialIndexSeen(),
                ("local DWG self-read publishes SPATIAL_INDEX" + suffix).c_str(),
                failures);
-        expect(version <= DRW::AC1021
+        expect(version <= DRW::AC1021 || r24TableStyleVersion
                    ? readIface.readTableStyleSeen()
                    : !readIface.readTableStyleSeen(),
                ("local DWG TABLESTYLE capability-gated self-read" + suffix).c_str(),

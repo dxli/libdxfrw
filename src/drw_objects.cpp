@@ -18006,6 +18006,25 @@ void putCellStyleMapCellStyle(DRW::Version version, dwgBufferW& body,
 } // namespace
 
 bool DRW_TableStyle::validateDwgPayload(DRW::Version version) const {
+    if (version == DRW::AC1024 || version == DRW::AC1027) {
+        if (!m_r24PrefixPresent
+            || reactorHandles.size() > dwgSafety::MaxReactorCount
+            || extensionDictionaryFlag() > 1u || !m_rowStyles.empty()
+            || m_cellStyles.size() != 3u
+            || !validCellStyleMapCellStyle(version, m_tableCellStyle)
+            || m_tableCellStyle.m_type != 5 || m_tableCellStyle.m_id != 4
+            || m_tableCellStyle.m_styleClass < 0
+            || m_tableCellStyle.m_styleClass > 2)
+            return false;
+        constexpr int expectedIds[] = {1, 2, 3};
+        for (std::size_t index = 0u; index < m_cellStyles.size(); ++index) {
+            const DRW_TableStyleCellStyle& style = m_cellStyles[index];
+            if (!validCellStyleMapCellStyle(version, style)
+                || style.m_type != 5 || style.m_id != expectedIds[index])
+                return false;
+        }
+        return true;
+    }
     // The legacy TABLESTYLE layout is stable through R2007. The R2010+
     // branch has a different body and is intentionally still preserved via
     // the validated raw carrier.
@@ -18069,6 +18088,44 @@ bool DRW_TableStyle::encodeDwg(DRW::Version version, dwgBufferW *buf,
                                dwgBufferW *handleBuf) const {
     if (buf == nullptr || !validateDwgPayload(version))
         return false;
+
+    if (version == DRW::AC1024 || version == DRW::AC1027) {
+        dwgBufferW *stringBuf = strBuf != nullptr ? strBuf : buf;
+        dwgBufferW *hBuf = handleBuf != nullptr ? handleBuf : buf;
+        buf->putRawChar8(m_r24ClassVersion);
+        stringBuf->putVariableText(version, m_name);
+        buf->putBitLong(m_r24UnknownValue1);
+        buf->putBitLong(m_r24UnknownValue2);
+        putCellStyleMapCellStyle(version, *buf, *stringBuf,
+                                 m_tableCellStyle);
+        buf->putBitLong(static_cast<std::int32_t>(m_cellStyles.size()));
+        for (const DRW_TableStyleCellStyle& style : m_cellStyles) {
+            buf->putBitLong(style.m_id);
+            putCellStyleMapCellStyle(version, *buf, *stringBuf, style);
+        }
+        putCommonObjectHandlePrefix(
+            hBuf, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()),
+            extensionDictionaryFlag(), &reactorHandles, xDictHandle);
+        hBuf->putHandle(makeRefW(m_unknownHandle, DRW::DwgHardOwnership));
+        const auto writeCellStyleHandles = [hBuf](
+                const DRW_TableStyleCellStyle& style) {
+            if (!style.m_hasData)
+                return;
+            hBuf->putHandle(makeRefW(
+                style.m_contentFormat.m_textStyleHandle,
+                DRW::DwgHardPointer));
+            for (const DRW_TableStyleBorder& border : style.m_borders) {
+                if (border.m_edgeFlags != 0)
+                    hBuf->putHandle(makeRefW(
+                        border.m_lineTypeHandle, DRW::DwgHardPointer));
+            }
+        };
+        writeCellStyleHandles(m_tableCellStyle);
+        for (const DRW_TableStyleCellStyle& style : m_cellStyles)
+            writeCellStyleHandles(style);
+        return buf->isGood() && stringBuf->isGood() && hBuf->isGood();
+    }
 
     dwgBufferW *stringBuf = version > DRW::AC1018 && strBuf != nullptr
         ? strBuf : buf;

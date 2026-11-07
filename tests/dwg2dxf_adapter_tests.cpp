@@ -22345,30 +22345,98 @@ bool acdsOpaqueProxyCodecReadback() {
 bool opaqueDwgSourceInventory(const std::string& sourcePath) {
     dx_data data;
     dx_iface importer;
-    if (!importer.fileImport(sourcePath, &data, false)
-        || data.sourceFormat != dx_source_format::DWG
-        || (data.sourceVersion != DRW::AC1021
-            && data.sourceVersion != DRW::AC1027)
-        || !data.hasCompleteOpaqueDwgSourceCapture()) {
+  if (!importer.fileImport(sourcePath, &data, false) ||
+      data.sourceFormat != dx_source_format::DWG ||
+      (data.sourceVersion != DRW::AC1021 &&
+       data.sourceVersion != DRW::AC1027) ||
+      !data.hasCompleteOpaqueDwgSourceCapture()) {
         std::cerr << "opaque DWG inventory: source import/capture incomplete\n";
         return false;
     }
-    const char* versionName = data.sourceVersion == DRW::AC1021
-        ? "AC1021" : "AC1027";
-    std::cout << "opaqueSourceFrameInventory schema=2 sourceVersion="
-              << versionName
-              << " sourceCallbacks="
-              << data.dwgReadOutcome.opaqueViewCallbacks
-              << " captured="
-              << data.dwgReadOutcome.opaqueSourceFramesCaptured
+  const char *versionName =
+      data.sourceVersion == DRW::AC1021 ? "AC1021" : "AC1027";
+  std::cout
+      << "opaqueSourceFrameInventory schema=2 sourceVersion=" << versionName
+      << " sourceCallbacks=" << data.dwgReadOutcome.opaqueViewCallbacks
+      << " captured=" << data.dwgReadOutcome.opaqueSourceFramesCaptured
               << " retained="
-              << DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrameCount(
-                     data)
+      << DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrameCount(data)
               << " standardCaptured="
               << DxIfaceStandardDwgCaptureTestAccess::frames(data)
-              << " inventoryScope=identity-and-common-header"
-              << " bodyReferenceCoverage=not-inspected"
+      << " inventoryScope=identity-common-header-and-selected-typed-models"
+      << " bodyReferenceCoverage=partial-typed-models"
               << " sourceHashBoundByUtility=0\n";
+  std::cout << " opaqueTypedBodyModels"
+            << " dictionaryWithDefault=" << data.dictionaryWithDefaults.size()
+            << " layouts=" << data.layouts.size()
+            << " tableStyles=" << data.tableStyles.size()
+            << " mLeaderStyles=" << data.mLeaderStyles.size() << '\n';
+  for (const DRW_DictionaryWithDefault &dictionary :
+       data.dictionaryWithDefaults) {
+    std::cout << " typedBodyFrame type=DICTIONARYWDFLT"
+              << " handle=" << dictionary.handle
+              << " default=" << dictionary.m_defaultEntryHandle
+              << " entries=" << dictionary.m_entries.size() << '\n';
+    for (const DRW_Dictionary::Entry &entry : dictionary.m_entries)
+      std::cout << " typedBodyReference owner=" << dictionary.handle
+                << " role=dictionary-entry key=" << entry.m_name
+                << " target=" << entry.m_handle << '\n';
+    if (dictionary.m_defaultEntryHandle != 0u)
+      std::cout << " typedBodyReference owner=" << dictionary.handle
+                << " role=default-entry target="
+                << dictionary.m_defaultEntryHandle << '\n';
+  }
+  for (const DRW_Layout &layout : data.layouts)
+    std::cout << " typedBodyFrame type=LAYOUT handle=" << layout.handle
+              << " blockHeader=" << layout.paperSpaceBlockRecordHandle.ref
+              << '\n';
+  for (const DRW_TableStyle &style : data.tableStyles) {
+    std::cout << " typedBodyFrame type=TABLESTYLE handle=" << style.handle
+              << " rows=" << style.m_rowStyles.size()
+              << " cells=" << style.m_cellStyles.size() << '\n';
+    const auto reportCell = [&style](const DRW_TableStyleCellStyle &cell,
+                                     const std::string &path) {
+      if (cell.m_contentFormat.m_textStyleHandle != 0u)
+        std::cout << " typedBodyReference owner=" << style.handle
+                  << " role=" << path << ".textStyle target="
+                  << cell.m_contentFormat.m_textStyleHandle << '\n';
+      for (std::size_t index = 0u; index < cell.m_borders.size(); ++index)
+        if (cell.m_borders[index].m_lineTypeHandle != 0u)
+          std::cout << " typedBodyReference owner=" << style.handle
+                    << " role=" << path << ".border[" << index
+                    << "].lineType target="
+                    << cell.m_borders[index].m_lineTypeHandle << '\n';
+    };
+    reportCell(style.m_tableCellStyle, "tableCellStyle");
+    for (std::size_t index = 0u; index < style.m_rowStyles.size(); ++index) {
+      const DRW_TableStyleRowStyle &row = style.m_rowStyles[index];
+      if (row.m_textStyleHandle != 0u)
+        std::cout << " typedBodyReference owner=" << style.handle
+                  << " role=rowStyle[" << index
+                  << "].textStyle target=" << row.m_textStyleHandle << '\n';
+      for (std::size_t border = 0u; border < row.m_borders.size(); ++border)
+        if (row.m_borders[border].m_lineTypeHandle != 0u)
+          std::cout << " typedBodyReference owner=" << style.handle
+                    << " role=rowStyle[" << index << "].border[" << border
+                    << "].lineType target="
+                    << row.m_borders[border].m_lineTypeHandle << '\n';
+    }
+    for (std::size_t index = 0u; index < style.m_cellStyles.size(); ++index)
+      reportCell(style.m_cellStyles[index],
+                 "cellStyle[" + std::to_string(index) + "]");
+  }
+  for (const DRW_MLeaderStyle &style : data.mLeaderStyles) {
+    std::cout << " typedBodyFrame type=MLEADERSTYLE handle=" << style.handle
+              << '\n';
+    if (style.leaderLineTypeHandle.ref != 0u)
+      std::cout << " typedBodyReference owner=" << style.handle
+                << " role=lineType target=" << style.leaderLineTypeHandle.ref
+                << '\n';
+    if (style.textStyleHandle.ref != 0u)
+      std::cout << " typedBodyReference owner=" << style.handle
+                << " role=textStyle target=" << style.textStyleHandle.ref
+                << '\n';
+  }
     DxIfaceStandardDwgCaptureTestAccess::printOpaqueSourceFrames(
         data, data.importGeneration);
     DxIfaceStandardDwgCaptureTestAccess::printStandardSourceFrames(
@@ -22408,8 +22476,7 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
         }
         std::cout << " visualStyle handle=" << style.handle
                   << " owner=" << style.parentHandle
-                  << " xdict=" << style.xDictHandle
-                  << " xdictFlag="
+              << " xdict=" << style.xDictHandle << " xdictFlag="
                   << static_cast<unsigned>(style.extensionDictionaryFlag())
                   << " dictionaryMatches=" << dictionaryMatches;
         if (dictionary == nullptr) {
@@ -22421,12 +22488,10 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
                   << " dictionaryHardOwner=" << dictionary->hardOwner
                   << " dictionaryXdict=" << dictionary->xDictHandle
                   << " reactors=" << dictionary->reactorHandles.size()
-                  << " entries=" << dictionary->m_entries.size()
-                  << " styleColors=";
-        for (std::size_t index = 0u;
-             index < style.m_body.m_encoding.colorCount; ++index)
-            std::cout << std::hex
-                      << style.m_body.m_encoding.colors[index].rawRgb
+              << " entries=" << dictionary->m_entries.size() << " styleColors=";
+    for (std::size_t index = 0u; index < style.m_body.m_encoding.colorCount;
+         ++index)
+      std::cout << std::hex << style.m_body.m_encoding.colors[index].rawRgb
                       << ',' << std::dec;
         std::cout << '\n';
         for (const DRW_Dictionary::Entry& entry : dictionary->m_entries) {
@@ -22458,8 +22523,7 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
                               << " xrecordReactors=";
                     for (std::uint32_t reactor : xrecord->reactorHandles)
                         std::cout << reactor << ',';
-                    std::cout << " xrecordHandleValues="
-                              << xrecord->m_handleValues.size()
+          std::cout << " xrecordHandleValues=" << xrecord->m_handleValues.size()
                               << " xrecordRaw=" << xrecord->m_rawDataValid
                               << " xrecordEED=" << xrecord->extData.size()
                               << " xrecordAppData=" << xrecord->appData.size()

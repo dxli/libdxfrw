@@ -4119,7 +4119,9 @@ bool dwgWriter15::emitTableStyleObject(std::uint32_t handle,
 }
 
 bool dwgWriter15::writeTableStyle(const DRW_TableStyle& style) {
-    if (m_version < DRW::AC1015 || m_version > DRW::AC1021)
+    if (m_version < DRW::AC1015
+        || (m_version > DRW::AC1021
+            && m_version != DRW::AC1024 && m_version != DRW::AC1027))
         return false;
 
     DRW_TableStyle object = style;

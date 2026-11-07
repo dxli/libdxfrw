@@ -1,0 +1,107 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "title": "AC1027 Cover body-reference audit and peer parser coverage",
+  "date": "2026-11-07",
+  "supportClaimEffect": "none",
+  "source": {
+    "path": "/Users/dli/doc/dwg/Cover.dwg",
+    "sha256": "3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42",
+    "version": "AC1027",
+    "provenanceLimit": "Existing local source; producer is not independently authenticated and no DWG/DXF fixture is committed."
+  },
+  "localInventory": {
+    "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --opaque-dwg-source-inventory /Users/dli/doc/dwg/Cover.dwg",
+    "binarySha256": "2c124a4917ebdf602541e23f863dce04e76ba3ab80b9832c0802c2145648882c",
+    "logPath": "/private/tmp/cover-opaque-source-inventory-body.log",
+    "logSha256": "3633365916b534da588d8f5aad1143cf449b1ec51d8c8ef84ff97065f7387676",
+    "result": "88/88 opaque callbacks captured, with 75 retained opaque frames and 13 standard-object source frames. The local importer retains typed DICTIONARYWDFLT, two LAYOUTs, TABLESTYLE, and MLEADERSTYLE models; body references from those typed models are printed. The utility does not bind the source hash and does not scan arbitrary raw frame bodies."
+  },
+  "independentPeerParse": {
+    "tool": "LibreDWG 0.14 dwgread -O minJSON",
+    "jsonPath": "/private/tmp/cover-current-libredwg.json",
+    "jsonSha256": "12a88999c8a23a63aa82062bc867432afd62df558c74fd0cd446520acaa0e0e9",
+    "objectCount": 111,
+    "frameJoin": "All 75 local opaque-frame handles join a peer JSON object and all 75 peer sizes equal the local captured object span. The numeric type agrees for 74/75; MLEADERSTYLE is dispatched through the custom-class index locally while minJSON reports generic type 1, but both identify AcDbMLeaderStyle at handle 108."
+  },
+  "bodyReferences": {
+    "peerVisibleNonNullEdges": 14,
+    "allPeerTargetsResolveInJson": true,
+    "edges": [
+      {
+        "source": "DICTIONARYWDFLT 14",
+        "field": "items.Normal",
+        "target": "PLACEHOLDER 15",
+        "role": "dictionary entry"
+      },
+      {
+        "source": "DICTIONARYWDFLT 14",
+        "field": "defaultid",
+        "target": "PLACEHOLDER 15",
+        "role": "default entry"
+      },
+      {
+        "source": "LAYOUT 30",
+        "field": "block_header",
+        "target": "BLOCK_HEADER 27",
+        "role": "hard pointer"
+      },
+      {
+        "source": "LAYOUT 34",
+        "field": "block_header",
+        "target": "BLOCK_HEADER 31",
+        "role": "hard pointer"
+      },
+      {
+        "source": "TABLESTYLE 106",
+        "field": "one parsed cell style text_style",
+        "target": "STYLE 17",
+        "role": "hard pointer"
+      },
+      {
+        "source": "TABLESTYLE 106",
+        "field": "one parsed cell style six border ltypes",
+        "target": "LTYPE 20",
+        "role": "hard pointers",
+        "count": 6
+      },
+      {
+        "source": "MLEADERSTYLE 108",
+        "field": "line_type",
+        "target": "LTYPE 20",
+        "role": "hard pointer"
+      },
+      {
+        "source": "MLEADERSTYLE 108",
+        "field": "text_style",
+        "target": "STYLE 17",
+        "role": "hard pointer"
+      },
+      {
+        "source": "3DSOLID 111",
+        "field": "layer",
+        "target": "LAYER 16",
+        "role": "hard pointer"
+      }
+    ],
+    "localTableStyleModel": {
+      "handle": 106,
+      "cellStyles": 3,
+      "nonNullTextStyleEdges": 3,
+      "nonNullBorderLtypeEdges": 18,
+      "totalNonNullBodyEdges": 21,
+      "targetHandles": {
+        "textStyle": 17,
+        "borderLtype": 20
+      }
+    },
+    "peerTableStyleCoverage": "minJSON exposes only one cell style's seven edges and retains 7,352 TABLESTYLE bits as unknown. ODA v5.4.1 \u00a720.4.101.2-.4 specifies the R24 Table cell style plus three repeated title/header/data styles, with hard-pointer text-style and linetype fields. The peer's seven edges therefore corroborate field targets for one style but do not establish full body coverage; use the local three-style typed parse and specification as separate evidence and keep producer/semantic qualification open.",
+    "localModelCoverage": "Local typed diagnostics expose DICTIONARYWDFLT entries/default, LAYOUT block-header handles, all 21 TABLESTYLE style references, and both MLEADERSTYLE references. The 3DSOLID layer edge is currently peer-only in the local diagnostic. These reports are not a generic scanner of every opaque body reference."
+  },
+  "strictDisposition": {
+    "ac1027AggregateReferenceGuard": "retained",
+    "headerSuffix": "731 bytes remain unclaimed at source offsets 844-1575",
+    "strictDxfPublished": false,
+    "outputRouteQualified": false
+  },
+  "nextAction": "Finish a source-bound reference/role inventory for every callback and entity, including the 3DSOLID layer link, then qualify one selected physical graph through current DXF output/readback and atomic refusal/retry. Keep the aggregate AC1027 guard and independent HEADER suffix gate in place until their distinct evidence conditions pass."
+}
