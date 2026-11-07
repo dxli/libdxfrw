@@ -51,6 +51,18 @@ public:
 
 namespace dwgReaderDetail {
 
+/// Class/version pairs whose CELLSTYLEMAP body is retained raw-only when its
+/// typed decoder refuses it. These are narrowly observed compatibility
+/// profiles; the caller must still validate the common object shell before
+/// publishing the frame.
+inline bool isCellStyleMapRawOnlyProfile(DRW::Version version,
+                                         const DRW_Class *objectClass) {
+  return objectClass != nullptr
+      && objectClass->recName == "CELLSTYLEMAP"
+      && objectClass->className == "AcDbCellStyleMap"
+      && (version == DRW::AC1015 || version == DRW::AC1018);
+}
+
 /// Immutable ordering key for the bounded catch-all ENTITIES sweep. The
 /// source map is unordered; retaining only this key lets the reader reproduce
 /// its established sourceOrdinal/location/handle order without keeping

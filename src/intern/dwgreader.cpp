@@ -14136,10 +14136,9 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
             if (rn == "CELLSTYLEMAP" ||
                 cit->second->className == "AcDbCellStyleMap") {
               DRW_CellStyleMap e;
-              const bool ac1018CellStyleMap =
-                  version == DRW::AC1018
-                  && rn == "CELLSTYLEMAP"
-                  && cit->second->className == "AcDbCellStyleMap";
+              const bool cellStyleMapRawOnlyProfile =
+                  dwgReaderDetail::isCellStyleMapRawOnlyProfile(
+                      version, cit->second);
               dwgBuffer cellStyleMapShellProbe = buff.forkIndependent();
               ret = parseTableEntry(e);
               if (ret) {
@@ -14149,15 +14148,17 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                 DRW_UnsupportedObject raw = makeRawObject(oType, cit->second);
                 raw.m_typedPayloadValidated = true;
                 intfa.addUnsupportedObject(raw);
-              } else if (ac1018CellStyleMap
+              } else if (cellStyleMapRawOnlyProfile
                          && RawObjectShell().parseDwg(
                              version, &cellStyleMapShellProbe, bs)
                          && cellStyleMapShellProbe.isGood()) {
-                // This AC1018 back-save profile carries an AcDbCellStyleMap
-                // class definition but its content-format schema is not
-                // independently established. Preserve the validated common
-                // shell and exact source frame only; do not publish a partial
-                // typed object or authorize DXF replay.
+                // These observed AC1015 and AC1018 compatibility profiles
+                // carry an AcDbCellStyleMap class, but their body schemas are
+                // not independently established. ODA v5.4.1 §20.4.102 says
+                // CELLSTYLEMAP was introduced in AutoCAD 2008; the AC1015
+                // occurrence is therefore out-of-version. Preserve only the
+                // validated common shell and exact source frame. Do not
+                // publish partial typed state or authorize DXF replay.
                 intfa.addUnsupportedObject(
                     makeRawObject(oType, cit->second, false));
                 const std::string &className = cit->second->className;

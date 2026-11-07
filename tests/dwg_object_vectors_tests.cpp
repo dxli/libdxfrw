@@ -3636,6 +3636,29 @@ void testCellStyleMapAc1018ObservedProfile(TestContext& t) {
              "AC1018 CELLSTYLEMAP retries after truncated handles");
 }
 
+void testCellStyleMapRawOnlyVersionProfile(TestContext& t) {
+    DRW_Class objectClass;
+    objectClass.recName = "CELLSTYLEMAP";
+    objectClass.className = "AcDbCellStyleMap";
+    t.expect(dwgReaderDetail::isCellStyleMapRawOnlyProfile(
+                 DRW::AC1015, &objectClass),
+             "AC1015 CELLSTYLEMAP uses only the validated raw-shell fallback");
+    t.expect(dwgReaderDetail::isCellStyleMapRawOnlyProfile(
+                 DRW::AC1018, &objectClass),
+             "AC1018 CELLSTYLEMAP retains its existing raw-shell fallback");
+    t.expect(!dwgReaderDetail::isCellStyleMapRawOnlyProfile(
+                 DRW::AC1014, &objectClass)
+                 && !dwgReaderDetail::isCellStyleMapRawOnlyProfile(
+                     DRW::AC1021, &objectClass)
+                 && !dwgReaderDetail::isCellStyleMapRawOnlyProfile(
+                     DRW::AC1015, nullptr),
+             "CELLSTYLEMAP raw-shell fallback stays version and class bounded");
+    objectClass.recName = "TABLESTYLE";
+    t.expect(!dwgReaderDetail::isCellStyleMapRawOnlyProfile(
+                 DRW::AC1015, &objectClass),
+             "CELLSTYLEMAP raw-shell fallback refuses a different record class");
+}
+
 void testCellStyleMapIdentityDomains(TestContext& t) {
     struct Case {
         DRW::Version version;
@@ -21222,6 +21245,7 @@ int main(int argc, char** argv) {
         TestContext context;
         testCellStyleMapIdentityDomains(context);
         testCellStyleMapAc1018ObservedProfile(context);
+        testCellStyleMapRawOnlyVersionProfile(context);
         std::cout << "AC1021/AC1024/AC1027/AC1032 CELLSTYLEMAP style ID/class domains: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
@@ -21339,6 +21363,7 @@ int main(int argc, char** argv) {
     testTableStyleTypeDomain(context);
     testCellStyleMapIdentityDomains(context);
     testCellStyleMapAc1018ObservedProfile(context);
+    testCellStyleMapRawOnlyVersionProfile(context);
     testCellStyleMapDwgEncodeRoundTrip(context);
     testTableStyleMarginOverrideFlagDomain(context);
     testR2010MergedRangeProjectionVector(context);

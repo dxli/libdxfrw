@@ -4,21 +4,13 @@ Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectCont
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
-**Latest implementation slice (2026-11-07):** the generated TABLESTYLE nested
-raw-net selector now passes after correcting its synthetic merged-cell spans
-and basing raw TABLESTYLE identity/order checks on emitted remapped handles.
-The test verifies unchanged raw payload/spelling, Table-to-TABLESTYLE identity,
-following-object order, and malformed-record recovery for generated ASCII and
-Binary DXF. This is test-readiness evidence only; production behavior and support
-claims are unchanged. The two adjacent domain controls now pass after correcting
-the generated repeated-style index and aligning DWG unit-type admission with the
-ODA wire enum. The existing AC1024 producer-observed class-0 value remains
-retained as opaque state. An AC1021 generated legacy-row control now exercises
-all five serialized unit values and rejects 3/16 atomically, followed by a
-successful fresh-frame parse. This closes only the identified legacy parser
-regression gap; no source, output, or support qualification changes. See the
-[TABLESTYLE domain receipt](docs/research/p5-tablestyle-dwg-unit-and-identity-domains-2026-11-07.json)
-and [nested raw-net receipt](docs/research/p5-tablestyle-nested-raw-net-remapped-identity-fast-slice-2026-11-07.json).
+**Latest implementation slice (2026-11-07):** the exact AC1015/AC1018
+`CELLSTYLEMAP` class/version profiles now preserve a failed typed record as
+raw-only after common-shell validation. The local AC1015 `PolyLine3D_2.dwg`
+witness advances from 228/229 to 229/229 published frames; strict output still
+refuses because the out-of-version object is unsupported and has no qualified
+serializer. The focused version/class guard passes. No body semantics, output
+eligibility or support claim changed. See the [recovery receipt](docs/research/p4-ac1015-cellstylemap-raw-only-recovery-2026-11-07.json).
 
 The local AC1018 `HatchG.dwg`
 CellStyleMap typed parse failure now falls back to exact raw-only preservation
@@ -116,6 +108,11 @@ created locally from scratch for the specific control.
    This is one unauthenticated local source profile, not independent producer,
    native clipping, platform, or broader support evidence; no drawing fixture
    or derivative is committed.
+
+   The local AC1015 `PolyLine3D_2.dwg` candidate now publishes all 229 observed
+   frames. Its out-of-version `CELLSTYLEMAP` remains an exact raw-only object;
+   strict DXF output correctly refuses it as unsupported, so do not retry its
+   typed body or treat this as an output-ready source ([receipt](docs/research/p4-ac1015-cellstylemap-raw-only-recovery-2026-11-07.json)).
 
    Recent candidates remain refused for distinct reasons: title-block null
    BLOCK_CONTROL members, AC1027 Cover incomplete reference closure, and AC1018
@@ -616,6 +613,13 @@ created locally from scratch for the specific control.
    [prior direct retry](docs/research/p6-ac1027-oda-header-suffix-after-user-unlock-2026-11-07.json),
    the [earlier same-day retry](docs/research/p6-ac1027-oda-header-suffix-current-unlock-retry-2026-11-07.json),
    and [prior retry history](docs/research/p6-ac1027-oda-header-suffix-post-unlock-retry-2026-11-06.json).
+   A separate AC1032 cross-check of LibreDWG's tracked `Line.dwg` also reads
+   143/143 frames with zero entity/object parse failures, then refuses strict
+   output on two HEADER boundary integrity rows and 743 unclaimed trailing
+   bytes. Its GPL-licensed provenance and hash are recorded in the
+   [AC1032 suffix triage receipt](docs/research/p6-ac1032-libredwg-line-header-suffix-triage-2026-11-07.json).
+   Keep this as a separate AC1032 witness: it does not establish a shared
+   suffix schema with AC1027 Cover or justify weakening either strict gate.
 4. **P6 / AC1032 IMAGEDEF role conflict and remaining object frames:** the AC1032 DataStorage multi-schdat profile is implemented and independently bounded; the tracked sample now reads 837/842 frames with no entity failures or DataStorage link/orphan failures. The source blocker is isolated to IMAGEDEF `0x8c4`: its owner token is code `0xC`, offset 2, resolving to `0x8c2`. ODA §2.13 defines code `0xC` as a relative soft pointer, while ODA §20.4.81 specifies IMAGEDEF `parenthandle` as a hard owner. The bounded observer now retains this as `UnqualifiedOwnerRole`; strict export still stops before serialization with an explicit owner-role refusal. Do not relabel it as hard ownership or relax the output gate without eligible normative or producer evidence ([role receipt](docs/research/p6-ac1032-imagedef-relative-owner-unqualified-profile-2026-11-07.json)).
 
    The current sample publishes 842/842 frames with zero entity/object parse failures. The bare `AcDbPersSubentManager` at `0xD63` and two `AcDbTableContent` records at `0xE5F`/`0x747` use version- and class-bounded raw-only fallback when their typed body parsers fail: independent shell checks validate the common header/handle tail, then the full source frames publish with `m_typedPayloadValidated=false`. Generated following-frame recovery and the physical AC1032 read pass. The original code-0x5 ATTDEF mismatch is superseded by the scoped body/string/handle trace: the normal path's 32/80 attribute counts are likely caused by reading type-4 strings from the detached stream, while a debug-only candidate reads body byte counts 44/26, gets zero attributes and consumes the code-0x5 handles as content-format text-style links. The candidate parses each body exactly and its string cursor equals the ODA-defined detached-stream end: 14,076 and 13,368 data bits, respectively. The apparent 17-bit gap is the raw string-size word plus presence bit, not unconsumed text. The one terminal handle bit is the exact padding needed to reach the next byte boundary, as required by ODA §20.1. Semantic completeness is false, and the candidate does not resolve ODA's detached-string rule. Keep both frames raw-only and strict output refused; details and limits are in the [TABLECONTENT receipt](docs/research/p6-ac1032-tablecontent-raw-only-shell-recovery-2026-11-07.json). The PERSUBENTMGR field order remains disputed; no raw payload promotes semantic/output support ([PERSUBENTMGR receipt](docs/research/p6-ac1032-persubentmgr-raw-only-shell-recovery-2026-11-07.json)). Two `AcDbTextObjectContextData` frames also preserve their common version/default/owner/reactor/scale shell and raw frame after transactional rollback when the typed four-field text body does not fit its declared boundary. This is raw preservation, not decoded text placement or DXF support; strict conversion remains refused by the context-data replay gate ([receipt](docs/research/p6-ac1032-text-context-data-raw-only-fallback-2026-11-07.json)). LibreDWG 0.14 also leaves both TABLECONTENT frames unknown. Continue with another source-ready implementation slice if none of these layouts is safely resolved. No fixture was added.
