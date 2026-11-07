@@ -135,18 +135,21 @@ created locally from scratch for the specific control.
    geometry/group semantics ([receipt](docs/research/p4-ac1021-generated-group-2d-3d-strict-dxf-readback-2026-11-06.json)).
 
    **Next implementation slice:** bounded AC1027 Cover source-reference
-   closure using the existing local `/Users/dli/doc/dwg/Cover.dwg` witness and
-   its current receipt. First verify the source hash/version, latest callback
-   disposition and exact unqualified identities; do not spend time on another
-   corpus-wide scan. Then trace only those identities to their owner, typed
-   target and emitted-record role, reusing existing source-binding and readback
-   helpers. Add a focused selected-graph ASCII/Binary proof with destination
-   preservation and corrected same-adapter retry only where the DXF schema
-   permits the roles. Keep the independent unclaimed HEADER suffix gate closed:
-   this slice cannot produce strict whole-source output or promote support
-   claims while that suffix is unexplained. If target closure depends on a
-   missing/unsupported source object, preserve refusal and move to the next
-   eligible source. No drawing fixture is needed or may be added.
+   inventory using the existing local `/Users/dli/doc/dwg/Cover.dwg` witness.
+   The current source still reads 111/111 observed frames with zero entity/object
+   parse failures, but strict preflight stops at the sticky
+   `m_unqualifiedAc1027DwgImport` aggregate guard before exposing individual
+   missing owner/reference roles. First build one source-bound inventory for
+   this exact source: record each typed/raw callback identity, its declared
+   common and body references, resolved target class, owner role, and whether
+   the current DXF writer has a schema-valid route. Do not clear the aggregate
+   guard from callback counts alone. Only after the inventory is complete may a
+   bounded source profile replace the aggregate gate; test it with output
+   inspection, typed readback, atomic refusal and same-adapter retry. The
+   independent 731-byte unclaimed HEADER suffix remains a separate strict-read
+   blocker, so no strict whole-source success or support claim is possible in
+   this slice. If inventory shows unsupported or ambiguous references, preserve
+   refusal and move to an eligible source. See the [current guard probe](docs/research/p6-ac1027-cover-current-guard-probe-2026-11-07.json).
 
    The AC1021 `truetype.dwg` selected LayerStates and four-VIEWPORT routes are
    complete for their exact source graph: ASCII/Binary typed readback, rollback
@@ -160,7 +163,10 @@ created locally from scratch for the specific control.
    establish producer-wide, native plotting, platform, or support claims. The
    external source remains outside Git. Other distinct
    screens are title-block null BLOCK_CONTROL members, AC1027 Cover reference
-   closure, and AC1018 Extruder2 incomplete parser disposition. The named-block
+   closure, and AC1018 Extruder2 incomplete parser disposition. Cover's
+   aggregate strict guard requires a source-bound per-reference inventory
+   before any selected-output work; the suffix remains independently unclaimed.
+   The named-block
    SORTENTSTABLE candidate remains refused under the owner-scope boundary above.
    Use each linked receipt to resume from its exact blocker; if one fails a
    gate, preserve strict refusal and move to another existing candidate. Keep test drawings outside Git
