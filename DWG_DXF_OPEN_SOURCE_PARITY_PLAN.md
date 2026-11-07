@@ -126,6 +126,14 @@ created locally from scratch for the specific control.
    or a functioning independent converter session/supported GUI invocation is
    available; continue the next ready local implementation slice meanwhile.
    See the updated [retry receipt](docs/research/p6-ac1027-oda-header-suffix-post-unlock-retry-2026-11-06.json).
+   A fifth bounded retry after the user's latest unlock report at 19:27:20
+   America/Toronto reproduced the same pasteboard/XPC SIGABRT (`-6`) with
+   unchanged, reverified source and converter hashes; the output directory
+   remained empty. This confirms the launch-environment blocker persists. Do
+   not spend more time on unchanged direct CLI retries; continue the ready
+   local implementation queue and revisit suffix qualification only when the
+   converter can launch through a functioning supported GUI/session or an
+   independent converter becomes available.
 
 | ID | State | Remaining result | Dependency |
 | --- | --- | --- | --- |
