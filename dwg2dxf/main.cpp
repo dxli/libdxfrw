@@ -112,6 +112,17 @@ const char* cliCodePagePolicyName(DRW::DxfCodePagePolicy policy) noexcept {
         ? "exact-named" : "compatible";
 }
 
+const char* cliDwgFrameCoverageName(
+        DRW_DwgFrameCoverageStatus status) noexcept {
+    switch (status) {
+    case DRW_DwgFrameCoverageStatus::NotAvailable: return "not-available";
+    case DRW_DwgFrameCoverageStatus::InProgress: return "in-progress";
+    case DRW_DwgFrameCoverageStatus::FinalizedComplete: return "complete";
+    case DRW_DwgFrameCoverageStatus::FinalizedPartial: return "partial";
+    }
+    return "unknown";
+}
+
 void writeCliHex64(std::ostream& output, std::uint64_t value) {
     static constexpr char digits[] = "0123456789abcdef";
     std::array<char, 16> text{};
@@ -200,6 +211,43 @@ void reportCliConversionProjection(const dx_data& data,
     std::cerr << " sourceDwgSkippedUnsupportedObjectInstances=";
     if (isDwg)
         std::cerr << dwgObservations.skippedUnsupportedObjects.instances;
+    else
+        std::cerr << "not-applicable";
+    std::cerr << " sourceDwgEntityParseFailures=";
+    if (isDwg)
+        std::cerr << dwgObservations.entityParseFailures;
+    else
+        std::cerr << "not-applicable";
+    std::cerr << " sourceDwgObjectParseFailures=";
+    if (isDwg)
+        std::cerr << dwgObservations.objectParseFailures;
+    else
+        std::cerr << "not-applicable";
+    std::cerr << " sourceDwgFrameCoverage=";
+    if (isDwg)
+        std::cerr << cliDwgFrameCoverageName(dwgObservations.frames.status);
+    else
+        std::cerr << "not-applicable";
+    std::cerr << " sourceDwgSourceFrames=";
+    if (isDwg)
+        std::cerr << dwgObservations.frames.sourceFrames;
+    else
+        std::cerr << "not-applicable";
+    static constexpr std::array<const char*, 7> frameDispositionFields{{
+        " sourceDwgFramesPending=", " sourceDwgFramesDeferred=",
+        " sourceDwgFramesStaged=", " sourceDwgFramesPublished=",
+        " sourceDwgFramesQuarantined=", " sourceDwgFramesFailed=",
+        " sourceDwgFramesUnresolved="}};
+    for (std::size_t index = 0; index < frameDispositionFields.size(); ++index) {
+        std::cerr << frameDispositionFields[index];
+        if (isDwg)
+            std::cerr << dwgObservations.frames.dispositions[index];
+        else
+            std::cerr << "not-applicable";
+    }
+    std::cerr << " sourceDwgFramesUnrecognized=";
+    if (isDwg)
+        std::cerr << dwgObservations.frames.unrecognizedDispositions;
     else
         std::cerr << "not-applicable";
     std::cerr << "\n";

@@ -1065,6 +1065,11 @@ def check_partial_dwg_read_cli(converter, root, writer):
             + revision,
             b"entityParseFailures=1",
             b"failed=1",
+            b"sourceDwgEntityParseFailures=1",
+            b"sourceDwgObjectParseFailures=0",
+            b"sourceDwgFrameCoverage=partial",
+            b"sourceDwgFramesFailed=1",
+            b"sourceDwgFramesUnresolved=0",
             (b"AC1027 DWG source references are not fully qualified"
              if revision == b"AC1027"
              else b"strict-complete conversion requires successful, complete DWG read disposition"),
@@ -1217,7 +1222,10 @@ def check_source_disposition_projection(converter, root, writer):
     if (malformed.returncode != 1 or malformed_output.read_bytes() != SENTINEL
             or malformed_header.read_bytes() != malformed_bytes
             or b"sourceRepairAction=none" not in malformed.stderr
-            or b"sourceHeaderStructure=repair-required" not in malformed.stderr):
+            or b"sourceHeaderStructure=repair-required" not in malformed.stderr
+            or b"sourceDwgEntityParseFailures=not-applicable" not in malformed.stderr
+            or b"sourceDwgFrameCoverage=not-applicable" not in malformed.stderr
+            or b"sourceDwgFramesFailed=not-applicable" not in malformed.stderr):
         raise AssertionError(
             f"malformed HEADER was not projected as repair-required: {malformed!r}")
     checked += 1
