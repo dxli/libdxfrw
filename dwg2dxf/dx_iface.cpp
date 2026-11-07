@@ -79951,6 +79951,8 @@ bool dx_iface::fileExportSelectedDwgAssociativeNetworks(
         m_selectedDwgAssociativeExcludedDictionaryEdges =
             std::move(excludedDictionaryEdges);
         m_selectedDwgAssociativeExcludedHandles = std::move(excludedHandles);
+        if (debug)
+            std::cerr << "selected associative projection snapshot prepared\n";
         const bool exported = fileExport(
             file, version, binary, source, debug, false,
             dx_dxfSourceTextPolicy::Compatible,

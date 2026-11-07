@@ -444,9 +444,13 @@ created locally from scratch for the specific control.
    corrected same-adapter retry. The physical readback now checks all ten
    selected Edge records' parsed persistent-subentity fields, dependency roles
    and linked handles, and resolves each remapped target to matching
-   LWPOLYLINE geometry. Next add a deterministic post-plan mutation refusal
-   control (without a concurrent data race), confirm destination preservation
-   and corrected same-adapter retry. Use the named selector
+   LWPOLYLINE geometry. The generated control now uses a synchronous debug
+   marker after projection freeze to mutate a selected network field, root
+   target, and dictionary edge in turn; each export refuses without replacing
+   the sentinel, then succeeds on the same adapter after restoration. This
+   closes the selected-network projection implementation slice. Continue with
+   the next source-ready P4 graph while preserving strict whole-source civil
+   refusal at the null LTYPE_CONTROL member. Use the named selector
    during edits and the smallest affected cohort at packet readiness. Do not
    run a full suite for this bounded adapter slice. Whole-source strict civil
    export remains independently refused by its null counted LTYPE_CONTROL
@@ -475,9 +479,10 @@ created locally from scratch for the specific control.
    target polylines match source geometry after handle remapping. The generated
    in-memory ASCII/Binary control passes selected/excluded branch projection,
    SORTENTSTABLE retention, wrong-kind refusal, sentinel preservation, readback,
-   and corrected retry. Post-plan mutation refusal remains open. These are
-   bounded selected-route controls; the local source and derived outputs are
-   not committed.
+   and corrected retry. Three post-plan mutations (selected network field, root
+   action target, and selected dictionary edge) each refuse with destination
+   preservation and same-adapter recovery. These are bounded selected-route
+   controls; the local source and derived outputs are not committed.
 
    An exploratory test-only projection reached preflight but correctly refused
    before serialization; that harness was removed because it had no

@@ -67800,6 +67800,40 @@ bool associativeDwgNestedNetworkSortEntsOutput() {
 }
 
 bool generatedSelectedAssociativeNetworksOutput() {
+    class MutationOnMarkerBuffer final : public std::streambuf {
+    public:
+        explicit MutationOnMarkerBuffer(std::function<void()> mutation)
+            : mutation_(std::move(mutation)) {}
+        bool triggered() const noexcept { return triggered_; }
+    protected:
+        std::streamsize xsputn(const char* bytes,
+                               std::streamsize count) override {
+            for (std::streamsize index = 0; index < count; ++index)
+                consume(bytes[index]);
+            return count;
+        }
+        int_type overflow(int_type value) override {
+            if (!traits_type::eq_int_type(value, traits_type::eof()))
+                consume(traits_type::to_char_type(value));
+            return value;
+        }
+    private:
+        void consume(char value) {
+            constexpr std::string_view marker =
+                "selected associative projection snapshot prepared";
+            tail_.push_back(value);
+            if (tail_.size() > marker.size())
+                tail_.erase(0u, tail_.size() - marker.size());
+            if (!triggered_ && tail_ == marker) {
+                triggered_ = true;
+                mutation_();
+            }
+        }
+        std::function<void()> mutation_;
+        std::string tail_;
+        bool triggered_{false};
+    };
+
     const auto nonce = std::chrono::steady_clock::now()
                            .time_since_epoch().count();
     const auto directory = std::filesystem::temp_directory_path();
@@ -68048,6 +68082,90 @@ bool generatedSelectedAssociativeNetworksOutput() {
             || excludedOwner->m_entries.front().m_handle != 0x300u
             || readback.sortEntsTables.front().handle != 0x300u)
             return fail("generated excluded owner lost SORTENTS during projection");
+
+        const auto readSentinel = [&path]() {
+            std::ifstream input(path, std::ios::binary);
+            return std::string(std::istreambuf_iterator<char>(input),
+                               std::istreambuf_iterator<char>());
+        };
+        const auto seedSentinel = [&path, &sentinel]() {
+            std::ofstream output(path, std::ios::binary | std::ios::trunc);
+            return output && static_cast<bool>(output << sentinel);
+        };
+        for (unsigned fault = 0u; fault < 3u; ++fault) {
+            if (!seedSentinel())
+                return fail("could not reseed generated mutation destination");
+            std::function<void()> mutation;
+            std::function<void()> restore;
+            if (fault == 0u) {
+                const std::int32_t original =
+                    source.dwgAssociativeObjects[1].m_networkActionIndex;
+                mutation = [&source]() {
+                    ++source.dwgAssociativeObjects[1].m_networkActionIndex;
+                };
+                restore = [&source, original]() {
+                    source.dwgAssociativeObjects[1].m_networkActionIndex =
+                        original;
+                };
+            } else if (fault == 1u) {
+                const std::uint32_t original =
+                    source.dwgAssociativeObjects.front().m_actions.front().m_handle;
+                mutation = [&source]() {
+                    source.dwgAssociativeObjects.front()
+                        .m_actions.front().m_handle = 0x930u;
+                };
+                restore = [&source, original]() {
+                    source.dwgAssociativeObjects.front()
+                        .m_actions.front().m_handle = original;
+                };
+            } else {
+                const auto owner = std::find_if(source.dictionaries.begin(),
+                    source.dictionaries.end(), [](const DRW_Dictionary& row) {
+                        return row.handle == 0x210u;
+                    });
+                if (owner == source.dictionaries.end()
+                    || owner->m_entries.empty())
+                    return fail("generated mutation owner dictionary is missing");
+                const std::string original = owner->m_entries.front().m_name;
+                mutation = [&source]() {
+                    const auto row = std::find_if(source.dictionaries.begin(),
+                        source.dictionaries.end(), [](const DRW_Dictionary& item) {
+                            return item.handle == 0x210u;
+                        });
+                    row->m_entries.front().m_name = "BROKEN_ASSOC_EDGE";
+                };
+                restore = [&source, original]() {
+                    const auto row = std::find_if(source.dictionaries.begin(),
+                        source.dictionaries.end(), [](const DRW_Dictionary& item) {
+                            return item.handle == 0x210u;
+                        });
+                    row->m_entries.front().m_name = original;
+                };
+            }
+            MutationOnMarkerBuffer mutationBuffer(std::move(mutation));
+            std::streambuf* previousCerr = std::cerr.rdbuf(&mutationBuffer);
+            const bool mutationExported =
+                exporter.fileExportSelectedDwgAssociativeNetworks(
+                    path.string(), DRW::AC1024, binary, &source, root.handle,
+                    {0x910u, 0x920u}, true);
+            std::cerr.rdbuf(previousCerr);
+            if (mutationExported || !mutationBuffer.triggered()
+                || readSentinel() != sentinel) {
+                restore();
+                return fail("post-plan mutation was not refused atomically");
+            }
+            restore();
+            if (!exporter.fileExportSelectedDwgAssociativeNetworks(
+                    path.string(), DRW::AC1024, binary, &source, root.handle,
+                    {0x910u, 0x920u}, false))
+                return fail("corrected generated source did not retry on the same adapter");
+            dx_data retried;
+            dx_iface retryReader;
+            if (!retryReader.fileImport(path.string(), &retried, false)
+                || retried.associativeObjects.size() != 3u
+                || retried.sortEntsTables.size() != 1u)
+                return fail("corrected post-mutation retry did not read back");
+        }
     }
     return true;
 }
