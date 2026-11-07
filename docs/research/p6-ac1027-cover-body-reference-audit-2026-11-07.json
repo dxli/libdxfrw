@@ -11,10 +11,10 @@
   },
   "localInventory": {
     "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --opaque-dwg-source-inventory /Users/dli/doc/dwg/Cover.dwg",
-    "binarySha256": "06b49130c00c41aaaca57cdae8e99bb58aa429fcbfdbdf26f165c4ce36edcc82",
+    "binarySha256": "1e1344cf1cc588b833ca952eca0c0d44cc22a363c9ac14d7ba1539e930507305",
     "logPath": "/private/tmp/cover-field-span-raw-inventory.log",
-    "logSha256": "bf24d42735fb6acbbe7d87a4a70ee1e35bd0645b510db13449b292f07a83815a",
-    "result": "88/88 opaque callbacks captured, with 75 retained opaque frames and 13 standard-object source frames. TABLESTYLE 0x6A parser ranges cover one Table and three repeated records, all 16 ID/class fields, four text-style handles and 24 border-linetype handles; all ranges are complete and nonempty. Independent raw decoding derives the AC1027 prologue and R24 prefix through Table cell start bit 68, then validates Table cell type/data flags. The 924-byte captured frame exactly matches LibreDWG’s 7,352-bit unknown tail from bit 40 plus zero alignment byte; later identity/reference field coordinates still come from the local parser."
+    "logSha256": "306de923b736bc40e5efe6c9984b5f0db0948816ae961bc458e6bb218ff6ad0c",
+    "result": "88/88 opaque callbacks captured, with 75 retained opaque frames and 13 standard-object source frames. TABLESTYLE 0x6A parser ranges cover one Table and three repeated records, all 16 ID/class fields, four text-style handles and 24 border-linetype handles. An independent ODA-schema cursor now derives the full decompressed TABLESTYLE body/string field sequence, exact body/string terminal positions, all four identities and all 28 typed handle targets; every modeled parser span matches. LibreDWG’s 7,352-bit unknown tail remains byte-identical from bit 40 plus zero alignment. The captured frame metadata supplies the handle-stream partition; compressed physical-page offsets remain unproven."
   },
   "independentPeerParse": {
     "tool": "LibreDWG 0.14 dwgread -O minJSON",

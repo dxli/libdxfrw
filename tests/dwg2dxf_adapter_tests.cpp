@@ -22547,12 +22547,24 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
         std::cerr << "AC1027 TABLESTYLE raw object header is not independently readable\n";
         return false;
       }
+      dwgBuffer stringBoundsProbe(rawFrame->m_rawBytes.data(),
+                                  rawFrame->m_rawBytes.size());
+      std::uint64_t stringStartBit = 0u;
+      std::uint64_t stringEndBit = 0u;
+      const std::uint64_t dataBits =
+          static_cast<std::uint64_t>(rawFrame->m_objectSize) * 8u
+          - rawFrame->m_bodyBitSize;
+      if (!stringBoundsProbe.getR2007StringStreamBounds(
+              dataBits, stringStartBit, stringEndBit)) {
+        std::cerr << "AC1027 TABLESTYLE string stream bounds are invalid\n";
+        return false;
+      }
       std::cout << " typedBodyRawFrame owner=" << style.handle
                 << " byteSize=" << rawFrame->m_objectSize
                 << " handleStreamBits=" << rawFrame->m_bodyBitSize
                 << " dataStreamBits="
-                << static_cast<std::uint64_t>(rawFrame->m_objectSize) * 8u
-                    - rawFrame->m_bodyBitSize
+                << dataBits << " stringStartBit=" << stringStartBit
+                << " stringEndBit=" << stringEndBit
                 << " hex=";
       for (std::uint8_t byte : rawFrame->m_rawBytes)
         std::cout << std::hex << std::setw(2) << std::setfill('0')

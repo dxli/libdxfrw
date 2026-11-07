@@ -233,16 +233,32 @@ created locally from scratch for the specific control.
    the peer's bit-40 class payload, walks the R24 prefix (RC plus the two BL
    values), and derives the Table cell start at bit 68. It decodes the Table
    cell type/data flags there and matches the reported Table record start.
-   **Next implementation slice:** extend this independent ODA-schema cursor
-   through the full Table cell style and all three repeated styles, deriving
-   identity/name/reference boundaries and following sentinels without using
-   local parser coordinates. Then compare every derived range/value with the
-   local parser and peer capture. The ACadSharp sample shares the
-   library's own class/order convention and cannot settle normative correctness.
-   If the class semantics remain disputed after field mapping, find a second
-   producer or consumer witness. Change parser semantics only if independent
-   spans establish a defect; otherwise keep Cover unqualified and do not
-   normalize values speculatively.
+   **Completed field-mapping slice:** the verifier now independently walks the
+   R24 body, detached strings, and typed handles from the raw 924-byte frame;
+   parser spans are comparison targets only. It closes the body and string
+   cursors at bits 6384 and 6938, checks all 28 typed handle references and
+   five zero tail-padding bits, and matches every identity, content-format,
+   cell-style, record, name and handle span. The detached string footer is
+   decoded from raw bits. The handle-stream start at bit 6955 is supplied by
+   the retained validated frame metadata, so compressed-page stream partition
+   recovery remains open. The verifier result, executable/log/source hashes,
+   full decoded fields, and exact scope are in the updated [raw-span receipt](docs/research/p6-ac1027-cover-tablestyle-raw-span-crosscheck-2026-11-07.json).
+   No test fixture was added. The focused adapter diagnostic target rebuilds,
+   the source-bound verifier passes, and
+   `libdxfrw_tablestyle_r24_typed_writer` passes (1/1).
+
+   This cursor confirms the physical repeated sequence is title/header/data,
+   with IDs 1/2/3 and classes 1/1/2. ODA v5.4.1 §20.4.101.2 specifies
+   data/title/header order and §20.4.101.4 defines class 1 as data and class 2
+   as label. The physical values and normative interpretation conflict;
+   ACadSharp agrees with the local named-role interpretation but exposes no
+   raw spans and its writer uses the same internal convention. **Next:** find
+   an eligible second producer or native consumer witness that exposes raw
+   order and named-role meaning. Until then keep Cover TABLESTYLE output
+   unqualified and make no parser/writer semantic change. Do not retry the
+   unchanged ODA CLI launch. If no witness is readily available, proceed with
+   another independent source-ready implementation packet while preserving
+   Cover's strict refusal. See the updated [ODA differential receipt](docs/research/p6-ac1027-cover-tablestyle-oda-layout-differential-2026-11-07.json).
 
    An exploratory test-only projection reached preflight but correctly refused
    before serialization; that harness was removed because it had no

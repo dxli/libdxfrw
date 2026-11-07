@@ -61,7 +61,7 @@
     }
   },
   "localObservedModel": {
-    "inventoryLogSha256": "319f21c4e1556175d0cf1764b2c27f2eadf2d518b52afde350ef32afd6352b39",
+    "inventoryLogSha256": "306de923b736bc40e5efe6c9984b5f0db0948816ae961bc458e6bb218ff6ad0c",
     "tableStyleHandle": "0x6a",
     "tableCell": {
       "id": 4,
@@ -92,8 +92,30 @@
   "differential": {
     "order": "Local parsed order is title/header/data; ODA documents data/title/header.",
     "classMeaning": "Local classes are 1/1/2 for title/header/data, while ODA defines class 1 as data and class 2 as label.",
-    "resolution": "Unresolved. The local reader and ACadSharp execution agree on the Cover named-role values, and ACadSharp’s own source/sample follows the same title/header/data and class 1/1/2 convention. That establishes implementation agreement, not format correctness. ODA v5.4.1 remains authoritative; neither this sample nor the peer with unknown TABLESTYLE body bits can justify overriding it. The raw source spans still require independent field mapping and normative reconciliation."
+    "resolution": "The independent raw cursor confirms the physical repeated order is title/header/data, with IDs 1/2/3 and classes 1/1/2. ODA v5.4.1 §20.4.101.2 specifies data/title/header order and §20.4.101.4 defines class 1 as data and class 2 as label. ACadSharp reports the same named roles/classes but does not expose its raw order, and its writer follows the same internal convention. These results confirm a real source/spec interpretation conflict, not which side is correct. Keep the profile unqualified and make no parser or writer normalization without a second independent raw-span/semantic witness."
   },
-  "nextAction": "Independently reconstruct physical TABLESTYLE body/string/handle positions or obtain a reader exposing raw spans, then correlate each already-recorded parser range and following sentinel against ODA §20.4.101.2–.4 and ACadSharp named-role observations. The ACadSharp sample shares the library internal class/order convention and cannot settle normative correctness. Change semantics only if independent field mapping proves a defect; otherwise keep Cover unqualified and do not export its ambiguous profile.",
-  "fixturePolicy": "No DWG/DXF fixture was added to the repository."
+  "nextAction": "Find an eligible second AC1027 producer/consumer witness that exposes raw repeated-record order and named-role/class interpretation. If none is immediately available, keep Cover strict output refused and continue another source-ready local implementation slice; do not retry ODA’s unchanged direct launch.",
+  "fixturePolicy": "No DWG/DXF fixture was added to the repository.",
+  "rawSpanEvidence": {
+    "receipt": "p6-ac1027-cover-tablestyle-raw-span-crosscheck-2026-11-07.json",
+    "independentCursorResult": "PASS independent AC1027 object, common-link, R24 prefix, body, string, and handle cursors derive the complete TABLESTYLE frame; all modeled parser field spans and peer raw bytes match",
+    "rawFrameSha256": "2bd3365551e63cc9c46193f755262234aaffff63205fc330d393c5874ce7d8f4",
+    "verifierSha256": "865198692368df4611006ce56989c3b367009c7958bbc4bc7deb2fd00f39dce1",
+    "parserSpanRangesMatched": true,
+    "decodedOrder": [
+      "_TITLE",
+      "_HEADER",
+      "_DATA"
+    ],
+    "decodedIds": [
+      1,
+      2,
+      3
+    ],
+    "decodedClasses": [
+      1,
+      1,
+      2
+    ]
+  }
 }
