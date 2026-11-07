@@ -14136,6 +14136,11 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
             if (rn == "CELLSTYLEMAP" ||
                 cit->second->className == "AcDbCellStyleMap") {
               DRW_CellStyleMap e;
+              const bool ac1018CellStyleMap =
+                  version == DRW::AC1018
+                  && rn == "CELLSTYLEMAP"
+                  && cit->second->className == "AcDbCellStyleMap";
+              dwgBuffer cellStyleMapShellProbe = buff.forkIndependent();
               ret = parseTableEntry(e);
               if (ret) {
                 intfa.addCellStyleMap(e);
@@ -14144,6 +14149,30 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                 DRW_UnsupportedObject raw = makeRawObject(oType, cit->second);
                 raw.m_typedPayloadValidated = true;
                 intfa.addUnsupportedObject(raw);
+              } else if (ac1018CellStyleMap
+                         && RawObjectShell().parseDwg(
+                             version, &cellStyleMapShellProbe, bs)
+                         && cellStyleMapShellProbe.isGood()) {
+                // This AC1018 back-save profile carries an AcDbCellStyleMap
+                // class definition but its content-format schema is not
+                // independently established. Preserve the validated common
+                // shell and exact source frame only; do not publish a partial
+                // typed object or authorize DXF replay.
+                intfa.addUnsupportedObject(
+                    makeRawObject(oType, cit->second, false));
+                const std::string &className = cit->second->className;
+                const std::string &recordName = cit->second->recName;
+                const std::string objectName =
+                    recordName.empty() ? className : recordName;
+                ++m_skippedCustomClasses[className.empty()
+                    ? recordName.c_str() : className.c_str()];
+                ++m_skippedUnsupportedObjects[objectName];
+                ret = true;
+                DRW_DBG("[cell-style-map-raw-only class=");
+                DRW_DBG(className.c_str());
+                DRW_DBG(" handle=");
+                DRW_DBG(obj.handle);
+                DRW_DBG("]\n");
               }
               break;
             }

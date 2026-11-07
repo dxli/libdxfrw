@@ -4,6 +4,16 @@ Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectCont
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
+**Latest implementation slice (2026-11-07):** the local AC1018 `HatchG.dwg`
+CellStyleMap typed parse failure now falls back to exact raw-only preservation
+when a forked `RawObjectShell` validates its common header and handle data. The
+read publishes all 229 observed frames with zero failed frames. The profile is
+restricted to the exact AC1018 `CELLSTYLEMAP` / `AcDbCellStyleMap` class pair;
+no typed values, output support, or parity claim are inferred. Strict DXF
+preflight still refuses on the independent IMAGEDEF/reactor source-correlation
+gate. The generated CellStyleMap encoder/readback selector passes. See the
+[AC1018 raw-only receipt](docs/research/p6-ac1018-cellstylemap-raw-only-recovery-2026-11-07.json).
+
 The objective remains full, evidence-backed DWG/DXF parity with the intended
 LibreCAD/libdxfrw routes, preserving LibreCAD and LibreCAD_3 as 2D consumers while
 enabling 3D consumers and FreeCAD's `dwg2dxf` workflow. Support includes the
@@ -619,6 +629,24 @@ created locally from scratch for the specific control.
    LibreDWG does not successfully decode these frames, and `dwgTs` is
    ACadSharp-derived; none of these peers is an independent adjudicator.
    See the expanded [TABLECONTENT receipt](docs/research/p6-ac1032-tablecontent-raw-only-shell-recovery-2026-11-07.json).
+
+   **AC1018 CellStyleMap recovery (implemented; raw-only):** `/Users/dli/doc/dwg3/HatchG.dwg`
+   (AC1018, SHA-256 `9d03bcf4330ff5940a45e0fded1a4278810a626cc93cafe04b5ea0931a1ccc31`)
+   contains an `AcDbCellStyleMap` class entry whose class definition reports
+   DWG class version 27. The typed decoder fails in the TABLESTYLE content-format
+   profile at handle `0x2F6` (source frame ordinal 157, offset 147491); that
+   does not independently establish which historical/back-save content-format
+   variant is correct. `readDwgObject` now forks the source cursor before typed
+   parsing and, only for AC1018 plus the exact record/class names, publishes
+   the untouched raw frame after `RawObjectShell` validates its common header
+   and handle data. The CLI trace reports 229/229 source frames published and
+   zero failed frames. Partial conversion still exits before output because
+   strict IMAGEDEF/reactor source correlation is independently incomplete.
+   Generated CellStyleMap encoder/readback and source-profile controls pass;
+   the physical source frame was not committed as a test fixture. This closes
+   the reader-frame-loss defect only. Keep schema interpretation, typed
+   callbacks, replay, semantic support, and strict output closed pending
+   independent producer/spec evidence ([receipt](docs/research/p6-ac1018-cellstylemap-raw-only-recovery-2026-11-07.json)).
 
    The body, detached-string, and byte-aligned handle boundaries are now
    reconciled for these two source frames. Keep the remaining schema decision
