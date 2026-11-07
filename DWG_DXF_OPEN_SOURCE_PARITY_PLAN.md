@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-07 (AC1032 multi-schdat DataStorage advances reading to 837/842 frames; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; a fresh ODA retry after the latest user-reported unlock still aborts before document processing; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal). This file
+Updated 2026-11-07 (AC1032 multi-schdat DataStorage advances reading to 837/842 frames; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; a fresh ODA retry after the latest user-reported unlock still aborts before document processing; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the generated associative-geometry export selector was rechecked and remains green, so its physical-source gate—not another generated serializer pass—is the remaining work). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -155,6 +155,19 @@ created locally from scratch for the specific control.
    transport result only: it does not establish arbitrary 3D entity support,
    independent producer behavior, LibreCAD_3/FreeCAD acceptance or native
    geometry/group semantics ([receipt](docs/research/p4-ac1021-generated-group-2d-3d-strict-dxf-readback-2026-11-06.json)).
+
+   The generated AC1024 associative-geometry dependency export control is
+   already implemented and passes the focused
+   `dwg2dxf_associative_geometry_dependency_graph_export` selector (1/1).
+   Reuse it for regression coverage; do not schedule another generated-only
+   serializer pass. Its output/readback and rollback/retry prove the bounded
+   adapter mechanics, not physical-source serialization or native associative
+   meaning. The remaining associative action is source-bound: select a physical
+   profile only when every emitted dependency and target role is closed and the
+   existing strict preflight admits that exact scope; otherwise retain the
+   refusal and continue to another ready packet. See the [AC1024 constraint
+   group writer receipt](docs/research/p4-ac1024-associative-constraint-group-dxf-writer-2026-10-30.json)
+   and [physical source-handle inventory](docs/research/p4-associative-source-handle-inventory-2026-10-30.json).
 
    **Next implementation slice:** finish the source-bound AC1027 Cover
    reference-role inventory using the existing local
