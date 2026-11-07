@@ -397,6 +397,8 @@ created locally from scratch for the specific control.
 
    The same sample still has five independent OBJECTS parse failures: one `AcDbPersSubentManager`, two `AcDbTableContent`, and two `AcDbTextObjectContextData` frames. LibreDWG 0.14 also leaves both TABLECONTENT frames unknown; the current cell-unit values lack a proven schema. Its TextObjectContextData projection reports version 4/default/scale and common links, but the local ODA specification copy does not document this class body. PERSUBENTMGR's proposed field order remains disputed. Keep these frames refused/raw; choose a body fix only after authoritative field and boundary evidence exists. Continue with another source-ready implementation slice if none of these layouts is safely resolved. No fixture was added.
 
+   A separate tracked external AC1032 ODA R2018 sample (`acad_table_cells.dwg`) exposed one `AcDbMentalRayRenderSettings` parse failure. The bounded parser now tries the observed base-field variants transactionally and accepts only the uniquely body/string-bounded layout. A current-code diagnostic publishes 182/182 frames with zero entity/object parse failures. Strict export remains refused by the sample's two HEADER integrity rows and 739 unclaimed bytes; this resolves one parser failure only. Independent producer evidence for the modern `hasPredefined` variants and HEADER-envelope meaning remain open. See the [fix receipt](docs/research/p6-ac1032-acad-table-cells-reader-fix-2026-11-07.json).
+
 
 | ID | State | Remaining result | Dependency |
 | --- | --- | --- | --- |
@@ -2098,9 +2100,10 @@ passes for the installed 27.1 app and the downloaded 27.9 package and extracted
 app; earlier sandboxed signature failures were unreliable. The verified 27.1 CLI has completed audit-disabled AC1027-to-AC1027 Cover resaves in a functioning launch environment.
 The validated trailer ends at byte 844; the original has 731 unclaimed HEADER
 bytes and same-revision ODA outputs have 739. LibreDWG 0.14 independently
-decompressed earlier original/resave sections. The latest post-unlock retry
-aborted during Pasteboard/XPC initialization and produced no resave, so no new
-suffix comparison was possible. The prior successful resave had no bytewise
+decompressed earlier original/resave sections. An eighth bounded direct retry
+after the user again reported unlocking the session aborted during
+Pasteboard/XPC initialization and produced no resave, so no new suffix
+comparison was possible. The prior successful resave had no bytewise
 suffix matches against five previously compared same-source outputs; pairwise
 low-bit patterns remain structured but unexplained. That output reads 119/119
 frames with no entity/object parse failures, then strict DXF preparation refuses
