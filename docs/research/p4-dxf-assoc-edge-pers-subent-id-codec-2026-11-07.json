@@ -34,7 +34,7 @@
     "src/drw_objects.h": "967779914b33b6335e4ffa9d13f68197b6f79f7174088a9ddbc88d52f8109787",
     "src/drw_objects.cpp": "8333c93d56dc9d4ff0e0766f0b8e7bda4454696e6a9a2fd7c4456751f120ae65",
     "src/libdxfrw.cpp": "fd0ea8562ea5f88dda3e0a2729bba4d6101782a2075b97828969aac442852605",
-    "tests/wave1_tests.cpp": "cd4b3d6ee16861c092962165b1e226c7b0a4853b3042bfa6d20f2a8f646bd11e",
+    "tests/wave1_tests.cpp": "22ae751c84b7765ade96f3b235da3a18a11be0a731b4a457b51b2b28f42be72c",
     "tests/dwg2dxf_adapter_tests.cpp": "c21af6b220bf01834a3ab450adf62e2caa81bd73bb1dc010127f73f0002a1a10"
   },
   "validation": {
@@ -43,8 +43,8 @@
     "tests": [
       {
         "command": "ctest --test-dir build-gcc -R '^(libdxfrw_associative_dependency_writer|dwg2dxf_associative_callback_contract)$' --output-on-failure",
-        "result": "PASS, 2/2 in 1.14 seconds",
-        "coverage": "ASCII/Binary writer field order, required-field refusal, mismatched SingleEdge refusal, and ASCII/Binary generated DXF import retention."
+        "result": "PASS, 2/2 in 0.28 seconds",
+        "coverage": "ASCII/Binary writer field order, required-field refusal, mismatched SingleEdge refusal, ASCII/Binary generated DXF import retention, and ASCII writer output surviving typed dx_iface re-import."
       }
     ],
     "fullSuites": "NOT_RUN",

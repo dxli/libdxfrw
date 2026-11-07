@@ -8770,6 +8770,51 @@ void testAssociativeDependencyWriter(TestContext& t) {
                  binary
                      ? "Edge persistent-subentity typed fields serialize in binary DXF"
                      : "Edge persistent-subentity typed fields serialize in ASCII DXF");
+        if (!binary && wrote) {
+            std::ostringstream record(std::ios::out | std::ios::binary);
+            dxfRW recordWriter("");
+            recordWriter.version = DRW::AC1024;
+            recordWriter.writer = std::make_unique<dxfWriterAscii>(&record);
+            const auto roundtripHandle =
+                static_cast<std::uint64_t>(
+                    std::chrono::steady_clock::now()
+                        .time_since_epoch().count());
+            const auto path = std::filesystem::temp_directory_path()
+                / ("libdxfrw-assoc-edge-roundtrip-"
+                   + std::to_string(roundtripHandle) + ".dxf");
+            const bool wroteRecord =
+                recordWriter.writeAssociativeDependency(&edge);
+            const std::string drawing =
+                "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1024\n"
+                "0\nENDSEC\n0\nSECTION\n2\nOBJECTS\n"
+                + record.str() + "0\nENDSEC\n0\nEOF\n";
+            bool roundtrip = false;
+            if (wroteRecord && !record.str().empty()) {
+                std::ofstream file(path, std::ios::binary);
+                if (file) {
+                    file.write(drawing.data(),
+                               static_cast<std::streamsize>(drawing.size()));
+                    file.close();
+                    dx_iface importer;
+                    dx_data decoded;
+                    roundtrip = file.good()
+                        && importer.fileImport(path.string(), &decoded, false)
+                        && decoded.associativeObjects.size() == 1u
+                        && decoded.associativeObjects.front()
+                               .m_geomPersistentSubentityFieldsParsed
+                        && decoded.associativeObjects.front()
+                               .m_geomPersistentSubentityClassVersion == 2
+                        && decoded.associativeObjects.front()
+                               .m_geomPersistentSubentityIndex1 == 1234
+                        && decoded.associativeObjects.front()
+                               .m_geomPersistentSubentityIndex2 == 5678;
+                    std::error_code ignored;
+                    std::filesystem::remove(path, ignored);
+                }
+            }
+            t.expect(roundtrip,
+                     "Edge persistent-subentity writer output is retained by typed DXF re-import");
+        }
     }
 
     DRW_AssociativeObject missingEdgeFields("ACDBASSOCGEOMDEPENDENCY");
