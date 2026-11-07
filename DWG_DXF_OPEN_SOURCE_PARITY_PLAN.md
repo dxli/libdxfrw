@@ -89,10 +89,16 @@ created locally from scratch for the specific control.
    native clipping, platform, or broader support evidence; no drawing fixture
    or derivative is committed.
 
-   Recent candidates remain refused for distinct reasons: AC1024 architectural
-   SORTENTSTABLE owner scope, title-block null BLOCK_CONTROL members, AC1027
-   Cover incomplete reference closure, and AC1018 Extruder2 incomplete parser
-   disposition. The separate AC1021 plot-screening graph is now closed for its
+   Recent candidates remain refused for distinct reasons: title-block null
+   BLOCK_CONTROL members, AC1027 Cover incomplete reference closure, and AC1018
+   Extruder2 incomplete parser disposition. The AC1024 architectural
+   named-block SORTENTSTABLE candidate is now explicitly ruled out for DXF
+   output: Autodesk limits the body's owner reference to `*MODEL_SPACE` or
+   `*PAPER_SPACE`; an internal writer/readback experiment was reverted because
+   it emitted an owner outside that schema. Current strict conversion correctly
+   stops at 484/490 qualified callbacks, leaving the six named-block tables
+   refused ([spec-boundary receipt](docs/research/p4-ac1024-architectural-named-block-sortents-spec-boundary-2026-11-07.json)).
+   The separate AC1021 plot-screening graph is now closed for its
    exact source profile: seven LAYOUTs, twelve VIEWPORTs, all 69 observed
    callbacks, and the ASE_INDEX_DICTIONARY XRECORD's 240 ordered references
    passed source-role checks, ASCII/Binary typed readback, rollback/retry, and
@@ -128,26 +134,19 @@ created locally from scratch for the specific control.
    independent producer behavior, LibreCAD_3/FreeCAD acceptance or native
    geometry/group semantics ([receipt](docs/research/p4-ac1021-generated-group-2d-3d-strict-dxf-readback-2026-11-06.json)).
 
-   **Next implementation slice:** bounded AC1024 `architectural_example-imperial.dwg`
-   SORTENTSTABLE owner-profile follow-through. The existing source receipt
-   already establishes the `Window - Imperial` owner dictionary entries and
-   preserves strict refusal at the separate incomplete dynamic-block gate
-   ([structural gate](docs/research/p5-ac1024-sortents-dynamic-owner-structural-gate-2026-10-31.json));
-   the mechanical sample's complete table/owner DICTIONARY transaction is a
-   useful selector pattern, not evidence for this owner profile
-   ([output receipt](docs/research/p4-ac1024-sortents-owner-dictionary-qualification-2026-11-01.json)).
-   Read the existing candidate receipt and current source-bound selector first.
-   Then, in one fast slice: (a) census the exact SORTENTSTABLE owner, owner
-   dictionary entries, reactors, nested associative-network sibling, ordered
-   entity targets and frame identities from the tracked AC1024 sample; (b) reuse
-   existing output inspection if every edge maps to an already supported
-   emitted record, otherwise keep refusal and select the next candidate; (c)
-   for a closed profile, add the narrow selector assertion and ASCII/Binary
-   readback with destination preservation and same-adapter correction/retry;
-   (d) run the focused selector/build and one strict whole-source probe only if
-   that graph is the last blocking gate. Do not broaden dynamic-block output or
-   infer native associative behavior. No new fixture is needed: the DWG is
-   already tracked. Do not repeat the 28-stream census.
+   **Next implementation slice:** bounded AC1027 Cover source-reference
+   closure using the existing local `/Users/dli/doc/dwg/Cover.dwg` witness and
+   its current receipt. First verify the source hash/version, latest callback
+   disposition and exact unqualified identities; do not spend time on another
+   corpus-wide scan. Then trace only those identities to their owner, typed
+   target and emitted-record role, reusing existing source-binding and readback
+   helpers. Add a focused selected-graph ASCII/Binary proof with destination
+   preservation and corrected same-adapter retry only where the DXF schema
+   permits the roles. Keep the independent unclaimed HEADER suffix gate closed:
+   this slice cannot produce strict whole-source output or promote support
+   claims while that suffix is unexplained. If target closure depends on a
+   missing/unsupported source object, preserve refusal and move to the next
+   eligible source. No drawing fixture is needed or may be added.
 
    The AC1021 `truetype.dwg` selected LayerStates and four-VIEWPORT routes are
    complete for their exact source graph: ASCII/Binary typed readback, rollback
@@ -160,11 +159,11 @@ created locally from scratch for the specific control.
    This removes only this one physical profile from the queue; it does not
    establish producer-wide, native plotting, platform, or support claims. The
    external source remains outside Git. Other distinct
-   screens are AC1024 architectural named-block SORTENTSTABLE owner scope,
-   title-block null BLOCK_CONTROL members, AC1027 Cover reference closure, and
-   AC1018 Extruder2 incomplete parser disposition. Use each linked receipt to
-   resume from its exact blocker; if one fails a gate, preserve strict refusal
-   and move to another existing candidate. Keep test drawings outside Git
+   screens are title-block null BLOCK_CONTROL members, AC1027 Cover reference
+   closure, and AC1018 Extruder2 incomplete parser disposition. The named-block
+   SORTENTSTABLE candidate remains refused under the owner-scope boundary above.
+   Use each linked receipt to resume from its exact blocker; if one fails a
+   gate, preserve strict refusal and move to another existing candidate. Keep test drawings outside Git
    unless they already exist in LibreCAD/libdxfrw or were authored locally
    from scratch.
 2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
@@ -343,6 +342,13 @@ unqualified even when their source graph and emitted bytes are internally
 consistent. The previous multi-table output receipt records physical output
 evidence, but its named-block callbacks are not eligible DXF support claims
 under this owner schema. See the [owner-scope receipt](docs/research/p4-ac1024-sortents-owner-scope-qualification-2026-11-01.json).
+The 2026-11-07 recheck found six named-block SORTENTSTABLE callbacks in the
+AC1024 architectural sample. A temporary output-qualification relaxation
+passed libdxfrw's own ASCII/Binary round trip but was reverted after the
+Autodesk group-330 rule was rechecked; current strict conversion remains refused
+at 484/490 with no DXF published. Treat that result as evidence that internal
+codec consistency is insufficient, not as an output profile
+([recheck receipt](docs/research/p4-ac1024-architectural-named-block-sortents-spec-boundary-2026-11-07.json)).
 
 **Open external semantic gate — native dynamic-block evaluation.**
 The AC1024 source has `EvalExpr.parentId=0xFFFFFFFF` for `BLOCKLINEARGRIP`
