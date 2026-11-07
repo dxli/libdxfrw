@@ -2948,7 +2948,8 @@ Native source-release builds and platform qualification remain open.
   see the [tracked-sample binding receipt](docs/research/p8-freecad-tracked-sample-binding-2026-11-02.json).
 - `dwg2dxf` now uses `std::filesystem::u8path` for input/output preflight and
   the Windows `wmain` entry point converts Unicode arguments strictly to UTF-8
-  before handing them to the shared CLI parser. The focused FreeCAD CLI
+  before handing them to the shared CLI parser; MinGW builds select Unicode
+  console startup with `-municode`. The focused FreeCAD CLI
   compatibility control now stages its generated source at an ASCII path and
   copies it into Unicode paths, so it exercises Unicode input and output paths
   on every host; build and focused CTest pass on the current host. Native
