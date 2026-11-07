@@ -314,9 +314,11 @@ Proof observe(const std::uint8_t* bytes, std::size_t size, unsigned revision,
     // unsupported EED must not fall through the generic Unsupported path,
     // which is allowed for older profiles without inspecting owner bytes.
     detail::Bits ownerProbe{bytes, result.dataEnd, total};
-    const bool unqualifiedOwnerCandidate = revision == 2010u
-        && kind == Kind::Definition
-        && (ownerProbe.take(8u) >> 4u) == 4u && ownerProbe.good;
+    const auto ownerCode = static_cast<unsigned>(ownerProbe.take(8u) >> 4u);
+    const bool unqualifiedOwnerCandidate = kind == Kind::Definition
+        && ownerProbe.good
+        && ((revision == 2010u && ownerCode == 4u)
+            || (revision == 2018u && ownerCode == 12u));
     // Fixed-type role-4 IMAGEDEF is not part of this observed profile.
     if (unqualifiedOwnerCandidate && definitionType < 500u) return result;
     begin = body.pos;
@@ -424,6 +426,10 @@ Proof observe(const std::uint8_t* bytes, std::size_t size, unsigned revision,
     detail::span(result, Field::ScalarPadding, body.pos, body.end);
     detail::Bits handles{bytes, result.dataEnd, total};
     begin = handles.pos;
+    // ODA §2.13 defines codes 6/8/10/12 as offset soft pointers. The
+    // observed AC1032 IMAGEDEF code-12 owner conflicts with §20.4.81's hard
+    // owner role. Decode its target for diagnostics/correlation, but keep the
+    // profile explicitly unqualified so this evidence cannot admit output.
     const auto owner = detail::handle(handles, unqualifiedOwnerCandidate ? 4u : kind == Kind::Definition ? 3u : 4u, result.self);
     result.owner = owner.value; result.ownerRole = owner.role;
     detail::span(result, Field::Owner, begin, handles.pos);

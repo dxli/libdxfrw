@@ -26589,6 +26589,29 @@ void dx_iface::retainRasterDwgSource(const DRW_UnsupportedObject &data) noexcept
                                         bytes)
         || cData->m_rasterDwgSourceBytes > ImageDefinitionCaptureMaxRetainedBytes
         || bytes > ImageDefinitionCaptureMaxRetainedBytes - cData->m_rasterDwgSourceBytes) {
+        DRW_DBG("Raster DWG raw-source capture rejected handle=");
+        DRW_DBGH(data.m_handle);
+        DRW_DBG(" type=");
+        DRW_DBG(data.m_objectType);
+        DRW_DBG(" class=");
+        DRW_DBG(data.m_className);
+        DRW_DBG(" record=");
+        DRW_DBG(data.m_recordName);
+        DRW_DBG(" custom=");
+        DRW_DBG(data.m_isCustomClass);
+        DRW_DBG(" rawBytes/objectSize=");
+        DRW_DBG(data.m_rawBytes.size());
+        DRW_DBG("/");
+        DRW_DBG(data.m_objectSize);
+        DRW_DBG(" commonEvidence=");
+        DRW_DBG(static_cast<unsigned>(data.m_commonLinkEvidence));
+        DRW_DBG(" commonValidated=");
+        DRW_DBG(data.m_commonHandleDataValidated);
+        DRW_DBG(" reactors=");
+        DRW_DBG(data.m_numReactors);
+        DRW_DBG("/");
+        DRW_DBG(data.m_reactorHandles.size());
+        DRW_DBG("\n");
         cData->m_rasterDwgSourceFailed = true;
         return;
     }
@@ -26664,6 +26687,27 @@ void dx_iface::retainRasterDwgPublication(const DRW_DwgFramePublication &data) n
                                         bytes)
         || cData->m_rasterDwgSourceBytes > ImageDefinitionCaptureMaxRetainedBytes
         || bytes > ImageDefinitionCaptureMaxRetainedBytes - cData->m_rasterDwgSourceBytes) {
+        DRW_DBG("Raster DWG publication rejected handle=");
+        DRW_DBGH(data.m_handle);
+        DRW_DBG(" encoded/resolved/version/carrier/custom=");
+        DRW_DBG(data.m_encodedType);
+        DRW_DBG("/");
+        DRW_DBG(data.m_resolvedType);
+        DRW_DBG("/");
+        DRW_DBG(static_cast<unsigned>(data.m_version));
+        DRW_DBG("/");
+        DRW_DBG(static_cast<unsigned>(data.m_carrier));
+        DRW_DBG("/");
+        DRW_DBG(data.m_isCustomClass);
+        DRW_DBG(" class=");
+        DRW_DBG(data.m_className);
+        DRW_DBG(" rawCommonMatches=");
+        DRW_DBG(data.m_parentHandle == raw.m_parentHandle
+                && data.m_reactorHandles == raw.m_reactorHandles
+                && data.m_numReactors == raw.m_numReactors
+                && data.m_xDictHandle == raw.m_xDictHandle
+                && data.m_xDictFlag == raw.m_xDictFlag);
+        DRW_DBG("\n");
         reject();
         return;
     }
@@ -26686,7 +26730,22 @@ void dx_iface::finishRasterDwgSources(bool successfulRead, std::size_t appIdBegi
         std::max(cData->m_rasterDwgClosedThrough, cData->importGeneration);
     if (cData->m_rasterDwgSourceFailed)
         return;
-    const auto reject = [this]() { cData->m_rasterDwgSourceFailed = true; };
+    const char *capturePhase = "initialization";
+    std::uint32_t activeHandle = 0u;
+    const auto reject = [this, &capturePhase, &activeHandle]() {
+        DRW_DBG("Raster DWG finish-source capture rejected; frames=");
+        DRW_DBG(cData->m_rasterDwgSources.size());
+        DRW_DBG(" definitions=");
+        DRW_DBG(cData->imageDefinitions.size());
+        DRW_DBG(" reactors=");
+        DRW_DBG(cData->imageDefinitionReactors.size());
+        DRW_DBG(" phase=");
+        DRW_DBG(capturePhase);
+        DRW_DBG(" handle=");
+        DRW_DBGH(activeHandle);
+        DRW_DBG("\n");
+        cData->m_rasterDwgSourceFailed = true;
+    };
     // A typed callback without its source carrier must not silently become
     // an authored record when the raw lane is empty.
     const auto hasSources = [this](const auto& records) {
@@ -26696,6 +26755,7 @@ void dx_iface::finishRasterDwgSources(bool successfulRead, std::size_t appIdBegi
         }
         return true;
     };
+    capturePhase = "typed-to-raw source census";
     if (!hasSources(cData->imageDefinitions) || !hasSources(cData->imageDefinitionReactors)) {
         reject();
         return;
@@ -26704,6 +26764,7 @@ void dx_iface::finishRasterDwgSources(bool successfulRead, std::size_t appIdBegi
     if (begin == cData->m_rasterDwgSources.end() || begin->first.first != cData->importGeneration)
         return;
     if (!successfulRead) {
+        capturePhase = "reader did not complete";
         reject();
         return;
     }
@@ -26717,6 +26778,7 @@ void dx_iface::finishRasterDwgSources(bool successfulRead, std::size_t appIdBegi
             index(nameImport->apps, appIds); index(nameImport->layers, layers);
         } else if (!standardDwgNames(cData->appIds, begin->second.typedBaseline ? begin->second.appIdBegin : appIdBegin, appIds)
             || !standardDwgNames(cData->layers, begin->second.typedBaseline ? begin->second.layerBegin : layerBegin, layers)) {
+            capturePhase = "fallback APPID/LAYER census";
             reject();
             return;
         }
@@ -26726,6 +26788,7 @@ void dx_iface::finishRasterDwgSources(bool successfulRead, std::size_t appIdBegi
         if (outcome.sourceCodePageFieldPresent && outcome.sourceCodePageRecognized) {
             const char *page = dwgCodePageName(outcome.sourceCodePageId);
             if (page == nullptr) {
+                capturePhase = "source codepage binding";
                 reject();
                 return;
             }
@@ -26736,6 +26799,8 @@ void dx_iface::finishRasterDwgSources(bool successfulRead, std::size_t appIdBegi
         for (auto current = begin; current != cData->m_rasterDwgSources.end()
                                    && current->first.first == cData->importGeneration;
              ++current) {
+            activeHandle = current->first.second;
+            capturePhase = "typed callback/publication identity";
             auto &frame = current->second;
             const auto &raw = frame.raw;
             const bool definition = isRasterDwgDefinition(raw);
@@ -26758,8 +26823,10 @@ void dx_iface::finishRasterDwgSources(bool successfulRead, std::size_t appIdBegi
                 reject();
                 return;
             }
+            capturePhase = "class-row binding";
             const auto classBinding = rasterClassBinding(frame);
             if (classBinding.state == dx_class_evidence::RasterState::Contradiction) { reject(); return; }
+            capturePhase = "name-table import binding";
             if (nameImport && (nameImport->attempt != frame.classReadAttempt || nameImport->version != raw.m_version
                 || nameImport->codePage != outcome.sourceCodePageId || nameImport->codePagePresent != outcome.sourceCodePageFieldPresent
                 || nameImport->codePageRecognized != outcome.sourceCodePageRecognized)) { reject(); return; }
@@ -26779,6 +26846,7 @@ void dx_iface::finishRasterDwgSources(bool successfulRead, std::size_t appIdBegi
                 if (token.code == 1000u && ++stringCount > StandardDwgObjectCaptureMaxEntries) return false;
                 return true;
             };
+            capturePhase = "raw IMAGEDEF/reactor wire and EED scan";
             const auto wire = dx_raster_wire::observe(raw.m_rawBytes.data(), raw.m_rawBytes.size(),
                 rasterWireRevision(raw.m_version), definition ? dx_raster_wire::Kind::Definition
                     : dx_raster_wire::Kind::Reactor, raw.m_bodyBitSize, visitReactor, inspectEed,
@@ -26787,6 +26855,25 @@ void dx_iface::finishRasterDwgSources(bool successfulRead, std::size_t appIdBegi
                 || ((wire.status == dx_raster_wire::Status::Proven
                      || wire.status == dx_raster_wire::Status::UnqualifiedOwnerRole)
                     && wire.eedVariants != typed->extData.size())) {
+                DRW_DBG("Raster DWG wire proof mismatch status=");
+                DRW_DBG(static_cast<unsigned>(wire.status));
+                DRW_DBG(" revision=");
+                DRW_DBG(rasterWireRevision(raw.m_version));
+                DRW_DBG(" bodyBits=");
+                DRW_DBG(raw.m_bodyBitSize);
+                DRW_DBG(" eedVariants/typedEed=");
+                DRW_DBG(wire.eedVariants);
+                DRW_DBG("/");
+                DRW_DBG(typed->extData.size());
+                DRW_DBG(" ownerRole/value=");
+                DRW_DBG(wire.ownerRole);
+                DRW_DBG("/");
+                DRW_DBGH(wire.owner);
+                DRW_DBG(" reactors=");
+                DRW_DBG(wire.reactorCount);
+                DRW_DBG(" expectedReactors=");
+                DRW_DBG(typed->reactorCount());
+                DRW_DBG("\n");
                 reject();
                 return;
             }
@@ -26816,6 +26903,7 @@ void dx_iface::finishRasterDwgSources(bool successfulRead, std::size_t appIdBegi
                 || !addAssociativeRetainedBytes(stringCount * sizeof(dx_raster_wire::EedToken), dependencyBytes)
                 || cData->m_rasterDwgSourceBytes > ImageDefinitionCaptureMaxRetainedBytes
                 || (!frame.typedBaseline && dependencyBytes > ImageDefinitionCaptureMaxRetainedBytes - cData->m_rasterDwgSourceBytes)) {
+                capturePhase = "dependency evidence allocation bounds";
                 reject(); return;
             }
             dependencies.reserve(dependencyCount);
@@ -26894,8 +26982,10 @@ void dx_iface::finishRasterDwgSources(bool successfulRead, std::size_t appIdBegi
                 static_cast<std::uint32_t>(raw.m_objectType));
             if (!dx_raster_wire::sameProof(wire, dependencyWire) || dependencies.size() != dependencyCount
                 || strings.size() != stringCount) {
+                capturePhase = "EED dependency/source binding";
                 reject(); return;
             }
+            capturePhase = "independent raw payload reparse";
             codec.resetAccumulatedDecodeIssues();
             dwgBuffer body(raw.m_rawBytes.data(), raw.m_rawBytes.size(), &codec);
             dwgBuffer probe = body.forkIndependent();
@@ -26923,6 +27013,7 @@ void dx_iface::finishRasterDwgSources(bool successfulRead, std::size_t appIdBegi
             // Resolve the same source dependency envelope as the original
             // callback. This correlation is not an independent text certificate.
             const auto observed = [](auto, const UTF8STRING &) { return true; };
+            capturePhase = "raw-to-typed payload correlation";
             if (!body.isGood()
                 || !resolveStandardDwgExtendedData(*parsed, appIds, layers, observed, observed)
                 || !rasterDwgModelEqual(*parsed, *typed, raw.m_version, definition)
@@ -26938,6 +27029,7 @@ void dx_iface::finishRasterDwgSources(bool successfulRead, std::size_t appIdBegi
                 return;
             }
             if (frame.typedBaseline) {
+                capturePhase = "immutable baseline comparison";
                 if (!rasterDwgModelEqual(*frame.typedBaseline, *typed, raw.m_version, definition)
                     || frame.nameImport != nameImport
                     || !frame.classBindingObserved || !dx_class_evidence::sameRasterBinding(frame.classBinding, classBinding)
@@ -26956,6 +27048,7 @@ void dx_iface::finishRasterDwgSources(bool successfulRead, std::size_t appIdBegi
                     if (!dx_raster_wire::sameToken(frame.eedStrings[n], strings[n])) { reject(); return; }
                 continue; // Validation must never refresh an established source.
             }
+            capturePhase = "immutable baseline capture";
             if ((!outcome.sourceCodePageFieldPresent || !outcome.sourceCodePageRecognized)
                 && (raw.m_version <= DRW::AC1018 || !parsed->extData.empty()))
                 codec.mergeDecodeIssues(
@@ -27015,8 +27108,12 @@ void dx_iface::finishRasterDwgSources(bool successfulRead, std::size_t appIdBegi
 }
 
 bool dx_iface::hasUnchangedRasterDwgSources() const noexcept {
-    if (cData == nullptr || cData->m_rasterDwgSourceFailed)
+    if (cData == nullptr)
         return false;
+    if (cData->m_rasterDwgSourceFailed) {
+        DRW_DBG("Raster DWG source-correlation check: capture was already marked failed\n");
+        return false;
+    }
     bool dependencies = false;
     for (const auto &source : cData->m_rasterDwgSources) {
         const auto &frame = source.second;
@@ -27028,22 +27125,41 @@ bool dx_iface::hasUnchangedRasterDwgSources() const noexcept {
             typed = &def->second;
         if (!definition && reactor != cData->imageDefinitionReactors.end())
             typed = &reactor->second;
-        if (!typed || !frame.typedBaseline || !frame.sourceProfileBound || !frame.payloadMatched
-            || frame.nameImport != rasterDwgNameImport(frame)
-            || (frame.nameImport && (frame.nameImport->version != frame.raw.m_version
-                || frame.nameImport->codePage != frame.sourceCodePageId
-                || frame.nameImport->codePagePresent != frame.sourceCodePageFieldPresent
-                || frame.nameImport->codePageRecognized != frame.sourceCodePageRecognized))
-            || !frame.classBindingObserved || !dx_class_evidence::sameRasterBinding(frame.classBinding, rasterClassBinding(frame))
-            || !frame.wireObserved || !frame.dependenciesObserved
-            || frame.wire.status == dx_raster_wire::Status::Malformed
-            || frame.wire.status == dx_raster_wire::Status::UnqualifiedOwnerRole
-            || !frame.publicationSeen || source.first.first != frame.generation
-            || source.first.second != frame.raw.m_handle
-            || (definition && reactor != cData->imageDefinitionReactors.end())
-            || (!definition && def != cData->imageDefinitions.end())
-            || !rasterDwgModelEqual(*frame.typedBaseline, *typed, frame.raw.m_version, definition))
+        const auto mismatch = [&](const char *reason) {
+            DRW_DBG("Raster DWG source-correlation mismatch handle=");
+            DRW_DBGH(source.first.second);
+            DRW_DBG(" kind=");
+            DRW_DBG(definition ? "IMAGEDEF: " : "IMAGEDEF_REACTOR: ");
+            DRW_DBG(reason);
+            DRW_DBG("\n");
             return false;
+        };
+        if (!typed) return mismatch("typed callback missing");
+        if (!frame.typedBaseline) return mismatch("immutable typed snapshot missing");
+        if (!frame.sourceProfileBound) return mismatch("source profile not bound");
+        if (!frame.payloadMatched) return mismatch("raw payload not correlated");
+        if (frame.nameImport != rasterDwgNameImport(frame)) return mismatch("name-table import identity changed");
+        if (frame.nameImport && (frame.nameImport->version != frame.raw.m_version
+            || frame.nameImport->codePage != frame.sourceCodePageId
+            || frame.nameImport->codePagePresent != frame.sourceCodePageFieldPresent
+            || frame.nameImport->codePageRecognized != frame.sourceCodePageRecognized))
+            return mismatch("name-table import profile changed");
+        if (!frame.classBindingObserved
+            || !dx_class_evidence::sameRasterBinding(frame.classBinding, rasterClassBinding(frame)))
+            return mismatch("class-row binding changed");
+        if (!frame.wireObserved || !frame.dependenciesObserved) return mismatch("wire/dependency proof missing");
+        if (frame.wire.status == dx_raster_wire::Status::Malformed) return mismatch("wire profile malformed");
+        if (frame.wire.status == dx_raster_wire::Status::UnqualifiedOwnerRole)
+            return mismatch("owner role unqualified");
+        if (!frame.publicationSeen) return mismatch("frame publication missing");
+        if (source.first.first != frame.generation) return mismatch("generation key mismatch");
+        if (source.first.second != frame.raw.m_handle) return mismatch("handle key mismatch");
+        if (definition && reactor != cData->imageDefinitionReactors.end())
+            return mismatch("same handle has a reactor record");
+        if (!definition && def != cData->imageDefinitions.end())
+            return mismatch("same handle has a definition record");
+        if (!rasterDwgModelEqual(*frame.typedBaseline, *typed, frame.raw.m_version, definition))
+            return mismatch("typed model differs from immutable snapshot");
         dependencies = dependencies || !frame.eedDependencies.empty();
     }
     if (!dependencies) return true; // Keep the common no-EED check allocation-free.
