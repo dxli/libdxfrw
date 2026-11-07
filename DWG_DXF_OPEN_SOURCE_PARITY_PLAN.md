@@ -2534,12 +2534,19 @@ passes for the installed 27.1 app and the downloaded 27.9 package and extracted
 app; earlier sandboxed signature failures were unreliable. The verified 27.1 CLI has completed audit-disabled AC1027-to-AC1027 Cover resaves in a functioning launch environment.
 The validated trailer ends at byte 844; the original has 731 unclaimed HEADER
 bytes and same-revision ODA outputs have 739. LibreDWG 0.14 independently
-decompressed earlier original/resave sections. A ninth bounded direct retry after the user reported unlocking the session again aborted during PasteBoard/XPC initialization and produced no resave, so no new suffix comparison was possible. The prior successful resave had no bytewise
-suffix matches against five previously compared same-source outputs; pairwise
-low-bit patterns remain structured but unexplained. That output reads 119/119
-frames with no entity/object parse failures, then strict DXF preparation refuses
-on unqualified source references. Keep the suffix unclaimed and strict output
-refused. See the [latest retry receipt](docs/research/p6-ac1027-oda-header-suffix-after-user-unlock-2026-11-07.json),
+decompressed earlier original/resave sections. A tenth bounded direct retry
+after the user again unlocked the Mac aborted during PasteBoard/XPC
+initialization (SIGABRT after 0.5 seconds) and produced no output. The changed
+session state therefore does not unblock this CLI launch path; do not repeat
+the identical invocation. No new suffix comparison was possible. The prior
+successful resave had no bytewise suffix matches against five previously
+compared same-source outputs; pairwise low-bit patterns remain structured but
+unexplained. That output reads 119/119 frames with no entity/object parse
+failures, then strict DXF preparation refuses on unqualified source references.
+Keep the suffix unclaimed and strict output refused. Resume only with a changed
+launch route that reaches document processing (for example, a functioning GUI
+workflow or a different verified converter environment). See the [latest retry
+receipt](docs/research/p6-ac1027-oda-header-suffix-retry-2026-11-07b.json),
 [integrity correction](docs/research/p6-ac1027-cover-oda-arm64-package-integrity-2026-11-02.json)
 and [same-version resave receipt](docs/research/p6-ac1027-cover-oda-same-version-resave-2026-11-03.json).
 
