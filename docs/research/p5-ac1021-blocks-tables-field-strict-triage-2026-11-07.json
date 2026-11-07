@@ -28,11 +28,26 @@
       "Repeated FIELD records retain 258-bit unmodeled object-data tails; one observed tail is 210 bits."
     ]
   },
+  "independentPeer": {
+    "implementation": "LibreDWG dwgread 0.14",
+    "executablePath": "/opt/homebrew/Cellar/libredwg/0.14/bin/dwgread",
+    "executableSha256": "536eef295f1dfdc2e63b4f1cd2961905f98c55bbd1fe017ef3574c0f1345f1ff",
+    "command": "dwgread -O minJSON /Users/dli/doc/dwg/blocks_and_tables_-_imperial.dwg",
+    "exitCode": 0,
+    "outputPath": "/private/tmp/blocks-tables-peer.min.json",
+    "outputSha256": "fa0a6a47d812fcc66659e56c17b7f6542dbf27a632af8cc5e3fbb94fc99c990d",
+    "fieldRecords": 142,
+    "fieldListSlots": 142,
+    "recordsReportingChildFormatFlags010801FC": 13,
+    "exampleHandles": ["0x24aa4", "0x24ab7", "0x24aca", "0x24add"],
+    "interpretation": "The peer exposes the same unsupported child flag value on 13 records, alongside invalid-looking type/unit projections. This is corroboration of the observed byte profile, not independent validation of those fields' semantics or physical bit spans."
+  },
   "interpretation": [
     "The run establishes complete frame publication for this input and the strict preflight refusal reason.",
     "It does not bind the FIELD child flags, child-count fields, or tail bits to physical source spans.",
+    "The peer repeats the unsupported child flag observation but also does not provide source spans or authoritative semantics.",
     "The observed flags and tails do not establish a valid alternate wire profile and must not be used to widen accepted parsing or output behavior."
   ],
-  "nextAction": "Perform one bounded source-span and independent-decoder comparison for a single complete FIELD profile. Implement only if ODA v5.4.1 §§20.4.76/77/99 and independent evidence support a uniquely bounded profile whose references and root graph close. Otherwise preserve raw/refused behavior and switch to another ready packet.",
+  "triageDisposition": "No safe parser or serializer change is supported for this source profile. The local and independent decoders report the same opaque child flag value, but neither establishes a spec-conforming span or role interpretation. Keep these records raw and strict output refused; close this candidate and continue the separately source-ready P4 OBJECTS graph work.",
   "fixturePolicy": "No DWG/DXF fixture or converted output was added to the repository."
 }
