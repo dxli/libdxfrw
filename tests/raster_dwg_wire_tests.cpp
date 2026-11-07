@@ -413,57 +413,57 @@ bool run() {
                           unqualified.kind, unqualified.handles,
                           wire::detail::Ignore{}, wire::detail::IgnoreEed{},
                           unqualified.objectType).status != wire::Status::Malformed) return false;
-    // This AC1032 source profile stores IMAGEDEF's owner as code-C, a
-    // relative soft pointer. ODA §2.13 defines the arithmetic, while
-    // §20.4.81 calls this field a hard owner. Decode the target and retain an
-    // explicitly unqualified result; strict output must continue to refuse.
-    auto ac1032RelativeOwner = make(2018u, wire::Kind::Definition, false,
-        false, 2u, 528u, false, nullptr, true);
-    const auto relativeOwner = ac1032RelativeOwner.spans[
-        static_cast<std::size_t>(wire::Field::Owner)];
-    const auto ac1032Reactors = ac1032RelativeOwner.spans[
-        static_cast<std::size_t>(wire::Field::Reactors)];
-    ac1032RelativeOwner.bytes.patch(relativeOwner.begin, 0xC2u, 8u);
-    ac1032RelativeOwner.bytes.patch(relativeOwner.begin + 8u, 2u, 16u);
-    unsigned ac1032ReactorsVisited = 0u;
-    const auto inspectAc1032Reactor = [&](std::uint32_t index,
-            std::uint32_t value, wire::Span span, std::uint8_t role) noexcept {
-        const std::uint32_t expected[] = {0x3344u, 0x5566u};
-        if (index >= 2u || value != expected[index] || role != 4u
-            || span.begin != ac1032Reactors.begin + 24u * index
-            || span.end != ac1032Reactors.begin + 24u * (index + 1u))
+    // AutoCAD's AC1021/24/27/32 samples encode IMAGEDEF's parent as code-C,
+    // a relative soft pointer, while the ODA IMAGEDEF schema calls it a hard
+    // owner. Decode the exact target and following reactor spans, but retain
+    // the explicitly unqualified status for every witnessed revision.
+    for (const unsigned revision : {2007u, 2010u, 2013u, 2018u}) {
+        auto relativeOwner = make(revision, wire::Kind::Definition, false,
+            false, 2u, 528u, false, nullptr, true);
+        const auto ownerSpan = relativeOwner.spans[
+            static_cast<std::size_t>(wire::Field::Owner)];
+        const auto reactorSpan = relativeOwner.spans[
+            static_cast<std::size_t>(wire::Field::Reactors)];
+        relativeOwner.bytes.patch(ownerSpan.begin, 0xC2u, 8u);
+        relativeOwner.bytes.patch(ownerSpan.begin + 8u, 2u, 16u);
+        unsigned reactorsVisited = 0u;
+        const auto inspectRelativeReactor = [&](std::uint32_t index,
+                std::uint32_t value, wire::Span span,
+                std::uint8_t role) noexcept {
+            const std::uint32_t expected[] = {0x3344u, 0x5566u};
+            if (index >= 2u || value != expected[index] || role != 4u
+                || span.begin != reactorSpan.begin + 24u * index
+                || span.end != reactorSpan.begin + 24u * (index + 1u))
+                return false;
+            ++reactorsVisited;
+            return true;
+        };
+        const auto relativeProof = wire::observe(
+            relativeOwner.bytes.bytes.data(), relativeOwner.bytes.bytes.size(),
+            revision, wire::Kind::Definition, relativeOwner.handles,
+            inspectRelativeReactor, wire::detail::IgnoreEed{},
+            relativeOwner.objectType);
+        if (relativeProof.status != wire::Status::UnqualifiedOwnerRole
+            || relativeProof.ownerRole != 12u
+            || relativeProof.owner != 0x11223342u
+            || relativeProof.reactorCount != 2u || reactorsVisited != 2u
+            || relativeProof.at(wire::Field::Owner).width() != 24u)
             return false;
-        ++ac1032ReactorsVisited;
-        return true;
-    };
-    const auto ac1032RelativeProof = wire::observe(
-        ac1032RelativeOwner.bytes.bytes.data(),
-        ac1032RelativeOwner.bytes.bytes.size(), 2018u,
-        wire::Kind::Definition, ac1032RelativeOwner.handles,
-        inspectAc1032Reactor, wire::detail::IgnoreEed{},
-        ac1032RelativeOwner.objectType);
-    if (ac1032RelativeProof.status != wire::Status::UnqualifiedOwnerRole
-        || ac1032RelativeProof.ownerRole != 12u
-        || ac1032RelativeProof.owner != 0x11223342u
-        || ac1032RelativeProof.reactorCount != 2u
-        || ac1032ReactorsVisited != 2u
-        || ac1032RelativeProof.at(wire::Field::Owner).width() != 24u)
-        return false;
-    auto fixedAc1032RelativeOwner = make(2018u,
-        wire::Kind::Definition, false, false, 2u, 102u);
-    const auto fixedOwner = fixedAc1032RelativeOwner.spans[
-        static_cast<std::size_t>(wire::Field::Owner)];
-    fixedAc1032RelativeOwner.bytes.patch(fixedOwner.begin, 0xC2u, 8u);
-    fixedAc1032RelativeOwner.bytes.patch(fixedOwner.begin + 8u, 2u, 16u);
-    if (scan(fixedAc1032RelativeOwner).status != wire::Status::Malformed)
-        return false;
-    auto ac1032OwnerUnderflow = ac1032RelativeOwner;
-    ac1032OwnerUnderflow.bytes.patch(relativeOwner.begin, 0xC4u, 8u);
-    ac1032OwnerUnderflow.bytes.patch(relativeOwner.begin + 8u,
-        0xFFFFFFFFu, 32u);
-    if (scan(ac1032OwnerUnderflow).status != wire::Status::Malformed)
-        return false;
-    ++positive;
+        auto fixedRelativeOwner = make(revision, wire::Kind::Definition,
+            false, false, 2u, 102u);
+        const auto fixedOwnerSpan = fixedRelativeOwner.spans[
+            static_cast<std::size_t>(wire::Field::Owner)];
+        fixedRelativeOwner.bytes.patch(fixedOwnerSpan.begin, 0xC2u, 8u);
+        fixedRelativeOwner.bytes.patch(fixedOwnerSpan.begin + 8u, 2u, 16u);
+        if (scan(fixedRelativeOwner).status != wire::Status::Malformed)
+            return false;
+        auto underflow = relativeOwner;
+        underflow.bytes.patch(ownerSpan.begin, 0xC4u, 8u);
+        underflow.bytes.patch(ownerSpan.begin + 8u, 0xFFFFFFFFu, 32u);
+        if (scan(underflow).status != wire::Status::Malformed)
+            return false;
+        ++positive;
+    }
     for (unsigned revision : {2004u, 2007u, 2013u, 2018u}) {
         auto wrongRevision = make(revision, wire::Kind::Definition, true, false,
                                   2u, 514u, false, nullptr, true);
