@@ -14982,14 +14982,32 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                 ++aseHierarchyIndexEntityRecordCount;
                 ++aseHierarchyIndexRecordCount;
                 const DRW_XRecord& cache = *record->second;
+                const std::size_t matchingNodRoots =
+                    static_cast<std::size_t>(std::count_if(
+                        data->namedObjectDictionary.m_entries.begin(),
+                        data->namedObjectDictionary.m_entries.end(),
+                        [&owner](const DRW_Dictionary::Entry& entry) {
+                            return asciiIdentifierEquals(entry.m_name,
+                                        "ASE_INDEX_DICTIONARY")
+                                && entry.m_handle == owner->second->handle;
+                        }));
+                const std::size_t namedNodRoots =
+                    static_cast<std::size_t>(std::count_if(
+                        data->namedObjectDictionary.m_entries.begin(),
+                        data->namedObjectDictionary.m_entries.end(),
+                        [](const DRW_Dictionary::Entry& entry) {
+                            return asciiIdentifierEquals(entry.m_name,
+                                        "ASE_INDEX_DICTIONARY");
+                        }));
                 if (aseHierarchyIndexEntityRecordCount != 1u
                     || owner->second->parentHandle
                         != data->namedObjectDictionary.handle
                     || owner->second->m_entries.size() != 1u
                     || matchingEntries != 1u
+                    || matchingNodRoots != 1u
+                    || namedNodRoots != 1u
                     || cache.m_cloning != 1
                     || !cache.m_values.empty()
-                    || cache.m_handleValues.empty()
                     || cache.m_handleValues.size()
                         > dwgSafety::MaxOwnedObjectCount
                     || cache.m_dataEntries.size()

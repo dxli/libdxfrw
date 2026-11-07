@@ -1597,6 +1597,11 @@ add_test(NAME libdxfrw_ase_hierarchy_ac1021_insert_target_roundtrip
         --ase-hierarchy-generated-ac1021-insert-targets)
 set_tests_properties(libdxfrw_ase_hierarchy_ac1021_insert_target_roundtrip
     PROPERTIES LABELS "fast;dxf;graph;adapter;objects;transaction" TIMEOUT 60)
+add_test(NAME libdxfrw_ase_hierarchy_ac1021_empty_cache_roundtrip
+    COMMAND libdxfrw_dwg2dxf_adapter_tests
+        --ase-hierarchy-generated-ac1021-empty-cache)
+set_tests_properties(libdxfrw_ase_hierarchy_ac1021_empty_cache_roundtrip
+    PROPERTIES LABELS "fast;dxf;graph;adapter;objects;transaction" TIMEOUT 30)
 if(TARGET dwg2dxf)
     add_test(NAME libdxfrw_extension_graph_limits
         COMMAND ${CMAKE_COMMAND}

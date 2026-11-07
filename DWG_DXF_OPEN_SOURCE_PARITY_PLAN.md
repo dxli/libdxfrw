@@ -135,14 +135,32 @@ created locally from scratch for the specific control.
    bounded-partial output also refuses because the integrity ledger is not
    complete. Do not weaken either gate or add an output route for this source.
    See the [candidate screen receipt](docs/research/p4-ac1018-extruder2-ole2frame-candidate-screen-2026-11-06.json).
-   Next, screen a source already admitted by strict or bounded-partial export,
-   then choose the smallest distinct rooted graph whose targets and owners are
-   typed and output-supported. Reject candidates immediately when reader
-   disposition, integrity completeness, source binding or output admission
-   fails; preserve the existing OLE2FRAME tablet profile unchanged. Keep all
-   local source/output files outside Git and author any generated controls
-   from scratch. Retain the screened-out candidate boundaries below; do not
-   reopen them without new source or admission evidence.
+   The fresh AC1024 architectural corpus candidate reaches strict finalization
+   at 484/490 callbacks; all six unresolved identities are named-block
+   SORTENTSTABLEs owned by Door/Window or anonymous BLOCK_RECORDs. Autodesk's
+   DXF record contract limits SORTENTSTABLE's owner to *MODEL_SPACE or
+   *PAPER_SPACE, so retain refusal and do not widen that schema from this
+   candidate. See the [owner-scope evidence](https://help.autodesk.com/cloudhelp/2015/ENU/AutoCAD-DXF/files/GUID-462F4378-F850-4E89-90F2-3C1880F55779.htm).
+   A distinct AC1021 source profile, `lineweights.dwg`, now completes strict
+   whole-source conversion after adding bounded admission for its empty
+   `ASEBlockHierarchyIndexRecord`: exact NOD `ASE_INDEX_DICTIONARY` root,
+   one dictionary child, empty XRECORD body, and retained DCO15 EED. The
+   focused physical selector verifies source frames, ASCII/Binary readback,
+   owner/reactor/EED links, mutation refusal and same-adapter retry; the
+   generated fast control covers wrong-root refusal and retry. Strict full-DWG
+   conversion and a fresh same-version DXF re-export pass for this exact local
+   source hash. Preserve the existing nonempty 208-reference tablet profile;
+   this does not qualify ASE semantics or another producer. See the
+   [empty-cache receipt](docs/research/p4-ac1021-lineweights-ase-empty-cache-strict-output-2026-11-06.json).
+   Continue the census with a source already admitted by strict or
+   bounded-partial export, then choose the smallest distinct rooted graph whose
+   targets and owners are typed and output-supported. Reject candidates
+   immediately when reader disposition, integrity completeness, source binding
+   or output admission fails; preserve the existing OLE2FRAME tablet profile
+   unchanged. Keep all local source/output files outside Git and author any
+   generated controls from scratch. Retain the screened-out candidate
+   boundaries below; do not reopen them without new source or admission
+   evidence.
    The current `title_block-arch.dwg` AC1024 probe reads 501/501 frames with
    zero entity/object parse failures and a finalized-complete frame report,
    but strict and bounded-partial export correctly refuse its three null
@@ -1531,11 +1549,14 @@ and [same-version receipt](docs/research/p6-ac1027-cover-oda-same-version-resave
 A suffix-free AC1027 source acquired the same 739-byte form after an ODA
 resave, narrowing its origin to that observed save process without explaining
 its contents; see the [controlled receipt](docs/research/p6-ac1027-oda-header-suffix-controlled-producer-2026-11-04.json).
-After the user unlocked the macOS session, the direct ODA 27.1 CLI retry still
-aborted before conversion with PasteBoard/XPC service errors and produced no
-output. Do not repeat this invocation until the host service or supported GUI
-path changes; this is not evidence about suffix contents. Keep the bytes
-unclaimed and strict output refused ([retry receipt](docs/research/p6-ac1027-oda-unlocked-cli-retry-2026-11-05.json)).
+After repeated user unlocks, five bounded retries of the same verified ODA
+27.1 direct CLI invocation still aborted during Pasteboard/XPC initialization
+and produced no output; a Launch Services attempt also returned
+`kLSNoExecutableErr`. The latest retry rechecked the source and converter
+hashes and again produced no output. Do not repeat unchanged launches until
+the launch environment changes or a functioning supported GUI/independent
+converter session is available. This is not evidence about suffix contents:
+keep the bytes unclaimed and strict output refused ([latest retry receipt](docs/research/p6-ac1027-oda-header-suffix-post-unlock-retry-2026-11-06.json), [earlier retry receipt](docs/research/p6-ac1027-oda-unlocked-cli-retry-2026-11-05.json)).
 An AC1024 maintenance-55 source now reaches its raster and NOD callbacks under
 the same diagnostic policy. Its IMAGEDEF and reactor are retained for diagnosis,
 but export refuses the IMAGEDEF's unqualified role-4 owner because ODA's common
@@ -1900,16 +1921,19 @@ The files remain local and were not added to the repository. See the
 
 **ODA ARM64 package integrity recheck:** Native verification outside the sandbox
 passes for the installed 27.1 app and the downloaded 27.9 package and extracted
-app; earlier sandboxed signature failures were unreliable. The verified 27.1 CLI completes audit-disabled AC1027-to-AC1027 Cover resaves.
+app; earlier sandboxed signature failures were unreliable. The verified 27.1 CLI has completed audit-disabled AC1027-to-AC1027 Cover resaves in a functioning launch environment.
 The validated trailer ends at byte 844; the original has 731 unclaimed HEADER
 bytes and same-revision ODA outputs have 739. LibreDWG 0.14 independently
-decompressed earlier original/resave sections. A further post-unlock retry
-produced no bytewise suffix matches against five previously compared same-source
-outputs; pairwise low-bit patterns remain structured but unexplained. The new
-output reads 119/119 frames with no entity/object parse failures, then strict
-DXF preparation refuses on unqualified source references. Keep the suffix
-unclaimed and strict output refused. See the [integrity correction](docs/research/p6-ac1027-cover-oda-arm64-package-integrity-2026-11-02.json)
-and updated [same-version resave receipt](docs/research/p6-ac1027-cover-oda-same-version-resave-2026-11-03.json).
+decompressed earlier original/resave sections. The latest post-unlock retry
+aborted during Pasteboard/XPC initialization and produced no resave, so no new
+suffix comparison was possible. The prior successful resave had no bytewise
+suffix matches against five previously compared same-source outputs; pairwise
+low-bit patterns remain structured but unexplained. That output reads 119/119
+frames with no entity/object parse failures, then strict DXF preparation refuses
+on unqualified source references. Keep the suffix unclaimed and strict output
+refused. See the [latest retry receipt](docs/research/p6-ac1027-oda-header-suffix-post-unlock-retry-2026-11-06.json),
+[integrity correction](docs/research/p6-ac1027-cover-oda-arm64-package-integrity-2026-11-02.json)
+and [same-version resave receipt](docs/research/p6-ac1027-cover-oda-same-version-resave-2026-11-03.json).
 
 **MESH DWG face-stream guards:** `DRW_Mesh::parseDwg` reserves the parsed-face vector to the validated face-stream item bound and rejects face records with fewer than three vertex indices, matching the typed geometry invariant and DXF reader. Generated AC1024 vectors cover triangle readback, two-index face refusal with cleared state and same-object retry, plus the existing malformed crease-count refusal/retry selector. These are bounded parsing and failure-state controls only; the ODA v5.4.1 PDF has no `AcDbSubDMesh` layout entry, and no DWG layout or native geometry support claim is inferred. See the [face-record reserve receipt](docs/research/p6-mesh-dwg-face-record-reserve-guard-2026-11-02.json) and [face-count domain receipt](docs/research/p6-mesh-dwg-face-count-domain-2026-11-02.json).
 
