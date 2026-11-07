@@ -45,6 +45,15 @@
     "saved_dxf_sha256": "5e18501cb56559cd9ff5c096a7011d0bcfda5e78ec0dafe7ace93a8d62cbf8d9",
     "fixtures": "All test inputs and outputs remain in /private/tmp; none were added to this repository."
   },
+  "in_tree_usage_requirement_guard": {
+    "target": "libdxfrw_consumer_cxx17_contract",
+    "source": "tests/consumer_cxx17_contract.cpp",
+    "consumer_requested_standard": "C++14",
+    "linked_target": "dxfrw",
+    "assertion": "The public <optional> feature macro and DRW_Variant::ActiveDwgLayerReference are available to the downstream translation unit.",
+    "effective_compile_flags": "-std=c++17 in build-gcc/tests/CMakeFiles/libdxfrw_consumer_cxx17_contract.dir/flags.make",
+    "result": "cmake --build build-gcc --target libdxfrw_consumer_cxx17_contract -j 4 succeeded"
+  },
   "interpretation": "The observed failure is explained by the consumer compile mode and does not establish a source/API defect under the libdxfrw target's declared C++17 requirement. The repository AGENTS.md description of libdxfrw as C++14 is stale relative to CMakeLists.txt and must not be used as the current build contract.",
   "implementation_follow_up": [
     "Prefer the installed CONFIG package in LibreCAD_3 with CMAKE_FIND_PACKAGE_PREFER_CONFIG=ON and libdxfrw_DIR set to the selected package, or update its module-mode imported interface target to publish cxx_std_17. Do not pass raw source include/library variables without a compile-feature contract.",

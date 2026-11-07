@@ -2418,7 +2418,10 @@ Native source-release builds and platform qualification remain open.
   the existing focused DXF export tests pass 3/3 and the planar LINE/CIRCLE
   open/save/reopen control passes 1/1 against that exact installed package
   archive; `DYLD_PRINT_LIBRARIES` confirms the new persistence/kernel dylibs
-  were loaded. Outputs remain scratch-only. Keep the default module-mode/raw-path
+  were loaded. An in-tree compile-only consumer guard now requests C++14 while
+  linking `dxfrw` and requires the public `<optional>` API to compile; its
+  effective command is `-std=c++17` and the focused target builds. Outputs
+  remain scratch-only. Keep the default module-mode/raw-path
   failure recorded. This closes only this dirty macOS ARM64 persistence
   integration probe; preserve the pinned libdxfrw revision and qualify a clean
   consumer revision, full application, ABI, and Linux/Windows separately.

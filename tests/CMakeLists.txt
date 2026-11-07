@@ -4824,6 +4824,20 @@ target_include_directories(lc3_compat_check PRIVATE
 )
 target_compile_features(lc3_compat_check PRIVATE cxx_std_17)
 
+# The public target must carry the language level required by the installed
+# headers. Model an older downstream's own requested standard and let dxfrw's
+# PUBLIC cxx_std_17 usage requirement raise the effective compile mode. This
+# catches regressions that the direct C++17 API facade check above cannot.
+add_library(libdxfrw_consumer_cxx17_contract OBJECT
+    ${CMAKE_CURRENT_SOURCE_DIR}/consumer_cxx17_contract.cpp
+)
+set_target_properties(libdxfrw_consumer_cxx17_contract PROPERTIES
+    CXX_STANDARD 14
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
+target_link_libraries(libdxfrw_consumer_cxx17_contract PRIVATE dxfrw)
+
 # Exercise a public DRW_Interface sink against locally generated 3D DXF
 # records. The probe writes ASCII and binary DXFs at runtime, reads them back
 # through dxfRW, and checks that native Z/topology/OCS values reach the sink.
