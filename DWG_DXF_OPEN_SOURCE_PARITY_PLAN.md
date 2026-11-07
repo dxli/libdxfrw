@@ -956,6 +956,16 @@ refused; the AC1027 ENC fixture's references `0x35`–`0x38` have no target
 objects, and the AC1021 fixture has not passed the strict-complete gate. This
 is read compatibility for the identified historical writer, not producer
 interoperability or output qualification ([receipt](docs/research/p4-libreCAD-historical-control-read-profile-2026-11-05.json)).
+The current AC1021 fixture recheck confirms why this is not a one-condition
+output fix: all 26 HANDLE-map frames publish with zero parse failures, but the
+integrity ledger has seven Error rows—four null current HEADER references and
+role errors for LTYPE_CONTROL, the LAYER-to-LTYPE pointer, and BLOCK_CONTROL—plus
+nine checksum warnings. A temporary local probe showed that matching the exact
+legacy BYBLOCK/BYLAYER/CONTINUOUS LTYPE order satisfies the membership predicate
+alone; strict conversion still refuses on the independent source errors, and
+that probe was reverted. Keep output refused until each source error has a
+format-valid, lossless projection; do not whitelist the LTYPE member order by
+itself. See the [strict-refusal recheck](docs/research/p4-libreCAD-ac1021-strict-refusal-recheck-2026-11-07.json).
 Keep the selected one-layer graph's output
 qualification open for physical source conversion: generated entity and layer
 LTYPE references now bind to same-import rows, but no whole-source producer
