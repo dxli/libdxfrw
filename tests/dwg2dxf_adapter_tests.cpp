@@ -78904,6 +78904,11 @@ bool sortEntsAdapter(const std::filesystem::path& prefix) {
         if (!expectRejectedWithoutReplacing())
             return fail("missing SORTENTSTABLE target was not rejected safely");
 
+        source.sortEntsTables.front().m_entityHandles = {DRW::NoHandle};
+        source.rawSortEntsTables.front() = makeRaw(source.sortEntsTables.front());
+        if (!expectRejectedWithoutReplacing())
+            return fail("null SORTENTSTABLE target was not rejected atomically");
+
         source.sortEntsTables.front().m_entityHandles = {0x101u};
         source.rawSortEntsTables.front() = makeRaw(source.sortEntsTables.front());
         if (!converter.fileExport(output.string(), DRW::AC1027, binary,

@@ -108,6 +108,20 @@ created locally from scratch for the specific control.
    [source inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json),
    and linked candidate receipts below.
 
+   A focused AC1021 `Pool_Detail.dwg` read now retains all 3,222 ordered
+   SORTENTSTABLE entries in object `0x4097`, including 14 decoded null entity
+   soft-pointer slots. ODA v5.4.1 §20.4.93 defines the counted entity refs as
+   soft pointers but does not establish these null slots as valid members;
+   LibreDWG 0.14 exposes the same 14 zero refs. The parser now preserves them
+   as decoded values, while the strict adapter rejects a zero target and its
+   generated control checks destination preservation. This fixes the prior
+   object-parse failure only: the whole source remains refused because its
+   LTYPE_CONTROL and BLOCK_CONTROL contain null members, HEADER `$CLAYER`
+   points to unresolved handle `0x0E`, and 113 opaque callbacks lack output
+   qualification. No selected-source or support claim follows. Keep the null
+   SORTENTSTABLE graph refused and move to a separate source-ready graph; see
+   the [read-recovery receipt](docs/research/p4-ac1021-pool-detail-sortents-null-target-read-recovery-2026-11-07.json).
+
    The locally generated AC1021 GROUP parent/reactor graph now passes the exact
    extension-planner closure test; unresolved target refusal and same-planner
    retry pass. The receipt records the scratch recipe, source/tool hashes and

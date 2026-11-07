@@ -11885,9 +11885,10 @@ bool DRW_SortEntsTable::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint
     for (std::uint32_t i = 0; i < numEntries; ++i) {
         dwgHandle entH;
         if (!readDwgObjectHandleWithinFrame(version, *handleBuf, true, entH)
-            || entH.code != DRW::DwgSoftPointer
-            || entH.ref == DRW::NoHandle)
+            || entH.code != DRW::DwgSoftPointer)
             return fail();
+        // Preserve typed null source slots. The adapter's strict graph check
+        // rejects any zero entity target before DXF publication.
         parsedEntityHandles.push_back(entH.ref);
     }
     if (!buf->isGood() || !handleBuf->isGood())

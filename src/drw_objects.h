@@ -1037,7 +1037,9 @@ struct DRW_DwgGroupMembership {
 //!
 //! Each declared row has an entity soft pointer and an inline sort handle. A
 //! null sort handle is meaningful: it requests the entity's own handle as the
-//! sort key, so it must not be removed from the counted sequence.
+//! sort key, so it must not be removed from the counted sequence. A decoded
+//! zero entity handle is retained as a null slot, but is not a resolved graph
+//! edge and must be refused by strict output.
 struct DRW_DwgSortEntsMembership {
   struct Entry {
     std::uint32_t m_entityHandle = DRW::NoHandle;

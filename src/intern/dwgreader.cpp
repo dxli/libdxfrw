@@ -2461,8 +2461,7 @@ bool dwgReader::validateDwgFramePublicationStaticArtifacts(
          ++index) {
       const DRW_DwgSortEntsMembership::Entry &entry =
           sortEntsMembership->m_entries[index];
-      if (entry.m_entityHandle == DRW::NoHandle ||
-          entry.m_ordinal != static_cast<std::uint32_t>(index) ||
+      if (entry.m_ordinal != static_cast<std::uint32_t>(index) ||
           entry.m_sortFallsBackToEntity !=
               (entry.m_sortHandle == DRW::NoHandle)) {
         return false;

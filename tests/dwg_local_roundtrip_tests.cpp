@@ -4572,7 +4572,10 @@ public:
         invalidSortEnts.handle = 0xB201u;
         invalidSortEnts.parentHandle = DRW::DwgModelSpaceBlockRecordHandle;
         invalidSortEnts.m_blockOwnerHandle = DRW::DwgModelSpaceBlockRecordHandle;
-        invalidSortEnts.m_entityHandles = {modelSpaceLineHandle_};
+        // Equal-cardinality arrays with a null target isolate the wire-domain
+        // guard; DWG SORTENTSTABLE targets must resolve before DXF output.
+        invalidSortEnts.m_sortHandles = {modelSpaceLineHandle_};
+        invalidSortEnts.m_entityHandles = {DRW::NoHandle};
         rejectedMalformedSortEntsTable_ = !writer_->writeSortEntsTable(&invalidSortEnts);
 
         DRW_FieldList invalidFieldList;
