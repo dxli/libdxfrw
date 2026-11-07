@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-06 (locally generated AC1021 GROUP 2D/3D strict DXF readback completed; strict-source residuals re-queued). This file
+Updated 2026-11-06 (AC1021 `colorwh.dwg` strict whole-source ASCII conversion and fresh same-version re-export now pass after six VIEWPORT callbacks were qualified). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -61,7 +61,7 @@ created locally from scratch for the specific control.
 
 ### Next work packets
 
-1. **P4 / source-qualified OBJECTS graph — next: the remaining generated-source output gates:** the
+1. **P4 / source-qualified OBJECTS graph — next: resolve the next source-ready physical OBJECTS profile:** the
    28-stream same-version census is complete; its four strict-output sources
    are already profiled (children-room, lineweights, mechanical, tablet). The
    exact children-room selected-output inventory is complete (112/112 standard
@@ -70,6 +70,24 @@ created locally from scratch for the specific control.
    lineweights' exact four-VIEWPORT ASCII/Binary readback and strict
    same-version conversion now pass ([receipt](docs/research/p4-ac1021-lineweights-viewport-physical-output-2026-11-06.json)).
    Do not repeat these source scans.
+
+   A further existing local source, `/Users/dli/doc/dwg/colorwh.dwg` (AC1021,
+   SHA-256 `7c70a76ce00647770b5026727fd0156a94a11d456db47db97d0bdf5a81acc344`),
+   now passes the exact three-LAYOUT and six-VIEWPORT profile. The ASCII/Binary
+   selected-output selector verifies all 52/52 opaque callbacks, reciprocal
+   paper-space BLOCK_RECORDs, VIEWPORT layer/style targets, projected group
+   68/69 IDs, the 340 clip-flag/handle pairs and both remapped co-owned CIRCLE
+   boundaries, plus atomic refusal, same-adapter retry and typed readback. A
+   staged LAYER handle lookup previously rejected valid BLOCKS-before-TABLES
+   forward references; the entity preflight now uses the frozen source binding,
+   with the final staged-table proof still required. Existing AC1021 lineweights
+   viewport output also passes after this ordering change. Full strict AC1021
+   ASCII conversion now succeeds, and a fresh same-version re-export succeeds
+   with the same section/class record census (36,505 records each). See the
+   [colorwh receipt](docs/research/p4-ac1021-colorwh-layout-viewport-strict-readback-2026-11-06.json).
+   This is one unauthenticated local source profile, not independent producer,
+   native clipping, platform, or broader support evidence; no drawing fixture
+   or derivative is committed.
 
    Recent candidates remain refused for distinct reasons: AC1024 architectural
    SORTENTSTABLE owner scope, title-block null BLOCK_CONTROL members, AC1021
@@ -105,19 +123,23 @@ created locally from scratch for the specific control.
    independent producer behavior, LibreCAD_3/FreeCAD acceptance or native
    geometry/group semantics ([receipt](docs/research/p4-ac1021-generated-group-2d-3d-strict-dxf-readback-2026-11-06.json)).
 
-   **Next implementation slice:** select the next source-ready P4 graph from
-   the candidate inventory below and bind its exact frame/owner/reference
-   closure, output projection and fresh readback. Keep unresolved candidates
-   refused, reuse their existing focused selector and do not commit external
-   drawing fixtures. Do not rerun the ODA CLI for the AC1027 suffix on unchanged
-   launch state: the fifth bounded post-unlock attempt aborted during
-   pasteboard/XPC initialization without output. Retry that external check only
-   after a functioning supported GUI/converter session or another eligible
-   independent source becomes available. After that, admit another
-   P4 code slice only when a source has
+   **Next implementation slice:** resume from an already inventoried physical
+   candidate only when its read disposition and full owner/reference closure
+   are evidenced; do not repeat the 28-stream corpus scan. Current unresolved
+   screens remain distinct: AC1024 architectural named-block SORTENTSTABLE
+   owner scope, title-block null BLOCK_CONTROL members, AC1021 truetype
+   LayerStates plot-screening target, AC1027 Cover incomplete reference
+   closure, and AC1018 Extruder2 incomplete parser disposition. For each, use
+   its linked receipt to identify the cheapest unresolved proof; keep strict
+   refusal until that proof passes. The ODA CLI retry after the user's latest
+   report that the Mac is being unlocked is still pending; check the resulting
+   session state before deciding whether a bounded retry is possible. The last
+   recorded launch aborted during pasteboard/XPC initialization without output,
+   so do not repeat an unchanged failing launch. Admit another P4 code slice
+   only when a source has
    complete read disposition, an independently checked root/owner/reference
-   graph, and supported emitted routes. Screen one candidate at a time; stop
-   on the first unsatisfied gate, preserve strict refusal, and move to an
+   graph, and supported emitted routes. Screen candidates one at a time; when
+   one fails a gate, preserve strict refusal and continue with another
    independent source-ready task. Keep test drawings outside Git unless they
    already exist in LibreCAD/libdxfrw or were authored from scratch.
 2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**

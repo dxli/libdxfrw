@@ -50747,7 +50747,12 @@ bool physicalViewportOutputReadback(
         && hasLayoutIdentity(0x1B18u, "ISO A2 Plot")
         && hasLayoutIdentity(0x2B16u, "ANSI C Plot")
         && source.dwgReadOutcome.opaqueViewCallbacks == 51u;
-
+    const bool ac1021ColorwhSource = ac1021Source
+        && source.layouts.size() == 3u
+        && hasLayoutIdentity(0x22u, "Model")
+        && hasLayoutIdentity(0x6E6u, "AutoCAD Color Index")
+        && hasLayoutIdentity(0x1DBDu, "True Color")
+        && source.dwgReadOutcome.opaqueViewCallbacks == 52u;
     struct LocatedViewport {
         const DRW_Viewport* viewport{nullptr};
         std::string blockName;
@@ -50765,6 +50770,12 @@ bool physicalViewportOutputReadback(
         expectedOpaqueCallbacks = {
             {0x1B1Au, 34}, {0x1B1Bu, 34},
             {0x2B18u, 34}, {0x2B19u, 34}, {0x2B80u, 74}};
+    } else if (ac1021ColorwhSource) {
+        expectedHandles = {0x6A7u, 0x6A8u, 0x6AAu, 0x6ABu,
+                           0x1D7Eu, 0x1D81u};
+        expectedOpaqueCallbacks = {
+            {0x6A7u, 34}, {0x6A8u, 34}, {0x6AAu, 34}, {0x6ABu, 34},
+            {0x1D7Eu, 34}, {0x1D81u, 34}};
     } else if (ac1021Source
         && source.dwgReadOutcome.opaqueViewCallbacks == 186u) {
         expectedHandles = {0x266u, 0x26Au};
@@ -50860,7 +50871,8 @@ bool physicalViewportOutputReadback(
             && sameDouble(lhs.z, rhs.z);
     };
     const auto sameProfile = [&sameDouble, &sameCoord](
-            const DRW_Viewport& expected, const DRW_Viewport& actual) {
+            const DRW_Viewport& expected, const DRW_Viewport& actual,
+            bool remappedClipBoundary) {
         return actual.eType == DRW::VIEWPORT
             && actual.space == expected.space
             && actual.layer == expected.layer
@@ -50922,7 +50934,8 @@ bool physicalViewportOutputReadback(
             && actual.ambientColor == expected.ambientColor
             && actual.ambientColorRgb == expected.ambientColorRgb
             && actual.ambientColorName == expected.ambientColorName
-            && actual.clipBoundaryHandle == expected.clipBoundaryHandle
+            && (remappedClipBoundary
+                || actual.clipBoundaryHandle == expected.clipBoundaryHandle)
             && actual.namedUcsHandle == expected.namedUcsHandle
             && actual.baseUcsHandle == expected.baseUcsHandle
             && actual.backgroundHandle == expected.backgroundHandle
@@ -51048,8 +51061,37 @@ bool physicalViewportOutputReadback(
         }
         return found;
     };
+    struct LocatedCircle {
+        const DRW_Circle* circle{nullptr};
+        std::string blockName;
+        bool mainContainer{false};
+    };
+    const auto uniqueCircleByHandle = [](const dx_data& data,
+                                         std::uint32_t handle) {
+        LocatedCircle found;
+        std::size_t matches = 0u;
+        const auto visit = [&found, &matches, handle](
+                const dx_ifaceBlock* block, bool mainContainer) {
+            if (block == nullptr)
+                return;
+            for (const DRW_Entity* entity : block->ent) {
+                if (entity == nullptr || entity->handle != handle
+                    || entity->eType != DRW::CIRCLE)
+                    continue;
+                const auto* circle = dynamic_cast<const DRW_Circle*>(entity);
+                if (circle == nullptr)
+                    continue;
+                found = {circle, block->name, mainContainer};
+                ++matches;
+            }
+        };
+        visit(data.mBlock, true);
+        for (const dx_ifaceBlock* block : data.blocks)
+            visit(block, false);
+        return matches == 1u ? found : LocatedCircle{};
+    };
     if (ac1021Source && !ac1021LineweightsSource
-        && !ac1021TabletSource) {
+        && !ac1021TabletSource && !ac1021ColorwhSource) {
         const DRW_Layout* layout =
             uniqueLayoutByName(source, "dwgmodels.com");
         if (layout == nullptr || layout->handle != 0xD7u
@@ -51152,6 +51194,90 @@ bool physicalViewportOutputReadback(
                 || viewport.space != DRW::PaperSpace
                 || viewport.xDictHandle != 0u)
                 return fail("AC1021 tablet VIEWPORT owner/layout or extension profile changed");
+        }
+    } else if (ac1021ColorwhSource) {
+        const auto verifyLayout = [&source, &uniqueLayoutByName,
+                                   &uniqueBlockRecord](
+                const char* name, std::uint32_t layoutHandle,
+                std::uint32_t expectedBlockHandle,
+                std::initializer_list<std::uint32_t> viewportHandles) {
+            const DRW_Layout* layout = uniqueLayoutByName(source, name);
+            const std::uint32_t blockHandle = layout == nullptr ? 0u
+                : layout->paperSpaceBlockRecordHandle.ref;
+            const DRW_Block_Record* owner = uniqueBlockRecord(source, blockHandle);
+            return layout != nullptr && layout->handle == layoutHandle
+                && blockHandle == expectedBlockHandle
+                && layout->viewportCount
+                    == static_cast<std::int32_t>(viewportHandles.size())
+                && layout->viewportHandles
+                    == std::vector<std::uint32_t>(viewportHandles)
+                && owner != nullptr && owner->handle == blockHandle
+                && owner->layoutHandle == layoutHandle;
+        };
+        if (!verifyLayout("AutoCAD Color Index", 0x6E6u, 0x6A6u,
+                          {0x6A7u, 0x6A8u, 0x6AAu, 0x6ABu})
+            || !verifyLayout("True Color", 0x1DBDu, 0x1D7Du,
+                             {0x1D7Eu, 0x1D81u}))
+            return fail("AC1021 colorwh LAYOUT/BLOCK_RECORD viewport lists are not exact and reciprocal");
+        for (const auto& located : sourceViewports) {
+            const DRW_Viewport& viewport = *located.viewport;
+            const DRW_Layout* layout = uniqueLayoutForViewport(
+                source, viewport.handle);
+            const DRW_Block_Record* owner = layout == nullptr ? nullptr
+                : uniqueBlockRecord(
+                    source, layout->paperSpaceBlockRecordHandle.ref);
+            const std::uint32_t expectedLayout =
+                viewport.handle == 0x6A7u || viewport.handle == 0x6A8u
+                    || viewport.handle == 0x6AAu || viewport.handle == 0x6ABu
+                    ? 0x6E6u : 0x1DBDu;
+            const std::uint32_t expectedLayer =
+                viewport.handle == 0x6A7u || viewport.handle == 0x1D7Eu
+                    ? 0x10u : 0x4D6u;
+            const auto layer = std::find_if(
+                source.layers.begin(), source.layers.end(),
+                [expectedLayer, &viewport](const DRW_Layer& candidate) {
+                    return candidate.handle == expectedLayer
+                        && candidate.name == viewport.layer;
+                });
+            const auto style = std::find_if(
+                source.visualStyles.begin(), source.visualStyles.end(),
+                [&viewport](const DRW_VisualStyle& candidate) {
+                    return candidate.handle == 0xBEF7u
+                        && candidate.handle == viewport.visualStyleHandle;
+                });
+            if (layout == nullptr || layout->handle != expectedLayout
+                || viewport.space != DRW::PaperSpace
+                || owner == nullptr || owner->layoutHandle != layout->handle
+                || (!located.mainContainer
+                    && (located.blockName != owner->name
+                        || (viewport.parentHandle != 0u
+                            && viewport.parentHandle != owner->handle)))
+                || (located.mainContainer && viewport.parentHandle != 0u
+                    && viewport.parentHandle != owner->handle)
+                || viewport.xDictHandle != 0u
+                || !viewport.reactorHandles.empty()
+                || layer == source.layers.end()
+                || style == source.visualStyles.end())
+                return fail("AC1021 colorwh VIEWPORT layout, layer/style, or optional-reference profile changed");
+            const std::uint32_t expectedClip = viewport.handle == 0x6AAu
+                ? 0x6A9u : viewport.handle == 0x1D81u ? 0x1D80u : 0u;
+            if (viewport.clipBoundaryHandle != expectedClip)
+                return fail("AC1021 colorwh VIEWPORT clip-boundary handle profile changed");
+            constexpr int nonRectangularClipFlag = 0x10000;
+            if (((viewport.statusFlags & nonRectangularClipFlag) != 0)
+                != (expectedClip != 0u))
+                return fail("AC1021 colorwh VIEWPORT clip flag and boundary handle disagree");
+            if (expectedClip != 0u) {
+                const LocatedCircle boundary = uniqueCircleByHandle(
+                    source, expectedClip);
+                if (boundary.circle == nullptr
+                    || boundary.circle->parentHandle != viewport.parentHandle
+                    || boundary.circle->space != DRW::PaperSpace
+                    || boundary.circle->layer != viewport.layer
+                    || boundary.mainContainer != located.mainContainer
+                    || boundary.blockName != located.blockName)
+                    return fail("AC1021 colorwh nonrectangular clip boundary is not a unique co-owned paper-space CIRCLE");
+            }
         }
     } else if (ac1021LineweightsSource) {
         const auto verifyLayout = [&source, &uniqueLayoutByName,
@@ -51341,7 +51467,7 @@ bool physicalViewportOutputReadback(
         if (!exportSelected())
             return fail("corrected physical VIEWPORT source could not retry on the same adapter");
         if (ac1021Source && !ac1021LineweightsSource
-            && !ac1021TabletSource) {
+            && !ac1021TabletSource && !ac1021ColorwhSource) {
             for (const std::uint32_t handle :
                     {0x267u, 0x268u, 0x26Bu, 0x26Cu}) {
                 if (!DxIfaceStandardDwgCaptureTestAccess::standardDwgOutputQualified(
@@ -51402,7 +51528,7 @@ bool physicalViewportOutputReadback(
                     != source.dwgReadOutcome.opaqueViewCallbacks))
             return fail("physical VIEWPORT retry did not qualify every source-bound callback in the admitted AC1024 witness");
         if (ac1021Source && !ac1021LineweightsSource
-            && !ac1021TabletSource
+            && !ac1021TabletSource && !ac1021ColorwhSource
             && source.dwgReadOutcome.opaqueViewCallbacks != 186u)
             return fail("physical AC1021 VIEWPORT source census changed during output");
         if (ac1021TabletSource
@@ -51412,6 +51538,10 @@ bool physicalViewportOutputReadback(
         if (ac1021LineweightsSource
             && source.dwgReadOutcome.opaqueViewCallbacks != 49u)
             return fail("physical AC1021 lineweights VIEWPORT source census changed during output");
+        if (ac1021ColorwhSource
+            && (source.dwgReadOutcome.opaqueViewCallbacks != 52u
+                || qualifiedOpaqueCallbacks != 52u))
+            return fail("physical AC1021 colorwh VIEWPORT source census or selected callback proof count changed");
 
         dx_iface outputReader;
         dx_data output;
@@ -51502,7 +51632,8 @@ bool physicalViewportOutputReadback(
             for (std::size_t candidate = 0; candidate < outputViewports.size();
                  ++candidate) {
                 if (sameProfile(*sourceViewports[index].viewport,
-                                *outputViewports[candidate].viewport)) {
+                                *outputViewports[candidate].viewport,
+                                ac1021ColorwhSource)) {
                     if (match != outputViewports.size())
                         return fail("physical VIEWPORT source projection is ambiguous on readback");
                     match = candidate;
@@ -51511,10 +51642,28 @@ bool physicalViewportOutputReadback(
             if (match == outputViewports.size() || matchedOutput[match]
                 || sourceViewports[index].mainContainer
                     != outputViewports[match].mainContainer
-                || (!ac1021LineweightsSource
+                || (!ac1021LineweightsSource && !ac1021ColorwhSource
                     && sourceViewports[index].blockName
-                        != outputViewports[match].blockName))
+                        != outputViewports[match].blockName)) {
+                std::cerr << "VIEWPORT readback match detail: source=0x"
+                          << std::hex << sourceViewports[index].viewport->handle
+                          << std::dec << " source-clip=0x" << std::hex
+                          << sourceViewports[index].viewport->clipBoundaryHandle
+                          << std::dec << " main="
+                          << sourceViewports[index].mainContainer << " block='"
+                          << sourceViewports[index].blockName << "' match="
+                          << match << '/' << outputViewports.size() << '\n';
+                for (const auto& candidate : outputViewports)
+                    std::cerr << "  output handle=0x" << std::hex
+                              << candidate.viewport->handle << " clip=0x"
+                              << candidate.viewport->clipBoundaryHandle
+                              << std::dec << " main=" << candidate.mainContainer
+                              << " block='" << candidate.blockName << "' layer='"
+                              << candidate.viewport->layer << "' visual=0x"
+                              << std::hex << candidate.viewport->visualStyleHandle
+                              << std::dec << '\n';
                 return fail("physical VIEWPORT source fields, identity, or entity-container membership changed on readback");
+            }
             const DRW_Viewport& sourceViewport =
                 *sourceViewports[index].viewport;
             const DRW_Viewport& outputViewport =
@@ -51550,6 +51699,36 @@ bool physicalViewportOutputReadback(
                 || outputViewport.parentHandle != outputOwner->handle
                 || outputStyleMatches != 1u || outputLayerMatches != 1u)
                 return fail("physical VIEWPORT owner, layer, or visual-style target does not resolve after readback");
+            if (ac1021ColorwhSource) {
+                if ((sourceViewport.clipBoundaryHandle == 0u)
+                    != (outputViewport.clipBoundaryHandle == 0u))
+                    return fail("AC1021 colorwh VIEWPORT clip-boundary reference presence changed on readback");
+                if (sourceViewport.clipBoundaryHandle != 0u) {
+                    const LocatedCircle sourceBoundary = uniqueCircleByHandle(
+                        source, sourceViewport.clipBoundaryHandle);
+                    const LocatedCircle outputBoundary = uniqueCircleByHandle(
+                        output, outputViewport.clipBoundaryHandle);
+                    if (sourceBoundary.circle == nullptr
+                        || outputBoundary.circle == nullptr
+                        || sourceBoundary.circle->parentHandle
+                            != sourceViewport.parentHandle
+                        || outputBoundary.circle->parentHandle
+                            != outputOwner->handle
+                        || outputBoundary.circle->layer
+                            != outputViewport.layer
+                        || outputBoundary.mainContainer
+                            != outputViewports[match].mainContainer
+                        || outputBoundary.blockName
+                            != outputViewports[match].blockName
+                        || !sameCoord(sourceBoundary.circle->basePoint,
+                                      outputBoundary.circle->basePoint)
+                        || !sameDouble(sourceBoundary.circle->radious,
+                                      outputBoundary.circle->radious)
+                        || !sameCoord(sourceBoundary.circle->extPoint,
+                                      outputBoundary.circle->extPoint))
+                        return fail("AC1021 colorwh remapped clip-boundary CIRCLE does not resolve in the same output paper-space owner with unchanged geometry");
+                }
+            }
             const auto sourceLayoutViewport = std::find(
                 sourceLayout->viewportHandles.begin(),
                 sourceLayout->viewportHandles.end(), sourceViewport.handle);
@@ -52218,11 +52397,17 @@ bool physicalLayoutOutputReadback(
         && hasIdentity(0x22u, "Model")
         && hasIdentity(0x102u, "ISO A4 Size")
         && hasIdentity(0x108u, "Letter Size");
+    const bool ac1021ColorwhSource = ac1021Source
+        && source.layouts.size() == 3u
+        && hasIdentity(0x22u, "Model")
+        && hasIdentity(0x6E6u, "AutoCAD Color Index")
+        && hasIdentity(0x1DBDu, "True Color");
     if (!imported
         || source.sourceFormat != dx_source_format::DWG
         || (!ac1015Source && !ac1021Source
             && source.sourceVersion != DRW::AC1024)
-        || source.layouts.size() != (ac1021LineweightsSource ? 3u : 2u)
+        || source.layouts.size()
+            != ((ac1021LineweightsSource || ac1021ColorwhSource) ? 3u : 2u)
         || !source.hasNamedObjectDictionary)
         return fail("physical LAYOUT source is not an admitted AC1015/AC1021/AC1024 graph");
 
@@ -52236,6 +52421,10 @@ bool physicalLayoutOutputReadback(
     } else if (ac1021LineweightsSource) {
         expected = {{0x22u, "Model"}, {0x102u, "ISO A4 Size"},
                     {0x108u, "Letter Size"}};
+    } else if (ac1021ColorwhSource) {
+        expected = {{0x22u, "Model"},
+                    {0x6E6u, "AutoCAD Color Index"},
+                    {0x1DBDu, "True Color"}};
     } else if (!ac1015Source && hasIdentity(0x22u, "Model")
         && hasIdentity(0x59u, "Layout1")) {
         expected = {{0x22u, "Model"}, {0x59u, "Layout1"}};
@@ -52521,7 +52710,7 @@ bool physicalLayoutOutputReadback(
         || sourceLayoutDictionary->m_entries.size() != source.layouts.size())
         return fail("physical ACAD_LAYOUT dictionary root or cardinality is not uniquely closed");
     std::vector<std::uint32_t> layoutExtensionFrameHandles;
-    if (ac1021LineweightsSource) {
+    if (ac1021LineweightsSource || ac1021ColorwhSource) {
         for (const DRW_Layout* layout : sourceLayouts) {
             if (layout->xDictHandle == 0u)
                 continue;
@@ -52709,7 +52898,7 @@ bool physicalLayoutOutputReadback(
                 || !layout->viewportHandles.empty())
                 return fail("physical AC1015 LAYOUT viewports are outside the exact local source profile");
         } else if (layout->name == "Model") {
-            if (ac1021LineweightsSource) {
+            if (ac1021LineweightsSource || ac1021ColorwhSource) {
                 if (layout->lastActiveViewportHandle.ref != 0u)
                     return fail("physical lineweights Model LAYOUT has an unexpected active viewport handle");
             } else {
@@ -52833,7 +53022,8 @@ bool physicalLayoutOutputReadback(
             return fail("invalid physical LAYOUT block-record target was not refused atomically");
         if (!exportPartial())
             return fail("corrected physical LAYOUT graph could not retry on the same adapter");
-        if (ac1021Source && !ac1021LineweightsSource) {
+        if (ac1021Source && !ac1021LineweightsSource
+            && !ac1021ColorwhSource) {
             for (const std::uint32_t handle :
                     {0x205u, 0x288u, 0x3BFu, 0x3C0u}) {
                 if (!DxIfaceStandardDwgCaptureTestAccess::standardDwgOutputQualified(
@@ -52846,7 +53036,7 @@ bool physicalLayoutOutputReadback(
                 printStandardDwgOutputProofHandles(
                     writer, source.importGeneration);
         }
-        if (ac1021LineweightsSource) {
+        if (ac1021LineweightsSource || ac1021ColorwhSource) {
             for (const std::uint32_t handle : layoutExtensionFrameHandles)
                 if (!DxIfaceStandardDwgCaptureTestAccess::
                         standardDwgOutputQualified(
@@ -53118,7 +53308,7 @@ bool physicalLayoutOutputReadback(
                     || outputMatch->lastActiveViewportHandle.ref != 0u)
                     return fail("physical AC1015 LAYOUT active-viewport field changed");
             } else if (sourceLayout.name == "Model") {
-                if (ac1021LineweightsSource) {
+                if (ac1021LineweightsSource || ac1021ColorwhSource) {
                     if (sourceLayout.lastActiveViewportHandle.ref != 0u
                         || outputMatch->lastActiveViewportHandle.ref != 0u)
                         return fail("physical lineweights Model LAYOUT active viewport field changed on output/readback");

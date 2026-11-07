@@ -35148,6 +35148,11 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
         && hasLayoutIdentity(0x22u, "Model")
         && hasLayoutIdentity(0x102u, "ISO A4 Size")
         && hasLayoutIdentity(0x108u, "Letter Size");
+    const bool ac1021ColorwhProfile = ac1021Profile
+        && cData->layouts.size() == 3u
+        && hasLayoutIdentity(0x22u, "Model")
+        && hasLayoutIdentity(0x6E6u, "AutoCAD Color Index")
+        && hasLayoutIdentity(0x1DBDu, "True Color");
     const bool ac1021TabletProfile = ac1021Profile
         && cData->layouts.size() == 3u
         && hasLayoutIdentity(0x22u, "Model")
@@ -35163,7 +35168,7 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
     const bool ac1018Profile = cData->sourceVersion == DRW::AC1018;
     const std::size_t expectedLayoutCount =
         (ac1018Profile || ac1021LineweightsProfile
-            || ac1021TabletProfile) ? 3u : 2u;
+            || ac1021TabletProfile || ac1021ColorwhProfile) ? 3u : 2u;
     if (cData->layouts.size() != expectedLayoutCount
         || !cData->hasNamedObjectDictionary
         || cData->namedObjectDictionary.handle == 0u
@@ -35253,6 +35258,9 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
     const std::vector<const char*> expected = ac1021LineweightsProfile
         ? std::vector<const char*>{
             "Model", "ISO A4 Size", "Letter Size"}
+        : ac1021ColorwhProfile
+        ? std::vector<const char*>{
+            "Model", "AutoCAD Color Index", "True Color"}
         : ac1021TabletProfile
         ? std::vector<const char*>{
             "Model", "ISO A2 Plot", "ANSI C Plot"}
@@ -35270,7 +35278,7 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
     try {
         if (ac1018Profile || ac1015Profile || ac1021Profile) {
             const std::vector<const char*> emptyRootNames =
-                ac1021LineweightsProfile
+                (ac1021LineweightsProfile || ac1021ColorwhProfile)
                 ? std::vector<const char*>{
                     "ACAD_GROUP", "ACAD_PLOTSETTINGS", "ACAD_COLOR"}
                 : ac1021Profile
@@ -35356,7 +35364,7 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
             // this NOD. Staged inspection checks the emitted graph against
             // this frozen source model.
             const std::vector<const char*> expectedNodNames =
-                ac1021LineweightsProfile
+                (ac1021LineweightsProfile || ac1021ColorwhProfile)
                 ? std::vector<const char*>{
                     "ACAD_COLOR", "ACAD_GROUP", "ACAD_LAYOUT",
                     "ACAD_MATERIAL", "ACAD_MLINESTYLE",
@@ -35695,6 +35703,9 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
         const bool expectedPaperLayouts = ac1021LineweightsProfile
             ? selectedNames.count("ISO A4 Size") == 1u
                 && selectedNames.count("Letter Size") == 1u
+            : ac1021ColorwhProfile
+            ? selectedNames.count("AutoCAD Color Index") == 1u
+                && selectedNames.count("True Color") == 1u
             : ac1021TabletProfile
             ? selectedNames.count("ISO A2 Plot") == 1u
                 && selectedNames.count("ANSI C Plot") == 1u
@@ -35776,6 +35787,12 @@ bool dx_iface::hasUnchangedDwgLayoutOutputSources(bool debug) const noexcept {
         && hasLayoutIdentity(0x22u, "Model")
         && hasLayoutIdentity(0x102u, "ISO A4 Size")
         && hasLayoutIdentity(0x108u, "Letter Size");
+    const bool ac1021ColorwhProfile = cData != nullptr
+        && cData->sourceVersion == DRW::AC1021
+        && cData->layouts.size() == 3u
+        && hasLayoutIdentity(0x22u, "Model")
+        && hasLayoutIdentity(0x6E6u, "AutoCAD Color Index")
+        && hasLayoutIdentity(0x1DBDu, "True Color");
     if (cData == nullptr || m_dwgLayoutOutputOwner != cData
         || m_dwgLayoutOutputGeneration != cData->importGeneration
         || cData->sourceFormat != dx_source_format::DWG
@@ -35788,7 +35805,7 @@ bool dx_iface::hasUnchangedDwgLayoutOutputSources(bool debug) const noexcept {
             && m_dwgLayoutOutputSourceVersion != DRW::AC1015
             && m_dwgLayoutOutputSourceVersion != DRW::AC1018
             && !(m_dwgLayoutOutputSourceVersion == DRW::AC1021
-                 && ac1021LineweightsProfile))
+                 && (ac1021LineweightsProfile || ac1021ColorwhProfile)))
         || (m_dwgLayoutOutputNodComplete
             != (m_dwgLayoutOutputNod.handle != 0u))
         || (m_dwgLayoutOutputSourceVersion == DRW::AC1024
@@ -35802,7 +35819,8 @@ bool dx_iface::hasUnchangedDwgLayoutOutputSources(bool debug) const noexcept {
         || (m_dwgLayoutOutputSourceVersion == DRW::AC1021
             && !m_dwgNodDictionaryOutputSources.empty()
             && m_dwgNodDictionaryOutputSources.size()
-                != (ac1021LineweightsProfile ? 3u : 1u))
+                != ((ac1021LineweightsProfile || ac1021ColorwhProfile)
+                    ? 3u : 1u))
         || cData->layouts.size() != m_dwgLayoutOutputSources.size()
         || cData->namedObjectDictionary.handle != m_dwgLayoutOutputNodHandle
         || cData->namedObjectDictionary.hardOwner
@@ -55506,13 +55524,15 @@ bool dx_iface::hasClosedDwgEntityLayerReferenceTree(
         return false;
     const DwgLayerOutputBinding& binding =
         m_dwgLayerOutputBindings[found->second];
+    // BLOCKS can be serialized before TABLES have published their source
+    // handle bindings. The immutable source binding is sufficient here;
+    // finalizeDwgLineTypeControlOutput verifies the actual emitted LAYER and
+    // remapped handle after all output sections have been staged.
     if (binding.sourceHandle != sourceHandle
         || binding.sourceName != entity->layer
         || binding.emittedHandle == 0u
         || binding.emittedHandle == DRW::NoHandle
-        || !sameAsciiName(binding.outputName, binding.sourceName)
-        || dxfW->dxfWriteEmittedSourceTableHandle(sourceHandle)
-            != binding.emittedHandle)
+        || !sameAsciiName(binding.outputName, binding.sourceName))
         return false;
 
     if (const auto* polyline = dynamic_cast<const DRW_Polyline*>(entity)) {
@@ -73620,6 +73640,13 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
         {0x1B1Bu, 2, 2, "ISO A2 Plot"},
         {0x2B18u, 1, 1, "ANSI C Plot"},
         {0x2B19u, 2, 2, "ANSI C Plot"}}};
+    constexpr std::array<ExpectedViewport, 6> ac1021ColorwhProfile{{
+        {0x6A7u, 1, 1, "AutoCAD Color Index"},
+        {0x6A8u, 2, 2, "AutoCAD Color Index"},
+        {0x6AAu, 3, 3, "AutoCAD Color Index"},
+        {0x6ABu, 4, 4, "AutoCAD Color Index"},
+        {0x1D7Eu, 1, 1, "True Color"},
+        {0x1D81u, 2, 2, "True Color"}}};
     const auto matchesProfile = [&type34Entities](const auto& profile) {
         return type34Entities.size() == profile.size()
             && std::all_of(profile.begin(), profile.end(),
@@ -73634,6 +73661,8 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
         && matchesProfile(ac1021LineweightsProfile);
     const bool ac1021TabletSource = cData->sourceVersion == DRW::AC1021
         && matchesProfile(ac1021TabletProfile);
+    const bool ac1021ColorwhSource = cData->sourceVersion == DRW::AC1021
+        && matchesProfile(ac1021ColorwhProfile);
     const bool mechanicalSource = cData->sourceVersion == DRW::AC1024
         && matchesProfile(mechanicalProfile);
     const bool titleBlockSource = matchesProfile(titleBlockProfile);
@@ -73641,18 +73670,21 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
     // accepted only without an extension dictionary; that would add an
     // unqualified child graph and must stay refused until separately proved.
     if (!ac1021Source && !ac1021LineweightsSource
-        && !ac1021TabletSource && !mechanicalSource && !titleBlockSource)
+        && !ac1021TabletSource && !ac1021ColorwhSource
+        && !mechanicalSource && !titleBlockSource)
         return true;
     const ExpectedViewport* expected = ac1021Source
         ? ac1021Profile.data()
         : ac1021LineweightsSource ? ac1021LineweightsProfile.data()
         : ac1021TabletSource ? ac1021TabletProfile.data()
+        : ac1021ColorwhSource ? ac1021ColorwhProfile.data()
         : mechanicalSource ? mechanicalProfile.data()
                            : titleBlockProfile.data();
     const std::size_t expectedCount = ac1021Source
         ? ac1021Profile.size()
         : ac1021LineweightsSource ? ac1021LineweightsProfile.size()
         : ac1021TabletSource ? ac1021TabletProfile.size()
+        : ac1021ColorwhSource ? ac1021ColorwhProfile.size()
         : mechanicalSource ? mechanicalProfile.size()
                            : titleBlockProfile.size();
     const bool xrecordSource = ac1021Source || mechanicalSource;
@@ -73671,8 +73703,12 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
             || !frame->second.m_isEntity
             || frame->second.m_handle != item.handle
             || frame->second.m_version != cData->sourceVersion
-            || cData->m_opaqueDwgSourceFrameIdentities.count(key) != 1u)
+            || cData->m_opaqueDwgSourceFrameIdentities.count(key) != 1u) {
+            if (m_debugDwgOutputQualification)
+                std::cerr << "VIEWPORT source-frame identity failed: handle=0x"
+                          << std::hex << item.handle << std::dec << '\n';
             return false;
+        }
 
         const DRW_Viewport* viewport = nullptr;
         const dx_ifaceBlock* containingBlock = nullptr;
@@ -73701,15 +73737,34 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
         if (viewportCount != 1u || viewport == nullptr
             || containingBlock == nullptr
             || viewport->space != DRW::PaperSpace
-            || viewport->handle != item.handle)
+            || viewport->handle != item.handle) {
+            if (m_debugDwgOutputQualification)
+                std::cerr << "VIEWPORT typed identity failed: handle=0x"
+                          << std::hex << item.handle << std::dec
+                          << " count=" << viewportCount << " object="
+                          << static_cast<const void*>(viewport)
+                          << " container="
+                          << static_cast<const void*>(containingBlock) << '\n';
             return false;
+        }
         if (titleBlockSource && viewport->xDictHandle != 0u)
             return true;
         const auto projection = m_dwgViewportProjections.find(viewport);
         if (projection == m_dwgViewportProjections.end()
             || projection->second.first != item.status
-            || projection->second.second != item.id)
+            || projection->second.second != item.id) {
+            if (m_debugDwgOutputQualification)
+                std::cerr << "VIEWPORT projection mismatch: handle=0x"
+                          << std::hex << item.handle << std::dec
+                          << " expected=" << item.status << '/' << item.id
+                          << " actual="
+                          << (projection == m_dwgViewportProjections.end()
+                                  ? -1 : projection->second.first)
+                          << '/'
+                          << (projection == m_dwgViewportProjections.end()
+                                  ? -1 : projection->second.second) << '\n';
             return false;
+        }
 
         const DRW_Layout* layout = nullptr;
         std::size_t layoutCount = 0u;
@@ -73724,8 +73779,15 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
             ++layoutCount;
         }
         if (layoutCount != 1u || layout == nullptr
-            || layout->name != item.layoutName)
+            || layout->name != item.layoutName) {
+            if (m_debugDwgOutputQualification)
+                std::cerr << "VIEWPORT layout membership mismatch: handle=0x"
+                          << std::hex << item.handle << std::dec
+                          << " count=" << layoutCount << " actual="
+                          << (layout == nullptr ? "<none>" : layout->name)
+                          << " expected=" << item.layoutName << '\n';
             return false;
+        }
         const std::uint32_t sourceOwner =
             layout->paperSpaceBlockRecordHandle.ref;
         const DRW_Block_Record* owner = nullptr;
@@ -73771,7 +73833,14 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
             || !dxfW->dxfWriteRecordHasIdentity(
                 emittedOwner, "BLOCK_RECORD", "TABLES")
             || !recordOpaqueDwgOutputQualification(item.handle))
+        {
+            if (m_debugDwgOutputQualification)
+                std::cerr << "VIEWPORT emitted identity/owner proof failed: source=0x"
+                          << std::hex << item.handle << " emitted=0x"
+                          << emitted << " owner=0x" << emittedOwner << std::dec
+                          << " section=" << section << '\n';
             return false;
+        }
     }
     if (!xrecordSource)
         return m_dwgViewportXrecordOutputProofs.empty();
