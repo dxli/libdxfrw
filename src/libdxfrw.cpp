@@ -5808,8 +5808,8 @@ bool dxfRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
     if (!writeRequiredString(0, "SECTION")
         || !writeRequiredString(2, "TABLES"))
         return failWrite();
-    outputStage = "TABLES emission";
-    if (!writeTables() || m_writeError || writer->hasWriteError())
+    outputStage = "TABLES preflight";
+    if (!writeTables(&outputStage) || m_writeError || writer->hasWriteError())
         return failWrite();
     if (!writeRequiredString(0, "ENDSEC")
         || !writeRequiredString(0, "SECTION")
@@ -16943,6 +16943,15 @@ bool dxfRW::writeBlock(DRW_Block *bk){
 }
 
 bool dxfRW::writeTables() {
+    return writeTables(nullptr);
+}
+
+bool dxfRW::writeTables(const char** outputStage) {
+    const auto setOutputStage = [outputStage](const char* stage) {
+        if (outputStage != nullptr)
+            *outputStage = stage;
+    };
+    setOutputStage("TABLES preflight");
     if (!preflightDxfWrite()) {
         m_writeError = true;
         return false;
@@ -16977,6 +16986,7 @@ bool dxfRW::writeTables() {
         return !hasWriteFailure();
     };
 
+    setOutputStage("VPORT table");
     writer->writeString(0, "TABLE");
     writer->writeString(2, "VPORT");
     if (version > DRW::AC1009) {
@@ -17008,6 +17018,7 @@ bool dxfRW::writeTables() {
     if (!writeEndTable())
         return false;
 /*** LTYPE ***/
+    setOutputStage("LTYPE table");
     std::map<std::string, const DRW_LType*> mandatoryLinetypes;
     const auto mandatoryHandle = [](const std::string& name) {
         const std::string key = dxfSymbolNameKey(name);
@@ -17143,6 +17154,7 @@ bool dxfRW::writeTables() {
     if (!writeEndTable())
         return false;
 /*** LAYER ***/
+    setOutputStage("LAYER table");
     std::uint32_t sourceLayerControlHandle = 0u;
     std::uint32_t sourceLayerControlDictionary = 0u;
     auto* layerControlHandler =
@@ -17205,6 +17217,7 @@ bool dxfRW::writeTables() {
     if (!writeEndTable())
         return false;
 /*** STYLE ***/
+    setOutputStage("STYLE table");
     writer->writeString(0, "TABLE");
     writer->writeString(2, "STYLE");
     if (version > DRW::AC1009) {
@@ -17235,6 +17248,7 @@ bool dxfRW::writeTables() {
     if (!writeEndTable())
         return false;
 
+    setOutputStage("VIEW table");
     writer->writeString(0, "TABLE");
     writer->writeString(2, "VIEW");
     if (version > DRW::AC1009) {
@@ -17256,6 +17270,7 @@ bool dxfRW::writeTables() {
     if (!writeEndTable())
         return false;
 
+    setOutputStage("UCS table");
     writer->writeString(0, "TABLE");
     writer->writeString(2, "UCS");
     if (version > DRW::AC1009) {
@@ -17277,6 +17292,7 @@ bool dxfRW::writeTables() {
     if (!writeEndTable())
         return false;
 
+    setOutputStage("APPID table");
     writer->writeString(0, "TABLE");
     writer->writeString(2, "APPID");
     if (version > DRW::AC1009) {
@@ -17313,6 +17329,7 @@ bool dxfRW::writeTables() {
     if (!writeEndTable())
         return false;
 
+    setOutputStage("DIMSTYLE table");
     writer->writeString(0, "TABLE");
     writer->writeString(2, "DIMSTYLE");
     if (version > DRW::AC1009) {
@@ -17390,6 +17407,7 @@ bool dxfRW::writeTables() {
     if (!writeEndTable())
         return false;
 
+    setOutputStage("BLOCK_RECORD table");
     if (version > DRW::AC1009) {
         writer->writeString(0, "TABLE");
         writer->writeString(2, "BLOCK_RECORD");

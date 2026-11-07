@@ -940,6 +940,20 @@ qualification open for physical source conversion: generated entity and layer
 LTYPE references now bind to same-import rows, but no whole-source producer
 conversion has yet reached this output gate. Keep dangling and wrong-kind
 source cases refused.
+
+**AC1015 `entities-3d.dwg` STYLE blocker:** TABLES diagnostics now identify the
+exact failed table. This candidate reads 75/75 frames, but its STYLE table has
+an empty-name shape STYLE at handle `0x38` (`es.shx`) referenced by SHAPE `0x39`;
+it cannot be dropped as unreferenced. LibreDWG 0.14 emits this SHAPE with empty
+style and shape-name groups while omitting the STYLE row. Autodesk's STYLE and
+SHAPE references document the relevant fields, but do not settle this empty-name
+profile's validity or rendering semantics. Keep strict output refused; do not
+invent a name, discard a referenced STYLE, or treat peer output as semantic
+proof. Resolve with a producer-backed source and an independent native consumer;
+only then bind the exact source identities, output references and readback and
+add a scoped serializer regression. Source provenance is unverified, so neither
+the DWG nor peer DXF is a fixture. See the [focused receipt](docs/research/p4-ac1015-entities3d-style-empty-name-output-blocker-2026-11-07.json).
+
 Common entity LAYER and explicit LTYPE lookups now report unresolved or
 truncated non-null handles to the integrity ledger while preserving tolerant
 reads; the original wire role is retained and checked for these three hard

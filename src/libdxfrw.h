@@ -1856,6 +1856,7 @@ private:
     void recordInvalidRawHandleDiagnostic();
 
 private:
+    bool writeTables(const char** outputStage);
     bool writeRawDxfGroupsInternal(
         const std::vector<DRW_Variant>& groups,
         const std::vector<UTF8STRING>& rawValues,
