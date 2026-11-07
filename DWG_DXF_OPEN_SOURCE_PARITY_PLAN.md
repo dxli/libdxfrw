@@ -128,7 +128,15 @@ instead of repeating successful scans or controls.
    same-version census and source inventories to select the first profile whose
    frame disposition, source identity, owner roles, and recursive targets are
    already established. Do not rescan colorwh, plot-screening, lineweights,
-   children-room, or civil Edge. For the selected subgraph, freeze source
+   children-room, civil Edge, or Pool_Detail VISUALSTYLE. The Pool_Detail
+   AC1021 `ACAD_VISUALSTYLE` graph (NOD `0xC` to dictionary `0x33CC`, 16
+   styles) now passes selected ASCII/Binary output and typed/raw readback,
+   late-mutation refusal, destination preservation and same-adapter retry.
+   Pool_Detail `ACAD_MATERIAL` is the next candidate, but its current selected
+   output check stops because its extension-XRECORD census differs from the
+   children-room profile. Inventory exact source targets and payloads before
+   changing admission or writer behavior; keep the unrelated `SORTENTSTABLE`
+   null-target graph refused. For the selected subgraph, freeze source
    identity and expected record/handle roles; implement only the missing
    serializer or planner binding; add ASCII/Binary output, fresh typed
    readback, destination-preserving refusal, correction and same-adapter retry.
@@ -295,6 +303,7 @@ same-version whole-source recheck still stops at independent DBCOLOR and other
 document-wide gates. See the current [frame inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json),
 [same-version gate recheck](docs/research/p4-ac1021-children-room-same-version-output-gate-2026-11-05.json),
 [VisualStyle graph receipt](docs/research/p4-ac1021-visualstyle-extension-dictionary-xrecord-output-2026-11-06.json),
+[Pool_Detail VISUALSTYLE receipt](docs/research/p4-ac1021-pool-detail-visualstyle-selected-output-2026-11-07.json),
 [SCALE graph receipt](docs/research/p4-ac1021-scale-physical-selected-output-2026-11-06.json), and
 [DICTIONARYVAR graph receipt](docs/research/p4-ac1021-dictionaryvar-physical-selected-output-2026-11-06.json).
 Source-origin admission outside witnessed tuples, broader graphs, physical

@@ -47404,6 +47404,78 @@ bool physicalAc1021VisualStyleOutput(const std::filesystem::path& sourcePath,
                 return fail("physical AC1021 VisualStyle field or owner changed on output readback");
         }
     }
+
+    class LateVisualStyleMutation final : public dx_iface {
+    public:
+        bool mutateAfterObjects{false};
+        std::uint32_t targetHandle{0u};
+
+        void writeObjects() override {
+            dx_iface::writeObjects();
+            if (!mutateAfterObjects || cData == nullptr)
+                return;
+            const auto found = std::find_if(cData->visualStyles.begin(),
+                cData->visualStyles.end(), [this](const DRW_VisualStyle& row) {
+                    return row.handle == targetHandle;
+                });
+            if (found != cData->visualStyles.end())
+                found->desc += " late-mutation";
+        }
+    };
+
+    const DRW_VisualStyle originalStyle = source.visualStyles.front();
+    const std::filesystem::path retryPath = directory
+        / "physical-visual-style-ac1021-rollback-retry.dxf";
+    const std::string sentinel = "VISUALSTYLE destination sentinel\n";
+    { std::ofstream existing(retryPath, std::ios::binary | std::ios::trunc);
+      existing << sentinel; }
+    LateVisualStyleMutation retryWriter;
+    retryWriter.targetHandle = originalStyle.handle;
+    retryWriter.mutateAfterObjects = true;
+    const auto exportSelected = [&]() {
+        return retryWriter.fileExport(
+            retryPath.string(), DRW::AC1021, false, &selected, false, false,
+            dx_dxfSourceTextPolicy::Compatible,
+            DRW::DxfTextWritePolicy::Compatible,
+            dx_dxfProxyGraphicsPolicy::Compatible,
+            dx_dwgReadCompletenessPolicy::Legacy);
+    };
+    if (exportSelected())
+        return fail("late physical VISUALSTYLE mutation was accepted");
+    { std::ifstream preserved(retryPath, std::ios::binary);
+      const std::string bytes{std::istreambuf_iterator<char>(preserved), {}};
+      if (bytes != sentinel)
+          return fail("rejected physical VISUALSTYLE mutation replaced the destination"); }
+    const auto restore = std::find_if(selected.visualStyles.begin(),
+        selected.visualStyles.end(), [&originalStyle](const DRW_VisualStyle& row) {
+            return row.handle == originalStyle.handle;
+        });
+    if (restore == selected.visualStyles.end())
+        return fail("physical VISUALSTYLE mutation target disappeared");
+    *restore = originalStyle;
+    retryWriter.mutateAfterObjects = false;
+    if (!exportSelected())
+        return fail("restored physical VISUALSTYLE source could not retry on the same adapter");
+    dx_data retryReadback;
+    dx_iface retryReader;
+    if (!retryReader.fileImport(retryPath.string(), &retryReadback, false)
+        || retryReadback.visualStyles.size() != source.visualStyles.size()
+        || retryReadback.rawVisualStyleObjects.size() != source.visualStyles.size())
+        return fail("physical VISUALSTYLE same-adapter retry did not read back all typed/raw records");
+    const auto retryStyle = std::find_if(retryReadback.visualStyles.begin(),
+        retryReadback.visualStyles.end(), [&originalStyle](const DRW_VisualStyle& row) {
+            return row.handle == originalStyle.handle;
+        });
+    if (retryStyle == retryReadback.visualStyles.end()
+        || retryStyle->desc != originalStyle.desc
+        || retryStyle->type != originalStyle.type
+        || retryStyle->parentHandle != originalStyle.parentHandle
+        || originalStyle.reactorHandles.size() != 1u
+        || originalStyle.reactorHandles.front() != originalStyle.parentHandle
+        || retryStyle->reactorHandles.size() != 1u
+        || retryStyle->reactorHandles.front() != retryStyle->parentHandle)
+        return fail("physical VISUALSTYLE retry changed the selected record identity or fields");
+
     return true;
 }
 
