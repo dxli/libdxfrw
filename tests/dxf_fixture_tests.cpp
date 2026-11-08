@@ -3391,6 +3391,156 @@ void testLayoutShadePlotClosure(TestContext& t) {
     }
 }
 
+void testLayoutObjectsAllocationRetry(TestContext& t) {
+    class LayoutObjectsWriter final : public dx_iface {
+    public:
+        bool inject{false};
+        long offset{0L};
+        long remaining{-1L};
+
+        void writeObjects() override {
+            objectsCallbackReached = true;
+            if (!inject) {
+                dx_iface::writeObjects();
+                return;
+            }
+            materialAllocationCountdown = offset;
+            dx_iface::writeObjects();
+            remaining = materialAllocationCountdown;
+            materialAllocationCountdown = -1L;
+        }
+
+        bool objectsCallbackReached{false};
+    };
+
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto directory = std::filesystem::temp_directory_path()
+        / ("libdxfrw-layout-objects-allocation-" + std::to_string(nonce));
+    std::error_code error;
+    if (!std::filesystem::create_directory(directory, error) || error) {
+        t.expect(false, "temporary LAYOUT OBJECTS allocation directory is available");
+        return;
+    }
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    } cleanup{directory};
+
+    const auto graphMatches = [](const dx_data& data) {
+        const auto layout = std::find_if(data.layouts.begin(), data.layouts.end(),
+            [](const DRW_Layout& value) { return value.name == "Sheet A"; });
+        if (layout == data.layouts.end() || layout->shadePlotMode != 5
+            || data.renderSettings.size() != 1u
+            || data.rawRenderSettingsObjects.size() != 1u)
+            return false;
+        const DRW_RenderSettings& settings = data.renderSettings.front();
+        const bool matches = settings.m_kind == DRW_RenderSettings::RapidRT
+            && settings.handle == layout->shadePlotHandle.ref
+            && data.rawRenderSettingsObjects.front().handle == settings.handle;
+        return matches;
+    };
+
+    for (const bool binary : {false, true}) {
+        const std::string encoding = binary ? "binary" : "ascii";
+        const auto input = directory / ("source-" + encoding + ".dxf");
+        const auto output = directory / ("destination-" + encoding + ".dxf");
+        if (!writeLayoutGraphControl(input, binary, true, "703", 5)) {
+            t.expect(false, "generated LAYOUT/RapidRT source graph is complete");
+            continue;
+        }
+
+        const auto importGraph = [&](LayoutObjectsWriter& adapter,
+                                     dx_data& data) {
+            if (!adapter.fileImport(input.string(), &data, false)
+                || !graphMatches(data))
+                return false;
+            adapter.cData = &data;
+            adapter.currentBlock = data.mBlock;
+            return true;
+        };
+        constexpr long probe = 1000000L;
+        long allocationCount = 0L;
+        {
+            dx_data data;
+            LayoutObjectsWriter adapter;
+            const bool imported = importGraph(adapter, data);
+            adapter.inject = true;
+            adapter.offset = probe;
+            const bool written = imported && adapter.fileExport(
+                output.string(), DRW::AC1027, binary, &data, false);
+            materialAllocationCountdown = -1L;
+            if (written && adapter.objectsCallbackReached
+                && adapter.remaining > 0L && adapter.remaining < probe)
+                allocationCount = probe - adapter.remaining;
+        }
+
+        bool allFailuresRolledBack = allocationCount > 0L;
+        bool allRetriesReadBack = allocationCount > 0L;
+        long injectedFailures = 0L;
+        for (long offset = 0L; offset < allocationCount; ++offset) {
+            const std::string sentinel = "LAYOUT OBJECTS allocation sentinel\n";
+            {
+                std::ofstream seed(output, std::ios::binary | std::ios::trunc);
+                seed << sentinel;
+                if (!seed) {
+                    allFailuresRolledBack = false;
+                    allRetriesReadBack = false;
+                    break;
+                }
+            }
+
+            dx_data data;
+            LayoutObjectsWriter adapter;
+            const bool imported = importGraph(adapter, data);
+            adapter.inject = true;
+            adapter.offset = offset;
+            const std::size_t failuresBefore = materialFailedAllocations;
+            const bool failed = imported && !adapter.fileExport(
+                output.string(), DRW::AC1027, binary, &data, false);
+            materialAllocationCountdown = -1L;
+            const bool rolledBack = failed && adapter.objectsCallbackReached
+                && materialFailedAllocations == failuresBefore + 1u
+                && [&]() {
+                    std::ifstream file(output, std::ios::binary);
+                    const std::string bytes{
+                        std::istreambuf_iterator<char>(file), {}};
+                    return bytes == sentinel;
+                }()
+                && graphMatches(data);
+            allFailuresRolledBack = allFailuresRolledBack && rolledBack;
+            if (rolledBack)
+                ++injectedFailures;
+
+            adapter.inject = false;
+            adapter.objectsCallbackReached = false;
+            const bool retried = rolledBack && adapter.fileExport(
+                output.string(), DRW::AC1027, binary, &data, false);
+            dx_data readback;
+            dx_iface reader;
+            const bool read = retried && adapter.objectsCallbackReached
+                && reader.fileImport(output.string(), &readback, false)
+                && graphMatches(readback);
+            allRetriesReadBack = allRetriesReadBack && read;
+        }
+        t.expect(allFailuresRolledBack && injectedFailures == allocationCount,
+                 binary
+                     ? "binary LAYOUT/RapidRT OBJECTS allocation sweep rolls back every measured offset"
+                     : "ASCII LAYOUT/RapidRT OBJECTS allocation sweep rolls back every measured offset");
+        t.expect(allRetriesReadBack,
+                 binary
+                     ? "binary LAYOUT/RapidRT OBJECTS allocation sweep retries with graph readback"
+                     : "ASCII LAYOUT/RapidRT OBJECTS allocation sweep retries with graph readback");
+        std::cout << "LAYOUT/RapidRT " << encoding << ": allocations="
+                  << allocationCount << ", rollback/retry/readback="
+                  << (allFailuresRolledBack && allRetriesReadBack ? "PASS" : "FAIL")
+                  << '\n';
+    }
+}
+
 void testDwgViewportProjection(TestContext& t) {
     const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
     const auto directory = std::filesystem::temp_directory_path()
@@ -67774,6 +67924,14 @@ int main(int argc, char** argv) {
         testLayoutGraphReadContract(context);
         testLayoutShadePlotClosure(context);
         std::cout << "DXF LAYOUT/NOD/UCS/shade graph contract: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--layout-objects-allocation-retry") {
+        TestContext context;
+        testLayoutObjectsAllocationRetry(context);
+        std::cout << "LAYOUT/RapidRT OBJECTS allocation rollback/retry: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

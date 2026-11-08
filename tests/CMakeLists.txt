@@ -2639,6 +2639,11 @@ add_test(NAME libdxfrw_layout_graph_read_contract
     COMMAND libdxfrw_dxf_fixture_tests --layout-graph-read-contract)
 set_tests_properties(libdxfrw_layout_graph_read_contract PROPERTIES
     LABELS "fast;dxf;adapter;layout;graph;compatibility" TIMEOUT 60)
+add_test(NAME libdxfrw_layout_objects_allocation_retry
+    COMMAND libdxfrw_dxf_fixture_tests --layout-objects-allocation-retry)
+set_tests_properties(libdxfrw_layout_objects_allocation_retry PROPERTIES
+    LABELS "fast;dxf;adapter;layout;render-settings;allocation;transaction;generated"
+    TIMEOUT 60)
 add_test(NAME libdxfrw_layer_viewport_override_xrecord_transport
     COMMAND libdxfrw_dxf_fixture_tests --layer-viewport-overrides)
 set_tests_properties(libdxfrw_layer_viewport_override_xrecord_transport PROPERTIES
