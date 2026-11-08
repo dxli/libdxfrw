@@ -19,6 +19,44 @@
     ]
   },
   "decision": "Keep DWG TABLE output refused until an exact version profile, complete entity/block/object graph, and transaction are implemented. Do not infer R24 layout from the partial reader or generalize one codec across versions.",
+  "physical_source_probe": {
+    "path": "tests/samples/AC1021/blocks_and_tables_-_imperial.dwg",
+    "sha256": "3c95e8a82d5c8c251483fabc61efa8ca904f4e4bc8c2fce4786d74e812284d07",
+    "command": "build-gcc/dwg2dxf/dwg2dxf tests/samples/AC1021/blocks_and_tables_-_imperial.dwg -y -d -v2007 /private/tmp/libdxfrw-table-source-probe.dxf",
+    "traceSha256": "7eb4b9cd5aa353d46c27556e4a146ea71decd5b09abe4a87c60c4ea31f5d8f4b",
+    "observations": [
+      "The trace captures encoded/resolved entity type 506, class AcDbTable, for two AC1021 TABLE frames; this is empirical for this file/profile only and does not establish the AC1018 class number.",
+      "The read publishes all 3,586 frames with zero entity/object parse failures, but TABLE semantic parsing becomes incomplete at CadValue flags 18137348, type 48, payload bit 278726; a second TABLE frame also stops at type 48.",
+      "Strict same-version DXF output stops at the unrelated FIELD/FIELDLIST serializer gate before writing, so no TABLE output/readback route was exercised."
+    ],
+    "disposition": "Exclude this source as a complete TABLE writer witness. Do not use type 506 to hardcode an AC1018 class number or infer type-48 semantics. The user-provided DWG was not added to Git."
+  },
+  "ac1018_source_screen": [
+    {
+      "path": "/Users/dli/doc/dwg6/example_2004.dwg",
+      "sha256": "e72d5e86d5d36d64b08822fb25a46079f592fd895a6157b1b8d9b07775e06108",
+      "tracePath": "/private/tmp/libdxfrw-ac1018-table-screen-example_2004.dwg.log",
+      "traceSha256": "736475ea48331d12b185336e0d9a59a16eb17b5beb60a8740e79bb24eabfcaf0",
+      "observations": [
+        "The AC1018 source resolves AcDbTable to class number 528 for entity handle 0x4f2; this is a per-file empirical mapping, not a version-wide constant.",
+        "The typed TABLE body becomes semantically incomplete at undocumented R2007 cell override flags 0x40000.",
+        "The full source has 735 object frames and four object parse failures; strict output refuses the incomplete source disposition."
+      ],
+      "disposition": "Not a complete TABLE writer witness; do not infer the unknown override payload or hardcode class number 528."
+    },
+    {
+      "path": "/Users/dli/doc/dwg6/sample_AC1018.dwg",
+      "sha256": "7d26f908516ec5fb89cc8054af33aff233b68a7b63208bbc5b7f9d4b9ff9866",
+      "tracePath": "/private/tmp/libdxfrw-ac1018-table-screen-sample_AC1018.dwg.log",
+      "traceSha256": "8ae2bf8fe8db37861c7c7ec8f49af5071b2464daef4e95184ac78cdcd2036d58",
+      "observations": [
+        "Two AcDbTable entities resolve to class number 523 (handles 0x528 and 0xa35), differing from the other AC1018 source and disproving a single observed class ordinal as a sufficient registration rule.",
+        "Typed TABLE bodies become semantically incomplete at undocumented cell override flags 0x40020 and 0x40000.",
+        "The full source has 1,014 object frames and six object parse failures; strict output stops at the IMAGEDEF/reactor capture gate."
+      ],
+      "disposition": "Not a complete TABLE writer witness; do not infer the unknown override payload or hardcode class number 523."
+    }
+  ],
   "first_candidate": {
     "version": "AC1018",
     "profile": "one row, one column, one plain text value-content cell",
@@ -41,7 +79,10 @@
   "status": "OPEN_IMPLEMENTATION",
   "blockers": [
     "No production encoder exists.",
-    "No complete AC1018 source-to-writer profile is currently recorded in this plan.",
+    "No complete AC1018 source-to-writer profile is currently recorded; the two screened AC1018 sources stop at undocumented 0x40000/0x40020 cell override flags.",
+    "Observed AC1018 AcDbTable class numbers differ by source (528 and 523); determine the supported CLASS-map resolution policy and never treat either ordinal as a version constant.",
+    "The only newly captured table class number is 506 in one AC1021 file; an AC1018 class number must be captured empirically before registering an AC1018 writer.",
+    "The available AC1021 table source is semantically incomplete at cell CadValue type 48 and cannot validate a complete output route.",
     "R24+ TABLECONTENT/TABLEGEOMETRY relationship is outside the available ODA v5.4.1 layout and must remain refused."
   ]
 }

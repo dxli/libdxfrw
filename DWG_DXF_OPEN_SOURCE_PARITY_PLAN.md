@@ -2423,11 +2423,43 @@ The inspected code paths, exact authority section, candidate exclusions, and
 compound-output acceptance gates are recorded in the
 [encoder-readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 
+The trace of the existing AC1021
+`tests/samples/AC1021/blocks_and_tables_-_imperial.dwg` captures two
+`AcDbTable` entities with encoded/resolved class number 506. This is empirical
+for that AC1021 source only. Both typed TABLE bodies stop at undocumented
+CadValue type 48; strict output stops earlier at the unrelated FIELD/FIELDLIST
+gate. It is therefore not a complete writer witness and does not provide an
+AC1018 class number. Before registering a TABLE encoder, capture its class
+number from a real DWG of the exact target version; never copy 506 across
+versions or use a peer's numeric class value.
+
+An AC1018 source screen is now available, but neither candidate is a complete
+TABLE witness. `/Users/dli/doc/dwg6/example_2004.dwg` resolves `AcDbTable` to
+class 528, while `/Users/dli/doc/dwg6/sample_AC1018.dwg` resolves it to class
+523. Both have TABLE bodies with undocumented cell override bits (`0x40000`
+and `0x40020`) and stop typed semantic parsing there; the second source also
+has unrelated IMAGEDEF/reactor and other object parse failures. These are
+source-specific observations, not stable AC1018 class IDs. Do not hardcode
+either value or skip the unknown override payload. Keep `writeTable` refused
+until the parser can identify the exact physical body span and the output
+profile has independent source-to-output evidence. The speed-first next slice
+is a small generated refusal control that preserves the known flag prefix as
+an explicitly incomplete diagnostic range, followed by retry/sentinel checks;
+it must leave TABLE support fail-closed. Then resume the bounded AC1018 writer
+profile only with a physical source whose cell fields and compound `*T` graph
+are fully modeled. Trace hashes, source hashes, and dispositions are in the
+[encoder-readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
+
 Speed-oriented implementation sequence:
 
 1. Start with one explicit **AC1018 plain-text-cell** generated profile, because
    its string is inline and it avoids both the R2007+ detached string stream and
-   the undocumented R24 TABLECONTENT relationship. Require one row/column,
+   the undocumented R24 TABLECONTENT relationship. The existing AC1018 traces
+   confirm class/body dispatch but disagree on class number (528 versus 523),
+   so first determine the production class-resolution rule from each source's
+   CLASS map and keep the encoder keyed to validated class identity rather
+   than either observed ordinal. Do not infer class IDs from the DWG version.
+   Require one row/column,
    one value-content item of type 1, default indexed colors/style, no cell or
    table overrides, merges, data links, fields, block content, attributes,
    retained raw subrecords, or unexplained geometry/cache state. Match every
