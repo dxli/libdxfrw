@@ -71612,6 +71612,38 @@ bool cellStyleMapDxfWriter() {
         dx_data source;
         const std::filesystem::path output = directory
             / (binary ? "cellstylemap-binary.dxf" : "cellstylemap-ascii.dxf");
+        const std::string refusalSentinel =
+            "preserve CELLSTYLEMAP CMC refusal destination\n";
+        const auto seedRefusalSentinel = [&]() {
+            std::ofstream prior(output, std::ios::binary | std::ios::trunc);
+            return prior && static_cast<bool>(prior << refusalSentinel);
+        };
+        const auto refusalDestinationIsPreserved = [&]() {
+            std::ifstream prior(output, std::ios::binary);
+            const std::string contents{
+                std::istreambuf_iterator<char>{prior}, {}};
+            return prior.good() || prior.eof()
+                ? contents == refusalSentinel : false;
+        };
+        if (!seedRefusalSentinel())
+            return fail("could not seed CELLSTYLEMAP CMC refusal destination");
+        DRW_TableStyleContentFormat& firstContent =
+            writer.first.m_cellStyles.front().m_contentFormat;
+        const std::uint8_t savedContentMethod =
+            firstContent.m_contentColorCmc.m_method;
+        firstContent.m_contentColorCmc.m_method = 0u;
+        if (writer.fileExport(output.string(), DRW::AC1027, binary,
+                              &source, false)
+            || !refusalDestinationIsPreserved())
+            return fail("CELLSTYLEMAP accepted RGB metadata with a non-C2 method or replaced the destination");
+        firstContent.m_contentColorCmc.m_method = savedContentMethod;
+        const int savedContentRgb = firstContent.m_contentColorCmc.m_rgb;
+        firstContent.m_contentColorCmc.m_rgb = -1;
+        if (writer.fileExport(output.string(), DRW::AC1027, binary,
+                              &source, false)
+            || !refusalDestinationIsPreserved())
+            return fail("CELLSTYLEMAP accepted a color-book name without its RGB base or replaced the destination");
+        firstContent.m_contentColorCmc.m_rgb = savedContentRgb;
         if (!writer.fileExport(output.string(), DRW::AC1027, binary,
                                &source, false) || !writer.emitted)
             return fail(binary

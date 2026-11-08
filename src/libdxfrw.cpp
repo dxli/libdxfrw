@@ -13044,7 +13044,10 @@ bool dxfRW::writeCellStyleMap(DRW_CellStyleMap *ent) {
             return false;
         switch (cmc.m_method) {
         case 0:
-            return true;
+            // The DXF truecolor/color-book extension fields are only
+            // round-trippable through the C2 method profile below.
+            return cmc.m_rgb < 0 && cmc.m_name.empty()
+                && cmc.m_bookName.empty();
         case 0xC1:
             return cmc.m_rgb < 0 && cmc.m_name.empty()
                 && cmc.m_bookName.empty() && index == 0;
@@ -13274,12 +13277,17 @@ bool dxfRW::writeCellStyleMap(DRW_CellStyleMap *ent) {
             return cmc.m_bookName.empty();
         // DXF represents a color-book CMC as one BOOK$ENTRY group 430 string.
         std::string colorName;
-        if (!cmc.m_bookName.empty()) {
-            colorName.reserve(cmc.m_bookName.size() + 1u + cmc.m_name.size());
-            colorName.append(cmc.m_bookName);
-            colorName.push_back('$');
+        try {
+            if (!cmc.m_bookName.empty()) {
+                colorName.reserve(cmc.m_bookName.size() + 1u
+                    + cmc.m_name.size());
+                colorName.append(cmc.m_bookName);
+                colorName.push_back('$');
+            }
+            colorName.append(cmc.m_name);
+        } catch (...) {
+            return false;
         }
-        colorName.append(cmc.m_name);
         return writer->writeUtf8String(430, colorName);
     };
     const auto writeContent = [this, &writeColor, &resolve](
