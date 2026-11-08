@@ -19439,6 +19439,34 @@ bool xrecordGroupReferenceAdmission() {
                 return fail("GROUP reference exact source-record budget did not retry");
         }
     }
+    for (unsigned roleCase = 0u; roleCase < 3u; ++roleCase) {
+        dx_data data;
+        dx_iface iface;
+        data.hasNamedObjectDictionary = true;
+        data.namedObjectDictionary.handle = 0xCu;
+        data.namedObjectDictionary.m_entries = {{"LAYERSTATE_RECORD", 0xA502u}};
+        DRW_XRecord record;
+        record.handle = 0xA502u;
+        record.parentHandle = 0xCu;
+        DRW_Layer layer;
+        layer.handle = 0xA503u;
+        layer.name = "LayerStateLayer";
+        data.layers.push_back(layer);
+        DRW_LType lineType;
+        lineType.handle = 0xA504u;
+        lineType.name = "LayerStateLinetype";
+        data.lineTypes.push_back(lineType);
+        const int groupCode = roleCase == 1u ? 331 : 330;
+        const std::uint64_t target = roleCase == 2u ? 0xA505u
+            : (roleCase == 1u ? lineType.handle : layer.handle);
+        record.m_dataEntries.emplace_back(groupCode, target);
+        data.xRecords.push_back(record);
+        const bool admitted = DxIfaceExtensionGraphTestAccess::prepare(
+            iface, data, true);
+        if (admitted != (roleCase != 2u))
+            return fail("XRECORD table pointer did not require a uniquely present LAYER/LTYPE target: "
+                + std::to_string(roleCase));
+    }
     return true;
 }
 
@@ -56521,6 +56549,224 @@ bool physicalAc1021LayerStateViewXrecordOutputReadback(
     return true;
 }
 
+bool physicalAc1021TrueTypeStrictOutputReadback(
+        const std::filesystem::path& sourcePath,
+        const std::filesystem::path& outputDirectory) {
+    std::filesystem::create_directories(outputDirectory);
+    for (const bool binary : {false, true}) {
+        dx_iface sourceReader;
+        dx_data source;
+        if (!sourceReader.fileImport(sourcePath.string(), &source, false)
+            || source.sourceFormat != dx_source_format::DWG
+            || source.sourceVersion != DRW::AC1021
+            || !source.dwgReadOutcome.operationSucceeded
+            || source.dwgReadOutcome.observations.entityParseFailures != 0u
+            || source.dwgReadOutcome.observations.objectParseFailures != 0u
+            || source.dwgReadOutcome.observations.frames.sourceFrames != 173u
+            || source.dwgReadOutcome.observations.frames.status
+                != DRW_DwgFrameCoverageStatus::FinalizedComplete
+            || source.dwgReadOutcome.observations.frames.dispositions[
+                static_cast<std::size_t>(DRW_DwgFrameDisposition::Published)]
+                != 173u
+            || source.dwgReadOutcome.observations.integrity.retained != 0u)
+            return fail("truetype strict-output source census is incomplete");
+
+        std::uint32_t control = 0u, extensionHandle = 0u;
+        if (!source.getLayerTableControlExtensionDictionary(
+                control, extensionHandle))
+            return fail("truetype LayerStates source root is missing");
+        const auto layerStates = std::find_if(source.dictionaries.begin(),
+            source.dictionaries.end(), [extensionHandle](
+                    const DRW_Dictionary& row) {
+                return row.handle == extensionHandle;
+            });
+        if (layerStates == source.dictionaries.end())
+            return fail("truetype LayerStates extension dictionary is ambiguous");
+        const auto stateEntry = std::find_if(layerStates->m_entries.begin(),
+            layerStates->m_entries.end(), [](const DRW_Dictionary::Entry& row) {
+                return row.m_name == "ACAD_LAYERSTATES";
+            });
+        if (stateEntry == layerStates->m_entries.end())
+            return fail("truetype LayerStates named root is missing");
+        const auto stateDictionary = std::find_if(source.dictionaries.begin(),
+            source.dictionaries.end(), [stateEntry](
+                    const DRW_Dictionary& row) {
+                return row.handle == stateEntry->m_handle;
+            });
+        if (stateDictionary == source.dictionaries.end()
+            || stateDictionary->m_entries.size() != 1u
+            || stateDictionary->m_entries.front().m_name
+                != "ACAD_VIEWS_default")
+            return fail("truetype LayerStates selected dictionary shape changed");
+        const std::uint32_t recordHandle =
+            stateDictionary->m_entries.front().m_handle;
+        auto record = std::find_if(source.xRecords.begin(),
+            source.xRecords.end(), [recordHandle](const DRW_XRecord& row) {
+                return row.handle == recordHandle;
+            });
+        if (record == source.xRecords.end() || record->m_dataEntries.size() != 27u
+            || record->m_handleValues.size() != 8u)
+            return fail("truetype LayerStates XRECORD source payload changed");
+        std::vector<std::pair<int, std::uint32_t>> expectedReferences;
+        for (const auto& reference : record->m_handleValues)
+            if (reference.first == 330 || reference.first == 331)
+                expectedReferences.push_back(reference);
+        if (expectedReferences.size() != 8u)
+            return fail("truetype LayerStates XRECORD role census changed");
+
+        const auto output = outputDirectory
+            / (binary ? "truetype-strict-binary.dxf"
+                      : "truetype-strict-ascii.dxf");
+        const std::string sentinel = "preserve invalid XRECORD target\n";
+        { std::ofstream seed(output, std::ios::binary | std::ios::trunc);
+          seed << sentinel; }
+        const std::uint32_t originalTarget = record->m_handleValues.front().second;
+        record->m_handleValues.front().second = 0xFFFFFFFEu;
+        dx_iface writer;
+        const auto exportStrict = [&]() {
+            return writer.fileExport(output.string(), DRW::AC1021, binary,
+                &source, false, false,
+                dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::RequireComplete);
+        };
+        if (exportStrict())
+            return fail("truetype strict output accepted an unresolved XRECORD target");
+        { std::ifstream input(output, std::ios::binary);
+          const std::string retained{
+              std::istreambuf_iterator<char>(input), {}};
+          if (retained != sentinel)
+              return fail("unresolved XRECORD target replaced the output destination"); }
+        record->m_handleValues.front().second = originalTarget;
+        if (!exportStrict())
+            return fail("truetype strict output did not retry on the same adapter: "
+                + writer.extensionGraphFailureDetail());
+
+        dx_iface outputReader;
+        dx_data readback;
+        if (!outputReader.fileImport(output.string(), &readback, false)
+            || readback.sourceFormat != dx_source_format::DXF
+            || readback.sourceVersion != DRW::AC1021
+            || readback.xRecords.size() != source.xRecords.size()
+            || readback.layers.size() != source.layers.size()
+            || readback.lineTypes.size() != source.lineTypes.size())
+            return fail("truetype strict DXF output did not freshly read back completely");
+        const auto outputRecord = std::find_if(readback.xRecords.begin(),
+            readback.xRecords.end(), [recordHandle](const DRW_XRecord& row) {
+                return row.handle == recordHandle;
+            });
+        if (outputRecord == readback.xRecords.end()
+            || outputRecord->parentHandle != stateDictionary->handle
+            || outputRecord->m_dataEntries.size() != 27u)
+            return fail("truetype LayerStates XRECORD owner or payload changed on readback");
+        std::vector<std::pair<int, std::uint32_t>> expectedOutputReferences;
+        for (const auto& reference : expectedReferences) {
+            if (reference.first == 330) {
+                const auto sourceLayer = std::find_if(source.layers.begin(),
+                    source.layers.end(), [&reference](const DRW_Layer& row) {
+                        return row.handle == reference.second;
+                    });
+                if (sourceLayer == source.layers.end())
+                    return fail("truetype source group-330 target disappeared");
+                const auto emittedLayer = std::find_if(readback.layers.begin(),
+                    readback.layers.end(), [&sourceLayer](const DRW_Layer& row) {
+                        return row.name == sourceLayer->name;
+                    });
+                if (emittedLayer == readback.layers.end())
+                    return fail("truetype source group-330 LAYER identity was not emitted");
+                expectedOutputReferences.emplace_back(330, emittedLayer->handle);
+            } else {
+                const auto sourceLineType = std::find_if(source.lineTypes.begin(),
+                    source.lineTypes.end(), [&reference](const DRW_LType& row) {
+                        return row.handle == reference.second;
+                    });
+                if (sourceLineType == source.lineTypes.end())
+                    return fail("truetype source group-331 target disappeared");
+                const auto emittedLineType = std::find_if(readback.lineTypes.begin(),
+                    readback.lineTypes.end(), [&sourceLineType](const DRW_LType& row) {
+                        return row.name == sourceLineType->name;
+                    });
+                if (emittedLineType == readback.lineTypes.end())
+                    return fail("truetype source group-331 LTYPE identity was not emitted");
+                expectedOutputReferences.emplace_back(331, emittedLineType->handle);
+            }
+        }
+        std::size_t layerRefs = 0u, lineTypeRefs = 0u, group370 = 0u;
+        std::vector<std::pair<int, std::uint32_t>> outputReferences;
+        for (const DRW_Variant& value : outputRecord->m_dataEntries) {
+            if (value.code() == 330) {
+                std::uint64_t target = 0u;
+                if (value.type() == DRW_Variant::STRING) {
+                    const char* text = value.c_str();
+                    if (text == nullptr || *text == '\0')
+                        return fail("truetype XRECORD group-330 handle is empty");
+                    const char* end = text + std::char_traits<char>::length(text);
+                    const auto parsed = std::from_chars(text, end, target, 16);
+                    if (parsed.ec != std::errc{} || parsed.ptr != end)
+                        return fail("truetype XRECORD group-330 handle is malformed");
+                } else if (value.type() == DRW_Variant::INTEGER64) {
+                    target = static_cast<std::uint64_t>(value.i64_val());
+                } else if (value.type() == DRW_Variant::INTEGER) {
+                    target = static_cast<std::uint64_t>(value.i_val());
+                } else {
+                    return fail("truetype XRECORD group-330 target type changed");
+                }
+                if (std::none_of(readback.layers.begin(), readback.layers.end(),
+                        [target](const DRW_Layer& row) {
+                            return row.handle == target;
+                        }))
+                    return fail("truetype XRECORD group-330 target is not an emitted LAYER");
+                if (target > std::numeric_limits<std::uint32_t>::max())
+                    return fail("truetype XRECORD group-330 target overflows source handles");
+                outputReferences.emplace_back(330,
+                    static_cast<std::uint32_t>(target));
+                ++layerRefs;
+            } else if (value.code() == 331) {
+                std::uint64_t target = 0u;
+                if (value.type() == DRW_Variant::STRING) {
+                    const char* text = value.c_str();
+                    if (text == nullptr || *text == '\0')
+                        return fail("truetype XRECORD group-331 handle is empty");
+                    const char* end = text + std::char_traits<char>::length(text);
+                    const auto parsed = std::from_chars(text, end, target, 16);
+                    if (parsed.ec != std::errc{} || parsed.ptr != end)
+                        return fail("truetype XRECORD group-331 handle is malformed");
+                } else if (value.type() == DRW_Variant::INTEGER64) {
+                    target = static_cast<std::uint64_t>(value.i64_val());
+                } else if (value.type() == DRW_Variant::INTEGER) {
+                    target = static_cast<std::uint64_t>(value.i_val());
+                } else {
+                    return fail("truetype XRECORD group-331 target type changed");
+                }
+                if (std::none_of(readback.lineTypes.begin(), readback.lineTypes.end(),
+                        [target](const DRW_LType& row) {
+                            return row.handle == target;
+                        }))
+                    return fail("truetype XRECORD group-331 target is not an emitted LTYPE");
+                if (target > std::numeric_limits<std::uint32_t>::max())
+                    return fail("truetype XRECORD group-331 target overflows source handles");
+                outputReferences.emplace_back(331,
+                    static_cast<std::uint32_t>(target));
+                ++lineTypeRefs;
+            } else if (value.code() == 370) {
+                if (value.type() != DRW_Variant::INTEGER || value.i_val() != -3)
+                    return fail("truetype XRECORD group-370 typed value changed");
+                ++group370;
+            }
+        }
+        std::sort(outputReferences.begin(), outputReferences.end());
+        std::sort(expectedOutputReferences.begin(), expectedOutputReferences.end());
+        if (layerRefs != 4u || lineTypeRefs != 4u || group370 != 4u
+            || outputReferences != expectedOutputReferences)
+            return fail("truetype XRECORD reference or LayerStates value counts changed");
+    }
+    std::cout << "Physical AC1021 truetype strict output/readback PASS "
+              << "encodings=ASCII,Binary sourceFrames=173 published=173 "
+              << "XRECORD=330:LAYERx4,331:LTYPEx4,370x4 rollback=pass retry=pass\n";
+    return true;
+}
+
 bool physicalAc1021EmptyLayerStateProjection(
         const std::filesystem::path& sourcePath) {
     const auto uniqueDictionary = [](const dx_data& data,
@@ -86006,6 +86252,10 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--layerstates-ac1021-view-xrecord-output-readback")
         return physicalAc1021LayerStateViewXrecordOutputReadback(argv[2])
+            ? 0 : 1;
+    if (argc == 4
+        && std::string(argv[1]) == "--truetype-ac1021-strict-output-readback")
+        return physicalAc1021TrueTypeStrictOutputReadback(argv[2], argv[3])
             ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--tablestyle-physical-ac1018-source-profile")

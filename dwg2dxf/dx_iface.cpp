@@ -15625,6 +15625,15 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     const bool resolved = targetHandle == 0
                         || sourceBoundLayerStateLayerReference
                         || sourceBoundLayerStateScaleReference
+                        // DXF XRECORD payloads preserve the original group
+                        // code for object references. A group-330 soft pointer
+                        // to an emitted LAYER and a group-331 soft pointer to
+                        // an emitted LTYPE are valid after re-import without
+                        // the DWG-only LayerStates receipt.
+                        || (code == 330
+                            && layerHandles.count(targetHandle) != 0u)
+                        || (code == 331
+                            && linetypeHandles.count(targetHandle) != 0u)
                         || linetypeHandles.count(targetHandle) != 0
                         || groupReferenceHandles.count(targetHandle) != 0
                         || imageDefinitionOwners.count(targetHandle) != 0

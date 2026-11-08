@@ -215,6 +215,20 @@ instead of repeating successful scans or controls.
    versions, styles, or dependency shapes remain refused. The source is an
    unauthenticated local drawing and remains uncommitted. See the [bounded
    MLEADERSTYLE projection receipt](docs/research/p4-ac1021-pool-detail-mleaderstyle-subset-physical-output-2026-11-07.json).
+   The AC1021 `truetype.dwg` source now passes `RequireComplete` ASCII and
+   Binary output and fresh whole-DXF import readback: all 173 source frames
+   publish, with zero entity/object parse failures and zero retained integrity
+   rows. Its rooted `ACAD_VIEWS_default` XRECORD survives with four group-330
+   LAYER refs, four group-331 LTYPE refs, and four group-370 values. The reader
+   had rejected the emitted group-330/331 targets on re-import because the
+   extension graph admitted only the DWG-specific LayerStates path; it now
+   validates those exact group-code/typed-table target roles. An unresolved
+   target still refuses atomically, then corrected same-adapter retry passes.
+   This is one unauthenticated local source profile and adds no support claim.
+   A second DXF-to-DXF save still refuses its group-370 values because that
+   compatibility writer path requires the DWG source receipt; keep that
+   separate preservation gap open and do not broaden group-370 admission from
+   this readback result. See the [strict output/readback receipt](docs/research/p4-ac1021-truetype-strict-dxf-output-readback-2026-11-07.json).
    For any selected subgraph, freeze source
    identity and expected record/handle roles; implement only the missing
    serializer or planner binding; add ASCII/Binary output, fresh typed
@@ -337,7 +351,7 @@ integration/release checkpoints.
 
 | ID | State | Remaining work | Dependency |
 | --- | --- | --- | --- |
-| P4 | OPEN — source and graph closure | Select the next physically evidenced OBJECTS subgraph; bind source identities, owner/target roles, recursive dependencies, and exact emitted records. Pool_Detail MLEADERSTYLE now has selected ASCII/Binary transport/readback under the exact bounded AC1021 one-style/one-BYBLOCK projection; its malformed LTYPE_CONTROL, BLOCK_CONTROL, and HEADER current-layer integrity observations remain excluded, and strict whole-source output remains refused. Do not widen this private gate to other shapes or infer valid control membership. Resolve the tracked ENC dangling-reference profile only with eligible producer evidence. Keep unresolved null members, orphan owners, unsupported frames, and named-block SORTENTSTABLE profiles refused. Broaden beyond individual local sources only with independent producer and native output evidence. | Existing source census, exact frame/profile evidence, ODA role/layout rules, and focused ASCII/Binary output/readback controls. |
+| P4 | OPEN — source and graph closure | Continue with the next distinct physically evidenced OBJECTS subgraph; bind source identities, owner/target roles, recursive dependencies, and exact emitted records. Pool_Detail MLEADERSTYLE passes selected ASCII/Binary transport under the exact bounded AC1021 one-style/one-BYBLOCK projection; malformed LTYPE_CONTROL, BLOCK_CONTROL, and HEADER current-layer integrity observations remain excluded, and strict whole-source output remains refused. The AC1021 truetype whole source now passes `RequireComplete` ASCII/Binary output and fresh whole-DXF import readback at 173/173 published frames; its XRECORD group-330 LAYER and group-331 LTYPE targets are validated, with atomic bad-target refusal/retry. DXF-origin re-emission of its group-370 values remains refused pending an equally bounded preservation profile. Do not infer producer-wide support or generalize either source-specific gate. Resolve the tracked ENC dangling-reference profile only with eligible producer evidence. Keep unresolved null members, orphan owners, unsupported frames, and named-block SORTENTSTABLE profiles refused. Broaden beyond individual local sources only with independent producer and native output evidence. | Existing source census, exact frame/profile evidence, ODA role/layout rules, and focused ASCII/Binary output/readback controls. |
 | P5 | OPEN — dynamic-block semantics, rendering and TABLE profiles | Find a complete FIELD/FIELDLIST source graph with a visible root; qualify physical TABLEGEOMETRY spans and remaining CONTENTFORMAT/CELLSTYLEMAP combinations; resolve VIEWPORT override type/value and native activation/rendering; establish native dynamic constraint evaluation. | P4 closure where needed; source-bound spans/roles plus native semantic evidence. |
 | P6 | OPEN — version, schema and semantic residuals | Resolve only evidence-backed source gaps: AC1021/24/27/32 IMAGEDEF parent-role conflict (source capture now retained as unqualified; DXF output still refused); raw-only TABLECONTENT/PERSUBENTMGR/TextObjectContextData; unclaimed AC1027/AC1032 HEADER suffixes; remaining version boundaries, geometry/no-loss, HEADER/CLI, parser disposition and caller-state contracts. Preserve strict refusal for unsupported or unclaimed bytes. | ODA v5.4.1 plus AutoCAD DWG/DXF source pairs; focused fast controls. Owner-semantic promotion still needs independent native rewrite or normative resolution. Suffix work requires a materially changed converter route. See the [IMAGEDEF role receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json). |
 | P7 | OPEN — ACIS/ACDS and independent 3D meaning | Complete entity/owner/key/AcDs/SAT-SAB association, versioned framing/index/suffix/prototype assembly and exact output binding; qualify transforms, units, topology, trims, periodicity and spline meaning with an independent kernel. | P4 graph/output bindings and independent semantic/kernel evidence. |
