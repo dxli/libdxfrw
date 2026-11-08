@@ -164,25 +164,21 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-08)
 
-- **Latest local slice:** commit `9678d0c2` admits ODA §20.4.99's R24
-  TABLESTYLE group-92 value-data codes and R2007+ group-93 unit codes, while
-  retaining refusal for undocumented values. All documented codes pass
-  generated ASCII/Binary typed readback; type 3 and unit 0x10 refuse while
-  preserving the destination. The focused `libdxfrw_tablestyle_r24_typed_writer`
-  CTest passes (1/1, 1.73 seconds); see the [value-domain receipt](docs/research/p6-r24-tablestyle-value-format-domains-2026-11-08.json).
-  The same selector also verifies the earlier non-null border LTYPE transport
-  in commits `12698d59` and `93c02f0d`, including exact mapped group 340,
-  missing/wrong-kind refusal, destination preservation and same-adapter retry
-  ([receipt](docs/research/p6-r24-tablestyle-border-ltype-dxf-transport-2026-11-08.json)).
-  These are bounded generated writer/readback results; physical source,
-  rendering, whole-source conversion and untested field semantics remain open.
-  The preceding ACSH exact-span guard remains in commit `6106bfd4`: the pinned
+- **Latest local slice:** commit `513a8adf` extends the bounded R24 TABLESTYLE
+  profile to non-default group-300 format text, finite group-40 rotation, and
+  finite group-140 block scale. Generated ASCII/Binary outputs preserve exact
+  raw field order and typed readback. Newline/over-1-MiB text and non-finite
+  numbers refuse atomically, followed by same-adapter retry. The focused
+  `libdxfrw_tablestyle_r24_typed_writer` CTest passes (1/1, 1.65 seconds); see
+  the [scalar-field receipt](docs/research/p6-r24-tablestyle-format-scalar-transport-2026-11-08.json).
+  Commits `9678d0c2`, `12698d59`, and `93c02f0d` also cover ODA value/unit code
+  domains and qualified border-LTYPE mapping with separate [domain](docs/research/p6-r24-tablestyle-value-format-domains-2026-11-08.json)
+  and [reference](docs/research/p6-r24-tablestyle-border-ltype-dxf-transport-2026-11-08.json)
+  receipts. These are bounded generated writer/readback results; physical
+  source, native rendering and whole-source conversion remain open. The
+  preceding ACSH exact-span guard remains in commit `6106bfd4`: the pinned
   AC1027 Sweep body remains `Partial` (174/2,571 bits); do not infer its
   undocumented tail or output route. See its [receipt](docs/research/p4-ac1027-sweep-action-body-exact-span-2026-11-08.json).
-  This does not qualify a physical DWG producer, rendering, or whole-source
-  conversion. The preceding ACSH exact-span guard remains in commit `6106bfd4`:
-  the pinned AC1027 Sweep body remains `Partial` (174/2,571 bits); do not infer
-  its undocumented tail or output route. See its [receipt](docs/research/p4-ac1027-sweep-action-body-exact-span-2026-11-08.json).
 - **P4 inventory decision:** the saved [same-version census](docs/research/p4-local-same-version-strict-output-census-2026-11-06.json)
   reports four already-qualified whole-source passes, 20 strict refusals, and
   zero newly qualified source profiles. The saved [AC1021 source inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)
@@ -221,20 +217,22 @@ The queue below contains only unfinished actions. Completed source profiles,
 codecs, tests, and controls have been removed from the queue; their commits and
 receipts remain in Git and `docs/research/`. Resume from the linked blocker
 instead of repeating successful scans or controls. The generated R24 TABLESTYLE
-border LTYPE and documented value-domain slices are complete in commits
-`12698d59`, `93c02f0d`, and `9678d0c2`; the saved P4 inventory decision has no
-new ready physical graph. Continue with the following bounded P6 field packet.
+border LTYPE, value-domain and scalar format slices are complete in commits
+`12698d59`, `93c02f0d`, `9678d0c2`, and `513a8adf`; the saved P4 inventory
+decision has no new ready physical graph. Continue with the following bounded
+R24 margin packet.
 
-1. **P6 / admit bounded R24 TABLESTYLE content-format scalar fields.** ODA
-   §20.4.101.3 defines the format string (group 300), rotation (40), and block
-   scale (140). The typed R24 writer already serializes these fields but its
-   exact-profile gate only accepts an empty string, zero rotation and unit
-   scale. Extend the generated profile only for safe bounded text and finite
-   scalar values; preserve refusal for property override/flag combinations
-   without their own field/meaning proof. Test non-default values in ASCII and
-   Binary, exact raw group sequence and typed readback, invalid text/numeric
-   refusal with destination preservation, then same-adapter correction/retry.
-   Keep native rendering and physical producer qualification open.
+1. **P6 / admit bounded R24 TABLESTYLE margin values per style.** ODA
+   §20.4.101.4 documents an override flag plus six BD margin/spacing values
+   for each cell style. The typed writer currently admits only the exact
+   0.06/0.18 set or an all-custom-styles-inherited profile. Allow an individual
+   style to use flag 0 only with zero payload, or flag 1 with finite,
+   nonnegative values; remove the across-style equality requirement. Keep all
+   other style fields and format limits unchanged. Test distinct explicit
+   margins and a mixed explicit/inherited style set in ASCII/Binary, exact raw
+   field order, typed readback, negative/non-finite refusal with destination
+   preservation, and same-adapter correction/retry. Native layout/rendering
+   and physical producer qualification remain open.
 
 2. **P4 / resume physical OBJECTS closure only on a new ready witness.** The
    saved census and inventory have been reviewed: every current selected-output
