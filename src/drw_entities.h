@@ -2060,6 +2060,11 @@ public:
         m_tableRowTextColors(o.m_tableRowTextColors),
         m_tableRowFillNone(o.m_tableRowFillNone),
         m_tableRowFillColors(o.m_tableRowFillColors),
+        m_tableBorderColors(o.m_tableBorderColors),
+        m_tableBorderLineweights(o.m_tableBorderLineweights),
+        m_tableBorderVisibilities(o.m_tableBorderVisibilities),
+        m_hasTableBorderLineweightOverrides(o.m_hasTableBorderLineweightOverrides),
+        m_hasTableBorderVisibilityOverrides(o.m_hasTableBorderVisibilityOverrides),
         m_titleSuppressed(o.m_titleSuppressed),
         m_headerSuppressed(o.m_headerSuppressed),
         m_tableStyleHandle(o.m_tableStyleHandle), m_content(o.m_content) {
@@ -2088,6 +2093,13 @@ public:
             m_tableRowTextColors = o.m_tableRowTextColors;
             m_tableRowFillNone = o.m_tableRowFillNone;
             m_tableRowFillColors = o.m_tableRowFillColors;
+            m_tableBorderColors = o.m_tableBorderColors;
+            m_tableBorderLineweights = o.m_tableBorderLineweights;
+            m_tableBorderVisibilities = o.m_tableBorderVisibilities;
+            m_hasTableBorderLineweightOverrides =
+                o.m_hasTableBorderLineweightOverrides;
+            m_hasTableBorderVisibilityOverrides =
+                o.m_hasTableBorderVisibilityOverrides;
             m_titleSuppressed = o.m_titleSuppressed;
             m_headerSuppressed = o.m_headerSuppressed;
             m_tableStyleHandle = o.m_tableStyleHandle;
@@ -2140,6 +2152,11 @@ public:
     std::array<DRW_DwgCmColor, 3> m_tableRowTextColors;
     std::array<bool, 3> m_tableRowFillNone{{false, false, false}};
     std::array<DRW_DwgCmColor, 3> m_tableRowFillColors;
+    std::array<DRW_DwgCmColor, 18> m_tableBorderColors;
+    std::array<int, 18> m_tableBorderLineweights{{}};
+    std::array<int, 18> m_tableBorderVisibilities{{}};
+    std::array<bool, 18> m_hasTableBorderLineweightOverrides{{}};
+    std::array<bool, 18> m_hasTableBorderVisibilityOverrides{{}};
     bool m_titleSuppressed = false;
     bool m_headerSuppressed = false;
     std::uint32_t m_tableStyleHandle = 0;

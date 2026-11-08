@@ -7822,7 +7822,10 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
                          std::uint8_t virtualEdgeFlags = 0u,
                          std::uint16_t topVisibility = 1u,
                          std::uint8_t tableRowTextStyleHandleCode =
-                             DRW::DwgHardPointer) {
+                             DRW::DwgHardPointer,
+                         std::uint32_t borderColorOverrideFlags = 0u,
+                         std::uint32_t borderLineweightOverrideFlags = 0u,
+                         std::uint32_t borderVisibilityOverrideFlags = 0u) {
     constexpr std::uint32_t ac1018CellOverrideFlags = 0x0003FFE0u;
     const bool knownCellOverrideProfile = cellOverrideFlags == 0u
         || (version == DRW::AC1018 && cellOverrideFlags != 0u
@@ -7833,6 +7836,11 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
     if (!knownCellOverrideProfile
         || (tableOverrideFlags & ~generatedTableOverrideFlags) != 0u)
         return false;
+    constexpr std::uint32_t knownBorderOverrideFlags = 0x0003FFFFu;
+    if ((borderColorOverrideFlags & ~knownBorderOverrideFlags) != 0u
+        || (borderLineweightOverrideFlags & ~knownBorderOverrideFlags) != 0u
+        || (borderVisibilityOverrideFlags & ~knownBorderOverrideFlags) != 0u)
+        return false;
     TableDwgCodecProbe source;
     source.handle = 0xA500u;
 
@@ -7840,6 +7848,11 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
     dwgBufferW handles;
     dwgBufferW strings;
     dwgBufferW typePrefix;
+    const auto putByLayerCmc = [&body]() {
+        body.putBitShort(0);
+        body.putBitLong(static_cast<std::int32_t>(0xC0u << 24u));
+        body.putRawChar8(0);
+    };
     typePrefix.putObjType(version, 506);
     const std::size_t objectSizeBit = typePrefix.bitCount();
     if (!source.encodeCommonForVector(version, body, handles))
@@ -7956,11 +7969,6 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
                 body.putBitDouble(1.25); // horizontal cell margin
             if ((tableOverrideFlags & 0x00000010u) != 0u)
                 body.putBitDouble(2.5); // vertical cell margin
-            const auto putByLayerCmc = [&body]() {
-                body.putBitShort(0);
-                body.putBitLong(static_cast<std::int32_t>(0xC0u << 24u));
-                body.putRawChar8(0);
-            };
             if ((tableOverrideFlags & 0x00000020u) != 0u) {
                 // Literal ByLayer CMC; no text payload.
                 putByLayerCmc();
@@ -7994,9 +8002,27 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
             if ((tableOverrideFlags & 0x00400000u) != 0u)
                 body.putBitDouble(5.5); // data row height
         }
-        body.putBit(0);
-        body.putBit(0);
-        body.putBit(0);
+        body.putBit(borderColorOverrideFlags != 0u);
+        if (borderColorOverrideFlags != 0u) {
+            body.putBitLong(static_cast<std::int32_t>(borderColorOverrideFlags));
+            for (std::size_t i = 0; i < 18u; ++i)
+                if ((borderColorOverrideFlags & (1u << i)) != 0u)
+                    putByLayerCmc();
+        }
+        body.putBit(borderLineweightOverrideFlags != 0u);
+        if (borderLineweightOverrideFlags != 0u) {
+            body.putBitLong(static_cast<std::int32_t>(borderLineweightOverrideFlags));
+            for (std::size_t i = 0; i < 18u; ++i)
+                if ((borderLineweightOverrideFlags & (1u << i)) != 0u)
+                    body.putBitShort(static_cast<std::uint16_t>(i + 5u));
+        }
+        body.putBit(borderVisibilityOverrideFlags != 0u);
+        if (borderVisibilityOverrideFlags != 0u) {
+            body.putBitLong(static_cast<std::int32_t>(borderVisibilityOverrideFlags));
+            for (std::size_t i = 0; i < 18u; ++i)
+                if ((borderVisibilityOverrideFlags & (1u << i)) != 0u)
+                    body.putBitShort(i % 2u == 0u ? 1u : 0u);
+        }
     } else {
         // If an unknown type is decoded as the known layout, this sentinel
         // makes the generated control observe an over-read.
@@ -8332,7 +8358,8 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     R2007TableFrame tableRowHeightOverridesFrame;
     const bool tableRowHeightOverridesBuilt = makeR2007TableFrame(
         1, tableRowHeightOverridesFrame, TablePlacement{}, 0u,
-        0x007FFFFFu);
+        0x007FFFFFu, DRW::AC1021, 0u, 0u, 1u, DRW::DwgHardPointer,
+        0x00020001u, 0x00010002u, 0x00008004u);
     t.expect(tableRowHeightOverridesBuilt,
              "AC1021 TABLE row-height-override vector builds from scratch");
     if (!tableRowHeightOverridesBuilt)
@@ -8358,6 +8385,19 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  && table.m_tableRowFillColors[0].method == 0xC0u
                  && table.m_tableRowFillColors[1].method == 0xC0u
                  && table.m_tableRowFillColors[2].method == 0xC0u
+                 && table.m_borderColorOverrideFlags == 0x00020001u
+                 && table.m_tableBorderColors[0].method == 0xC0u
+                 && table.m_tableBorderColors[17].method == 0xC0u
+                 && table.m_borderLineweightOverrideFlags == 0x00010002u
+                 && table.m_tableBorderLineweights[1] == 6
+                 && table.m_tableBorderLineweights[16] == 21
+                 && table.m_hasTableBorderLineweightOverrides[1]
+                 && table.m_hasTableBorderLineweightOverrides[16]
+                 && table.m_borderVisibilityOverrideFlags == 0x00008004u
+                 && table.m_tableBorderVisibilities[2] == 1
+                 && table.m_tableBorderVisibilities[15] == 0
+                 && table.m_hasTableBorderVisibilityOverrides[2]
+                 && table.m_hasTableBorderVisibilityOverrides[15]
                  && !table.m_semanticContentComplete
                  && cursorBit(tableRowHeightOverridesInput)
                      == tableRowHeightOverridesFrame.tableDataEndBit,

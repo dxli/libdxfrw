@@ -36763,6 +36763,15 @@ bool tableScalarOverrideOutput(bool binary) {
     data.tables.front().m_tableRowFillNone = {{true, false, true}};
     data.tables.front().m_tableRowFillColors[2].method = 0xC0u;
     data.tables.front().m_tableRowFillColors[2].sourceVersion = DRW::AC1021;
+    data.tables.front().m_borderColorOverrideFlags = 1u;
+    data.tables.front().m_tableBorderColors[0].method = 0xC0u;
+    data.tables.front().m_tableBorderColors[0].sourceVersion = DRW::AC1021;
+    data.tables.front().m_borderLineweightOverrideFlags = 2u;
+    data.tables.front().m_tableBorderLineweights[1] = 0;
+    data.tables.front().m_hasTableBorderLineweightOverrides[1] = true;
+    data.tables.front().m_borderVisibilityOverrideFlags = 4u;
+    data.tables.front().m_tableBorderVisibilities[2] = 0;
+    data.tables.front().m_hasTableBorderVisibilityOverrides[2] = true;
     data.tables.front().m_semanticContentComplete = true;
     if (exportCurrent())
         return fail("unmapped TABLE row-height/alignment overrides were emitted");
@@ -36776,16 +36785,19 @@ bool tableScalarOverrideOutput(bool binary) {
             return fail("unmapped TABLE row-height/alignment overrides replaced the destination");
     }
     data.tables.front().m_tableOverrideFlags = 0x0000001Fu;
+    data.tables.front().m_borderColorOverrideFlags = 0u;
+    data.tables.front().m_borderLineweightOverrideFlags = 0u;
+    data.tables.front().m_borderVisibilityOverrideFlags = 0u;
     if (exportCurrent())
-        return fail("unflagged TABLE row override values were emitted");
+        return fail("unflagged TABLE row/border override values were emitted");
     {
         std::ifstream stream(output, std::ios::binary);
         const std::string contents((std::istreambuf_iterator<char>(stream)),
                                    std::istreambuf_iterator<char>());
         if (!stream.good() && !stream.eof())
-            return fail("unflagged TABLE row override sentinel could not be read");
+            return fail("unflagged TABLE row/border override sentinel could not be read");
         if (contents != sentinel)
-            return fail("unflagged TABLE row override values replaced the destination");
+            return fail("unflagged TABLE row/border override values replaced the destination");
     }
     data.tables.front().m_tableRowHeightOverrides = {{0.0, 0.0, 0.0}};
     data.tables.front().m_tableRowAlignmentOverrides = {{0, 0, 0}};
@@ -36797,6 +36809,14 @@ bool tableScalarOverrideOutput(bool binary) {
     data.tables.front().m_tableRowFillColors = {{DRW_DwgCmColor{},
                                                  DRW_DwgCmColor{},
                                                  DRW_DwgCmColor{}}};
+    data.tables.front().m_borderColorOverrideFlags = 0u;
+    data.tables.front().m_tableBorderColors.fill(DRW_DwgCmColor{});
+    data.tables.front().m_borderLineweightOverrideFlags = 0u;
+    data.tables.front().m_tableBorderLineweights.fill(0);
+    data.tables.front().m_hasTableBorderLineweightOverrides.fill(false);
+    data.tables.front().m_borderVisibilityOverrideFlags = 0u;
+    data.tables.front().m_tableBorderVisibilities.fill(0);
+    data.tables.front().m_hasTableBorderVisibilityOverrides.fill(false);
     if (!exportCurrent() || !checkWire() || !checkReadback())
         return fail("TABLE row-height/alignment refusal corrected retry failed");
     return true;

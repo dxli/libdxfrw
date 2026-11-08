@@ -12111,6 +12111,14 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
             [](bool value) { return value; })
         || std::any_of(ent->m_tableRowFillColors.begin(),
                        ent->m_tableRowFillColors.end(), hasDwgCmColor)
+        || std::any_of(ent->m_tableBorderColors.begin(),
+                       ent->m_tableBorderColors.end(), hasDwgCmColor)
+        || std::any_of(ent->m_hasTableBorderLineweightOverrides.begin(),
+                       ent->m_hasTableBorderLineweightOverrides.end(),
+            [](bool value) { return value; })
+        || std::any_of(ent->m_hasTableBorderVisibilityOverrides.begin(),
+                       ent->m_hasTableBorderVisibilityOverrides.end(),
+            [](bool value) { return value; })
         || ent->m_borderColorOverrideFlags > static_cast<std::uint32_t>(
                std::numeric_limits<int>::max())
         || ent->m_borderColorOverrideFlags != 0u

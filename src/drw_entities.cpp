@@ -969,11 +969,6 @@ bool skipTableBit(dwgBuffer& buffer, std::uint64_t endBit) {
     return readBoundedBit(buffer, endBit, value);
 }
 
-bool skipTableBitShort(dwgBuffer& buffer, std::uint64_t endBit) {
-    std::uint16_t value = 0;
-    return readBoundedBitShort(buffer, endBit, value);
-}
-
 bool skipTableBitLong(dwgBuffer& buffer, std::uint64_t endBit) {
     std::int32_t value = 0;
     return readBoundedBitLong(buffer, endBit, value);
@@ -3610,12 +3605,14 @@ bool skipR2007TableOverrides(DRW::Version version, dwgBuffer *buf,
             return false;
         if ((flags & ~0x0003FFFFu) != 0u)
             return false;
+        table.m_borderColorOverrideFlags = flags;
         if (flags != 0u)
             semanticComplete = false;
         ++maskCount;
-        for (int i = 0; i < 18; ++i) {
-            if (flags & (1u << i)
-                && !readTableCmColor(version, buf, strBuf, bounds))
+        for (std::size_t i = 0; i < table.m_tableBorderColors.size(); ++i) {
+            if ((flags & (1u << i)) != 0u
+                && !readTableCmColor(version, buf, strBuf, bounds,
+                                     &table.m_tableBorderColors[i]))
                 return false;
         }
     }
@@ -3628,13 +3625,18 @@ bool skipR2007TableOverrides(DRW::Version version, dwgBuffer *buf,
             return false;
         if ((flags & ~0x0003FFFFu) != 0u)
             return false;
+        table.m_borderLineweightOverrideFlags = flags;
         if (flags != 0u)
             semanticComplete = false;
         ++maskCount;
-        for (int i = 0; i < 18; ++i) {
-            if (flags & (1u << i))
-                if (!skipTableBitShort(*buf, bounds.bodyEndBit))
+        for (std::size_t i = 0; i < table.m_tableBorderLineweights.size(); ++i) {
+            if ((flags & (1u << i)) != 0u) {
+                std::uint16_t lineweight = 0;
+                if (!readBoundedBitShort(*buf, bounds.bodyEndBit, lineweight))
                     return false;
+                table.m_tableBorderLineweights[i] = lineweight;
+                table.m_hasTableBorderLineweightOverrides[i] = true;
+            }
         }
     }
 
@@ -3646,13 +3648,20 @@ bool skipR2007TableOverrides(DRW::Version version, dwgBuffer *buf,
             return false;
         if ((flags & ~0x0003FFFFu) != 0u)
             return false;
+        table.m_borderVisibilityOverrideFlags = flags;
         if (flags != 0u)
             semanticComplete = false;
         ++maskCount;
-        for (int i = 0; i < 18; ++i) {
-            if (flags & (1u << i))
-                if (!skipTableBitShort(*buf, bounds.bodyEndBit))
+        for (std::size_t i = 0; i < table.m_tableBorderVisibilities.size(); ++i) {
+            if ((flags & (1u << i)) != 0u) {
+                std::uint16_t visibility = 0;
+                if (!readBoundedBitShort(*buf, bounds.bodyEndBit, visibility))
                     return false;
+                table.m_tableBorderVisibilities[i] = visibility;
+                table.m_hasTableBorderVisibilityOverrides[i] = true;
+                if (visibility > 1u)
+                    semanticComplete = false;
+            }
         }
     }
 
@@ -13220,6 +13229,11 @@ void DRW_Table::resetDwgState() {
     m_tableRowFillNone = {{false, false, false}};
     m_tableRowFillColors = {{DRW_DwgCmColor{}, DRW_DwgCmColor{},
                              DRW_DwgCmColor{}}};
+    m_tableBorderColors.fill(DRW_DwgCmColor{});
+    m_tableBorderLineweights.fill(0);
+    m_tableBorderVisibilities.fill(0);
+    m_hasTableBorderLineweightOverrides.fill(false);
+    m_hasTableBorderVisibilityOverrides.fill(false);
     m_titleSuppressed = false;
     m_headerSuppressed = false;
     m_tableStyleHandle = 0;
