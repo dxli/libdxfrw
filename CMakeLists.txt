@@ -1239,6 +1239,10 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dwg_local_roundtrip --r2007-generic-control-boundaries)
     add_test(NAME libdxfrw_dwg_r2007_layer_string_boundaries
         COMMAND libdxfrw_dwg_local_roundtrip --r2007-layer-string-boundaries)
+    add_test(NAME libdxfrw_dwg_table_entry_appdata_guards
+        COMMAND libdxfrw_dwg_local_roundtrip --table-entry-appdata-guards)
+    set_tests_properties(libdxfrw_dwg_table_entry_appdata_guards PROPERTIES
+        LABELS "fast;dwg;generated;transaction;metadata")
     add_test(NAME libdxfrw_dwg_r2007_primitive_footers
         COMMAND libdxfrw_dwg_local_roundtrip --r2007-primitive-footers)
     set_tests_properties(libdxfrw_dwg_r2007_primitive_footers PROPERTIES

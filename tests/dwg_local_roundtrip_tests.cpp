@@ -691,6 +691,72 @@ public:
         return true;
     }
 
+    static bool checkTableEntryAppDataGuards() {
+        DRW_Header header;
+        dwgWriter21 writer(nullptr, &header);
+        DRW_Layer layer;
+        layer.name = "APPDATA_GUARD";
+        layer.appData.push_back({
+            {102, std::string("{CUSTOM_APP")},
+            {1, std::string("opaque payload")},
+            {102, std::string("}")}});
+        const auto initial = writer.buffer();
+        if (writer.emitLayerRecord(0xA610u, layer)
+            || writer.buffer() != initial)
+            return false;
+
+        layer.appData.clear();
+        layer.pendingAppIdResolutions.push_back(
+            DRW_TableEntry::PendingHandleRef{0u, 0xA611u, 0u, false});
+        const auto beforePending = writer.buffer();
+        if (writer.emitLayerRecord(0xA610u, layer)
+            || writer.buffer() != beforePending)
+            return false;
+
+        layer.pendingAppIdResolutions.clear();
+        layer.pendingLayerRefResolutions.push_back(
+            DRW_TableEntry::PendingHandleRef{0u, 0xA611u, 0u, false});
+        const auto beforeLayerPending = writer.buffer();
+        if (writer.emitLayerRecord(0xA610u, layer)
+            || writer.buffer() != beforeLayerPending)
+            return false;
+
+        layer.pendingLayerRefResolutions.clear();
+        layer.reactorHandles.push_back(0xA612u);
+        layer.appData.push_back({
+            {102, std::string("ACAD_REACTORS")},
+            {330, std::string("A612")},
+            {102, std::string("}")}});
+        if (!writer.emitLayerRecord(0xA610u, layer))
+            return false;
+
+        DRW_Header mismatchHeader;
+        dwgWriter21 mismatchWriter(nullptr, &mismatchHeader);
+        DRW_Layer mismatch;
+        mismatch.name = "APPDATA_MISMATCH";
+        mismatch.reactorHandles.push_back(0xA612u);
+        mismatch.appData.push_back({
+            {102, std::string("ACAD_REACTORS")},
+            {330, std::string("A613")},
+            {102, std::string("}")}});
+        const auto beforeMismatch = mismatchWriter.buffer();
+        if (mismatchWriter.emitLayerRecord(0xA610u, mismatch)
+            || mismatchWriter.buffer() != beforeMismatch)
+            return false;
+
+        DRW_Header xDictionaryHeader;
+        dwgWriter21 xDictionaryWriter(nullptr, &xDictionaryHeader);
+        DRW_Layer xDictionary;
+        xDictionary.name = "XDIRECTORY_GUARD";
+        xDictionary.setDwgCommonObjectState(0, 1u, false);
+        xDictionary.xDictHandle = 0xA614u;
+        xDictionary.appData.push_back({
+            {102, std::string("ACAD_XDICTIONARY")},
+            {360, std::string("A614")},
+            {102, std::string("}")}});
+        return xDictionaryWriter.emitLayerRecord(0xA610u, xDictionary);
+    }
+
     static bool checkR2007GenericControlBoundaries(dwgWriter21& writer) {
         if (!writer.prepareDwgClassManifest() || !writer.writeFileHeaderStub()
             || !writer.writeDwgHeader() || !writer.writeDwgClasses()
@@ -38024,6 +38090,10 @@ int main(int argc, char** argv) {
     } else if (argc == 2 && std::string(argv[1]) == "--r2007-layer-string-boundaries") {
         const bool passed = DwgBlockRecordXrefWireTestAccess::checkR2007LayerStringBoundaries();
         std::cout << "DWG R2007 layer string boundaries: " << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    } else if (argc == 2 && std::string(argv[1]) == "--table-entry-appdata-guards") {
+        const bool passed = DwgBlockRecordXrefWireTestAccess::checkTableEntryAppDataGuards();
+        std::cout << "DWG table-entry appData guards: " << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     } else if (argc == 2 && std::string(argv[1]) == "--r2007-generic-control-boundaries") {
         DRW_Header header; dwgWriter21 writer(nullptr, &header);
