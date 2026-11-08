@@ -18246,12 +18246,31 @@ bool inspectAcshTorusSourceProfile(const std::filesystem::path& path) {
             torus = &object;
     }
     const DRW_EvaluationGraph* graph = nullptr;
-    for (const DRW_EvaluationGraph& item : data.evaluationGraphs) {
-        if (item.handle == 0x454u)
-            graph = &item;
+    std::size_t historyCount = 0u;
+    std::size_t torusCount = 0u;
+    std::size_t graphCount = 0u;
+    for (const DRW_AcShHistoryObject& object : data.acshHistoryObjects) {
+        if (object.handle == 0x453u
+            && object.m_recordName == "ACSH_HISTORY_CLASS")
+            ++historyCount;
+        if (object.handle == 0x455u
+            && object.m_recordName == "ACSH_TORUS_CLASS")
+            ++torusCount;
     }
+    for (const DRW_EvaluationGraph& item : data.evaluationGraphs) {
+        if (item.handle == 0x454u) {
+            ++graphCount;
+            graph = &item;
+        }
+    }
+    static constexpr std::uint8_t sabSignature[] = {
+        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e'};
+    static constexpr std::uint8_t sabEndMarker[] = {
+        0x0E, 0x03, 'E', 'n', 'd', 0x0E, 0x02, 'o', 'f', 0x0E, 0x04,
+        'A', 'C', 'I', 'S', 0x0D, 0x04, 'd', 'a', 't', 'a'};
     if (solid == nullptr || history == nullptr || graph == nullptr
-        || torus == nullptr || solid->m_historyHandle != history->handle
+        || torus == nullptr || historyCount != 1u || graphCount != 1u
+        || torusCount != 1u || solid->m_historyHandle != history->handle
         || history->parentHandle != solid->handle
         || history->m_ownerHandle != graph->handle
         || graph->parentHandle != history->handle
@@ -18265,7 +18284,27 @@ bool inspectAcshTorusSourceProfile(const std::filesystem::path& path) {
         || torus->m_historyNodePrefix.m_colorIndex != 2u
         || torus->m_historyNodePrefix.m_colorIndexRaw != 0u
         || torus->m_historyNodePrefix.m_handle != 0u
-        || torus->m_historyNodePrefix.m_nodeValue != 0)
+        || torus->m_historyNodePrefix.m_nodeValue != 0
+        || data.dataStorageSections.size() != 0u
+        || solid->hasDataStorageRecord
+        || solid->dataStorageHandle != 0u
+        || !solid->dataStorageHandleKey.empty()
+        || !solid->dataStorageData.empty()
+        || solid->m_dwgSourceVersion != DRW::AC1021
+        || solid->m_modelerVersion != 2u
+        || solid->m_isEmpty || !solid->m_hasModelerData
+        || solid->m_objectSize != 1799u
+        || solid->m_dwgAcisPayload.size() != 1059u
+        || solid->m_dwgAcisPayload.size() < sizeof(sabSignature)
+            + sizeof(sabEndMarker)
+        || !std::equal(std::begin(sabSignature), std::end(sabSignature),
+                       solid->m_dwgAcisPayload.begin())
+        || !std::equal(std::begin(sabEndMarker), std::end(sabEndMarker),
+                       solid->m_dwgAcisPayload.end() - sizeof(sabEndMarker))
+        || solid->m_payloadRanges.size() != 1u
+        || solid->m_payloadRanges.front().m_kind
+               != DRW_ModelerPayloadRange::Kind::Sab
+        || solid->m_payloadRanges.front().m_length != 1059u)
         return false;
     const auto& color = torus->m_historyNodePrefix;
     std::cout << "AC1021 TORUS source handles 452->453->454->455; radii="
@@ -18275,8 +18314,185 @@ bool inspectAcshTorusSourceProfile(const std::filesystem::path& path) {
               << " scalar=" << std::dec << color.m_colorIndex
               << " raw-index=" << color.m_colorIndexRaw
               << " reserved=" << color.m_colorIndexIsReserved
-              << " material=" << color.m_handle << '\n';
+              << " material=" << color.m_handle
+              << " inlineSAB=" << solid->m_dwgAcisPayload.size()
+              << " modelerVersion=" << solid->m_modelerVersion
+              << " DataStorageSections=" << data.dataStorageSections.size()
+              << '\n';
     return true;
+}
+
+bool runAcshTorusSourceProjectionRefusal(
+    const std::filesystem::path& path,
+    const std::filesystem::path& outputDirectory) {
+    dx_data physical;
+    dx_iface reader;
+    if (!reader.fileImport(path.string(), &physical, false)
+        || physical.sourceVersion != DRW::AC1021
+        || physical.dataStorageSections.size() != 0u)
+        return false;
+
+    const DRW_ModelerGeometry* sourceSolid = nullptr;
+    std::size_t solidCount = 0u;
+    for (const DRW_Entity* entity : physical.mBlock->ent) {
+        if (entity != nullptr && entity->eType == DRW::E3DSOLID
+            && entity->handle == 0x452u) {
+            ++solidCount;
+            sourceSolid = static_cast<const DRW_ModelerGeometry*>(entity);
+        }
+    }
+    if (solidCount != 1u || sourceSolid == nullptr
+        || sourceSolid->m_dwgAcisPayload.size() != 1059u
+        || sourceSolid->m_modelerVersion != 2u
+        || sourceSolid->hasDataStorageRecord)
+        return false;
+
+    dx_data selected;
+    selected.sourceVersion = physical.sourceVersion;
+    // This test-only projection intentionally has no whole-source identity.
+    // The separate full-source check below keeps strict admission tied to the
+    // actual DWG read; this projection only checks bounded refusal behavior.
+    selected.sourceFormat = dx_source_format::Unknown;
+    selected.dwgClassCoverage = physical.dwgClassCoverage;
+    selected.dwgClassCoverage.m_entries.erase(
+        std::remove_if(selected.dwgClassCoverage.m_entries.begin(),
+                       selected.dwgClassCoverage.m_entries.end(),
+            [](const DRW_DwgClassCoverageEntry& entry) {
+                return entry.m_recordName != "ACSH_HISTORY_CLASS"
+                    && entry.m_recordName != "ACAD_EVALUATION_GRAPH"
+                    && entry.m_recordName != "ACSH_TORUS_CLASS";
+            }),
+        selected.dwgClassCoverage.m_entries.end());
+    auto* selectedSolid = new DRW_ModelerGeometry(*sourceSolid);
+    selected.mBlock->ent.push_back(selectedSolid);
+    for (const DRW_AcShHistoryObject& object : physical.acshHistoryObjects) {
+        if ((object.handle == 0x453u
+             && object.m_recordName == "ACSH_HISTORY_CLASS")
+            || (object.handle == 0x455u
+                && object.m_recordName == "ACSH_TORUS_CLASS"))
+            selected.acshHistoryObjects.push_back(object);
+    }
+    for (const DRW_EvaluationGraph& graph : physical.evaluationGraphs) {
+        if (graph.handle == 0x454u)
+            selected.evaluationGraphs.push_back(graph);
+    }
+    if (selected.dwgClassCoverage.m_entries.size() != 3u
+        || selected.acshHistoryObjects.size() != 2u
+        || selected.evaluationGraphs.size() != 1u)
+        return false;
+    std::size_t selectedLayerCount = 0u;
+    for (const DRW_Layer& layer : physical.layers) {
+        if (layer.name == sourceSolid->layer) {
+            ++selectedLayerCount;
+            selected.layers.push_back(layer);
+        }
+    }
+    if (selectedLayerCount != 1u)
+        return false;
+    std::size_t selectedBlockRecordCount = 0u;
+    for (const DRW_Block_Record& record : physical.blockRecords) {
+        if (record.handle == sourceSolid->parentHandle) {
+            ++selectedBlockRecordCount;
+            selected.blockRecords.push_back(record);
+        }
+    }
+    if (selectedBlockRecordCount > 1u)
+        return false;
+    std::vector<std::uint32_t> pendingExtensionDictionaries;
+    if (!selected.layers.empty() && selected.layers.front().xDictHandle != 0u)
+        pendingExtensionDictionaries.push_back(
+            selected.layers.front().xDictHandle);
+    std::unordered_set<std::uint32_t> visitedExtensionDictionaries;
+    while (!pendingExtensionDictionaries.empty()) {
+        const std::uint32_t handle = pendingExtensionDictionaries.back();
+        pendingExtensionDictionaries.pop_back();
+        if (!visitedExtensionDictionaries.insert(handle).second)
+            continue;
+        const DRW_Dictionary* found = nullptr;
+        for (const DRW_Dictionary& dictionary : physical.dictionaries) {
+            if (dictionary.handle == handle) {
+                if (found != nullptr)
+                    return false;
+                found = &dictionary;
+            }
+        }
+        if (found == nullptr)
+            return false;
+        selected.dictionaries.push_back(*found);
+        for (const DRW_Dictionary::Entry& entry : found->m_entries) {
+            if (entry.m_handle == 0u || entry.m_handle == DRW::NoHandle)
+                continue;
+            const bool childDictionary = std::any_of(
+                physical.dictionaries.begin(), physical.dictionaries.end(),
+                [&entry](const DRW_Dictionary& dictionary) {
+                    return dictionary.handle == entry.m_handle;
+                });
+            if (childDictionary) {
+                pendingExtensionDictionaries.push_back(entry.m_handle);
+                continue;
+            }
+            const auto xrecord = std::find_if(
+                physical.xRecords.begin(), physical.xRecords.end(),
+                [&entry](const DRW_XRecord& record) {
+                    return record.handle == entry.m_handle;
+                });
+            if (xrecord == physical.xRecords.end()
+                || std::find_if(std::next(xrecord), physical.xRecords.end(),
+                    [&entry](const DRW_XRecord& record) {
+                        return record.handle == entry.m_handle;
+                    }) != physical.xRecords.end())
+                return false;
+            selected.xRecords.push_back(*xrecord);
+        }
+    }
+
+    std::filesystem::create_directories(outputDirectory);
+    const auto refusesWithoutPublishing = [](
+        dx_data* data, const std::filesystem::path& output, bool binary,
+        bool strict) {
+        constexpr const char* sentinel = "inline SAB refusal sentinel";
+        {
+            std::ofstream file(output, std::ios::binary | std::ios::trunc);
+            file << sentinel;
+            if (!file) return false;
+        }
+        dx_iface exporter;
+        const bool exported = exporter.fileExport(
+            output.string(), DRW::AC1027, binary, data, true,
+            strict, dx_dxfSourceTextPolicy::Compatible,
+            DRW::DxfTextWritePolicy::Compatible,
+            dx_dxfProxyGraphicsPolicy::Compatible,
+            strict ? dx_dwgReadCompletenessPolicy::RequireComplete
+                   : dx_dwgReadCompletenessPolicy::Legacy);
+        std::ifstream file(output, std::ios::binary);
+        const std::string retained{
+            std::istreambuf_iterator<char>(file),
+            std::istreambuf_iterator<char>()};
+        return !exported && retained == sentinel;
+    };
+    const auto nonce = std::to_string(
+        std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto selectedAscii = outputDirectory
+        / ("torus-inline-selected-ascii-" + nonce + ".dxf");
+    const auto selectedBinary = outputDirectory
+        / ("torus-inline-selected-binary-" + nonce + ".dxf");
+    const auto fullSource = outputDirectory
+        / ("torus-inline-full-source-" + nonce + ".dxf");
+    std::error_code ec;
+    const bool selectedAsciiRefused = refusesWithoutPublishing(
+        &selected, selectedAscii, false, false);
+    const bool selectedBinaryRefused = refusesWithoutPublishing(
+        &selected, selectedBinary, true, false);
+    const bool fullSourceRefused = refusesWithoutPublishing(
+        &physical, fullSource, false, true);
+    std::filesystem::remove(selectedAscii, ec);
+    std::filesystem::remove(selectedBinary, ec);
+    std::filesystem::remove(fullSource, ec);
+    std::cout << "AC1021 selected physical subgraph projection: ASCII refused="
+              << selectedAsciiRefused << " Binary refused="
+              << selectedBinaryRefused << " strict full-source refused="
+              << fullSourceRefused << '\n';
+    return selectedAsciiRefused && selectedBinaryRefused && fullSourceRefused;
 }
 
 bool runDxfEvaluationGraphRoundTrip(
@@ -37856,6 +38072,14 @@ int main(int argc, char** argv) {
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     } else if (argc == 4
+        && std::string(argv[1]) == "--check-acsh-torus-source-projection") {
+        const bool inspected = inspectAcshTorusSourceProfile(argv[2]);
+        const bool refused = inspected
+            && runAcshTorusSourceProjectionRefusal(argv[2], argv[3]);
+        std::cout << "ACSH pinned TORUS selected projection refusal: "
+                  << (refused ? "PASS" : "FAIL") << '\n';
+        return refused ? 0 : 1;
+    } else if (argc == 4
         && std::string(argv[1]) == "--verify-dynamicblock-typed-pair") {
         const bool passed = runDynamicBlockTypedDxfPairQualification(
             argv[2], argv[3]);
@@ -37922,6 +38146,7 @@ int main(int argc, char** argv) {
                      " [--verify-hatch-pattern DXF]"
                      " [--verify-acsh-prefix-sample DWG]"
                      " [--inspect-acsh-torus-source DWG]"
+                     " [--check-acsh-torus-source-projection DWG OUTPUT_DIRECTORY]"
                      " [--generate-mpolygon-header[-binary] DXF]"
                      " [--verify-mpolygon-header DXF]"
                      " [--generate-mpolygon-metadata[-binary] DXF]"

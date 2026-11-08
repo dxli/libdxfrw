@@ -486,43 +486,77 @@ No physical P4 OBJECTS subgraph currently passes the source-to-output gate.
 The AC1021 public TORUS graph is source-bound and its fields/links match the
 narrow writer profile, but only generated output/readback is qualified; the
 containing source has 387 opaque callbacks and other ACDS graphs. Next add a
-source-bound selected-route check for this exact graph in ASCII and Binary
-while retaining whole-source refusal; do not promote a parser/source match to
-whole-document output or semantic support.
+selected projection check for this exact graph in ASCII and Binary while
+retaining whole-source refusal. The projection now fails before the modeler
+serializer, so no selected physical output route is qualified. Do not promote
+a parser/source match to whole-document output or semantic support.
 
-**Next implementation slice — source-bound TORUS selected projection:**
-1. Extend the existing opt-in physical-source inspector for the pinned
-   `atmos_dc22s_2007.dwg` hash to expose the exact modeler, DataStorage section
-   and record key/handle needed to select the `0x452 → 0x453 → 0x454 → 0x455`
-   path. Assert uniqueness and all owner, history, graph, primitive and material
-   roles before building a projection; never select by callback order alone.
-2. Construct a scratch `dx_data` view containing only that closed modeler and
-   its exact linked DataStorage record and required schema/index metadata. Do
-   not mutate or filter the live source object, discard unrelated objects and
-   then use ordinary whole-file output, or weaken the full-source disposition
-   check. If the DataStorage representation cannot be safely narrowed, keep
-   the slice test-only and prove the selected writer route directly rather than
-   broadening production admission.
-3. Export that selected projection to ASCII and Binary DXF, re-import each,
-   and compare emitted modeler identity, history/graph/primitive roles, both
-   radii, CMC color/index and null material link against the source-bound
-   expected values. Prove a missing or mismatched dependency refuses without
-   publishing partial output, then repair the same adapter/projection and
-   retry successfully in each encoding.
-4. In the same focused control, retain an assertion that ordinary export of the
-   complete physical source is still refused at its existing incomplete-frame
-   or opaque-source gate. This selected-route result qualifies bounded
-   transport only; it does not qualify SAB/ACIS semantics, native 3D behavior,
-   or whole-drawing conversion.
+**Correction from source inspection (2026-11-08):** the proposed next slice
+incorrectly assumed that the AC1021 TORUS source had a linked DataStorage
+record. The pinned file is AC1021 and its unique solid `0x452` has no
+`hasDataStorageRecord`, no DataStorage handle/key, and the drawing has no
+DataStorage sections. The solid instead carries an exact 1,059-byte inline
+`m_dwgAcisPayload` with modeler version 2 and source version AC1021; its
+`m_objectSize` is 1,799 bytes. Keep that carrier identity separate from the
+source-bound history path `0x452 → 0x453 → 0x454 → 0x455`. Never synthesize a
+physical source DataStorage record or call this graph an ACDSDATA record
+selection.
 
-Keep this as an opt-in/manual local-source probe unless the test harness can
-consume the already-approved existing corpus path without checking in a new
-DWG/DXF. Do not add generated or downloaded DWG/DXF fixture files. During the
-edit loop, rebuild `libdxfrw_dwg_local_roundtrip` once and run the new selector
-plus `dxf_acsh_torus_typed_roundtrip` and `dxf_acsh_cmc_loss_guard`; run the
-small owning ACDS cohort only if the changed production hook affects it. No
-full-suite run is warranted for this isolated slice. Update this plan with the
-receipt and exact outcome as part of the same slice.
+**Next implementation slice — resolve the inline-SAB to DXF carrier route:**
+1. Extend the manual source inspector to pin the input hash, unique graph roles,
+   the inline SAB prefix and terminator/span, payload length and modeler version;
+   assert that DataStorage is absent. Do not check in a DWG/DXF fixture.
+2. Trace the current writer gate for this exact source entity in both target
+   DXF families. The code admits DWG-associated AC1015 SAT-v1 payloads and
+   R2013+ SAB linked through ACDSDATA; the AC1021 inline SAB is neither, so it
+   must not be relabeled or emitted by filtering the containing drawing.
+3. Resolve the standards-backed conversion route before production changes:
+   either preserve this source carrier in a documented DXF representation, or
+   create the later ACDSDATA envelope only if its modeler shell fields and
+   carrier conversion are supported by an authoritative spec plus eligible
+   producer output. LibreDWG's SAB-to-SAT conversion is a useful implementation
+   comparison, not independent semantic proof. Do not invent group-290/UID
+   values, translate the SAB terminator by guess, or count parser agreement as
+   geometry validation.
+4. Close the selected layer-0 extension dictionary `0x1C1` (decimal handle
+   449) and its child records; do not confuse decimal diagnostic handles with
+   hexadecimal DWG handles. The scratch projection now carries that exact
+   typed closure. Its next refusal is `EvaluationGraph owner is unresolved or
+   not representable`: the typed ACDS collector is only entered when
+   `dataStorageSections` is nonempty, while this AC1021 source has no
+   DataStorage and no same-profile raw DXF history receipt. Resolve how the
+   DWG-origin history/graph can enter the typed output closure without
+   fabricating a DataStorage section; only then can source-bound ASCII/Binary
+   controls reach the modeler serializer. Require exact carrier and graph-role
+   readback, rollback plus corrected retry for injectable dependency failures,
+   and the same complete-source refusal guard. Generated-output checks remain
+   separate from physical-source evidence.
+
+Use the pinned existing local source only as an opt-in/manual probe. During the
+edit loop, rebuild `libdxfrw_dwg_local_roundtrip` once and run the source
+selector plus `dxf_acsh_torus_typed_roundtrip` and `dxf_acsh_cmc_loss_guard`;
+run the owning ACDS cohort only if its production hook changes. No full-suite
+run is warranted for this isolated slice. Record the exact source/writer gate
+result here and in its receipt; do not promote support claims from a refusal
+control.
+
+**Current checkpoint:** the source inspector now requires unique graph roles,
+the exact inline SAB signature and tagged terminator, the 1,059-byte payload,
+the AC1021/modeler-version-2 identity, and absence of a DataStorage link. The
+opt-in `--check-acsh-torus-source-projection` attempts selected ASCII and
+Binary output from a scratch projection; both are refused without replacing a
+sentinel. The projection includes the exact layer-0 extension DICTIONARY
+closure (`0x1C1`, decimal handle 449), then stops at extension-graph
+validation: `EvaluationGraph owner is unresolved or not representable`. The
+typed ACDS collector is gated on a nonempty DataStorage section, which this
+AC1021 source does not have. The probe validates atomic refusal but does not
+reach the modeler serializer or qualify the inline-SAB carrier gate. Strict
+full-source export also
+preserves its destination but stops first at the unrelated unqualified DWG
+IMAGEDEF owner role, so the later opaque-frame gate was not reached. The
+existing generated TORUS/CMC controls pass (2/2); no fixture was added. These
+are refusal results, not successful physical-source output. See the
+[inline-SAB carrier gate receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).
 
 The local P6 AC1027
 source-reference inventory is complete, with

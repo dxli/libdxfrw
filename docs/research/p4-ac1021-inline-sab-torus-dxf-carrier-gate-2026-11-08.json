@@ -1,0 +1,65 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "id": "p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08",
+  "date": "2026-11-08",
+  "status": "INLINE_SAB_SOURCE_BOUND_TYPED_HISTORY_ROUTE_STOPS_BEFORE_SERIALIZER",
+  "supportClaimEffect": "none",
+  "scope": "Correct the next TORUS projection assumption using the pinned AC1021 physical source; bind its inline SAB carrier, probe selected ASCII/Binary writer refusal and retain full-source strict refusal.",
+  "source": {
+    "repository": "LibreDWG",
+    "revision": "6d6a33987a1a97095b069c799c3d8a793320f812",
+    "inputRepository": "dwg-writer public committed LibreDWG fixture",
+    "inputPath": "/Users/dli/dev/dwg-writer/tests/fixtures/committed/libredwg/atmos_dc22s_2007.dwg",
+    "inputSha256": "0e3eccc70ea6b82120c77449bb1d1d27ee280a1ed1c0f2e88e31b1db503ca66f",
+    "version": "AC1021",
+    "selectedGraph": {
+      "solid": "0x452",
+      "history": "0x453",
+      "evaluationGraph": "0x454",
+      "torus": "0x455",
+      "radii": [19.0, 2.789983459616414],
+      "cmc": {
+        "method": "0xC3",
+        "aci": 2,
+        "rawBsIndex": 0,
+        "materialHandle": "0x0"
+      }
+    },
+    "carrier": {
+      "kind": "inline SAB in the AC1021 modeler entity body",
+      "payloadBytes": 1059,
+      "modelerVersion": 2,
+      "modelerSourceVersion": "AC1021",
+      "objectSizeBytes": 1799,
+      "dataStorageSections": 0,
+      "hasDataStorageRecord": false,
+      "signature": "ACIS BinaryFile",
+      "terminator": "tagged End-of-ACIS-data marker",
+      "interpretation": "bounded carrier extraction only; ACIS syntax and geometry remain unqualified"
+    }
+  },
+  "writerRouteResearch": {
+    "libdxfrw": "DWG-associated modeler DXF output currently admits the qualified AC1015 SAT-v1 profile or an R2013+ SAB record linked through ACDSDATA. The pinned AC1021 inline SAB matches neither path and is refused; do not relabel it as DataStorage or fabricate R2013+ shell fields.",
+    "libreDWG": {
+      "file": "/Users/dli/dev/libredwg/src/out_dxf.c",
+      "revision": "6d6a33987a1a97095b069c799c3d8a793320f812",
+      "observedStrategy": "dxf_3dsolid converts a version-2 SAB through dwg_convert_SAB_to_SAT1 before writing SAT text groups",
+      "evidenceLimit": "implementation comparison only; it shares the SAB input and does not independently establish geometry semantics"
+    }
+  },
+  "validation": {
+    "build": "cmake --build build --target libdxfrw_dwg_local_roundtrip -j4 — PASS",
+    "sourceProjectionControl": "build/libdxfrw_dwg_local_roundtrip --check-acsh-torus-source-projection <pinned DWG> <scratch directory> — PASS; selected ASCII/Binary attempts refuse and preserve existing destinations; strict full-source export also refuses and preserves its destination.",
+    "selectedProjectionFirstObservedGate": "The selected projection includes the exact layer-0 extension DICTIONARY 0x1C1 closure and its XRECORD child. Extension-graph validation then stops at `EvaluationGraph owner is unresolved or not representable`. The typed ACDS collector is only entered when `dataStorageSections` is nonempty; this AC1021 source has none and has no same-profile raw DXF history receipts. The selected projection therefore remains refused before entity serialization and does not dynamically prove the inline-SAB writer gate.",
+    "fullSourceFirstObservedGate": "DWG IMAGEDEF owner role is unqualified for output; this is the first observed full-source rejection, so this result does not prove the opaque-frame gate was reached.",
+    "focusedCtest": "ctest --test-dir build -R '^(dxf_acsh_torus_typed_roundtrip|dxf_acsh_cmc_loss_guard)$' --output-on-failure — 2/2 PASS",
+    "diffCheck": "git diff --check — PASS",
+    "fixturesAdded": 0,
+    "fullSuites": "NOT RUN"
+  },
+  "remaining": [
+    "Admit the exact DWG-origin typed history/graph closure without requiring a fabricated DataStorage section, or establish a standards-backed AC1021 inline-SAB DXF carrier route without loss or fabricated shell values.",
+    "After route selection, prove exact carrier and graph-role readback in ASCII and Binary, plus rollback/retry and complete-source refusal.",
+    "Independent ACIS kernel/native semantic evidence remains separate and open."
+  ]
+}
