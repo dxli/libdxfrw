@@ -12206,6 +12206,29 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
         }
         return false;
     };
+    const auto hasUnmappedTableBorders = [&]() {
+        if (ent->m_borderLineweightOverrideFlags & ~0x0003FFFFu
+            || ent->m_borderVisibilityOverrideFlags & ~0x0003FFFFu)
+            return true;
+        for (std::size_t i = 0u; i < 18u; ++i) {
+            const bool lineweightSelected =
+                (ent->m_borderLineweightOverrideFlags & (1u << i)) != 0u;
+            const bool visibilitySelected =
+                (ent->m_borderVisibilityOverrideFlags & (1u << i)) != 0u;
+            if (lineweightSelected != ent->m_hasTableBorderLineweightOverrides[i]
+                || (lineweightSelected
+                    && (ent->m_tableBorderLineweights[i] < 0
+                        || ent->m_tableBorderLineweights[i] > 65535))
+                || (!lineweightSelected && ent->m_tableBorderLineweights[i] != 0)
+                || visibilitySelected != ent->m_hasTableBorderVisibilityOverrides[i]
+                || (!visibilitySelected && ent->m_tableBorderVisibilities[i] != 0)
+                || (visibilitySelected
+                    && ent->m_tableBorderVisibilities[i] != 0
+                    && ent->m_tableBorderVisibilities[i] != 1))
+                return true;
+        }
+        return false;
+    };
     if (ent->m_dataVersion < 0 || ent->m_dataVersion > 32767
         || (version < DRW::AC1024 && ent->m_dataVersion != 0)
         || ent->m_flowDirection < 0 || ent->m_flowDirection > 32767
@@ -12222,21 +12245,14 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
         || hasUnmappedTableRowColors()
         || std::any_of(ent->m_tableBorderColors.begin(),
                        ent->m_tableBorderColors.end(), hasDwgCmColor)
-        || std::any_of(ent->m_hasTableBorderLineweightOverrides.begin(),
-                       ent->m_hasTableBorderLineweightOverrides.end(),
-            [](bool value) { return value; })
-        || std::any_of(ent->m_hasTableBorderVisibilityOverrides.begin(),
-                       ent->m_hasTableBorderVisibilityOverrides.end(),
-            [](bool value) { return value; })
         || ent->m_borderColorOverrideFlags > static_cast<std::uint32_t>(
                std::numeric_limits<int>::max())
         || ent->m_borderColorOverrideFlags != 0u
         || ent->m_borderLineweightOverrideFlags > static_cast<std::uint32_t>(
                std::numeric_limits<int>::max())
-        || ent->m_borderLineweightOverrideFlags != 0u
         || ent->m_borderVisibilityOverrideFlags > static_cast<std::uint32_t>(
                std::numeric_limits<int>::max())
-        || ent->m_borderVisibilityOverrideFlags != 0u
+        || hasUnmappedTableBorders()
         || !std::isfinite(ent->m_horizontalCellMargin)
         || !std::isfinite(ent->m_verticalCellMargin)
         || ent->m_horizontalCellMargin < 0.0
@@ -12520,6 +12536,21 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
         if ((ent->m_tableOverrideFlags & rowFillNoneFlags[i]) != 0u)
             writer->writeInt16(283,
                 ent->m_tableRowFillNone[i] ? 0 : 1);
+    }
+    for (std::size_t slot = 0u; slot < 18u; ++slot) {
+        if ((ent->m_borderLineweightOverrideFlags & (1u << slot)) == 0u)
+            continue;
+        const int raw = ent->m_tableBorderLineweights[slot];
+        const int signedLineweight = raw <= 32767 ? raw : raw - 65536;
+        writer->writeInt16(274 + static_cast<int>(slot % 6u),
+                           signedLineweight);
+    }
+    for (std::size_t slot = 0u; slot < 18u; ++slot) {
+        if ((ent->m_borderVisibilityOverrideFlags & (1u << slot)) == 0u)
+            continue;
+        // DWG stores 0=visible / 1=invisible; TABLE DXF stores the inverse.
+        writer->writeInt16(284 + static_cast<int>(slot % 6u),
+            ent->m_tableBorderVisibilities[slot] == 0 ? 1 : 0);
     }
 
     if (!ent->extData.empty() && !writeExtData(ent->extData))

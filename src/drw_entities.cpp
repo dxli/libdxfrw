@@ -12941,19 +12941,46 @@ bool DRW_Table::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     }
     case 274:
     case 277:
-        reader->getInt32();
-        markIncomplete();
-        break;
     case 279:
     case 275:
     case 276:
     case 278: {
         static const int codes[] = {279, 275, 276, 278};
-        const auto found = std::find(std::begin(codes), std::end(codes), code);
-        const std::size_t borderIndex = static_cast<std::size_t>(found - std::begin(codes));
-        if (!m_dxfTablePropertiesStarted && currentCell() != nullptr)
+        const bool allCellsStarted = m_dxfRowsExpected >= 0
+            && m_dxfColumnsExpected >= 0
+            && m_dxfNextCell >= static_cast<std::size_t>(m_dxfRowsExpected)
+                * static_cast<std::size_t>(m_dxfColumnsExpected);
+        const std::size_t edge = static_cast<std::size_t>(code - 274);
+        std::size_t expected = 0u;
+        std::size_t slot = 0u;
+        for (std::size_t i = edge; i < 18u; i += 6u) {
+            if ((m_borderLineweightOverrideFlags & (1u << i)) != 0u) {
+                if (expected == m_dxfTableBorderLineweightReads[edge])
+                    slot = i;
+                ++expected;
+            }
+        }
+        const bool tableField = m_dxfTablePropertiesStarted
+            || (allCellsStarted && expected != 0u
+                && m_dxfTableBorderLineweightReads[edge] < expected);
+        if (tableField && expected != 0u
+            && m_dxfTableBorderLineweightReads[edge] < expected) {
+            const int wireValue = reader->getInt32();
+            if (wireValue < -32768 || wireValue > 32767) {
+                markIncomplete();
+                break;
+            }
+            m_tableBorderLineweights[slot] = static_cast<std::uint16_t>(wireValue);
+            m_hasTableBorderLineweightOverrides[slot] = true;
+            ++m_dxfTableBorderLineweightReads[edge];
+            m_dxfTablePropertiesStarted = true;
+        } else if (!m_dxfTablePropertiesStarted && currentCell() != nullptr
+                   && std::find(std::begin(codes), std::end(codes), code)
+                       != std::end(codes)) {
+            const auto found = std::find(std::begin(codes), std::end(codes), code);
+            const std::size_t borderIndex = static_cast<std::size_t>(found - std::begin(codes));
             currentCell()->m_borders[borderIndex].m_lineWeight = reader->getInt32();
-        else {
+        } else {
             reader->getInt32();
             markIncomplete();
         }
@@ -12961,9 +12988,55 @@ bool DRW_Table::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     }
     case 284:
     case 287:
-        reader->getInt32();
-        markIncomplete();
+    case 289:
+    case 285:
+    case 286:
+    case 288: {
+        const bool allCellsStarted = m_dxfRowsExpected >= 0
+            && m_dxfColumnsExpected >= 0
+            && m_dxfNextCell >= static_cast<std::size_t>(m_dxfRowsExpected)
+                * static_cast<std::size_t>(m_dxfColumnsExpected);
+        const std::size_t edge = static_cast<std::size_t>(code - 284);
+        std::size_t expected = 0u;
+        std::size_t slot = 0u;
+        for (std::size_t i = edge; i < 18u; i += 6u) {
+            if ((m_borderVisibilityOverrideFlags & (1u << i)) != 0u) {
+                if (expected == m_dxfTableBorderVisibilityReads[edge])
+                    slot = i;
+                ++expected;
+            }
+        }
+        const bool tableField = m_dxfTablePropertiesStarted
+            || (allCellsStarted && expected != 0u
+                && m_dxfTableBorderVisibilityReads[edge] < expected);
+        if (tableField && expected != 0u
+            && m_dxfTableBorderVisibilityReads[edge] < expected) {
+            bool visible = false;
+            if (!readDxfBool(reader, visible))
+                return false;
+            m_tableBorderVisibilities[slot] = visible ? 0 : 1;
+            m_hasTableBorderVisibilityOverrides[slot] = true;
+            ++m_dxfTableBorderVisibilityReads[edge];
+            m_dxfTablePropertiesStarted = true;
+        } else if (!m_dxfTablePropertiesStarted && currentCell() != nullptr
+                   && (code == 289 || code == 285 || code == 286 || code == 288)) {
+            static const int codes[] = {289, 285, 286, 288};
+            const auto found = std::find(std::begin(codes), std::end(codes), code);
+            const std::size_t borderIndex = static_cast<std::size_t>(found - std::begin(codes));
+            DRW_TableCell *cell = currentCell();
+            bool value = false;
+            if (!readDxfBool(reader, value))
+                return false;
+            cell->m_borders[borderIndex].m_visible = value;
+            cell->m_borders[borderIndex].m_hasDxfVisibility = true;
+        } else {
+            bool ignored = false;
+            if (!readDxfBool(reader, ignored))
+                return false;
+            markIncomplete();
+        }
         break;
+    }
     case 283: {
         constexpr std::uint32_t fillNoneFlags[] = {
             0x00000100u, 0x00000200u, 0x00000400u
@@ -13007,28 +13080,6 @@ bool DRW_Table::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             else if (allCellsStarted && hasTableOverride)
                 markIncomplete();
         } else {
-            markIncomplete();
-        }
-        break;
-    }
-    case 289:
-    case 285:
-    case 286:
-    case 288: {
-        static const int codes[] = {289, 285, 286, 288};
-        const auto found = std::find(std::begin(codes), std::end(codes), code);
-        const std::size_t borderIndex = static_cast<std::size_t>(found - std::begin(codes));
-        if (!m_dxfTablePropertiesStarted && currentCell() != nullptr) {
-            DRW_TableCell *cell = currentCell();
-            bool value = false;
-            if (!readDxfBool(reader, value))
-                return false;
-            cell->m_borders[borderIndex].m_visible = value;
-            cell->m_borders[borderIndex].m_hasDxfVisibility = true;
-        } else {
-            bool ignored = false;
-            if (!readDxfBool(reader, ignored))
-                return false;
             markIncomplete();
         }
         break;
@@ -13130,6 +13181,26 @@ void DRW_Table::finalizeDxfParse() noexcept {
         || m_dxfTableRowFillColorsRead != expectedFillColors) {
         m_dxfUnsupportedData = true;
         m_semanticContentComplete = false;
+    }
+    if ((m_borderLineweightOverrideFlags & ~0x0003FFFFu) != 0u
+        || (m_borderVisibilityOverrideFlags & ~0x0003FFFFu) != 0u) {
+        m_dxfUnsupportedData = true;
+        m_semanticContentComplete = false;
+    }
+    for (std::size_t edge = 0u; edge < 6u; ++edge) {
+        std::size_t expectedLineweights = 0u;
+        std::size_t expectedVisibilities = 0u;
+        for (std::size_t slot = edge; slot < 18u; slot += 6u) {
+            if ((m_borderLineweightOverrideFlags & (1u << slot)) != 0u)
+                ++expectedLineweights;
+            if ((m_borderVisibilityOverrideFlags & (1u << slot)) != 0u)
+                ++expectedVisibilities;
+        }
+        if (m_dxfTableBorderLineweightReads[edge] != expectedLineweights
+            || m_dxfTableBorderVisibilityReads[edge] != expectedVisibilities) {
+            m_dxfUnsupportedData = true;
+            m_semanticContentComplete = false;
+        }
     }
     if (!m_hasSemanticContent)
         return;
@@ -13538,6 +13609,8 @@ void DRW_Table::resetDwgState() {
     m_dxfTableAlignmentOverridesRead = 0u;
     m_dxfTableRowTextStylesRead = 0u;
     m_dxfTableRowTextHeightsRead = 0u;
+    m_dxfTableBorderLineweightReads.fill(0u);
+    m_dxfTableBorderVisibilityReads.fill(0u);
     m_dxfTableRowTextColorsRead = 0u;
     m_dxfTableRowFillNoneRead = 0u;
     m_dxfTableRowFillColorsRead = 0u;

@@ -2193,6 +2193,8 @@ private:
     std::size_t m_dxfTableAlignmentOverridesRead = 0u;
     std::size_t m_dxfTableRowTextStylesRead = 0u;
     std::size_t m_dxfTableRowTextHeightsRead = 0u;
+    std::array<std::size_t, 6> m_dxfTableBorderLineweightReads{{}};
+    std::array<std::size_t, 6> m_dxfTableBorderVisibilityReads{{}};
     std::size_t m_dxfTableRowTextColorsRead = 0u;
     std::size_t m_dxfTableRowFillNoneRead = 0u;
     std::size_t m_dxfTableRowFillColorsRead = 0u;
@@ -2239,6 +2241,8 @@ private:
         m_dxfTableAlignmentOverridesRead = 0u;
         m_dxfTableRowTextStylesRead = 0u;
         m_dxfTableRowTextHeightsRead = 0u;
+        m_dxfTableBorderLineweightReads.fill(0u);
+        m_dxfTableBorderVisibilityReads.fill(0u);
         m_dxfTableRowTextColorsRead = 0u;
         m_dxfTableRowFillNoneRead = 0u;
         m_dxfTableRowFillColorsRead = 0u;

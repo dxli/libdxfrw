@@ -36679,6 +36679,9 @@ bool tableScalarOverrideOutput(bool binary) {
     table.m_content.m_rows[0].m_cells[0].m_backgroundEnabled = true;
     table.m_content.m_rows[0].m_cells[0].m_fillColorRgb = 3;
     table.m_content.m_rows[0].m_cells[0].m_textColorRgb = 4;
+    table.m_content.m_rows[0].m_cells[0].m_borders[0].m_lineWeight = 11;
+    table.m_content.m_rows[0].m_cells[0].m_borders[0].m_visible = false;
+    table.m_content.m_rows[0].m_cells[0].m_borders[0].m_hasDxfVisibility = true;
     // Exercise selected default values as well as the implicit R2007 header
     // suppression value. The override mask preserves explicit presence.
     table.m_titleSuppressed = false;
@@ -36686,6 +36689,20 @@ bool tableScalarOverrideOutput(bool binary) {
     table.m_flowDirection = 0;
     table.m_horizontalCellMargin = 0.0;
     table.m_verticalCellMargin = 0.0;
+    table.m_borderLineweightOverrideFlags = 131201u;
+    table.m_tableBorderLineweights[0] = 0;
+    table.m_tableBorderLineweights[7] = 65534;
+    table.m_tableBorderLineweights[17] = 32767;
+    table.m_hasTableBorderLineweightOverrides[0] = true;
+    table.m_hasTableBorderLineweightOverrides[7] = true;
+    table.m_hasTableBorderLineweightOverrides[17] = true;
+    table.m_borderVisibilityOverrideFlags = 65794u;
+    table.m_tableBorderVisibilities[1] = 0;
+    table.m_tableBorderVisibilities[8] = 1;
+    table.m_tableBorderVisibilities[16] = 0;
+    table.m_hasTableBorderVisibilityOverrides[1] = true;
+    table.m_hasTableBorderVisibilityOverrides[8] = true;
+    table.m_hasTableBorderVisibilityOverrides[16] = true;
     writer.addTable(table);
 
     const auto output = directory / "table.dxf";
@@ -36729,10 +36746,20 @@ bool tableScalarOverrideOutput(bool binary) {
             && actual.m_tableRowFillColors[1].index == 0u
             && actual.m_tableRowFillColors[2].method == 0xC3u
             && actual.m_tableRowFillColors[2].index == 3u
+            && actual.m_borderLineweightOverrideFlags == 131201u
+            && actual.m_tableBorderLineweights[0] == 0
+            && actual.m_tableBorderLineweights[7] == 65534
+            && actual.m_tableBorderLineweights[17] == 32767
+            && actual.m_borderVisibilityOverrideFlags == 65794u
+            && actual.m_tableBorderVisibilities[1] == 0
+            && actual.m_tableBorderVisibilities[8] == 1
+            && actual.m_tableBorderVisibilities[16] == 0
             && actual.m_content.m_rows[0].m_cells[0].m_textAlignment == 4
             && actual.m_content.m_rows[0].m_cells[0].m_backgroundEnabled
             && actual.m_content.m_rows[0].m_cells[0].m_fillColorRgb == 3
-            && actual.m_content.m_rows[0].m_cells[0].m_textColorRgb == 4;
+            && actual.m_content.m_rows[0].m_cells[0].m_textColorRgb == 4
+            && actual.m_content.m_rows[0].m_cells[0].m_borders[0].m_lineWeight == 11
+            && !actual.m_content.m_rows[0].m_cells[0].m_borders[0].m_visible;
     };
     const auto checkWire = [&]() {
         std::ifstream stream(output, std::ios::binary);
@@ -36751,6 +36778,8 @@ bool tableScalarOverrideOutput(bool binary) {
         std::vector<int> fillEnabled;
         std::vector<std::string> rowTextStyles;
         std::vector<double> rowTextHeights;
+        std::vector<std::pair<int, int>> borderLineweights;
+        std::vector<std::pair<int, int>> borderVisibilities;
         int code = 0;
         while (dxf->readRec(&code)) {
             if (code == 0) {
@@ -36796,6 +36825,12 @@ bool tableScalarOverrideOutput(bool binary) {
                 case 283:
                     fillEnabled.push_back(dxf->getInt32());
                     break;
+                case 274: case 275: case 276: case 277: case 278: case 279:
+                    borderLineweights.emplace_back(code, dxf->getInt32());
+                    break;
+                case 284: case 285: case 286: case 287: case 288: case 289:
+                    borderVisibilities.emplace_back(code, dxf->getInt32());
+                    break;
                 default:
                     break;
                 }
@@ -36809,7 +36844,11 @@ bool tableScalarOverrideOutput(bool binary) {
             && rowTextHeights == std::vector<double>({0.0, 2.5, 3.5})
             && fillColors == std::vector<int>({3, 256, 0, 3})
             && textColors == std::vector<int>({4, 256, 0, 7})
-            && fillEnabled == std::vector<int>({1, 0, 1, 0});
+            && fillEnabled == std::vector<int>({1, 0, 1, 0})
+            && borderLineweights == std::vector<std::pair<int, int>>(
+                {{279, 11}, {274, 0}, {275, -2}, {279, 32767}})
+            && borderVisibilities == std::vector<std::pair<int, int>>(
+                {{289, 0}, {285, 1}, {286, 0}, {288, 1}});
     };
     if (!exportCurrent())
         return fail("TABLE explicit scalar default override output failed");
@@ -37006,7 +37045,38 @@ bool tableScalarOverrideOutput(bool binary) {
     data.tables.front().m_borderVisibilityOverrideFlags = 0u;
     data.tables.front().m_tableBorderVisibilities.fill(0);
     data.tables.front().m_hasTableBorderVisibilityOverrides.fill(false);
+    data.tables.front().m_borderVisibilityOverrideFlags = 2u;
+    data.tables.front().m_tableBorderVisibilities[1] = 2;
+    data.tables.front().m_hasTableBorderVisibilityOverrides[1] = true;
+    if (exportCurrent())
+        return fail("invalid TABLE border visibility value was emitted");
+    {
+        std::ifstream stream(output, std::ios::binary);
+        const std::string contents((std::istreambuf_iterator<char>(stream)),
+                                   std::istreambuf_iterator<char>());
+        if (!stream.good() && !stream.eof())
+            return fail("invalid border visibility sentinel could not be read");
+        if (contents != sentinel)
+            return fail("invalid border visibility replaced the destination");
+    }
+    data.tables.front().m_borderVisibilityOverrideFlags = 0u;
+    data.tables.front().m_tableBorderVisibilities.fill(0);
+    data.tables.front().m_hasTableBorderVisibilityOverrides.fill(false);
     data.tables.front().m_tableRowHeightOverrides = {{0.0, 2.5, 3.5}};
+    data.tables.front().m_borderLineweightOverrideFlags = 131201u;
+    data.tables.front().m_tableBorderLineweights[0] = 0;
+    data.tables.front().m_tableBorderLineweights[7] = 65534;
+    data.tables.front().m_tableBorderLineweights[17] = 32767;
+    data.tables.front().m_hasTableBorderLineweightOverrides[0] = true;
+    data.tables.front().m_hasTableBorderLineweightOverrides[7] = true;
+    data.tables.front().m_hasTableBorderLineweightOverrides[17] = true;
+    data.tables.front().m_borderVisibilityOverrideFlags = 65794u;
+    data.tables.front().m_tableBorderVisibilities[1] = 0;
+    data.tables.front().m_tableBorderVisibilities[8] = 1;
+    data.tables.front().m_tableBorderVisibilities[16] = 0;
+    data.tables.front().m_hasTableBorderVisibilityOverrides[1] = true;
+    data.tables.front().m_hasTableBorderVisibilityOverrides[8] = true;
+    data.tables.front().m_hasTableBorderVisibilityOverrides[16] = true;
     if (!exportCurrent() || !checkWire() || !checkReadback())
         return fail("TABLE row-height/style corrected retry failed");
     return true;

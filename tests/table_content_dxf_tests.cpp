@@ -989,7 +989,8 @@ bool tableRowAlignmentOverrideParseTests(const std::filesystem::path& dir) {
             {0,"ACAD_TABLE"},{5,"4F2"},{100,"AcDbEntity"},{8,"0"},
             {100,"AcDbBlockReference"},{2,"*T1"},{10,"1"},{20,"2"},
             {30,"3"},{100,"AcDbTable"},{90,"6"},{91,"1"},{92,"1"},
-            {93,"8388607"},{141,"8"},{142,"20"},{171,"1"},{172,"0"},
+            {93,"8388607"},{94,"0"},{95,"131201"},{96,"65794"},
+            {141,"8"},{142,"20"},{171,"1"},{172,"0"},
             {173,"0"},{174,"0"},{175,"1"},{176,"1"},{91,"15"},
             {170,"4"},{283,"1"},{63,"3"},{64,"4"},{1,"cell"},
             // The row override mask and complete cell sequence make these
@@ -1001,6 +1002,8 @@ bool tableRowAlignmentOverrideParseTests(const std::filesystem::path& dir) {
             {63,"256"},{63,"0"},{63,"3"},
             {64,"256"},{64,"0"},{64,"7"},
             {283,"0"},{283,"1"},{283,"0"},
+            {274,"0"},{275,"-2"},{279,"32767"},
+            {285,"1"},{286,"0"},{288,"1"},
             {0,"ENDSEC"},{0,"EOF"}};
     };
     const auto import = [&](const Tags& tags, bool binary, dx_data& data) {
@@ -1040,11 +1043,39 @@ bool tableRowAlignmentOverrideParseTests(const std::filesystem::path& dir) {
             || !colorIs(table.m_tableRowFillColors[0], 0xC0u, 256u)
             || !colorIs(table.m_tableRowFillColors[1], 0xC1u, 0u)
             || !colorIs(table.m_tableRowFillColors[2], 0xC3u, 3u)
+            || table.m_borderLineweightOverrideFlags != 131201u
+            || table.m_tableBorderLineweights
+                != std::array<int, 18>{{0, 0, 0, 0, 0, 0, 0, 65534,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 32767}}
+            || table.m_borderVisibilityOverrideFlags != 65794u
+            || table.m_tableBorderVisibilities
+                != std::array<int, 18>{{0, 0, 0, 0, 0, 0, 0, 0,
+                    1, 0, 0, 0, 0, 0, 0, 0, 0, 0}}
+            || !table.m_hasTableBorderLineweightOverrides[0]
+            || !table.m_hasTableBorderLineweightOverrides[7]
+            || !table.m_hasTableBorderLineweightOverrides[17]
+            || !table.m_hasTableBorderVisibilityOverrides[1]
+            || !table.m_hasTableBorderVisibilityOverrides[8]
+            || !table.m_hasTableBorderVisibilityOverrides[16]
             || !table.m_content.m_rows[0].m_cells[0].m_backgroundEnabled
             || table.m_content.m_rows[0].m_cells[0].m_textColorRgb != 4
             || table.m_content.m_rows[0].m_cells[0].m_fillColorRgb != 3
             || !table.m_semanticContentComplete)
             return fail("title/header/data order or completion state differs");
+
+        for (const int missingCode : {274, 275, 279, 285, 286, 288}) {
+            Tags missing = source();
+            const auto found = std::find_if(missing.begin(), missing.end(),
+                [missingCode](const Tag& tag) { return tag.code == missingCode; });
+            if (found == missing.end())
+                return fail("border override control field was not found");
+            missing.erase(found);
+            dx_data incomplete;
+            if (!import(missing, binary, incomplete)
+                || incomplete.tables.size() != 1u
+                || incomplete.tables.front().m_semanticContentComplete)
+                return fail("missing selected border override was accepted as complete");
+        }
 
         for (std::size_t missingIndex : {0u, 1u, 2u}) {
             Tags missing = source();
