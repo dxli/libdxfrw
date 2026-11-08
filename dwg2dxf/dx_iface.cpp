@@ -16218,12 +16218,21 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
             if (data->sourceVersion == DRW::AC1027) {
                 const auto source = data->m_standardDwgObjectFrames.find(
                     {data->importGeneration, dictionary->second->handle});
-                if (source == data->m_standardDwgObjectFrames.end()
-                    || !source->second.payloadMatched || !source->second.sourceProfileBound
-                    || !dx_ac1027_material_wire::dictionary(source->second.raw,
-                        *dictionary->second, data->namedObjectDictionary.handle))
+                const char* dictionaryFailure = nullptr;
+                if (source == data->m_standardDwgObjectFrames.end())
                     return reject(ExtensionGraphFailure::InvalidGraph,
-                        "AC1027 default MATERIAL dictionary wire does not match the witnessed profile");
+                        "AC1027 default MATERIAL dictionary source frame is missing");
+                if (!source->second.payloadMatched
+                    || !source->second.sourceProfileBound)
+                    return reject(ExtensionGraphFailure::InvalidGraph,
+                        "AC1027 default MATERIAL dictionary source frame is not bound");
+                if (!dx_ac1027_material_wire::dictionary(source->second.raw,
+                        *dictionary->second, data->namedObjectDictionary.handle,
+                        &dictionaryFailure))
+                    return reject(ExtensionGraphFailure::InvalidGraph,
+                        std::string("AC1027 default MATERIAL dictionary profile mismatch: ")
+                            + (dictionaryFailure == nullptr
+                                ? "unknown reason" : dictionaryFailure));
             }
             std::unordered_set<std::uint32_t> materialTargets;
             std::unordered_set<std::string> materialNames;

@@ -175,6 +175,39 @@ public:
 
 class DxIfaceStandardDwgCaptureTestAccess {
 public:
+    static void copyAc1027MaterialSourceProof(const dx_data& source,
+                                               dx_data& projection) {
+        projection.dwgClassCoverage = source.dwgClassCoverage;
+        projection.m_opaqueDwgSourceFrames = source.m_opaqueDwgSourceFrames;
+        projection.m_opaqueDwgSourceFrameIdentities =
+            source.m_opaqueDwgSourceFrameIdentities;
+        projection.m_opaqueDwgSourceFrameRetainedBytes =
+            source.m_opaqueDwgSourceFrameRetainedBytes;
+        projection.m_classEvidenceImports = source.m_classEvidenceImports;
+        projection.m_classEvidenceFailure = source.m_classEvidenceFailure;
+        projection.m_classEvidenceAttempt = source.m_classEvidenceAttempt;
+        projection.m_classEvidenceGeneration = source.m_classEvidenceGeneration;
+        projection.m_classEvidenceHighWater = source.m_classEvidenceHighWater;
+        projection.m_classEvidenceOwner = source.m_classEvidenceOwner;
+        projection.m_classEvidenceBytes = source.m_classEvidenceBytes;
+        projection.m_classEvidenceByteLimit = source.m_classEvidenceByteLimit;
+        projection.m_classEvidenceCountLimit = source.m_classEvidenceCountLimit;
+        projection.m_classEvidenceFallback = source.m_classEvidenceFallback;
+        projection.m_classSourceReports = source.m_classSourceReports;
+        projection.m_classSourceFailure = source.m_classSourceFailure;
+        projection.m_classSourceFailureGeneration =
+            source.m_classSourceFailureGeneration;
+    }
+
+    static bool copyStandardObjectFrame(const dx_data& source,
+                                        dx_data& projection,
+                                        std::uint32_t handle) {
+        const dx_data::StandardDwgFrameKey key{source.importGeneration, handle};
+        const auto found = source.m_standardDwgObjectFrames.find(key);
+        return found != source.m_standardDwgObjectFrames.end()
+            && projection.m_standardDwgObjectFrames.emplace(*found).second;
+    }
+
     static bool dynamicBlockOwnerDictionaryProfile(
             const dx_data& data, std::uint32_t handle) noexcept {
         return dx_iface::testAc1024DynamicBlockOwnerDictionary(data, handle);
@@ -64792,20 +64825,36 @@ bool physicalMaterialOutputReadback(
 
     dx_data selected;
     std::set<std::uint32_t> selectedXRecordHandles;
-    dx_data* const exportData = outputVersion == DRW::AC1021 ? &selected : &source;
+    dx_data* const exportData =
+        outputVersion == DRW::AC1021 || outputVersion == DRW::AC1027
+            ? &selected : &source;
     if (exportData == &selected) {
         selected.sourceFormat = source.sourceFormat;
         selected.sourceVersion = source.sourceVersion;
         selected.importGeneration = source.importGeneration;
         selected.dwgReadOutcome = source.dwgReadOutcome;
+        if (outputVersion == DRW::AC1027) {
+            DxIfaceStandardDwgCaptureTestAccess::copyAc1027MaterialSourceProof(
+                source, selected);
+        }
         selected.namedObjectDictionary = source.namedObjectDictionary;
         selected.namedObjectDictionary.m_entries.erase(
             std::remove_if(selected.namedObjectDictionary.m_entries.begin(),
                 selected.namedObjectDictionary.m_entries.end(),
                 [](const DRW_Dictionary::Entry& entry) {
-                    return entry.m_name != "ACAD_MATERIAL";
+                    return entry.m_name != "ACAD_MATERIAL"
+                        && entry.m_name != "ACAD_IMAGE_VARS";
                 }), selected.namedObjectDictionary.m_entries.end());
         selected.hasNamedObjectDictionary = true;
+        if (outputVersion == DRW::AC1027) {
+            selected.dwgRasterVariables = source.dwgRasterVariables;
+            selected.rasterVariablesRetainedRecords =
+                source.rasterVariablesRetainedRecords;
+            selected.rasterVariablesRetainedBytes =
+                source.rasterVariablesRetainedBytes;
+            selected.rasterVariablesCaptureFailed =
+                source.rasterVariablesCaptureFailed;
+        }
         std::set<std::uint32_t> selectedDictionaryHandles;
         selectedDictionaryHandles.insert(sourceOwner.handle);
         for (const DRW_Material& material : source.materials) {
@@ -64815,8 +64864,12 @@ bool physicalMaterialOutputReadback(
         for (const std::uint32_t handle : selectedDictionaryHandles) {
             const auto dictionary = sourceDictionaries.find(handle);
             if (dictionary == sourceDictionaries.end())
-                return fail("AC1021 MATERIAL projection has a missing dependency dictionary");
+                return fail("selected MATERIAL projection has a missing dependency dictionary");
             selected.dictionaries.push_back(*dictionary->second);
+            if (outputVersion == DRW::AC1027
+                && !DxIfaceStandardDwgCaptureTestAccess::copyStandardObjectFrame(
+                    source, selected, handle))
+                return fail("AC1027 selected MATERIAL graph lacks its dictionary source frame");
             if (handle == sourceOwner.handle)
                 continue;
             for (const DRW_Dictionary::Entry& entry :
@@ -64829,7 +64882,7 @@ bool physicalMaterialOutputReadback(
                     return candidate.handle == handle;
                 });
             if (record == source.xRecords.end())
-                return fail("AC1021 MATERIAL projection has a non-XRECORD extension target");
+                return fail("selected MATERIAL projection has a non-XRECORD extension target");
             selected.xRecords.push_back(*record);
         }
         selected.materials = source.materials;
@@ -64870,7 +64923,7 @@ bool physicalMaterialOutputReadback(
         selected.rawNamedResourceCaptureFailed = false;
         if (!selected.hasSingleSuccessfulNamedResourceImport()
             || !selected.hasSingleSuccessfulMaterialImport())
-            return fail("AC1021 MATERIAL selected projection lost its source receipts");
+            return fail("selected MATERIAL projection lost its source receipts");
     }
 
     const auto outputEncoding = [&](bool binary) {
@@ -88785,6 +88838,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--material-ac1021-physical-output-readback")
         return physicalMaterialOutputReadback(argv[2], DRW::AC1021) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--material-ac1027-physical-output-readback")
+        return physicalMaterialOutputReadback(argv[2], DRW::AC1027) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--mleaderstyle-physical-output-readback")
         return physicalMLeaderStyleOutputReadback(argv[2]) ? 0 : 1;
