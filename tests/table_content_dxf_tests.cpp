@@ -977,6 +977,97 @@ bool tests(const std::filesystem::path& dir) {
 // authored inputs exercise representation only, not individual flag meaning.
 void tableExportReuseDrawing(dx_iface& writer,dx_data& data,unsigned shape,bool block);
 bool tableExportReadback(const std::filesystem::path& path,bool binary,unsigned shape,bool block);
+bool tableRowAlignmentOverrideParseTests(const std::filesystem::path& dir) {
+    const auto input = dir / "table-row-alignment-overrides.dxf";
+    const auto fail = [](const std::string& why) {
+        std::cerr << "TABLE row alignment: " << why << '\n';
+        return false;
+    };
+    const auto source = [] {
+        return Tags{{0,"SECTION"},{2,"HEADER"},{9,"$ACADVER"},{1,"AC1021"},
+            {0,"ENDSEC"},{0,"SECTION"},{2,"ENTITIES"},
+            {0,"ACAD_TABLE"},{5,"4F2"},{100,"AcDbEntity"},{8,"0"},
+            {100,"AcDbBlockReference"},{2,"*T1"},{10,"1"},{20,"2"},
+            {30,"3"},{100,"AcDbTable"},{90,"6"},{91,"1"},{92,"1"},
+            {93,"114688"},{141,"8"},{142,"20"},{171,"1"},{172,"0"},
+            {173,"0"},{174,"0"},{175,"1"},{176,"1"},{91,"1"},
+            {1,"cell"},{170,"4"},
+            // The row override mask and complete cell sequence make these
+            // trailing group 170 values entity-level even without an unrelated
+            // flow-direction property acting as a parser phase marker.
+            {170,"2"},{170,"5"},{170,"8"},
+            {0,"ENDSEC"},{0,"EOF"}};
+    };
+    const auto import = [&](const Tags& tags, bool binary, dx_data& data) {
+        if (!write(input, tags, binary))
+            return false;
+        Probe reader;
+        return reader.fileImport(input.string(), &data, false)
+            && reader.tableCallbacks == 1u;
+    };
+    const std::array<int, 3> expected{{2, 5, 8}};
+    for (bool binary : {false, true}) {
+        dx_data data;
+        if (!import(source(), binary, data) || data.tables.size() != 1u)
+            return fail("complete input did not produce one TABLE callback");
+        const DRW_Table& table = data.tables.front();
+        if (table.m_tableOverrideFlags != 0x0001C000u
+            || table.m_tableRowAlignmentOverrides != expected
+            || table.m_content.m_rows[0].m_cells[0].m_textAlignment != 4
+            || !table.m_semanticContentComplete)
+            return fail("title/header/data order or completion state differs");
+
+        for (std::size_t missingIndex : {0u, 1u, 2u}) {
+            Tags missing = source();
+            std::size_t seen = 0u;
+            for (auto it = missing.begin(); it != missing.end(); ++it) {
+                if (it->code != 170)
+                    continue;
+                if (seen++ == missingIndex) {
+                    missing.erase(it);
+                    break;
+                }
+            }
+            dx_data incomplete;
+            if (!import(missing, binary, incomplete)
+                || incomplete.tables.size() != 1u
+                || incomplete.tables.front().m_semanticContentComplete)
+                return fail("missing selected row alignment was accepted as complete");
+        }
+
+        Tags excess = source();
+        const auto end = std::find_if(excess.rbegin(), excess.rend(),
+            [](const Tag& tag) { return tag.code == 0 && tag.value == "ENDSEC"; });
+        if (end == excess.rend())
+            return fail("could not locate TABLE section end");
+        excess.insert(end.base() - 1, Tag{170, "9"});
+        dx_data incomplete;
+        if (!import(excess, binary, incomplete)
+            || incomplete.tables.size() != 1u
+            || incomplete.tables.front().m_semanticContentComplete)
+            return fail("excess row alignment was accepted as complete");
+
+        for (const char* invalidValue : {"0", "10", "-1"}) {
+            Tags invalid = source();
+            auto selected = std::find_if(invalid.begin(), invalid.end(),
+                [](const Tag& tag) { return tag.code == 170; });
+            if (selected == invalid.end())
+                return fail("could not locate selected alignment field");
+            selected = std::find_if(std::next(selected), invalid.end(),
+                [](const Tag& tag) { return tag.code == 170; });
+            if (selected == invalid.end())
+                return fail("could not locate selected table alignment field");
+            selected->value = invalidValue;
+            dx_data invalidData;
+            if (!import(invalid, binary, invalidData)
+                || invalidData.tables.size() != 1u
+                || invalidData.tables.front().m_semanticContentComplete)
+                return fail("invalid alignment enum was accepted as complete");
+        }
+    }
+    return true;
+}
+
 bool legacyTableOverride177Tests(const std::filesystem::path& dir) {
     const auto input=dir/"legacy-table.dxf", output=dir/"legacy-output.dxf";
     const auto fail=[](const std::string& why) {std::cerr<<"legacy 177: "<<why<<'\n';return false;};
@@ -5502,6 +5593,15 @@ int main(int argc,char** argv) {
             "libdxfrw-legacy-table-177-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()),error);
         if(dir.empty())return 1;
         const bool ok=legacyTableOverride177Tests(dir);
+        if(ok)std::filesystem::remove_all(dir,error);else std::cerr<<"Evidence: "<<dir<<'\n';
+        return ok?0:1;
+    }
+    if(argc==2&&std::string(argv[1])=="--table-row-alignment-overrides") {
+        std::error_code error;
+        const auto dir=reserveTestScratch(std::filesystem::temp_directory_path(),
+            "libdxfrw-table-row-alignment-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()),error);
+        if(dir.empty())return 1;
+        const bool ok=tableRowAlignmentOverrideParseTests(dir);
         if(ok)std::filesystem::remove_all(dir,error);else std::cerr<<"Evidence: "<<dir<<'\n';
         return ok?0:1;
     }

@@ -12500,6 +12500,7 @@ bool DRW_Table::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         break;
     case 171:
         m_dxfStructuredCellValue=false;m_dxfValueFields=0u;
+        m_dxfCurrentCellAlignmentRead = false;
         if (m_dxfCurrentCell >= 0) {
             if (m_dxfMergeCurrentFields != 7u)
                 m_dxfMergeFieldsInvalid = true;
@@ -12700,14 +12701,57 @@ bool DRW_Table::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             markIncomplete();
         }
         break;
-    case 170:
-        if (!m_dxfTablePropertiesStarted && currentCell() != nullptr)
-            currentCell()->m_textAlignment = reader->getInt32();
-        else {
-            reader->getInt32();
+    case 170: {
+        constexpr std::uint32_t rowAlignmentFlags[] = {
+            0x00004000u, 0x00008000u, 0x00010000u
+        };
+        std::size_t slot = 0u;
+        std::size_t expected = 0u;
+        for (std::size_t i = 0u; i < 3u; ++i) {
+            if ((m_tableOverrideFlags & rowAlignmentFlags[i]) != 0u) {
+                if (expected == m_dxfTableAlignmentOverridesRead)
+                    slot = i;
+                ++expected;
+            }
+        }
+        const bool allCellsStarted = m_dxfRowsExpected >= 0
+            && m_dxfColumnsExpected >= 0
+            && m_dxfNextCell >= static_cast<std::size_t>(m_dxfRowsExpected)
+                * static_cast<std::size_t>(m_dxfColumnsExpected);
+        DRW_TableCell *cell = currentCell();
+        const bool hasCellAlignmentOverride = cell != nullptr
+            && (cell->m_overrideFlags & 0x00000001u) != 0u
+            && !m_dxfCurrentCellAlignmentRead;
+        const bool hasTableAlignmentOverride = expected != 0u
+            && m_dxfTableAlignmentOverridesRead < expected;
+        const bool tableAlignmentField = m_dxfTablePropertiesStarted
+            || (allCellsStarted && hasTableAlignmentOverride
+                && !hasCellAlignmentOverride);
+        const int alignment = reader->getInt32();
+        if (tableAlignmentField) {
+            if (!hasTableAlignmentOverride) {
+                markIncomplete();
+            } else if (alignment < 1 || alignment > 9) {
+                // ODA §20.4.96.1 uses the same nine-position alignment values
+                // as TABLE cell overrides. Preserve tolerant import while
+                // refusing invalid enums for output.
+                markIncomplete();
+                ++m_dxfTableAlignmentOverridesRead;
+            } else {
+                m_tableRowAlignmentOverrides[slot] = alignment;
+                ++m_dxfTableAlignmentOverridesRead;
+            }
+        } else if (cell != nullptr) {
+            cell->m_textAlignment = alignment;
+            if (hasCellAlignmentOverride)
+                m_dxfCurrentCellAlignmentRead = true;
+            else if (allCellsStarted && expected != 0u)
+                markIncomplete();
+        } else {
             markIncomplete();
         }
         break;
+    }
     case 177: {
         int value = 0;
         // Legacy TABLE cell overrides use a 16-bit flag field. Binary DXF
@@ -12850,6 +12894,17 @@ void DRW_Table::finalizeDxfParse() noexcept {
         if (m_dxfMergeCurrentFields != 7u)
             m_dxfMergeFieldsInvalid = true;
         ++m_dxfMergeCheckedCells;
+    }
+    constexpr std::uint32_t rowAlignmentFlags = 0x0001C000u;
+    std::size_t expectedRowAlignmentOverrides = 0u;
+    for (std::uint32_t bit = 0x00004000u; bit <= 0x00010000u; bit <<= 1u) {
+        if ((m_tableOverrideFlags & bit) != 0u)
+            ++expectedRowAlignmentOverrides;
+    }
+    if ((m_tableOverrideFlags & rowAlignmentFlags) != 0u
+        && m_dxfTableAlignmentOverridesRead != expectedRowAlignmentOverrides) {
+        m_dxfUnsupportedData = true;
+        m_semanticContentComplete = false;
     }
     if (!m_hasSemanticContent)
         return;
@@ -13250,6 +13305,8 @@ void DRW_Table::resetDwgState() {
     m_dxfValueFields = 0u;
     m_dxfDataVersionRead = false;
     m_dxfTablePropertiesStarted = false;
+    m_dxfCurrentCellAlignmentRead = false;
+    m_dxfTableAlignmentOverridesRead = 0u;
     m_dxfUnsupportedData = false;
     m_dxfAttributesExpected = -1;
     m_dxfAttributesRead = 0;

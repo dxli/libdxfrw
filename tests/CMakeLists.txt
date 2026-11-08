@@ -2424,6 +2424,10 @@ add_test(NAME libdxfrw_table_content_dxf_projection COMMAND libdxfrw_table_conte
 add_test(NAME libdxfrw_table_legacy_override_177
     COMMAND libdxfrw_table_content_dxf_tests --legacy-table-177)
 set_tests_properties(libdxfrw_table_legacy_override_177 PROPERTIES LABELS "dxf;table")
+add_test(NAME libdxfrw_table_row_alignment_override_parse
+    COMMAND libdxfrw_table_content_dxf_tests --table-row-alignment-overrides)
+set_tests_properties(libdxfrw_table_row_alignment_override_parse PROPERTIES
+    LABELS "fast;dxf;table;generated;parser" TIMEOUT 30)
 add_test(NAME libdxfrw_table_legacy_text_height
     COMMAND libdxfrw_table_content_dxf_tests --legacy-table-height)
 set_tests_properties(libdxfrw_table_legacy_text_height PROPERTIES LABELS "dxf;table")

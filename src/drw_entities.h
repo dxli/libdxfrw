@@ -2181,6 +2181,8 @@ private:
     unsigned m_dxfValueFields = 0u;
     bool m_dxfDataVersionRead = false;
     bool m_dxfTablePropertiesStarted = false;
+    bool m_dxfCurrentCellAlignmentRead = false;
+    std::size_t m_dxfTableAlignmentOverridesRead = 0u;
     bool m_dxfUnsupportedData = false;
     int m_dxfAttributesExpected = -1;
     int m_dxfAttributesRead = 0;
@@ -2217,6 +2219,8 @@ private:
         m_dxfValueFields = 0u;
         m_dxfDataVersionRead = false;
         m_dxfTablePropertiesStarted = false;
+        m_dxfCurrentCellAlignmentRead = false;
+        m_dxfTableAlignmentOverridesRead = 0u;
         m_dxfUnsupportedData = false;
         m_dxfAttributesExpected = -1;
         m_dxfAttributesRead = 0;

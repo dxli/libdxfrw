@@ -12085,6 +12085,20 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
             || !color.colorName.empty() || !color.bookName.empty()
             || color.sourceVersion != DRW::UNKNOWNV;
     };
+    constexpr std::uint32_t rowAlignmentFlags[] = {
+        0x00004000u, 0x00008000u, 0x00010000u
+    };
+    const auto hasUnmappedTableRowAlignment = [&]() {
+        for (std::size_t i = 0u; i < 3u; ++i) {
+            const bool selected =
+                (ent->m_tableOverrideFlags & rowAlignmentFlags[i]) != 0u;
+            const int alignment = ent->m_tableRowAlignmentOverrides[i];
+            if (selected ? (alignment < 1 || alignment > 9)
+                         : (alignment != 0))
+                return true;
+        }
+        return false;
+    };
     if (ent->m_dataVersion < 0 || ent->m_dataVersion > 32767
         || (version < DRW::AC1024 && ent->m_dataVersion != 0)
         || ent->m_flowDirection < 0 || ent->m_flowDirection > 32767
@@ -12094,13 +12108,11 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
             && !ent->m_headerSuppressed)
         || ent->m_tableOverrideFlags > static_cast<std::uint32_t>(
                std::numeric_limits<int>::max())
-        || (ent->m_tableOverrideFlags & ~0x0000001Fu) != 0u
+        || (ent->m_tableOverrideFlags & ~0x0001C01Fu) != 0u
         || std::any_of(ent->m_tableRowHeightOverrides.begin(),
                        ent->m_tableRowHeightOverrides.end(),
             [](double value) { return value != 0.0; })
-        || std::any_of(ent->m_tableRowAlignmentOverrides.begin(),
-                       ent->m_tableRowAlignmentOverrides.end(),
-            [](int value) { return value != 0; })
+        || hasUnmappedTableRowAlignment()
         || std::any_of(ent->m_tableRowTextStyleHandles.begin(),
                        ent->m_tableRowTextStyleHandles.end(),
             [](std::uint32_t value) { return value != 0u; })
@@ -12379,6 +12391,10 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
     if (ent->m_headerSuppressed
         || (ent->m_tableOverrideFlags & 0x00000002u) != 0u)
         writer->writeInt16(281, ent->m_headerSuppressed ? 1 : 0);
+    for (std::size_t i = 0u; i < 3u; ++i) {
+        if ((ent->m_tableOverrideFlags & rowAlignmentFlags[i]) != 0u)
+            writer->writeInt16(170, ent->m_tableRowAlignmentOverrides[i]);
+    }
 
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;

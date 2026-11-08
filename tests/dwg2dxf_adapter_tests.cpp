@@ -36638,7 +36638,10 @@ bool tableScalarOverrideOutput(bool binary) {
     writer.cData = &data;
     writer.currentBlock = data.mBlock;
     DRW_Table table = makeTextTableControl();
-    table.m_tableOverrideFlags = 0x0000001Fu;
+    table.m_tableOverrideFlags = 0x0001C01Fu;
+    table.m_tableRowAlignmentOverrides = {{2, 5, 8}};
+    table.m_content.m_rows[0].m_cells[0].m_overrideFlags = 0x00000001u;
+    table.m_content.m_rows[0].m_cells[0].m_textAlignment = 4;
     // Exercise selected default values as well as the implicit R2007 header
     // suppression value. The override mask preserves explicit presence.
     table.m_titleSuppressed = false;
@@ -36663,11 +36666,14 @@ bool tableScalarOverrideOutput(bool binary) {
             || readback.tables.size() != 1u)
             return false;
         const DRW_Table& actual = readback.tables.front();
-        return actual.m_tableOverrideFlags == 0x0000001Fu
+        return actual.m_tableOverrideFlags == 0x0001C01Fu
             && !actual.m_titleSuppressed && actual.m_headerSuppressed
             && actual.m_flowDirection == 0
             && actual.m_horizontalCellMargin == 0.0
-            && actual.m_verticalCellMargin == 0.0;
+            && actual.m_verticalCellMargin == 0.0
+            && actual.m_tableRowAlignmentOverrides
+                == std::array<int, 3>{{2, 5, 8}}
+            && actual.m_content.m_rows[0].m_cells[0].m_textAlignment == 4;
     };
     const auto checkWire = [&]() {
         std::ifstream stream(output, std::ios::binary);
@@ -36680,6 +36686,7 @@ bool tableScalarOverrideOutput(bool binary) {
             : std::unique_ptr<dxfReader>(new dxfReaderAscii(&stream));
         bool inTable = false;
         std::array<bool, 6> seen{};
+        std::vector<int> alignments;
         int code = 0;
         while (dxf->readRec(&code)) {
             if (code == 0) {
@@ -36690,7 +36697,7 @@ bool tableScalarOverrideOutput(bool binary) {
             } else if (inTable) {
                 switch (code) {
                 case 93:
-                    seen[0] = dxf->getInt32() == 0x1F;
+                    seen[0] = dxf->getInt32() == 0x1C01F;
                     break;
                 case 70:
                     seen[1] = dxf->getInt32() == 0;
@@ -36707,16 +36714,24 @@ bool tableScalarOverrideOutput(bool binary) {
                 case 281:
                     seen[5] = dxf->getInt32() == 1;
                     break;
+                case 170:
+                    alignments.push_back(dxf->getInt32());
+                    break;
                 default:
                     break;
                 }
             }
         }
         return inTable && std::all_of(seen.begin(), seen.end(),
-                                      [](bool value) { return value; });
+                                      [](bool value) { return value; })
+            && alignments == std::vector<int>({4, 2, 5, 8});
     };
-    if (!exportCurrent() || !checkWire() || !checkReadback())
-        return fail("TABLE explicit scalar default override output/readback failed");
+    if (!exportCurrent())
+        return fail("TABLE explicit scalar default override output failed");
+    if (!checkWire())
+        return fail("TABLE explicit scalar default override wire order failed");
+    if (!checkReadback())
+        return fail("TABLE explicit scalar default override readback failed");
 
     const std::string sentinel = "preserve-existing-destination";
     {
@@ -36800,7 +36815,8 @@ bool tableScalarOverrideOutput(bool binary) {
             return fail("unflagged TABLE row/border override values replaced the destination");
     }
     data.tables.front().m_tableRowHeightOverrides = {{0.0, 0.0, 0.0}};
-    data.tables.front().m_tableRowAlignmentOverrides = {{0, 0, 0}};
+    data.tables.front().m_tableOverrideFlags = 0x0001C01Fu;
+    data.tables.front().m_tableRowAlignmentOverrides = {{2, 5, 8}};
     data.tables.front().m_tableRowTextStyleHandles = {{0u, 0u, 0u}};
     data.tables.front().m_tableRowTextColors = {{DRW_DwgCmColor{},
                                                  DRW_DwgCmColor{},
