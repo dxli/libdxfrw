@@ -155,12 +155,24 @@
     "date": "2026-11-07",
     "sourcePath": "/Users/dli/dev/dwgTs/tests/fixtures/committed/libredwg/example_r13.dwg",
     "sourceSha256": "53558a8ae4bf666f906c9c2e4d3c3ee7ef61690e3b0f4d4a858e4e1bf555fc89",
-    "method": "A temporary diagnostic around decodeEedString logged unrecognized per-value codepages while importing the source. The instrumentation was removed after the trace; no source or test change remains.",
-    "tracePath": "/tmp/libdxfrw-r13-group-eed-trace.log",
-    "observedZeroCodepageEedValues": 297,
-    "observation": "The trace contains EED strings with per-value codepage 0 and varying byte counts across the drawing. It does not yet bind the DICTIONARY handle 0xD issue to a particular EED value or prove the meaning of codepage 0.",
-    "authorityReview": "ODA v5.4.1 chapter 28 describes the per-value codepage field and framing, but the reviewed text does not define codepage 0 as inheriting the file codepage. LibreDWG's file-header codepage-0 fallback is not evidence for EED per-value semantics.",
-    "disposition": "Keep the DICTIONARY text issue and both common-link eligibility gates closed. Do not map codepage 0 to the file codepage or clear UnknownCodePage absent field-bound source bytes plus normative or independent producer evidence.",
+    "method": "A temporary diagnostic in readDwgEed logged the APPID handle, byte count and raw bytes for legacy EED strings whose per-value codepage was zero. The instrumentation was removed; no source or test change remains.",
+    "tracePath": "/private/tmp/libdxfrw-r13-group-eed-values.log",
+    "zeroCodepageTraceOccurrences": 297,
+    "traceOccurrencesAreUniqueValues": false,
+    "dictionaryEed": {
+      "objectHandle": "0xD",
+      "objectType": 42,
+      "appIdHandle": "0x12",
+      "appIdName": "ACAD",
+      "itemCode": 0,
+      "declaredCodepage": 0,
+      "rawByteCount": 13,
+      "rawBytesHex": "54 52 45 41 54 5F 41 53 5F 48 41 52 44",
+      "asciiValue": "TREAT_AS_HARD",
+      "independentReader": "LibreDWG 0.14 JSON identifies APPID handle 0x12 as ACAD and decodes the same EED value as TREAT_AS_HARD; this corroborates the ASCII value, not the semantics of per-value codepage zero."
+    },
+    "authorityReview": "ODA v5.4.1 chapter 28 specifies the legacy EED string length, 2-byte codepage and character bytes, but does not define codepage 0 as inheriting the file codepage. LibreDWG's file-header codepage-0 fallback is not evidence for EED per-value semantics.",
+    "disposition": "The exact value producing the DICTIONARY UnknownCodePage issue is now bound. Keep the text and both common-link eligibility gates closed. Do not map per-value codepage 0 to the file codepage without normative or independent producer evidence defining that rule.",
     "supportClaimEffect": "none"
   }
 }
