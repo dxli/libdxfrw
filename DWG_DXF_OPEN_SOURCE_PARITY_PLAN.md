@@ -164,28 +164,30 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-08)
 
-- **Latest local slice:** AC1027/AC1032 PERSUBENTMGR typed failures now publish
-  raw-only after independent common-shell and handle-stream validation. The
-  hash-matched AC1027 physical source publishes handle `0x2E0` and reduces
+- **Latest local slice:** the AC1027 `AcDbAssocOsnapPointRefActionParam`
+  frame at `0x393` now publishes raw-only after independent common-shell and
+  handle-stream validation. A hash-matched physical read publishes 481/481
+  frames with zero entity/object parse failures; strict output remains refused
+  at the source-reference gate. The generated invalid-body/shell-valid control
+  and prior recovery controls pass `libdxfrw_persistent_manager_prefix_dispatch`
+  (1/1). See the [action-parameter receipt](docs/research/p6-ac1027-osnap-action-param-raw-only-shell-recovery-2026-11-08.json).
+- **Previous local slice:** AC1027/AC1032 PERSUBENTMGR typed failures now
+  publish raw-only after independent common-shell and handle-stream validation.
+  The hash-matched AC1027 physical source publishes handle `0x2E0` and reduces
   object parse failures from two to one; strict output remains refused at the
-  source-reference gate. Generated AC1027 and existing AC1032 controls pass
-  `libdxfrw_persistent_manager_prefix_dispatch` (1/1). See the
+  source-reference gate. See the
   [PERSUBENTMGR receipt](docs/research/p6-ac1027-persubentmgr-raw-only-shell-recovery-2026-11-08.json).
 - **Previous local slice:** commit `4f615637` adds AC1027 TABLECONTENT raw-only
   recovery, gated to AC1027/AC1032 `TABLECONTENT` / `AcDbTableContent` records
   whose typed parse fails but whose independent common-shell and handle-stream
   parse succeeds. The generated control preserves exact frame bytes and common
   links, publishes no typed TABLECONTENT, and recovers the following frame.
-  The hash-matched physical source publishes object `0xC94` raw-only; two other
-  object parse failures remain after this change. No typed semantics or support
-  claim is promoted. See the
+  The hash-matched physical source publishes object `0xC94` raw-only; one object
+  parse failure remained after that slice. See the
   [TABLECONTENT recovery receipt](docs/research/p6-ac1027-tablecontent-raw-only-shell-recovery-2026-11-08.json).
   Plan-only commit `21bb2ebc` records the saved source-evidence screen and its
   limits; it does not infer that uninspected local samples contain no such
   objects.
-  Plan-only commit `21bb2ebc` records that the saved TABLECONTENT source-evidence
-  screen found no eligible physical witness; it does not infer that uninspected
-  local samples contain no such objects.
 - **Earlier local slice:** commit `05720365` adds bounded R24 TABLESTYLE CMC
   truecolor/color-book DXF group-62/420/430 output and parser recovery for
   background, content and border colors. Generated ASCII/Binary controls
@@ -853,15 +855,17 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    AC1027/AC1032 TABLECONTENT typed failures now fall back to raw-only when an
    independent common-shell/handle parse succeeds; generated controls preserve
    exact bytes and the following frame. A hash-matched physical recheck of
-   `example_2013.dwg` now publishes object `0xC94` raw-only; object parse
-   failures fell from three to two, while strict output remains blocked at the
-   AC1027 source-reference gate. This does not resolve typed fields. Bare
-   AC1027/AC1032 PERSUBENTMGR typed failures now also retain raw frames after
-   the same independent shell check; the physical AC1027 object `0x2E0` reduces
-   object parse failures from two to one. Strict output remains refused and the
-   body schema is unresolved. See the
-   [TABLECONTENT recovery receipt](docs/research/p6-ac1027-tablecontent-raw-only-shell-recovery-2026-11-08.json)
-   and [PERSUBENTMGR recovery receipt](docs/research/p6-ac1027-persubentmgr-raw-only-shell-recovery-2026-11-08.json).
+   `example_2013.dwg` publishes object `0xC94` raw-only; its remaining object
+   parse failure was subsequently recovered. Bare AC1027/AC1032 PERSUBENTMGR
+   typed failures also retain raw frames after the same independent shell
+   check; physical object `0x2E0` reduced the failure count from two to one.
+   The AC1027 `AcDbAssocOsnapPointRefActionParam` at `0x393` now likewise
+   publishes raw-only, bringing the same source to 481/481 frames and zero
+   entity/object parse failures. These recoveries do not establish body
+   semantics or qualify output: the strict source-reference gate still refuses
+   export. See the [TABLECONTENT recovery receipt](docs/research/p6-ac1027-tablecontent-raw-only-shell-recovery-2026-11-08.json),
+   [PERSUBENTMGR recovery receipt](docs/research/p6-ac1027-persubentmgr-raw-only-shell-recovery-2026-11-08.json),
+   and [action-parameter recovery receipt](docs/research/p6-ac1027-osnap-action-param-raw-only-shell-recovery-2026-11-08.json).
    TextObjectContextData remains raw-only.
    Remaining P6 work is limited to source-backed version/layout gaps and independent evidence for the
    IMAGEDEF owner-role conflict and AC1027/AC1032 HEADER suffixes. The successful

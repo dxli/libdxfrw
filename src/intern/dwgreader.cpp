@@ -14279,6 +14279,11 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                   (version == DRW::AC1027 || version == DRW::AC1032)
                   && rn == "ACDBPERSSUBENTMANAGER"
                   && cit->second->className == "AcDbPersSubentManager";
+              const bool ac1027OsnapActionParamRawOnlyProfile =
+                  version == DRW::AC1027
+                  && rn == "ACDBASSOCOSNAPPOINTREFACTIONPARAM"
+                  && cit->second->className
+                      == "AcDbAssocOsnapPointRefActionParam";
               // Keep a pristine cursor for the narrow raw-shell recovery.
               // parseDwg invalidates its input when a class-specific body
               // fails, so the shell must be checked on an independent cursor.
@@ -14315,6 +14320,11 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                     && RawObjectShell().parseDwg(
                         version, &persistentManagerShellProbe, bs)
                     && persistentManagerShellProbe.isGood();
+                const bool osnapActionParamShellValid =
+                    ac1027OsnapActionParamRawOnlyProfile
+                    && RawObjectShell().parseDwg(
+                        version, &persistentManagerShellProbe, bs)
+                    && persistentManagerShellProbe.isGood();
                 // The AC1027/AC1032 bare manager body layout remains
                 // disputed. If only its class-specific body fails, publish
                 // the exact source frame through the validated raw shell.
@@ -14333,6 +14343,20 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                       ? recordName.c_str() : className.c_str()];
                   ++m_skippedUnsupportedObjects[objectName];
                   DRW_DBG("[persistent-manager-raw-only class=");
+                  DRW_DBG(cit->second->className.c_str());
+                  DRW_DBG(" handle=");
+                  DRW_DBG(obj.handle);
+                  DRW_DBG("]\n");
+                } else if (osnapActionParamShellValid) {
+                  ret = true;
+                  const std::string &className = cit->second->className;
+                  const std::string &recordName = cit->second->recName;
+                  const std::string objectName =
+                      recordName.empty() ? className : recordName;
+                  ++m_skippedCustomClasses[className.empty()
+                      ? recordName.c_str() : className.c_str()];
+                  ++m_skippedUnsupportedObjects[objectName];
+                  DRW_DBG("[assoc-action-param-raw-only class=");
                   DRW_DBG(cit->second->className.c_str());
                   DRW_DBG(" handle=");
                   DRW_DBG(obj.handle);
