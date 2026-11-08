@@ -8793,6 +8793,66 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  "AC1018 TABLE text-height cell override preserves following body sentinel");
     }
 
+    TableDwgCodecProbe cellBorderTable = makeEncodableAc1018Table();
+    DRW_TableCell& cellBorderCell =
+        cellBorderTable.m_content.m_rows.front().m_cells.front();
+    cellBorderCell.m_overrideFlags = 0x0003FFC0u;
+    cellBorderCell.m_edgeFlags = 0x0F;
+    const std::array<int, 4> cellBorderColors = {{256, 0, 7, 255}};
+    const std::array<int, 4> cellBorderLineweights = {{0, 5, 9, 13}};
+    const std::array<bool, 4> cellBorderVisibilities = {{true, false, true, false}};
+    for (std::size_t edge = 0u; edge < cellBorderColors.size(); ++edge) {
+        DRW_TableBorder& border = cellBorderCell.m_borders[edge];
+        border.m_colorRgb = cellBorderColors[edge];
+        border.m_lineWeight = cellBorderLineweights[edge];
+        border.m_visible = cellBorderVisibilities[edge];
+        border.m_hasDxfVisibility = true;
+    }
+    dwgBufferW cellBorderBody;
+    dwgBufferW cellBorderHandles;
+    dwgBufferW cellBorderTypePrefix;
+    cellBorderTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t cellBorderObjectSizeBit =
+        cellBorderTypePrefix.bitCount();
+    const bool cellBorderEncoded = cellBorderTable.encodeAsTableClass(
+        DRW::AC1018, cellBorderBody, cellBorderHandles);
+    const std::uint64_t cellBorderBodyEndBit = cellBorderBody.bitCount();
+    constexpr std::int32_t cellBorderSentinel = 0x51CA3FFC;
+    cellBorderBody.putBitLong(cellBorderSentinel);
+    cellBorderBody.patchRawLong32AtBit(
+        cellBorderObjectSizeBit,
+        static_cast<std::uint32_t>(cellBorderBody.bitCount()));
+    appendBits(cellBorderBody, cellBorderHandles);
+    dwgBuffer cellBorderInput(cellBorderBody.data().data(),
+                              cellBorderBody.data().size());
+    TableDwgCodecProbe cellBorderReadback;
+    const bool cellBorderRead = cellBorderEncoded
+        && cellBorderReadback.parseDwg(DRW::AC1018, &cellBorderInput);
+    bool cellBorderMatches = cellBorderRead && cellBorderInput.isGood()
+        && cellBorderReadback.m_semanticContentComplete
+        && cursorBit(cellBorderInput) == cellBorderBodyEndBit;
+    if (cellBorderMatches) {
+        const DRW_TableCell& readCell =
+            cellBorderReadback.m_content.m_rows.front().m_cells.front();
+        cellBorderMatches = readCell.m_overrideFlags == 0x0003FFC0u
+            && readCell.m_edgeFlags == 0x0F;
+        for (std::size_t edge = 0u;
+             edge < cellBorderColors.size() && cellBorderMatches; ++edge) {
+            const DRW_TableBorder& border = readCell.m_borders[edge];
+            cellBorderMatches = border.m_colorRgb == cellBorderColors[edge]
+                && border.m_lineWeight == cellBorderLineweights[edge]
+                && border.m_visible == cellBorderVisibilities[edge]
+                && border.m_hasDxfVisibility;
+        }
+    }
+    t.expect(cellBorderMatches,
+             "AC1018 TABLE four-edge color, lineweight, and visibility overrides round-trip");
+    if (cellBorderMatches) {
+        const std::int32_t sentinel = cellBorderInput.getBitLong();
+        t.expect(cellBorderInput.isGood() && sentinel == cellBorderSentinel,
+                 "AC1018 TABLE cell border overrides preserve following body sentinel");
+    }
+
     DRW_Header tableFrameHeader;
     TableClassSerializationProbe tableFrameWriter(nullptr, &tableFrameHeader);
     const dwgWriter::CompoundWriteCheckpoint tableFrameCheckpoint =
@@ -9124,6 +9184,23 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
             table.m_content.m_rows.front().m_cells.front().m_textHeight = 2.75;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects a selected edge override missing its edge flag without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            auto& cell = table.m_content.m_rows.front().m_cells.front();
+            cell.m_overrideFlags = 0x40u;
+            cell.m_borders[0].m_colorRgb = 7;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects an invalid cell border lineweight without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            auto& cell = table.m_content.m_rows.front().m_cells.front();
+            cell.m_overrideFlags = 0x400u;
+            cell.m_edgeFlags = 1;
+            cell.m_borders[0].m_lineWeight = -1;
         });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects a missing BLOCK_RECORD handle without writing",

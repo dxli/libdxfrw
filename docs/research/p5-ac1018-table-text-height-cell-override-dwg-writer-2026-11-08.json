@@ -24,8 +24,7 @@
         "encoding": "BD; finite and greater than zero"
       }
     ],
-    "all_other_cell_override_bits": "refused",
-    "table_border_overrides": "refused"
+    "at_this_slice": "only bit 0x20 was admitted; later implementation is recorded in p5-ac1018-table-cell-border-overrides-dwg-writer-2026-11-08.json"
   },
   "generated_control": {
     "authenticity": "locally generated codec vector; no DWG/DXF fixture",

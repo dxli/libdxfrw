@@ -13884,15 +13884,65 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
     const DRW_TableCell& cell = row.m_cells.front();
     const bool hasCellTextHeightOverride =
         (cell.m_overrideFlags & 0x00000020u) != 0u;
-    const bool validCellTextHeightOverride =
-        (cell.m_overrideFlags & ~0x00000020u) == 0u
+    constexpr std::array<std::uint32_t, 4> cellBorderColorFlags = {{
+        0x00000040u, 0x00000080u, 0x00000100u, 0x00000200u
+    }};
+    constexpr std::array<std::uint32_t, 4> cellBorderLineweightFlags = {{
+        0x00000400u, 0x00000800u, 0x00001000u, 0x00002000u
+    }};
+    constexpr std::array<std::uint32_t, 4> cellBorderVisibilityFlags = {{
+        0x00004000u, 0x00008000u, 0x00010000u, 0x00020000u
+    }};
+    std::uint32_t supportedCellOverrideMask = 0x00000020u;
+    for (std::size_t edge = 0u; edge < cellBorderColorFlags.size(); ++edge)
+        supportedCellOverrideMask |= cellBorderColorFlags[edge]
+            | cellBorderLineweightFlags[edge]
+            | cellBorderVisibilityFlags[edge];
+    int expectedCellEdgeFlags = 0;
+    bool validCellBorderOverrides = true;
+    for (std::size_t edge = 0u; edge < cellBorderColorFlags.size(); ++edge) {
+        const DRW_TableBorder& border = cell.m_borders[edge];
+        const bool hasColor =
+            (cell.m_overrideFlags & cellBorderColorFlags[edge]) != 0u;
+        const bool hasLineweight =
+            (cell.m_overrideFlags & cellBorderLineweightFlags[edge]) != 0u;
+        const bool hasVisibility =
+            (cell.m_overrideFlags & cellBorderVisibilityFlags[edge]) != 0u;
+        if (hasColor || hasLineweight || hasVisibility)
+            expectedCellEdgeFlags |= 1 << edge;
+        validCellBorderOverrides = validCellBorderOverrides
+            && (hasColor
+                ? (border.m_colorRgb >= 0 && border.m_colorRgb <= 256
+                    && border.m_colorMethod == 0u)
+                : (border.m_colorRgb == -1 && border.m_colorMethod == 0u))
+            && (hasLineweight
+                ? (border.m_lineWeight >= 0 && border.m_lineWeight <= 211
+                    && isValidTableLineWeight(border.m_lineWeight))
+                : border.m_lineWeight == 0)
+            && (hasVisibility
+                ? border.m_hasDxfVisibility
+                : (border.m_visible && !border.m_hasDxfVisibility));
+    }
+    for (std::size_t edge = cellBorderColorFlags.size();
+         edge < cell.m_borders.size(); ++edge) {
+        const DRW_TableBorder& border = cell.m_borders[edge];
+        validCellBorderOverrides = validCellBorderOverrides
+            && border.m_lineWeight == 0 && border.m_visible
+            && border.m_colorRgb == -1 && border.m_colorMethod == 0u
+            && !border.m_hasDxfVisibility;
+    }
+    const bool validCellOverrides =
+        (cell.m_overrideFlags & ~supportedCellOverrideMask) == 0u
         && (hasCellTextHeightOverride
             ? (std::isfinite(cell.m_textHeight) && cell.m_textHeight > 0.0)
-            : cell.m_textHeight == 0.0);
+            : cell.m_textHeight == 0.0)
+        && validCellBorderOverrides
+        && cell.m_edgeFlags == expectedCellEdgeFlags;
     if (!column.m_name.empty()
         || !std::isfinite(column.m_width) || column.m_width <= 0.0
         || !std::isfinite(row.m_height) || row.m_height <= 0.0
-        || cell.m_type != 1 || cell.m_edgeFlags != 0
+        || cell.m_type != 1 || cell.m_edgeFlags < 0
+        || cell.m_edgeFlags > 15
         || cell.m_isMerged || cell.m_autoFit
         || cell.m_mergedWidth != 1 || cell.m_mergedHeight != 1
         || !std::isfinite(cell.m_rotation) || cell.m_rotation != 0.0
@@ -13915,7 +13965,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || cell.m_textColorRgb != -1 || cell.m_textColorMethod != 0u
         || cell.m_fillColorRgb != -1 || cell.m_fillColorMethod != 0u
         || cell.m_backgroundEnabled || cell.m_textAlignment != 0
-        || !validCellTextHeightOverride || cell.m_virtualEdgeFlags != 0u
+        || !validCellOverrides || cell.m_virtualEdgeFlags != 0u
         || cell.m_contents.size() != 1u
         || cell.m_contents.front().m_type != 1
         || cell.m_contents.front().m_handle != 0u
@@ -13936,14 +13986,6 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
                 != DRW_Variant::INVALID
             && cell.m_contents.front().m_value.m_value.type()
                 != DRW_Variant::STRING)
-        || std::any_of(cell.m_borders.cbegin(), cell.m_borders.cend(),
-                       [](const DRW_TableBorder& border) {
-                           return border.m_lineWeight != 0
-                               || !border.m_visible
-                               || border.m_colorRgb != -1
-                               || border.m_colorMethod != 0u
-                               || border.m_hasDxfVisibility;
-                       })
         || cell.m_contents.front().m_text.size() > kMaxTableStringBytes
         || thickness != 0.0 || xAxisAngle != 0.0
         || !std::isfinite(basePoint.x) || !std::isfinite(basePoint.y)
@@ -14005,13 +14047,30 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         stagedBody.putBitLong(1);
         stagedBody.putBitDouble(cell.m_rotation);
         stagedBody.putVariableText(version, cell.m_contents.front().m_text);
-        stagedBody.putBit(hasCellTextHeightOverride);
-        if (hasCellTextHeightOverride) {
+        stagedBody.putBit(cell.m_overrideFlags != 0u);
+        if (cell.m_overrideFlags != 0u) {
             stagedBody.putBitLong(
                 static_cast<std::int32_t>(cell.m_overrideFlags));
             stagedBody.putRawChar8(
                 static_cast<std::uint8_t>(cell.m_virtualEdgeFlags));
-            stagedBody.putBitDouble(cell.m_textHeight);
+            if (hasCellTextHeightOverride)
+                stagedBody.putBitDouble(cell.m_textHeight);
+            for (std::size_t edge = 0u;
+                 edge < cellBorderColorFlags.size(); ++edge) {
+                const DRW_TableBorder& border = cell.m_borders[edge];
+                if ((cell.m_overrideFlags
+                     & cellBorderColorFlags[edge]) != 0u)
+                    stagedBody.putCmColor(
+                        version,
+                        static_cast<std::uint16_t>(border.m_colorRgb));
+                if ((cell.m_overrideFlags
+                     & cellBorderLineweightFlags[edge]) != 0u)
+                    stagedBody.putBitShort(
+                        static_cast<std::uint16_t>(border.m_lineWeight));
+                if ((cell.m_overrideFlags
+                     & cellBorderVisibilityFlags[edge]) != 0u)
+                    stagedBody.putBitShort(border.m_visible ? 1u : 0u);
+            }
         }
         stagedBody.putBit(m_tableOverrideFlags != 0u);
         if (m_tableOverrideFlags != 0u) {
