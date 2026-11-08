@@ -18592,6 +18592,27 @@ bool runAcisSab21200SatV1Controls() {
         || preservedVectorSat != std::vector<std::uint8_t>({0x3Cu, 0xC3u}))
         return false;
 
+    std::vector<std::uint8_t> extraTorusBooleanSource = fullTorusSource;
+    const std::uint8_t terminalRecordMarker[] = {0x0Eu, 0x03u, 'E', 'n', 'd'};
+    const auto terminalMarker = std::search(
+        extraTorusBooleanSource.begin(), extraTorusBooleanSource.end(),
+        std::begin(terminalRecordMarker), std::end(terminalRecordMarker));
+    if (terminalMarker == extraTorusBooleanSource.end()
+        || terminalMarker == extraTorusBooleanSource.begin())
+        return false;
+    extraTorusBooleanSource.insert(terminalMarker - 1, 10u);
+    DRW_SabData extraTorusBooleanParsed;
+    if (!drw_parseSab(extraTorusBooleanSource.data(),
+                      extraTorusBooleanSource.size(), extraTorusBooleanParsed))
+        return false;
+    std::vector<std::uint8_t> preservedExtraBooleanSat{0x69u, 0x96u};
+    if (drw_convertSabToSatV1(extraTorusBooleanSource.data(),
+                              extraTorusBooleanSource.size(), DRW::AC1024,
+                              preservedExtraBooleanSat)
+        || preservedExtraBooleanSat
+            != std::vector<std::uint8_t>({0x69u, 0x96u}))
+        return false;
+
     std::vector<std::uint8_t> preserved{0xA5u, 0x5Au};
     std::vector<std::uint8_t> unsupported = sab;
     unsupported.insert(unsupported.begin() + 73, {1u, 0x10u});

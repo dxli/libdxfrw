@@ -167,8 +167,9 @@ created locally from scratch for the specific control.
 - **Latest ACIS writer hardening:** commit `e3111a82` preserves binary64
   precision in SAT v1 output using `max_digits10`. Follow-up commit
   `a3d58f7f` adds nonfinite header-scalar refusal, and `dce17422` adds a
-  nonfinite torus-vector control. Both failure paths preserve the preexisting
-  SAT output buffer. The pinned independent parser matches the physical source SAB
+  nonfinite torus-vector control. All failure paths preserve the preexisting
+  SAT output buffer; an extra torus-surface Boolean is parsed but rejected by
+  the version-bounded SAT writer. The pinned independent parser matches the physical source SAB
   fields exactly. Native B-rep and independent-kernel gates remain open; see
   the [P7 parser receipt](docs/research/p7-ac1021-inventorloader-sat-parser-crosscheck-2026-11-08.json).
 - **Latest local slice:** the AC1027 `AcDbAssocOsnapPointRefActionParam`
@@ -803,7 +804,7 @@ route admits only the source-bound AC1021 E3DSOLID profile and emits only for
 AC1021/AC1024 targets. The exact source-bound
 `0x452 → 0x453 → 0x454 → 0x455` selected graph passes AC1024 ASCII/Binary
 readback, rollback/retry, and strict full-source refusal at the unrelated
-IMAGEDEF owner role. Focused token/TORUS/CMC controls pass 3/3, including nonfinite header-scalar and torus-vector refusal with the existing output buffer preserved; the hash-pinned physical probe passes; no fixture was added. This is selected carrier, graph
+IMAGEDEF owner role. Focused token/TORUS/CMC controls pass 3/3, including nonfinite header/vector refusal and unknown extra torus-Boolean refusal with the existing output buffer preserved; the hash-pinned physical probe passes; no fixture was added. This is selected carrier, graph
 transport, and independent parser-field evidence, not B-rep semantics, native
 application acceptance, or whole-document support. Keep support claims
 unchanged. See the [parser field cross-check receipt](docs/research/p7-ac1021-inventorloader-sat-parser-crosscheck-2026-11-08.json).

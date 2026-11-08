@@ -44,7 +44,7 @@
   },
   "implementation": {
     "precisionFix": "SAT numeric formatting now uses std::numeric_limits<double>::max_digits10 with the classic locale; the prior six-significant-digit formatting rounded source binary64 values.",
-    "generatedControls": "Fast token controls assert round-trip numeric lexemes for nontrivial coordinates/radii, along with forward/reverse sense, full-range I markers, and finite U-start output. A nonfinite resTol header scalar is confirmed by the SAB parser, then refused by SAT conversion with the caller output sentinel unchanged. A separate torus LocationVec NaN mutation is confirmed by SAB parsing, then refused by SAT conversion with the caller output sentinel unchanged.",
+    "generatedControls": "Fast token controls assert round-trip numeric lexemes for nontrivial coordinates/radii, along with forward/reverse sense, full-range I markers, and finite U-start output. A nonfinite resTol header scalar is confirmed by the SAB parser, then refused by SAT conversion with the caller output sentinel unchanged. A separate torus LocationVec NaN mutation is confirmed by SAB parsing, then refused by SAT conversion with the caller output sentinel unchanged. An extra torus-surface Boolean is parser-valid but rejected by the bounded SAT serializer, preserving the existing output sentinel.",
     "physicalOutput": {
       "bytes": 1057,
       "sha256": "4917d971df23651987e01f18cf8635d19dab7ec2c306c910734ba0093641da08",
@@ -133,7 +133,8 @@
     "fullSuites": "NOT RUN",
     "exactBinary64FieldComparison": "PASS for center, axis, major/minor radius, and U origin: independently parsed SAT text exactly equals the binary64 values decoded from source SAB.",
     "nonFiniteHeaderRollback": "PASS: NaN resTol parses as a source field, SAT conversion refuses it, and the preexisting SAT output sentinel remains byte-for-byte unchanged.",
-    "nonFiniteVectorRollback": "PASS: NaN in the parsed torus LocationVec is refused by SAT conversion and the preexisting output sentinel remains byte-for-byte unchanged."
+    "nonFiniteVectorRollback": "PASS: NaN in the parsed torus LocationVec is refused by SAT conversion and the preexisting output sentinel remains byte-for-byte unchanged.",
+    "unknownTorusBooleanRollback": "PASS: the extra SAB Boolean parses, SAT v1 conversion refuses the unqualified torus-surface field, and the prior output sentinel is unchanged."
   },
   "nativeRuntime": {
     "freecad": "/Applications/FreeCAD.app/Contents/MacOS/FreeCAD",
