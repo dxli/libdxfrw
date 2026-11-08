@@ -164,12 +164,14 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-08)
 
-- **Latest local slice:** commit `bff89295` now admits finite, nonnegative
-  per-style R24 TABLESTYLE text heights. Generated ASCII/Binary readback
-  checks exact raw group-144 order; negative and infinite values refuse
-  atomically and corrected values succeed on the same adapter. The focused
-  `libdxfrw_tablestyle_r24_typed_writer` CTest passes (1/1, 1.85 seconds); see
-  the [text-height receipt](docs/research/p6-r24-tablestyle-text-height-transport-2026-11-08.json).
+- **Latest local slice:** commit `e19a6170` admits per-style R24 TABLESTYLE
+  merge flags within ODA's `0x18000` mask. Generated ASCII/Binary controls
+  verify raw group-92 order and typed readback; an undocumented bit refuses
+  atomically before a same-adapter retry. The focused
+  `libdxfrw_tablestyle_r24_typed_writer` CTest passes (1/1, 1.64 seconds); see
+  the [merge-flag receipt](docs/research/p6-r24-tablestyle-merge-flags-transport-2026-11-08.json).
+  Commit `bff89295` admits finite, nonnegative per-style text heights with
+  exact group-144 readback/refusal controls ([receipt](docs/research/p6-r24-tablestyle-text-height-transport-2026-11-08.json)).
   Commit `37d876cf` admits per-style explicit/inherited margin profiles with
   exact readback and refusal controls ([receipt](docs/research/p6-r24-tablestyle-style-margins-2026-11-08.json)).
   Commit `513a8adf` covers non-default safe group-300 format strings and finite
@@ -220,20 +222,19 @@ The queue below contains only unfinished actions. Completed source profiles,
 codecs, tests, and controls have been removed from the queue; their commits and
 receipts remain in Git and `docs/research/`. Resume from the linked blocker
 instead of repeating successful scans or controls. The generated R24 TABLESTYLE
-border LTYPE, value-domain, scalar format, per-style margin and text-height
+border LTYPE, value-domain, scalar format, margin, text-height and merge-flag
 slices are complete in commits `12698d59`, `93c02f0d`, `9678d0c2`, `513a8adf`,
-`37d876cf`, and `bff89295`; the saved P4 inventory decision has no new ready
-physical graph. Continue with the following bounded R24 merge-flag packet.
+`37d876cf`, `bff89295`, and `e19a6170`; the saved P4 inventory decision has no
+new ready physical graph. Continue with the following bounded R24 layout packet.
 
-1. **P6 / admit documented R24 TABLESTYLE merge flags.** ODA §20.4.101.4
-   defines BL group 92 merge flags and limits them to bits `0x8000` and
-   `0x10000`. The writer currently hard-codes the witnessed title/header/data
-   combination. Preserve style identity and all other gates, but admit any
-   combination within that documented mask per cell style. Generated
-   ASCII/Binary controls must verify the exact group-92 positions and typed
-   readback, refuse an unknown bit with destination preservation, and retry
-   successfully on the same adapter. Keep native merge behavior and physical
-   producer qualification open.
+1. **P6 / admit documented R24 TABLESTYLE content-layout values.** ODA
+   §20.4.101.4 defines BL group 93 as Flow `1`, Stacked horizontal `2`, or
+   Stacked vertical `4`. The writer currently accepts only `1`. Preserve style
+   identity and all other gates, but admit these three values per style.
+   Generated ASCII/Binary controls must verify the exact group-93 position
+   inside each TABLEFORMAT and typed readback; refuse value `8` with
+   destination preservation, then verify corrected same-adapter retry. Keep
+   native layout/rendering and physical producer qualification open.
 
 2. **P4 / resume physical OBJECTS closure only on a new ready witness.** The
    saved census and inventory have been reviewed: every current selected-output
