@@ -11,9 +11,11 @@ The P6 audit has added a generated AC1027 NOD → named DICTIONARY → typed SCA
 OBJECTS allocation sweep: all 12 ASCII and 12 Binary callback allocation
 offsets preserve destination/caller state, then same-writer retry and typed
 readback pass ([receipt](docs/research/p6-dxf-scale-objects-allocation-failure-retry-2026-11-08.json)).
-This closes only the typed SCALE callback profile. Continue the receipt-driven
-audit with the next independent OBJECTS builder that lacks equivalent
-allocation/rollback evidence; do not reopen already swept families or promote
+The slice is committed as `6e8db601`. This closes only the typed SCALE callback
+profile. Next, audit other independent `writeObjects()` records without an
+allocation receipt (starting with DATALINK/FIELD/TABLECONTENT candidates),
+compare graph setup cost and reached allocation paths, and select the smallest
+complete generated profile. Do not reopen already swept families or promote
 support claims. After each slice, update its receipt and this checkpoint,
 commit the implementation with the evidence, and report the commit and next
 ready slice.
