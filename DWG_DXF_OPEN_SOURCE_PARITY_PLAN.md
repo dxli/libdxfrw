@@ -171,16 +171,17 @@ created locally from scratch for the specific control.
   preservation and corrected same-adapter retry. This is codec consistency
   only: independent producer behavior, native color-book meaning and broader
   document closure remain unqualified. See the [CMC receipt](docs/research/p6-r24-tablestyle-cmc-truecolor-book-2026-11-08.json).
-  Follow-up commit `360e8470` closes the method-zero lossiness hole: RGB/book
-  extensions now require the C2 profile, and book/name output requires its
-  RGB base. Generated ASCII/Binary controls verify atomic refusal for both
-  malformed combinations and corrected retry on the same adapter; the receipt
-  above records this follow-up too.
-  Commit `d12fdb5c` applies the same fail-closed CMC rule to the CELLSTYLEMAP
-  writer and catches color-name allocation failure at the record boundary.
-  Its generated ASCII/Binary control confirms truecolor/book readback, atomic
-  refusal of method-mismatched and book-only CMC values, destination
-  preservation and same-adapter retry ([CELLSTYLEMAP receipt](docs/research/p6-cellstylemap-cmc-loss-guard-2026-11-08.json)).
+  Follow-up commits `360e8470` and `d12fdb5c` added loss guards to both
+  writers. Commit `eeb864b5` refines them against the DXF wire: [Autodesk
+  defines groups 420/430 as truecolor/name fields](https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-3610039E-27D1-4E23-B6D3-7E60B22BB5BD.htm)
+  and DXF has no CMC method byte, so representable method-zero RGB/book colors
+  now emit and normalize to
+  C2 on typed readback. Book/name without RGB remains refused. ASCII/Binary
+  controls verify normalization, destination-preserving refusal and
+  same-adapter retry; the [TABLESTYLE](docs/research/p6-r24-tablestyle-cmc-truecolor-book-2026-11-08.json)
+  and [CELLSTYLEMAP](docs/research/p6-cellstylemap-cmc-loss-guard-2026-11-08.json)
+  receipts record the corrected behavior. Color-name allocation failure stays
+  contained at the CELLSTYLEMAP record boundary.
   Commit `e19a6170` admits per-style R24 TABLESTYLE
   merge flags within ODA's `0x18000` mask. Generated ASCII/Binary controls
   verify raw group-92 order and typed readback; an undocumented bit refuses
@@ -246,14 +247,15 @@ truecolor/book-color codec slices are complete in commits
 `12698d59`, `93c02f0d`,
 `9678d0c2`, `513a8adf`, `37d876cf`, `bff89295`, `e19a6170`, `9b064748`,
 `7781bcfc`, `9d9de967`, `c4bb35ee`, `4432792f`, `55ce3c7c`, `6463f3b7`, and
-`05720365`, `360e8470`, and `d12fdb5c`. The latest
+`05720365`, `360e8470`, `d12fdb5c`, and `eeb864b5`. The latest
 bounded additions follow ODA §20.4.101.3–.4: group 93 admits content-layout
 values 1/2/4; group 94 admits cell alignments 1–9; group 90/91 admit
 documented property-override masks and AutoScale only when its override is
 selected; and border group 90 admits its six defined property bits. Indexed
 group-62 colors and the bounded truecolor/book-color CMC profiles (groups
 62/420/430) are supported in both R24 TABLESTYLE and CELLSTYLEMAP generated
-codec paths; method-mismatched and book-only states refuse atomically. Border types
+codec paths. Method-zero RGB states normalize to C2; book/name states without
+an RGB base refuse atomically. Border types
 1/2, invisibility 0/1, finite nonnegative double-line spacing, and the
 existing 27-value lineweight domain are also admitted. Generated controls
 verify group-92 ordering and typed values; see the
