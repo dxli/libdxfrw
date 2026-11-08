@@ -22,10 +22,15 @@ handle, before typed parsing or graph readback. The failure is not yet attribute
 to a production defect; preserve the existing strict FIELD/FIELDLIST support
 gate and do not use this synthetic graph to make claims. The post-unlock desktop
 check still reports the Mac locked, so no new ODA/FreeCAD peer evidence is
-available. Next, anchor the allocation slice to an already passing typed
-TABLECONTENT writer/readback profile, isolate its OBJECTS callback mutations,
-and only then sweep ASCII/Binary allocation points. Do not reopen swept
-families or promote support claims. Each slice must update its receipt and
+available. A minimal generated AC1027 TABLECONTENT writer slice then swept 12
+ASCII and 10 Binary callback allocation points. Every injected failure preserved
+the destination and caller model; same-writer retries passed typed grid/value
+readback. The receipt is [here](docs/research/p6-dxf-tablecontent-objects-allocation-failure-retry-2026-11-08.json).
+The output's `m_semanticContentComplete` remains false for this minimal profile,
+so this is transaction/typed-field evidence only and does not qualify strict
+output or TABLECONTENT semantics. Next, select the next uncovered typed OBJECTS
+writer with established readback, keeping FIELD/FIELDLIST gated. Do not reopen
+swept families or promote support claims. Each slice must update its receipt and
 checkpoint, commit implementation with evidence, then report the commit and
 next ready slice.
 
