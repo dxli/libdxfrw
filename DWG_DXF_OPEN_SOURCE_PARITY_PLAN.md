@@ -169,9 +169,10 @@ created locally from scratch for the specific control.
   `a3d58f7f` adds nonfinite header-scalar refusal, `dce17422` adds a
   nonfinite torus-vector control, and `fc8929f0` verifies that an extra
   torus-surface Boolean is refused. All failure paths preserve the preexisting
-  SAT output buffer. A separate allocation sweep now covers all 11 observed
-  SAT text-assembly allocations and retries the same output buffer after every
-  injected failure. The pinned independent parser matches the physical source SAB
+  SAT output buffer. Commit `44781903` catches SAT assembly allocation failures;
+  its sweep covers all 11 observed allocation points and retries the same
+  output buffer after every injected failure. The pinned independent parser
+  matches the physical source SAB
   fields exactly. Native B-rep and independent-kernel gates remain open; see
   the [P7 parser receipt](docs/research/p7-ac1021-inventorloader-sat-parser-crosscheck-2026-11-08.json).
 - **Latest local slice:** the AC1027 `AcDbAssocOsnapPointRefActionParam`
