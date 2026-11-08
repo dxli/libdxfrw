@@ -517,7 +517,19 @@ selection.
    producer output. LibreDWG's SAB-to-SAT conversion is a useful implementation
    comparison, not independent semantic proof. Do not invent group-290/UID
    values, translate the SAB terminator by guess, or count parser agreement as
-   geometry validation.
+   geometry validation. Autodesk's current 3DSOLID DXF reference lists version
+   group 70, proprietary SAT strings in groups 1/3 and the history soft-owner
+   group 350; the generic 310 binary-chunk code is not specified for 3DSOLID,
+   so do not infer that it carries SAB. ODA §20.4.41 distinguishes inline
+   version-2 DWG SAB by the `ACIS BinaryFile` header and tagged terminator.
+   The existing LibreDWG peer output for this exact source emits handle `452`
+   with group 70 = 1 and history `453`, but no groups 1/3/310. This is not a
+   positive carrier witness. Resolve whether LibreDWG declined an unavailable
+   or invalid body and bind the bytes to the exact peer entity before using
+   this source to qualify a conversion. See the [Autodesk 3DSOLID DXF
+   reference](https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-19AB1C40-0BE0-4F32-BCAB-04B37044A0D3.htm),
+   [ODA v5.4.1 §20.4.41](https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf),
+   and the [carrier gate receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).
 4. Close the selected layer-0 extension dictionary `0x1C1` (decimal handle
    449) and its child records; do not confuse decimal diagnostic handles with
    hexadecimal DWG handles. The scratch projection now carries that exact
