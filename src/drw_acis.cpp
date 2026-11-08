@@ -20,6 +20,7 @@
 #include <cmath>
 #include <cstring>
 #include <exception>
+#include <iomanip>
 #include <limits>
 #include <locale>
 #include <map>
@@ -27,6 +28,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -283,6 +285,16 @@ public:
         require(1);
         return bitAlignedByte(m_data, index++, m_shift);
     }
+    std::int8_t readSignedByte() {
+        return static_cast<std::int8_t>(readByte());
+    }
+    std::int16_t readShort() {
+        const std::uint8_t low = readByte();
+        const std::uint8_t high = readByte();
+        return static_cast<std::int16_t>(
+            static_cast<std::uint16_t>(low)
+            | (static_cast<std::uint16_t>(high) << 8u));
+    }
     int readInt() {
         require(4);
         if (m_shift == 0u) {
@@ -312,6 +324,22 @@ public:
         double v;
         std::memcpy(&v, bytes, sizeof(v));
         return v;
+    }
+    float readFloat32() {
+        std::uint8_t bytes[4];
+        for (std::size_t i = 0; i < 4u; ++i)
+            bytes[i] = readByte();
+        float value;
+        std::memcpy(&value, bytes, sizeof(value));
+        return value;
+    }
+    std::int64_t readLongLong() {
+        std::uint8_t bytes[8];
+        for (std::size_t i = 0; i < 8u; ++i)
+            bytes[i] = readByte();
+        std::int64_t value;
+        std::memcpy(&value, bytes, sizeof(value));
+        return value;
     }
     std::string readStr(std::size_t length, SabParseBudget& budget) {
         require(length);
@@ -410,7 +438,8 @@ void appendTypePart(std::vector<std::string>& parts, std::string&& part,
 }
 
 // Read one record up to RECORD_END (or a data-end marker at stream end).
-DRW_SabRecord readRecord(SabByteReader& r, SabParseBudget& budget) {
+DRW_SabRecord readRecord(SabByteReader& r, SabParseBudget& budget,
+                         int sabVersion) {
     DRW_SabRecord out;
     std::vector<std::string> typeParts;
     std::string type;
@@ -427,8 +456,28 @@ DRW_SabRecord readRecord(SabByteReader& r, SabParseBudget& budget) {
         budget.consumeTag();
         int tag = r.readByte();
         switch (tag) {
+        case DRW_SabTag::Byte: {
+            DRW_SabToken t = tok(tag); t.ival = r.readByte();
+            appendSabToken(out.tokens, std::move(t), budget);
+            break;
+        }
+        case DRW_SabTag::Char: {
+            DRW_SabToken t = tok(tag); t.ival = r.readSignedByte();
+            appendSabToken(out.tokens, std::move(t), budget);
+            break;
+        }
+        case DRW_SabTag::Short: {
+            DRW_SabToken t = tok(tag); t.ival = r.readShort();
+            appendSabToken(out.tokens, std::move(t), budget);
+            break;
+        }
         case DRW_SabTag::Int: {
             DRW_SabToken t = tok(tag); t.ival = r.readInt();
+            appendSabToken(out.tokens, std::move(t), budget);
+            break;
+        }
+        case DRW_SabTag::Float: {
+            DRW_SabToken t = tok(tag); t.dval = r.readFloat32();
             appendSabToken(out.tokens, std::move(t), budget);
             break;
         }
@@ -440,6 +489,22 @@ DRW_SabRecord readRecord(SabByteReader& r, SabParseBudget& budget) {
         case DRW_SabTag::Str: {
             DRW_SabToken t = tok(tag);
             t.sval = r.readStr(r.readByte(), budget);
+            appendSabToken(out.tokens, std::move(t), budget);
+            break;
+        }
+        case DRW_SabTag::Str2: {
+            const std::int16_t length = r.readShort();
+            if (length < 0) throw SabError();
+            DRW_SabToken t = tok(tag);
+            t.sval = r.readStr(static_cast<std::size_t>(length), budget);
+            appendSabToken(out.tokens, std::move(t), budget);
+            break;
+        }
+        case DRW_SabTag::Str3: {
+            const int length = r.readInt();
+            if (length < 0) throw SabError();
+            DRW_SabToken t = tok(tag);
+            t.sval = r.readStr(static_cast<std::size_t>(length), budget);
             appendSabToken(out.tokens, std::move(t), budget);
             break;
         }
@@ -512,7 +577,11 @@ DRW_SabRecord readRecord(SabByteReader& r, SabParseBudget& budget) {
             break;
         }
         case DRW_SabTag::Unknown0x17: {
-            DRW_SabToken t = tok(tag); t.dval = r.readFloat();
+            DRW_SabToken t = tok(tag);
+            if (sabVersion == 21200)
+                t.ival = r.readLongLong();
+            else
+                t.dval = r.readFloat();
             appendSabToken(out.tokens, std::move(t), budget);
             break;
         }
@@ -2146,12 +2215,14 @@ bool parseSabPrefix(const std::uint8_t* data, std::size_t length,
         if (parsed.header.numRecords < 0)
             throw SabError();
 
-        // The pinned ezdxf 1.4.4 SAB 21800 witness uses zero for this
-        // header count while carrying records. Only this profile has an
-        // unspecified count; do not generalize it to other SABs.
-        const bool unknownAcis21800Count =
+        // The pinned ACIS 21200 source and the supported 21800 witness use
+        // zero as an unspecified record count and terminate the stream with
+        // an explicit End-of-ACIS-data record. Keep this empirical profile
+        // version-scoped; do not treat arbitrary zero counts as complete.
+        const bool unknownAcisRecordCount =
             parsed.header.signature == "ACIS BinaryFile"
-            && parsed.header.version == 21800
+            && (parsed.header.version == 21200
+                || parsed.header.version == 21800)
             && parsed.header.numRecords == 0;
 
         // A normal record needs at least EntityType + a non-empty name +
@@ -2165,7 +2236,7 @@ bool parseSabPrefix(const std::uint8_t* data, std::size_t length,
             + (remainder == 3u ? 1u : 0u);
         std::size_t reserveRecords = std::min(
             byteBound, budget.limits().maxRecords);
-        if (!unknownAcis21800Count && parsed.header.numRecords > 0) {
+        if (!unknownAcisRecordCount && parsed.header.numRecords > 0) {
             reserveRecords = std::min(
                 reserveRecords,
                 static_cast<std::size_t>(parsed.header.numRecords));
@@ -2174,7 +2245,8 @@ bool parseSabPrefix(const std::uint8_t* data, std::size_t length,
 
         while (reader.hasData()) {
             budget.consumeRecord();
-            DRW_SabRecord record = readRecord(reader, budget);
+            DRW_SabRecord record = readRecord(
+                reader, budget, parsed.header.version);
             const bool marker = isEndMarker(record.type);
             const bool autodesk21800 =
                 parsed.header.signature == "ACIS BinaryFile"
@@ -2192,7 +2264,7 @@ bool parseSabPrefix(const std::uint8_t* data, std::size_t length,
                 break;
         }
 
-        const bool countMatched = unknownAcis21800Count
+        const bool countMatched = unknownAcisRecordCount
             || parsed.records.size()
                 == static_cast<std::size_t>(parsed.header.numRecords);
         if (!countMatched)
@@ -2202,10 +2274,10 @@ bool parseSabPrefix(const std::uint8_t* data, std::size_t length,
         outcome.trailingByteCount = length - reader.index;
         outcome.terminalRecordSeen = !parsed.records.empty()
             && isEndMarker(parsed.records.back().type);
-        outcome.recordCountKnown = !unknownAcis21800Count;
+        outcome.recordCountKnown = !unknownAcisRecordCount;
         outcome.recordCountMatched = outcome.recordCountKnown;
         outcome.complete = outcome.trailingByteCount == 0
-            && (!unknownAcis21800Count || outcome.terminalRecordSeen);
+            && (!unknownAcisRecordCount || outcome.terminalRecordSeen);
         captureBudget(outcome, budget);
         out = std::move(parsed);
         return true;
@@ -2260,6 +2332,253 @@ bool drw_parseSab(const std::uint8_t* data, std::size_t length,
         out = DRW_SabData();
         return false;
     }
+    return true;
+}
+
+bool drw_convertSabToSatV1(const std::uint8_t* data, std::size_t length,
+                          DRW::Version targetVersion,
+                          std::vector<std::uint8_t>& out) {
+    if (data == nullptr || targetVersion == DRW::UNKNOWNV)
+        return false;
+
+    DRW_SabData sab;
+    if (!drw_parseSab(data, length, sab)
+        || sab.header.signature != "ACIS BinaryFile"
+        || sab.header.version != 21200
+        || sab.records.empty()
+        || sab.records.back().type != "End-of-ACIS-data")
+        return false;
+
+    const auto satVersionForTarget = [](DRW::Version version) {
+        if (version >= DRW::AC1027) return 21800;
+        if (version >= DRW::AC1024) return 21500;
+        if (version >= DRW::AC1021) return 21200;
+        if (version >= DRW::AC1018) return 20800;
+        if (version >= DRW::AC1015) return 400;
+        return 106;
+    };
+    const std::int32_t satVersion = satVersionForTarget(targetVersion);
+    const std::int32_t historyFlags = targetVersion < DRW::AC1024
+        ? 0 : sab.header.flags;
+
+    std::string text;
+    std::size_t column = 0u;
+    const auto appendRaw = [&text, &column](std::string_view value,
+                                            bool wrap) {
+        std::size_t offset = 0u;
+        while (offset < value.size()) {
+            if (wrap && column != 0u && column + value.size() - offset > 255u) {
+                text.push_back('\n');
+                column = 0u;
+            }
+            const std::size_t available = wrap && value.size() - offset > 255u
+                ? 255u : value.size() - offset;
+            text.append(value.data() + offset, available);
+            offset += available;
+            column += available;
+            if (offset < value.size()) {
+                text.push_back('\n');
+                column = 0u;
+            }
+        }
+        return true;
+    };
+    const auto appendLineEnd = [&text, &column]() {
+        text.push_back('\n');
+        column = 0u;
+    };
+    const auto formatDouble = [](double value, std::string& result) {
+        if (!std::isfinite(value)) return false;
+        std::ostringstream stream;
+        stream.imbue(std::locale::classic());
+        stream << std::setprecision(6) << std::defaultfloat << value;
+        if (!stream) return false;
+        result = stream.str();
+        return !result.empty();
+    };
+    const auto appendInteger = [&appendRaw](std::int64_t value,
+                                            bool pointer) {
+        std::string token = pointer ? "$" : "";
+        token += std::to_string(value);
+        token.push_back(' ');
+        return appendRaw(token, true);
+    };
+    const auto appendDouble = [&formatDouble, &appendRaw](double value) {
+        std::string token;
+        if (!formatDouble(value, token)) return false;
+        token.push_back(' ');
+        return appendRaw(token, true);
+    };
+
+    if (!appendInteger(satVersion, false)
+        || !appendInteger(sab.header.numRecords, false)
+        || !appendInteger(sab.header.numEntities, false)
+        || !appendInteger(historyFlags, false))
+        return false;
+    // The header's scalar fields share a line in SAT v1.
+    appendLineEnd();
+
+    const auto appendHeaderString = [&appendRaw](const std::string& value) {
+        return appendRaw(std::to_string(value.size()), false)
+            && appendRaw(" ", false) && appendRaw(value, false)
+            && appendRaw(" ", false);
+    };
+    if (!appendHeaderString(sab.header.productId)
+        || !appendHeaderString(sab.header.acisVersion)
+        || !appendHeaderString(sab.header.creationDate))
+        return false;
+    appendLineEnd();
+
+    if (!appendDouble(sab.header.unitsInMm)
+        || !appendDouble(sab.header.resTol)
+        || !appendDouble(sab.header.norTol))
+        return false;
+    appendLineEnd();
+
+    const auto booleanWord = [](const std::string& record, bool value,
+                                unsigned& ordinal, std::string& word) {
+        if (record != "face" && record != "varblendsplsur"
+            && record != "attrib_var_blend" && record != "bdy_geom")
+            ordinal = 0u;
+        if (record == "sphere" || record == "plane" || record == "stripc"
+            || record == "torus")
+            word = value ? "reverse_v" : "forward_v";
+        else if (record == "spline" || record == "edge"
+                 || record == "meshsurf" || record == "pcurve"
+                 || record == "intcurve")
+            word = value ? "reversed" : "forward";
+        else if (record == "surfcur" || record == "bldcur"
+                 || record == "parcur" || record == "projcur"
+                 || record == "perspsil")
+            word = value ? "surf1" : "surf2";
+        else if (record == "sweepsur")
+            word = value ? "angled" : "normal";
+        else if (record == "var_cross_section")
+            word = value ? "radius" : "no_radius";
+        else if (record == "var_radius")
+            word = value ? "uncalibrated" : "calibrated";
+        else if (record == "wire")
+            word = value ? "in" : "out";
+        else if (record == "adv_var_blend")
+            word = value ? "smooth" : "sharp";
+        else if (record == "attrib_fhlhead")
+            word = value ? "valid" : "invalid";
+        else if (record == "attrib_fhlplist" || record == "attrib_fhl_slist")
+            word = value ? "visible" : "invisible";
+        else if (record == "bl_ent_ent" || record == "bl_inst")
+            word = value ? "set" : "unset";
+        else if (record == "face") {
+            static const char* const values[3][2] = {
+                {"forward", "reversed"}, {"single", "double"},
+                {"out", "in"}};
+            if (ordinal >= 3u) return false;
+            word = values[ordinal][value ? 1 : 0];
+            ordinal = (ordinal + 1u) % 3u;
+        } else if (record == "varblendsplsur") {
+            static const char* const values[2][2] = {
+                {"concave", "convex"}, {"rb_snapshot", "rb_envelope"}};
+            if (ordinal >= 2u) return false;
+            word = values[ordinal][value ? 1 : 0];
+            ordinal = (ordinal + 1u) % 2u;
+        } else if (record == "attrib_var_blend") {
+            static const char* const values[3][2] = {
+                {"calibrated", "uncalibrated"}, {"one_radius", "two_radii"},
+                {"forward", "reversed"}};
+            if (ordinal >= 3u) return false;
+            word = values[ordinal][value ? 1 : 0];
+            ordinal = (ordinal + 1u) % 3u;
+        } else if (record == "bdy_geom") {
+            static const char* const values[2][2] = {
+                {"cross", "non_cross"}, {"non_smooth", "smooth"}};
+            if (ordinal >= 2u) return false;
+            word = values[ordinal][value ? 1 : 0];
+            ordinal = (ordinal + 1u) % 2u;
+        } else {
+            word = value ? "I" : "F";
+        }
+        return true;
+    };
+
+    for (std::size_t recordIndex = 0u;
+         recordIndex < sab.records.size(); ++recordIndex) {
+        const DRW_SabRecord& record = sab.records[recordIndex];
+        const bool terminal = recordIndex + 1u == sab.records.size();
+        unsigned booleanOrdinal = 0u;
+        for (const DRW_SabToken& token : record.tokens) {
+            std::string rendered;
+            switch (token.tag) {
+            case DRW_SabTag::Char:
+            case DRW_SabTag::Short:
+                rendered = std::to_string(token.ival);
+                rendered.push_back(' ');
+                if (!appendRaw(rendered, true)) return false;
+                break;
+            case DRW_SabTag::Int:
+            case DRW_SabTag::Pointer:
+            case DRW_SabTag::Enum:
+            case DRW_SabTag::Unknown0x17:
+                if (token.tag == DRW_SabTag::Int
+                    || token.tag == DRW_SabTag::Enum
+                    || token.tag == DRW_SabTag::Pointer
+                    || token.tag == DRW_SabTag::Unknown0x17)
+                    rendered.push_back('$');
+                rendered += std::to_string(token.ival);
+                rendered.push_back(' ');
+                if (!appendRaw(rendered, true)) return false;
+                break;
+            case DRW_SabTag::Float:
+            case DRW_SabTag::Double:
+                if (!appendDouble(token.dval)) return false;
+                break;
+            case DRW_SabTag::Str:
+                rendered = std::to_string(token.sval.size());
+                rendered.push_back(' ');
+                rendered += token.sval;
+                rendered.push_back(' ');
+                if (!appendRaw(rendered, true)) return false;
+                break;
+            case DRW_SabTag::Str2:
+            case DRW_SabTag::Str3:
+            case DRW_SabTag::LiteralStr:
+            case DRW_SabTag::EntityType:
+                rendered = token.sval;
+                rendered.push_back(' ');
+                if (!appendRaw(rendered, true)) return false;
+                break;
+            case DRW_SabTag::BoolTrue:
+            case DRW_SabTag::BoolFalse: {
+                const bool value = token.tag == DRW_SabTag::BoolTrue;
+                if (!booleanWord(record.type, value, booleanOrdinal, rendered))
+                    return false;
+                rendered.push_back(' ');
+                if (!appendRaw(rendered, true)) return false;
+                break;
+            }
+            case DRW_SabTag::SubtypeStart:
+                if (!appendRaw("{ ", true)) return false;
+                break;
+            case DRW_SabTag::SubtypeEnd:
+                if (!appendRaw("} ", true)) return false;
+                break;
+            case DRW_SabTag::LocationVec:
+            case DRW_SabTag::DirectionVec:
+                if (!appendDouble(token.vec.x) || !appendDouble(token.vec.y)
+                    || !appendDouble(token.vec.z))
+                    return false;
+                break;
+            default:
+                return false;
+            }
+        }
+        if (!terminal) {
+            if (!appendRaw("#", false)) return false;
+            appendLineEnd();
+        }
+    }
+    if (text.empty() || text.back() != '\n')
+        appendLineEnd();
+    std::vector<std::uint8_t> converted(text.begin(), text.end());
+    out.swap(converted);
     return true;
 }
 

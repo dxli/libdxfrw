@@ -18306,6 +18306,14 @@ bool inspectAcshTorusSourceProfile(const std::filesystem::path& path) {
                != DRW_ModelerPayloadRange::Kind::Sab
         || solid->m_payloadRanges.front().m_length != 1059u)
         return false;
+    DRW_SabData parsedSab;
+    if (!drw_parseSab(solid->m_dwgAcisPayload.data(),
+                      solid->m_dwgAcisPayload.size(), parsedSab)
+        || parsedSab.header.version != 21200
+        || parsedSab.header.numRecords != 0
+        || parsedSab.records.size() < 3u
+        || parsedSab.records.back().type != "End-of-ACIS-data")
+        return false;
     const auto& color = torus->m_historyNodePrefix;
     std::cout << "AC1021 TORUS source handles 452->453->454->455; radii="
               << torus->m_shapeParams[0] << ',' << torus->m_shapeParams[1]
@@ -18317,9 +18325,121 @@ bool inspectAcshTorusSourceProfile(const std::filesystem::path& path) {
               << " material=" << color.m_handle
               << " inlineSAB=" << solid->m_dwgAcisPayload.size()
               << " modelerVersion=" << solid->m_modelerVersion
+              << " SABVersion=" << parsedSab.header.version
+              << " SABRecords=" << parsedSab.records.size()
               << " DataStorageSections=" << data.dataStorageSections.size()
               << '\n';
     return true;
+}
+
+bool writeAcshTorusSourceSat(
+    const std::filesystem::path& input,
+    const std::filesystem::path& output, DRW::Version targetVersion) {
+    if (std::filesystem::exists(output))
+        return false;
+    dx_data data;
+    dx_iface reader;
+    if (!reader.fileImport(input.string(), &data, false)
+        || data.sourceVersion != DRW::AC1021)
+        return false;
+    const DRW_ModelerGeometry* solid = nullptr;
+    for (const DRW_Entity* entity : data.mBlock->ent) {
+        if (entity != nullptr && entity->eType == DRW::E3DSOLID
+            && entity->handle == 0x452u) {
+            if (solid != nullptr)
+                return false;
+            solid = static_cast<const DRW_ModelerGeometry*>(entity);
+        }
+    }
+    if (solid == nullptr)
+        return false;
+    std::vector<std::uint8_t> sat;
+    if (!drw_convertSabToSatV1(
+            solid->m_dwgAcisPayload.data(),
+            solid->m_dwgAcisPayload.size(), targetVersion, sat)
+        || sat.empty())
+        return false;
+    std::ofstream stream(output, std::ios::binary | std::ios::out);
+    if (!stream)
+        return false;
+    stream.write(reinterpret_cast<const char*>(sat.data()),
+                 static_cast<std::streamsize>(sat.size()));
+    return stream.good();
+}
+
+bool runAcisSab21200SatV1Controls() {
+    std::vector<std::uint8_t> sab{
+        'A','C','I','S',' ','B','i','n','a','r','y','F','i','l','e'};
+    const auto putU32 = [&sab](std::uint32_t value) {
+        for (unsigned shift = 0; shift < 32u; shift += 8u)
+            sab.push_back(static_cast<std::uint8_t>(value >> shift));
+    };
+    const auto putU64 = [&sab](std::uint64_t value) {
+        for (unsigned shift = 0; shift < 64u; shift += 8u)
+            sab.push_back(static_cast<std::uint8_t>(value >> shift));
+    };
+    const auto putString = [&sab](std::uint8_t tag,
+                                  const std::string& value) {
+        sab.push_back(tag);
+        sab.push_back(static_cast<std::uint8_t>(value.size()));
+        sab.insert(sab.end(), value.begin(), value.end());
+    };
+    putU32(21200u); putU32(0u); putU32(1u); putU32(0u);
+    putString(7u, "P"); putString(7u, "A"); putString(7u, "D");
+    const auto putDouble = [&sab](double value) {
+        sab.push_back(6u);
+        std::uint64_t bits = 0;
+        std::memcpy(&bits, &value, sizeof(value));
+        for (unsigned shift = 0; shift < 64u; shift += 8u)
+            sab.push_back(static_cast<std::uint8_t>(bits >> shift));
+    };
+    putDouble(1.0); putDouble(0.1); putDouble(0.01);
+
+    putString(13u, "body");
+    sab.push_back(2u); sab.push_back(0xFFu); // signed char -1
+    sab.push_back(3u); sab.push_back(0x34u); sab.push_back(0x12u);
+    sab.push_back(5u);
+    const float floatValue = 1.5f;
+    std::uint32_t floatBits = 0;
+    std::memcpy(&floatBits, &floatValue, sizeof(floatValue));
+    putU32(floatBits);
+    putString(7u, "xyz");
+    sab.push_back(8u); sab.push_back(2u); sab.push_back(0u);
+    sab.insert(sab.end(), {'a','b'});
+    sab.push_back(9u); putU32(3u); sab.insert(sab.end(), {'c','d','e'});
+    sab.push_back(23u); putU64(static_cast<std::uint64_t>(-7));
+    sab.push_back(10u); sab.push_back(11u);
+    sab.push_back(15u); sab.push_back(16u); sab.push_back(17u);
+    sab.insert(sab.end(), {0x0Eu,0x03u,'E','n','d',
+                           0x0Eu,0x02u,'o','f',
+                           0x0Eu,0x04u,'A','C','I','S',
+                           0x0Du,0x04u,'d','a','t','a'});
+
+    DRW_SabData parsed;
+    if (!drw_parseSab(sab.data(), sab.size(), parsed)
+        || parsed.header.version != 21200
+        || parsed.header.numRecords != 0
+        || parsed.records.size() != 2u
+        || parsed.records.back().type != "End-of-ACIS-data")
+        return false;
+    std::vector<std::uint8_t> sat;
+    if (!drw_convertSabToSatV1(sab.data(), sab.size(), DRW::AC1021, sat))
+        return false;
+    const std::string expected =
+        "21200 0 1 0 \n"
+        "1 P 1 A 1 D \n"
+        "1 0.1 0.01 \n"
+        "body -1 4660 1.5 3 xyz ab cde $-7 I F { } #\n"
+        "End-of-ACIS-data \n";
+    if (sat != std::vector<std::uint8_t>(expected.begin(), expected.end()))
+        return false;
+
+    std::vector<std::uint8_t> preserved{0xA5u, 0x5Au};
+    std::vector<std::uint8_t> unsupported = sab;
+    unsupported.insert(unsupported.begin() + 73, {1u, 0x10u});
+    return !drw_convertSabToSatV1(unsupported.data(), unsupported.size(),
+                                  DRW::AC1021, preserved)
+        && preserved == std::vector<std::uint8_t>({0xA5u, 0x5Au});
 }
 
 bool runAcshTorusSourceProjectionRefusal(
@@ -37241,6 +37361,29 @@ bool runBlockRecordXrefMetadataRoundTrip(
 #include "dwg_ellipse_wcs_test.h"
 
 int main(int argc, char** argv) {
+    if (argc == 2
+        && std::string(argv[1]) == "--sab21200-sat-v1-controls") {
+        const bool passed = runAcisSab21200SatV1Controls();
+        std::cout << "ACIS SAB 21200 to SAT v1 token controls: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    }
+    if (argc == 5
+        && std::string(argv[1]) == "--convert-acsh-torus-source") {
+        DRW::Version target = DRW::UNKNOWNV;
+        const std::string version(argv[3]);
+        if (version == "AC1015") target = DRW::AC1015;
+        else if (version == "AC1018") target = DRW::AC1018;
+        else if (version == "AC1021") target = DRW::AC1021;
+        else if (version == "AC1024") target = DRW::AC1024;
+        else if (version == "AC1027") target = DRW::AC1027;
+        else if (version == "AC1032") target = DRW::AC1032;
+        const bool passed = target != DRW::UNKNOWNV
+            && writeAcshTorusSourceSat(argv[2], argv[4], target);
+        std::cout << "AC1021 inline SAB to SAT v1: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    }
     if (argc == 2
         && std::string(argv[1]) == "--rastervariables-dwg-scalar-domain") {
         const bool passed = runRasterVariablesDwgDomainRefusal();

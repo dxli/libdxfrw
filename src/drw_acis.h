@@ -65,7 +65,8 @@ namespace DRW_SabTag {
 //! A single decoded SAB field token: a tag plus its typed value.
 /*!
  *  Only one of the value slots is meaningful, selected by `tag`:
- *  Double/Unknown0x17 -> dval; Int/Pointer/Enum/SubtypeStart/SubtypeEnd -> ival;
+ *  Double -> dval; Byte/Char/Short/Int/Pointer/Enum/SubtypeStart/SubtypeEnd
+ *  and version-21200 Unknown0x17 -> ival;
  *  BoolTrue/BoolFalse -> bval; Str/LiteralStr/EntityType/EntityTypeEx -> sval;
  *  LocationVec/DirectionVec -> vec.
  */
@@ -167,6 +168,16 @@ LIBDXFRW_EXPORT bool drw_parseSabWithOutcome(
 LIBDXFRW_EXPORT bool drw_parseSabWithLimits(
     const std::uint8_t* data, std::size_t length, DRW_SabData& out,
     DRW_SabParseOutcome& outcome, const DRW_SabParseLimits& limits);
+
+//! Convert a complete ACIS BinaryFile SAB v2 stream to plain SAT v1 text.
+//! The output is byte serialization only; it does not validate ACIS topology,
+//! B-rep closure, or geometry semantics. The caller supplies the DXF target
+//! release because the SAT header carries a target-version identifier.
+//! Only explicitly implemented SAB token/version profiles are accepted.
+//! On failure, `out` is unchanged.
+LIBDXFRW_EXPORT bool drw_convertSabToSatV1(
+    const std::uint8_t* data, std::size_t length, DRW::Version targetVersion,
+    std::vector<std::uint8_t>& out);
 
 // ── B-rep record graph (entities.ts) ───────────────────────────────────────
 

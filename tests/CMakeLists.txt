@@ -3846,6 +3846,19 @@ set_tests_properties(dxf_acsh_torus_typed_roundtrip PROPERTIES
     TIMEOUT 30
 )
 
+# Decode the empirically observed ACIS 21200 SAB token forms and serialize a
+# bounded SAT-v1 text stream, including the zero-count/explicit-terminator
+# profile. The control is locally authored in memory and adds no fixture.
+add_test(
+    NAME acis_sab21200_sat_v1_token_controls
+    COMMAND $<TARGET_FILE:libdxfrw_dwg_local_roundtrip>
+            --sab21200-sat-v1-controls
+)
+set_tests_properties(acis_sab21200_sat_v1_token_controls PROPERTIES
+    LABELS "fast;dwg;dxf;3d;acis;generated"
+    TIMEOUT 30
+)
+
 # Preserve the PFACE record boundary and following entity through direct
 # ASCII/Binary read and canonical write/readback without running the full suite.
 add_test(

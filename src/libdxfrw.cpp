@@ -2114,6 +2114,40 @@ bool hasQualifiedAc1015SatV1Payload(const DRW_ModelerGeometry& entity) {
     return declaredTotal == entity.m_dwgAcisPayload.size();
 }
 
+bool hasQualifiedAc1021InlineSab21200Payload(
+    const DRW_ModelerGeometry& entity) {
+    if (entity.eType != DRW::E3DSOLID
+        || entity.m_dwgSourceVersion != DRW::AC1021
+        || entity.m_modelerVersion != 2 || entity.m_isEmpty
+        || !entity.m_hasModelerData || entity.m_objectSize == 0
+        || entity.m_rawBytes.size() != entity.m_objectSize
+        || entity.m_dwgAcisPayload.empty()
+        || entity.m_dwgAcisPayload.size() > DRW::kMaxDxfBinaryPayloadBytes
+        || entity.m_payloadRanges.size() != 1u
+        || entity.hasDataStorageBinaryData() || entity.hasDataStorageRecord
+        || !entity.dataStorageData.empty())
+        return false;
+
+    const DRW_ModelerPayloadRange& range = entity.m_payloadRanges.front();
+    if (range.m_kind != DRW_ModelerPayloadRange::Kind::Sab
+        || range.m_section != DRW_ModelerPayloadRange::Section::Body
+        || range.m_consistency != DRW_ModelerPayloadRange::Consistency::Exact
+        || range.m_confidence != DRW_ModelerPayloadRange::Confidence::Marker
+        || range.m_length != entity.m_dwgAcisPayload.size()
+        || range.m_bitOffset != 0u)
+        return false;
+
+    try {
+        DRW_SabData sab;
+        return drw_parseSab(entity.m_dwgAcisPayload.data(),
+                            entity.m_dwgAcisPayload.size(), sab)
+            && sab.header.signature == "ACIS BinaryFile"
+            && sab.header.version == 21200;
+    } catch (...) {
+        return false;
+    }
+}
+
 bool hasSabBinaryFileSignature(const std::vector<std::uint8_t>& payload) {
     return drw_hasSabMinimumHeader(payload);
 }
@@ -16579,9 +16613,23 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
     }
     const bool writeAc1015SatV1 = version == DRW::AC1015
         && hasQualifiedAc1015SatV1Payload(*ent);
+    const bool writeAc1021InlineSab21200 =
+        (version == DRW::AC1021 || version == DRW::AC1024)
+        && hasQualifiedAc1021InlineSab21200Payload(*ent);
     const bool writeR2013PlusSab = isAcdsDxfVersion(version)
         && hasQualifiedR2013PlusAcdsRecord(
             *ent, m_rawDxfSections, version);
+    std::vector<std::uint8_t> convertedInlineSabSat;
+    if (writeAc1021InlineSab21200) {
+        try {
+            if (!drw_convertSabToSatV1(ent->m_dwgAcisPayload.data(),
+                                       ent->m_dwgAcisPayload.size(), version,
+                                       convertedInlineSabSat))
+                return rejectUnsupportedDxfWrite("3DSOLID/REGION/BODY");
+        } catch (...) {
+            return rejectUnsupportedDxfWrite("3DSOLID/REGION/BODY");
+        }
+    }
     // A DWG-associated modeler currently does not decode the R2013+ DXF
     // shell's flag and revision identifier from its source frame.
     // Omitting them can cause consumers to synthesize different values even
@@ -16597,6 +16645,9 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
     DRW_DBG("\n");
     DRW_DBG("dxfRW::writeModelerGeometry AC1015 SAT v1 qualified: ");
     DRW_DBG(writeAc1015SatV1);
+    DRW_DBG("\n");
+    DRW_DBG("dxfRW::writeModelerGeometry AC1021 inline SAB 21200 qualified: ");
+    DRW_DBG(writeAc1021InlineSab21200);
     DRW_DBG(" payload bytes: ");
     DRW_DBG(ent->m_dwgAcisPayload.size());
     DRW_DBG(" modeler version: ");
@@ -16623,6 +16674,7 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
     DRW_DBG(ent->m_modelerDataUnknownBit);
     DRW_DBG("\n");
     const bool hasUnqualifiedDwgPayload = !writeAc1015SatV1
+        && !writeAc1021InlineSab21200
         && !writeR2013PlusSab
         && (ent->m_bodyBitSize != 0
         || ent->m_objectSize != 0 || ent->m_hasModelerData
@@ -16631,7 +16683,8 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
         || ent->hasDataStorageBinaryData() || ent->hasDataStorageRecord
         || !ent->dataStorageData.empty());
     if (hasUnqualifiedDwgPayload
-        || (!writeAc1015SatV1 && !writeR2013PlusSab
+        || (!writeAc1015SatV1 && !writeAc1021InlineSab21200
+            && !writeR2013PlusSab
             && !ent->m_rawBytes.empty()
             && (version > DRW::AC1024
                 || !hasDxfTextPayloadChunks(ent->m_rawBytes,
@@ -16667,6 +16720,9 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
     }
     if (writeAc1015SatV1) {
         if (!writeDxfSatV1Text(writer.get(), ent->m_dwgAcisPayload))
+            return failDxfWrite();
+    } else if (writeAc1021InlineSab21200) {
+        if (!writeDxfSatV1Text(writer.get(), convertedInlineSabSat))
             return failDxfWrite();
     } else if (!writeR2013PlusSab && !ent->m_rawBytes.empty()) {
         if (!writeDxfSatTextPayloadChunks(writer.get(), ent->m_rawBytes,

@@ -835,10 +835,26 @@ from `i` to `i + 1`; its conversion emits 17 group-1 SAT chunks for handle
 This gives a peer-derived byte target for implementing our own SAB-to-SAT
 route, but does not independently validate the DXF carrier or geometry. The
 post-unlock ODA startup retry still aborts before conversion during
-PasteBoard/XPC initialization. The existing generated TORUS/CMC
-controls pass (2/2); no fixture was added. These are refusal results, not
-successful physical-source output. See the
-[inline-SAB carrier gate receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).
+PasteBoard/XPC initialization. The generated TORUS/CMC controls pass (2/2); no
+fixture was added. These are refusal results, not successful physical-source
+output. See the [inline-SAB carrier gate receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).
+
+**Implementation progress (2026-11-08):** a bounded AC1021 inline SAB v2
+converter now parses the observed version-21200 token profile and emits SAT v1
+text. Its output for the pinned `0x452` payload matches the corrected
+LibreDWG scratch peer byte for byte (909 bytes; SHA-256
+`5d82bceb0e931e4ac2c11a86fa5706e9621567990bdcaf200d607ed0a46ba7b0`).
+The `writeModelerGeometry` entity route admits only an AC1021 E3DSOLID whose
+single exact SAB body span, retained source frame, header/version, and absence
+of DataStorage all match this profile; it converts only for AC1021/AC1024
+targets. Generated token controls and existing TORUS/CMC tests pass (3/3),
+with no fixtures added. This is differential conversion and writer-gate
+implementation, not physical output/readback: the selected graph still stops
+before entity serialization at unresolved EvaluationGraph ownership, and no
+independent CAD reader or geometry-kernel evidence exists. Keep support claims
+unchanged. Next implement source-bound EvaluationGraph/history/torus closure
+without routing through ACDSDATA, then exercise this writer gate in ASCII and
+Binary with exact readback, allocation rollback/retry, and full-source refusal.
 
 The local P6 AC1027
 source-reference inventory is complete, with
