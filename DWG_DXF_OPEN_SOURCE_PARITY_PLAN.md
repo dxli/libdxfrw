@@ -338,6 +338,14 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-08)
 
+- **Desktop qualification recheck:** after the user indicated they were
+  unlocking the Mac, the desktop inventory still reported the native session
+  locked. The ODA File Converter launch therefore remains unexecuted against
+  any drawing; its earlier PasteBoard/XPC abort is not format evidence. Do not
+  retry the same CLI launch or mark FreeCAD/ODA qualification complete until a
+  fresh desktop inventory exposes an unlocked native app surface. Continue
+  independently actionable repository work and keep platform qualification as
+  a separate external gate.
 - **Latest ACIS writer hardening:** commit `e3111a82` preserves binary64
   precision in SAT v1 output using `max_digits10`. Follow-up commit
   `a3d58f7f` adds nonfinite header-scalar refusal, `dce17422` adds a
