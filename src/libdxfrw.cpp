@@ -12088,6 +12088,35 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
     constexpr std::uint32_t rowAlignmentFlags[] = {
         0x00004000u, 0x00008000u, 0x00010000u
     };
+    constexpr std::uint32_t rowTextColorFlags[] = {
+        0x00000020u, 0x00000040u, 0x00000080u
+    };
+    constexpr std::uint32_t rowFillNoneFlags[] = {
+        0x00000100u, 0x00000200u, 0x00000400u
+    };
+    constexpr std::uint32_t rowFillColorFlags[] = {
+        0x00000800u, 0x00001000u, 0x00002000u
+    };
+    const auto tableColorToDxf = [](const DRW_DwgCmColor& color,
+                                    int& dxfColor) {
+        if (color.flags != 0u || color.rgb24 != -1 || color.hasRgbColor
+            || !color.colorName.empty() || !color.bookName.empty())
+            return false;
+        if (color.method == 0xC0u && color.index == 256u) {
+            dxfColor = 256;
+            return true;
+        }
+        if (color.method == 0xC1u && color.index == 0u) {
+            dxfColor = 0;
+            return true;
+        }
+        if (color.method == 0xC3u && color.index > 0u
+            && color.index <= 255u) {
+            dxfColor = static_cast<int>(color.index);
+            return true;
+        }
+        return false;
+    };
     const auto hasUnmappedTableRowAlignment = [&]() {
         for (std::size_t i = 0u; i < 3u; ++i) {
             const bool selected =
@@ -12095,6 +12124,27 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
             const int alignment = ent->m_tableRowAlignmentOverrides[i];
             if (selected ? (alignment < 1 || alignment > 9)
                          : (alignment != 0))
+                return true;
+        }
+        return false;
+    };
+    const auto hasUnmappedTableRowColors = [&]() {
+        for (std::size_t i = 0u; i < 3u; ++i) {
+            const bool textSelected =
+                (ent->m_tableOverrideFlags & rowTextColorFlags[i]) != 0u;
+            const bool fillSelected =
+                (ent->m_tableOverrideFlags & rowFillColorFlags[i]) != 0u;
+            const bool fillNoneSelected =
+                (ent->m_tableOverrideFlags & rowFillNoneFlags[i]) != 0u;
+            int ignoredColor = 0;
+            if ((textSelected
+                    ? !tableColorToDxf(ent->m_tableRowTextColors[i], ignoredColor)
+                    : hasDwgCmColor(ent->m_tableRowTextColors[i]))
+                || (fillSelected
+                    ? !tableColorToDxf(ent->m_tableRowFillColors[i], ignoredColor)
+                    : hasDwgCmColor(ent->m_tableRowFillColors[i]))
+                || (!fillNoneSelected
+                    && ent->m_tableRowFillNone[i]))
                 return true;
         }
         return false;
@@ -12108,7 +12158,7 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
             && !ent->m_headerSuppressed)
         || ent->m_tableOverrideFlags > static_cast<std::uint32_t>(
                std::numeric_limits<int>::max())
-        || (ent->m_tableOverrideFlags & ~0x0001C01Fu) != 0u
+        || (ent->m_tableOverrideFlags & ~0x0001FFFFu) != 0u
         || std::any_of(ent->m_tableRowHeightOverrides.begin(),
                        ent->m_tableRowHeightOverrides.end(),
             [](double value) { return value != 0.0; })
@@ -12116,13 +12166,7 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
         || std::any_of(ent->m_tableRowTextStyleHandles.begin(),
                        ent->m_tableRowTextStyleHandles.end(),
             [](std::uint32_t value) { return value != 0u; })
-        || std::any_of(ent->m_tableRowTextColors.begin(),
-                       ent->m_tableRowTextColors.end(), hasDwgCmColor)
-        || std::any_of(ent->m_tableRowFillNone.begin(),
-                       ent->m_tableRowFillNone.end(),
-            [](bool value) { return value; })
-        || std::any_of(ent->m_tableRowFillColors.begin(),
-                       ent->m_tableRowFillColors.end(), hasDwgCmColor)
+        || hasUnmappedTableRowColors()
         || std::any_of(ent->m_tableBorderColors.begin(),
                        ent->m_tableBorderColors.end(), hasDwgCmColor)
         || std::any_of(ent->m_hasTableBorderLineweightOverrides.begin(),
@@ -12394,6 +12438,27 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
     for (std::size_t i = 0u; i < 3u; ++i) {
         if ((ent->m_tableOverrideFlags & rowAlignmentFlags[i]) != 0u)
             writer->writeInt16(170, ent->m_tableRowAlignmentOverrides[i]);
+    }
+    for (std::size_t i = 0u; i < 3u; ++i) {
+        if ((ent->m_tableOverrideFlags & rowFillColorFlags[i]) != 0u) {
+            int color = 0;
+            if (!tableColorToDxf(ent->m_tableRowFillColors[i], color))
+                return failDxfWrite();
+            writer->writeInt16(63, color);
+        }
+    }
+    for (std::size_t i = 0u; i < 3u; ++i) {
+        if ((ent->m_tableOverrideFlags & rowTextColorFlags[i]) != 0u) {
+            int color = 0;
+            if (!tableColorToDxf(ent->m_tableRowTextColors[i], color))
+                return failDxfWrite();
+            writer->writeInt16(64, color);
+        }
+    }
+    for (std::size_t i = 0u; i < 3u; ++i) {
+        if ((ent->m_tableOverrideFlags & rowFillNoneFlags[i]) != 0u)
+            writer->writeInt16(283,
+                ent->m_tableRowFillNone[i] ? 0 : 1);
     }
 
     if (!ent->extData.empty() && !writeExtData(ent->extData))

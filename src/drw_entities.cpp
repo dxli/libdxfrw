@@ -12501,6 +12501,7 @@ bool DRW_Table::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     case 171:
         m_dxfStructuredCellValue=false;m_dxfValueFields=0u;
         m_dxfCurrentCellAlignmentRead = false;
+        m_dxfCurrentCellOverridesRead = 0u;
         if (m_dxfCurrentCell >= 0) {
             if (m_dxfMergeCurrentFields != 7u)
                 m_dxfMergeFieldsInvalid = true;
@@ -12767,19 +12768,89 @@ bool DRW_Table::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         break;
     }
     case 63:
-    case 64:
-        if (!m_dxfTablePropertiesStarted && currentCell() != nullptr) {
-            DRW_TableCell *cell = currentCell();
-            int color = reader->getInt32();
-            if (code == 63)
-                cell->m_fillColorRgb = color;
-            else
+    case 64: {
+        constexpr std::uint32_t textColorFlags[] = {
+            0x00000020u, 0x00000040u, 0x00000080u
+        };
+        constexpr std::uint32_t fillColorFlags[] = {
+            0x00000800u, 0x00001000u, 0x00002000u
+        };
+        const bool textColor = code == 64;
+        const auto& tableFlags = textColor ? textColorFlags : fillColorFlags;
+        std::size_t slot = 0u;
+        std::size_t expected = 0u;
+        for (std::size_t i = 0u; i < 3u; ++i) {
+            if ((m_tableOverrideFlags & tableFlags[i]) != 0u) {
+                if (expected == (textColor ? m_dxfTableRowTextColorsRead
+                                           : m_dxfTableRowFillColorsRead))
+                    slot = i;
+                ++expected;
+            }
+        }
+        const bool allCellsStarted = m_dxfRowsExpected >= 0
+            && m_dxfColumnsExpected >= 0
+            && m_dxfNextCell >= static_cast<std::size_t>(m_dxfRowsExpected)
+                * static_cast<std::size_t>(m_dxfColumnsExpected);
+        DRW_TableCell *cell = currentCell();
+        const unsigned cellFlag = textColor ? 0x00000008u : 0x00000004u;
+        const bool hasCellOverride = cell != nullptr
+            && (cell->m_overrideFlags & cellFlag) != 0u
+            && (m_dxfCurrentCellOverridesRead & cellFlag) == 0u;
+        std::size_t& readCount = textColor ? m_dxfTableRowTextColorsRead
+                                           : m_dxfTableRowFillColorsRead;
+        const bool hasTableOverride = expected != 0u && readCount < expected;
+        const bool tableField = m_dxfTablePropertiesStarted
+            || (allCellsStarted && hasTableOverride && !hasCellOverride);
+        const int color = reader->getInt32();
+        if (tableField) {
+            if (!hasTableOverride) {
+                markIncomplete();
+            } else if (color < 0 || color > 256) {
+                markIncomplete();
+                ++readCount;
+            } else {
+                DRW_DwgCmColor cmc;
+                cmc.sourceVersion = reader->getSourceVersion();
+                cmc.index = static_cast<std::uint16_t>(color);
+                cmc.method = color == 256 ? 0xC0u
+                    : color == 0 ? 0xC1u : 0xC3u;
+                if (textColor)
+                    m_tableRowTextColors[slot] = std::move(cmc);
+                else
+                    m_tableRowFillColors[slot] = std::move(cmc);
+                ++readCount;
+            }
+        } else if (cell != nullptr) {
+            if (textColor)
                 cell->m_textColorRgb = color;
+            else
+                cell->m_fillColorRgb = color;
+            if (hasCellOverride)
+                m_dxfCurrentCellOverridesRead |= cellFlag;
+            else if (allCellsStarted && hasTableOverride)
+                markIncomplete();
         } else {
-            reader->getInt32();
             markIncomplete();
         }
         break;
+    }
+    case 420: {
+        const int rgb = reader->getInt32();
+        (void)rgb;
+        // The TABLE DXF definition names group 63/64 ACI color values but does
+        // not define a row-style true-color companion. Do not pair a generic
+        // entity group 420 with retained row CMC values by guesswork.
+        if ((m_tableOverrideFlags & 0x000038E0u) != 0u)
+            markIncomplete();
+        break;
+    }
+    case 430: {
+        const UTF8STRING colorName = reader->getUtf8String();
+        (void)colorName;
+        if ((m_tableOverrideFlags & 0x000038E0u) != 0u)
+            markIncomplete();
+        break;
+    }
     case 69:
     case 65:
     case 66:
@@ -12820,20 +12891,53 @@ bool DRW_Table::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         reader->getInt32();
         markIncomplete();
         break;
-    case 283:
-        if (!m_dxfTablePropertiesStarted && currentCell() != nullptr) {
-            DRW_TableCell *cell = currentCell();
-            bool value = false;
-            if (!readDxfBool(reader, value))
-                return false;
+    case 283: {
+        constexpr std::uint32_t fillNoneFlags[] = {
+            0x00000100u, 0x00000200u, 0x00000400u
+        };
+        std::size_t slot = 0u;
+        std::size_t expected = 0u;
+        for (std::size_t i = 0u; i < 3u; ++i) {
+            if ((m_tableOverrideFlags & fillNoneFlags[i]) != 0u) {
+                if (expected == m_dxfTableRowFillNoneRead)
+                    slot = i;
+                ++expected;
+            }
+        }
+        const bool allCellsStarted = m_dxfRowsExpected >= 0
+            && m_dxfColumnsExpected >= 0
+            && m_dxfNextCell >= static_cast<std::size_t>(m_dxfRowsExpected)
+                * static_cast<std::size_t>(m_dxfColumnsExpected);
+        DRW_TableCell *cell = currentCell();
+        constexpr unsigned cellFlag = 0x00000002u;
+        const bool hasCellOverride = cell != nullptr
+            && (cell->m_overrideFlags & cellFlag) != 0u
+            && (m_dxfCurrentCellOverridesRead & cellFlag) == 0u;
+        const bool hasTableOverride = expected != 0u
+            && m_dxfTableRowFillNoneRead < expected;
+        const bool tableField = m_dxfTablePropertiesStarted
+            || (allCellsStarted && hasTableOverride && !hasCellOverride);
+        bool value = false;
+        if (!readDxfBool(reader, value))
+            return false;
+        if (tableField) {
+            if (!hasTableOverride) {
+                markIncomplete();
+            } else {
+                m_tableRowFillNone[slot] = !value;
+                ++m_dxfTableRowFillNoneRead;
+            }
+        } else if (cell != nullptr) {
             cell->m_backgroundEnabled = value;
+            if (hasCellOverride)
+                m_dxfCurrentCellOverridesRead |= cellFlag;
+            else if (allCellsStarted && hasTableOverride)
+                markIncomplete();
         } else {
-            bool ignored = false;
-            if (!readDxfBool(reader, ignored))
-                return false;
             markIncomplete();
         }
         break;
+    }
     case 289:
     case 285:
     case 286:
@@ -12903,6 +13007,32 @@ void DRW_Table::finalizeDxfParse() noexcept {
     }
     if ((m_tableOverrideFlags & rowAlignmentFlags) != 0u
         && m_dxfTableAlignmentOverridesRead != expectedRowAlignmentOverrides) {
+        m_dxfUnsupportedData = true;
+        m_semanticContentComplete = false;
+    }
+    const auto countSelected = [this](
+            const std::array<std::uint32_t, 3>& flags) {
+        std::size_t count = 0u;
+        for (const std::uint32_t bit : flags)
+            if ((m_tableOverrideFlags & bit) != 0u)
+                ++count;
+        return count;
+    };
+    const std::array<std::uint32_t, 3> tableTextColorFlags{{
+        0x00000020u, 0x00000040u, 0x00000080u
+    }};
+    const std::array<std::uint32_t, 3> tableFillNoneFlags{{
+        0x00000100u, 0x00000200u, 0x00000400u
+    }};
+    const std::array<std::uint32_t, 3> tableFillColorFlags{{
+        0x00000800u, 0x00001000u, 0x00002000u
+    }};
+    const std::size_t expectedTextColors = countSelected(tableTextColorFlags);
+    const std::size_t expectedFillNone = countSelected(tableFillNoneFlags);
+    const std::size_t expectedFillColors = countSelected(tableFillColorFlags);
+    if (m_dxfTableRowTextColorsRead != expectedTextColors
+        || m_dxfTableRowFillNoneRead != expectedFillNone
+        || m_dxfTableRowFillColorsRead != expectedFillColors) {
         m_dxfUnsupportedData = true;
         m_semanticContentComplete = false;
     }
@@ -13306,7 +13436,11 @@ void DRW_Table::resetDwgState() {
     m_dxfDataVersionRead = false;
     m_dxfTablePropertiesStarted = false;
     m_dxfCurrentCellAlignmentRead = false;
+    m_dxfCurrentCellOverridesRead = 0u;
     m_dxfTableAlignmentOverridesRead = 0u;
+    m_dxfTableRowTextColorsRead = 0u;
+    m_dxfTableRowFillNoneRead = 0u;
+    m_dxfTableRowFillColorsRead = 0u;
     m_dxfUnsupportedData = false;
     m_dxfAttributesExpected = -1;
     m_dxfAttributesRead = 0;

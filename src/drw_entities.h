@@ -2182,7 +2182,11 @@ private:
     bool m_dxfDataVersionRead = false;
     bool m_dxfTablePropertiesStarted = false;
     bool m_dxfCurrentCellAlignmentRead = false;
+    unsigned m_dxfCurrentCellOverridesRead = 0u;
     std::size_t m_dxfTableAlignmentOverridesRead = 0u;
+    std::size_t m_dxfTableRowTextColorsRead = 0u;
+    std::size_t m_dxfTableRowFillNoneRead = 0u;
+    std::size_t m_dxfTableRowFillColorsRead = 0u;
     bool m_dxfUnsupportedData = false;
     int m_dxfAttributesExpected = -1;
     int m_dxfAttributesRead = 0;
@@ -2220,7 +2224,11 @@ private:
         m_dxfDataVersionRead = false;
         m_dxfTablePropertiesStarted = false;
         m_dxfCurrentCellAlignmentRead = false;
+        m_dxfCurrentCellOverridesRead = 0u;
         m_dxfTableAlignmentOverridesRead = 0u;
+        m_dxfTableRowTextColorsRead = 0u;
+        m_dxfTableRowFillNoneRead = 0u;
+        m_dxfTableRowFillColorsRead = 0u;
         m_dxfUnsupportedData = false;
         m_dxfAttributesExpected = -1;
         m_dxfAttributesRead = 0;

@@ -989,13 +989,16 @@ bool tableRowAlignmentOverrideParseTests(const std::filesystem::path& dir) {
             {0,"ACAD_TABLE"},{5,"4F2"},{100,"AcDbEntity"},{8,"0"},
             {100,"AcDbBlockReference"},{2,"*T1"},{10,"1"},{20,"2"},
             {30,"3"},{100,"AcDbTable"},{90,"6"},{91,"1"},{92,"1"},
-            {93,"114688"},{141,"8"},{142,"20"},{171,"1"},{172,"0"},
-            {173,"0"},{174,"0"},{175,"1"},{176,"1"},{91,"1"},
-            {1,"cell"},{170,"4"},
+            {93,"131071"},{141,"8"},{142,"20"},{171,"1"},{172,"0"},
+            {173,"0"},{174,"0"},{175,"1"},{176,"1"},{91,"15"},
+            {170,"4"},{283,"1"},{63,"3"},{64,"4"},{1,"cell"},
             // The row override mask and complete cell sequence make these
-            // trailing group 170 values entity-level even without an unrelated
-            // flow-direction property acting as a parser phase marker.
+            // trailing groups entity-level without requiring an unrelated
+            // flow-direction property as a parser phase marker.
             {170,"2"},{170,"5"},{170,"8"},
+            {63,"256"},{63,"0"},{63,"3"},
+            {64,"256"},{64,"0"},{64,"7"},
+            {283,"0"},{283,"1"},{283,"0"},
             {0,"ENDSEC"},{0,"EOF"}};
     };
     const auto import = [&](const Tags& tags, bool binary, dx_data& data) {
@@ -1011,9 +1014,28 @@ bool tableRowAlignmentOverrideParseTests(const std::filesystem::path& dir) {
         if (!import(source(), binary, data) || data.tables.size() != 1u)
             return fail("complete input did not produce one TABLE callback");
         const DRW_Table& table = data.tables.front();
-        if (table.m_tableOverrideFlags != 0x0001C000u
+        const auto colorIs = [](const DRW_DwgCmColor& color,
+                                std::uint8_t method, std::uint16_t index) {
+            return color.method == method && color.index == index
+                && color.flags == 0u && color.rgb24 == -1
+                && !color.hasRgbColor && color.colorName.empty()
+                && color.bookName.empty();
+        };
+        if (table.m_tableOverrideFlags != 0x0001FFFFu
             || table.m_tableRowAlignmentOverrides != expected
             || table.m_content.m_rows[0].m_cells[0].m_textAlignment != 4
+            || !table.m_tableRowFillNone[0]
+            || table.m_tableRowFillNone[1]
+            || !table.m_tableRowFillNone[2]
+            || !colorIs(table.m_tableRowTextColors[0], 0xC0u, 256u)
+            || !colorIs(table.m_tableRowTextColors[1], 0xC1u, 0u)
+            || !colorIs(table.m_tableRowTextColors[2], 0xC3u, 7u)
+            || !colorIs(table.m_tableRowFillColors[0], 0xC0u, 256u)
+            || !colorIs(table.m_tableRowFillColors[1], 0xC1u, 0u)
+            || !colorIs(table.m_tableRowFillColors[2], 0xC3u, 3u)
+            || !table.m_content.m_rows[0].m_cells[0].m_backgroundEnabled
+            || table.m_content.m_rows[0].m_cells[0].m_textColorRgb != 4
+            || table.m_content.m_rows[0].m_cells[0].m_fillColorRgb != 3
             || !table.m_semanticContentComplete)
             return fail("title/header/data order or completion state differs");
 
@@ -1063,6 +1085,59 @@ bool tableRowAlignmentOverrideParseTests(const std::filesystem::path& dir) {
                 || invalidData.tables.size() != 1u
                 || invalidData.tables.front().m_semanticContentComplete)
                 return fail("invalid alignment enum was accepted as complete");
+        }
+
+        for (const int code : {63, 64, 283}) {
+            Tags missing = source();
+            std::size_t seen = 0u;
+            for (auto it = missing.begin(); it != missing.end(); ++it) {
+                if (it->code != code)
+                    continue;
+                if (seen++ == 1u) {
+                    missing.erase(it);
+                    break;
+                }
+            }
+            dx_data incomplete;
+            if (!import(missing, binary, incomplete)
+                || incomplete.tables.size() != 1u
+                || incomplete.tables.front().m_semanticContentComplete)
+                return fail("missing selected row color/fill value was accepted as complete");
+        }
+        Tags invalidColor = source();
+        std::size_t colorCode64Count = 0u;
+        for (Tag& tag : invalidColor) {
+            if (tag.code == 64 && colorCode64Count++ == 1u) {
+                tag.value = "300";
+                break;
+            }
+        }
+        dx_data incompleteColor;
+        if (!import(invalidColor, binary, incompleteColor)
+            || incompleteColor.tables.size() != 1u
+            || incompleteColor.tables.front().m_semanticContentComplete)
+            return fail("unsupported row CMC index was accepted as complete");
+        for (const Tag& companion : {Tag{420, "1193046"},
+                                     Tag{430, "ColorBook$Entry"}}) {
+            Tags unsupportedColor = source();
+            auto tableTextColor = std::find_if(unsupportedColor.begin(),
+                unsupportedColor.end(), [](const Tag& tag) {
+                    return tag.code == 64;
+                });
+            if (tableTextColor == unsupportedColor.end())
+                return fail("could not locate cell text color field");
+            tableTextColor = std::find_if(std::next(tableTextColor),
+                unsupportedColor.end(), [](const Tag& tag) {
+                    return tag.code == 64;
+                });
+            if (tableTextColor == unsupportedColor.end())
+                return fail("could not locate table text color field");
+            unsupportedColor.insert(std::next(tableTextColor), companion);
+            dx_data incompleteCompanion;
+            if (!import(unsupportedColor, binary, incompleteCompanion)
+                || incompleteCompanion.tables.size() != 1u
+                || incompleteCompanion.tables.front().m_semanticContentComplete)
+                return fail("unsupported row true/color-book CMC companion was accepted");
         }
     }
     return true;
