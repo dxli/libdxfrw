@@ -57,9 +57,18 @@ same codec and confirms the dependency's typed fields by importing the DXF.
 No DWG/DXF fixture was added and no production code or support claim changed
 ([receipt](docs/research/p6-dxf-associative-dependency-objects-allocation-failure-retry-2026-11-08.json)).
 This is one base-dependency profile only; geometry/value dependency semantics,
-graph closure, and source-producer prevalence remain open. The next ready slice
-is the AC1024 `ACDBASSOCVALUEDEPENDENCY` allocation rollback/retry sweep, using
-the existing typed output/readback profile.
+graph closure, and source-producer prevalence remain open.
+
+**Implementation follow-up (2026-11-08):** the same fast target now also
+sweeps the AC1024 `ACDBASSOCVALUEDEPENDENCY` profile: 8/8 ASCII and 7/7 Binary
+callback allocations, with destination/source rollback, same-codec retry, and
+typed value-name/real-value readback. The base dependency remains covered at
+6/6 offsets per encoding. The combined [receipt](docs/research/p6-dxf-associative-dependency-objects-allocation-failure-retry-2026-11-08.json)
+limits this evidence to those generated record profiles; integer and geometry
+dependencies, graph closure, source prevalence, and support claims remain
+open. Next, add geometry-dependency allocation coverage only if its exact
+graph prerequisites can be exercised without broad adapter-preflight fault
+injection.
 
 **Resume checkpoint (2026-11-07):** the Mac session was unlocked and the
 audit-enabled ODA 27.1 GUI route has completed the AC1024 civil residual

@@ -2,35 +2,35 @@
   "schema": "libdxfrw.research-receipt.v1",
   "id": "p6-dxf-associative-dependency-objects-allocation-failure-retry-2026-11-08",
   "date": "2026-11-08",
-  "status": "GENERATED_AC1024_ASSOCIATIVE_DEPENDENCY_OBJECTS_ALLOCATION_ROLLBACK_RETRY_PASS",
+  "status": "GENERATED_AC1024_BASE_AND_VALUE_ASSOCIATIVE_DEPENDENCY_OBJECTS_ALLOCATION_ROLLBACK_RETRY_PASS",
   "supportClaimEffect": "none",
-  "scope": "Sweep allocations reached inside the AC1024 OBJECTS callback while emitting one typed ACDBASSOCDEPENDENCY record.",
+  "scope": "Sweep allocations reached inside the AC1024 OBJECTS callback while emitting typed ACDBASSOCDEPENDENCY and ACDBASSOCVALUEDEPENDENCY records.",
   "source": {
     "kind": "deterministic locally-authored in-memory DRW_AssociativeObject",
-    "profile": "One dependency record with class version 3, status -7, read/attached flags, dependency order -2, present name allocation-retry, null dependency references, and body id -9.",
+    "profile": "The base dependency profile has class version 3, status -7, read/attached flags, dependency order -2, present name allocation-retry, null dependency references, and body id -9. The value-dependency profile adds class version 0, name VALUE_DEPENDENCY, and a real value 12.5.",
     "fixtureFilesAdded": 0
   },
   "implementation": {
-    "parentCommit": "b94539c5",
+    "parentCommit": "07ca6f7a",
     "files": {
-      "tests/associative_dependency_allocation_tests.cpp": "1a159b9554bc6dd413743127dc65582ad050b1dc362ce1745929fc0f94942db9",
+      "tests/associative_dependency_allocation_tests.cpp": "ca55737ca976d52eca91c14749de9cbda9b41ec210d7d517be61cc0d2b3cd489",
       "tests/CMakeLists.txt": "4bd71e4d6dadadfd865415a2dba371d6edd5116ce9fb6ec174d86b4c338b9b12"
     },
-    "method": "Warm and calibrate callback allocations separately for ASCII and Binary. Inject std::bad_alloc at each reached offset; require failed whole-file publication, byte-identical destination sentinel preservation, caller-object preservation, same-codec retry, and fresh DXF typed readback of the dependency fields.",
+    "method": "Warm and calibrate each record profile in ASCII and Binary. Inject std::bad_alloc at every reached callback offset; require failed whole-file publication, byte-identical destination sentinel preservation, caller-object preservation, same-codec retry, and fresh DXF typed readback of the base and value-dependency fields.",
     "productionCodeChanged": false
   },
   "validation": {
     "configure": "cmake -S . -B build-gcc -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DLIBDXFRW_ENABLE_FREECAD_DESKTOP_CONTROL=OFF -DLIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_LINE_CONTROL=OFF: PASS",
     "build": "cmake --build build-gcc --target libdxfrw_associative_dependency_allocation_tests -j4: PASS",
     "focusedCTest": "ctest --test-dir build-gcc -R '^libdxfrw_associative_dependency_allocation_retry$' --output-on-failure: PASS 1/1",
-    "ascii": "6/6 callback allocation offsets injected; destination and source preserved; same-codec retry and typed dependency readback passed.",
-    "binary": "6/6 callback allocation offsets injected; destination and source preserved; same-codec retry and typed dependency readback passed.",
+    "ascii": "Base dependency: 6/6; value dependency: 8/8 callback allocation offsets injected. Destination and source were preserved; same-codec retry and typed readback passed.",
+    "binary": "Base dependency: 6/6; value dependency: 7/7 callback allocation offsets injected. Destination and source were preserved; same-codec retry and typed readback passed.",
     "fullSuites": "NOT RUN"
   },
   "limitations": [
     "Generated serialization and transaction evidence only; no physical producer prevalence or native associative semantics are established.",
-    "This sweep covers one base dependency record only; value/geometry dependencies, reference graph closure, and whole-drawing conversion remain outside scope.",
+    "The value dependency control covers only one AC1024 real-valued source profile; integer values, geometry dependencies, reference graph closure, and whole-drawing conversion remain outside scope.",
     "No support claim is promoted."
   ],
-  "nextAction": "Add the matching focused allocation rollback/retry slice for the AC1024 ACDBASSOCVALUEDEPENDENCY typed writer/readback profile; keep source and graph semantics independently gated."
+  "nextAction": "Add allocation rollback/retry coverage for a typed AC1024 ACDBASSOCGEOMDEPENDENCY profile only if its graph prerequisites can be represented and read back without broad adapter preflight injection; keep source and graph semantics independently gated."
 }
