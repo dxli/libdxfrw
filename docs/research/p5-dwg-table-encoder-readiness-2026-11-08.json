@@ -176,12 +176,28 @@
   },
   "first_candidate": {
     "version": "AC1018",
-    "profile": "one row, one column, one plain text value-content cell",
+    "profile": "one row, one column, one plain text value-content cell; direct generated codec additionally admits only the typed AC1018 cell override subset listed below",
+    "supportedGeneratedCodecCellOverrides": {
+      "0x00001": "cell alignment raw RS, values 1-9",
+      "0x00002": "group-283 background fill-state boolean retained verbatim in the current model",
+      "0x00004": "indexed background color CMC only",
+      "0x00008": "indexed content color CMC only",
+      "0x00010": "text-style H reference with DwgHardPointer role",
+      "0x00020": "positive finite text height BD",
+      "0x00040-0x00200": "four indexed physical-edge colors",
+      "0x00400-0x02000": "four physical-edge valid nonnegative lineweight enums",
+      "0x04000-0x20000": "four physical-edge explicit visibility booleans"
+    },
+    "supportedGeneratedCodecTableOverrides": {
+      "mask": "0x0000001f",
+      "fields": "title suppression, implicit-true header suppression, flow direction 0/1, finite nonnegative horizontal and vertical margins"
+    },
     "excluded": [
       "attributes and attribute definitions",
       "block-valued cells",
-      "overrides, merges, fields and data links",
-      "nondefault style/color, cache, geometry, or retained raw subrecords",
+      "unmodeled cell override bits, including physical-source masks 0x40000 and 0x40020",
+      "table merges, fields and data links",
+      "named/true-color cell CMC, non-indexed color side channels, cell style maps, cache, geometry, or retained raw subrecords",
       "any unmodeled or incomplete semantic data"
     ],
     "required_before_adapter_admission": [
