@@ -149,10 +149,17 @@ late-mutation refusal, sentinel preservation, and same-adapter retry still
 pass. See the [node dependency closure receipt](docs/research/p6-ac1024-mechanical-dimension-node-dependency-closure-2026-11-08.json).
 A locally authored graph without that source-bound profile is correctly
 refused by strict adapter preflight; do not manufacture a receipt or relax the
-gate. Next measure the existing physical route's OBJECTS callback allocation
-count and elapsed time. If a full callback sweep exceeds the fast-validation
-budget, split the proof into bounded source-backed record selections while
-retaining physical graph closure and destination-preserving retry checks.
+gate. A temporary scoped allocation/time probe measured the physical
+`writeObjects()` callback at 6,419 allocations / 19.1–19.5 ms for ASCII and
+6,321 allocations / 19.3–19.5 ms for Binary across the successful and expected
+late-mutation refusal attempts. The probe was removed after measurement. A
+full allocation-offset sweep would require thousands of callback attempts, so
+keep exhaustive fault injection on the bounded standalone pair/value writers
+and add only targeted callback failure points for the physical graph path.
+Continue the P4 census with the first saved OBJECTS profile whose source
+identity, owner/dependency roles, and byte/frame disposition are all closed;
+preserve the physical dimension graph and destination-retry gates. See the
+[callback cost receipt](docs/research/p6-ac1024-mechanical-objects-callback-cost-2026-11-08.json).
 
 **Resume checkpoint (2026-11-07):** the Mac session was unlocked and the
 audit-enabled ODA 27.1 GUI route has completed the AC1024 civil residual
