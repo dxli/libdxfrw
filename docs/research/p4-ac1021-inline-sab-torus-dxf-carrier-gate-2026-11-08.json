@@ -2,9 +2,9 @@
   "schema": "libdxfrw-research-receipt-v1",
   "id": "p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08",
   "date": "2026-11-08",
-  "status": "INLINE_SAB_SAT_V1_CONVERTER_AND_WRITER_GATE_IMPLEMENTED_GRAPH_CLOSURE_OPEN",
+  "status": "INLINE_SAB_AC1024_SELECTED_ASCII_BINARY_READBACK_PASS_SEMANTIC_QUALIFICATION_OPEN",
   "supportClaimEffect": "none",
-  "scope": "Implement the bounded SAB 21200 to SAT v1 conversion and AC1021 inline-SAB entity writer gate using the pinned physical payload and corrected LibreDWG differential output; retain graph, readback, and semantic gates.",
+  "scope": "Implement and qualify the source-bound AC1021 inline-SAB selected projection through AC1024 ASCII/Binary, exact SAT carrier and graph-role readback, failure rollback/retry, and retain strict full-source refusal.",
   "source": {
     "repository": "LibreDWG",
     "revision": "6d6a33987a1a97095b069c799c3d8a793320f812",
@@ -42,7 +42,7 @@
     }
   },
   "writerRouteResearch": {
-    "libdxfrw": "DWG-associated modeler DXF output currently admits the qualified AC1015 SAT-v1 profile or an R2013+ SAB record linked through ACDSDATA. The pinned AC1021 inline SAB matches neither path and is refused; do not relabel it as DataStorage or fabricate R2013+ shell fields.",
+    "libdxfrw": "Implemented bounded AC1021 E3DSOLID inline SAB 21200 to SAT v1 carrier route for AC1021/AC1024. Exact marker-bounded span and retained source frame are required. Selected source-class and graph-role closure is independent of ACDSDATA. Emitted group 70 is 1 for the SAT v1 carrier.",
     "libreDWG": {
       "file": "/Users/dli/dev/libredwg/src/out_dxf.c",
       "revision": "6d6a33987a1a97095b069c799c3d8a793320f812",
@@ -95,6 +95,11 @@
       "autodeskBinaryGroupRange": "https://help.autodesk.com/cloudhelp/2027/ENU/OARX-RefGuide/files/OARX-RefGuide-DXF_Group_Codes.html",
       "odaSpecification": "https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf",
       "odaSection": "\u00a720.4.41"
+    },
+    "odaCommonHandleFlag": {
+      "source": "ODA Open Design Specification v5.4.1 \u00a714.5.2 and common object handle stream",
+      "finding": "For R2004+, XDic Missing Flag 1 means no XDictionary handle is stored. The source history record has flag 1 and no xDict handle; DXF output omits the extension edge.",
+      "supportClaimEffect": "none"
     }
   },
   "reproductionResearch": {
@@ -147,12 +152,14 @@
       "supportClaimEffect": "none"
     },
     "fastFocusedControls": "cmake --build build --target libdxfrw_dwg_local_roundtrip -j4 \u2014 PASS; ctest --test-dir build -R \"^(acis_sab21200_sat_v1_token_controls|dxf_acsh_torus_typed_roundtrip|dxf_acsh_cmc_loss_guard)$\" --output-on-failure \u2014 3/3 PASS; git diff --check \u2014 PASS.",
-    "physicalWriterReadback": "NOT YET REACHED: selected physical projection remains refused at unresolved EvaluationGraph ownership before entity serialization; ASCII/Binary writer-gate output/readback and failure/retry are not qualified."
+    "physicalWriterReadback": "PASS for the selected AC1021 inline SAB v2 profile converted to AC1024 SAT v1. This does not qualify whole-drawing export, a native third-party reader, or ACIS geometry semantics.",
+    "selectedPhysicalProjection": "PASS using the hash-pinned wrapper and the existing external LibreDWG DWG (no fixture added): selected AC1024 ASCII and Binary output/readback pass; exact SAT v1 group-1 payload and history/EvaluationGraph/torus references read back; same-adapter rollback/retry passes in each encoding.",
+    "fullSourceStrictRefusal": "PASS: strict full-source export preserves its destination and remains refused at the unrelated DWG IMAGEDEF owner-role qualification gate; opaque-frame output gate remains unreached.",
+    "physicalSourceProbeCommand": "python3 tools/research/run_acsh_torus_source_probe.py <pinned DWG> /private/tmp/acsh-final-probe --probe build/libdxfrw_dwg_local_roundtrip \u2014 PASS after exact SHA-256 admission; selected AC1024 ASCII/Binary readback and failure/retry pass; strict full-source sentinel remains unchanged at IMAGEDEF owner-role gate."
   },
   "remaining": [
-    "Implement source-bound AC1021 EvaluationGraph/history/torus class and role closure without fabricating or routing through DataStorage; make selected projection reach the new entity writer route while preserving full-source refusal.",
-    "Exercise physical selected output through ASCII and Binary, verify exact SAT carrier and graph-role readback, and prove destination/caller rollback plus same-adapter retry on injected failure.",
-    "Obtain independent ACIS kernel/native CAD semantic evidence; corrected LibreDWG byte match and local parser/converter controls do not establish geometry semantics."
+    "Obtain independent native ACIS/CAD semantic evidence for the exact 0x452 SAT v1 output and 0x452\u21920x453\u21920x454\u21920x455 history graph; local readback and LibreDWG differential equality do not establish geometry semantics.",
+    "Qualify broader native consumer and platform behavior after independent semantic evidence is available. Keep AC1024/1027/1032 source profiles and unrelated whole-source IMAGEDEF/opaque-frame refusal gates separate."
   ],
   "implementation": {
     "converter": "drw_convertSabToSatV1 parses only complete ACIS BinaryFile version-21200 SAB with an explicit terminal record and serializes the observed SAT v1 profile; output is committed only on success.",
@@ -162,6 +169,8 @@
       "sha256": "5d82bceb0e931e4ac2c11a86fa5706e9621567990bdcaf200d607ed0a46ba7b0",
       "peer": "corrected LibreDWG scratch revision 6d6a33987a1a97095b069c799c3d8a793320f812",
       "effect": "byte comparison only; not independent semantic evidence"
-    }
+    },
+    "sourceBoundClosure": "Unique selected AC1021 solid/history/EvaluationGraph/torus chain is validated independently of DataStorage; raw ACSH objects and the typed EvaluationGraph are written as selected records. The layer-0 extension DICTIONARY closure is retained.",
+    "readbackAndRetry": "Selected AC1024 ASCII and Binary outputs are reimported; SAT bytes, carrier group/version, and remapped solid\u2192history\u2192EvaluationGraph\u2192torus roles are checked. A changed span-confidence bit forces atomic refusal with sentinel preserved, then restoring the source evidence and retrying with the same adapter succeeds."
   }
 }

@@ -721,80 +721,22 @@ source-bound history path `0x452 → 0x453 → 0x454 → 0x455`. Never synthesiz
 physical source DataStorage record or call this graph an ACDSDATA record
 selection.
 
-**Next implementation slice — resolve the inline-SAB to DXF carrier route:**
-1. Hash-pin the manual source probe before import. The wrapper
-   `tools/research/run_acsh_torus_source_probe.py` streams SHA-256 and accepts
-   only the receipt's exact LibreDWG source digest; the C++ inspector then
-   verifies unique graph roles, inline-SAB signature/terminator/span, payload
-   length/modeler version and DataStorage absence. Keep the external DWG/DXF
-   outside the repository; do not check in a fixture.
-2. Trace the current writer gate for this exact source entity in both target
-   DXF families. The code admits DWG-associated AC1015 SAT-v1 payloads and
-   R2013+ SAB linked through ACDSDATA; the AC1021 inline SAB is neither, so it
-   must not be relabeled or emitted by filtering the containing drawing.
-3. Resolve the standards-backed conversion route before production changes:
-   either preserve this source carrier in a documented DXF representation, or
-   create the later ACDSDATA envelope only if its modeler shell fields and
-   carrier conversion are supported by an authoritative spec plus eligible
-   producer output. LibreDWG's SAB-to-SAT conversion is a useful implementation
-   comparison, not independent semantic proof. Do not invent group-290/UID
-   values, translate the SAB terminator by guess, or count parser agreement as
-   geometry validation. Autodesk's current 3DSOLID DXF reference lists version
-   group 70, proprietary SAT strings in groups 1/3 and the history soft-owner
-   group 350; the generic 310 binary-chunk code is not specified for 3DSOLID,
-   so do not infer that it carries SAB. ODA §20.4.41 distinguishes inline
-   version-2 DWG SAB by the `ACIS BinaryFile` header and tagged terminator.
-   The existing LibreDWG peer output for this exact source emits handle `452`
-   with group 70 = 1 and history `453`, but no groups 1/3/310. A fresh local
-   LibreDWG 0.14 conversion reproduced that ten-pair record, while verbose
-   conversion of the full drawing did not bind a SAB-to-SAT trace to this
-   output entity. Treat this as a negative peer observation, not a positive
-   carrier witness. A fresh `dwg2dxf -v5 --as r2010` trace for the pinned
-   source binds handle `0x452` to `ACIS BinaryFile` SAB v2 and enters the
-   converter. LibreDWG `src/out_dxf.c` then stores the final short SAT chunk at
-   index `i` but assigns `_obj->num_blocks = i`; the DXF writer iterates only
-   to `num_blocks`, so it omits that final chunk (and group 1/3) when the
-   output fits one chunk. The reproduced entity still has only groups 70 and
-   350. This explains the negative peer output as a serializer defect; it is
-   not a positive carrier witness. A disposable archive of LibreDWG revision
-   `6d6a33987a1a97095b069c799c3d8a793320f812` was rebuilt with only the
-   final count corrected to `i + 1`; conversion of the hash-pinned source
-   then emitted 17 group-1 SAT chunks for handle `0x452` (plus groups 70 and
-   350). The unmodified output had no SAT groups. This is an implementation
-   comparison and a concrete carrier-format control, not independent
-   producer or geometry evidence. Use its bytes as a differential target for
-   the local SAB-to-SAT implementation, then require a native independent
-   reader/semantic check before promoting support. The
-   installed ODA File Converter's direct CLI route still aborts before
-   conversion with PasteBoard/XPC errors. On 2026-11-08 the user reported
-   unlocking the Mac; a fresh `--help` startup attempt still exited 134 with
-   PasteBoard `-4960` errors and an invalid `com.apple.hiservices-xpcservice`
-   connection before opening an input. This is a platform/tool initialization
-   failure, not evidence about the drawing. Do not repeat the same direct
-   launch; use a materially different supported GUI/session route or continue
-   local work. The functioning GUI route does not bind a SAB
-   carrier to this entity. The scratch-corrected LibreDWG output provides an
-   implementation-derived carrier reference only; seek independent producer
-   and native-reader evidence before promoting the profile.
-   See the [Autodesk 3DSOLID DXF
-   reference](https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-19AB1C40-0BE0-4F32-BCAB-04B37044A0D3.htm),
-   [ODA v5.4.1 §20.4.41](https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf),
-   and the [carrier gate receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).
-4. Close the selected layer-0 extension dictionary `0x1C1` (decimal handle
-   449) and its child records; do not confuse decimal diagnostic handles with
-   hexadecimal DWG handles. The scratch projection now carries that exact
-   typed closure. Its next refusal is `EvaluationGraph owner is unresolved or
-   not representable`: the typed ACDS collector is only entered when
-   `dataStorageSections` is nonempty, while this AC1021 source has no
-   DataStorage and no same-profile raw DXF history receipt. Do not route these
-   DWG-origin records through that DataStorage-only collector or synthesize an
-   ACDSDATA envelope. First define a dedicated inline-SAB projection contract
-   with source-class and graph-role closure independent of DataStorage;
-   implement a carrier only if the DXF schema and an eligible producer
-   witness establish its representation. Require exact carrier and graph-role
-   readback, rollback plus corrected retry for injectable dependency failures,
-   and the same complete-source refusal guard. Generated-output checks remain
-   separate from physical-source evidence.
+**Completed implementation slice — AC1021 inline-SAB selected route:** the
+hash-pinned probe verifies the exact input before import; the AC1021 source
+profile now converts inline SAB v2 to the schema-backed SAT v1 text carrier,
+closes the exact history/EvaluationGraph/torus and layer extension roles
+without DataStorage, and emits the selection to AC1024 ASCII and Binary. Both
+outputs pass exact SAT carrier and graph-role readback. An injected source-span
+qualification failure preserves the destination; correcting it and retrying
+with the same adapter succeeds. Strict whole-source output still refuses at
+the unrelated IMAGEDEF owner role. The corrected LibreDWG bytes are a
+differential target only; independent native/semantic validation remains open.
+See the [inline-SAB carrier gate receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).
+
+**Next:** seek independent ACIS/native CAD semantic evidence for this exact
+carrier and graph; then qualify broader native consumer/platform behavior.
+Do not promote support from the local reader/writer loop or the LibreDWG
+comparison. Keep full-source IMAGEDEF and opaque-frame output gates separate.
 
 Use the pinned existing local source only as an opt-in/manual probe. During the
 edit loop, rebuild `libdxfrw_dwg_local_roundtrip` once and run the hash-pinned
@@ -809,22 +751,19 @@ before invoking the C++ inspector; a one-byte-mutated scratch copy is refused
 before import. The inspector requires unique graph roles,
 the exact inline SAB signature and tagged terminator, the 1,059-byte payload,
 the AC1021/modeler-version-2 identity, and absence of a DataStorage link. The
-opt-in `--check-acsh-torus-source-projection` attempts selected ASCII and
-Binary output from a scratch projection; both are refused without replacing a
-sentinel. The projection includes the exact layer-0 extension DICTIONARY
-closure (`0x1C1`, decimal handle 449), then stops at extension-graph
-validation: `EvaluationGraph owner is unresolved or not representable`. The
-typed ACDS collector is gated on a nonempty DataStorage section, which this
-AC1021 source does not have. Do not reuse that DataStorage-only collector or
-synthesize an ACDSDATA envelope for this inline-SAB source. After the user
-reported unlocking the Mac, a fresh ODA 27.1 `--help` startup attempt still
-exited 134 during PasteBoard/XPC initialization before processing an input;
-this produced no drawing-level evidence. The probe validates atomic refusal but does not
-reach the modeler serializer or qualify the inline-SAB carrier gate. Strict
-full-source export also preserves its destination but stops first at the
-unrelated unqualified DWG IMAGEDEF owner role, so the later opaque-frame gate
-was not reached. A fresh LibreDWG 0.14 peer conversion again emitted only
-group 70 and history handle `453` for output handle `452`. The later verbose LibreDWG trace shows
+opt-in `--check-acsh-torus-source-projection` now emits selected AC1024 DXF in
+ASCII and Binary and verifies readback of the exact converted SAT bytes plus
+the solid→history→EvaluationGraph→torus handle roles. Both encodings pass a
+same-adapter retry after an injected source-span qualification failure, with
+the prior destination preserved on failure. The selection includes the exact
+layer-0 extension DICTIONARY closure (`0x1C1`, decimal handle 449). No physical
+source DataStorage record or ACDSDATA envelope is created. Strict full-source
+export still preserves its destination and stops first at the unrelated
+unqualified DWG IMAGEDEF owner role, so the opaque-frame gate remains open.
+After the user-reported unlock, ODA 27.1 still aborts during PasteBoard/XPC
+startup before reading an input; this produced no drawing-level evidence. A
+fresh LibreDWG 0.14 peer conversion again emitted only group 70 and history
+handle `453` for output handle `452`. The later verbose LibreDWG trace shows
 that its SAB-to-SAT converter runs for handle `0x452`, but the source writer
 sets the emitted chunk count to the last chunk index and consequently omits
 the final chunk; the exact output entity has only groups 70 and 350. This is a
@@ -835,9 +774,11 @@ from `i` to `i + 1`; its conversion emits 17 group-1 SAT chunks for handle
 This gives a peer-derived byte target for implementing our own SAB-to-SAT
 route, but does not independently validate the DXF carrier or geometry. The
 post-unlock ODA startup retry still aborts before conversion during
-PasteBoard/XPC initialization. The generated TORUS/CMC controls pass (2/2); no
-fixture was added. These are refusal results, not successful physical-source
-output. See the [inline-SAB carrier gate receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).
+PasteBoard/XPC initialization. The generated TORUS/CMC controls and physical
+selected-output probe pass; no fixture was added. This qualifies the local
+carrier and graph transport for the selected profile, not independent CAD
+semantics or whole-document support. See the [inline-SAB carrier gate
+receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).
 
 **Implementation progress (2026-11-08):** a bounded AC1021 inline SAB v2
 converter now parses the observed version-21200 token profile and emits SAT v1
@@ -848,13 +789,16 @@ The `writeModelerGeometry` entity route admits only an AC1021 E3DSOLID whose
 single exact SAB body span, retained source frame, header/version, and absence
 of DataStorage all match this profile; it converts only for AC1021/AC1024
 targets. Generated token controls and existing TORUS/CMC tests pass (3/3),
-with no fixtures added. This is differential conversion and writer-gate
-implementation, not physical output/readback: the selected graph still stops
-before entity serialization at unresolved EvaluationGraph ownership, and no
-independent CAD reader or geometry-kernel evidence exists. Keep support claims
-unchanged. Next implement source-bound EvaluationGraph/history/torus closure
-without routing through ACDSDATA, then exercise this writer gate in ASCII and
-Binary with exact readback, allocation rollback/retry, and full-source refusal.
+with no fixtures added. A source-bound inline-SAB/history closure now admits
+only the unique `0x452 → 0x453 → 0x454 → 0x455` profile without routing
+through ACDSDATA. Selected AC1024 ASCII and Binary export pass exact SAT
+carrier readback, typed EvaluationGraph and raw ACSH owner/expression
+readback, plus same-adapter failure/retry with destination preservation.
+Full-source strict refusal still passes at the unrelated IMAGEDEF owner role.
+The hash-pinned physical probe and focused token/TORUS/CMC controls pass; no
+fixtures were added. This is local carrier and graph transport evidence, not
+independent CAD semantics or whole-document support. Keep support claims
+unchanged and retain the independent semantic and broader consumer gates.
 
 The local P6 AC1027
 source-reference inventory is complete, with

@@ -2819,7 +2819,8 @@ public:
             }
         }
         objectWritePhase = "ACDS records";
-        if (!cData->dataStorageSections.empty()) {
+        if (!cData->dataStorageSections.empty()
+            || !m_acdsTypedHistoryObjects.empty()) {
             if (!m_acdsTypedHistoryObjects.empty()) {
                 for (DRW_RawDxfObject& object : m_acdsTypedHistoryObjects) {
                     if (object.handle == 0
@@ -2890,7 +2891,9 @@ public:
         // The bounded typed EvaluationGraph writer is independently usable
         // for ordinary DXF input. AC1027 DataStorage closures stay on their
         // stricter proxy-graph gate until ACSH field serialization is complete.
-        if (cData->dataStorageSections.empty() && m_acdsDxfHistoryObjects.empty()) {
+        if (cData->dataStorageSections.empty()
+            && m_acdsDxfHistoryObjects.empty()
+            && m_acdsTypedHistoryObjects.empty()) {
             for (DRW_EvaluationGraph& graph : cData->evaluationGraphs) {
                 if (!dxfW->writeEvaluationGraph(
                         &graph, "ACAD_EVALUATION_GRAPH")) {

@@ -9130,9 +9130,67 @@ bool dx_iface::collectAcdsTypedPrimitiveHistoryObjects(
         }
         return false;
     };
-    if (data.dataStorageSections.empty() || !data.proxyObjects.empty()
+    const auto isQualifiedAc1021InlineSabModeler = [](
+            const DRW_ModelerGeometry& modeler) {
+        if (modeler.eType != DRW::E3DSOLID
+            || modeler.m_dwgSourceVersion != DRW::AC1021
+            || modeler.m_modelerVersion != 2u || modeler.m_isEmpty
+            || !modeler.m_hasModelerData || modeler.m_objectSize == 0u
+            || modeler.m_rawBytes.size() != modeler.m_objectSize
+            || modeler.m_dwgAcisPayload.empty()
+            || modeler.m_payloadRanges.size() != 1u
+            || modeler.hasDataStorageRecord
+            || modeler.hasDataStorageBinaryData()
+            || !modeler.dataStorageData.empty())
+            return false;
+        const DRW_ModelerPayloadRange& range =
+            modeler.m_payloadRanges.front();
+        if (range.m_kind != DRW_ModelerPayloadRange::Kind::Sab
+            || range.m_section != DRW_ModelerPayloadRange::Section::Body
+            || range.m_consistency
+                   != DRW_ModelerPayloadRange::Consistency::Exact
+            || range.m_confidence
+                   != DRW_ModelerPayloadRange::Confidence::Marker
+            || range.m_length != modeler.m_dwgAcisPayload.size()
+            || range.m_bitOffset >= 8u)
+            return false;
+        DRW_SabData sab;
+        return drw_parseSab(modeler.m_dwgAcisPayload.data(),
+                            modeler.m_dwgAcisPayload.size(), sab)
+            && sab.header.signature == "ACIS BinaryFile"
+            && sab.header.version == 21200;
+    };
+    bool hasQualifiedInlineSabModeler = false;
+    const auto findInlineSabModeler = [&](const dx_ifaceBlock* block) {
+        if (block == nullptr)
+            return true;
+        for (const DRW_Entity* entity : block->ent) {
+            if (entity == nullptr || entity->eType != DRW::E3DSOLID)
+                continue;
+            const auto* modeler =
+                static_cast<const DRW_ModelerGeometry*>(entity);
+            if (modeler->m_dwgAcisPayload.empty())
+                continue;
+            if (!isQualifiedAc1021InlineSabModeler(*modeler)
+                || hasQualifiedInlineSabModeler)
+                return false;
+            hasQualifiedInlineSabModeler = true;
+        }
+        return true;
+    };
+    if (data.sourceFormat == dx_source_format::DWG
+        && data.sourceVersion == DRW::AC1021) {
+        if (!findInlineSabModeler(data.mBlock))
+            return reject("multiple or unqualified AC1021 inline SAB modelers");
+        for (const dx_ifaceBlock* block : data.blocks) {
+            if (block != data.mBlock && !findInlineSabModeler(block))
+                return reject("multiple or unqualified AC1021 inline SAB modelers");
+        }
+    }
+    if ((data.dataStorageSections.empty() && !hasQualifiedInlineSabModeler)
+        || !data.proxyObjects.empty()
         || !data.rawProxyObjects.empty()) {
-        return reject("typed lane requires DataStorage and no proxy records");
+        return reject("typed lane requires a qualified carrier and no proxy records");
     }
     if (!data.dwgClassCoverage.m_complete
         || data.dwgClassCoverage.m_status
@@ -9190,7 +9248,10 @@ bool dx_iface::collectAcdsTypedPrimitiveHistoryObjects(
     const auto commonLinksAreEmpty = [](const DRW_TableEntry& object) {
         return object.extData.empty() && object.appData.empty()
             && object.reactorHandles.empty() && object.xDictHandle == 0
-            && object.extensionDictionaryFlag() == 0;
+            // ODA §14.5.2 defines the R2004+ XDic Missing Flag as 1 when
+            // no XDictionary handle is stored. This is the normal no-dict
+            // state and does not represent an omitted DXF extension edge.
+            && object.extensionDictionaryFlag() <= 1u;
     };
     const auto historyNodeColorIsDxfRepresentable = [](
             const DRW_AcShHistoryObject::HistoryNodePrefix& color) {
@@ -9234,14 +9295,19 @@ bool dx_iface::collectAcdsTypedPrimitiveHistoryObjects(
     }
 
     std::vector<const DRW_ModelerGeometry*> modelers;
-    const auto inspect = [&modelers](const dx_ifaceBlock* block) {
+    const auto inspect = [&modelers,
+                          &isQualifiedAc1021InlineSabModeler](
+            const dx_ifaceBlock* block) {
         if (block == nullptr)
             return true;
         for (const DRW_Entity* entity : block->ent) {
             if (entity == nullptr
                 || (!entity->hasDataStorageRecord
                     && !entity->hasDataStorageBinaryData()
-                    && entity->dataStorageData.empty())) {
+                    && entity->dataStorageData.empty()
+                    && (entity->eType != DRW::E3DSOLID
+                        || !isQualifiedAc1021InlineSabModeler(
+                            *static_cast<const DRW_ModelerGeometry*>(entity))))) {
                 continue;
             }
             if (entity->eType != DRW::E3DSOLID
@@ -9344,6 +9410,9 @@ bool dx_iface::collectAcdsTypedPrimitiveHistoryObjects(
             return reject("modeler history handle is not typed",
                           modeler->m_historyHandle);
         const DRW_AcShHistoryObject& history = *historyIt->second;
+        const bool historyCommonLinksEmpty = commonLinksAreEmpty(history);
+        const bool historyPrefixesComplete = hasCompletePrefixes(history, {
+            DRW_AssociativePrefixStatus::Kind::AcDbShHistoryNode});
         if (history.m_recordName != "ACSH_HISTORY_CLASS"
             || history.parentHandle != modeler->handle
             || history.m_ownerHandle == 0
@@ -9353,9 +9422,7 @@ bool dx_iface::collectAcdsTypedPrimitiveHistoryObjects(
                    std::numeric_limits<std::int32_t>::max())
             || history.m_historyNodeId > static_cast<std::uint32_t>(
                    std::numeric_limits<std::int32_t>::max())
-            || !commonLinksAreEmpty(history)
-            || !hasCompletePrefixes(history, {
-                DRW_AssociativePrefixStatus::Kind::AcDbShHistoryNode})) {
+            || !historyCommonLinksEmpty || !historyPrefixesComplete) {
             return reject("history object owner or body is incomplete",
                           history.handle);
         }
@@ -15987,11 +16054,100 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                 && object.parentHandle == graphHandle;
                         });
                 };
+            const auto isSelectedAc1021InlineSabHistoryOwner =
+                [data](std::uint32_t historyHandle) {
+                    if (data->sourceFormat != dx_source_format::DWG
+                        || data->sourceVersion != DRW::AC1021
+                        || data->acshHistoryObjects.size() != 2u
+                        || data->evaluationGraphs.size() != 1u)
+                        return false;
+                    const DRW_AcShHistoryObject* history = nullptr;
+                    const DRW_AcShHistoryObject* torus = nullptr;
+                    for (const DRW_AcShHistoryObject& object :
+                         data->acshHistoryObjects) {
+                        if (object.handle == historyHandle
+                            && object.m_recordName == "ACSH_HISTORY_CLASS")
+                            history = &object;
+                        if (object.m_recordName == "ACSH_TORUS_CLASS")
+                            torus = &object;
+                    }
+                    if (history == nullptr || torus == nullptr
+                        || history->m_ownerHandle == 0u
+                        || history->parentHandle == 0u
+                        || torus->parentHandle != history->m_ownerHandle)
+                        return false;
+                    const DRW_EvaluationGraph& graph =
+                        data->evaluationGraphs.front();
+                    if (graph.handle != history->m_ownerHandle
+                        || graph.parentHandle != history->handle
+                        || graph.m_nodes.size() != 1u || !graph.m_edges.empty()
+                        || graph.m_nodes.front().m_expressionHandle
+                            != torus->handle)
+                        return false;
+                    std::size_t modelerMatches = 0u;
+                    const auto matchesModeler = [&](const dx_ifaceBlock* block) {
+                        if (block == nullptr)
+                            return true;
+                        for (const DRW_Entity* entity : block->ent) {
+                            if (entity == nullptr
+                                || entity->eType != DRW::E3DSOLID)
+                                continue;
+                            const auto* modeler =
+                                static_cast<const DRW_ModelerGeometry*>(entity);
+                            if (modeler->handle != history->parentHandle)
+                                continue;
+                            ++modelerMatches;
+                            if (modeler->m_historyHandle != history->handle
+                                || modeler->m_dwgSourceVersion != DRW::AC1021
+                                || modeler->m_modelerVersion != 2u
+                                || modeler->m_isEmpty
+                                || !modeler->m_hasModelerData
+                                || modeler->m_dwgAcisPayload.empty()
+                                || modeler->m_payloadRanges.size() != 1u
+                                || modeler->hasDataStorageRecord
+                                || modeler->hasDataStorageBinaryData()
+                                || !modeler->dataStorageData.empty())
+                                return false;
+                            const DRW_ModelerPayloadRange& range =
+                                modeler->m_payloadRanges.front();
+                            if (range.m_kind
+                                    != DRW_ModelerPayloadRange::Kind::Sab
+                                || range.m_section
+                                    != DRW_ModelerPayloadRange::Section::Body
+                                || range.m_consistency
+                                    != DRW_ModelerPayloadRange::Consistency::Exact
+                                || range.m_confidence
+                                    != DRW_ModelerPayloadRange::Confidence::Marker
+                                || range.m_length
+                                    != modeler->m_dwgAcisPayload.size()
+                                || range.m_bitOffset >= 8u)
+                                return false;
+                            DRW_SabData sab;
+                            return drw_parseSab(
+                                    modeler->m_dwgAcisPayload.data(),
+                                    modeler->m_dwgAcisPayload.size(), sab)
+                                && sab.header.signature == "ACIS BinaryFile"
+                                && sab.header.version == 21200;
+                        }
+                        return true;
+                    };
+                    if (!matchesModeler(data->mBlock))
+                        return false;
+                    for (const dx_ifaceBlock* block : data->blocks) {
+                        if (block != data->mBlock && !matchesModeler(block))
+                            return false;
+                    }
+                    if (modelerMatches != 1u)
+                        return false;
+                    return true;
+                };
             const auto hasEvaluationGraphOwner = [&hasParent, data,
-                                                  &isSelectedDynamicBlockGraphOwner](
+                &isSelectedDynamicBlockGraphOwner,
+                &isSelectedAc1021InlineSabHistoryOwner](
                     std::uint32_t parent) {
                 return hasParent(parent)
                     || isSelectedDynamicBlockGraphOwner(parent)
+                    || isSelectedAc1021InlineSabHistoryOwner(parent)
                     || (data->hasNamedObjectDictionary
                         && data->namedObjectDictionary.handle != 0
                         && data->namedObjectDictionary.handle != DRW::NoHandle
@@ -15999,14 +16155,25 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
             };
             for (const DRW_EvaluationGraph& graph : data->evaluationGraphs) {
                 const bool selectedHistory = selectedAcdsHistoryOwners.count(graph.parentHandle) != 0u;
-                if (!examineEdge()
-                    || (!selectedHistory && !hasEvaluationGraphOwner(graph.parentHandle)))
+                const bool edgeBudgetAccepted = examineEdge();
+                const bool graphOwnerAccepted = hasEvaluationGraphOwner(
+                    graph.parentHandle);
+                if (!edgeBudgetAccepted
+                    || (!selectedHistory && !graphOwnerAccepted)) {
                     return reject(ExtensionGraphFailure::InvalidGraph,
                         "EvaluationGraph owner is unresolved or not representable");
+                }
                 for (const DRW_EvaluationGraphNode& node : graph.m_nodes) {
+                    const bool selectedInlineSabExpression =
+                        isSelectedAc1021InlineSabHistoryOwner(
+                            graph.parentHandle)
+                        && !graph.m_nodes.empty()
+                        && node.m_expressionHandle
+                            == graph.m_nodes.front().m_expressionHandle;
                     if (!examineEdge() || node.m_expressionHandle == 0
                         || node.m_expressionHandle == DRW::NoHandle
-                        || sourceHandles.count(node.m_expressionHandle) == 0)
+                        || (sourceHandles.count(node.m_expressionHandle) == 0
+                            && !selectedInlineSabExpression))
                         return reject(ExtensionGraphFailure::InvalidGraph,
                             "EvaluationGraph expression target is unresolved or not representable");
                 }
@@ -83977,7 +84144,29 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             return false;
         }
     }
-    if (!cData->dataStorageSections.empty()) {
+    bool hasAc1021InlineSabSource = false;
+    if (cData->sourceFormat == dx_source_format::DWG
+        && cData->sourceVersion == DRW::AC1021) {
+        const auto inspectInlineSab = [&hasAc1021InlineSabSource](
+                const dx_ifaceBlock* block) {
+            if (block == nullptr)
+                return;
+            for (const DRW_Entity* entity : block->ent) {
+                if (entity != nullptr && entity->eType == DRW::E3DSOLID
+                    && !static_cast<const DRW_ModelerGeometry*>(entity)
+                            ->m_dwgAcisPayload.empty()) {
+                    hasAc1021InlineSabSource = true;
+                    return;
+                }
+            }
+        };
+        inspectInlineSab(cData->mBlock);
+        for (const dx_ifaceBlock* block : cData->blocks) {
+            if (block != cData->mBlock)
+                inspectInlineSab(block);
+        }
+    }
+    if (!cData->dataStorageSections.empty() || hasAc1021InlineSabSource) {
         const auto failAcdsExport = [&]() {
             delete dxfW;
             dxfW = nullptr;
@@ -84648,7 +84837,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             return false;
         }
     }
-    if (!cData->dataStorageSections.empty()) {
+    if (!cData->dataStorageSections.empty()
+        || !m_acdsTypedHistoryObjects.empty()) {
         for (const DRW_RawDxfObject& object : m_acdsHistoryObjects) {
             if (!proxyHandles.insert(object.handle).second
                 || !dxfW->reserveHandle(object.handle)) {
@@ -84666,14 +84856,16 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 return false;
             }
         }
-        for (const DRW_EvaluationGraph& graph :
-             m_acdsTypedEvaluationGraphs) {
-            if (graph.handle == 0
-                || !proxyHandles.insert(graph.handle).second
-                || !dxfW->reserveHandle(graph.handle)) {
-                delete dxfW;
-                dxfW = nullptr;
-                return false;
+        if (!cData->dataStorageSections.empty()) {
+            for (const DRW_EvaluationGraph& graph :
+                 m_acdsTypedEvaluationGraphs) {
+                if (graph.handle == 0
+                    || !proxyHandles.insert(graph.handle).second
+                    || !dxfW->reserveHandle(graph.handle)) {
+                    delete dxfW;
+                    dxfW = nullptr;
+                    return false;
+                }
             }
         }
         for (const std::uint32_t handle : m_acdsMaterialHandles) {

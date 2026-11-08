@@ -2134,7 +2134,7 @@ bool hasQualifiedAc1021InlineSab21200Payload(
         || range.m_consistency != DRW_ModelerPayloadRange::Consistency::Exact
         || range.m_confidence != DRW_ModelerPayloadRange::Confidence::Marker
         || range.m_length != entity.m_dwgAcisPayload.size()
-        || range.m_bitOffset != 0u)
+        || range.m_bitOffset >= 8u)
         return false;
 
     try {
@@ -16716,7 +16716,10 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
         if (ent->m_hasDxfModelerUid)
             writer->writeUtf8String(2, ent->m_dxfModelerUid);
     } else {
-        writer->writeInt16(70, ent->m_modelerVersion);
+        // The inline SAB v2 source is converted to the SAT v1 text carrier;
+        // DXF group 70 identifies the emitted carrier version.
+        writer->writeInt16(70, writeAc1021InlineSab21200
+            ? 1 : ent->m_modelerVersion);
     }
     if (writeAc1015SatV1) {
         if (!writeDxfSatV1Text(writer.get(), ent->m_dwgAcisPayload))
