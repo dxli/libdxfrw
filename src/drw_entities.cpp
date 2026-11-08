@@ -3434,6 +3434,7 @@ bool parseR2007TableCell(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf
 
 bool skipR2007TableOverrides(DRW::Version version, dwgBuffer *buf,
                              dwgBuffer *strBuf, dwgBuffer *hdlBuf,
+                             DRW_Table& table,
                              bool& semanticComplete,
                              std::vector<DRW_DwgSubrecordRange> *ranges,
                              const TableDwgBounds& bounds) {
@@ -3455,21 +3456,42 @@ bool skipR2007TableOverrides(DRW::Version version, dwgBuffer *buf,
             return false;
         if ((flags & ~0x007FFFFFu) != 0u)
             return false;
-        if (flags != 0u)
+        table.m_tableOverrideFlags = flags;
+        constexpr std::uint32_t retainedFlags = 0x0000001Fu;
+        if ((flags & ~retainedFlags) != 0u)
             semanticComplete = false;
         ++maskCount;
-        if (flags & 0x000001)
-            if (!skipTableBit(*buf, bounds.bodyEndBit))
+        if (flags & 0x000001u) {
+            if (!readBoundedBit(*buf, bounds.bodyEndBit,
+                                table.m_titleSuppressed))
                 return false;
-        if (flags & 0x000004)
-            if (!skipTableBitShort(*buf, bounds.bodyEndBit))
+        }
+        if (flags & 0x000002u)
+            table.m_headerSuppressed = true;
+        if (flags & 0x000004u) {
+            std::uint16_t flowDirection = 0;
+            if (!readBoundedBitShort(*buf, bounds.bodyEndBit, flowDirection))
                 return false;
-        if (flags & 0x000008)
-            if (!skipTableBitDouble(*buf, bounds.bodyEndBit))
+            table.m_flowDirection = static_cast<int>(flowDirection);
+            if (flowDirection > 1u)
+                semanticComplete = false;
+        }
+        if (flags & 0x000008u) {
+            if (!readBoundedBitDouble(*buf, bounds.bodyEndBit,
+                                      table.m_horizontalCellMargin))
                 return false;
-        if (flags & 0x000010)
-            if (!skipTableBitDouble(*buf, bounds.bodyEndBit))
+            if (!std::isfinite(table.m_horizontalCellMargin)
+                || table.m_horizontalCellMargin < 0.0)
+                semanticComplete = false;
+        }
+        if (flags & 0x000010u) {
+            if (!readBoundedBitDouble(*buf, bounds.bodyEndBit,
+                                      table.m_verticalCellMargin))
                 return false;
+            if (!std::isfinite(table.m_verticalCellMargin)
+                || table.m_verticalCellMargin < 0.0)
+                semanticComplete = false;
+        }
         if ((flags & 0x000020)
             && !readTableCmColor(version, buf, strBuf, bounds))
             return false;
@@ -13590,7 +13612,8 @@ bool DRW_Table::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
     }
     if (cellsParseComplete) {
         const bool tableOverridesParsed = skipR2007TableOverrides(
-            version, buf, cellStrBuf, &hBuff, m_semanticContentComplete,
+            version, buf, cellStrBuf, &hBuff, *this,
+            m_semanticContentComplete,
             &m_content.m_subrecordRanges, tableBounds);
         if (!tableOverridesParsed)
             m_semanticContentComplete = false;

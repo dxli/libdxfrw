@@ -36618,6 +36618,132 @@ DRW_Table makeTextTableControl() {
     return table;
 }
 
+bool tableScalarOverrideOutput(bool binary) {
+    const auto nonce = static_cast<std::uint64_t>(
+        std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto directory = std::filesystem::temp_directory_path()
+        / ("libdxfrw-table-scalar-overrides-" + std::to_string(nonce)
+           + (binary ? "-binary" : "-ascii"));
+    std::filesystem::create_directories(directory);
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ec;
+            std::filesystem::remove_all(path, ec);
+        }
+    } cleanup{directory};
+
+    dx_data data;
+    dx_iface writer;
+    writer.cData = &data;
+    writer.currentBlock = data.mBlock;
+    DRW_Table table = makeTextTableControl();
+    table.m_tableOverrideFlags = 0x0000001Fu;
+    // Exercise selected default values as well as the implicit R2007 header
+    // suppression value. The override mask preserves explicit presence.
+    table.m_titleSuppressed = false;
+    table.m_headerSuppressed = true;
+    table.m_flowDirection = 0;
+    table.m_horizontalCellMargin = 0.0;
+    table.m_verticalCellMargin = 0.0;
+    writer.addTable(table);
+
+    const auto output = directory / "table.dxf";
+    const auto exportCurrent = [&]() {
+        return writer.fileExport(
+            output.string(), DRW::AC1021, binary, &data, false, false,
+            dx_dxfSourceTextPolicy::Compatible,
+            DRW::DxfTextWritePolicy::Compatible,
+            dx_dxfProxyGraphicsPolicy::FailIfNotPreserved);
+    };
+    const auto checkReadback = [&]() {
+        dx_data readback;
+        dx_iface reader;
+        if (!reader.fileImport(output.string(), &readback, false)
+            || readback.tables.size() != 1u)
+            return false;
+        const DRW_Table& actual = readback.tables.front();
+        return actual.m_tableOverrideFlags == 0x0000001Fu
+            && !actual.m_titleSuppressed && actual.m_headerSuppressed
+            && actual.m_flowDirection == 0
+            && actual.m_horizontalCellMargin == 0.0
+            && actual.m_verticalCellMargin == 0.0;
+    };
+    const auto checkWire = [&]() {
+        std::ifstream stream(output, std::ios::binary);
+        if (!stream)
+            return false;
+        if (binary)
+            stream.seekg(22);
+        std::unique_ptr<dxfReader> dxf = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&stream))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&stream));
+        bool inTable = false;
+        std::array<bool, 6> seen{};
+        int code = 0;
+        while (dxf->readRec(&code)) {
+            if (code == 0) {
+                const std::string value = dxf->getString();
+                if (inTable)
+                    break;
+                inTable = value == "ACAD_TABLE";
+            } else if (inTable) {
+                switch (code) {
+                case 93:
+                    seen[0] = dxf->getInt32() == 0x1F;
+                    break;
+                case 70:
+                    seen[1] = dxf->getInt32() == 0;
+                    break;
+                case 40:
+                    seen[2] = dxf->getDouble() == 0.0;
+                    break;
+                case 41:
+                    seen[3] = dxf->getDouble() == 0.0;
+                    break;
+                case 280:
+                    seen[4] = dxf->getInt32() == 0;
+                    break;
+                case 281:
+                    seen[5] = dxf->getInt32() == 1;
+                    break;
+                default:
+                    break;
+                }
+            }
+        }
+        return inTable && std::all_of(seen.begin(), seen.end(),
+                                      [](bool value) { return value; });
+    };
+    if (!exportCurrent() || !checkWire() || !checkReadback())
+        return fail("TABLE explicit scalar default override output/readback failed");
+
+    const std::string sentinel = "preserve-existing-destination";
+    {
+        std::ofstream stream(output, std::ios::binary | std::ios::trunc);
+        stream.write(sentinel.data(),
+                     static_cast<std::streamsize>(sentinel.size()));
+        if (!stream.good())
+            return fail("TABLE scalar override sentinel could not be written");
+    }
+    data.tables.front().m_borderColorOverrideFlags = 1u;
+    if (exportCurrent())
+        return fail("unmodeled TABLE border color override mask was emitted");
+    {
+        std::ifstream stream(output, std::ios::binary);
+        const std::string contents((std::istreambuf_iterator<char>(stream)),
+                                   std::istreambuf_iterator<char>());
+        if (!stream.good() && !stream.eof())
+            return fail("TABLE scalar override sentinel could not be read");
+        if (contents != sentinel)
+            return fail("unmodeled TABLE border color mask replaced the destination");
+    }
+    data.tables.front().m_borderColorOverrideFlags = 0u;
+    if (!exportCurrent() || !checkWire() || !checkReadback())
+        return fail("TABLE scalar override same-adapter corrected retry failed");
+    return true;
+}
+
 std::string generatedDwgTableProxyGraphic() {
     std::string bytes(8u, '\0');
     const auto appendU32 = [&bytes](std::uint32_t value) {
@@ -87149,6 +87275,10 @@ bool sunStudyDxfGraph(const std::string& source) {
 }
 
 int main(int argc, char** argv) {
+    if (argc == 2
+        && std::string(argv[1]) == "--table-scalar-override-output")
+        return tableScalarOverrideOutput(false)
+                && tableScalarOverrideOutput(true) ? 0 : 1;
     if ((argc == 3 || argc == 4)
         && std::string(argv[1]) == "--tablestyle-ac1021-cellstylemap-selected-output")
         return physicalAc1021CellStyleMapSelectedOutput(

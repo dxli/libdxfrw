@@ -1723,6 +1723,11 @@ add_test(NAME libdxfrw_tablestyle_r24_typed_writer
     COMMAND libdxfrw_dwg2dxf_adapter_tests --tablestyle-r24-typed-writer)
 set_tests_properties(libdxfrw_tablestyle_r24_typed_writer PROPERTIES
     LABELS "fast;dxf;adapter;tablestyle;generated;transaction" TIMEOUT 30)
+add_test(NAME libdxfrw_table_scalar_override_output
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --table-scalar-override-output)
+set_tests_properties(libdxfrw_table_scalar_override_output PROPERTIES
+    LABELS "fast;dxf;adapter;tables;generated;readback;refusal;retry"
+    TIMEOUT 30)
 add_test(NAME libdxfrw_visual_style_import_evidence
     COMMAND libdxfrw_dwg2dxf_adapter_tests --visual-style-import-evidence
         ${CMAKE_CURRENT_BINARY_DIR})

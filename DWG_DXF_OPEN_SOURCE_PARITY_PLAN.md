@@ -211,6 +211,15 @@ created locally from scratch for the specific control.
   the P4 section; do not repeat their probes or weaken strict output. Continue
   with a distinct locally testable P5/P6 implementation gap; do not repeat the
   corpus census or speculate about the remaining Sweep body.
+- **P5 pre-R24 TABLE scalar overrides:** the AC1018/AC1021 TABLE reader now
+  retains ODA §20.4.96.1 table override bits `0x01`–`0x10` for title/header
+  suppression, flow direction and margins. DXF output preserves selected
+  default values; unmodeled table bits and all border override masks refuse.
+  Generated AC1021 boundary/alignment controls and ASCII/Binary DXF
+  readback/refusal/retry controls pass. This is bounded schema/codec evidence,
+  not producer or whole-drawing qualification. The current local metric TABLE
+  parser stops earlier at cell-value types 16/92, and the imperial census has
+  no TABLECONTENT evidence. See the [scalar override receipt](docs/research/p5-ac1018-ac1021-table-scalar-overrides-2026-11-08.json).
 - **ODA suffix lane:** the user unlocked the Mac and the planned direct ODA
   27.1 retry was made; it again aborted during Pasteboard/XPC initialization
   before document processing, produced no output, and matched the prior source
@@ -659,7 +668,13 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    FIELD output refused and do not retry the screened samples. Resume only with
    a source profile that closes that graph. Continue other P5 work only where
    exact source spans and target roles are available; keep TABLEGEOMETRY,
-   dynamic evaluation and native rendering claims gated.
+   dynamic evaluation and native rendering claims gated. The generated
+   pre-R24 TABLE scalar override profile for ODA §20.4.96.1 bits `0x01`–`0x10`
+   is implemented; retain strict refusal for remaining table color/fill/
+   alignment/style bits and all three border override masks until their values
+   have typed storage and complete serialization. Physical-source coverage
+   remains open: the available metric TABLE fails before these fields at
+   unmodeled cell-value types 16/92. See the [scalar override receipt](docs/research/p5-ac1018-ac1021-table-scalar-overrides-2026-11-08.json).
 4. **P6 / source-backed parser and no-loss gaps.** The
    raster wire observer now recognizes the witnessed IMAGEDEF code-`0xC`
    parent in AC1021/24/27/32 as `UnqualifiedOwnerRole`; the generated control

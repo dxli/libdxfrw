@@ -7827,7 +7827,7 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
             && (cellOverrideFlags & ~ac1018CellOverrideFlags) == 0u)
         || (version == DRW::AC1021 && cellOverrideFlags == 0x00000004u);
     if (!knownCellOverrideProfile
-        || (tableOverrideFlags & ~0x00000020u) != 0u)
+        || (tableOverrideFlags & ~0x0000003Fu) != 0u)
         return false;
     TableDwgCodecProbe source;
     source.handle = 0xA500u;
@@ -7932,11 +7932,21 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
         body.putBit(tableOverrideFlags != 0u);
         if (tableOverrideFlags != 0u) {
             body.putBitLong(static_cast<std::int32_t>(tableOverrideFlags));
-            // ODA v5.4.1 §20.4.96.1: table override 0x20 selects title-row
-            // color CMC. This literal is ByLayer and has no text payload.
-            body.putBitShort(0);
-            body.putBitLong(static_cast<std::int32_t>(0xC0u << 24u));
-            body.putRawChar8(0);
+            // ODA v5.4.1 §20.4.96.1 table override fields in wire order.
+            if ((tableOverrideFlags & 0x00000001u) != 0u)
+                body.putBit(1); // title suppressed
+            if ((tableOverrideFlags & 0x00000004u) != 0u)
+                body.putBitShort(1); // flow up
+            if ((tableOverrideFlags & 0x00000008u) != 0u)
+                body.putBitDouble(1.25); // horizontal cell margin
+            if ((tableOverrideFlags & 0x00000010u) != 0u)
+                body.putBitDouble(2.5); // vertical cell margin
+            if ((tableOverrideFlags & 0x00000020u) != 0u) {
+                // Literal ByLayer CMC; no text payload.
+                body.putBitShort(0);
+                body.putBitLong(static_cast<std::int32_t>(0xC0u << 24u));
+                body.putRawChar8(0);
+            }
         }
         body.putBit(0);
         body.putBit(0);
@@ -8243,6 +8253,35 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  && cursorBit(tableColorOverrideInput)
                      == tableColorOverrideFrame.tableDataEndBit,
              "unretained AC1021 TABLE-level CMC override remains structurally parsed but is not marked semantically complete");
+
+    R2007TableFrame tableScalarOverridesFrame;
+    const bool tableScalarOverridesBuilt = makeR2007TableFrame(
+        1, tableScalarOverridesFrame, TablePlacement{}, 0u, 0x0000001Fu);
+    t.expect(tableScalarOverridesBuilt,
+             "AC1021 TABLE scalar-override vector builds from scratch");
+    if (!tableScalarOverridesBuilt)
+        return;
+    dwgBuffer tableScalarOverridesInput(tableScalarOverridesFrame.bytes.data(),
+                                       tableScalarOverridesFrame.bytes.size());
+    const bool tableScalarOverridesRead = table.parseDwg(
+        DRW::AC1021, &tableScalarOverridesInput);
+    t.expect(tableScalarOverridesRead && tableScalarOverridesInput.isGood()
+                 && table.m_hasSemanticContent
+                 && table.m_semanticContentComplete
+                 && table.m_tableOverrideFlags == 0x0000001Fu
+                 && table.m_titleSuppressed && table.m_headerSuppressed
+                 && table.m_flowDirection == 1
+                 && table.m_horizontalCellMargin == 1.25
+                 && table.m_verticalCellMargin == 2.5
+                 && cursorBit(tableScalarOverridesInput)
+                     == tableScalarOverridesFrame.tableDataEndBit,
+             "AC1021 TABLE retains the ODA title/header/flow/margin override fields and preserves the following body boundary");
+    if (tableScalarOverridesRead) {
+        const std::int32_t sentinel = tableScalarOverridesInput.getBitLong();
+        t.expect(tableScalarOverridesInput.isGood()
+                     && sentinel == kTablePlacementTailSentinel,
+                 "AC1021 TABLE scalar-override decoder leaves the following field aligned");
+    }
 
     R2007TableFrame secondUnknownFrame;
     const bool secondUnknownBuilt = makeR2007TableFrame(92, secondUnknownFrame);
@@ -20873,6 +20912,14 @@ void testScaleDwgPositiveUnitDomain(TestContext& t) {
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 2
+        && std::string(argv[1]) == "--table-r2007-cell-reader") {
+        TestContext context;
+        testR2007TableCellTypeReaderVectors(context);
+        std::cout << "AC1018/AC1021 TABLE cell reader vectors: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
     if (argc == 2
         && std::string(argv[1]) == "--legacy-dictionary-group-links") {
         TestContext context;

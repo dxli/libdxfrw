@@ -12082,14 +12082,22 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
     if (ent->m_dataVersion < 0 || ent->m_dataVersion > 32767
         || (version < DRW::AC1024 && ent->m_dataVersion != 0)
         || ent->m_flowDirection < 0 || ent->m_flowDirection > 32767
+        || ((ent->m_tableOverrideFlags & 0x00000004u) != 0u
+            && ent->m_flowDirection > 1)
+        || ((ent->m_tableOverrideFlags & 0x00000002u) != 0u
+            && !ent->m_headerSuppressed)
         || ent->m_tableOverrideFlags > static_cast<std::uint32_t>(
                std::numeric_limits<int>::max())
+        || (ent->m_tableOverrideFlags & ~0x0000001Fu) != 0u
         || ent->m_borderColorOverrideFlags > static_cast<std::uint32_t>(
                std::numeric_limits<int>::max())
+        || ent->m_borderColorOverrideFlags != 0u
         || ent->m_borderLineweightOverrideFlags > static_cast<std::uint32_t>(
                std::numeric_limits<int>::max())
+        || ent->m_borderLineweightOverrideFlags != 0u
         || ent->m_borderVisibilityOverrideFlags > static_cast<std::uint32_t>(
                std::numeric_limits<int>::max())
+        || ent->m_borderVisibilityOverrideFlags != 0u
         || !std::isfinite(ent->m_horizontalCellMargin)
         || !std::isfinite(ent->m_verticalCellMargin)
         || ent->m_horizontalCellMargin < 0.0
@@ -12326,16 +12334,21 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
         }
     }
 
-    if (ent->m_flowDirection != 0)
+    if (ent->m_flowDirection != 0
+        || (ent->m_tableOverrideFlags & 0x00000004u) != 0u)
         writer->writeInt16(70, ent->m_flowDirection);
-    if (ent->m_horizontalCellMargin != 0.0)
+    if (ent->m_horizontalCellMargin != 0.0
+        || (ent->m_tableOverrideFlags & 0x00000008u) != 0u)
         writer->writeDouble(40, ent->m_horizontalCellMargin);
-    if (ent->m_verticalCellMargin != 0.0)
+    if (ent->m_verticalCellMargin != 0.0
+        || (ent->m_tableOverrideFlags & 0x00000010u) != 0u)
         writer->writeDouble(41, ent->m_verticalCellMargin);
-    if (ent->m_titleSuppressed)
-        writer->writeInt16(280, 1);
-    if (ent->m_headerSuppressed)
-        writer->writeInt16(281, 1);
+    if (ent->m_titleSuppressed
+        || (ent->m_tableOverrideFlags & 0x00000001u) != 0u)
+        writer->writeInt16(280, ent->m_titleSuppressed ? 1 : 0);
+    if (ent->m_headerSuppressed
+        || (ent->m_tableOverrideFlags & 0x00000002u) != 0u)
+        writer->writeInt16(281, ent->m_headerSuppressed ? 1 : 0);
 
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
