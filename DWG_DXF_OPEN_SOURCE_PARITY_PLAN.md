@@ -222,18 +222,24 @@ The queue below contains only unfinished actions. Completed source profiles,
 codecs, tests, and controls have been removed from the queue; their commits and
 receipts remain in Git and `docs/research/`. Resume from the linked blocker
 instead of repeating successful scans or controls. The generated R24 TABLESTYLE
-border LTYPE, value-domain, scalar format, margin, text-height and merge-flag
-slices are complete in commits `12698d59`, `93c02f0d`, `9678d0c2`, `513a8adf`,
-`37d876cf`, `bff89295`, `e19a6170`, and `9b064748`. The R24 TABLESTYLE
-content-layout slice is complete: ODA §20.4.101.4 documents group 93 values
-Flow `1`, Stacked horizontal `2`, and Stacked vertical `4`; the AC1024 writer
-now admits these values per style and still refuses value `8` atomically.
-Generated ASCII/Binary controls verify the exact field position, typed
-readback, destination preservation and corrected same-adapter retry. The
-focused build and CTest passed (1/1); see the [content-layout receipt](docs/research/p6-r24-tablestyle-content-layout-2026-11-08.json).
-This adds no native rendering or physical-producer qualification. The saved P4
-inventory decision has no new ready physical graph. The next item is the
-existing physical-closure gate:
+border LTYPE, value-domain, scalar format, margin, text-height, merge-flag,
+content-layout, alignment and property-flag slices are complete in commits
+`12698d59`, `93c02f0d`, `9678d0c2`, `513a8adf`, `37d876cf`, `bff89295`,
+`e19a6170`, `9b064748`, `7781bcfc`, and `9d9de967`. The latest bounded
+additions follow ODA §20.4.101.3–.4: group 93 admits content-layout values
+1/2/4; group 94 admits cell alignments 1–9; and group 90/91 admit documented
+property-override masks and the AutoScale bit only when its override is
+selected. Generated ASCII/Binary controls verify exact field positions, raw
+and typed readback, invalid-value/flag refusal, destination preservation and
+corrected same-adapter retries. Each focused build and
+`libdxfrw_tablestyle_r24_typed_writer` run passed 1/1; see the
+[content-layout](docs/research/p6-r24-tablestyle-content-layout-2026-11-08.json),
+[alignment](docs/research/p6-r24-tablestyle-cell-alignment-2026-11-08.json),
+and [property-flag](docs/research/p6-r24-tablestyle-property-flags-2026-11-08.json)
+receipts. These generated controls add no native rendering or
+physical-producer qualification. The saved P4 inventory decision has no new
+ready physical graph. Continue with the remaining source-backed P4/P6 queue;
+do not repeat this TABLESTYLE codec work.
 
 1. **P4 / resume physical OBJECTS closure only on a new ready witness.** The
    saved census and inventory have been reviewed: every current selected-output
