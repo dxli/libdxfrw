@@ -11,6 +11,7 @@ SECTION_SHA = '6447fe7ae583c89ef0ef4cd28446848968363b600fce7012df8f1f391d078ee8'
 MAX_BYTES = 20 * 1024 * 1024
 EXPECTED = {0x176: ('REGION', 1709, 0), 0x2E1: ('3DSOLID', 8798, 0x2E4),
             0x37D: ('REGION', 2196, 0)}
+EXPECTED_HISTORY_FIELD = (3, 3, 2, 0x2E4, 446, 24)
 
 
 def require(ok, why):
@@ -80,6 +81,24 @@ def entity_prefix(frame, identity, kind):
     return graph_at, mode_at, reactors
 
 
+def history_field(row):
+    require(len(row) == 11, 'invalid history-field row')
+    identity = int(row[1], 16)
+    present, raw_code, code, size = map(int, row[2:6])
+    reference = int(row[6], 16)
+    start, bits, version, complete = map(int, row[7:11])
+    require(present in (0, 1), 'invalid history-field presence flag')
+    if not present:
+        require((raw_code, code, size, reference, start, bits, complete)
+                == (0, 0, 0, 0, 0, 0, 0),
+                'absent history field carries stale metadata')
+        return identity, None
+    require(raw_code == code and size <= 8 and bits == 8 + 8 * size
+            and complete == 1 and version != 0,
+            'history H role/value span is malformed or truncated')
+    return identity, (raw_code, code, size, reference, start, bits)
+
+
 def dxf_records(data):
     lines = data.decode('utf-8', errors='strict').splitlines()
     require(len(lines) % 2 == 0, 'odd DXF group stream')
@@ -144,6 +163,7 @@ def compare(source, oda, probe):
     run = subprocess.run([str(probe), str(source)], capture_output=True, timeout=60, check=True)
     require(len(run.stdout) <= MAX_BYTES, 'probe output exceeds bound')
     section, schema, indexes, records, entities, model_owners = None, [], [], {}, {}, []
+    history_fields = {}
     for line in run.stdout.decode('ascii', errors='strict').splitlines():
         row = line.split()
         if not row: continue
@@ -162,6 +182,10 @@ def compare(source, oda, probe):
             records[identity] = (int(row[2]), int(row[3]), int(row[4]),
                                  int(row[5]), int(row[6]), payload)
         elif row[0] == 'MODEL_BLOCK_RECORD': model_owners.append(int(row[1], 16))
+        elif row[0] == 'HISTORY_FIELD':
+            identity, field = history_field(row)
+            require(identity not in history_fields, 'duplicate source history field')
+            history_fields[identity] = field
         elif row[0] == 'ENTITY':
             require(len(row) == 13 and row[1] == 'MODEL', 'entity scope/profile mismatch')
             identity = int(row[3], 16)
@@ -178,6 +202,7 @@ def compare(source, oda, probe):
     require(indexes == [(0,0,0),(1,9,0),(0,9,20),(1,9,40),(1,9,60)], 'data-index mismatch')
     require(model_owners == [0x1F] and set(entities) == set(EXPECTED),
             'model-space block record or entity census mismatch')
+    require(set(history_fields) == set(EXPECTED), 'history-field census mismatch')
     dxf_entities, dxf_acds = dxf_projection(oda)
     require(set(dxf_entities) == set(EXPECTED) and set(records) == set(dxf_acds),
             'ODA source census mismatch')
@@ -195,6 +220,12 @@ def compare(source, oda, probe):
         require(records[identity][0] == 1 and len(payload) == expected_size
                 and payload.startswith(b'ACIS BinaryFile'), 'SAB schema/prefix/length mismatch')
         graph, mode, reactors = entity_prefix(raw, identity, kind)
+        if history:
+            require(history_fields[identity] == EXPECTED_HISTORY_FIELD,
+                    'source history handle code/value/span mismatch')
+        else:
+            require(history_fields[identity] is None,
+                    'unexpected History ID on source profile')
         print(f'{identity:X} {kind} modelspace-mode-bit={mode} reactors={reactors} '
               f'segment={records[identity][1]} local={records[identity][2]} '
               f'payload-bytes={len(payload)} sha256={hashlib.sha256(payload).hexdigest()}')
@@ -221,9 +252,29 @@ def main():
         try:
             entity_prefix(frame[:2], 0x176, 'REGION')
         except ValueError:
-            print('PASS: generated entity mode, storage flag and truncation checks')
-            return 0
-        raise ValueError('truncated entity prefix was accepted')
+            pass
+        else:
+            raise ValueError('truncated entity prefix was accepted')
+        good_history = ['HISTORY_FIELD', '2e1', '1', '3', '3', '2',
+                        '2e4', '446', '24', '6', '1']
+        _, good = history_field(good_history)
+        require(good == EXPECTED_HISTORY_FIELD,
+                'generated history H profile mismatch')
+        for fault, label in ((['HISTORY_FIELD', '2e1', '1', '5', '5', '2',
+                               '2e4', '446', '24', '6', '1'], 'role'),
+                             (['HISTORY_FIELD', '2e1', '1', '3', '3', '2',
+                               '2e4', '446', '23', '6', '1'], 'truncation')):
+            try:
+                _, parsed = history_field(fault)
+                require(parsed == EXPECTED_HISTORY_FIELD,
+                        f'mutated history {label} was accepted')
+            except ValueError:
+                pass
+            _, retry = history_field(good_history)
+            require(retry == EXPECTED_HISTORY_FIELD,
+                    f'corrected history {label} retry failed')
+        print('PASS: generated entity prefix and history role/span refusal/retry checks')
+        return 0
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--probe', type=Path, required=True)

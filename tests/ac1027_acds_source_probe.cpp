@@ -137,6 +137,17 @@ int main(int argc, char** argv) {
             std::cout << "REVISION_FRAME " << std::hex << modeler->handle
                       << std::dec << ' ' << modeler->m_bodyBitSize << ' ';
             hexBytes(modeler->m_rawBytes); std::cout << '\n';
+            std::cout << "HISTORY_FIELD " << std::hex << modeler->handle
+                      << std::dec << ' ' << modeler->m_hasDwgHistoryHandleField
+                      << ' ' << static_cast<unsigned>(modeler->m_dwgHistoryHandleField.rawCode)
+                      << ' ' << static_cast<unsigned>(modeler->m_dwgHistoryHandleField.code)
+                      << ' ' << static_cast<unsigned>(modeler->m_dwgHistoryHandleField.size)
+                      << ' ' << std::hex << modeler->m_dwgHistoryHandleField.ref64
+                      << std::dec << ' ' << modeler->m_dwgHistoryHandleFieldSpan.m_startBit
+                      << ' ' << modeler->m_dwgHistoryHandleFieldSpan.m_bitSize
+                      << ' ' << static_cast<int>(modeler->m_dwgHistoryHandleFieldSpan.m_version)
+                      << ' ' << modeler->m_dwgHistoryHandleFieldSpan.m_parseComplete
+                      << '\n';
             dwgBuffer raw(modeler->m_rawBytes.data(), modeler->m_rawBytes.size());
             ModelerCommonProbe common;
             if (!common.commonEnd(raw, modeler->m_bodyBitSize)) return false;

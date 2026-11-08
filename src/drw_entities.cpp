@@ -8516,6 +8516,10 @@ void DRW_ModelerGeometry::resetDwgState() {
     m_modelerDataUnknownBit = false;
     m_hasWireframe = false;
     m_historyHandle = 0;
+    m_hasDwgHistoryHandleField = false;
+    m_dwgHistoryHandleField = dwgHandle{};
+    m_dwgHistoryHandleFieldSpan = DRW_DwgSubrecordRange{};
+    m_dwgHistoryHandleFieldSpan.m_parseComplete = false;
     m_rawBytes.clear();
     m_dwgAcisPayload.clear();
     m_dxfPayloadChunks.clear();
@@ -8736,15 +8740,34 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
     if (!ret || !handleProbe.isGood())
         return fail();
     std::uint32_t parsedHistoryHandle = 0;
+    dwgHandle parsedHistoryHandleField;
+    DRW_DwgSubrecordRange parsedHistoryHandleFieldSpan;
+    parsedHistoryHandleFieldSpan.m_parseComplete = false;
+    bool hasParsedHistoryHandleField = false;
     if (eType == DRW::E3DSOLID && v > DRW::AC1018
         && proxyEntityHasBits(handleProbe, handleEndBit, 8)) {
+        const std::uint64_t historyStartBit = currentDwgBit(&handleProbe);
         dwgHandle historyH;
         if (!readBoundedDwgHandle(handleProbe, handleEndBit, 0, false,
                                   historyH))
             return fail();
+        const std::uint64_t historyEndBit = currentDwgBit(&handleProbe);
         parsedHistoryHandle = historyH.ref;
+        parsedHistoryHandleField = historyH;
+        parsedHistoryHandleFieldSpan.m_name = "3dsolid-history-id-handle";
+        parsedHistoryHandleFieldSpan.m_startBit = historyStartBit;
+        parsedHistoryHandleFieldSpan.m_bitSize =
+            historyEndBit - historyStartBit;
+        parsedHistoryHandleFieldSpan.m_version = v;
+        parsedHistoryHandleFieldSpan.m_count = 1u;
+        parsedHistoryHandleFieldSpan.m_parseComplete = true;
+        hasParsedHistoryHandleField = true;
         DRW_DBG(" 3DSOLID history Handle: ");
         DRW_DBGHL(historyH.code, historyH.size, historyH.ref); DRW_DBG("\n");
+        DRW_DBG(" 3DSOLID history H span bits: ");
+        DRW_DBG(historyStartBit); DRW_DBG(".. "); DRW_DBG(historyEndBit);
+        DRW_DBG(" (size "); DRW_DBG(historyEndBit - historyStartBit);
+        DRW_DBG(")\n");
     }
 
     if (handleProbe.size() > std::numeric_limits<std::uint32_t>::max())
@@ -8756,6 +8779,9 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
     m_modelerDataUnknownBit = parsedUnknownBit;
     m_modelerVersion = parsedModelerVersion;
     m_historyHandle = parsedHistoryHandle;
+    m_hasDwgHistoryHandleField = hasParsedHistoryHandleField;
+    m_dwgHistoryHandleField = parsedHistoryHandleField;
+    m_dwgHistoryHandleFieldSpan = std::move(parsedHistoryHandleFieldSpan);
     if (hasParsedAcisPayload) {
         m_payloadRanges = std::move(parsedAcisPayloadRanges);
         m_dwgAcisPayload = std::move(parsedInlineAcisPayload);

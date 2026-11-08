@@ -198,23 +198,27 @@ instead of repeating successful scans or controls.
    colorwh, plot-screening, lineweights,
    children-room, civil Edge, Pool_Detail VISUALSTYLE, Pool_Detail MATERIAL, or
    the tablet strict-output profile.
-   The next report is the AC1027 Cover 3DSOLID at handle 111. The current
-   inventory proves only that its layer name `0` resolves uniquely to LAYER
-   handle 16; it does not yet expose the history handle's wire span/role or
-   establish the entity-frame/DataStorage identity join. Before changing the
-   parser, bind the modeler entity and any same-handle DataStorage frame to the
-   source offsets and full import generation, then record the history value,
-   handle code and exact bit span. ODA v5.4.1 §20.4.41 (pp. 144–146) places
-   the R2007+ `H` group-350 History ID after common entity handle data and
-   explicitly limits its ACIS body description; use §2.13 for H encoding and
-   keep the proprietary ACIS/SAB bytes opaque. Confirm the actual source's
-   null/non-null history encoding and permitted DWG handle role before
-   classifying it. A null/absent history field is a source-profile result, not
-   permission to infer a global omission rule. The fast slice should assert
-   source identity, layer target, DataStorage association, history span/role
-   or bounded absence, and malformed-role/truncation refusal with retry. Keep
-   strict conversion refused until the recursive history target, if present,
-   and the complete 3D output route are separately qualified.
+   The AC1027 Cover 3DSOLID source-binding slice now retains and reports the
+   raw history H handle and exact parser handle-stream span. In the hash-bound
+   local Cover source, frame handle `0x6f` is at file offset 2696; its layer
+   name `0` resolves uniquely to LAYER `0x10`; its same-handle DataStorage
+   record `0x6f` matches the complete 22,983-byte payload; and the null
+   History ID is raw code 3, size 0, reference 0 at handle-stream bits 209–217.
+   A second already-receipted AC1027 source has 3DSOLID `0x2e1`, code 3, size 2,
+   reference `0x2e4` at bits 446–470. See the [history field receipt](docs/research/p4-ac1027-cover-3dsolid-history-wire-span-2026-11-08.json).
+   These source-bound observations establish two encoded profiles, not a
+   universal omission rule, semantic target graph or output route. ODA
+   v5.4.1 §20.4.41 (pp. 144–146) identifies the R2007+ `H` History ID but
+   limits the documented ACIS body; §2.13 maps code 3 to hard ownership. The
+   prior independent ODA DXF projection emits the same non-null value as group
+   350; that cross-format mapping is not a role-equivalence proof. Keep the
+   raw role and bit span diagnostic, preserve strict refusal, and do not reject
+   tolerant reads or promote support from the observed profile. Next, resolve
+   the `0x2e4` target identity/owner/dependencies and the code-3 to DXF group-350
+   projection from eligible producer evidence. Then add parser-bound generated
+   truncation/reset/retry controls; the current generated comparator self-test
+   rejects a mutated role/span and accepts the corrected row, but is not a
+   synthetic production-parser test.
    The Pool_Detail AC1021 `ACAD_VISUALSTYLE` graph (NOD `0xC` to dictionary `0x33CC`, 16
    styles) now passes selected ASCII/Binary output and typed/raw readback,
    late-mutation refusal, destination preservation and same-adapter retry.
@@ -617,7 +621,7 @@ integration/release checkpoints.
 
 | ID | State | Remaining work | Dependency |
 | --- | --- | --- | --- |
-| P4 | OPEN — source and graph closure | Continue with the next distinct physically evidenced OBJECTS subgraph; bind source identities, owner/target roles, recursive dependencies, and exact emitted records. Pool_Detail MLEADERSTYLE passes selected ASCII/Binary transport under the exact bounded AC1021 one-style/one-BYBLOCK projection; malformed LTYPE_CONTROL, BLOCK_CONTROL, and HEADER current-layer integrity observations remain excluded, and strict whole-source output remains refused. The AC1021 truetype whole source passes `RequireComplete` ASCII/Binary output and fresh whole-DXF import readback at 173/173 published frames; its group-330 LAYER/group-331 LTYPE references and exact LayerStates DXF-origin group-370 replay now pass under source snapshots and the complete dictionary path, with mutation refusal/retry. Other group-370 XRECORDs remain refused. Do not infer producer-wide support or generalize either source-specific gate. Resolve the tracked ENC dangling-reference profile only with eligible producer evidence. Keep unresolved null members, orphan owners, unsupported frames, and named-block SORTENTSTABLE profiles refused. Broaden beyond individual local sources only with independent producer and native output evidence. **Immediate local work: bind the AC1027 Cover 3DSOLID handle-111 history field and DataStorage join to ODA §20.4.41; then determine whether its body-reference disposition can be closed. AC1027 MATERIAL output remains unsupported and the global strict guard stays in place.** | Existing Cover source inventory, ODA v5.4.1 §§2.13 and 20.4.41, the source-bound field/role capture, and generated fast truncation/retry controls. |
+| P4 | OPEN — source and graph closure | Continue with the next distinct physically evidenced OBJECTS subgraph; bind source identities, owner/target roles, recursive dependencies, and exact emitted records. Pool_Detail MLEADERSTYLE passes selected ASCII/Binary transport under the exact bounded AC1021 one-style/one-BYBLOCK projection; malformed LTYPE_CONTROL, BLOCK_CONTROL, and HEADER current-layer integrity observations remain excluded, and strict whole-source output remains refused. The AC1021 truetype whole source passes `RequireComplete` ASCII/Binary output and fresh whole-DXF import readback at 173/173 published frames; its group-330 LAYER/group-331 LTYPE references and exact LayerStates DXF-origin group-370 replay now pass under source snapshots and the complete dictionary path, with mutation refusal/retry. Other group-370 XRECORDs remain refused. Do not infer producer-wide support or generalize either source-specific gate. Resolve the tracked ENC dangling-reference profile only with eligible producer evidence. Keep unresolved null members, orphan owners, unsupported frames, and named-block SORTENTSTABLE profiles refused. Broaden beyond individual local sources only with independent producer and native output evidence. **The AC1027 Cover 3DSOLID handle-111 history H field and same-handle DataStorage payload join are now captured with exact source identity and handle-stream span (receipt `p4-ac1027-cover-3dsolid-history-wire-span-2026-11-08`). Remaining local gates are parser-bound truncation/reset/retry, resolution of the non-null `0x2e4` history target/recursive dependencies, and an evidence-backed explanation for DWG code 3 versus the ODA DXF group-350 projection. Strict output remains refused; AC1027 MATERIAL output is still unsupported.** | Existing Cover source inventory, ODA v5.4.1 §§2.13 and 20.4.41, hash-bound source probes, parser-bound generated fault controls, and external target-role evidence. |
 | P5 | OPEN — dynamic-block semantics, rendering and TABLE profiles | Find a complete FIELD/FIELDLIST source graph with a visible root; qualify physical TABLEGEOMETRY spans and remaining CONTENTFORMAT/CELLSTYLEMAP combinations; resolve VIEWPORT override type/value and native activation/rendering; establish native dynamic constraint evaluation. | P4 closure where needed; source-bound spans/roles plus native semantic evidence. |
 | P6 | OPEN — version, schema and semantic residuals | Resolve only evidence-backed source gaps: AC1021/24/27/32 IMAGEDEF parent-role conflict (source capture now retained as unqualified; DXF output still refused); raw-only TABLECONTENT/PERSUBENTMGR/TextObjectContextData; unclaimed AC1027/AC1032 HEADER suffixes; remaining version boundaries, geometry/no-loss, HEADER/CLI, parser disposition and caller-state contracts. The minimal generated AC1021 ODA matrix passes only when both default-layer graph opt-ins are enabled; the AC1021/24/27 fast material control now checks both output layer-0 references against planned targets. This is bounded writer evidence, not a broad support claim. Preserve strict refusal for unsupported or unclaimed bytes. | ODA v5.4.1 plus AutoCAD DWG/DXF source pairs; focused fast controls. Owner-semantic promotion still needs independent native rewrite or normative resolution. Suffix work requires a materially changed converter route. See the [IMAGEDEF role receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json) and [AC1021 writer probe receipt](docs/research/p6-ac1021-minimal-writer-oda-gui-rejection-2026-11-07.json). |
 | P7 | OPEN — ACIS/ACDS and independent 3D meaning | Complete entity/owner/key/AcDs/SAT-SAB association, versioned framing/index/suffix/prototype assembly and exact output binding; qualify transforms, units, topology, trims, periodicity and spline meaning with an independent kernel. | P4 graph/output bindings and independent semantic/kernel evidence. |

@@ -1158,6 +1158,12 @@ public:
     //! Lazily-decoded ACIS wireframe from an identified payload carrier.
     DRW_AcisBrep m_wireframe;
     bool m_wireframeDecoded = false;
+    // Appended source evidence for the R2007+ 3DSOLID History ID H field.
+    // This preserves its encoded role/value and parser handle-stream span;
+    // it does not establish a DXF ownership mapping or ACIS semantics.
+    bool m_hasDwgHistoryHandleField = false;
+    dwgHandle m_dwgHistoryHandleField{};
+    DRW_DwgSubrecordRange m_dwgHistoryHandleFieldSpan;
     //! Decode an identified ACIS wireframe on demand. Idempotent; never throws.
     bool decodeWireframe() {
         if (!m_wireframeDecoded) {
