@@ -67034,6 +67034,8 @@ bool physicalAssociativeDimensionDependencyOutputReadback(
 
     std::size_t dimensionNodesBound = 0u;
     std::size_t valueNodesBound = 0u;
+    std::set<std::uint32_t> dimensionNodeValueDependencyHandles;
+    std::set<std::uint32_t> dimensionNodeVariableHandles;
     for (const auto& entry : sourceDependencies) {
         const DRW_AssociativeObject& dependency = *entry.second;
         const auto groupEntry = sourceByHandle.find(
@@ -67067,8 +67069,11 @@ bool physicalAssociativeDimensionDependencyOutputReadback(
         if (valueDependency == sourceByHandle.end()
             || valueDependency->second->m_recordName
                 != "ACDBASSOCVALUEDEPENDENCY"
+            || valueDependency->second->parentHandle != group.handle
             || !valueDependency->second->m_dependencyWireComplete
             || !valueDependency->second->m_valueDependencyFieldsParsed
+            || !dimensionNodeValueDependencyHandles.insert(
+                valueDependency->second->handle).second
             || std::count(group.m_constraintActions.begin(),
                 group.m_constraintActions.end(),
                 valueDependency->second->handle) != 1)
@@ -67076,12 +67081,20 @@ bool physicalAssociativeDimensionDependencyOutputReadback(
         const auto target = sourceByHandle.find(
             valueDependency->second->m_dependencyHandle);
         if (target == sourceByHandle.end()
-            || target->second->m_recordName != "ACDBASSOCVARIABLE")
+            || target->second->m_recordName != "ACDBASSOCVARIABLE"
+            || !target->second->m_associativeVariableFieldsParsed
+            || !target->second->m_associativeVariableWireComplete
+            || !target->second->m_variableValueParsed
+            || !dimensionNodeVariableHandles.insert(
+                target->second->handle).second)
             return fail("dimension value dependency target is not a typed associative variable");
         ++valueNodesBound;
     }
     if (dimensionNodesBound != sourceDependencies.size()
-        || valueNodesBound != sourceDependencies.size())
+        || valueNodesBound != sourceDependencies.size()
+        || dimensionNodeValueDependencyHandles.size()
+            != sourceDependencies.size()
+        || dimensionNodeVariableHandles.size() != sourceDependencies.size())
         return fail("dimension constraint node/dependency closure count changed");
 
     const auto sameCoord = [](const DRW_Coord& left,
@@ -67342,6 +67355,10 @@ bool physicalAssociativeDimensionDependencyOutputReadback(
         AssocByHandle outputByHandle;
         std::map<std::string, const DRW_AssociativeObject*> outputBodies;
         std::map<std::string, const DRW_AssociativeObject*> outputDependencies;
+        std::map<std::uint32_t, const DRW_AssociativeObject*>
+            outputValueDependencies;
+        std::map<std::uint32_t, const DRW_AssociativeObject*>
+            outputVariables;
         std::map<std::uint32_t, const DRW_Entity*> outputDimensions;
         if (!indexAssociative(output.associativeObjects, outputByHandle)
             || !indexDimensions(output, outputDimensions))
@@ -67362,6 +67379,27 @@ bool physicalAssociativeDimensionDependencyOutputReadback(
                     || !outputDependencies.emplace(
                         body->second->name, &object).second)
                     return fail("physical output dependencies are not typed or uniquely paired");
+            } else if (object.m_recordName
+                           == "ACDBASSOCVALUEDEPENDENCY") {
+                if (!object.m_dependencyWireComplete
+                    || !object.m_valueDependencyFieldsParsed
+                    || !outputValueDependencies.emplace(
+                        object.handle, &object).second)
+                    return fail("physical output value dependencies are not typed or unique");
+            } else if (object.m_recordName == "ACDBASSOCVARIABLE") {
+                if (!object.m_associativeVariableFieldsParsed
+                    || !object.m_variableValueParsed
+                    || !outputVariables.emplace(object.handle, &object).second) {
+                    std::cerr << "output variable handle=" << object.handle
+                              << " parsed="
+                              << object.m_associativeVariableFieldsParsed
+                              << " value=" << object.m_variableValueParsed
+                              << " code=" << object.m_variableValueCode
+                              << " kind=" << static_cast<int>(
+                                  object.m_variableValueKind)
+                              << " name=" << object.m_variableName << '\n';
+                    return fail("physical output associative variables are not typed or unique");
+                }
             }
         }
         if (outputBodies.size() != sourceBodies.size()
@@ -67369,6 +67407,8 @@ bool physicalAssociativeDimensionDependencyOutputReadback(
             return fail("physical dependency/body counts changed on readback");
 
         std::size_t verifiedPairs = 0u;
+        std::set<std::uint32_t> outputDimensionNodeValueDependencyHandles;
+        std::set<std::uint32_t> outputDimensionNodeVariableHandles;
         for (const auto& entry : sourceDependencies) {
             const DRW_AssociativeObject& expectedDependency = *entry.second;
             const DRW_AssociativeObject& expectedBody =
@@ -67384,6 +67424,71 @@ bool physicalAssociativeDimensionDependencyOutputReadback(
                 *actualBodyEntry->second;
             const DRW_AssociativeObject& actualDependency =
                 *actualDependencyEntry->second;
+            const DRW_AssociativeObject& expectedGroup = *sourceByHandle.at(
+                static_cast<std::uint32_t>(expectedDependency.parentHandle));
+            const auto expectedNode = std::find_if(
+                expectedGroup.m_constraintNodes.begin(),
+                expectedGroup.m_constraintNodes.end(),
+                [&expectedDependency](
+                    const DRW_AssociativeConstraintNode& node) {
+                    return node.m_hasDimensionDependencyHandle
+                        && node.m_dimensionDependencyHandle
+                            == expectedDependency.handle;
+                });
+            if (expectedNode == expectedGroup.m_constraintNodes.end())
+                return fail("physical source dimension node disappeared before output readback");
+            const auto expectedValueDependency = sourceByHandle.find(
+                static_cast<std::uint32_t>(
+                    expectedNode->m_valueDependencyHandle));
+            if (expectedValueDependency == sourceByHandle.end())
+                return fail("physical source value dependency disappeared before output readback");
+            const auto actualValueDependency = outputValueDependencies.find(
+                expectedValueDependency->second->handle);
+            if (actualValueDependency == outputValueDependencies.end())
+                return fail("physical output value dependency is missing or untyped");
+            const DRW_AssociativeObject& expectedVariable =
+                *sourceByHandle.at(
+                    expectedValueDependency->second->m_dependencyHandle);
+            const auto actualVariable = outputVariables.find(
+                expectedVariable.handle);
+            if (actualVariable == outputVariables.end()
+                || !outputDimensionNodeValueDependencyHandles.insert(
+                    actualValueDependency->second->handle).second
+                || !outputDimensionNodeVariableHandles.insert(
+                    actualVariable->second->handle).second
+                || actualValueDependency->second->parentHandle
+                    != expectedValueDependency->second->parentHandle
+                || actualValueDependency->second->m_dependencyHandle
+                    != expectedValueDependency->second->m_dependencyHandle
+                || actualValueDependency->second->m_valueDependencyClassVersion
+                    != expectedValueDependency->second->m_valueDependencyClassVersion
+                || actualValueDependency->second->m_valueDependencyName
+                    != expectedValueDependency->second->m_valueDependencyName
+                || actualValueDependency->second->m_valueDependencyValueCode
+                    != expectedValueDependency->second->m_valueDependencyValueCode
+                || actualValueDependency->second->m_valueDependencyValueKind
+                    != expectedValueDependency->second->m_valueDependencyValueKind
+                || actualValueDependency->second->m_valueDependencyValueReal
+                    != expectedValueDependency->second->m_valueDependencyValueReal
+                || actualValueDependency->second->m_valueDependencyValueInt32
+                    != expectedValueDependency->second->m_valueDependencyValueInt32
+                || actualVariable->second->m_variableName
+                    != expectedVariable.m_variableName
+                || actualVariable->second->m_variableExpression
+                    != expectedVariable.m_variableExpression
+                || actualVariable->second->m_variableEvaluator
+                    != expectedVariable.m_variableEvaluator
+                || actualVariable->second->m_variableDescription
+                    != expectedVariable.m_variableDescription
+                || actualVariable->second->m_variableValueCode
+                    != expectedVariable.m_variableValueCode
+                || actualVariable->second->m_variableValueKind
+                    != expectedVariable.m_variableValueKind
+                || actualVariable->second->m_variableValueReal
+                    != expectedVariable.m_variableValueReal
+                || actualVariable->second->m_variableValueInt32
+                    != expectedVariable.m_variableValueInt32)
+                return fail("physical value dependency or associative variable fields changed on readback");
             if (actualBody.name != expectedBody.name
                 || actualBody.m_dependencyBodyVersion
                     != expectedBody.m_dependencyBodyVersion
@@ -67477,7 +67582,9 @@ bool physicalAssociativeDimensionDependencyOutputReadback(
                 return fail("physical dimension target or reactor backlink changed on readback");
             ++verifiedPairs;
         }
-        if (verifiedPairs != 17u)
+        if (verifiedPairs != 17u
+            || outputDimensionNodeValueDependencyHandles.size() != 17u
+            || outputDimensionNodeVariableHandles.size() != 17u)
             return fail("physical dependency/body readback did not close all 17 pairs");
         std::cerr << "Physical ACDBASSOCDEPENDENCY "
                   << (binary ? "binary" : "ASCII")

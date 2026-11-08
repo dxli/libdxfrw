@@ -16,8 +16,8 @@
   "implementation": {
     "file": "tests/dwg2dxf_adapter_tests.cpp",
     "test": "physicalAssociativeDimensionDependencyOutputReadback",
-    "testSourceSha256": "5036e1cb2b091c7b565417a1064b3478021d75dd9db6b3f45c0491cf1727181e",
-    "summary": "For every source dimension dependency, require exactly one matching constraint node in the owning constraint group. Admit only Distance and RadiusDiameter node kinds, and require both dimension and value references to use hard-pointer roles. Resolve the value edge to a typed, wire-complete ACDBASSOCVALUEDEPENDENCY listed exactly once among the owning group action handles, then resolve its dependency target to a typed ACDBASSOCVARIABLE."
+    "testSourceSha256": "55ce6a07121acf6dc102192e53016ccfb519ce58462f57441b9011609a98083a",
+    "summary": "For every source dimension dependency, require exactly one matching constraint node in the owning constraint group. Admit only Distance and RadiusDiameter node kinds, and require both dimension and value references to use hard-pointer roles. Resolve each value edge to a distinct typed, wire-complete ACDBASSOCVALUEDEPENDENCY listed exactly once among the owning group action handles, then resolve its dependency target to a distinct typed, wire-complete ACDBASSOCVARIABLE with a parsed value."
   },
   "validation": {
     "build": {
@@ -27,15 +27,16 @@
     "physicalGate": {
       "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --assocdependency-physical-output-readback /Users/dli/doc/dwg/mechanical_example-imperial.dwg",
       "result": "PASS for ASCII and Binary DXF",
-      "observed": "Both encodings reported 17 linked dependency/body pairs, all 399 constraint nodes, group and dimension roles, atomic refusal, same-adapter retry, and typed readback. The strengthened one-to-one dimension-node and value-dependency edges passed for all 17 dimension dependencies."
+      "observed": "Both encodings reported 17 linked dependency/body pairs, all 399 constraint nodes, group and dimension roles, atomic refusal, same-adapter retry, and typed readback. All 17 dimension nodes resolve to distinct typed value dependencies and distinct typed associative variables. Fresh DXF readback preserves each value-dependency and variable represented field. The DXF assertion intentionally does not compare the DWG-only associativeVariableWireComplete span marker."
     },
     "coverage": [
       "Unique source constraint-node reference for each of 17 dimension dependencies",
       "Admitted Distance or RadiusDiameter node kind",
       "Hard-pointer dimension and value dependency roles",
       "Unique typed and wire-complete value dependency in the owning group's action list",
-      "Typed associative-variable target for each value dependency",
-      "ASCII and Binary output, fresh DXF readback, mutation refusal, sentinel preservation, and corrected retry"
+      "Distinct typed and wire-complete associative-variable target for each value dependency",
+      "ASCII and Binary readback of represented value-dependency and variable fields",
+      "Mutation refusal, sentinel preservation, and corrected retry"
     ],
     "fullSuites": "NOT_RUN; focused physical gate only"
   },
@@ -45,5 +46,5 @@
     "No independent native CAD semantic or platform qualification is established.",
     "Do not promote general associative dimension, DWG, or DXF support claims from this witness."
   ],
-  "next": "Measure OBJECTS callback allocation count and elapsed time for this physical route; split the validation only if it exceeds the fast-validation budget, preserving graph closure and failure/retry checks."
+  "next": "Continue the P4 census with another saved OBJECTS profile whose source identity, owner/dependency roles, and byte/frame disposition are all closed; do not retry the ineligible AC1027 Sweep tail without authoritative or independently captured complete field boundaries."
 }

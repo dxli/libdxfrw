@@ -149,7 +149,12 @@ late-mutation refusal, sentinel preservation, and same-adapter retry still
 pass. See the [node dependency closure receipt](docs/research/p6-ac1024-mechanical-dimension-node-dependency-closure-2026-11-08.json).
 A locally authored graph without that source-bound profile is correctly
 refused by strict adapter preflight; do not manufacture a receipt or relax the
-gate. A temporary scoped allocation/time probe measured the physical
+gate. The readback gate now also proves 17 distinct value-dependency and
+associative-variable pairs: each dimension node resolves to its own typed value
+dependency, and the corresponding variable and value-dependency fields survive
+fresh ASCII/Binary DXF readback. The DXF check compares represented semantic
+fields and does not compare the DWG-only `m_associativeVariableWireComplete`
+marker. A temporary scoped allocation/time probe measured the physical
 `writeObjects()` callback at 6,419 allocations / 19.1–19.5 ms for ASCII and
 6,321 allocations / 19.3–19.5 ms for Binary across the successful and expected
 late-mutation refusal attempts. The probe was removed after measurement. A
