@@ -1,0 +1,35 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p6-dxf-associative-network-objects-allocation-failure-retry-2026-11-08",
+  "date": "2026-11-08",
+  "status": "GENERATED_ASCII_BINARY_ASSOCIATIVE_NETWORK_OBJECTS_ALLOCATION_ROLLBACK_RETRY_PASS",
+  "supportClaimEffect": "none",
+  "scope": "Sweep OBJECTS-callback allocations for a rooted AC1024 associative-network profile containing one named DICTIONARY and one empty root ACDBASSOCNETWORK.",
+  "source": {
+    "kind": "deterministic locally-authored in-memory DRW graph",
+    "profile": "NOD ACAD_ASSOCNETWORK entry -> DICTIONARY E900 -> ACDBASSOCNETWORK E901 with one owner reactor, complete action/network prefix status, and no actions or owning-network edge.",
+    "fixtureFilesAdded": 0
+  },
+  "implementation": {
+    "parentCommit": "308e2fef",
+    "files": {
+      "tests/associative_network_objects_allocation_tests.cpp": "4cf375aba6dc65f4d30627365fdd85c8e38d2de32b46092bf2ad993097360d94",
+      "tests/CMakeLists.txt": "55fe6be4665e0c265768074354ab1973ef247dd9e76aa8adf743d35c12985d1b"
+    },
+    "method": "Warm the writer and calibrate callback allocations per encoding. Inject std::bad_alloc at every reached offset; require failed publication, byte-for-byte destination sentinel preservation, dictionary/network caller-state preservation, same-writer retry, and typed import of the rooted dictionary/network graph."
+  },
+  "validation": {
+    "configure": "cmake -S . -B build-gcc -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DLIBDXFRW_ENABLE_FREECAD_DESKTOP_CONTROL=OFF -DLIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_LINE_CONTROL=OFF: PASS",
+    "build": "cmake --build build-gcc --target libdxfrw_associative_network_objects_allocation_tests --parallel 4: PASS",
+    "focusedCTest": "ctest --test-dir build-gcc -R '^libdxfrw_associative_network_objects_allocation_retry$' --output-on-failure: PASS 1/1",
+    "ascii": "18/18 reached callback allocation offsets injected; destination and caller graph preserved; same-writer retry and typed dictionary/network readback passed.",
+    "binary": "15/15 reached callback allocation offsets injected; destination and caller graph preserved; same-writer retry and typed dictionary/network readback passed.",
+    "fullSuites": "NOT RUN"
+  },
+  "limitations": [
+    "Generated serialization and transaction evidence only; no physical producer prevalence or native associative semantics are established.",
+    "The profile covers an empty root network only; action branches, dependencies, variables, constraint groups, parameter/body records, and selected subgraph projection are outside this sweep.",
+    "No support claim is promoted."
+  ],
+  "nextAction": "Continue P6 safety work with the next associative OBJECTS writer that has an established passing typed output/readback profile, preserving exact graph prerequisites and avoiding broad allocation injection across adapter preflight."
+}

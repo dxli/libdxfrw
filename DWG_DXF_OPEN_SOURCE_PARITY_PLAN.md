@@ -31,13 +31,20 @@ so this is transaction/typed-field evidence only and does not qualify strict
 output or TABLECONTENT semantics. A first TABLEGEOMETRY allocation-probe
 prototype was also rejected before commit because the generated minimal object
 was refused during warm-up; it did not reach allocation injection or readback.
-Do not infer a TABLEGEOMETRY writer defect from this incomplete setup. Next,
-select the next uncovered typed OBJECTS writer from an existing passing
-readback profile, and use its established owner/dependency setup instead of
-inventing another minimal graph. Keep FIELD/FIELDLIST gated. Do not reopen swept
-families or promote support claims. Each slice must update its receipt and
-checkpoint, commit implementation with evidence, then report the commit and
-next ready slice.
+Do not infer a TABLEGEOMETRY writer defect from this incomplete setup. A broad
+global-allocation sweep around the selected associative adapter export was also
+rejected: it terminated on an uncaught `std::bad_alloc` during adapter preflight,
+before a safe writer-callback boundary; the prototype was removed and no
+production files changed. The narrowed low-level AC1024 OBJECTS callback now
+sweeps a rooted empty ACDBASSOCNETWORK profile at 18 ASCII and 15 Binary
+allocation offsets, with destination/caller rollback, same-writer retry and
+typed graph readback ([receipt](docs/research/p6-dxf-associative-network-objects-allocation-failure-retry-2026-11-08.json)).
+This does not cover action branches or broader associative support. Next, select
+the next associative OBJECTS writer from an established passing typed
+output/readback profile, with its exact graph prerequisites. Keep FIELD/FIELDLIST
+gated. Do not reopen swept families or promote support claims. Each slice must
+update its receipt and checkpoint, commit implementation with evidence, then
+report the commit and next ready slice.
 
 **Resume checkpoint (2026-11-07):** the Mac session was unlocked and the
 audit-enabled ODA 27.1 GUI route has completed the AC1024 civil residual
