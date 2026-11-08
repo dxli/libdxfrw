@@ -245,6 +245,17 @@ instead of repeating successful scans or controls.
    output and do not generalize this source-specific LayerStates route. See the
    [strict output/readback receipt](docs/research/p4-ac1021-truetype-strict-dxf-output-readback-2026-11-07.json)
    and [bounded DXF replay receipt](docs/research/p4-ac1021-truetype-layerstate-dxf-group370-replay-2026-11-07.json).
+   The earlier civil readiness count of 11 incomplete geometry dependencies is
+   stale against the current parser. A fresh source-bound probe finds 28/29
+   wire-complete; the sole residual is handle `0xC55`, whose recognized fields
+   end at bit 128 while its object-data boundary is bit 152. LibreDWG reports
+   the dependency name `AcDbAssocEdgePersSubentId` but an empty persistent-
+   subentity classname, and does not explain the remaining 24 bits. Keep this
+   record raw and output-ineligible; do not infer an Edge tail or padding.
+   Reopen only with authoritative class layout or an independent producer trace
+   that accounts for every bit. The other 28 records and the ten-record civil
+   Edge selected route are not broadened by this finding. See the [current
+   residual receipt](docs/research/p4-ac1024-civil-assoc-current-one-unresolved-2026-11-07.json).
    For any selected subgraph, freeze source
    identity and expected record/handle roles; implement only the missing
    serializer or planner binding; add ASCII/Binary output, fresh typed
