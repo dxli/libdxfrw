@@ -421,6 +421,11 @@ created locally from scratch for the specific control.
   entities cannot be matched to typed cell semantics or used to derive the
   generated one-cell profile. The next graph implementation needs a complete
   bounded source/producer profile; keep public TABLE output refused meanwhile.
+  ACadSharp's current local writer explicitly rejects TABLE before R2010;
+  LibreDWG can emit AC1018 from DXF, but its secondary export of this source
+  already loses a reliable cell-to-cache mapping, so that round trip is only a
+  mechanical probe. Neither writer supplies the missing legacy semantic
+  witness.
   The full source/output fingerprints and limits are in the [TABLE readiness
   receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 - **Previous local slice:** AC1027/AC1032 PERSUBENTMGR typed failures now

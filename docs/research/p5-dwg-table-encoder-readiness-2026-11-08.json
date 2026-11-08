@@ -409,6 +409,33 @@
       "outputSha256": "b3bdb1a8d809e4ff1a1700e67c08f8724d299bba3cdcff290beb2e517163402b",
       "disposition": "Not used as a semantic oracle: the emitted entity is represented as INSERT with an AcDbTable subclass and a renamed *T14 block; the output does not establish the source TABLE cell-to-cache relation."
     },
+    "alternative_writer_screens": [
+      {
+        "project": "ACadSharp",
+        "revision": "3a52a52047e84670759c1f9ad3916ec3ce85ff56; local master is 274 commits behind origin/master at 35a1aada564f77f65b584411d54ffbc00e365cee",
+        "files": [
+          "/Users/dli/dev/ACadSharp/src/ACadSharp/IO/DWG/DwgStreamWriters/DwgObjectWriter.cs",
+          "/Users/dli/dev/ACadSharp/src/ACadSharp/IO/DWG/DwgStreamWriters/DwgObjectWriter.Entities.cs"
+        ],
+        "observations": [
+          "isEntitySupported rejects TableEntity when the output is before R2010.",
+          "writeTableEntity throws NotImplementedException for the pre-R2010 branch and implements only the R2010+ body."
+        ],
+        "disposition": "Not an AC1018 independent writer/source generator. Its R2010+ support does not fill the legacy profile gap."
+      },
+      {
+        "project": "LibreDWG",
+        "version": "0.14",
+        "command": "dwgwrite --as r2004 -I DXF -o /private/tmp/libdxfrw-table-example2004-dwgwrite.dwg -y /private/tmp/libdxfrw-table-example2004.dxf",
+        "outputSha256": "3fcc754ff46dcb3b5f4266d1f9ffc269b7b1f77985c1823b9388e89082d749d2",
+        "observations": [
+          "The command emits AC1018 and LibreDWG minJSON reads one ACAD_TABLE with one *T14 block and 39 block entities.",
+          "Input was LibreDWG's own secondary DXF export of the incomplete physical table; that DXF represents the object as INSERT plus AcDbTable and omits a trustworthy cell-to-cache semantic mapping.",
+          "The output class ordinal is 526, further evidence that ordinals are file-local."
+        ],
+        "disposition": "Mechanical writer/readback probe only. Because the input DXF did not preserve qualified TABLE body semantics, this is not a from-scratch candidate witness, independent semantic confirmation, or support qualification."
+      }
+    ],
     "native_session": "A fresh desktop inventory reports the Mac locked. Do not retry ODA/FreeCAD GUI qualification until an unlocked app surface is observed.",
     "overall_disposition": "Independent peer evidence narrows the AC1018 TABLE graph shape to a physical example but cannot unlock compound output. Keep dwgRW::writeTable refused and do not promote support claims."
   }
