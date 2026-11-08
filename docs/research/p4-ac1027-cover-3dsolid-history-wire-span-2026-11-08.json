@@ -100,7 +100,7 @@
         "0x2e3 EVALUATION_GRAPH common owner 0x2e4; one node id 0 flags 32 next 1 references 0x2e2",
         "0x2e2 ACSH_SWEEP_CLASS common owner 0x2e3"
       ],
-      "scopeLimit": "Exact selected identity and owner/reference edges match the independent minJSON projection. Local AcDbShHistory EvalExpr and HistoryNode prefixes remain incomplete; peer decoding is corroboration, not normative class-body semantics."
+      "scopeLimit": "Exact selected identity and owner/reference edges match the independent minJSON projection. The local ACSH_HISTORY_CLASS direct fields parse completely. The referenced ACSH_SWEEP_CLASS EvalExpr and HistoryNode prefixes parse, but its class-specific action body remains incomplete; peer decoding is corroboration, not normative Sweep semantics."
     }
   },
   "validation": {
@@ -127,7 +127,7 @@
     }
   },
   "remaining": [
-    "Keep the selected AC1027 source profile output-ineligible: its typed AcDbShHistory body is incomplete and no lossless DWG-body-to-DXF representation is available in current routes.",
+    "Keep the selected AC1027 source profile output-ineligible: ACSH_HISTORY_CLASS direct fields are complete, but its graph targets ACSH_SWEEP_CLASS, whose class-specific action body is incomplete and has no AC1027 writer route.",
     "Resolve the DWG hard-owner code 3 to DXF group-350 soft-owner projection only through an authoritative rule or independent producer evidence that establishes role and remapping semantics; the observed converter output alone is insufficient.",
     "Advance to another locally implementable P4/P6 source-backed gap; do not repeat graph discovery, parser-helper controls, or unchanged converter launches.",
     "Keep strict whole-source conversion refused until source graph closure and the complete 3D output route pass their separate gates."
@@ -135,9 +135,9 @@
   "fixturesAdded": 0,
   "outputRouteAudit": {
     "readerCapture": "For successfully typed ACSH_* DWG objects, makeRawObject stores tmpByteStr (the complete decompressed object body from DwgObjectFrame::body) with source class/common-link metadata; dx_iface retains bounded AcSH/evaluation-graph frames in acdsHistoryDwgFrames.",
-    "ac1027WriterRoute": "The AC1027+ DataStorage route selects collectAcdsTypedBoxHistoryObjects when typed history/evaluation objects exist. That collector requires complete class-specific prefixes; the observed AcDbShHistory prefixes are incomplete, so it fails closed. The AC1024 opaque-proxy collector is explicitly AC1024-only.",
+    "ac1027WriterRoute": "The AC1027+ DataStorage route selects collectAcdsTypedBoxHistoryObjects when typed history/evaluation objects exist. This route emits ACSH_HISTORY_CLASS and ACSH_BOX_CLASS only; its selected profile requires an ACSH_BOX_CLASS target. The pinned graph instead targets ACSH_SWEEP_CLASS. That class's EvalExpr and HistoryNode prefixes parse, but its embedded sweep/path entity blobs and SweepOptions action-body tail remain partial/best-effort; LibreDWG 0.14 leaves 2568 bits unknown for this object and is not a semantic oracle. The AC1024 opaque-proxy collector is explicitly AC1024-only.",
     "rawDxfRoute": "rawAcdsHistoryObjects is populated by the DXF AcShHistory import path, where original DXF group sequences exist. It does not convert a DWG-encoded object body into equivalent DXF fields.",
     "entityAssociation": "The 3DSOLID DXF writer remaps/resolves the history target and emits group 350. Source H code 3 is identified by ODA as hard ownership, while Autodesk DXF docs call group 350 soft-owner; converter output corroborates the value only.",
-    "disposition": "No lossless AC1027 DWG-to-DXF route is established for the selected incomplete history record. Do not serialize its retained DWG body as a DXF proxy or synthesize missing fields. Keep the selected source profile output-ineligible and strict output refused."
+    "disposition": "No lossless AC1027 DWG-to-DXF route is established for the selected Sweep history graph: there is no ACSH_SWEEP_CLASS writer, its class-specific action-body tail is incomplete, and the DWG H code-3 to DXF group-350 role projection is unqualified. Do not serialize retained DWG body bytes as a DXF proxy or synthesize missing fields. Keep the selected source profile output-ineligible and strict output refused."
   }
 }
