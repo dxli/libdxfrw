@@ -71,6 +71,17 @@ TABLESTYLE_PROFILE = re.compile(
     r"complete=1$",
     re.MULTILINE,
 )
+MLEADERSTYLE_PROFILE = re.compile(
+    r"^ typedBodyProfile type=MLEADERSTYLE handle=(\d+) "
+    r"bodyHandleFields=(\d+) rule=(ODA-20\.4\.87) "
+    r"dictionaryKey=(ACAD_MLEADERSTYLE) dictionaryHandle=(\d+) complete=1$",
+    re.MULTILINE,
+)
+MLEADERSTYLE_HANDLE_FIELD = re.compile(
+    r"^ typedBodyHandleField owner=(\d+) role=(lineType|arrowHead|textStyle|block) "
+    r"code=(\d+) target=(\d+) startBit=(\d+) bitSize=(\d+) complete=1$",
+    re.MULTILINE,
+)
 DICTIONARY_MEMBERSHIP = re.compile(
     r"^ typedBodyFrame type=(SCALE|DICTIONARYVAR|MLINESTYLE|ACDBPLACEHOLDER|MATERIAL) handle=(\d+) .*?"
     r"dictionaryOwner=(\d+) dictionaryKey=(.*?) "
@@ -115,7 +126,10 @@ def verify_peer_profiles(
         if not isinstance(obj, dict):
             continue
         handle = peer_handle(obj.get("handle"))
-        if handle is None or int(obj.get("type", -1)) not in (73, 80, 501, 502, 504, 506):
+        if handle is None or (
+            int(obj.get("type", -1)) not in (73, 80, 501, 502, 504, 506)
+            and obj.get("object") != "MLEADERSTYLE"
+        ):
             continue
         if handle in peer_by_handle:
             raise SystemExit("LibreDWG minJSON repeats a profiled object handle")
@@ -123,7 +137,8 @@ def verify_peer_profiles(
 
     names = {
         73: "MLINESTYLE", 80: "ACDBPLACEHOLDER",
-        501: "VISUALSTYLE", 502: "MATERIAL", 504: "TABLESTYLE", 506: "SUN",
+        501: "VISUALSTYLE", 502: "MATERIAL", 504: "TABLESTYLE",
+        505: "MLEADERSTYLE", 506: "SUN",
     }
     rows = []
     for frame in frames:
@@ -137,6 +152,7 @@ def verify_peer_profiles(
             501: "VISUALSTYLE",
             502: "MATERIAL",
             504: "TABLESTYLE",
+            505: "MLEADERSTYLE",
             506: "SUN",
         }[object_type]
         expected_dxf = {
@@ -145,6 +161,7 @@ def verify_peer_profiles(
             501: None,
             502: None,
             504: None,
+            505: None,
             506: None,
         }[object_type]
         reactors = obj.get("reactors", []) if obj else []
@@ -175,6 +192,20 @@ def verify_peer_profiles(
             "reactorHandles": peer_reactors,
             "matchesLibdxfrwFrame": True,
         })
+
+        if object_type == 505:
+            expected_fields = {
+                "line_type": [5, 1, 20, 20],
+                "arrow_head": [5, 0, 0, 0],
+                "text_style": [5, 1, 17, 17],
+                "block": [5, 0, 0, 0],
+            }
+            if any(obj.get(field) != value
+                   for field, value in expected_fields.items()):
+                raise SystemExit(
+                    "LibreDWG minJSON MLEADERSTYLE body handle roles/targets "
+                    "differ from the source-bound profile"
+                )
 
     schema_text = peer_schema_path.read_text(errors="replace")
     schema_blocks: dict[str, str] = {}
@@ -228,6 +259,27 @@ def verify_peer_profiles(
         raise SystemExit("LibreDWG TABLESTYLE schema handle roles changed")
     schema_blocks["TABLESTYLE"] = hashlib.sha256(
         tablestyle_block.encode()
+    ).hexdigest()
+
+    mleaderstyle_start = schema_text.find("DWG_OBJECT (MLEADERSTYLE)")
+    mleaderstyle_end = schema_text.find("DWG_OBJECT_END", mleaderstyle_start)
+    if mleaderstyle_start < 0 or mleaderstyle_end < 0:
+        raise SystemExit("LibreDWG dwg2.spec lacks MLEADERSTYLE object block")
+    mleaderstyle_block = schema_text[mleaderstyle_start:mleaderstyle_end]
+    expected_mleader_handles = (
+        "FIELD_HANDLE (line_type, 5, 340);",
+        "FIELD_HANDLE (arrow_head, 5, 341);",
+        "FIELD_HANDLE (text_style, 5, 342);",
+        "FIELD_HANDLE (block, 5, 343);",
+    )
+    if (
+        "START_OBJECT_HANDLE_STREAM;" not in mleaderstyle_block
+        or mleaderstyle_block.count("FIELD_HANDLE") != 4
+        or any(field not in mleaderstyle_block for field in expected_mleader_handles)
+    ):
+        raise SystemExit("LibreDWG MLEADERSTYLE schema handle roles changed")
+    schema_blocks["MLEADERSTYLE"] = hashlib.sha256(
+        mleaderstyle_block.encode()
     ).hexdigest()
 
     source_types = Counter(int(frame["encodedType"]) for frame in frames)
@@ -335,6 +387,22 @@ def main() -> int:
             "fieldCount": profile["fieldCount"],
             "objectType": "TABLESTYLE",
         }
+    mleader_style_profiles = {
+        int(handle): {
+            "fieldCount": int(field_count),
+            "rule": rule,
+            "dictionaryKey": dictionary_key,
+            "dictionaryHandle": int(dictionary_handle),
+        }
+        for handle, field_count, rule, dictionary_key, dictionary_handle
+        in MLEADERSTYLE_PROFILE.findall(combined)
+    }
+    for handle, profile in mleader_style_profiles.items():
+        handle_body_profiles[handle] = {
+            "rule": profile["rule"],
+            "fieldCount": profile["fieldCount"],
+            "objectType": "MLEADERSTYLE",
+        }
     dictionary_memberships = {
         int(handle): {
             "objectType": record_type,
@@ -404,6 +472,66 @@ def main() -> int:
             frames,
         )
     if version == "AC1027":
+        mleader_styles = [
+            frame for frame in frames if frame["encodedType"] == 505
+        ]
+        mleader_handle_fields = {
+            int(owner): [] for owner, *_ in MLEADERSTYLE_HANDLE_FIELD.findall(combined)
+        }
+        for owner, role, code, target, start_bit, bit_size in (
+            MLEADERSTYLE_HANDLE_FIELD.findall(combined)
+        ):
+            mleader_handle_fields[int(owner)].append({
+                "role": role,
+                "code": int(code),
+                "target": int(target),
+                "startBit": int(start_bit),
+                "bitSize": int(bit_size),
+            })
+        for frame in mleader_styles:
+            profile = mleader_style_profiles.get(int(frame["handle"]))
+            fields = mleader_handle_fields.get(int(frame["handle"]), [])
+            dictionary_edge = any(
+                item["ownerHandle"] == frame["ownerHandle"]
+                and item["role"] == "dictionary.entry[Standard]"
+                and item["targetHandle"] == frame["handle"]
+                for item in typed_references
+            )
+            nod_edge = any(
+                entry["key"] == "ACAD_MLEADERSTYLE"
+                and entry["targetHandle"] == frame["ownerHandle"]
+                for entry in named_object_dictionary_entries
+            )
+            expected_fields = [
+                ("lineType", 5, 20), ("arrowHead", 5, 0),
+                ("textStyle", 5, 17), ("block", 5, 0),
+            ]
+            if (
+                frame["className"] != "AcDbMLeaderStyle"
+                or frame["recordName"] != "MLEADERSTYLE"
+                or frame["typedBodyReport"] != "MLEADERSTYLE"
+                or frame["bodyReferenceDisposition"]
+                != "spec-profile-handle-references"
+                or profile != {
+                    "fieldCount": 4,
+                    "rule": "ODA-20.4.87",
+                    "dictionaryKey": "ACAD_MLEADERSTYLE",
+                    "dictionaryHandle": frame["ownerHandle"],
+                }
+                or len(fields) != 4
+                or [(item["role"], item["code"], item["target"])
+                    for item in fields] != expected_fields
+                or any(item["bitSize"] <= 0 for item in fields)
+                or [item["startBit"] for item in fields]
+                    != sorted(item["startBit"] for item in fields)
+                or frame["handle"] != 108 or frame["ownerHandle"] != 107
+                or frame["reactorHandles"] != [107]
+                or not dictionary_edge or not nod_edge
+            ):
+                raise SystemExit(
+                    "AC1027 MLEADERSTYLE lacks complete ODA body spans, peer "
+                    "handle-role evidence, or rooted dictionary membership"
+                )
         table_styles = [frame for frame in frames if frame["encodedType"] == 504]
         for frame in table_styles:
             profile = table_style_profiles.get(int(frame["handle"]))

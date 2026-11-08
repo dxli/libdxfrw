@@ -23426,6 +23426,74 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
   for (const DRW_MLeaderStyle &style : data.mLeaderStyles) {
     std::cout << " typedBodyFrame type=MLEADERSTYLE handle=" << style.handle
               << '\n';
+    if (data.sourceVersion == DRW::AC1027 && style.handle == 108u) {
+      const DRW_UnsupportedObject* frame =
+          DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+              data, data.importGeneration, style.handle);
+      const std::array<std::pair<const char*, const dwgHandle*>, 4> fields{{
+          {"lineType", &style.leaderLineTypeHandle},
+          {"arrowHead", &style.arrowHeadBlockHandle},
+          {"textStyle", &style.textStyleHandle},
+          {"block", &style.blockHandle},
+      }};
+      bool spansComplete = style.m_dwgHandleFieldSpans.size() == fields.size();
+      const auto rootEntryCount = std::count_if(
+          data.namedObjectDictionary.m_entries.begin(),
+          data.namedObjectDictionary.m_entries.end(),
+          [](const DRW_Dictionary::Entry& entry) {
+              return entry.m_name == "ACAD_MLEADERSTYLE"
+                  && entry.m_handle == 107u;
+          });
+      for (std::size_t index = 0u;
+           spansComplete && index < fields.size(); ++index) {
+        const DRW_DwgSubrecordRange& span =
+            style.m_dwgHandleFieldSpans[index];
+        spansComplete = span.m_name
+                == std::string("mleader-style-handle-")
+                    + (index == 0u ? "line-type"
+                       : index == 1u ? "arrow-head"
+                       : index == 2u ? "text-style" : "block")
+            && span.m_version == DRW::AC1027
+            && span.m_count == 1u && span.m_parseComplete
+            && span.m_bitSize != 0u
+            && fields[index].second->ref
+                == (index == 0u ? 20u : index == 2u ? 17u : 0u)
+            && (fields[index].second->code == DRW::DwgHardPointer
+                || (fields[index].second->ref == 0u
+                    && fields[index].second->code == 0u));
+      }
+      if (!spansComplete || frame == nullptr
+          || frame->m_version != DRW::AC1027
+          || frame->m_objectType != 505u || !frame->m_isCustomClass
+          || frame->m_recordName != "MLEADERSTYLE"
+          || frame->m_className != "AcDbMLeaderStyle"
+          || frame->m_handle != 108u || frame->m_parentHandle != 107u
+          || frame->m_reactorHandles != std::vector<std::uint32_t>{107u}
+          || frame->m_xDictHandle != 0u
+          || style.parentHandle != 107u
+          || style.reactorHandles != std::vector<std::uint32_t>{107u}
+          || style.xDictHandle != 0u
+          || rootEntryCount != 1) {
+        std::cerr << "AC1027 MLEADERSTYLE source handle profile mismatch\n";
+        return false;
+      }
+      std::cout << " typedBodyProfile type=MLEADERSTYLE handle=108"
+                   " bodyHandleFields=4 rule=ODA-20.4.87"
+                   " dictionaryKey=ACAD_MLEADERSTYLE"
+                   " dictionaryHandle=107 complete=1\n";
+      for (std::size_t index = 0u; index < fields.size(); ++index) {
+        const DRW_DwgSubrecordRange& span =
+            style.m_dwgHandleFieldSpans[index];
+        std::cout << " typedBodyHandleField owner=108 role="
+                  << fields[index].first
+                  << " code="
+                  << static_cast<unsigned>(fields[index].second->code)
+                  << " target=" << fields[index].second->ref
+                  << " startBit=" << span.m_startBit
+                  << " bitSize=" << span.m_bitSize
+                  << " complete=1\n";
+      }
+    }
     if (style.leaderLineTypeHandle.ref != 0u)
       std::cout << " typedBodyReference owner=" << style.handle
                 << " role=lineType target=" << style.leaderLineTypeHandle.ref
@@ -79319,13 +79387,15 @@ bool mleaderStylePackedColorProjection(
             return nullptr;
         const auto styleEntry = std::find_if(dictionary->m_entries.begin(),
             dictionary->m_entries.end(), [](const DRW_Dictionary::Entry& entry) {
-                return entry.m_name == "STANDARD";
+                return entry.m_name == "STANDARD"
+                    || entry.m_name == "Standard";
             });
         if (styleEntry == dictionary->m_entries.end()
             || std::count_if(dictionary->m_entries.begin(),
                    dictionary->m_entries.end(),
                    [](const DRW_Dictionary::Entry& entry) {
-                       return entry.m_name == "STANDARD";
+                       return entry.m_name == "STANDARD"
+                           || entry.m_name == "Standard";
                    }) != 1)
             return nullptr;
         const auto style = std::find_if(data.mLeaderStyles.begin(),
@@ -79494,9 +79564,27 @@ bool mleaderStylePackedColorProjection(
     const auto typedOutput = directory
         / ("root-mleaderstyle-packed-color-typed-" + encoding + ".dxf");
     dx_iface typedWriter;
+    const std::string typedSentinel =
+        "synthetic DWG receipt cannot authorize strict output\n";
+    {
+        std::ofstream previous(typedOutput, std::ios::binary | std::ios::trunc);
+        if (!previous || !(previous << typedSentinel))
+            return fail("could not seed synthetic-receipt refusal sentinel");
+    }
+    if (typedWriter.fileExport(typedOutput.string(), DRW::AC1027, binary,
+            &typedSource, false, true))
+        return fail("synthetic DWG receipt incorrectly authorized strict output");
+    {
+        std::ifstream previous(typedOutput, std::ios::binary);
+        const std::string preserved(
+            (std::istreambuf_iterator<char>(previous)),
+            std::istreambuf_iterator<char>());
+        if (previous.bad() || preserved != typedSentinel)
+            return fail("synthetic-receipt refusal replaced destination");
+    }
     if (!typedWriter.fileExport(typedOutput.string(), DRW::AC1027, binary,
-                                &typedSource, false, true))
-        return fail("typed MLEADERSTYLE packed colors were rejected: "
+            &typedSource, false, false))
+        return fail("typed MLEADERSTYLE generated control failed: "
             + typedWriter.extensionGraphFailureDetail());
     if (!verifyExport(typedOutput, 0, -1, 0xC1u, canonicalByBlock,
                       0x00123456, rgbColor, canonicalAciColor))
@@ -79542,7 +79630,7 @@ bool mleaderStylePackedColorProjection(
             + ".dxf");
     dx_iface aciZeroWriter;
     if (!aciZeroWriter.fileExport(aciZeroOutput.string(), DRW::AC1027,
-            binary, &aciZeroData, false, true))
+            binary, &aciZeroData, false, false))
         return fail("typed MLEADERSTYLE ACI-zero color was rejected: "
             + aciZeroWriter.extensionGraphFailureDetail());
     dx_data aciZeroReadback;
@@ -79609,7 +79697,7 @@ bool mleaderStylePackedColorProjection(
         / ("root-mleaderstyle-packed-color-bylayer-output-" + encoding + ".dxf");
     dx_iface byLayerWriter;
     if (!byLayerWriter.fileExport(byLayerOutput.string(), DRW::AC1027,
-            binary, &byLayerData, false, true))
+            binary, &byLayerData, false, false))
         return fail("typed MLEADERSTYLE BYLAYER color was rejected: "
             + byLayerWriter.extensionGraphFailureDetail());
     dx_data byLayerReadback;

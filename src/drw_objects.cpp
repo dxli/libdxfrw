@@ -20584,6 +20584,9 @@ bool DRW_MLeaderStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint3
     // the inline handle prefix still needs consuming.
     dwgBuffer hBuff = *buf;
     dwgBuffer *hBuf = (version > DRW::AC1018) ? &hBuff : buf;
+    std::uint64_t handleEndBit = 0;
+    if (!parsed.getDwgHandleEndBit(version, *hBuf, handleEndBit))
+        return fail();
     seekObjectHandleStream(version, hBuf, parsed.objSize);
     std::uint32_t parsedParentHandle = 0;
     std::vector<std::uint32_t> parsedReactors;
@@ -20595,10 +20598,28 @@ bool DRW_MLeaderStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint3
     if (!hBuf->isGood()
         || !parsed.readDwgObjectCommonHandles(version, hBuf, &parsedParentHandle, &parsedReactors, &parsedXDictHandle))
         return fail();
-    if (!parsed.readDwgObjectHandleWithinFrame(version, *hBuf, false, parsedLeaderLineTypeHandle)
-        || !parsed.readDwgObjectHandleWithinFrame(version, *hBuf, false, parsedArrowHeadBlockHandle)
-        || !parsed.readDwgObjectHandleWithinFrame(version, *hBuf, false, parsedTextStyleHandle)
-        || !parsed.readDwgObjectHandleWithinFrame(version, *hBuf, false, parsedBlockHandle))
+    const auto readHardPointerField = [&parsed, version, hBuf]
+        (const char *name, dwgHandle& field) {
+        const std::uint64_t startBit = currentObjectDwgBit(hBuf);
+        const bool read = parsed.readDwgObjectHandleWithinFrame(
+            version, *hBuf, false, field);
+        const bool roleValid = read
+            && (field.ref == 0
+                ? field.code == 0 || field.code == DRW::DwgHardPointer
+                : field.code == DRW::DwgHardPointer);
+        parsed.m_dwgHandleFieldSpans.push_back(makeObjectSubrecordRange(
+            name, startBit, currentObjectDwgBit(hBuf), version, 1u,
+            roleValid));
+        return roleValid;
+    };
+    if (!readHardPointerField("mleader-style-handle-line-type",
+                              parsedLeaderLineTypeHandle)
+        || !readHardPointerField("mleader-style-handle-arrow-head",
+                                 parsedArrowHeadBlockHandle)
+        || !readHardPointerField("mleader-style-handle-text-style",
+                                 parsedTextStyleHandle)
+        || !readHardPointerField("mleader-style-handle-block",
+                                 parsedBlockHandle))
         return fail();
 
     if (!hBuf->isGood())

@@ -6464,6 +6464,7 @@ public:
     blockColorDwgFlags = 0;
     blockColorDwgIndex = 0;
     blockColorDwgMetadataPresent = false;
+    m_dwgHandleFieldSpans.clear();
     blockScale = DRW_Coord(1, 1, 1);
     blockScaleEnabled = false;
     blockRotation = 0.0;
@@ -6569,6 +6570,8 @@ public:
   std::uint8_t blockColorDwgFlags = 0;
   std::uint16_t blockColorDwgIndex = 0;
   bool blockColorDwgMetadataPresent = false;
+  // Bounded R2010+ body handle fields captured from §20.4.87.
+  std::vector<DRW_DwgSubrecordRange> m_dwgHandleFieldSpans;
 };
 
 //! Class to handle DBCOLOR (AcDbColor), a custom OBJECT class (§20.4).

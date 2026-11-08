@@ -2128,8 +2128,9 @@
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "selected-typed-report-only",
-        "bodyReferenceRule": null,
+        "bodyHandleFieldCount": 29,
+        "bodyReferenceDisposition": "spec-profile-handle-references",
+        "bodyReferenceRule": "ODA-20.4.101.2+ODA-20.4.101.3+ODA-20.4.101.4",
         "captureKind": "opaque",
         "className": "AcDbTableStyle",
         "commonLinkEvidence": 1,
@@ -2152,8 +2153,9 @@
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "selected-typed-report-only",
-        "bodyReferenceRule": null,
+        "bodyHandleFieldCount": 4,
+        "bodyReferenceDisposition": "spec-profile-handle-references",
+        "bodyReferenceRule": "ODA-20.4.87",
         "captureKind": "opaque",
         "className": "AcDbMLeaderStyle",
         "commonLinkEvidence": 1,
@@ -3444,10 +3446,68 @@
         "defaultEntryHandleRole": "hard pointer",
         "authority": "ODA Open Design Specification v5.4.1 §20.4.45: same as DICTIONARY plus an H default-entry field (hard pointer). The one contained DICTIONARY entry is separately profiled under §20.4.44.",
         "scopeLimit": "Source-bound body reference and NOD/default role evidence only; no DXF output or broader producer qualification."
+      },
+      "MLEADERSTYLE": {
+        "sourceVersion": "AC1027",
+        "encodedType": 505,
+        "sourceFrameHandle": 108,
+        "frameSize": 122,
+        "ownerHandle": 107,
+        "reactorHandles": [
+          107
+        ],
+        "NODKey": "ACAD_MLEADERSTYLE",
+        "dictionaryHandle": 107,
+        "dictionaryEntry": "Standard",
+        "dictionaryTargetHandle": 108,
+        "bodyHandleFields": 4,
+        "fields": [
+          {
+            "role": "line type",
+            "field": "lineType",
+            "handleCode": 5,
+            "targetHandle": 20,
+            "spanName": "mleader-style-handle-line-type"
+          },
+          {
+            "role": "arrow head block",
+            "field": "arrowHeadBlock",
+            "handleCode": 0,
+            "targetHandle": 0,
+            "spanName": "mleader-style-handle-arrow-head"
+          },
+          {
+            "role": "text style",
+            "field": "textStyle",
+            "handleCode": 5,
+            "targetHandle": 17,
+            "spanName": "mleader-style-handle-text-style"
+          },
+          {
+            "role": "block",
+            "field": "block",
+            "handleCode": 0,
+            "targetHandle": 0,
+            "spanName": "mleader-style-handle-block"
+          }
+        ],
+        "fieldSpansComplete": true,
+        "authority": "ODA Open Design Specification v5.4.1 §20.4.87; MLEADERSTYLE contains four H hard-pointer fields. LibreDWG dwg2.spec independently lists four FIELD_HANDLE(...,5,...) fields.",
+        "peerIdentityMatch": {
+          "reader": "LibreDWG 0.13.3.553_6d6a_dirty",
+          "object": "MLEADERSTYLE",
+          "encodedType": 505,
+          "size": 122,
+          "ownerHandle": 107,
+          "reactorHandles": [
+            107
+          ]
+        },
+        "scopeLimit": "Exact AC1027 body-reference disposition and rooted dictionary membership only; not whole-object output, complete semantics, or native consumer qualification."
       }
     },
     "peerProfiles": {
-      "matchedFrameCount": 29,
+      "matchedFrameCount": 32,
       "sourceSha256": "3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42",
       "reader": "LibreDWG 0.13.3.553_6d6a_dirty",
       "matchedFrames": [
@@ -3798,13 +3858,50 @@
             67
           ],
           "size": 91
+        },
+        {
+          "dxfName": null,
+          "encodedType": 504,
+          "handle": 106,
+          "matchesLibdxfrwFrame": true,
+          "object": "TABLESTYLE",
+          "ownerHandle": 105,
+          "reactorHandles": [
+            105
+          ],
+          "size": 924
+        },
+        {
+          "dxfName": null,
+          "encodedType": 505,
+          "handle": 108,
+          "matchesLibdxfrwFrame": true,
+          "object": "MLEADERSTYLE",
+          "ownerHandle": 107,
+          "reactorHandles": [
+            107
+          ],
+          "size": 122
+        },
+        {
+          "dxfName": null,
+          "encodedType": 506,
+          "handle": 109,
+          "matchesLibdxfrwFrame": true,
+          "object": "SUN",
+          "ownerHandle": 41,
+          "reactorHandles": [],
+          "size": 25
         }
       ],
       "schemaPath": "/Users/dli/dev/libredwg/src/dwg2.spec",
       "schemaSha256": "2bb3602b2867277868ebb488ea236b07d7cdf605128987f767114d68dd501499",
       "schemaBlockSha256": {
         "MATERIAL": "d7d36f2b3e98d2d2aa75a4f947b548f0077c205ca99042b26c6cac2c9493622c",
+        "MLEADERSTYLE": "52dd33baeab0b0c6e685a487d2b708e887830e4818b3b34f5fa4836725274e1b",
         "PLACEHOLDER": "1aeadbb818abe467c93efcde35aa592f10bdfaa2392c89519ac9d145a64881aa",
+        "SUN": "5f5c6f5f59ab466f369bc15617851f3b49fe9d709deedd9f41d21b9dea619880",
+        "TABLESTYLE": "6601049813781ccc57884fe66b10bbd64a975f0fba67e02dbf3611a995bdbae8",
         "VISUALSTYLE": "fa0333f85428bdc2cda792a37adf999854c86edc690fa42a21a0d3a89c2029be"
       },
       "bodyHandleFieldsBeforeCommonStream": false,
@@ -3897,42 +3994,35 @@
       "/Users/dli/doc/dwg/Cover.dwg"
     ],
     "executable": "/private/tmp/libdxfrw-legacy-common-build/tests/libdxfrw_dwg2dxf_adapter_tests",
-    "executableSha256": "266c945a537c1037ba065c0f149f2e798240265c2ea879679de1b1fc2e330804",
+    "executableSha256": "b56cdc956b52471548009562eb6dff8ab612e9f1d2b427ca52d9cd983663d919",
     "exitCode": 0,
     "outputBinding": "The bounded runner hashed Cover.dwg immediately before and after this diagnostic. The peer minJSON was separately generated from the same input SHA-256 and its class/frame identities, sizes and common links were compared.",
-    "outputPath": "/private/tmp/ac1027-cover-reference-audit-v29.json",
-    "outputSha256": "f49ce969b7a84d1b72ccfa04ebd77ee5d2d71a6f255d3323ee5c9f92461d38e6",
+    "outputPath": "/private/tmp/ac1027-cover-reference-audit-v32.json",
+    "outputSha256": "7807b716982b795a4b228a1503c4cf13a27ba49cd2877a96872bd1b8d1176667",
     "repeatableAuditRunner": {
       "path": "tools/research/audit_ac1027_source_references.py",
-      "sha256": "33e601401744a918328797a90f5e43342450a76d5b951b23127a2c13ade261aa",
-      "diagnosticOutputSha256": "3b14b211aa12726bf649ccec9061d13dfdc98dd7e259734970fa04a77ca81ce3",
+      "sha256": "aacf3670cf5eb470f0416b75e9766f522e3b9e0c0372455378a58d8d6313a0fc",
+      "diagnosticOutputSha256": "1a43d639dde71c7e99387eb4a30f1ea319968338da44aa09a4d5d1b94639fcb0",
       "capturedFrameIdentities": 88,
       "dictionaryMembershipEdges": 43,
-      "framesWithNormativeHandleReferenceProfile": 17,
+      "framesWithNormativeHandleReferenceProfile": 18,
       "framesWithNormativeNoBodyHandleProfile": 40,
       "framesWithPeerNoBodyHandleProfile": 29,
-      "framesWithSelectedTypedBodyReport": 2,
+      "framesWithSelectedTypedBodyReport": 1,
       "framesWithoutExhaustiveBodyReferenceDecode": 0,
       "namedObjectDictionaryEntries": 14,
       "selectedTypedBodyReferenceRows": 129,
       "sourceHashBeforeAfterCheck": true,
       "sourceHashBoundInsideDiagnostic": false,
       "sourceCodeHashes": {
-        "src/drw_objects.cpp": "e5aaadf78d7fa7e39ef533b3c3c979d11a9a269a1edff0e72da132ede35ee1d6",
-        "src/drw_objects.h": "3a2dcc00d383703dc64185b6324be505f96e8003cd2b3ba89ced90b27a5b4943",
-        "src/intern/dwg_default_material.h": "a47f926e5cf5bbc34f19de17af841c651031384c727d71adbcfb3dbf6ec18ab6",
-        "src/intern/dwgreader.cpp": "36ebc06b6cb6031689a1b06fdf074c8b1fae6c9d518dfc53b58eb4c9a9668327",
-        "src/intern/dwgwriter24.cpp": "90725306ac6b3cc7a0ea3cac826c187a0199ba7267051d15e121087ee7f33ef3",
-        "tests/dwg_ac1024_default_material_tests.cpp": "e105238b797f59a55f0497e8f13e711ef6bfde220e3d424554262361d956a071",
-        "tests/dwg_default_material_optin_tests.cpp": "51ec58607af65e16c937fd204baf5ec4e7c7027a77355ca5cfc5605c6a7786a5",
-        "tests/dwg_material_replay_refusal_tests.cpp": "67dbd35ebe8ba5ee7980e1ef7fdaf333beac0faa5bf63e26f86cce25e428107e",
-        "tests/material_dwg_test_helpers.h": "d687e2a1f01a37f5ef432850822e799d1f0177dee1adad8a45533665fd83d467",
-        "tests/dwg2dxf_adapter_tests.cpp": "a69704d37b09b413c3b686a4674f5f4f44f3872fbb4627e71fed15547f21faa4",
-        "tools/research/audit_ac1027_source_references.py": "33e601401744a918328797a90f5e43342450a76d5b951b23127a2c13ade261aa"
+        "src/drw_objects.cpp": "56fb5a57d31333ab339909ffbd7b4e315fdb7f7b56bb9b0e303ca265bad80dee",
+        "src/drw_objects.h": "71e9110dbf3d4b5e289219688bd3c42fbe8148f3eebabad5528a10031667152b",
+        "tests/dwg2dxf_adapter_tests.cpp": "6e27eeb234e67dde9ef90790c63a9bb56d25eba515bc56a28fa7f76bda237a68",
+        "tools/research/audit_ac1027_source_references.py": "aacf3670cf5eb470f0416b75e9766f522e3b9e0c0372455378a58d8d6313a0fc"
       },
-      "peerMatchedFrames": 31
+      "peerMatchedFrames": 32
     },
-    "repositoryHead": "2c0eda3b",
+    "repositoryHead": "285ecbfa",
     "workingTreeCodeHashes": {
       "src/drw_objects.cpp": "e5aaadf78d7fa7e39ef533b3c3c979d11a9a269a1edff0e72da132ede35ee1d6",
       "src/drw_objects.h": "3a2dcc00d383703dc64185b6324be505f96e8003cd2b3ba89ced90b27a5b4943",
@@ -4359,8 +4449,8 @@
     "aggregateAc1027GuardCleared": false,
     "allEntityAndTableReferencesBound": false,
     "allOwnerRolesIndependentlyProven": false,
-    "bodyReferenceCoverage": "The repeatable hash-binding audit captures 88 retained object identities and 129 selected typed body-reference rows. Normative ODA body profiles cover 40 no-body-handle records (33 SCALE, five DICTIONARYVAR, one RASTERVARIABLES, one pre-R2018 MLINESTYLE) and 16 handle-bearing profiles (13 DICTIONARY, two LAYOUT, one DICTIONARYWDFLT). The DICTIONARYWDFLT profile establishes its one dictionary entry plus the §20.4.45 default hard pointer, with both roles targeting handle 15 under NOD key ACAD_PLOTSTYLENAME. Source-matched LibreDWG profiles cover one ACDBPLACEHOLDER, 24 VISUALSTYLE, three MATERIAL, and one SUN body; all 30 peer identities, frame sizes, owners and reactors match minJSON from the same Cover source. MATERIAL’s three AC1027 defaults pass bounded semantic decoding, but output remains refused because modern body/string replay is incomplete. SUN’s body has no H fields before common handles; its VPORT owner edge is independently supported by ODA §20.4.81 group 361. Three other frames (3DSOLID, TABLESTYLE, MLEADERSTYLE) remain selected typed reports only and incomplete. No body is currently classified as unknown, but these partial reports and unresolved graph/output closure keep the aggregate strict guard in place. This inventory does not qualify DXF output or general semantics. The LAYOUT report does not resolve the separate ODA RL versus observed BL viewport-count discrepancy.",
-    "decision": "Preserve the global AC1027 strict-source guard. Bounded body-reference classification covers 85/88 retained frames: 40 normative no-body-handle, 16 normative handle-reference, and 29 source-matched peer no-body-handle profiles; 43 dictionary-membership edges are recorded. Three frames (3DSOLID, TABLESTYLE, MLEADERSTYLE) have partial selected reports without exhaustive body-reference proof. The three AC1027 default MATERIAL records have bounded semantic read profiles, but no output claim follows because modern body/string replay remains refused. No guard narrowing or output-support promotion follows from this inventory.",
+    "bodyReferenceCoverage": "The repeatable hash-binding audit captures 88 retained object identities and 129 selected typed body-reference rows. Normative ODA body profiles cover 40 no-body-handle records and 18 handle-bearing profiles (13 DICTIONARY, two LAYOUT, one DICTIONARYWDFLT, one TABLESTYLE, and one MLEADERSTYLE). The DICTIONARYWDFLT, TABLESTYLE, and MLEADERSTYLE profiles bind their exact source roles and rooted dictionary membership. Source-matched LibreDWG profiles cover one ACDBPLACEHOLDER, 24 VISUALSTYLE, three MATERIAL, and one SUN body; all 32 peer identities, frame sizes, owners, and reactors match minJSON from the same Cover source. MATERIAL’s three AC1027 defaults pass bounded semantic decoding, but output remains refused because modern body/string replay is incomplete. SUN’s body has no H fields before common handles; its VPORT owner edge is independently supported by ODA §20.4.81 group 361. Only 3DSOLID remains a selected typed report without exhaustive body-reference proof. No body is classified as unknown. This inventory does not qualify DXF output or general semantics; LAYOUT retains the separate ODA RL versus observed BL viewport-count discrepancy.",
+    "decision": "Preserve the global AC1027 strict-source guard. Bounded body-reference classification covers 87/88 retained frames: 40 normative no-body-handle, 18 normative handle-reference, and 29 source-matched peer no-body-handle profiles; 43 dictionary-membership edges are recorded. The 3DSOLID frame remains a partial selected report. The three AC1027 default MATERIAL records have bounded semantic read profiles, but no output claim follows because modern body/string replay remains refused. No guard narrowing or output-support promotion follows from this inventory.",
     "independentProducerQualification": false,
     "omittedFrameDependenciesClosed": false,
     "selectedDxfDispositionComplete": false,
@@ -4443,30 +4533,31 @@
     "assertedCounts": {
       "bodyDispositionCounts": {
         "not-exhaustively-decoded": 0,
-        "selected-typed-report-only": 2,
-        "spec-profile-handle-references": 17,
+        "selected-typed-report-only": 1,
+        "spec-profile-handle-references": 18,
         "spec-profile-no-body-handles": 40,
         "peer-profile-no-body-handles": 29
       },
       "dictionaryMembershipEdges": 43,
       "namedObjectDictionaryEntries": 14,
-      "peerMatchedFrames": 31,
+      "peerMatchedFrames": 32,
       "retainedObjectFrames": 88,
       "selectedTypedBodyReferenceRows": 129,
       "AC1027DefaultMaterialSemanticProfiles": 3,
       "AC1027SunPeerNoBodyProfiles": 1,
-      "AC1027DictionaryWithDefaultOdaProfiles": 1
+      "AC1027DictionaryWithDefaultOdaProfiles": 1,
+      "AC1027MLeaderStyleOdaHandleProfile": 1
     },
-    "build": "passed with configured -Werror flags for libdxfrw_dwg_ac1024_default_material_tests and libdxfrw_dwg2dxf_adapter_tests; Python audit runner syntax check passed",
-    "buildCommand": "cmake --build /private/tmp/libdxfrw-legacy-common-build --target libdxfrw_dwg2dxf_adapter_tests libdxfrw_dwg_ac1024_default_material_tests -j2",
-    "diagnostic": "passed; refreshed audit verified 88 unique retained object identities and unchanged Cover SHA-256; 40 ODA no-body profiles, 17 ODA handle profiles, 29 source-matched LibreDWG peer no-body profiles, two selected typed reports, zero unknown body dispositions, and 43 dictionary-membership edges. TABLESTYLE has 29 ODA-anchored H-field spans and same-source LibreDWG identity/common-link match; MATERIAL semantic profiles, SUN/VPORT owner role, and DICTIONARYWDFLT default/member roles remain asserted.",
+    "build": "passed with configured -Werror flags for libdxfrw_dwg2dxf_adapter_tests; Python audit runner completed and hash-bound the unchanged Cover source.",
+    "buildCommand": "cmake --build /private/tmp/libdxfrw-legacy-common-build --target libdxfrw_dwg2dxf_adapter_tests -j2",
+    "diagnostic": "passed; refreshed audit verified 88 unique retained object identities and unchanged Cover SHA-256; 40 ODA no-body profiles, 18 ODA handle profiles, 29 source-matched LibreDWG peer no-body profiles, one selected typed report (3DSOLID), zero unknown body dispositions, and 43 dictionary-membership edges. TABLESTYLE and MLEADERSTYLE have ODA-anchored complete handle-field spans and same-source LibreDWG identity/common-link matches; MATERIAL semantic profiles, SUN/VPORT owner role, and DICTIONARYWDFLT default/member roles remain asserted.",
     "diagnosticCommand": [
       "/private/tmp/libdxfrw-legacy-common-build/tests/libdxfrw_dwg2dxf_adapter_tests",
       "--opaque-dwg-source-inventory",
       "/Users/dli/doc/dwg/Cover.dwg"
     ],
     "newDwgDxfFixturesCommitted": false,
-    "diagnosticOutputSha256": "3b14b211aa12726bf649ccec9061d13dfdc98dd7e259734970fa04a77ca81ce3",
+    "diagnosticOutputSha256": "1a43d639dde71c7e99387eb4a30f1ea319968338da44aa09a4d5d1b94639fcb0",
     "semanticNotes": {
       "materialHandles": [
         68,
@@ -4508,9 +4599,67 @@
         "NODKey": "ACAD_TABLESTYLE",
         "dictionaryMembershipTarget": 106,
         "qualificationLimit": "Body-reference disposition only; no whole-object output or native semantic claim."
+      },
+      "mleaderStyleHandleProfile": {
+        "sourceVersion": "AC1027",
+        "encodedType": 505,
+        "sourceFrameHandle": 108,
+        "frameSize": 122,
+        "ownerHandle": 107,
+        "reactorHandles": [
+          107
+        ],
+        "NODKey": "ACAD_MLEADERSTYLE",
+        "dictionaryHandle": 107,
+        "dictionaryEntry": "Standard",
+        "dictionaryTargetHandle": 108,
+        "bodyHandleFields": 4,
+        "fields": [
+          {
+            "role": "line type",
+            "field": "lineType",
+            "handleCode": 5,
+            "targetHandle": 20,
+            "spanName": "mleader-style-handle-line-type"
+          },
+          {
+            "role": "arrow head block",
+            "field": "arrowHeadBlock",
+            "handleCode": 0,
+            "targetHandle": 0,
+            "spanName": "mleader-style-handle-arrow-head"
+          },
+          {
+            "role": "text style",
+            "field": "textStyle",
+            "handleCode": 5,
+            "targetHandle": 17,
+            "spanName": "mleader-style-handle-text-style"
+          },
+          {
+            "role": "block",
+            "field": "block",
+            "handleCode": 0,
+            "targetHandle": 0,
+            "spanName": "mleader-style-handle-block"
+          }
+        ],
+        "fieldSpansComplete": true,
+        "authority": "ODA Open Design Specification v5.4.1 §20.4.87; MLEADERSTYLE contains four H hard-pointer fields. LibreDWG dwg2.spec independently lists four FIELD_HANDLE(...,5,...) fields.",
+        "peerIdentityMatch": {
+          "reader": "LibreDWG 0.13.3.553_6d6a_dirty",
+          "object": "MLEADERSTYLE",
+          "encodedType": 505,
+          "size": 122,
+          "ownerHandle": 107,
+          "reactorHandles": [
+            107
+          ]
+        },
+        "scopeLimit": "Exact AC1027 body-reference disposition and rooted dictionary membership only; not whole-object output, complete semantics, or native consumer qualification."
       }
     },
-    "focusedTestCommand": "ctest --test-dir /private/tmp/libdxfrw-legacy-common-build -R \"^libdxfrw_tablestyle_r24_typed_writer$\" --output-on-failure",
-    "focusedTest": "passed; R24 typed TABLESTYLE fast selector. The AC1027 source-bound TABLESTYLE handle profile and peer identity/common-link check passed in the refreshed audit; the three focused MATERIAL tests remain passing from commit 2c0eda3b."
+    "focusedTestCommand": "ctest --test-dir /private/tmp/libdxfrw-legacy-common-build -R \"^libdxfrw_mleaderstyle\" --output-on-failure",
+    "focusedTest": "passed 5/5 focused MLEADERSTYLE selectors: CMC/RGB, writer closure, boolean domain, integer source domains, and duplicate singleton fields. Writer closure also proves a synthetic DWG receipt refuses strict output and preserves the existing destination; generated opt-in writer checks remain mechanical codec evidence only."
   }
 }
