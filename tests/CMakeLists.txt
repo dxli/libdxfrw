@@ -1586,6 +1586,24 @@ add_test(NAME libdxfrw_associative_network_objects_allocation_retry
 set_tests_properties(libdxfrw_associative_network_objects_allocation_retry PROPERTIES
     LABELS "fast;dxf;associative;allocation;transaction;generated"
     TIMEOUT 60)
+add_executable(libdxfrw_associative_dependency_allocation_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/associative_dependency_allocation_tests.cpp
+    ${_libdxfrw_test_adapter_source}
+)
+target_compile_features(libdxfrw_associative_dependency_allocation_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_associative_dependency_allocation_tests
+    PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_associative_dependency_allocation_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/dwg2dxf
+    ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(libdxfrw_associative_dependency_allocation_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_associative_dependency_allocation_retry
+    COMMAND libdxfrw_associative_dependency_allocation_tests
+        "${CMAKE_CURRENT_BINARY_DIR}/associative-dependency-objects-scratch")
+set_tests_properties(libdxfrw_associative_dependency_allocation_retry PROPERTIES
+    LABELS "fast;dxf;associative;allocation;transaction;generated"
+    TIMEOUT 60)
 add_executable(libdxfrw_dictionary_default_objects_allocation_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/dictionary_default_objects_allocation_tests.cpp
     ${_libdxfrw_test_adapter_source}

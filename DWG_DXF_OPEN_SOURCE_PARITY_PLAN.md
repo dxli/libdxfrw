@@ -49,6 +49,18 @@ gated. Do not reopen swept families or promote support claims. Each slice must
 update its receipt and checkpoint, commit implementation with evidence, then
 report the commit and next ready slice.
 
+**Implementation slice (2026-11-08):** a generated AC1024
+`ACDBASSOCDEPENDENCY` OBJECTS callback now has allocation rollback coverage.
+The fast CTest sweeps all 6 ASCII and 6 Binary callback allocation offsets;
+each preserves the destination sentinel and caller object, then retries on the
+same codec and confirms the dependency's typed fields by importing the DXF.
+No DWG/DXF fixture was added and no production code or support claim changed
+([receipt](docs/research/p6-dxf-associative-dependency-objects-allocation-failure-retry-2026-11-08.json)).
+This is one base-dependency profile only; geometry/value dependency semantics,
+graph closure, and source-producer prevalence remain open. The next ready slice
+is the AC1024 `ACDBASSOCVALUEDEPENDENCY` allocation rollback/retry sweep, using
+the existing typed output/readback profile.
+
 **Resume checkpoint (2026-11-07):** the Mac session was unlocked and the
 audit-enabled ODA 27.1 GUI route has completed the AC1024 civil residual
 attempt, the four-variant AC1021 writer matrix, and an AC1012 R13 GROUP
