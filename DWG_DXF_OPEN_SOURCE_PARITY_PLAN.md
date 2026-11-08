@@ -364,26 +364,33 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-08)
 
-- **Clean LibreCAD_3 master compatibility probe:** a fresh archive of
+- **Clean LibreCAD_3 master compatibility patch:** a fresh archive of
   `origin/master` (`5cf435f4a5a57d8dba1599c720917b902e74b25b`) was populated
   with its pinned submodules, then its bundled libdxfrw submodule was replaced
-  only in `/private/tmp` by this repository's `045a3892` source. The clean
+  in `/private/tmp` by this repository's `045a3892` source. The clean
   persistence target configured, built, and linked. The focused export and
   round-trip cohort initially passed 48/64 tests: LibreCAD_3's `writeHeader`
-  unconditionally supplied `$INSUNITS` even for R12/R14, which the library
-  correctly refuses because those revisions cannot represent it. A
-  scratch-only, target-aware adapter change (emit `$INSUNITS` only after
-  AC1014) raised the cohort to 61/64. The remaining three tests shared a
-  malformed fixture: its first OBJECTS `DICTIONARY` had a non-null owner,
-  which violates the root-dictionary rule the reader enforces. Removing that
-  owner from the two scratch fixture copies brought the cohort to 64/64.
-  No LibreCAD_3 checkout, tracked fixture, or production source was changed.
-  Receipt: [clean master compatibility probe](docs/research/p8-librecad3-origin-master-clean-consumer-2026-11-08.json).
-  Next consumer implementation work is to apply the version-aware HEADER
-  callback and correct those fixtures in a clean LibreCAD_3 branch; preserve
-  libdxfrw's unsupported-version refusal and root-dictionary validation. This
-  is macOS integration evidence only; it does not satisfy native Linux/
-  Windows or application qualification.
+  supplied `$INSUNITS` even for R12/R14, which the library correctly refuses
+  because those revisions cannot represent it. A version-aware adapter change
+  (emit `$INSUNITS` only after AC1014, and report explicit insertion-unit loss
+  for legacy export) raised the cohort to 61/64. The remaining three tests
+  shared a malformed fixture: its first OBJECTS `DICTIONARY` had a non-null
+  owner, violating the root-dictionary rule. Correcting that owner in the two
+  existing LibreCAD_3 fixtures brought the cohort to 64/64. The four-file
+  consumer patch and regression are committed locally on
+  `/private/tmp/librecad3-p8`, branch `codex/libdxfrw-upstream-compat`, commit
+  `36082e71` (`Fix LibreCAD DXF exports for legacy versions`). The build
+  command `cmake --build /private/tmp/librecad3-p8/build --target persistence
+  lcunittest -j4` passed; the focused
+  `lcunittest --gtest_filter='DxfExportTest.*:DxfRoundTripTest.*'` run passed
+  64/64. No new DWG/DXF fixture was created; only two existing LibreCAD_3 DXF
+  fixtures were corrected. This local branch is not pushed, reviewed, or
+  merged into LibreCAD_3 `origin/master`. Preserve libdxfrw's unsupported
+  version refusal and root-dictionary validation. Receipt:
+  [clean master compatibility probe](docs/research/p8-librecad3-origin-master-clean-consumer-2026-11-08.json).
+  Next: review/propose this consumer patch, then complete native Linux/Windows
+  and application qualification independently. This macOS result does not
+  satisfy those gates.
 - **Desktop qualification recheck:** after the user indicated they were
   unlocking the Mac, the desktop inventory still reported the native session
   locked. The ODA File Converter launch therefore remains unexecuted against

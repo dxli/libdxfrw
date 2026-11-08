@@ -3,11 +3,13 @@
   "id": "p8-librecad3-origin-master-clean-consumer-2026-11-08",
   "date": "2026-11-08",
   "title": "LibreCAD_3 clean origin/master compatibility probe",
-  "status": "CLEAN_CONSUMER_BUILD_PASSED_WITH_TWO_SCRATCH_FIXES",
+  "status": "CLEAN_CONSUMER_COMPATIBILITY_PATCH_COMMITTED_LOCAL_BRANCH",
   "supportClaimEffect": "none",
   "sources": {
     "libdxfrwCommit": "045a389252bd465fb385d348960a05f331883ca1",
     "libreCAD3OriginMaster": "5cf435f4a5a57d8dba1599c720917b902e74b25b",
+    "consumerPatchBranch": "codex/libdxfrw-upstream-compat",
+    "consumerPatchCommit": "36082e71",
     "libreCAD3PinnedSubmodules": {
       "lckernel/nano-signal-slot": "d4d199e5d3fdde59490ac891333af35990889558",
       "lckernel/tinyspline": "bb3b02cdfaa039aa236a5240f2ba8bce66bea527",
@@ -36,13 +38,13 @@
       {
         "location": "LibreCAD_3 persistence/libdxfrw/dxfimpl.cpp",
         "change": "Emit $INSUNITS only when the selected export version is newer than AC1014, in both preserved and default header paths.",
-        "status": "SCRATCH_ONLY; not applied to a LibreCAD_3 checkout or committed"
+        "status": "COMMITTED on consumerPatchBranch"
       },
       {
         "location": "LibreCAD_3 unittest/persistence/fixtures/raw_objects.dxf and raw_objects_low_handles.dxf",
         "change": "Remove the non-null group-330 owner from the first OBJECTS DICTIONARY. The reader correctly refuses an owned first dictionary instead of misclassifying it as the root named-object dictionary.",
         "sourceSha256Before": "fa5ae3e7594863b188de85655e9cf873ce07fcbc6f726ae7104b8a0c7a08373d",
-        "status": "SCRATCH_ONLY; fixtures in the LibreCAD_3 archive were modified in /private/tmp and not committed"
+        "status": "COMMITTED on consumerPatchBranch; only pre-existing LibreCAD_3 DXF fixtures were corrected"
       }
     ],
     "afterScratchFixes": {
@@ -51,13 +53,29 @@
       "failures": 0
     }
   },
-  "interpretation": "This exposes two LibreCAD_3 integration/test-fixture changes, not a libdxfrw parser or writer defect. Keep the unsupported-version $INSUNITS refusal and first-root-DICTIONARY validation. It is a macOS clean-consumer compile and focused export/readback result only.",
+  "implementation": {
+    "repository": "/private/tmp/librecad3-p8",
+    "branch": "codex/libdxfrw-upstream-compat",
+    "commit": "36082e71",
+    "commitSubject": "Fix LibreCAD DXF exports for legacy versions",
+    "files": [
+      "persistence/libdxfrw/dxfimpl.cpp",
+      "unittest/persistence/dxfroundtriptest.cpp",
+      "unittest/persistence/fixtures/raw_objects.dxf",
+      "unittest/persistence/fixtures/raw_objects_low_handles.dxf"
+    ],
+    "buildCommand": "cmake --build /private/tmp/librecad3-p8/build --target persistence lcunittest -j4",
+    "buildResult": "PASS",
+    "testCommand": "/private/tmp/librecad3-p8/build/bin/lcunittest --gtest_filter='DxfExportTest.*:DxfRoundTripTest.*'",
+    "testResult": "PASS; 64/64 tests"
+  },
+  "interpretation": "This records two LibreCAD_3 consumer/test-fixture changes, not a libdxfrw parser or writer defect. The patch is committed on a local LibreCAD_3 branch but is not merged into LibreCAD_3 origin/master. Keep the unsupported-version $INSUNITS refusal and first-root-DICTIONARY validation. The evidence is a macOS clean-consumer build and focused export/readback result only.",
   "limitations": [
-    "The consumer fixes exist only in /private/tmp/librecad3-origin-master-check/source; no LibreCAD_3 checkout was edited or committed.",
+    "The consumer changes exist only on the local /private/tmp/librecad3-p8 branch; they have not been pushed, reviewed, or merged.",
     "The aggregate test suite was not run; only the 3 DxfExportTest and 61 DxfRoundTripTest cases were selected.",
     "No native LibreCAD_3 application run or Linux/Windows FreeCAD/LibreCAD qualification was performed.",
     "No DWG/DXF fixture was added to libdxfrw or any repository.",
     "No support claim or external J disposition changed."
   ],
-  "next": "Apply the version-aware $INSUNITS callback and root-dictionary fixture correction in a clean LibreCAD_3 branch with regression tests, then run native Linux/Windows and application qualification."
+  "next": "Review and propose the local consumer patch for LibreCAD_3 origin/master; then qualify native Linux/Windows and application behavior. Keep those gates separate from this macOS result."
 }
