@@ -1,0 +1,87 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "title": "Populated DWG GROUP candidate census and multi-member control",
+  "date": "2026-11-07",
+  "supportClaimEffect": "none",
+  "scope": {
+    "roots": [
+      "/Users/dli/dev/ACadSharp",
+      "/Users/dli/dev/dwgTs",
+      "/Users/dli/dev/LibreCAD",
+      "/Users/dli/dev/LibreCAD-dxf",
+      "/Users/dli/dev/dwg_samples"
+    ],
+    "uniqueDwgByteStreams": 173,
+    "LibreDWGJsonDecodeFailures": 3,
+    "method": "LibreDWG 0.14 JSON decode; correlate GROUP member handle references to decoded object/entity handles by exact source handle.",
+    "fixturePolicy": "All discovered external files were read-only inputs. No external DWG/DXF fixture was copied into or committed to libdxfrw."
+  },
+  "candidates": [
+    {
+      "profile": "AC1012 populated GROUP with LINE members",
+      "path": "/Users/dli/dev/dwgTs/tests/fixtures/committed/libredwg/example_r13.dwg",
+      "sha256": "53558a8ae4bf666f906c9c2e4d3c3ee7ef61690e3b0f4d4a858e4e1bf555fc89",
+      "upstreamProvenance": "The dwgTs committed-fixture provenance table identifies this byte stream as LibreDWG test/test-data/example_r13.dwg; GPL-3.0-or-later. It is external to the allowed libdxfrw/LibreCAD fixture locations and remains uncommitted.",
+      "group": {
+        "handle": "0x257",
+        "name": "",
+        "memberCount": 7,
+        "memberTypesInOrder": ["LINE", "LINE", "LINE", "LINE", "LINE", "LINE", "LINE"]
+      },
+      "libdxfrwRead": {
+        "command": "build-gcc/dwg2dxf/dwg2dxf <source> -y -d -v2000 <scratch-output>",
+        "headerUnclaimedBytes": 0,
+        "sourceFrames": 5785,
+        "publishedFrames": 5765,
+        "failedFrames": 20,
+        "entityParseFailures": 1,
+        "objectParseFailures": 19,
+        "groupCallbacks": 2,
+        "strictOutputRefusal": "typed DWG ModelDocViewStyle serialization requires the exact DWG source version"
+      },
+      "disposition": "Useful source-bound GROUP/member witness, but not a whole-source output candidate. A selected output route would need to prove isolation from the 20 failed frames and the target-version gate."
+    },
+    {
+      "profile": "AC1021 populated GROUP with IMAGE members",
+      "path": "/Users/dli/dev/dwgTs/tests/fixtures/committed/libredwg/leader_2007.dwg",
+      "sha256": "8e9750fd2f6af2134d3db0fecc940fb57312ce61d8c0c7299a184f5e2ea7529a",
+      "upstreamProvenance": "The dwgTs committed-fixture provenance table identifies this byte stream as LibreDWG test/test-data/2007/Leader.dwg; GPL-3.0-or-later. It is external to the allowed libdxfrw/LibreCAD fixture locations and remains uncommitted.",
+      "group": {
+        "handle": "0x829",
+        "name": "Superhatch",
+        "memberCount": 5,
+        "memberTypesInOrder": ["IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE"]
+      },
+      "libdxfrwRead": {
+        "sourceFrames": 245,
+        "publishedFrames": 245,
+        "entityParseFailures": 0,
+        "objectParseFailures": 0,
+        "strictOutputRefusal": "standalone DWG OBJECTCONTEXTDATA has no qualified replay path"
+      },
+      "disposition": "Not an eligible next P4 route: its required IMAGEDEF/reactor graph still has the independently documented owner-role conflict."
+    },
+    {
+      "profile": "AC1021 populated GROUP with LINE members in ACadSharp sample",
+      "path": "/Users/dli/dev/ACadSharp/samples/sample_AC1021.dwg",
+      "sha256": "70b5efec9a3c230a9892e810154a760fe72311b1e730fb582f22950135da770a",
+      "groups": [
+        {"handle": "0x69e", "memberCount": 6, "memberTypesInOrder": ["LINE", "LINE", "LINE", "LINE", "LINE", "LINE"]},
+        {"handle": "0x6a5", "memberCount": 6, "memberTypesInOrder": ["LINE", "LINE", "LINE", "LINE", "LINE", "LINE"]}
+      ],
+      "disposition": "Promising GROUP member shape, but the same drawing contains IMAGEDEF frames that stop the current adapter at the unresolved image owner role. ACadSharp sample producer provenance is not independently established; diagnostic-only."
+    }
+  ],
+  "generatedControl": {
+    "source": "Locally authored in-memory dx_data; no DWG/DXF fixture is retained.",
+    "test": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --group-adapter-roundtrip",
+    "result": "PASS (exit 0). The generated six-LINE GROUP now checks ordered unique 340 membership against retained entities after ASCII and Binary write/read, a second round trip, and correction/retry after refusal.",
+    "executableSha256": "c7b15c41c52a8ba8d792e6f218e5b45108728e81c9a11cb06b4a2cfac6430e37",
+    "limits": "Generated codec mechanics only; it does not qualify any physical DWG producer, selected graph closure, or whole-source output."
+  },
+  "planImpact": {
+    "nextP4Action": "Use the LibreDWG example_r13 source only for source-bound GROUP/member role mapping, then determine whether an isolated selected GROUP route can omit unrelated frames while proving all seven LINE targets and owner/dictionary dependencies. Keep strict whole-source output refused. Do not copy this external fixture into the repository.",
+    "fixtureFilesAdded": 0,
+    "externalEvidencePromoted": 0
+  }
+}

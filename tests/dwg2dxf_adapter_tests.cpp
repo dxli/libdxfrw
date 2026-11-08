@@ -80222,6 +80222,22 @@ bool groupAdapterRoundTrip() {
     const auto nonce = std::chrono::steady_clock::now()
         .time_since_epoch().count();
     const auto directory = std::filesystem::temp_directory_path();
+    const auto groupMembersResolve = [](const dx_data& data,
+                                        const DRW_Group& group) {
+        if (data.mBlock == nullptr || group.m_entityHandles.empty()
+            || group.m_entityHandles.size() != data.mBlock->ent.size())
+            return false;
+        std::set<std::uint32_t> members;
+        std::size_t index = 0u;
+        for (const DRW_Entity* entity : data.mBlock->ent) {
+            if (entity == nullptr || entity->handle == DRW::NoHandle
+                || group.m_entityHandles[index] != entity->handle
+                || !members.insert(group.m_entityHandles[index]).second)
+                return false;
+            ++index;
+        }
+        return true;
+    };
     for (const bool binary : {false, true}) {
         const std::string suffix = std::to_string(nonce)
             + (binary ? "-binary" : "-ascii");
@@ -80243,16 +80259,23 @@ bool groupAdapterRoundTrip() {
         } cleanup{firstPath, secondPath, invalidPath};
 
         dx_data source;
-        auto* line = new DRW_Line();
-        line->handle = 0x100u;
-        line->basePoint = DRW_Coord(1.0, 2.0, 0.0);
-        line->secPoint = DRW_Coord(4.0, 6.0, 0.0);
-        source.mBlock->ent.push_back(line);
+        constexpr std::size_t memberCount = 6u;
+        std::vector<std::uint32_t> memberHandles;
+        memberHandles.reserve(memberCount);
+        for (std::size_t index = 0; index < memberCount; ++index) {
+            auto* line = new DRW_Line();
+            line->handle = static_cast<std::uint32_t>(0x100u + index);
+            line->basePoint = DRW_Coord(static_cast<double>(index), 2.0, 0.0);
+            line->secPoint = DRW_Coord(static_cast<double>(index) + 3.0,
+                                       6.0, 0.0);
+            source.mBlock->ent.push_back(line);
+            memberHandles.push_back(line->handle);
+        }
         DRW_Group group;
         group.handle = 0x200u;
         group.name = "ROUNDTRIP_GROUP";
         group.m_description = "generated adapter GROUP control";
-        group.m_entityHandles = {line->handle};
+        group.m_entityHandles = memberHandles;
         source.groups.push_back(group);
         const char* sourceDescriptionStorage =
             source.groups.front().m_description.data();
@@ -80275,16 +80298,16 @@ bool groupAdapterRoundTrip() {
         if (!reader.fileImport(firstPath.string(), &imported, false)
             || imported.groups.size() != 1u
             || imported.groupCaptureFailed
-            || imported.groupNameResolutionFailed)
+            || imported.groupNameResolutionFailed
+            || imported.mBlock == nullptr)
             return fail("GROUP callback or ACAD_GROUP name resolution failed");
         const DRW_Group& importedGroup = imported.groups.front();
         if (importedGroup.name != group.name
             || importedGroup.m_description != group.m_description
-            || importedGroup.m_entityHandles.size() != 1u
-            || imported.mBlock->ent.size() != 1u
-            || importedGroup.m_entityHandles.front()
-                != imported.mBlock->ent.front()->handle)
-            return fail("GROUP name, description, or 340 member edge changed on import");
+            || importedGroup.m_entityHandles.size() != memberCount
+            || imported.mBlock->ent.size() != memberCount
+            || !groupMembersResolve(imported, importedGroup))
+            return fail("GROUP name, description, or ordered 340 member edges changed on import");
 
         const auto groupRootEntry = std::find_if(
             imported.namedObjectDictionary.m_entries.begin(),
@@ -80364,11 +80387,11 @@ bool groupAdapterRoundTrip() {
         dx_iface roundtripReader;
         if (!roundtripReader.fileImport(secondPath.string(), &roundtrip, false)
             || roundtrip.groups.size() != 1u
+            || roundtrip.mBlock == nullptr
             || roundtrip.groups.front().name != group.name
-            || roundtrip.groups.front().m_entityHandles.size() != 1u
-            || roundtrip.mBlock->ent.size() != 1u
-            || roundtrip.groups.front().m_entityHandles.front()
-                != roundtrip.mBlock->ent.front()->handle)
+            || roundtrip.groups.front().m_entityHandles.size() != memberCount
+            || roundtrip.mBlock->ent.size() != memberCount
+            || !groupMembersResolve(roundtrip, roundtrip.groups.front()))
             return fail("GROUP graph did not remain closed through a second round trip");
 
         const std::string destinationSentinel =
@@ -80397,6 +80420,7 @@ bool groupAdapterRoundTrip() {
 
         const auto rejectConflictingGroupRootAndRetry =
             [&firstPath, &group, &groupDictionary, &invalidPath,
+             &groupMembersResolve,
              &destinationSentinel, binary](const std::string& rootName,
                                             const std::string& label) {
                 dx_data invalidCandidate;
@@ -80454,11 +80478,13 @@ bool groupAdapterRoundTrip() {
                     || !correctedReader.fileImport(invalidPath.string(),
                                                    &correctedOutput, false)
                     || correctedOutput.groups.size() != 1u
+                    || correctedOutput.mBlock == nullptr
                     || correctedOutput.groups.front().name != group.name
-                    || correctedOutput.groups.front().m_entityHandles.size() != 1u
-                    || correctedOutput.mBlock->ent.size() != 1u
-                    || correctedOutput.groups.front().m_entityHandles.front()
-                        != correctedOutput.mBlock->ent.front()->handle)
+                    || correctedOutput.groups.front().m_entityHandles.size()
+                        != memberCount
+                    || correctedOutput.mBlock->ent.size() != memberCount
+                    || !groupMembersResolve(
+                        correctedOutput, correctedOutput.groups.front()))
                 {
                     std::cerr << "GROUP retry state: roots="
                               << correctedRootCount << " groups="

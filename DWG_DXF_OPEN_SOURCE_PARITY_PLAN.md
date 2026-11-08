@@ -155,12 +155,27 @@ instead of repeating successful scans or controls.
    receipt](docs/research/p4-ac1021-tablet-wcs-mesh-default-2026-11-07.json)
    and the [Pool_Detail
    MATERIAL receipt](docs/research/p4-ac1021-pool-detail-material-selected-output-2026-11-07.json).
-   A screen of the remaining 24 local DWGs found no populated GROUP, IMAGE or
-   IMAGEDEF candidate among 18 valid LibreDWG 0.14 minJSON outputs; five CLI
-   failures and one malformed JSON output are excluded as evidence of absence.
-   The next P4 prerequisite is an independently produced source with a
-   populated rooted graph and complete owner/target evidence; the exact screen
-   is recorded in the [local candidate receipt](docs/research/p4-local-dwg-group-image-screen-2026-11-07.json).
+   A screen of the remaining 24 local document DWGs found no populated GROUP,
+   IMAGE or IMAGEDEF candidate among 18 valid LibreDWG 0.14 minJSON outputs;
+   five CLI failures and one malformed JSON output are excluded as evidence of
+   absence. A broader read-only scan of 173 unique DWGs in existing open-source
+   worktree corpora found a hash-bound LibreDWG R13 example with one GROUP and
+   seven LINE members, plus an R2007 Leader GROUP with five IMAGE members. The
+   R13 source publishes 5,765/5,785 frames and strict output stops at the
+   exact-source-version ModelDocViewStyle gate; the Leader source publishes
+   245/245 frames but whole-source output stops at standalone OBJECTCONTEXTDATA,
+   and its IMAGE dependencies retain the unresolved owner-role conflict. An
+   ACadSharp AC1021 sample has two six-LINE groups but contains the same image
+   role blocker and its producer provenance is not established. These inputs
+   remain external and uncommitted. Next, use the R13 source only to bind the
+   seven member identities and their owner/dictionary dependencies, then test
+   whether a selected GROUP projection can prove isolation from the unrelated
+   failed frames and version gate. Keep whole-source output refused. The exact
+   scan and current blockers are recorded in the [GROUP candidate receipt](docs/research/p4-populated-group-candidate-census-2026-11-07.json);
+   the earlier 24-file screen remains recorded in the [local candidate receipt](docs/research/p4-local-dwg-group-image-screen-2026-11-07.json).
+   The locally authored GROUP codec control now exercises six ordered unique
+   member handles through ASCII/Binary output, typed readback, a second
+   round-trip and corrected retry; this is generated transport evidence only.
    Keep the unrelated `SORTENTSTABLE` null-target graph refused. The P6
    IMAGEDEF cross-version source capture is complete: its parent code `0xC`
    and dictionary group-350 edge match in AutoCAD AC1021/24/27/32 DWG/DXF
