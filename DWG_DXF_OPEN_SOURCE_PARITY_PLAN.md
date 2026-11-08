@@ -2601,6 +2601,11 @@ can mark DXF parsing incomplete before the TABLE grid exists, so the public
 unsupported/open-value/invalid-merge parser state independently of that public
 flag. A generated `AcDbTable` subclass + group-97 control verifies pre-grid
 refusal with both output streams unchanged; no fixture was added.
+The EED encoder also returns immediately for an empty `extData` vector, so
+stale pending APPID/LAYER resolution entries could otherwise be ignored. The
+TABLE preflight now refuses both parser-side pending resolutions and writer-
+side EED resolution vectors when no EED payload is present; four focused cases
+verify atomic refusal.
 The inherited INSERT audit also found `blockRecH`'s parsed wire code, size,
 raw role, and 64-bit reference were ignored while the TABLE encoder rebuilt a
 canonical hard pointer from the 32-bit `ref`. This generated-only codec now

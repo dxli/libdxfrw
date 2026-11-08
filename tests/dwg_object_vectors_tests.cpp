@@ -7540,6 +7540,14 @@ public:
 
     std::uint8_t rawLinetypeFlags() const { return ltFlags; }
 
+    void addStaleAppIdWriterRef() {
+        dwgEedAppIdWriteRefs.push_back(PendingHandleRef{});
+    }
+
+    void addStaleLayerWriterRef() {
+        dwgEedLayerWriteRefs.push_back(PendingHandleRef{});
+    }
+
     void setRawAcDbColorHandleState(bool present, std::uint32_t handle) {
         setDwgAcDbColorHandle(present, handle);
     }
@@ -9114,6 +9122,32 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         [](TableDwgCodecProbe& table) {
             table.extData.push_back(
                 std::make_shared<DRW_Variant>(1000, std::string("x")));
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects pending APPID resolution without EED values",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.pendingAppIdResolutions.push_back(
+                DRW_Entity::PendingHandleRef{});
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects pending LAYER resolution without EED values",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.pendingLayerRefResolutions.push_back(
+                DRW_Entity::PendingHandleRef{});
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects stale APPID writer resolution without EED values",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.addStaleAppIdWriterRef();
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects stale LAYER writer resolution without EED values",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.addStaleLayerWriterRef();
         });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects unencoded DXF application groups without writing",
