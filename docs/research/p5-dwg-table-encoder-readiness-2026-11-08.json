@@ -427,9 +427,13 @@
       {
         "field": "DRW_Entity::space",
         "reason": "The common writer maps every value other than PaperSpace to modelspace; reject values outside the two defined space states."
+      },
+      {
+        "field": "DRW_Entity::appData",
+        "reason": "The common DWG writer encodes EED from extData but has no serializer for arbitrary DXF group-102 application-data groups; the bounded TABLE codec refuses them rather than silently dropping them."
       }
     ],
-    "implementation": "src/drw_entities.cpp: DRW_Table::encodeDwg refuses all listed states during bounded preflight.",
+    "implementation": "src/drw_entities.cpp: DRW_Table::encodeDwg refuses all listed states during bounded preflight, including arbitrary DXF appData groups.",
     "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
     "assertion": "Generated refusal cases preserve pre-seeded body and handle buffers.",
     "disposition": "Closes only the enumerated omission and malformed-state paths for the direct generated AC1018 codec. Continue auditing remaining public fields and private retained DXF state; no output support claim."

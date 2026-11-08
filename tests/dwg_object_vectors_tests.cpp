@@ -9033,6 +9033,16 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                 std::make_shared<DRW_Variant>(1000, std::string("x")));
         });
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects unencoded DXF application groups without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            std::list<DRW_Variant> group;
+            group.emplace_back(102, std::string("{CUSTOM_APP}"));
+            group.emplace_back(1, std::string("opaque payload"));
+            group.emplace_back(102, std::string("}"));
+            table.appData.push_back(std::move(group));
+        });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects proxy graphics without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) { table.proxyGraphics = "x"; });

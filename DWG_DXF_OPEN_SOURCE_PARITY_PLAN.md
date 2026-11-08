@@ -401,7 +401,8 @@ created locally from scratch for the specific control.
   retry the same CLI launch or mark FreeCAD/ODA qualification complete until a
   fresh desktop inventory exposes an unlocked native app surface. Continue
   independently actionable repository work and keep platform qualification as
-  a separate external gate.
+  a separate external gate. A fresh inventory after the latest unlock reply
+  again reports the Mac locked; no application qualification was run.
 - **Latest ACIS writer hardening:** commit `e3111a82` preserves binary64
   precision in SAT v1 output using `max_digits10`. Follow-up commit
   `a3d58f7f` adds nonfinite header-scalar refusal, `dce17422` adds a
@@ -2583,7 +2584,12 @@ codes outside the DWG domain, negative plot-style sentinels, and inconsistent
 AcDbColor-presence/handle pairs. The preflight also rejects out-of-domain ACI/
 RGB values and color names or inline RGB data that the selected AcDbColor
 encoding would otherwise discard, plus invalid linetype-flag and entity-space
-enum values that the common writer would normalize.
+enum values that the common writer would normalize. The latest public-model
+audit also found DXF `appData` groups have no corresponding AC1018 TABLE body
+encoding (the common writer serializes EED from `extData`, not arbitrary group
+102 application data); the bounded profile now refuses nonempty `appData` and
+the focused vector confirms atomic refusal. This is a loss-prevention guard,
+not proof that arbitrary group 102 data has a DWG semantic mapping.
 The common writer itself is unchanged; this protection applies only to the
 generated AC1018 TABLE codec.
 The direct encoder builds both streams in private copies, catches emission
