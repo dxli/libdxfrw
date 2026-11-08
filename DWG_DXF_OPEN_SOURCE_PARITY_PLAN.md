@@ -1225,6 +1225,20 @@ integration/release checkpoints.
 | P8 | OPEN — consumers, platforms and release | Qualify LibreCAD and LibreCAD_3 callbacks/defaults; adapt LibreCAD's `RS_FilterDXFRW` to the upstream AC1021+ default plotstyle/material graph providers and establish the material opaque-reference predicate for its supported export profiles; run a clean consumer build and tests; run native Linux/Windows FreeCAD open/insert checks; qualify intended 3D consumers, ABI, packaging and release behavior. Existing evidence is source inspection only: LibreCAD currently links its bundled fork and its dirty adapter does not implement these upstream provider interfaces. | Stable candidate and native platform access with tool/version receipts; adapter migration must preserve LibreCAD 2D behavior and refuse unresolved references. |
 | P9 | DEFERRED_EXTERNAL — six non-promoting items | Resolve J256, J260, J268, J284, J293 and J295 only through the successor registry and eligible independent evidence. J268 still needs original input identity/digest; J284 has 11 target-debt/integrity blockers; J295 needs native receipts for four RTEXT position/rotation claims. None can promote support claims alone. | `metadata/external-evidence-resolution-v1.json`; retain lineage and exclusions. |
 
+**AC1024 CLASSES high-bit string-size recheck (2026-11-08):** the earlier
+local note that AutoCAD 2010 RTM samples fail `readDwgClasses()` is stale for
+the current tree. The implementation reads the optional high-size footer word
+through `readDwgClassStringFooter()` and accounts for the separately gated
+extended CLASSES prefix. The focused generated control
+`libdxfrw_dwg_reader_matrix_tests --r2007-class-string-footer` passes. A
+current-tree trace recheck of the nine AC1024 DWGs in `/Users/dli/doc/dwg/`
+reaches the `readDwgClasses()` return with `legacyError=0` for every sample,
+including all five samples whose application maintenance version is 2. Three
+later imports report unrelated object-parse failures; strict CLI conversion
+can also stop at opaque callback qualification. Neither outcome is a CLASSES
+failure. No reader change or fixture is needed for this stale issue; see the
+[recheck receipt](docs/research/p6-ac1024-classes-high-bit-rtm-recheck-2026-11-08.json).
+
 **AC1015 LTYPE_CONTROL outlier:** the unauthenticated local `simple.dwg` still
 fails at the bounded count/boundary check on current code. LibreDWG 0.14 parses
 25 entries, but its decoded profile includes BYBLOCK/BYLAYER in the counted
