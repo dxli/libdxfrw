@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "date": "2026-11-08",
+  "scope": "Focused physical AC1027 MATERIAL selected-output probe; diagnostic only",
+  "source": {
+    "path": "/Users/dli/doc/dwg/Cover.dwg",
+    "sha256": "3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42",
+    "committed_as_fixture": false
+  },
+  "commands": [
+    "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j4",
+    "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --material-ac1027-physical-output-readback /Users/dli/doc/dwg/Cover.dwg"
+  ],
+  "build": "passed",
+  "source_read": {
+    "operation_succeeded": true,
+    "source_version": "AC1027",
+    "legacy_error": 0,
+    "typed_material_records": 3,
+    "entity_parse_failures": 0,
+    "object_parse_failures": 0,
+    "opaque_source_frames_captured": 88
+  },
+  "output_probe": {
+    "exit_status": 1,
+    "first_preflight_refusal": "AC1027 default MATERIAL dictionary wire does not match the witnessed profile",
+    "retry_refusal": "standard DWG object source model changed, disappeared, or became ambiguous",
+    "dxf_emitted": false,
+    "readback_performed": false
+  },
+  "interpretation": [
+    "Physical AC1027 MATERIAL read semantics remain separate from output support.",
+    "The current exact AC1027 ACAD_MATERIAL dictionary profile did not match this source frame.",
+    "Retry source-model refusal is not explained by this probe and requires isolation.",
+    "No output or interoperability claim is promoted; strict refusal remains in force."
+  ],
+  "limitations": [
+    "The local source was not committed as a test fixture.",
+    "No ODA or native application output/readback was run.",
+    "No full test suite was run."
+  ]
+}

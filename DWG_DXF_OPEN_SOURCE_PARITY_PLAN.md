@@ -1188,6 +1188,19 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    and zero unknown body-reference dispositions. That audit supports source
    classification; the focused writer tests support this bounded retry change.
 
+   **Physical AC1027 MATERIAL output probe (2026-11-08):** a focused run against
+   the existing local `Cover.dwg` (SHA-256 recorded in the linked receipt)
+   successfully reads all three typed MATERIAL records, but selected output
+   preflight refuses the graph because the ACAD_MATERIAL dictionary body does
+   not match the current exact AC1027 witnessed profile. Follow-up retry
+   attempts also refuse when the retained standard-object source model no
+   longer matches. The probe emitted no DXF and supplies no output/readback
+   evidence. Keep AC1027 MATERIAL output disabled; next isolate the dictionary
+   frame/body profile and retry-state transition using source-bound evidence,
+   then repeat ASCII/Binary output and independent readback. Do not treat the
+   already-passing generated writer/profile controls as physical interoperability.
+   See the [physical probe receipt](docs/research/p6-ac1027-material-physical-output-probe-2026-11-08.json).
+
    Each frame must end in
    `no body handles`, ordered typed handle fields with spans/roles, or
    `unknown/incomplete` with a fail-closed reason. Bind fields to immutable
