@@ -107,11 +107,14 @@ created locally from scratch for the specific control.
   AC1027 Cover resaves from scratch copies. Both validated HEADER trailers end
   at byte 844 and have 739-byte suffixes with different hashes; a bytewise
   comparison finds no identical positions but matching low three bits at every
-  position. The pattern does not identify suffix meaning or boundaries, so the
-  bytes remain unclaimed. The independent AC1027
-  source-reference guard still blocks DXF output. Do not retry the unchanged
-  CLI/Launch Services routes; continue analysis from this successful GUI sample
-  and keep strict output refused.
+  position. An independent LibreDWG 0.14 decode also reads 119 OBJECTS from
+  the first resave, but does not assign meaning to the suffix. The pattern does
+  not identify suffix meaning or boundaries, so the bytes remain unclaimed.
+  The independent AC1027 source-reference guard still blocks DXF output. Do not
+  retry the unchanged CLI/Launch Services routes or repeat the same GUI export
+  without a discriminating input change; continue with controlled GUI variants
+  only if they can isolate a specific header/body dependency, and keep strict
+  output refused.
 - **External gates:** P7 ACIS/ACDS meaning, P8 native platform/consumer
   qualification, and P9's six advisory rows remain open. Local parser or codec
   controls cannot promote those claims.
@@ -202,10 +205,19 @@ instead of repeating successful scans or controls.
    [parser recovery receipt](docs/research/p6-ac1032-acad-table-cells-reader-fix-2026-11-07.json).
    TABLECONTENT and PERSUBENTMGR remain raw-only. Remaining P6 work is limited
    to source-backed version/layout gaps and independent evidence for the
-   IMAGEDEF owner-role conflict and AC1027/AC1032 HEADER suffixes. The latest
-   post-unlock ODA attempt still aborted before document processing; resume
-   suffix qualification only after the invocation environment or converter
-   session materially changes and reaches document processing.
+   IMAGEDEF owner-role conflict and AC1027/AC1032 HEADER suffixes. The successful
+   27.1 GUI route supersedes the earlier plan to wait for a changed launch
+   environment: two AC1027 outputs are now available, but neither isolates the
+   suffix's meaning. Next, avoid another identical resave; if suffix work is
+   pursued, make one controlled change to a locally generated or scratch source
+   and capture the matching GUI output, then compare only the validated HEADER
+   section and independently decoded fields. Keep this lane advisory until a
+   repeatable field-to-byte mapping or authoritative wire definition accounts
+   for every suffix byte. In parallel, inventory the AC1027 source-reference
+   guard against exact retained frame identities and role edges; do not clear
+   the blanket guard or infer closure from 119/119 frame publication or the
+   absence of a particular warning. The guard can be narrowed only after an
+   exact selected graph and all omitted-source dependencies are proven.
 4. **P7/P8/P9 / qualification gates.** P7 needs independent ACIS/ACDS semantic
    evidence. P8's current-head LibreCAD_3 CONFIG-package build, focused export
    tests, and planar save/open/reopen probe are refreshed; next qualify on a
@@ -2020,7 +2032,9 @@ semantics or strict output
 
 **ODA ARM64 package integrity recheck:** Native verification outside the sandbox
 passes for the installed 27.1 app and the downloaded 27.9 package and extracted
-app; earlier sandboxed signature failures were unreliable. The verified 27.1 CLI has completed audit-disabled AC1027-to-AC1027 Cover resaves in a functioning launch environment.
+app; earlier sandboxed signature failures were unreliable. The installed 27.1
+package produced the currently qualified AC1027-to-AC1027 Cover resaves through
+the GUI route; direct CLI retries continued to abort during startup.
 The validated trailer ends at byte 844; the original has 731 unclaimed HEADER
 bytes and same-revision ODA outputs have 739. LibreDWG 0.14 independently
 decompressed earlier original/resave sections. A tenth bounded direct retry
@@ -2032,9 +2046,11 @@ successful resave had no bytewise suffix matches against five previously
 compared same-source outputs; pairwise low-bit patterns remain structured but
 unexplained. That output reads 119/119 frames with no entity/object parse
 failures, then strict DXF preparation refuses on unqualified source references.
-Keep the suffix unclaimed and strict output refused. Resume only with a changed
-launch route that reaches document processing (for example, a functioning GUI
-workflow or a different verified converter environment). See the [latest retry
+Keep the suffix unclaimed and strict output refused. The functioning GUI route
+has already reached document processing, so do not repeat the identical export.
+Continue only with a controlled source mutation that can discriminate candidate
+suffix dependencies, or a new independently decoded/spec-defined field mapping.
+See the [latest retry
 receipt](docs/research/p6-ac1027-oda-header-suffix-retry-2026-11-07b.json),
 [integrity correction](docs/research/p6-ac1027-cover-oda-arm64-package-integrity-2026-11-02.json)
 and [same-version resave receipt](docs/research/p6-ac1027-cover-oda-same-version-resave-2026-11-03.json).
