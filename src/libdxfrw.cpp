@@ -12410,6 +12410,13 @@ bool dxfRW::writeTableStyle(
     const auto validR24StyleOverrides = [](std::uint32_t value) {
         return (value & ~std::uint32_t{0x7FFFFu}) == 0u;
     };
+    const auto validR24Color = [&scalarColorIsDxfRepresentable](
+            int value, const DRW_TableStyleCmcColor& cmc) {
+        return scalarColorIsDxfRepresentable(value, cmc)
+            || (value == 0 && cmc.m_rgb == -1 && cmc.m_name.empty()
+                && cmc.m_bookName.empty() && cmc.m_method == 0xC1u
+                && cmc.m_flags == 0u && cmc.m_reservedIndex == 0u);
+    };
     const auto validR24ContentOverrides = [](
             const DRW_TableStyleContentFormat& format) {
         return (format.m_propertyOverrideFlags
@@ -12436,13 +12443,6 @@ bool dxfRW::writeTableStyle(
     if (ent->m_r24PrefixPresent) {
         const auto failR24 = [&reject](const char *message) {
             return reject(message);
-        };
-        const auto byBlockColor = [](
-                int value, const DRW_TableStyleCmcColor& color) {
-            return value == 0 && color.m_rgb == -1
-                && color.m_name.empty() && color.m_bookName.empty()
-                && color.m_method == 0xC1u && color.m_flags == 0u
-                && color.m_reservedIndex == 0u;
         };
         const auto byNoneColor = [](
                 int value, const DRW_TableStyleCmcColor& color) {
@@ -12513,8 +12513,11 @@ bool dxfRW::writeTableStyle(
             if (style.m_type != 5 || !style.m_hasData
                 || !validR24StyleOverrides(style.m_propertyOverrideFlags)
                 || (style.m_mergeFlags & ~std::uint32_t{0x18000u}) != 0u
-                || !byNoneColor(style.m_backgroundColor,
-                                style.m_backgroundColorCmc)
+                || !(byNoneColor(style.m_backgroundColor,
+                                 style.m_backgroundColorCmc)
+                    || scalarColorIsDxfRepresentable(
+                        style.m_backgroundColor,
+                        style.m_backgroundColorCmc))
                 || !validR24ContentLayout(style.m_contentLayout)
                 || !validR24ContentOverrides(format)
                 || !validValueDataType(format.m_valueDataType)
@@ -12524,8 +12527,8 @@ bool dxfRW::writeTableStyle(
                 || !std::isfinite(format.m_rotation)
                 || !std::isfinite(format.m_blockScale)
                 || !validR24CellAlignment(format.m_cellAlignment)
-                || !byBlockColor(format.m_contentColor,
-                                 format.m_contentColorCmc)
+                || !validR24Color(format.m_contentColor,
+                                  format.m_contentColorCmc)
                 || !r24TextStyleHandleSupported(
                     format.m_textStyleHandle)
                 || ((format.m_textStyleHandle != 0u) != hasTextStyle)
@@ -12543,7 +12546,7 @@ bool dxfRW::writeTableStyle(
                 if (border.m_edgeFlags != (1 << index)
                     || (border.m_propertyOverrideFlags & ~0x3F) != 0
                     || border.m_borderType != 1
-                    || !byBlockColor(border.m_color, border.m_colorCmc)
+                    || !validR24Color(border.m_color, border.m_colorCmc)
                     || border.m_lineWeight != -2
                     || !r24BorderLineTypeSupported(border)
                     || border.m_visible != 0
