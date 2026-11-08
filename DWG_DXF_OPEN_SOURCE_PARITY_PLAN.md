@@ -164,7 +164,19 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-08)
 
-- **Latest local slice:** commit `05720365` adds bounded R24 TABLESTYLE CMC
+- **Latest local slice:** commit `4f615637` adds AC1027 TABLECONTENT raw-only
+  recovery, gated to AC1027/AC1032 `TABLECONTENT` / `AcDbTableContent` records
+  whose typed parse fails but whose independent common-shell and handle-stream
+  parse succeeds. The generated control preserves exact frame bytes and common
+  links, publishes no typed TABLECONTENT, and recovers the following frame.
+  `libdxfrw_persistent_manager_prefix_dispatch` passes (1/1). The pinned
+  physical AC1027 source is absent from the current workspace, so physical
+  disposition remains unverified and no support/output claim is promoted. See
+  the [recovery receipt](docs/research/p6-ac1027-tablecontent-raw-only-shell-recovery-2026-11-08.json).
+  Plan-only commit `21bb2ebc` records that the saved TABLECONTENT source-evidence
+  screen found no eligible physical witness; it does not infer that uninspected
+  local samples contain no such objects.
+- **Earlier local slice:** commit `05720365` adds bounded R24 TABLESTYLE CMC
   truecolor/color-book DXF group-62/420/430 output and parser recovery for
   background, content and border colors. Generated ASCII/Binary controls
   verify raw fields, typed CMC readback, invalid-RGB refusal, destination
