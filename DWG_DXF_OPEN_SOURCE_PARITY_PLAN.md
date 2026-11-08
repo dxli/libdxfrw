@@ -85,11 +85,19 @@ NOD → DICTIONARY → NETWORK → two VARIABLE action targets, plus the depende
 owner, non-null target, and reciprocal target reactor. It passes 40/40 ASCII
 and 37/37 Binary allocation failures with same-writer retry/readback. This
 still leaves the two locally-authored variables' wire-completeness flag false
-and is not independent source or semantic evidence. The next slice should apply
-the same rooted graph and allocation proof to a non-null
-`ACDBASSOCGEOMDEPENDENCY` edge targeting an emitted LINE and verify its owner,
-subentity fields, and reciprocal LINE reactor, using the already exercised
-network/group/LINE source profile.
+and is not independent source or semantic evidence.
+
+**Implementation follow-up (2026-11-08):** a second focused target now sweeps
+a rooted AC1024 NETWORK → constraint GROUP → geometry dependency → LINE graph.
+It verifies the group's action and inline-node references, the dependency's
+owner/LINE target and `AcDbAssocEdgePersSubentId` indices, and the reciprocal
+LINE reactor. All 52 ASCII and 50 Binary callback allocation offsets preserve
+the destination and source graph, then pass same-adapter retry and typed
+readback. This is generated graph/transaction evidence, not native constraint
+or geometry qualification ([receipt](docs/research/p6-dxf-associative-geometry-graph-allocation-failure-retry-2026-11-08.json)).
+Next, cover the dimension-dependency-body writer inside a rooted associative
+graph; keep standalone typed codec evidence separate from source prevalence and
+semantic claims.
 
 **Resume checkpoint (2026-11-07):** the Mac session was unlocked and the
 audit-enabled ODA 27.1 GUI route has completed the AC1024 civil residual
