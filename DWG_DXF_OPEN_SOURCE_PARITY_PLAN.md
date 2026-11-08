@@ -838,9 +838,10 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    [parser recovery receipt](docs/research/p6-ac1032-acad-table-cells-reader-fix-2026-11-07.json).
    AC1027/AC1032 TABLECONTENT typed failures now fall back to raw-only when an
    independent common-shell/handle parse succeeds; generated controls preserve
-   exact bytes and the following frame. The pinned AC1027 physical source is
-   not present in the current workspace, so this does not recheck its 0xC94
-   disposition or resolve typed fields. PERSUBENTMGR and TextObjectContextData
+   exact bytes and the following frame. A hash-matched physical recheck of
+   `example_2013.dwg` now publishes object `0xC94` raw-only; object parse
+   failures fell from three to two, while strict output remains blocked at the
+   AC1027 source-reference gate. This does not resolve typed fields. PERSUBENTMGR and TextObjectContextData
    remain raw-only. See the [AC1027 shell recovery receipt](docs/research/p6-ac1027-tablecontent-raw-only-shell-recovery-2026-11-08.json).
    Remaining P6 work is limited to source-backed version/layout gaps and independent evidence for the
    IMAGEDEF owner-role conflict and AC1027/AC1032 HEADER suffixes. The successful
