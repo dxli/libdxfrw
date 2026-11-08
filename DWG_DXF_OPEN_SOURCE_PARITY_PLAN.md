@@ -154,7 +154,11 @@ associative-variable pairs: each dimension node resolves to its own typed value
 dependency, and the corresponding variable and value-dependency fields survive
 fresh ASCII/Binary DXF readback. The DXF check compares represented semantic
 fields and does not compare the DWG-only `m_associativeVariableWireComplete`
-marker. A temporary scoped allocation/time probe measured the physical
+marker. The physical adapter check now also mutates one source value dependency
+after `writeObjects()`, requires an atomic destination-preserving refusal, then
+restores the source value and retries successfully on the same adapter in both
+encodings. This complements the existing body-name and constraint-node
+late-mutation controls. A temporary scoped allocation/time probe measured the physical
 `writeObjects()` callback at 6,419 allocations / 19.1–19.5 ms for ASCII and
 6,321 allocations / 19.3–19.5 ms for Binary across the successful and expected
 late-mutation refusal attempts. The probe was removed after measurement. A

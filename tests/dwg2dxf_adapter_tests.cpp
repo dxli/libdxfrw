@@ -67253,6 +67253,8 @@ bool physicalAssociativeDimensionDependencyOutputReadback(
             bool mutateConstraintNodeAfterObjects{false};
             std::uint32_t targetConstraintGroup{0u};
             std::size_t targetConstraintNode{0u};
+            bool mutateValueDependencyAfterObjects{false};
+            std::uint32_t targetValueDependency{0u};
             void writeObjects() override {
                 dx_iface::writeObjects();
                 if (cData == nullptr)
@@ -67282,6 +67284,20 @@ bool physicalAssociativeDimensionDependencyOutputReadback(
                                 targetConstraintNode].m_nodeId;
                             break;
                         }
+                    }
+                }
+                if (mutateValueDependencyAfterObjects) {
+                    for (DRW_AssociativeObject& object :
+                         cData->dwgAssociativeObjects) {
+                        if (object.handle != targetValueDependency
+                            || object.m_recordName
+                                != "ACDBASSOCVALUEDEPENDENCY")
+                            continue;
+                        if (object.m_valueDependencyValueCode == 90)
+                            ++object.m_valueDependencyValueInt32;
+                        else if (object.m_valueDependencyValueCode == 40)
+                            object.m_valueDependencyValueReal += 1.0;
+                        break;
                     }
                 }
             }
@@ -67345,6 +67361,42 @@ bool physicalAssociativeDimensionDependencyOutputReadback(
         writer.mutateConstraintNodeAfterObjects = false;
         if (!exportPartial())
             return fail("corrected physical constraint group could not retry on the same adapter");
+
+        const std::uint32_t valueDependencyHandle =
+            *dimensionNodeValueDependencyHandles.begin();
+        DRW_AssociativeObject* valueDependency = nullptr;
+        for (DRW_AssociativeObject& object : source.dwgAssociativeObjects)
+            if (object.handle == valueDependencyHandle
+                && object.m_recordName == "ACDBASSOCVALUEDEPENDENCY") {
+                valueDependency = &object;
+                break;
+            }
+        if (valueDependency == nullptr
+            || (valueDependency->m_valueDependencyValueCode != 40
+                && valueDependency->m_valueDependencyValueCode != 90))
+            return fail("physical constraint value dependency is unavailable for mutation control");
+        const double originalValueReal =
+            valueDependency->m_valueDependencyValueReal;
+        const std::int32_t originalValueInt32 =
+            valueDependency->m_valueDependencyValueInt32;
+        if (valueDependency->m_valueDependencyValueCode == 90
+            && originalValueInt32 == std::numeric_limits<std::int32_t>::max())
+            return fail("physical constraint integer value cannot be safely mutated");
+        {
+            std::ofstream existing(outputPath,
+                                   std::ios::binary | std::ios::trunc);
+            if (!existing || !(existing << sentinel))
+                return fail("could not reseed physical value dependency refusal sentinel");
+        }
+        writer.targetValueDependency = valueDependencyHandle;
+        writer.mutateValueDependencyAfterObjects = true;
+        if (exportPartial() || !destinationEquals(sentinel))
+            return fail("late physical value-dependency mutation did not refuse atomically");
+        valueDependency->m_valueDependencyValueReal = originalValueReal;
+        valueDependency->m_valueDependencyValueInt32 = originalValueInt32;
+        writer.mutateValueDependencyAfterObjects = false;
+        if (!exportPartial())
+            return fail("corrected physical value dependency could not retry on the same adapter");
 
         dx_iface outputReader;
         dx_data output;
