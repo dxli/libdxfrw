@@ -164,6 +164,12 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-08)
 
+- **Latest ACIS writer hardening:** commit `e3111a82` preserves binary64
+  precision in SAT v1 output using `max_digits10`; the current fast extension
+  also confirms nonfinite SAB header scalars fail before replacing an existing
+  SAT buffer. The pinned independent parser matches the physical source SAB
+  fields exactly. Native B-rep and independent-kernel gates remain open; see
+  the [P7 parser receipt](docs/research/p7-ac1021-inventorloader-sat-parser-crosscheck-2026-11-08.json).
 - **Latest local slice:** the AC1027 `AcDbAssocOsnapPointRefActionParam`
   frame at `0x393` now publishes raw-only after independent common-shell and
   handle-stream validation. A hash-matched physical read publishes 481/481
@@ -701,14 +707,7 @@ Saved-inventory candidate check (no corpus rescan):
 | ACadSharp AC1021 GROUP sample | Two 6-LINE groups | Producer provenance is unestablished; same drawing has the IMAGEDEF owner-role conflict |
 | AC1021 `children-room-decoration.dwg` | 112/112 standard objects and 74/74 opaque carriers have selected-output proof | Already-complete exact-source profile; not a distinct candidate |
 
-No physical P4 OBJECTS subgraph currently passes the source-to-output gate.
-The AC1021 public TORUS graph is source-bound and its fields/links match the
-narrow writer profile, but only generated output/readback is qualified; the
-containing source has 387 opaque callbacks and other ACDS graphs. Next add a
-selected projection check for this exact graph in ASCII and Binary while
-retaining whole-source refusal. The projection now fails before the modeler
-serializer, so no selected physical output route is qualified. Do not promote
-a parser/source match to whole-document output or semantic support.
+One bounded physical P4 graph now passes selected source-to-output projection: the AC1021 inline-SAB TORUS graph is emitted to AC1024 ASCII/Binary and read back with exact SAT carrier and remapped graph roles. It does not close the containing source, which still has 387 opaque callbacks and other ACDS graphs; full-source output refuses at the unrelated IMAGEDEF owner-role gate. The saved candidate table below contains no additional ready physical graph. Do not promote this selected route to whole-document output or semantic support.
 
 **Correction from source inspection (2026-11-08):** the proposed next slice
 incorrectly assumed that the AC1021 TORUS source had a linked DataStorage
@@ -803,8 +802,7 @@ route admits only the source-bound AC1021 E3DSOLID profile and emits only for
 AC1021/AC1024 targets. The exact source-bound
 `0x452 → 0x453 → 0x454 → 0x455` selected graph passes AC1024 ASCII/Binary
 readback, rollback/retry, and strict full-source refusal at the unrelated
-IMAGEDEF owner role. Focused token/TORUS/CMC controls pass 3/3; the hash-pinned
-physical probe passes; no fixture was added. This is selected carrier, graph
+IMAGEDEF owner role. Focused token/TORUS/CMC controls pass 3/3, including nonfinite-header-scalar refusal with the existing output buffer preserved; the hash-pinned physical probe passes; no fixture was added. This is selected carrier, graph
 transport, and independent parser-field evidence, not B-rep semantics, native
 application acceptance, or whole-document support. Keep support claims
 unchanged. See the [parser field cross-check receipt](docs/research/p7-ac1021-inventorloader-sat-parser-crosscheck-2026-11-08.json).

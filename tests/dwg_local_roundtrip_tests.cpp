@@ -18457,6 +18457,23 @@ bool runAcisSab21200SatV1Controls() {
     if (sat != std::vector<std::uint8_t>(expected.begin(), expected.end()))
         return false;
 
+    std::vector<std::uint8_t> nonFinite = sab;
+    const std::size_t resTolOffset = 15u + 4u * sizeof(std::uint32_t)
+        + 3u * 3u + 2u + sizeof(double);
+    const std::uint64_t quietNanBits = 0x7ff8000000000000ULL;
+    for (unsigned byte = 0u; byte < sizeof(quietNanBits); ++byte)
+        nonFinite[resTolOffset + byte] = static_cast<std::uint8_t>(
+            quietNanBits >> (byte * 8u));
+    DRW_SabData nonFiniteParsed;
+    if (!drw_parseSab(nonFinite.data(), nonFinite.size(), nonFiniteParsed)
+        || !std::isnan(nonFiniteParsed.header.resTol))
+        return false;
+    std::vector<std::uint8_t> preservedSat{0xA5u, 0x5Au};
+    if (drw_convertSabToSatV1(nonFinite.data(), nonFinite.size(),
+                              DRW::AC1021, preservedSat)
+        || preservedSat != std::vector<std::uint8_t>({0xA5u, 0x5Au}))
+        return false;
+
     const auto makeTorusSat = [&torusHeader](bool reverseV, bool finiteUStart,
                                              std::string& output) {
         std::vector<std::uint8_t> torus = torusHeader;
