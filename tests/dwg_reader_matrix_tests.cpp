@@ -14752,6 +14752,92 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
         }
     }
 
+    Options ac1027RawManager;
+    ac1027RawManager.version = DRW::AC1027;
+    ac1027RawManager.classNumber = 601u;
+    Options ac1027RawManagerNext = ac1027RawManager;
+    ac1027RawManagerNext.handle = 0xD64u;
+    Frame ac1027RawManagerObject, ac1027RawManagerNextObject;
+    std::vector<std::uint8_t> ac1027RawManagerFrame;
+    std::vector<std::uint8_t> ac1027RawManagerNextFrame;
+    const bool ac1027RawManagerBuilt =
+        makeFrame(ac1027RawManager, ac1027RawManagerObject)
+        && wrapFrame(ac1027RawManager, ac1027RawManagerObject,
+                     ac1027RawManagerFrame)
+        && makeFrame(ac1027RawManagerNext, ac1027RawManagerNextObject)
+        && wrapFrame(ac1027RawManagerNext, ac1027RawManagerNextObject,
+                     ac1027RawManagerNextFrame);
+    t.expect(ac1027RawManagerBuilt,
+             "AC1027 PERSUBENTMGR raw-only shell control is generated in memory");
+    if (ac1027RawManagerBuilt) {
+        const auto nextOffset = static_cast<std::uint32_t>(
+            ac1027RawManagerFrame.size());
+        std::vector<std::uint8_t> bytes = ac1027RawManagerFrame;
+        bytes.insert(bytes.end(), ac1027RawManagerNextFrame.begin(),
+                     ac1027RawManagerNextFrame.end());
+        PersistentManagerDispatchReader reader(
+            bytes, DRW::AC1027, ac1027RawManager.classNumber);
+        PersistentManagerDispatchSink sink;
+        const bool read = reader.readObjects(
+            bytes, ac1027RawManager.handle, nextOffset,
+            ac1027RawManagerNext.handle, sink);
+        const auto rawFirst = std::find_if(
+            sink.raw.begin(), sink.raw.end(),
+            [&ac1027RawManager](const DRW_UnsupportedObject& object) {
+                return object.m_handle == ac1027RawManager.handle;
+            });
+        const auto rawNext = std::find_if(
+            sink.raw.begin(), sink.raw.end(),
+            [&ac1027RawManagerNext](const DRW_UnsupportedObject& object) {
+                return object.m_handle == ac1027RawManagerNext.handle;
+            });
+        const auto firstPublication = std::find_if(
+            sink.publications.begin(), sink.publications.end(),
+            [&ac1027RawManager](const DRW_DwgFramePublication& publication) {
+                return publication.m_handle == ac1027RawManager.handle;
+            });
+        const auto nextPublication = std::find_if(
+            sink.publications.begin(), sink.publications.end(),
+            [&ac1027RawManagerNext](
+                const DRW_DwgFramePublication& publication) {
+                return publication.m_handle == ac1027RawManagerNext.handle;
+            });
+        const bool rawOnlyAc1027Manager = read
+            && reader.objectFailures() == 0u
+            && sink.typed.empty() && sink.raw.size() == 2u
+            && rawFirst != sink.raw.end()
+            && rawFirst->m_rawBytes == ac1027RawManagerObject.payload
+            && rawFirst->m_version == DRW::AC1027
+            && rawFirst->m_objectType == ac1027RawManager.classNumber
+            && rawFirst->m_recordName == "ACDBPERSSUBENTMANAGER"
+            && rawFirst->m_className == "AcDbPersSubentManager"
+            && !rawFirst->m_typedPayloadValidated
+            && rawFirst->m_commonLinkEvidence
+                == DRW_DwgCommonLinkEvidence::Validated
+            && rawFirst->m_parentHandle == 0xCu
+            && rawFirst->m_reactorHandles
+                == std::vector<std::uint32_t>{0xCu}
+            && rawNext != sink.raw.end()
+            && rawNext->m_rawBytes == ac1027RawManagerNextObject.payload
+            && firstPublication != sink.publications.end()
+            && firstPublication->m_carrier
+                == DRW_DwgFramePublication::Carrier::Raw
+            && nextPublication != sink.publications.end()
+            && nextPublication->m_carrier
+                == DRW_DwgFramePublication::Carrier::Raw
+            && sink.publications.size() == 2u;
+        t.expect(rawOnlyAc1027Manager,
+                 "AC1027 disputed PERSUBENTMGR frames publish raw-only after shell validation and retain the following frame");
+        if (!rawOnlyAc1027Manager) {
+            std::cerr << "AC1027 PERSUBENTMGR raw-only recovery: read="
+                      << read << " failures=" << reader.objectFailures()
+                      << " typed=" << sink.typed.size()
+                      << " raw=" << sink.raw.size()
+                      << " publications=" << sink.publications.size();
+            std::cerr << '\n';
+        }
+    }
+
     Options ac1032TableContent;
     ac1032TableContent.version = DRW::AC1032;
     ac1032TableContent.classNumber = 700u;

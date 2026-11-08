@@ -14275,8 +14275,8 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
               // params, value/variable deps) run the shared prefix and are
               // preserved byte-for-byte by the raw shelf below.
               DRW_AssociativeObject e(rn);
-              const bool ac1032BarePersistentManager =
-                  version == DRW::AC1032
+              const bool barePersistentManagerRawOnlyProfile =
+                  (version == DRW::AC1027 || version == DRW::AC1032)
                   && rn == "ACDBPERSSUBENTMANAGER"
                   && cit->second->className == "AcDbPersSubentManager";
               // Keep a pristine cursor for the narrow raw-shell recovery.
@@ -14311,15 +14311,16 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                     !partialPersistentPrefix && !partialConstraintGroupBody));
               } else {
                 const bool persistentManagerShellValid =
-                    ac1032BarePersistentManager
+                    barePersistentManagerRawOnlyProfile
                     && RawObjectShell().parseDwg(
                         version, &persistentManagerShellProbe, bs)
                     && persistentManagerShellProbe.isGood();
-                // The AC1032 bare manager body layout remains disputed. If
-                // only its class-specific body fails, publish the exact
-                // source frame through the validated raw shell. This is not
-                // typed-body success: the raw carrier is explicitly
-                // unvalidated and strict output continues to refuse it.
+                // The AC1027/AC1032 bare manager body layout remains
+                // disputed. If only its class-specific body fails, publish
+                // the exact source frame through the validated raw shell.
+                // This is not typed-body success: the raw carrier is
+                // explicitly unvalidated and strict output continues to
+                // refuse it.
                 intfa.addUnsupportedObject(
                     makeRawObject(oType, cit->second, false));
                 if (persistentManagerShellValid) {
