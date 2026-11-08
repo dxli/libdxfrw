@@ -13750,6 +13750,28 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
     const bool validLineWeight = lineWeightCode >= 0
         && (lineWeightCode <= 27
             || (lineWeightCode >= 29 && lineWeightCode <= 31));
+    const bool hasTitleSuppressed = (m_tableOverrideFlags & 0x00000001u) != 0u;
+    const bool hasHeaderSuppressed = (m_tableOverrideFlags & 0x00000002u) != 0u;
+    const bool hasFlowDirection = (m_tableOverrideFlags & 0x00000004u) != 0u;
+    const bool hasHorizontalCellMargin =
+        (m_tableOverrideFlags & 0x00000008u) != 0u;
+    const bool hasVerticalCellMargin =
+        (m_tableOverrideFlags & 0x00000010u) != 0u;
+    const bool validTableScalarOverrides =
+        (m_tableOverrideFlags & ~0x0000001Fu) == 0u
+        && (hasTitleSuppressed || !m_titleSuppressed)
+        && (m_headerSuppressed == hasHeaderSuppressed)
+        && (hasFlowDirection
+            ? (m_flowDirection == 0 || m_flowDirection == 1)
+            : m_flowDirection == 0)
+        && (hasHorizontalCellMargin
+            ? (std::isfinite(m_horizontalCellMargin)
+                && m_horizontalCellMargin >= 0.0)
+            : m_horizontalCellMargin == 0.0)
+        && (hasVerticalCellMargin
+            ? (std::isfinite(m_verticalCellMargin)
+                && m_verticalCellMargin >= 0.0)
+            : m_verticalCellMargin == 0.0);
     if (version != DRW::AC1018 || buf == nullptr || strBuf != nullptr
         || eType != DRW::TABLE || oType < 500 || handle == 0
         || blockRecH.ref == 0
@@ -13800,12 +13822,10 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || m_dxfUnsupportedData || m_dxfInCellValue || m_dxfMergeFieldsInvalid
         || (m_hasSemanticContent && !m_semanticContentComplete)
         || m_dataVersion != 0 || m_valueFlag != 0
-        || m_tableOverrideFlags != 0u
+        || !validTableScalarOverrides
         || m_borderColorOverrideFlags != 0u
         || m_borderLineweightOverrideFlags != 0u
-        || m_borderVisibilityOverrideFlags != 0u || m_titleSuppressed
-        || m_headerSuppressed || m_flowDirection != 0
-        || m_horizontalCellMargin != 0.0 || m_verticalCellMargin != 0.0
+        || m_borderVisibilityOverrideFlags != 0u
         || m_tableRowHeightOverrides != std::array<double, 3>{{0.0, 0.0, 0.0}}
         || m_tableRowAlignmentOverrides != std::array<int, 3>{{0, 0, 0}}
         || m_tableRowTextStyleHandles
@@ -13979,7 +13999,22 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         stagedBody.putBitDouble(cell.m_rotation);
         stagedBody.putVariableText(version, cell.m_contents.front().m_text);
         stagedBody.putBit(false); // no cell overrides
-        stagedBody.putBit(false); // no table overrides
+        stagedBody.putBit(m_tableOverrideFlags != 0u);
+        if (m_tableOverrideFlags != 0u) {
+            stagedBody.putBitLong(
+                static_cast<std::int32_t>(m_tableOverrideFlags));
+            // ODA v5.4.1 §20.4.96.1 defines this pre-R24 scalar prefix.
+            if (hasTitleSuppressed)
+                stagedBody.putBit(m_titleSuppressed);
+            // Header suppression is implicit true when bit 0x02 is set.
+            if (hasFlowDirection)
+                stagedBody.putBitShort(
+                    static_cast<std::uint16_t>(m_flowDirection));
+            if (hasHorizontalCellMargin)
+                stagedBody.putBitDouble(m_horizontalCellMargin);
+            if (hasVerticalCellMargin)
+                stagedBody.putBitDouble(m_verticalCellMargin);
+        }
         stagedBody.putBit(false); // no border color overrides
         stagedBody.putBit(false); // no border lineweight overrides
         stagedBody.putBit(false); // no border visibility overrides

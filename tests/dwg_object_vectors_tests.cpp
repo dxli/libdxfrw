@@ -8644,6 +8644,57 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         return table;
     };
 
+    TableDwgCodecProbe scalarOverrideTable = makeEncodableAc1018Table();
+    scalarOverrideTable.m_tableOverrideFlags = 0x0000001Fu;
+    scalarOverrideTable.m_titleSuppressed = true;
+    scalarOverrideTable.m_headerSuppressed = true;
+    scalarOverrideTable.m_flowDirection = 1;
+    scalarOverrideTable.m_horizontalCellMargin = 1.25;
+    scalarOverrideTable.m_verticalCellMargin = 2.5;
+    dwgBufferW scalarOverrideBody;
+    dwgBufferW scalarOverrideHandles;
+    dwgBufferW scalarOverrideTypePrefix;
+    scalarOverrideTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t scalarOverrideObjectSizeBit =
+        scalarOverrideTypePrefix.bitCount();
+    const bool scalarOverrideEncoded = scalarOverrideTable.encodeAsTableClass(
+        DRW::AC1018, scalarOverrideBody, scalarOverrideHandles);
+    t.expect(scalarOverrideEncoded,
+             "AC1018 TABLE encoder admits ODA scalar override mask 0x1f");
+    if (!scalarOverrideEncoded)
+        return;
+    const std::uint64_t scalarOverrideBodyEndBit =
+        scalarOverrideBody.bitCount();
+    constexpr std::int32_t scalarOverrideSentinel = 0x51CA1018;
+    scalarOverrideBody.putBitLong(scalarOverrideSentinel);
+    scalarOverrideBody.patchRawLong32AtBit(
+        scalarOverrideObjectSizeBit,
+        static_cast<std::uint32_t>(scalarOverrideBody.bitCount()));
+    appendBits(scalarOverrideBody, scalarOverrideHandles);
+    dwgBuffer scalarOverrideInput(scalarOverrideBody.data().data(),
+                                  scalarOverrideBody.data().size());
+    TableDwgCodecProbe scalarOverrideReadback;
+    const bool scalarOverrideRead = scalarOverrideReadback.parseDwg(
+        DRW::AC1018, &scalarOverrideInput);
+    t.expect(scalarOverrideRead && scalarOverrideInput.isGood()
+                 && scalarOverrideReadback.m_semanticContentComplete
+                 && scalarOverrideReadback.m_tableOverrideFlags == 0x1Fu
+                 && scalarOverrideReadback.m_titleSuppressed
+                 && scalarOverrideReadback.m_headerSuppressed
+                 && scalarOverrideReadback.m_flowDirection == 1
+                 && scalarOverrideReadback.m_horizontalCellMargin == 1.25
+                 && scalarOverrideReadback.m_verticalCellMargin == 2.5
+                 && cursorBit(scalarOverrideInput)
+                     == scalarOverrideBodyEndBit,
+             "AC1018 TABLE scalar override body encodes in ODA order and reads back exactly");
+    if (scalarOverrideRead && scalarOverrideInput.isGood()
+        && cursorBit(scalarOverrideInput) == scalarOverrideBodyEndBit) {
+        const std::int32_t sentinel = scalarOverrideInput.getBitLong();
+        t.expect(scalarOverrideInput.isGood()
+                     && sentinel == scalarOverrideSentinel,
+                 "AC1018 TABLE scalar overrides preserve the following body sentinel");
+    }
+
     DRW_Header tableFrameHeader;
     TableClassSerializationProbe tableFrameWriter(nullptr, &tableFrameHeader);
     const dwgWriter::CompoundWriteCheckpoint tableFrameCheckpoint =
@@ -8867,10 +8918,10 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1018,
         [](TableDwgCodecProbe& table) { table.eType = DRW::INSERT; });
     expectAtomicPreflightRefusal(
-        "AC1018 TABLE encoder rejects table overrides without writing",
+        "AC1018 TABLE encoder rejects unsupported table override bits without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
-            table.m_tableOverrideFlags = 1u;
+            table.m_tableOverrideFlags = 0x00000020u;
         });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects an additional column without writing",
@@ -9095,6 +9146,40 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             table.m_borderColorOverrideFlags = 1u;
             table.m_borderLineweightOverrideFlags = 1u;
             table.m_borderVisibilityOverrideFlags = 1u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder refuses table scalar override bits outside the ODA profile without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_tableOverrideFlags = 0x00000020u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder refuses title suppression residue without its flag",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.m_titleSuppressed = true; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder refuses header suppression without its implicit-true flag",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.m_headerSuppressed = true; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder refuses non-domain flow direction",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_tableOverrideFlags = 0x00000004u;
+            table.m_flowDirection = 2;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder refuses negative selected cell margin",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_tableOverrideFlags = 0x00000008u;
+            table.m_horizontalCellMargin = -0.5;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder refuses unflagged cell-margin residue",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_horizontalCellMargin = 0.5;
         });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects owned attributes without writing",
@@ -9603,7 +9688,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
              "AC1018 TABLE encoder rejects a noncustom class number without writing");
 
     TableDwgCodecProbe retryAc1018Table = makeEncodableAc1018Table();
-    retryAc1018Table.m_tableOverrideFlags = 1u;
+    retryAc1018Table.m_tableOverrideFlags = 0x00000020u;
     dwgBufferW retryRejectedBody;
     dwgBufferW retryRejectedHandles;
     const bool retryInitiallyRefused = !retryAc1018Table.encodeAsTableClass(
