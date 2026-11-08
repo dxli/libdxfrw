@@ -8088,6 +8088,23 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         void markClassInstanceFrameCommitted(std::uint32_t handle) {
             markDwgClassInstanceEmitted(handle);
         }
+
+        bool writeClassesSection(std::vector<std::uint8_t>& section) {
+            section.clear();
+            if (!writeDwgClasses())
+                return false;
+            const auto offset = m_sectionOffsets.find(recno::CLASSES);
+            const auto size = m_sectionSizes.find(recno::CLASSES);
+            if (offset == m_sectionOffsets.end()
+                || size == m_sectionSizes.end()
+                || offset->second > m_buf.data().size()
+                || size->second > m_buf.data().size() - offset->second)
+                return false;
+            section.assign(
+                m_buf.data().begin() + offset->second,
+                m_buf.data().begin() + offset->second + size->second);
+            return true;
+        }
     };
 
     DRW_Header tableClassHeader;
@@ -8136,6 +8153,169 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     const bool serializedManifestPrepared =
         emittedInstanceCountsValid
         && serializedTableClassWriter.prepareDwgClassManifest();
+    std::vector<std::uint8_t> serializedTableClassesSection;
+    const bool tableClassesSectionWritten = serializedManifestPrepared
+        && serializedTableClassWriter.writeClassesSection(
+            serializedTableClassesSection);
+    dwgBuffer decodedTableClassesSection(
+        serializedTableClassesSection.data(),
+        serializedTableClassesSection.size());
+    const bool tableClassesBeginSentinelMatches =
+        tableClassesSectionWritten
+        && serializedTableClassesSection.size() >= 38u
+        && std::equal(dwgSentinels::CLASSES_BEGIN,
+                      dwgSentinels::CLASSES_BEGIN + 16,
+                      serializedTableClassesSection.begin());
+    const bool classesPayloadPositioned = tableClassesBeginSentinelMatches
+        && decodedTableClassesSection.setPosition(16u);
+    const std::uint32_t tableClassesPayloadSize = classesPayloadPositioned
+        ? decodedTableClassesSection.getRawLong32() : 0u;
+    const std::uint16_t tableClassesMaximum = classesPayloadPositioned
+        ? decodedTableClassesSection.getBitShort() : 0u;
+    const std::uint8_t tableClassesRc1 = classesPayloadPositioned
+        ? decodedTableClassesSection.getRawChar8() : 0u;
+    const std::uint8_t tableClassesRc2 = classesPayloadPositioned
+        ? decodedTableClassesSection.getRawChar8() : 0u;
+    const std::uint8_t tableClassesFlag = classesPayloadPositioned
+        ? decodedTableClassesSection.getBit() : 0u;
+    bool sectionDecodedTableDefinitionFound = false;
+    bool sectionDecodedTableClassRowsWellFormed = classesPayloadPositioned
+        && tableClassesMaximum >= serializedTable.getDwgClassNum();
+    std::uint16_t sectionDecodedTableClassNumber = 0u;
+    std::uint16_t sectionDecodedTableProxyFlag = 0u;
+    std::string sectionDecodedTableApplication;
+    std::string sectionDecodedTableClassName;
+    std::string sectionDecodedTableRecordName;
+    std::uint8_t sectionDecodedTableWasProxy = 0u;
+    std::uint16_t sectionDecodedTableEntityFlag = 0u;
+    std::int32_t sectionDecodedTableInstanceCount = 0;
+    std::int32_t sectionDecodedTableDwgVersion = 0;
+    std::int32_t sectionDecodedTableMaintenanceVersion = 0;
+    std::int32_t sectionDecodedTableUnknown1 = 0;
+    std::int32_t sectionDecodedTableUnknown2 = 0;
+    for (std::uint32_t expectedClassNumber = 500u;
+         sectionDecodedTableClassRowsWellFormed
+             && expectedClassNumber <= tableClassesMaximum;
+         ++expectedClassNumber) {
+        const std::uint16_t classNumber =
+            decodedTableClassesSection.getBitShort();
+        const std::uint16_t proxyFlag =
+            decodedTableClassesSection.getBitShort();
+        const std::string application =
+            decodedTableClassesSection.getVariableText(DRW::AC1018);
+        const std::string className =
+            decodedTableClassesSection.getVariableText(DRW::AC1018);
+        const std::string recordName =
+            decodedTableClassesSection.getVariableText(DRW::AC1018);
+        const std::uint8_t wasProxy = decodedTableClassesSection.getBit();
+        const std::uint16_t entityFlag =
+            decodedTableClassesSection.getBitShort();
+        const std::int32_t instanceCount =
+            decodedTableClassesSection.getBitLong();
+        const std::int32_t dwgVersion =
+            decodedTableClassesSection.getBitLong();
+        const std::int32_t maintenanceVersion =
+            decodedTableClassesSection.getBitLong();
+        const std::int32_t unknown1 =
+            decodedTableClassesSection.getBitLong();
+        const std::int32_t unknown2 =
+            decodedTableClassesSection.getBitLong();
+        if (!decodedTableClassesSection.isGood()
+            || classNumber != expectedClassNumber) {
+            sectionDecodedTableClassRowsWellFormed = false;
+            break;
+        }
+        if (classNumber == serializedTable.getDwgClassNum()) {
+            sectionDecodedTableDefinitionFound = true;
+            sectionDecodedTableClassNumber = classNumber;
+            sectionDecodedTableProxyFlag = proxyFlag;
+            sectionDecodedTableApplication = application;
+            sectionDecodedTableClassName = className;
+            sectionDecodedTableRecordName = recordName;
+            sectionDecodedTableWasProxy = wasProxy;
+            sectionDecodedTableEntityFlag = entityFlag;
+            sectionDecodedTableInstanceCount = instanceCount;
+            sectionDecodedTableDwgVersion = dwgVersion;
+            sectionDecodedTableMaintenanceVersion = maintenanceVersion;
+            sectionDecodedTableUnknown1 = unknown1;
+            sectionDecodedTableUnknown2 = unknown2;
+        }
+    }
+    const std::uint64_t tableClassesPayloadEndBit =
+        (20u + static_cast<std::uint64_t>(tableClassesPayloadSize)) * 8u;
+    bool tableClassesPaddingZero = sectionDecodedTableClassRowsWellFormed
+        && cursorBit(decodedTableClassesSection) <= tableClassesPayloadEndBit
+        && tableClassesPayloadEndBit - cursorBit(decodedTableClassesSection) <= 7u;
+    while (tableClassesPaddingZero
+           && cursorBit(decodedTableClassesSection) < tableClassesPayloadEndBit) {
+        if (decodedTableClassesSection.getBit() != 0u)
+            tableClassesPaddingZero = false;
+    }
+    const std::size_t tableClassesCrcOffset =
+        static_cast<std::size_t>(tableClassesPayloadEndBit / 8u);
+    const std::size_t tableClassesUnknownTailOffset =
+        tableClassesCrcOffset + 2u;
+    const std::size_t tableClassesEndSentinelOffset =
+        tableClassesUnknownTailOffset + dwgSpec::kClassesUnknownTailBytes;
+    dwgBuffer tableClassesCrcInput(
+        serializedTableClassesSection.data(),
+        serializedTableClassesSection.size());
+    dwgBuffer tableClassesCrcReader(
+        serializedTableClassesSection.data(),
+        serializedTableClassesSection.size());
+    const bool tableClassesCrcPositioned =
+        classesPayloadPositioned
+        && tableClassesCrcOffset
+            <= static_cast<std::size_t>((std::numeric_limits<std::int32_t>::max)())
+        && tableClassesCrcReader.setPosition(tableClassesCrcOffset);
+    const std::uint16_t tableClassesStoredCrc = tableClassesCrcPositioned
+        ? tableClassesCrcReader.getRawShort16() : 0u;
+    const std::uint16_t tableClassesComputedCrc = tableClassesCrcPositioned
+        ? tableClassesCrcInput.crc8(
+              0xC0C1u, 16,
+              static_cast<std::int32_t>(tableClassesCrcOffset)) : 0u;
+    const bool tableClassesCrcMatches = tableClassesCrcPositioned
+        && tableClassesCrcReader.isGood() && tableClassesCrcInput.isGood()
+        && tableClassesStoredCrc == tableClassesComputedCrc;
+    const bool tableClassesUnknownTailZero = classesPayloadPositioned
+        && tableClassesEndSentinelOffset + 16u
+            == serializedTableClassesSection.size()
+        && std::all_of(
+            serializedTableClassesSection.begin()
+                + static_cast<std::ptrdiff_t>(tableClassesUnknownTailOffset),
+            serializedTableClassesSection.begin()
+                + static_cast<std::ptrdiff_t>(tableClassesEndSentinelOffset),
+            [](std::uint8_t byte) { return byte == 0u; });
+    const bool tableClassesEndSentinelMatches = classesPayloadPositioned
+        && tableClassesEndSentinelOffset + 16u
+            == serializedTableClassesSection.size()
+        && std::equal(dwgSentinels::CLASSES_END,
+                      dwgSentinels::CLASSES_END + 16,
+                      serializedTableClassesSection.begin()
+                          + static_cast<std::ptrdiff_t>(
+                              tableClassesEndSentinelOffset));
+    t.expect(tableClassesSectionWritten && tableClassesBeginSentinelMatches
+                 && decodedTableClassesSection.isGood()
+                 && tableClassesRc1 == 0u && tableClassesRc2 == 0u
+                 && tableClassesFlag == 1u
+                 && sectionDecodedTableClassRowsWellFormed
+                 && sectionDecodedTableDefinitionFound
+                 && sectionDecodedTableClassNumber == serializedTable.getDwgClassNum()
+                 && sectionDecodedTableProxyFlag == 0x401u
+                 && sectionDecodedTableApplication == "ObjectDBX Classes"
+                 && sectionDecodedTableClassName == "AcDbTable"
+                 && sectionDecodedTableRecordName == "ACAD_TABLE"
+                 && sectionDecodedTableWasProxy == 0u
+                 && sectionDecodedTableEntityFlag == 0x1F2u
+                 && sectionDecodedTableInstanceCount == 1
+                 && sectionDecodedTableDwgVersion == 25
+                 && sectionDecodedTableMaintenanceVersion == 20
+                 && sectionDecodedTableUnknown1 == 0 && sectionDecodedTableUnknown2 == 0
+                 && tableClassesPaddingZero
+                 && tableClassesCrcMatches
+                 && tableClassesUnknownTailZero
+                 && tableClassesEndSentinelMatches,
+             "AC1018 full CLASSES section decodes TABLE identity and committed instance count");
     dwgBufferW serializedTableClassEntry;
     const bool tableClassEntrySerialized = serializedManifestPrepared
         && serializedTableClassWriter.serializeClassDefinition(

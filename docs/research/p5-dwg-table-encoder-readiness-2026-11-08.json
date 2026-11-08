@@ -182,7 +182,6 @@
     "required_before_adapter_admission": [
       "audit remaining unchecked public-model guard branches; expanded refusal cases, representative body/handle truncation, corrected retry, and atomic append now pass",
       "bind TABLE class registration and emitted-instance accounting to the real compound entity transaction; prove entity and *T graph failure restore metadata/count ledgers and committed frames increment counts exactly once",
-      "serialize and independently decode the complete AC1018 CLASSES section containing the TABLE identity and matching instance count",
       "physical AC1018 plain-text source-to-output field comparison, or an explicit no-eligible-source disposition",
       "complete *T BLOCK/BLOCK_RECORD ownership and TABLE style-reference disposition",
       "compound writer atomic rollback, destination preservation, same-adapter corrected retry, and fresh readback",
@@ -235,9 +234,10 @@
       "declared count fails ledger validation until frame emission is marked committed",
       "actual CLASS-entry encoder output independently decodes to matching TABLE identity, entity role, one instance and class version fields",
       "decoded CLASS-entry cursor equals the exact encoded bit end",
-      "A writer compound checkpoint removes the staged TABLE class definition, class-instance handle association, and pending count state on rollback."
+      "A writer compound checkpoint removes the staged TABLE class definition, class-instance handle association, and pending count state on rollback.",
+      "The full AC1018 CLASSES section is decoded in memory: ordinal sequence, TABLE identity/count, payload end/padding, stored versus computed CRC, zero unknown tail, and end sentinel are checked."
     ],
-    "disposition": "Generated CLASS-entry serializer, instance-ledger, and writer-checkpoint rollback proof only. It does not exercise rollback through dwgRW after an emitted TABLE entity frame or failed *T graph stage, and does not decode a complete serialized CLASSES section."
+    "disposition": "Generated CLASS-entry and complete CLASSES-section encoder/decoder consistency, instance-ledger, and writer-checkpoint rollback proof. It is not an independent DWG reader or physical interoperability witness. Rollback through dwgRW after emitting an actual TABLE frame or failing the linked *T graph remains open."
   },
   "generated_ac1018_class_transaction_rollback_control": {
     "generatedFromScratch": true,
@@ -249,5 +249,20 @@
       "rollback removes the handle-to-class mapping and returns pending/emitted count ledgers to their checkpoint state"
     ],
     "disposition": "Writer checkpoint infrastructure proof only. No emitted TABLE frame or linked *T graph failure is driven through dwgRW; caller-model state and destination transaction are not covered by this control."
+  },
+  "generated_ac1018_full_classes_section_control": {
+    "generatedFromScratch": true,
+    "version": "AC1018",
+    "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
+    "result": "PASS",
+    "assertions": [
+      "writes the complete CLASSES section through dwgWriter18::writeDwgClasses",
+      "bounded decoder checks the beginning sentinel, section payload length, header and sequential class ordinals",
+      "TABLE class ordinal, proxy flag, identity fields, entity flag, instance count and version fields match",
+      "decoder reaches exact payload end with at most seven zero pad bits",
+      "stored CLASSES CRC equals independently calculated CRC over the section payload",
+      "the eight-byte AC1018 tail is zero and the ending sentinel is exact"
+    ],
+    "disposition": "Generated serializer/decoder consistency only. The decoder is test-local and not an independent DWG implementation; it does not qualify physical TABLE output or consumer interoperability."
   }
 }

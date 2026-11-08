@@ -2509,16 +2509,18 @@ registers one handle-bearing instance, confirms the declared count is invalid
 until its frame-commit marker, serializes the registered CLASS entry, and
 independently decodes its class number, full identity, entity flag, version
 fields and instance count. The focused `--table-cell-overrides` selector
-passes. This proves entry-encoder and ledger consistency for the generated
-identity, not that a TABLE entity frame or full CLASSES section is independently
-readable. A second generated check stages the TABLE class and a pending instance,
-then applies the writer's existing compound checkpoint rollback and verifies
-the class definition, handle-to-class link and pending/emitted count state are
-gone. This reuses proven transaction machinery; it does not yet exercise a
-TABLE entity frame or linked `*T` graph failure through `dwgRW`. The registration
-helper is still disconnected from `writeTable`; compound staging must bind a
-real TABLE frame and roll back class metadata and counts if entity or `*T` graph
-staging fails.
+passes. A bounded generated decoder now also walks the complete emitted AC1018
+CLASSES section, checks its row ordinals, TABLE metadata and instance count,
+payload padding, CRC, zero tail and ending sentinel. This is a generated
+writer/decoder control, not an independently implemented DWG reader or physical
+interoperability witness. A second generated check stages the TABLE class and a
+pending instance, then applies the writer's existing compound checkpoint
+rollback and verifies the class definition, handle-to-class link and
+pending/emitted count state are gone. This reuses proven transaction machinery;
+it does not yet exercise a TABLE entity frame or linked `*T` graph failure
+through `dwgRW`. The registration helper is still disconnected from `writeTable`;
+compound staging must bind a real TABLE frame and roll back class metadata and
+counts if entity or `*T` graph staging fails.
 
 Speed-oriented implementation sequence:
 
@@ -2554,10 +2556,10 @@ Speed-oriented implementation sequence:
 2. Bind CLASS registration and instance-count staging to the AC1018 TABLE
    frame transaction. Capture writer-class metadata/count checkpoints and
    prove a failed entity or `*T` graph stage restores them; a committed frame
-   must be the only point that increments the emitted-instance ledger. Extend
-   the control to the full serialized CLASSES section and decode it through an
-   independent bounded reader. Keep the route disconnected from public output
-   until this passes.
+   must be the only point that increments the emitted-instance ledger. The
+   complete CLASSES-section generated decode now passes; next prove this
+   rollback behavior through the `dwgRW` TABLE transaction. Keep the route
+   disconnected from public output until this passes.
 3. After the remaining focused refusal/atomicity controls and empirical
    class-map resolution, compare every encoded field against an independently bounded
    physical AC1018 plain-text TABLE body. Keep this separate from the generated
