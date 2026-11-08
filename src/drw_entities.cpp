@@ -13667,11 +13667,18 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || equalsAsciiNoCase(lineType, "BYLAYER")
         || equalsAsciiNoCase(lineType, "BYBLOCK")
         || equalsAsciiNoCase(lineType, "CONTINUOUS");
+    const int lineWeightCode = static_cast<int>(lWeight);
+    const bool validLineWeight = lineWeightCode >= 0
+        && (lineWeightCode <= 27
+            || (lineWeightCode >= 29 && lineWeightCode <= 31));
     if (version != DRW::AC1018 || buf == nullptr || strBuf != nullptr
         || oType < 500 || handle == 0 || blockRecH.ref == 0
         || dwgLayerHandle() == 0u
         || (dwgLinetypeHandle() == 0u
             && (ltFlags == 3u || !builtInLinetype))
+        || plotStyle < DRW::DefaultPlotStyle
+        || !std::isfinite(ltypeScale) || !validLineWeight
+        || hasAcDbColorH != (acDbColorHandle != 0u)
         || m_tableStyleHandle == 0 || !attribHandles.empty()
         || !attlist.empty()
         || seqendH.code != 0u || seqendH.size != 0u

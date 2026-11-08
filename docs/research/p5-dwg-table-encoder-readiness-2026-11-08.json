@@ -391,12 +391,28 @@
       {
         "field": "DRW_Entity::lineType/lTypeH.ref",
         "reason": "A named linetype or explicit named-linetype flag without a target handle would emit a null handle and lose the selected linetype."
+      },
+      {
+        "field": "DRW_Entity::plotStyle",
+        "reason": "Negative plot-style sentinels are not the default and are silently treated as absent by the AC1018 common writer."
+      },
+      {
+        "field": "DRW_Entity::ltypeScale",
+        "reason": "The AC1018 common writer emits this scalar; non-finite values are not representable as valid linetype scale."
+      },
+      {
+        "field": "DRW_Entity::lWeight",
+        "reason": "The common writer emits one byte; reject codes outside the defined DWG domain 0-27 and 29-31."
+      },
+      {
+        "field": "DRW_Entity::hasAcDbColorH/acDbColorHandle",
+        "reason": "The AC1018 writer emits an optional hard-pointer only when present; advertised-null and unadvertised-nonnull states are inconsistent."
       }
     ],
     "implementation": "src/drw_entities.cpp: DRW_Table::encodeDwg refuses all listed states during bounded preflight.",
     "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
     "assertion": "Generated refusal cases preserve pre-seeded body and handle buffers.",
-    "disposition": "Closes only the enumerated omission paths for the direct generated AC1018 codec. Continue auditing remaining public fields and private retained DXF state; no output support claim."
+    "disposition": "Closes only the enumerated omission and malformed-state paths for the direct generated AC1018 codec. Continue auditing remaining public fields and private retained DXF state; no output support claim."
   },
   "generated_ac1018_entity_frame_commit_rollback_control": {
     "generatedFromScratch": true,

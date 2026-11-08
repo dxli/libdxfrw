@@ -7537,6 +7537,10 @@ public:
         ltFlags = flags;
     }
 
+    void setRawAcDbColorHandleState(bool present, std::uint32_t handle) {
+        setDwgAcDbColorHandle(present, handle);
+    }
+
     std::int16_t encodedObjectType() const { return oType; }
     std::uint32_t encodedObjectSize() const { return objSize; }
 
@@ -8901,6 +8905,34 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         "AC1018 TABLE encoder rejects explicit linetype flag without a handle",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) { table.setRawLinetypeFlags(3u); });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects inconsistent AcDbColor presence without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.setRawAcDbColorHandleState(true, 0u);
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects an unadvertised AcDbColor handle without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.setRawAcDbColorHandleState(false, 0xA905u);
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects a negative plot-style handle without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.plotStyle = -1; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects non-finite linetype scale without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.ltypeScale = std::numeric_limits<double>::quiet_NaN();
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects invalid lineweight code without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.lWeight = static_cast<DRW_LW_Conv::lineWidth>(28);
+        });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects a missing entity handle without writing",
         DRW::AC1018,
