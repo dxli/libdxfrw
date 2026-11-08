@@ -323,12 +323,28 @@
       {
         "field": "DRW_Point::xAxisAngle",
         "reason": "The bounded TABLE frame profile does not encode inherited point X-axis angle."
+      },
+      {
+        "field": "DRW_Insert::seqendH.code",
+        "reason": "The one-frame TABLE profile has no retained SEQEND handle; wire code metadata must be absent when ref is NoHandle."
+      },
+      {
+        "field": "DRW_Insert::seqendH.size",
+        "reason": "The one-frame TABLE profile has no retained SEQEND handle; encoded handle size metadata must be absent."
+      },
+      {
+        "field": "DRW_Insert::seqendH.rawCode",
+        "reason": "The one-frame TABLE profile has no retained SEQEND handle; retained wire role metadata must be absent."
+      },
+      {
+        "field": "DRW_Insert::seqendH.ref64",
+        "reason": "The one-frame TABLE profile has no retained SEQEND handle; a wide reference cannot be ignored when the legacy ref is NoHandle."
       }
     ],
     "implementation": "src/drw_entities.cpp: DRW_Table::encodeDwg refuses all listed states during bounded preflight.",
     "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
     "assertion": "Each generated refusal preserves pre-seeded body and handle buffers.",
-    "disposition": "Closes only these seven omission paths for the direct generated AC1018 codec. Continue auditing remaining public fields and private retained DXF state; no output support claim."
+    "disposition": "Closes only these eleven omission paths for the direct generated AC1018 codec. Continue auditing remaining public fields and private retained DXF state; no output support claim."
   },
   "generated_ac1018_entity_frame_commit_rollback_control": {
     "generatedFromScratch": true,

@@ -8923,6 +8923,24 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             table.attlist.push_back(std::make_shared<DRW_Attrib>());
         });
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects retained SEQEND wire code without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.seqendH.code = 5u; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects retained SEQEND wire size without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.seqendH.size = 1u; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects retained SEQEND wire role without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.seqendH.rawCode = DRW::DwgSoftPointer;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects retained SEQEND wide handle without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.seqendH.ref64 = 0xA900u; });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects EED without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
