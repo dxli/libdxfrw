@@ -8674,7 +8674,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         if (tableFacadeWriter == nullptr)
             return false;
         const std::uint64_t transaction =
-            tableFacade.beginDwgWriteTransaction(false, true, true);
+            tableFacade.beginDwgWriteTransaction(true, true, true);
         if (transaction == 0u)
             return false;
 
@@ -8704,6 +8704,51 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             return false;
         }
 
+        if (!tableFacade.beginBlockContent(blockRecord)) {
+            (void)tableFacade.rollbackDwgWriteTransaction(transaction);
+            return false;
+        }
+        DRW_Line geometryLine;
+        geometryLine.handle = 0xA811u;
+        geometryLine.parentHandle = DRW::NoHandle;
+        geometryLine.basePoint = DRW_Coord{0.0, 0.0, 0.0};
+        geometryLine.secPoint = DRW_Coord{8.0, 3.0, 0.0};
+        DRW_Line failedGeometryLine;
+        failedGeometryLine.handle = 0xA812u;
+        failedGeometryLine.parentHandle = DRW::NoHandle;
+        failedGeometryLine.basePoint = DRW_Coord{0.0, 0.0, 0.0};
+        failedGeometryLine.secPoint = DRW_Coord{8.0, 0.0, 0.0};
+        if (rollback) {
+            const bool earlierGeometryWritten =
+                tableFacade.writeLine(&geometryLine);
+            tableFacade.setDwgWriteFailurePointForTest(
+                dwgRW::DwgWriteFailurePoint::AfterFirstBlockOwnedEntity);
+            const bool injectedFailureOccurred =
+                !tableFacade.writeLine(&failedGeometryLine);
+            const bool graphScopeClosed = tableFacade.endBlockContent();
+            const bool failedGeometryCallerRestored =
+                failedGeometryLine.handle == 0xA812u
+                && failedGeometryLine.parentHandle == DRW::NoHandle;
+            const bool tableFrameStillStaged =
+                tableFacadeWriter->encodedBufferSize()
+                    > tableFacadeInitialBytes;
+            if (!earlierGeometryWritten || !injectedFailureOccurred
+                || !graphScopeClosed || !failedGeometryCallerRestored
+                || !tableFrameStillStaged
+                || tableFacade.m_successfulEntityWrites
+                    != tableFacadeInitialSuccesses + 2u) {
+                (void)tableFacade.rollbackDwgWriteTransaction(transaction);
+                return false;
+            }
+        } else {
+            const bool geometryWritten = tableFacade.writeLine(&geometryLine);
+            const bool graphScopeClosed = tableFacade.endBlockContent();
+            if (!geometryWritten || !graphScopeClosed) {
+                (void)tableFacade.rollbackDwgWriteTransaction(transaction);
+                return false;
+            }
+        }
+
         if (rollback) {
             const bool rolledBack = tableFacade.rollbackDwgWriteTransaction(
                 transaction);
@@ -8724,10 +8769,16 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             const bool callerRestored =
                 table.encodedObjectType() == originalObjectType
                 && table.encodedObjectSize() == originalObjectSize
-                && table.eType == DRW::TABLE && table.handle == 0xA810u;
+                && table.eType == DRW::TABLE && table.handle == 0xA810u
+                && geometryLine.handle == 0xA811u
+                && geometryLine.parentHandle == DRW::NoHandle
+                && failedGeometryLine.handle == 0xA812u
+                && failedGeometryLine.parentHandle == DRW::NoHandle;
             const bool passed = rolledBack
                 && bytesRolledBack && objectsRolledBack && classRolledBack
-                && handleRolledBack && writesRolledBack && callerRestored;
+                && handleRolledBack
+                && writesRolledBack && callerRestored
+                && !tableFacade.hasDwgWriteFailure();
             return passed;
         }
 
@@ -8738,7 +8789,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         const bool passed = classLedgerValid && committed
             && tableFacadeWriter->emittedHandle(table.handle)
             && tableFacade.m_successfulEntityWrites
-                == tableFacadeInitialSuccesses + 1u;
+                == tableFacadeInitialSuccesses + 2u;
         return passed;
     };
     const bool facadeRollbackAndRetry = tableFacadeAttempt(true)

@@ -346,12 +346,14 @@
     "assertions": [
       "class registration captures the caller TABLE state before assigning the writer-local class ordinal and records it for caller-state rollback",
       "the facade writes an actual AC1018 TABLE frame with a matching object-frame receipt and registered class-instance handle",
-      "explicit rollback restores the output buffer/object map, class definition, handle-to-class mapping, successful-write count, and caller TABLE class/body metadata",
-      "a second generated TABLE frame is committed on the same facade and the class instance ledger validates"
+      "the control writes one *T-owned LINE frame, injects failure after the following LINE frame is encoded, and verifies the failed frame restores its caller state while the earlier graph frame remains staged",
+      "explicit rollback restores the output buffer/object map, class definition, handle-to-class mapping, successful-write count, TABLE caller metadata, and the earlier geometry entity owner state",
+      "a second generated TABLE plus owned LINE is committed on the same facade and the class instance ledger validates"
     ],
     "limitations": [
-      "rollback is requested explicitly after frame staging to model a later graph-stage failure; no production *T graph-writing failure branch exists or is injected",
-      "the placeholder *T BLOCK_RECORD has no geometry and no TABLE/BLOCK_RECORD/TABLESTYLE graph closure is established",
+      "the generated LINEs are transaction probes only; they are not derived from TABLE cell layout or proof of rendered geometry semantics",
+      "the control manually sequences the public block-content and facade transaction APIs; public dwgRW::writeTable remains fail-closed and does not invoke this sequence",
+      "no independent proof establishes the emitted ACAD_TABLE-to-*T/BLOCK_RECORD/TABLESTYLE reference roles or complete graph closure",
       "the control does not call public dwgRW::writeTable, which remains fail-closed",
       "no physical source-profile, independent reader, producer, or native TABLE validation"
     ],

@@ -403,12 +403,12 @@ created locally from scratch for the specific control.
   block is empty; this proves only frame/class transaction mechanics. The
   current focused control also routes class registration and frame emission
   through an explicit `dwgRW` transaction: caller class state, frame bytes,
-  handle/class ledgers and success count roll back, then one retry commits on
-  the same facade. The rollback is an explicit simulation after frame staging,
-  not an injected failure from a real graph-writing branch. Next build the
-  smallest semantically complete `*T` geometry/reference graph and move the
-  rollback assertion to a failure injected after those graph frames are
-  staged. Keep `dwgRW::writeTable` fail-closed until that graph and its
+  handle/class ledgers and success count roll back after a failure injected
+  following an earlier `*T` owned geometry frame; one retry then commits on the
+  same facade. The generated LINEs are transaction probes only, not TABLE
+  rendering evidence. Next build the smallest semantically complete
+  `*T` geometry/reference graph from a bounded, source-supported profile. Keep
+  `dwgRW::writeTable` fail-closed until that graph and its
   physical-source, independent-reader/native qualification gates pass. See the
   [TABLE readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 - **Previous local slice:** AC1027/AC1032 PERSUBENTMGR typed failures now
