@@ -42,6 +42,13 @@ void appendDouble(std::vector<std::uint8_t>& bytes, double value) {
         bytes.push_back(static_cast<std::uint8_t>(bits >> shift));
 }
 
+void appendRawDouble(std::vector<std::uint8_t>& bytes, double value) {
+    std::uint64_t bits = 0u;
+    std::memcpy(&bits, &value, sizeof(bits));
+    for (unsigned shift = 0u; shift < 64u; shift += 8u)
+        bytes.push_back(static_cast<std::uint8_t>(bits >> shift));
+}
+
 std::vector<std::uint8_t> makeSab() {
     std::vector<std::uint8_t> bytes{
         'A','C','I','S',' ','B','i','n','a','r','y','F','i','l','e'};
@@ -62,6 +69,45 @@ std::vector<std::uint8_t> makeSab() {
                                0x0Eu,0x02u,'o','f',
                                0x0Eu,0x04u,'A','C','I','S',
                                0x0Du,0x04u,'d','a','t','a'});
+    return bytes;
+}
+
+std::vector<std::uint8_t> makeModelerSab() {
+    std::vector<std::uint8_t> bytes{
+        'A','C','I','S',' ','B','i','n','a','r','y','F','i','l','e'};
+    appendU32(bytes, 21800u);
+    appendU32(bytes, 3u);
+    appendU32(bytes, 2u);
+    appendU32(bytes, 0u);
+    appendString(bytes, 7u, "LOCAL_PRODUCT", 13u);
+    appendString(bytes, 7u, "LOCAL_ACIS", 10u);
+    appendString(bytes, 7u, "LOCAL_DATE", 10u);
+    appendDouble(bytes, 1.0);
+    appendDouble(bytes, 1.0e-6);
+    appendDouble(bytes, 1.0e-6);
+
+    appendString(bytes, DRW_SabTag::EntityType, "point", 5u);
+    bytes.push_back(DRW_SabTag::Pointer);
+    appendU32(bytes, static_cast<std::uint32_t>(-1));
+    bytes.push_back(DRW_SabTag::Int);
+    appendU32(bytes, 101u);
+    bytes.push_back(DRW_SabTag::LocationVec);
+    appendRawDouble(bytes, 1.0);
+    appendRawDouble(bytes, 2.0);
+    appendRawDouble(bytes, 3.0);
+    bytes.push_back(DRW_SabTag::RecordEnd);
+
+    appendString(bytes, DRW_SabTag::EntityType, "vertex", 6u);
+    bytes.push_back(DRW_SabTag::Pointer);
+    appendU32(bytes, static_cast<std::uint32_t>(-1));
+    bytes.push_back(DRW_SabTag::Int);
+    appendU32(bytes, 202u);
+    bytes.push_back(DRW_SabTag::Pointer);
+    appendU32(bytes, 0u);
+    bytes.push_back(DRW_SabTag::RecordEnd);
+
+    appendString(bytes, DRW_SabTag::EntityType, "End-of-ACIS-data", 16u);
+    bytes.push_back(DRW_SabTag::RecordEnd);
     return bytes;
 }
 } // namespace
@@ -137,7 +183,122 @@ int main() {
         std::fprintf(stderr, "allocation sweep too short: %d\n", firstSuccess);
         return 6;
     }
-    std::printf("SAT allocation rollback/retry passed at %d allocation points\n",
-                firstSuccess);
+
+    const std::vector<std::uint8_t> modelerSab = makeModelerSab();
+    DRW_AcisBrep expectedBrep;
+    DRW_SabParseOutcome expectedOutcome;
+    if (!drw_decodeAcisWireframeWithOutcome(modelerSab, expectedBrep,
+                                            expectedOutcome)
+        || !expectedOutcome.complete || expectedBrep.vertices.size() != 1u
+        || !expectedBrep.vertices.front().valid
+        || expectedBrep.vertices.front().point.x != 1.0
+        || expectedBrep.vertices.front().point.y != 2.0
+        || expectedBrep.vertices.front().point.z != 3.0
+        || !expectedBrep.hasBBox || expectedBrep.bboxMin.x != 1.0
+        || expectedBrep.bboxMin.y != 2.0 || expectedBrep.bboxMin.z != 3.0
+        || expectedBrep.bboxMax.x != 1.0 || expectedBrep.bboxMax.y != 2.0
+        || expectedBrep.bboxMax.z != 3.0) {
+        std::fprintf(stderr,
+                     "baseline ACIS decode failed: complete=%d vertices=%zu "
+                     "bbox=%d diagnostics=%zu\n",
+                     expectedOutcome.complete ? 1 : 0,
+                     expectedBrep.vertices.size(), expectedBrep.hasBBox ? 1 : 0,
+                     expectedBrep.diagnostics.size());
+        return 7;
+    }
+    const auto matchesExpectedBrep = [&expectedBrep](const DRW_AcisBrep& value) {
+        return value.vertices.size() == expectedBrep.vertices.size()
+            && value.vertices.front().point.x
+                == expectedBrep.vertices.front().point.x
+            && value.vertices.front().point.y
+                == expectedBrep.vertices.front().point.y
+            && value.vertices.front().point.z
+                == expectedBrep.vertices.front().point.z
+            && value.edges.size() == expectedBrep.edges.size()
+            && value.faces.size() == expectedBrep.faces.size()
+            && value.lumps.size() == expectedBrep.lumps.size()
+            && value.shells.size() == expectedBrep.shells.size()
+            && value.hasBBox == expectedBrep.hasBBox
+            && value.bboxMin.x == expectedBrep.bboxMin.x
+            && value.bboxMin.y == expectedBrep.bboxMin.y
+            && value.bboxMin.z == expectedBrep.bboxMin.z
+            && value.bboxMax.x == expectedBrep.bboxMax.x
+            && value.bboxMax.y == expectedBrep.bboxMax.y
+            && value.bboxMax.z == expectedBrep.bboxMax.z
+            && value.diagnostics == expectedBrep.diagnostics;
+    };
+    int decodeFirstSuccess = -1;
+    for (int failIndex = 0; failIndex < 512; ++failIndex) {
+        DRW_AcisBrep output;
+        DRW_AcisVertex sentinel;
+        sentinel.nodeIndex = 99;
+        sentinel.valid = true;
+        sentinel.point.x = 99.0;
+        output.vertices.push_back(sentinel);
+        output.hasBBox = true;
+        output.diagnostics.push_back("sentinel");
+        DRW_SabParseOutcome outcome;
+        outcome.complete = true;
+        outcome.sourceByteCount = 99u;
+
+        failAfter.store(failIndex, std::memory_order_relaxed);
+        bool decoded = false;
+        bool threw = false;
+        try {
+            decoded = drw_decodeAcisWireframeWithOutcome(
+                modelerSab, output, outcome);
+        } catch (...) {
+            threw = true;
+        }
+        failAfter.store(-1, std::memory_order_relaxed);
+
+        if (threw) {
+            std::fprintf(stderr, "ACIS decode allocation %d escaped\n",
+                         failIndex);
+            return 8;
+        }
+        if (decoded) {
+            if (!matchesExpectedBrep(output) || !outcome.complete) {
+                std::fprintf(stderr, "ACIS decode output mismatch\n");
+                return 9;
+            }
+            decodeFirstSuccess = failIndex;
+            break;
+        }
+        if (!output.empty() || output.hasBBox || !output.diagnostics.empty()
+            || !output.vertices.empty() || !output.edges.empty()
+            || !output.faces.empty() || !output.lumps.empty()
+            || !output.shells.empty()
+            || !outcome.allocationFailure
+            || outcome.sourceByteCount != modelerSab.size()) {
+            std::fprintf(stderr,
+                         "ACIS decode allocation %d rollback mismatch: "
+                         "empty=%d bbox=%d diag=%zu vertices=%zu edges=%zu "
+                         "faces=%zu lumps=%zu shells=%zu complete=%d "
+                         "alloc=%d bytes=%zu expected=%zu\n",
+                         failIndex, output.empty() ? 1 : 0,
+                         output.hasBBox ? 1 : 0, output.diagnostics.size(),
+                         output.vertices.size(), output.edges.size(),
+                         output.faces.size(), output.lumps.size(),
+                         output.shells.size(), outcome.complete ? 1 : 0,
+                         outcome.allocationFailure ? 1 : 0,
+                         outcome.sourceByteCount, modelerSab.size());
+            return 10;
+        }
+        if (!drw_decodeAcisWireframeWithOutcome(modelerSab, output, outcome)
+            || !outcome.complete || !matchesExpectedBrep(output)) {
+            std::fprintf(stderr, "ACIS decode allocation %d retry failed\n",
+                         failIndex);
+            return 11;
+        }
+    }
+    if (decodeFirstSuccess < 8) {
+        std::fprintf(stderr, "ACIS decode allocation sweep too short: %d\n",
+                     decodeFirstSuccess);
+        return 12;
+    }
+    std::printf("SAT allocation rollback/retry passed at %d points; "
+                "ACIS decode rollback/retry passed at %d points\n",
+                firstSuccess, decodeFirstSuccess);
     return 0;
 }
