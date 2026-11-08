@@ -36758,6 +36758,11 @@ bool tableScalarOverrideOutput(bool binary) {
     data.tables.front().m_tableRowHeightOverrides[2] = 5.5;
     data.tables.front().m_tableRowAlignmentOverrides = {{2, 5, 8}};
     data.tables.front().m_tableRowTextStyleHandles = {{0xA900u, 0xAA00u, 0xAB00u}};
+    data.tables.front().m_tableRowTextColors[0].method = 0xC0u;
+    data.tables.front().m_tableRowTextColors[0].sourceVersion = DRW::AC1021;
+    data.tables.front().m_tableRowFillNone = {{true, false, true}};
+    data.tables.front().m_tableRowFillColors[2].method = 0xC0u;
+    data.tables.front().m_tableRowFillColors[2].sourceVersion = DRW::AC1021;
     data.tables.front().m_semanticContentComplete = true;
     if (exportCurrent())
         return fail("unmapped TABLE row-height/alignment overrides were emitted");
@@ -36785,6 +36790,13 @@ bool tableScalarOverrideOutput(bool binary) {
     data.tables.front().m_tableRowHeightOverrides = {{0.0, 0.0, 0.0}};
     data.tables.front().m_tableRowAlignmentOverrides = {{0, 0, 0}};
     data.tables.front().m_tableRowTextStyleHandles = {{0u, 0u, 0u}};
+    data.tables.front().m_tableRowTextColors = {{DRW_DwgCmColor{},
+                                                 DRW_DwgCmColor{},
+                                                 DRW_DwgCmColor{}}};
+    data.tables.front().m_tableRowFillNone = {{false, false, false}};
+    data.tables.front().m_tableRowFillColors = {{DRW_DwgCmColor{},
+                                                 DRW_DwgCmColor{},
+                                                 DRW_DwgCmColor{}}};
     if (!exportCurrent() || !checkWire() || !checkReadback())
         return fail("TABLE row-height/alignment refusal corrected retry failed");
     return true;

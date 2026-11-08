@@ -7829,7 +7829,7 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
             && (cellOverrideFlags & ~ac1018CellOverrideFlags) == 0u)
         || (version == DRW::AC1021 && cellOverrideFlags == 0x00000004u);
     constexpr std::uint32_t generatedTableOverrideFlags =
-        0x007FC03Fu;
+        0x007FFFFFu;
     if (!knownCellOverrideProfile
         || (tableOverrideFlags & ~generatedTableOverrideFlags) != 0u)
         return false;
@@ -7956,12 +7956,31 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
                 body.putBitDouble(1.25); // horizontal cell margin
             if ((tableOverrideFlags & 0x00000010u) != 0u)
                 body.putBitDouble(2.5); // vertical cell margin
-            if ((tableOverrideFlags & 0x00000020u) != 0u) {
-                // Literal ByLayer CMC; no text payload.
+            const auto putByLayerCmc = [&body]() {
                 body.putBitShort(0);
                 body.putBitLong(static_cast<std::int32_t>(0xC0u << 24u));
                 body.putRawChar8(0);
+            };
+            if ((tableOverrideFlags & 0x00000020u) != 0u) {
+                // Literal ByLayer CMC; no text payload.
+                putByLayerCmc();
             }
+            if ((tableOverrideFlags & 0x00000040u) != 0u)
+                putByLayerCmc(); // header row color
+            if ((tableOverrideFlags & 0x00000080u) != 0u)
+                putByLayerCmc(); // data row color
+            if ((tableOverrideFlags & 0x00000100u) != 0u)
+                body.putBit(1); // title row fill none
+            if ((tableOverrideFlags & 0x00000200u) != 0u)
+                body.putBit(0); // header row fill enabled
+            if ((tableOverrideFlags & 0x00000400u) != 0u)
+                body.putBit(1); // data row fill none
+            if ((tableOverrideFlags & 0x00000800u) != 0u)
+                putByLayerCmc(); // title row fill color
+            if ((tableOverrideFlags & 0x00001000u) != 0u)
+                putByLayerCmc(); // header row fill color
+            if ((tableOverrideFlags & 0x00002000u) != 0u)
+                putByLayerCmc(); // data row fill color
             if ((tableOverrideFlags & 0x00004000u) != 0u)
                 body.putBitShort(2); // title row: top center
             if ((tableOverrideFlags & 0x00008000u) != 0u)
@@ -8313,7 +8332,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     R2007TableFrame tableRowHeightOverridesFrame;
     const bool tableRowHeightOverridesBuilt = makeR2007TableFrame(
         1, tableRowHeightOverridesFrame, TablePlacement{}, 0u,
-        0x007FC000u);
+        0x007FFFFFu);
     t.expect(tableRowHeightOverridesBuilt,
              "AC1021 TABLE row-height-override vector builds from scratch");
     if (!tableRowHeightOverridesBuilt)
@@ -8324,17 +8343,25 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     const bool tableRowHeightOverridesRead = table.parseDwg(
         DRW::AC1021, &tableRowHeightOverridesInput);
     t.expect(tableRowHeightOverridesRead && tableRowHeightOverridesInput.isGood()
-                 && table.m_tableOverrideFlags == 0x007FC000u
+                 && table.m_tableOverrideFlags == 0x007FFFFFu
                  && table.m_tableRowHeightOverrides
                      == std::array<double, 3>{{3.5, 4.5, 5.5}}
                  && table.m_tableRowAlignmentOverrides
                      == std::array<int, 3>{{2, 5, 8}}
                  && table.m_tableRowTextStyleHandles
                      == std::array<std::uint32_t, 3>{{0xA900u, 0xAA00u, 0xAB00u}}
+                 && table.m_tableRowTextColors[0].method == 0xC0u
+                 && table.m_tableRowTextColors[1].method == 0xC0u
+                 && table.m_tableRowTextColors[2].method == 0xC0u
+                 && table.m_tableRowFillNone
+                     == std::array<bool, 3>{{true, false, true}}
+                 && table.m_tableRowFillColors[0].method == 0xC0u
+                 && table.m_tableRowFillColors[1].method == 0xC0u
+                 && table.m_tableRowFillColors[2].method == 0xC0u
                  && !table.m_semanticContentComplete
                  && cursorBit(tableRowHeightOverridesInput)
                      == tableRowHeightOverridesFrame.tableDataEndBit,
-             "AC1021 TABLE retains ODA row-height, alignment and text-style overrides while keeping output semantics gated");
+             "AC1021 TABLE retains ODA row color/fill/height/alignment/text-style overrides while keeping output semantics gated");
     if (tableRowHeightOverridesRead) {
         const std::int32_t sentinel = tableRowHeightOverridesInput.getBitLong();
         t.expect(tableRowHeightOverridesInput.isGood()

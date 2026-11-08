@@ -12079,6 +12079,12 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
             || tableColumn.m_width < 0.0)
             return failDxfWrite();
     }
+    const auto hasDwgCmColor = [](const DRW_DwgCmColor& color) {
+        return color.method != 0u || color.flags != 0u || color.index != 0u
+            || color.rgb24 != -1 || color.hasRgbColor
+            || !color.colorName.empty() || !color.bookName.empty()
+            || color.sourceVersion != DRW::UNKNOWNV;
+    };
     if (ent->m_dataVersion < 0 || ent->m_dataVersion > 32767
         || (version < DRW::AC1024 && ent->m_dataVersion != 0)
         || ent->m_flowDirection < 0 || ent->m_flowDirection > 32767
@@ -12098,6 +12104,13 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
         || std::any_of(ent->m_tableRowTextStyleHandles.begin(),
                        ent->m_tableRowTextStyleHandles.end(),
             [](std::uint32_t value) { return value != 0u; })
+        || std::any_of(ent->m_tableRowTextColors.begin(),
+                       ent->m_tableRowTextColors.end(), hasDwgCmColor)
+        || std::any_of(ent->m_tableRowFillNone.begin(),
+                       ent->m_tableRowFillNone.end(),
+            [](bool value) { return value; })
+        || std::any_of(ent->m_tableRowFillColors.begin(),
+                       ent->m_tableRowFillColors.end(), hasDwgCmColor)
         || ent->m_borderColorOverrideFlags > static_cast<std::uint32_t>(
                std::numeric_limits<int>::max())
         || ent->m_borderColorOverrideFlags != 0u

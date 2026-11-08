@@ -3131,29 +3131,44 @@ bool skipTableCustomData(DRW::Version version, dwgBuffer *buf,
 }
 
 bool readTableCmColor(DRW::Version version, dwgBuffer *buf,
-                      dwgBuffer *strBuf, const TableDwgBounds& bounds) {
+                      dwgBuffer *strBuf, const TableDwgBounds& bounds,
+                      DRW_DwgCmColor *color = nullptr) {
     dwgBuffer *textBuf = strBuf ? strBuf : buf;
     if (version < DRW::AC1018) {
-        std::uint16_t ignoredColor = 0;
-        return readBoundedBitShort(*buf, bounds.bodyEndBit, ignoredColor);
+        std::uint16_t parsedColor = 0;
+        if (!readBoundedBitShort(*buf, bounds.bodyEndBit, parsedColor))
+            return false;
+        if (color != nullptr) {
+            color->index = parsedColor;
+            color->sourceVersion = version;
+        }
+        return true;
     }
 
-    std::uint16_t ignoredColorType = 0;
-    std::int32_t rgb = 0;
-    std::uint8_t colorFlags = 0;
-    if (!readBoundedBitShort(*buf, bounds.bodyEndBit, ignoredColorType)
-        || !readBoundedBitLong(*buf, bounds.bodyEndBit, rgb)
-        || !readBoundedRawChar8(*buf, bounds.bodyEndBit, colorFlags))
+    std::uint32_t packedColor = 0;
+    std::int32_t rgb24 = -1;
+    bool hasRgbColor = false;
+    UTF8STRING colorName;
+    UTF8STRING bookName;
+    std::uint8_t method = 0;
+    std::uint8_t flags = 0;
+    std::uint16_t index = 0;
+    if (!readBoundedCmColor(*buf, textBuf, bounds.bodyEndBit, version,
+                            packedColor, &rgb24, &hasRgbColor,
+                            &colorName, &bookName, bounds.stringEndBit,
+                            &method, &flags, &index))
         return false;
-    DRW_DBG("\ntype COLOR: "); DRW_DBGH(rgb >> 24);
-    DRW_DBG("\nRGB COLOR: "); DRW_DBGH(rgb);
-    DRW_DBG("\nbyte COLOR: "); DRW_DBGH(colorFlags);
-    const std::uint64_t textEndBit = tableTextEndBit(buf, textBuf, bounds);
-    if (colorFlags & 1)
-        readTableText(version, textBuf, textEndBit);
-    if (colorFlags & 2)
-        readTableText(version, textBuf, textEndBit);
-    return textBuf->isGood();
+    if (color != nullptr) {
+        color->method = method;
+        color->flags = flags;
+        color->index = index;
+        color->rgb24 = rgb24;
+        color->hasRgbColor = hasRgbColor;
+        color->colorName = std::move(colorName);
+        color->bookName = std::move(bookName);
+        color->sourceVersion = version;
+    }
+    return true;
 }
 
 bool parseR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
@@ -3493,31 +3508,40 @@ bool skipR2007TableOverrides(DRW::Version version, dwgBuffer *buf,
                 semanticComplete = false;
         }
         if ((flags & 0x000020)
-            && !readTableCmColor(version, buf, strBuf, bounds))
+            && !readTableCmColor(version, buf, strBuf, bounds,
+                                 &table.m_tableRowTextColors[0]))
             return false;
         if ((flags & 0x000040)
-            && !readTableCmColor(version, buf, strBuf, bounds))
+            && !readTableCmColor(version, buf, strBuf, bounds,
+                                 &table.m_tableRowTextColors[1]))
             return false;
         if ((flags & 0x000080)
-            && !readTableCmColor(version, buf, strBuf, bounds))
+            && !readTableCmColor(version, buf, strBuf, bounds,
+                                 &table.m_tableRowTextColors[2]))
             return false;
         if (flags & 0x000100)
-            if (!skipTableBit(*buf, bounds.bodyEndBit))
+            if (!readBoundedBit(*buf, bounds.bodyEndBit,
+                                table.m_tableRowFillNone[0]))
                 return false;
         if (flags & 0x000200)
-            if (!skipTableBit(*buf, bounds.bodyEndBit))
+            if (!readBoundedBit(*buf, bounds.bodyEndBit,
+                                table.m_tableRowFillNone[1]))
                 return false;
         if (flags & 0x000400)
-            if (!skipTableBit(*buf, bounds.bodyEndBit))
+            if (!readBoundedBit(*buf, bounds.bodyEndBit,
+                                table.m_tableRowFillNone[2]))
                 return false;
         if ((flags & 0x000800)
-            && !readTableCmColor(version, buf, strBuf, bounds))
+            && !readTableCmColor(version, buf, strBuf, bounds,
+                                 &table.m_tableRowFillColors[0]))
             return false;
         if ((flags & 0x001000)
-            && !readTableCmColor(version, buf, strBuf, bounds))
+            && !readTableCmColor(version, buf, strBuf, bounds,
+                                 &table.m_tableRowFillColors[1]))
             return false;
         if ((flags & 0x002000)
-            && !readTableCmColor(version, buf, strBuf, bounds))
+            && !readTableCmColor(version, buf, strBuf, bounds,
+                                 &table.m_tableRowFillColors[2]))
             return false;
         if (flags & 0x004000) {
             std::uint16_t alignment = 0;
@@ -13191,6 +13215,11 @@ void DRW_Table::resetDwgState() {
     m_tableRowHeightOverrides = {{0.0, 0.0, 0.0}};
     m_tableRowAlignmentOverrides = {{0, 0, 0}};
     m_tableRowTextStyleHandles = {{0u, 0u, 0u}};
+    m_tableRowTextColors = {{DRW_DwgCmColor{}, DRW_DwgCmColor{},
+                             DRW_DwgCmColor{}}};
+    m_tableRowFillNone = {{false, false, false}};
+    m_tableRowFillColors = {{DRW_DwgCmColor{}, DRW_DwgCmColor{},
+                             DRW_DwgCmColor{}}};
     m_titleSuppressed = false;
     m_headerSuppressed = false;
     m_tableStyleHandle = 0;
