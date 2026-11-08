@@ -488,7 +488,43 @@ narrow writer profile, but only generated output/readback is qualified; the
 containing source has 387 opaque callbacks and other ACDS graphs. Next add a
 source-bound selected-route check for this exact graph in ASCII and Binary
 while retaining whole-source refusal; do not promote a parser/source match to
-whole-document output or semantic support. The local P6 AC1027
+whole-document output or semantic support.
+
+**Next implementation slice — source-bound TORUS selected projection:**
+1. Extend the existing opt-in physical-source inspector for the pinned
+   `atmos_dc22s_2007.dwg` hash to expose the exact modeler, DataStorage section
+   and record key/handle needed to select the `0x452 → 0x453 → 0x454 → 0x455`
+   path. Assert uniqueness and all owner, history, graph, primitive and material
+   roles before building a projection; never select by callback order alone.
+2. Construct a scratch `dx_data` view containing only that closed modeler and
+   its exact linked DataStorage record and required schema/index metadata. Do
+   not mutate or filter the live source object, discard unrelated objects and
+   then use ordinary whole-file output, or weaken the full-source disposition
+   check. If the DataStorage representation cannot be safely narrowed, keep
+   the slice test-only and prove the selected writer route directly rather than
+   broadening production admission.
+3. Export that selected projection to ASCII and Binary DXF, re-import each,
+   and compare emitted modeler identity, history/graph/primitive roles, both
+   radii, CMC color/index and null material link against the source-bound
+   expected values. Prove a missing or mismatched dependency refuses without
+   publishing partial output, then repair the same adapter/projection and
+   retry successfully in each encoding.
+4. In the same focused control, retain an assertion that ordinary export of the
+   complete physical source is still refused at its existing incomplete-frame
+   or opaque-source gate. This selected-route result qualifies bounded
+   transport only; it does not qualify SAB/ACIS semantics, native 3D behavior,
+   or whole-drawing conversion.
+
+Keep this as an opt-in/manual local-source probe unless the test harness can
+consume the already-approved existing corpus path without checking in a new
+DWG/DXF. Do not add generated or downloaded DWG/DXF fixture files. During the
+edit loop, rebuild `libdxfrw_dwg_local_roundtrip` once and run the new selector
+plus `dxf_acsh_torus_typed_roundtrip` and `dxf_acsh_cmc_loss_guard`; run the
+small owning ACDS cohort only if the changed production hook affects it. No
+full-suite run is warranted for this isolated slice. Update this plan with the
+receipt and exact outcome as part of the same slice.
+
+The local P6 AC1027
 source-reference inventory is complete, with
 3DSOLID the only partial body report; its selected history target graph is now
 identified but the typed body/output route is incomplete. Keep this profile
