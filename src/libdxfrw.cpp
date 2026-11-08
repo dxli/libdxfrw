@@ -12407,6 +12407,17 @@ bool dxfRW::writeTableStyle(
     const auto validR24CellAlignment = [](int value) {
         return value >= 1 && value <= 9;
     };
+    const auto validR24StyleOverrides = [](std::uint32_t value) {
+        return (value & ~std::uint32_t{0x7FFFFu}) == 0u;
+    };
+    const auto validR24ContentOverrides = [](
+            const DRW_TableStyleContentFormat& format) {
+        return (format.m_propertyOverrideFlags
+                    & ~std::uint32_t{0x1FFu}) == 0u
+            && (format.m_propertyFlags & ~std::uint32_t{0x100u}) == 0u
+            && (format.m_propertyFlags
+                & ~format.m_propertyOverrideFlags) == 0u;
+    };
     if (!preflightDxfWrite())
         return reject("TABLESTYLE writer is already in a failed state");
     if (ent == nullptr)
@@ -12500,13 +12511,12 @@ bool dxfRW::writeTableStyle(
             const DRW_TableStyleContentFormat& format =
                 style.m_contentFormat;
             if (style.m_type != 5 || !style.m_hasData
-                || style.m_propertyOverrideFlags != 0u
+                || !validR24StyleOverrides(style.m_propertyOverrideFlags)
                 || (style.m_mergeFlags & ~std::uint32_t{0x18000u}) != 0u
                 || !byNoneColor(style.m_backgroundColor,
                                 style.m_backgroundColorCmc)
                 || !validR24ContentLayout(style.m_contentLayout)
-                || format.m_propertyOverrideFlags != 0u
-                || format.m_propertyFlags != 0u
+                || !validR24ContentOverrides(format)
                 || !validValueDataType(format.m_valueDataType)
                 || !validR24ValueUnitType(format.m_valueUnitType)
                 || format.m_valueFormatString.size() > 1024u * 1024u

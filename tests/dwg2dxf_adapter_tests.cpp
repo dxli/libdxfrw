@@ -37209,7 +37209,8 @@ void populateR24DwgTableStyleGraph(dx_data& data,
                                   bool variedTextHeights = false,
                                   bool variedMergeFlags = false,
                                   bool variedContentLayouts = false,
-                                  bool variedAlignments = false) {
+                                  bool variedAlignments = false,
+                                  bool variedPropertyFlags = false) {
     data.sourceFormat = dx_source_format::DWG;
     data.sourceVersion = DRW::AC1024;
     data.hasNamedObjectDictionary = true;
@@ -37317,6 +37318,18 @@ void populateR24DwgTableStyleGraph(dx_data& data,
         style.m_cellStyles[1].m_contentFormat.m_cellAlignment = 9;
         style.m_cellStyles[2].m_contentFormat.m_cellAlignment = 4;
     }
+    if (variedPropertyFlags) {
+        style.m_cellStyles[0].m_propertyOverrideFlags = 0x420u;
+        style.m_cellStyles[1].m_propertyOverrideFlags = 0x10000u;
+        style.m_cellStyles[2].m_propertyOverrideFlags = 0x8000u;
+        style.m_cellStyles[0].m_contentFormat.m_propertyOverrideFlags =
+            0x121u;
+        style.m_cellStyles[0].m_contentFormat.m_propertyFlags = 0x100u;
+        style.m_cellStyles[1].m_contentFormat.m_propertyOverrideFlags =
+            0x012u;
+        style.m_cellStyles[2].m_contentFormat.m_propertyOverrideFlags =
+            0x080u;
+    }
     if (extendedFormatProfile) {
         for (DRW_TableStyleCellStyle& cellStyle : style.m_cellStyles) {
             cellStyle.m_contentFormat.m_valueFormatString = "0.00";
@@ -37372,7 +37385,8 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
                                       bool variedTextHeights = false,
                                       bool variedMergeFlags = false,
                                       bool variedContentLayouts = false,
-                                      bool variedAlignments = false) {
+                                      bool variedAlignments = false,
+                                      bool variedPropertyFlags = false) {
     const std::string profileSuffix = inheritedCustomMargins
         ? "-inherited-margins" : "-explicit-margins";
     const std::filesystem::path output =
@@ -37391,7 +37405,7 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
         data, inheritedCustomMargins, prefixValue1,
         valueDataType, valueUnitType, extendedFormatProfile, variedMargins,
         variedTextHeights, variedMergeFlags, variedContentLayouts,
-        variedAlignments);
+        variedAlignments, variedPropertyFlags);
     constexpr std::uint32_t kBorderLineTypeHandle = 0x570u;
     if (lineTypeProfile) {
         DRW_LType lineType;
@@ -37585,6 +37599,28 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
             return fail("R24 TABLESTYLE accepted an undocumented cell alignment or replaced the destination");
         firstCustomStyle.m_contentFormat.m_cellAlignment = savedAlignment;
     }
+    if (variedPropertyFlags) {
+        const std::uint32_t savedStyleOverrides =
+            firstCustomStyle.m_propertyOverrideFlags;
+        firstCustomStyle.m_propertyOverrideFlags = 0x80000u;
+        if (writer.fileExport(output.string(), DRW::AC1024, binary,
+                              &data, false)
+            || !destinationIsSentinel())
+            return fail("R24 TABLESTYLE accepted an undocumented style override flag or replaced the destination");
+        firstCustomStyle.m_propertyOverrideFlags = savedStyleOverrides;
+        DRW_TableStyleContentFormat& format =
+            firstCustomStyle.m_contentFormat;
+        const std::uint32_t savedOverrides = format.m_propertyOverrideFlags;
+        const std::uint32_t savedFlags = format.m_propertyFlags;
+        format.m_propertyOverrideFlags = 0x21u;
+        format.m_propertyFlags = 0x100u;
+        if (writer.fileExport(output.string(), DRW::AC1024, binary,
+                              &data, false)
+            || !destinationIsSentinel())
+            return fail("R24 TABLESTYLE accepted AutoScale without its override or replaced the destination");
+        format.m_propertyOverrideFlags = savedOverrides;
+        format.m_propertyFlags = savedFlags;
+    }
     if (!writer.fileExport(output.string(), DRW::AC1024, binary,
                            &data, false)) {
         std::error_code ignored;
@@ -37653,6 +37689,15 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
         || tableCellStyle.m_contentFormat.m_cellAlignment
             != data.tableStyles.front().m_tableCellStyle
                 .m_contentFormat.m_cellAlignment
+        || tableCellStyle.m_propertyOverrideFlags
+            != data.tableStyles.front().m_tableCellStyle
+                .m_propertyOverrideFlags
+        || tableCellStyle.m_contentFormat.m_propertyOverrideFlags
+            != data.tableStyles.front().m_tableCellStyle
+                .m_contentFormat.m_propertyOverrideFlags
+        || tableCellStyle.m_contentFormat.m_propertyFlags
+            != data.tableStyles.front().m_tableCellStyle
+                .m_contentFormat.m_propertyFlags
         || tableCellStyle.m_contentFormat.m_textHeight
             != data.tableStyles.front().m_tableCellStyle
                 .m_contentFormat.m_textHeight
@@ -37668,6 +37713,15 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
         || titleStyle.m_contentFormat.m_cellAlignment
             != data.tableStyles.front().m_cellStyles.front()
                 .m_contentFormat.m_cellAlignment
+        || titleStyle.m_propertyOverrideFlags
+            != data.tableStyles.front().m_cellStyles.front()
+                .m_propertyOverrideFlags
+        || titleStyle.m_contentFormat.m_propertyOverrideFlags
+            != data.tableStyles.front().m_cellStyles.front()
+                .m_contentFormat.m_propertyOverrideFlags
+        || titleStyle.m_contentFormat.m_propertyFlags
+            != data.tableStyles.front().m_cellStyles.front()
+                .m_contentFormat.m_propertyFlags
         || titleStyle.m_contentFormat.m_valueDataType != valueDataType
         || titleStyle.m_contentFormat.m_valueUnitType != valueUnitType
         || titleStyle.m_contentFormat.m_valueFormatString
@@ -37702,6 +37756,17 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
             || typedStyle.m_cellStyles[index].m_contentFormat.m_cellAlignment
                 != data.tableStyles.front().m_cellStyles[index]
                     .m_contentFormat.m_cellAlignment
+            || typedStyle.m_cellStyles[index].m_propertyOverrideFlags
+                != data.tableStyles.front().m_cellStyles[index]
+                    .m_propertyOverrideFlags
+            || typedStyle.m_cellStyles[index].m_contentFormat
+                    .m_propertyOverrideFlags
+                != data.tableStyles.front().m_cellStyles[index]
+                    .m_contentFormat.m_propertyOverrideFlags
+            || typedStyle.m_cellStyles[index].m_contentFormat
+                    .m_propertyFlags
+                != data.tableStyles.front().m_cellStyles[index]
+                    .m_contentFormat.m_propertyFlags
             || typedStyle.m_cellStyles[index].m_mergeFlags
                 != data.tableStyles.front().m_cellStyles[index].m_mergeFlags
             || typedStyle.m_cellStyles[index].m_contentLayout
@@ -37750,12 +37815,16 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
     };
     std::vector<std::tuple<std::string, double, double>> contentFormatScalars;
     std::vector<int> rawCellAlignments;
+    std::vector<std::uint32_t> rawContentOverrideFlags;
+    std::vector<std::uint32_t> rawContentPropertyFlags;
     for (std::size_t index = 0; index + 8u < raw.groups.size(); ++index) {
         const DRW_Variant& marker = raw.groups[index];
         if (marker.code() != 1 || marker.type() != DRW_Variant::STRING
             || marker.c_str() == nullptr
             || std::string(marker.c_str()) != "CONTENTFORMAT_BEGIN")
             continue;
+        const DRW_Variant& propertyOverrides = raw.groups[index + 1u];
+        const DRW_Variant& propertyFlags = raw.groups[index + 2u];
         const DRW_Variant& formatString = raw.groups[index + 5u];
         const DRW_Variant& rotation = raw.groups[index + 6u];
         const DRW_Variant& blockScale = raw.groups[index + 7u];
@@ -37767,15 +37836,26 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
             || blockScale.code() != 140
             || blockScale.type() != DRW_Variant::DOUBLE
             || alignment.code() != 94
-            || alignment.type() != DRW_Variant::INTEGER)
+            || alignment.type() != DRW_Variant::INTEGER
+            || propertyOverrides.code() != 90
+            || propertyOverrides.type() != DRW_Variant::INTEGER
+            || propertyOverrides.i_val() < 0
+            || propertyFlags.code() != 91
+            || propertyFlags.type() != DRW_Variant::INTEGER
+            || propertyFlags.i_val() < 0)
             return fail("R24 TABLESTYLE content-format scalar field order is malformed");
         contentFormatScalars.emplace_back(
             formatString.c_str(), rotation.d_val(), blockScale.d_val());
         rawCellAlignments.push_back(alignment.i_val());
+        rawContentOverrideFlags.push_back(
+            static_cast<std::uint32_t>(propertyOverrides.i_val()));
+        rawContentPropertyFlags.push_back(
+            static_cast<std::uint32_t>(propertyFlags.i_val()));
     }
     std::vector<std::tuple<int, int, std::string>> identities;
     std::vector<std::uint32_t> rawMergeFlags;
     std::vector<std::uint32_t> rawContentLayouts;
+    std::vector<std::uint32_t> rawStyleOverrideFlags;
     for (std::size_t index = 0; index + 4u < raw.groups.size(); ++index) {
         const DRW_Variant& marker = raw.groups[index];
         if (marker.code() != 1 || marker.type() != DRW_Variant::STRING
@@ -37783,12 +37863,18 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
             || std::string(marker.c_str()) != "TABLEFORMAT_BEGIN")
             continue;
         const DRW_Variant& mergeFlags = raw.groups[index + 4u];
+        const DRW_Variant& propertyOverrides = raw.groups[index + 3u];
         if (mergeFlags.code() != 92
             || mergeFlags.type() != DRW_Variant::INTEGER
-            || mergeFlags.i_val() < 0)
+            || mergeFlags.i_val() < 0
+            || propertyOverrides.code() != 91
+            || propertyOverrides.type() != DRW_Variant::INTEGER
+            || propertyOverrides.i_val() < 0)
             return fail("R24 TABLESTYLE merge flag field order is malformed");
         rawMergeFlags.push_back(
             static_cast<std::uint32_t>(mergeFlags.i_val()));
+        rawStyleOverrideFlags.push_back(
+            static_cast<std::uint32_t>(propertyOverrides.i_val()));
         if (index + 6u >= raw.groups.size())
             return fail("R24 TABLESTYLE content-layout field is truncated");
         const DRW_Variant& contentLayout = raw.groups[index + 6u];
@@ -37825,9 +37911,23 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
         {2, 1, "_HEADER"}, {3, 2, "_DATA"}};
     std::vector<std::uint32_t> expectedMergeFlags{
         sourceTableStyle.m_tableCellStyle.m_mergeFlags};
+    std::vector<std::uint32_t> expectedStyleOverrideFlags{
+        sourceTableStyle.m_tableCellStyle.m_propertyOverrideFlags};
+    std::vector<std::uint32_t> expectedContentOverrideFlags{
+        sourceTableStyle.m_tableCellStyle.m_contentFormat
+            .m_propertyOverrideFlags};
+    std::vector<std::uint32_t> expectedContentPropertyFlags{
+        sourceTableStyle.m_tableCellStyle.m_contentFormat.m_propertyFlags};
     for (const DRW_TableStyleCellStyle& cellStyle :
-         sourceTableStyle.m_cellStyles)
+         sourceTableStyle.m_cellStyles) {
         expectedMergeFlags.push_back(cellStyle.m_mergeFlags);
+        expectedStyleOverrideFlags.push_back(
+            cellStyle.m_propertyOverrideFlags);
+        expectedContentOverrideFlags.push_back(
+            cellStyle.m_contentFormat.m_propertyOverrideFlags);
+        expectedContentPropertyFlags.push_back(
+            cellStyle.m_contentFormat.m_propertyFlags);
+    }
     std::vector<std::uint32_t> expectedContentLayouts{
         sourceTableStyle.m_tableCellStyle.m_contentLayout};
     std::vector<int> expectedCellAlignments{
@@ -37887,6 +37987,9 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
         || rawMergeFlags != expectedMergeFlags
         || rawContentLayouts != expectedContentLayouts
         || rawCellAlignments != expectedCellAlignments
+        || rawStyleOverrideFlags != expectedStyleOverrideFlags
+        || rawContentOverrideFlags != expectedContentOverrideFlags
+        || rawContentPropertyFlags != expectedContentPropertyFlags
         || countString(1, "TABLEFORMAT_BEGIN") != 4u
         || countString(1, "CONTENTFORMAT_BEGIN") != 4u
         || countString(1, "CELLMARGIN_BEGIN")
@@ -87253,6 +87356,12 @@ int main(int argc, char** argv) {
                 && typedDwgR24TableStyleDxfRoundTrip(
                     true, nonce, false, 8, false, 512, 0,
                     false, false, false, false, false, true)
+                && typedDwgR24TableStyleDxfRoundTrip(
+                    false, nonce, false, 8, false, 512, 0,
+                    false, false, false, false, false, false, true)
+                && typedDwgR24TableStyleDxfRoundTrip(
+                    true, nonce, false, 8, false, 512, 0,
+                    false, false, false, false, false, false, true)
             ? 0 : 1;
     }
     if (argc == 2 && std::string(argv[1]) == "--raster-dwg-source-profile-eed")
