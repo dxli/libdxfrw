@@ -1,5 +1,5 @@
 {
-  "schema": 2,
+  "schema": 3,
   "date": "2026-11-08",
   "scope": "Bounded physical AC1027 Cover MATERIAL-to-DXF output and local readback",
   "source": {
@@ -10,18 +10,27 @@
     "typed_material_records": 3
   },
   "implementation": {
-    "file": "dwg2dxf/dx_ac1027_material_wire.h",
+    "files": [
+      "dwg2dxf/dx_ac1027_material_wire.h",
+      "tests/dwg_ac1027_material_dictionary_wire_tests.cpp",
+      "tests/CMakeLists.txt",
+      "source-release-files.am",
+      "source-release-files.txt"
+    ],
     "changes": [
       "Validate the AC1027 dictionary's one NOD-owner reactor in both the object metadata and ordered common handle stream.",
       "Read the BL reactor count as 1 after the empty EED marker, matching ODA v5.4.1 §20.4.44 field order.",
       "Admit only the exact ByLayer/ByBlock/Global member set while checking each raw detached name and following soft-owner handle against the preserved source entry order.",
-      "Expose bounded refusal reasons for identity, metadata, body, name-stream, and handle-stream mismatches."
+      "Expose bounded refusal reasons for identity, metadata, body, name-stream, and handle-stream mismatches.",
+      "Add a locally generated 520-bit object frame test covering both valid member orders, duplicate keys, typed/wire order mismatch, and a corrupted reactor role."
     ]
   },
   "commands": [
     "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests libdxfrw_dwg_default_material_optin_tests -j4",
     "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --material-ac1027-physical-output-readback /Users/dli/doc/dwg/Cover.dwg",
-    "ctest --test-dir build-gcc -R 'dwg2dxf_material_ac1024_typed_graph_output|libdxfrw_dwg_default_material_optin' --output-on-failure"
+    "cmake -S . -B build-gcc -DCMAKE_POLICY_VERSION_MINIMUM=3.5",
+    "cmake --build build-gcc --target libdxfrw_dwg_ac1027_material_dictionary_wire_tests -j4",
+    "ctest --test-dir build-gcc -R 'libdxfrw_dwg_ac1027_material_dictionary_wire|libdxfrw_dwg_default_material_optin|dwg2dxf_material_ac1024_typed_graph_output' --output-on-failure"
   ],
   "results": {
     "build": "passed",
@@ -30,7 +39,7 @@
     "binary_output_and_local_readback": "passed",
     "same_adapter_retry_after_mutation_refusal": "passed",
     "destination_preservation_on_refusal": "passed",
-    "focused_generated_tests": "2 passed: AC1024 typed graph output and generated default MATERIAL opt-in"
+    "focused_generated_tests": "3 passed: AC1027 dictionary wire, AC1024 typed graph output, and generated default MATERIAL opt-in"
   },
   "bounded_selection": [
     "Three source MATERIAL records and their ACAD_MATERIAL owner dictionary.",

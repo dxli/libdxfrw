@@ -1205,7 +1205,11 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    only the selected same-version graph and local transport/readback; it does
    not qualify DWG MATERIAL encoding, whole-file conversion, other dictionary
    profiles, or native/independent semantic behavior. Keep the aggregate strict
-   guard and those broader claims open. See the [physical output receipt](docs/research/p6-ac1027-material-physical-output-probe-2026-11-08.json).
+   guard and those broader claims open. A generated 520-bit frame regression
+   now covers both observed member orders, exact name/handle sequence pairing,
+   duplicate-key refusal, typed reordering, and reactor-role refusal; it is
+   registered as a fast CTest and included in source-release manifests. The
+   focused MATERIAL cohort passes 3/3. See the [physical output receipt](docs/research/p6-ac1027-material-physical-output-probe-2026-11-08.json).
 
    Each frame must end in
    `no body handles`, ordered typed handle fields with spans/roles, or
