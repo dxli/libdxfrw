@@ -66,9 +66,18 @@ typed value-name/real-value readback. The base dependency remains covered at
 6/6 offsets per encoding. The combined [receipt](docs/research/p6-dxf-associative-dependency-objects-allocation-failure-retry-2026-11-08.json)
 limits this evidence to those generated record profiles; integer and geometry
 dependencies, graph closure, source prevalence, and support claims remain
-open. Next, add geometry-dependency allocation coverage only if its exact
-graph prerequisites can be exercised without broad adapter-preflight fault
-injection.
+open.
+
+**Implementation follow-up (2026-11-08):** the dependency allocation target
+now also covers generated AC1024 `ACDBASSOCGEOMDEPENDENCY` with the default
+`AcDbAssocSingleEdgePersSubentId` profile. It sweeps 8/8 ASCII and 7/7 Binary
+callback allocations and proves destination/source rollback, same-codec retry,
+and typed field readback. Its dependency references and subentity indices are
+null/default, so this is not a source-backed graph or geometry semantic claim.
+The [combined receipt](docs/research/p6-dxf-associative-dependency-objects-allocation-failure-retry-2026-11-08.json)
+records the base, real-valued, and default-index geometry profiles. Next, use
+the admitted AC1024 source profile to add non-null dependency reference roles
+inside a rooted graph and retain strict graph-closure gates.
 
 **Resume checkpoint (2026-11-07):** the Mac session was unlocked and the
 audit-enabled ODA 27.1 GUI route has completed the AC1024 civil residual

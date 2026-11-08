@@ -14,14 +14,19 @@ namespace {
 long allocationsBeforeFailure = -1;
 std::size_t failedAllocations = 0;
 
+enum class DependencyProfile { Base, Value, Geometry };
+
 struct AllocationFailure {
     explicit AllocationFailure(long count) { allocationsBeforeFailure = count; }
     ~AllocationFailure() { allocationsBeforeFailure = -1; }
 };
 
-DRW_AssociativeObject makeDependency(bool valueDependency) {
-    DRW_AssociativeObject dependency(valueDependency
-        ? "ACDBASSOCVALUEDEPENDENCY" : "ACDBASSOCDEPENDENCY");
+DRW_AssociativeObject makeDependency(DependencyProfile profile) {
+    const char* recordName = profile == DependencyProfile::Value
+        ? "ACDBASSOCVALUEDEPENDENCY"
+        : profile == DependencyProfile::Geometry
+            ? "ACDBASSOCGEOMDEPENDENCY" : "ACDBASSOCDEPENDENCY";
+    DRW_AssociativeObject dependency(recordName);
     dependency.handle = 0xE901u;
     dependency.m_classVersion = 3u;
     dependency.m_status = -7;
@@ -33,7 +38,7 @@ DRW_AssociativeObject makeDependency(bool valueDependency) {
     dependency.m_dependencyNamePresent = true;
     dependency.m_dependencyName = "allocation-retry";
     dependency.m_dependencyBodyId = -9;
-    if (valueDependency) {
+    if (profile == DependencyProfile::Value) {
         dependency.m_valueDependencyFieldsParsed = true;
         dependency.m_valueDependencyClassVersion = 0;
         dependency.m_valueDependencyName = "VALUE_DEPENDENCY";
@@ -41,6 +46,13 @@ DRW_AssociativeObject makeDependency(bool valueDependency) {
         dependency.m_valueDependencyValueKind =
             DRW_AssociativeObject::EvalVariantKind::Real;
         dependency.m_valueDependencyValueReal = 12.5;
+    } else if (profile == DependencyProfile::Geometry) {
+        dependency.m_geomDependencyFieldsParsed = true;
+        dependency.m_geomClassVersion = 0;
+        dependency.m_geomEnabled = true;
+        dependency.m_geomPersistentSubentityClassName =
+            "AcDbAssocSingleEdgePersSubentId";
+        dependency.m_geomDependentOnCompoundObject = true;
     }
     return dependency;
 }
@@ -48,9 +60,9 @@ DRW_AssociativeObject makeDependency(bool valueDependency) {
 class AssociativeDependencyExport final : public LC3CompatCheck {
 public:
     explicit AssociativeDependencyExport(dxfRW& output,
-                                         bool valueDependency = false)
+                                         DependencyProfile profile)
         : output(output) {
-        dependency = makeDependency(valueDependency);
+        dependency = makeDependency(profile);
     }
 
     dxfRW& output;
@@ -98,7 +110,7 @@ bool write(AssociativeDependencyExport& exporter, dxfRW& codec, bool binary) {
     return codec.write(&exporter, DRW::AC1024, binary);
 }
 
-bool verify(const std::filesystem::path& path, bool valueDependency) {
+bool verify(const std::filesystem::path& path, DependencyProfile profile) {
     dx_data data;
     dx_iface reader;
     if (!reader.fileImport(path.string(), &data, false)
@@ -106,8 +118,10 @@ bool verify(const std::filesystem::path& path, bool valueDependency) {
         return false;
     const DRW_AssociativeObject& actual = data.associativeObjects.front();
     return actual.handle == 0xE901u
-        && actual.m_recordName == (valueDependency
-            ? "ACDBASSOCVALUEDEPENDENCY" : "ACDBASSOCDEPENDENCY")
+        && actual.m_recordName == (profile == DependencyProfile::Value
+            ? "ACDBASSOCVALUEDEPENDENCY"
+            : profile == DependencyProfile::Geometry
+                ? "ACDBASSOCGEOMDEPENDENCY" : "ACDBASSOCDEPENDENCY")
         && actual.m_dependencyFieldsParsed
         && actual.m_dependencyWireComplete
         && actual.m_classVersion == 3u && actual.m_status == -7
@@ -117,14 +131,21 @@ bool verify(const std::filesystem::path& path, bool valueDependency) {
         && actual.m_dependencyNamePresent
         && actual.m_dependencyName == "allocation-retry"
         && actual.m_dependencyBodyId == -9
-        && (!valueDependency
+        && (profile != DependencyProfile::Value
             || (actual.m_valueDependencyFieldsParsed
                 && actual.m_valueDependencyClassVersion == 0
                 && actual.m_valueDependencyName == "VALUE_DEPENDENCY"
                 && actual.m_valueDependencyValueCode == 40
                 && actual.m_valueDependencyValueKind
                     == DRW_AssociativeObject::EvalVariantKind::Real
-                && actual.m_valueDependencyValueReal == 12.5));
+                && actual.m_valueDependencyValueReal == 12.5))
+        && (profile != DependencyProfile::Geometry
+            || (actual.m_geomDependencyFieldsParsed
+                && actual.m_geomClassVersion == 0
+                && actual.m_geomEnabled
+                && actual.m_geomPersistentSubentityClassName
+                    == "AcDbAssocSingleEdgePersSubentId"
+                && actual.m_geomDependentOnCompoundObject));
 }
 
 bool sourceUnchanged(const DRW_AssociativeObject& actual,
@@ -149,7 +170,17 @@ bool sourceUnchanged(const DRW_AssociativeObject& actual,
         && actual.m_valueDependencyValueKind
             == expected.m_valueDependencyValueKind
         && actual.m_valueDependencyValueReal
-            == expected.m_valueDependencyValueReal;
+            == expected.m_valueDependencyValueReal
+        && actual.m_geomDependencyFieldsParsed
+            == expected.m_geomDependencyFieldsParsed
+        && actual.m_geomClassVersion == expected.m_geomClassVersion
+        && actual.m_geomEnabled == expected.m_geomEnabled
+        && actual.m_geomPersistentSubentityClassName
+            == expected.m_geomPersistentSubentityClassName
+        && actual.m_geomPersistentSubentityFieldsParsed
+            == expected.m_geomPersistentSubentityFieldsParsed
+        && actual.m_geomDependentOnCompoundObject
+            == expected.m_geomDependentOnCompoundObject;
 }
 
 bool run(const std::filesystem::path& directory) {
@@ -165,15 +196,17 @@ bool run(const std::filesystem::path& directory) {
     const std::string sentinel = "prior associative dependency bytes\n";
     dxfRW codec(output.string().c_str());
     for (const bool binary : {false, true}) {
-        for (const bool valueDependency : {false, true}) {
-            AssociativeDependencyExport exporter(codec, valueDependency);
-            AssociativeDependencyExport expected(codec, valueDependency);
+        for (const DependencyProfile profile : {
+                 DependencyProfile::Base, DependencyProfile::Value,
+                 DependencyProfile::Geometry}) {
+            AssociativeDependencyExport exporter(codec, profile);
+            AssociativeDependencyExport expected(codec, profile);
             if (!write(exporter, codec, binary)
-                || !verify(output, valueDependency))
+                || !verify(output, profile))
                 return fail("generated baseline did not read back typed dependency fields");
             exporter.failAt = 1000000;
             if (!write(exporter, codec, binary)
-                || !verify(output, valueDependency))
+                || !verify(output, profile))
                 return fail("allocation calibration write/readback failed");
             const long allocationCount = exporter.reached;
             if (allocationCount <= 0)
@@ -201,14 +234,16 @@ bool run(const std::filesystem::path& directory) {
                                         expected.dependency))
                     return fail("injected failure changed the caller object");
                 if (!write(exporter, codec, binary)
-                    || !verify(output, valueDependency))
+                    || !verify(output, profile))
                     return fail("same-codec retry failed typed readback");
                 if (!sourceUnchanged(exporter.dependency,
                                      expected.dependency))
                     return fail("retry changed the caller object");
             }
             std::cout << "AC1024 "
-                      << (valueDependency ? "value" : "base")
+                      << (profile == DependencyProfile::Value ? "value"
+                          : profile == DependencyProfile::Geometry ? "geometry"
+                          : "base")
                       << " associative dependency OBJECTS "
                       << (binary ? "Binary" : "ASCII")
                       << ": allocation offsets=" << allocationCount
