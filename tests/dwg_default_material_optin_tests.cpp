@@ -311,6 +311,10 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
         return opaqueAbsent && a != 0 && b != 0 && c != 0 && d != 0;
     }
     bool wantsDwgDefaultPlotStyleGraph() const override { return plotEnabled; }
+    void dwgDefaultPlotStyleGraphPlanned(
+            std::uint32_t, std::uint32_t placeholder) override {
+        plotStylePlaceholder = placeholder;
+    }
     void dwgDefaultMaterialGraphPlanned(std::uint32_t a, std::uint32_t b,
                                         std::uint32_t c, std::uint32_t d) override {
         handles = {a,b,c,d};
@@ -397,6 +401,7 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
     bool enabled=true, plotEnabled=true, opaqueAbsent=true, rejected=false, supplied=false;
     Mode mode=Mode::Normal; std::size_t slot=0;
     std::array<std::uint32_t,4> handles{};
+    std::uint32_t plotStylePlaceholder=0;
 };
 struct Capture : LC3CompatCheck {
     void addNamedObjectDictionary(const DRW_Dictionary& value) override {
@@ -498,18 +503,23 @@ struct Capture : LC3CompatCheck {
         materials.push_back({m.m_name,m.handle});
     }
     void addLayer(const DRW_Layer& layer) override {
-        if(layer.name=="0") layerMaterial=layer.materialHandle.ref;
+        if(layer.name=="0") {
+            layerMaterial=layer.materialHandle.ref;
+            layerPlotStyle=layer.plotStyleHandle.ref;
+        }
     }
-    bool matches(const std::array<std::uint32_t,4>& h, bool supplied) const {
+    bool matches(const std::array<std::uint32_t,4>& h, bool supplied,
+                 std::uint32_t expectedPlotStyle=0u) const {
         if (!valid || root!=h[0] || dictionary!=h[0] || owner!=DRW::DwgNamedObjectsDictionaryHandle
             || children!=std::array<std::uint32_t,3>{h[1],h[2],h[3]}
-            || materials.size()!=3u || layerMaterial!=(supplied?0xB200u:h[3])) return false;
+            || materials.size()!=3u || layerMaterial!=(supplied?0xB200u:h[3])
+            || (expectedPlotStyle!=0u && layerPlotStyle!=expectedPlotStyle)) return false;
         const std::array<std::string,3> names{"ByBlock","ByLayer","Global"};
         for(std::size_t i=0;i<3;++i)
             if(std::find(materials.begin(),materials.end(),std::make_pair(names[i],h[i+1]))==materials.end()) return false;
         return true;
     }
-    std::uint32_t root=0,dictionary=0,owner=0,layerMaterial=0;
+    std::uint32_t root=0,dictionary=0,owner=0,layerMaterial=0,layerPlotStyle=0;
     std::array<std::uint32_t,3> children{};
     std::vector<std::pair<std::string,std::uint32_t>> materials;
     bool valid=true, requireSemantic=true, requireRaw=false;
@@ -518,7 +528,7 @@ struct Capture : LC3CompatCheck {
     DRW::Version rawVersion=DRW::AC1021;
 };
 bool inspect(const std::string& path,const std::array<std::uint32_t,4>& h,bool supplied,
-             DRW::Version version) {
+             DRW::Version version, std::uint32_t expectedPlotStyle=0u) {
     dwgRW reader(path.c_str()); Capture capture;
     // AC1021/AC1024 decode the bounded nonprocedural body; AC1027 additionally
     // requires the exact generated default body/string profile. Retained raw
@@ -527,7 +537,18 @@ bool inspect(const std::string& path,const std::array<std::uint32_t,4>& h,bool s
         || version == DRW::AC1024 || version == DRW::AC1027;
     capture.requireRaw = version == DRW::AC1021 || version == DRW::AC1027;
     capture.rawVersion = version;
-    const bool r = reader.read(&capture,false); const bool m = capture.matches(h,supplied); if (!r || !m) std::cerr << "inspect read=" << r << " match=" << m << " root=" << capture.root << " dict=" << capture.dictionary << " layer=" << capture.layerMaterial << " materials=" << capture.materials.size() << " valid=" << capture.valid << "\n"; return r && m;
+    const bool read = reader.read(&capture, false);
+    const bool matched = capture.matches(h, supplied, expectedPlotStyle);
+    if (!read || !matched) {
+        std::cerr << "inspect read=" << read << " match=" << matched
+                  << " root=" << capture.root << " dict=" << capture.dictionary
+                  << " layerMaterial=" << capture.layerMaterial
+                  << " layerPlotStyle=" << capture.layerPlotStyle
+                  << " expectedPlotStyle=" << expectedPlotStyle
+                  << " materials=" << capture.materials.size()
+                  << " valid=" << capture.valid << '\n';
+    }
+    return read && matched;
 }
 }
 int main(int argc,char**argv) {
@@ -562,7 +583,19 @@ int main(int argc,char**argv) {
         if(!output.reserveHandle(0x30u)||!output.reserveHandle(0x31u)||!output.reserveHandle(0xB200u)) return 1;
         Adapter adapter(output);
         adapter.version=version;
-        if(!output.write(&adapter,version,true)){std::cerr<<"normal write failed version="<<int(version)<<" path="<<path<<"\n";return 1;} if (!inspect(path,adapter.handles,false,version)) {std::cerr<<"normal read failed version="<<int(version)<<" path="<<path<<"\n";return 1;}
+        if (!output.write(&adapter, version, true)) {
+            std::cerr << "normal write failed version=" << int(version)
+                      << " path=" << path << '\n';
+            return 1;
+        }
+        if (adapter.plotStylePlaceholder == 0u
+            || !inspect(path, adapter.handles, false, version,
+                        adapter.plotStylePlaceholder)) {
+            std::cerr << "normal paired default-graph readback failed version="
+                      << int(version) << " plotstyle="
+                      << adapter.plotStylePlaceholder << " path=" << path << '\n';
+            return 1;
+        }
         for(auto h:adapter.handles) if(h==0x30u||h==0x31u||h==0xB200u) return 1;
         adapter.mode=Mode::SuppliedLayer;
         if (version == DRW::AC1027) {

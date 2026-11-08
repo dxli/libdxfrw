@@ -95,8 +95,14 @@
   "fast_controls": {
     "build": "cmake --build build-gcc --target libdxfrw_dwg_default_material_optin_tests libdxfrw_dwg_default_plotstyle_optin_tests -j4",
     "ctest": "ctest --test-dir build-gcc -R 'libdxfrw_dwg_default_(material|plotstyle)_optin' --output-on-failure",
-    "result": "Both focused fast tests passed (2/2, 3.41 seconds total). The material opt-in control has both graph providers enabled in its normal AC1021/24/27 case and checks readback; plotstyle controls are separate.",
-    "scope": "Generated parser/writer consistency and rollback/retry controls only; not ODA acceptance or broad interoperability."
+    "result": "Both focused fast tests passed (2/2 on the prior run; the material opt-in test was rerun after the paired-reference assertion and passed 1/1 in 2.25 seconds). The AC1021/24/27 generated material graph test now reads back layer 0 and asserts its plotstyle handle equals the planned default placeholder as well as its material handle equaling the planned Global material. This exercises the paired graph condition locally.",
+    "scope": "Generated parser/writer consistency and rollback/retry controls only; not ODA acceptance or broad interoperability.",
+    "paired_reference_assertion": {
+      "test_source_sha256": "76010b60c6a79cc78d3b4c789c3849dac016faecf6bf28802f0068b870b19f34",
+      "executable_sha256": "f802c140c2fc774f0f30799d2722dd30103f8545dc29cd38aa1dc2f1630455cf",
+      "command": "cmake --build build-gcc --target libdxfrw_dwg_default_material_optin_tests -j4 && ctest --test-dir build-gcc -R '^libdxfrw_dwg_default_material_optin$' --output-on-failure",
+      "result": "PASS; one focused CTest, 2.25 seconds. Normal combined-opt-in write/readback verifies both the layer-0 plotstyle placeholder and Global material references for AC1021, AC1024 and AC1027."
+    }
   },
   "consumer_review": {
     "repository": "LibreCAD sibling checkout at /Users/dli/dev/LibreCAD, HEAD 41678d976; checkout is dirty and read-only for this task, so findings are source inspection only.",
@@ -107,5 +113,6 @@
       "librecad/src/lib/filters/rs_filterdxfrw.cpp": "2c06a8873753f798489561ee4d9fc0390314d88685292218750c4acb2d13fe51"
     },
     "interpretation": "This is not proof that current LibreCAD writes invalid DWG: it links its bundled fork, not this upstream checkout, and its tree is dirty. For a migration to upstream, P8 must port caller-side opt-in and establish the opaque-reference absence predicate for supported export profiles, or otherwise provide independently validated layer 0 targets. Do not silently change upstream global defaults."
-  }
+  },
+  "implementation_change": "The existing fast default-material test now records the planned default plotstyle placeholder and asserts the freshly read layer-0 plotstyle points to it in the combined-opt-in case. Existing material reference assertion remains; no production serializer behavior changed."
 }
