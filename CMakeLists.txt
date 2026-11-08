@@ -1691,6 +1691,19 @@ if(LIBDXFRW_BUILD_TESTS)
     target_link_libraries(libdxfrw_dwg_object_vectors_tests PRIVATE dxfrw)
     add_test(NAME libdxfrw_dwg_object_vectors
         COMMAND libdxfrw_dwg_object_vectors_tests)
+    add_executable(libdxfrw_table_dwg_codec_allocation_tests
+        tests/table_dwg_codec_allocation_tests.cpp)
+    target_compile_features(libdxfrw_table_dwg_codec_allocation_tests
+        PRIVATE cxx_std_17)
+    target_include_directories(libdxfrw_table_dwg_codec_allocation_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/intern)
+    target_link_libraries(libdxfrw_table_dwg_codec_allocation_tests PRIVATE dxfrw)
+    add_test(NAME libdxfrw_table_dwg_codec_allocation_retry
+        COMMAND libdxfrw_table_dwg_codec_allocation_tests)
+    set_tests_properties(libdxfrw_table_dwg_codec_allocation_retry PROPERTIES
+        LABELS "fast;dwg;table;generated;allocation;retry"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_mesh_dwg_crease_count_guard
         COMMAND libdxfrw_dwg_object_vectors_tests
             --mesh-dwg-crease-count-guard)

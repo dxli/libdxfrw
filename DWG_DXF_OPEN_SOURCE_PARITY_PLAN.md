@@ -26,8 +26,11 @@ block graph/compound transaction is not implemented. The Mac still appears
 locked. ODA's `--version` diagnostic aborted during Pasteboard/XPC startup and
 produced no version or drawing evidence. Do not repeat the unchanged conversion
 launch; resume native qualification only after the desktop exposes an unlocked
-app surface. Next local gates are the remaining unchecked model guard branches
-and serialized CLASS identity/instance-count proof.
+app surface. A fast generated TABLE codec allocation sweep now injects all 19
+observed allocation failures and proves buffer rollback plus same-model retry.
+The remaining TABLE gates are a complete physical semantic profile, the
+public `dwgRW::writeTable` graph transaction, and independent readback/native
+qualification; keep the writer refused.
 
 The P6 audit added generated AC1027 NOD → named DICTIONARY → typed SCALE and
 NOD → named DICTIONARY → DATALINK graph allocation sweeps. SCALE passed 12
@@ -2557,14 +2560,18 @@ handle, and retained SEQEND metadata. The direct AC1018 codec now rejects each
 before writing, and the focused matrix confirms buffer preservation. This
 closes those specific omission paths; continue auditing the public model and
 private retained DXF state before widening the profile.
-The direct encoder now builds both streams in private copies, catches emission
+The direct encoder builds both streams in private copies, catches emission
 exceptions, and swaps the staged buffers into the caller only when both are
-good. A generated successful append preserves pre-existing body and handle
-prefixes. No injected post-emission primitive/allocation failure has exercised
-that rollback path yet. Production route instance publication, physical
-source-to-output proof, and compound-writer transaction remain open;
-`writeTable` remains fail-closed. Trace hashes, source hashes, and dispositions
-are in the
+good. A generated success append preserves pre-existing body and handle
+prefixes. The new focused allocation control injects failure at all 19 observed
+allocation points during encoding; every failure leaves both pre-seeded output
+buffers unchanged, and the same model and buffers then succeed on retry. The
+fast CTest passes in 0.16 seconds; no external drawing fixture is used. This
+closes only direct-codec allocation rollback. Production route instance
+publication, physical source-to-output proof, and compound-writer transaction
+remain open; `writeTable` remains fail-closed. See the [TABLE allocation
+receipt](docs/research/p5-ac1018-table-codec-allocation-rollback-2026-11-08.json)
+and the existing
 [encoder-readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 
 The two AC1018 CLASS records agree on the identity fields despite their

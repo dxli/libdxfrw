@@ -595,6 +595,7 @@ EXTRA_DIST = \
     tests/material_dwg_test_helpers.h \
     tests/material_normal_role_tests.cpp \
     tests/material_objects_allocation_tests.cpp \
+    tests/table_dwg_codec_allocation_tests.cpp \
     tests/modeler_block_census_tests.cpp \
     tests/modeler_dxf_writer_matrix_tests.cpp \
     tests/modeler_sat_dxf_compare.cpp \
