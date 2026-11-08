@@ -2096,6 +2096,20 @@ Strict output still fails, and no support claim is promoted.
    Continue only with distinct uncovered source- or consumer-backed
    CONTENTFORMAT/CELLSTYLEMAP/linetype combinations and source-backed
    precedence for overlapping TABLECONTENT edge declarations.
+   A post-unlock AC1021 `blocks_and_tables_-_imperial.dwg` census read and
+   published 3,586/3,586 frames without parse failures, but contained no
+   TABLECONTENT trace records; strict output stopped at the unrelated
+   FIELD/FIELDLIST serializer gate before producing DXF. This candidate is
+   excluded from TABLECONTENT evidence. See the
+   [AC1021 edge-census screen](docs/research/p5-ac1021-blocks-and-tables-edge-census-screen-2026-11-08.json).
+   Next, screen the existing local sample inventory for an actual
+   source-bound TABLECONTENT object before running another whole-file
+   conversion. If strict export is blocked by an unrelated object, use a
+   read-only selected-object/span extraction path and capture the source
+   object handle, physical field spans, and independent semantic comparison.
+   If no suitable witness is already available, keep overlapping edge masks
+   refused and move to a distinct implementation-ready profile; do not spend
+   time repeating broad census runs.
    Keep unsupported combinations refused until schema, version gates, wire order
    and readback behavior are established.
 5. The AC1018 text-cell reader maps the ODA §20.4.96.1 text-height and four
