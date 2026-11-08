@@ -459,7 +459,12 @@ created locally from scratch for the specific control.
   LibreDWG can emit AC1018 from DXF, but its secondary export of this source
   already loses a reliable cell-to-cache mapping, so that round trip is only a
   mechanical probe. Neither writer supplies the missing legacy semantic
-  witness.
+  witness. A separate from-scratch one-cell ACAD_TABLE DXF was passed through
+  LibreDWG 0.14 `dwgwrite --as r2004`; although the command printed `SUCCESS`,
+  its diagnostics say `Object TABLE unsupported` and `No class for TABLE type
+  721 found`. `dwgread` confirms the result contains zero TABLE frames/entities
+  and zero custom classes. Exclude this route as a physical profile source;
+  see the [LibreDWG writer screen](docs/research/p5-ac1018-libredwg-table-writer-screen-2026-11-08.json).
   The full source/output fingerprints and limits are in the [TABLE readiness
   receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 - **Previous local slice:** AC1027/AC1032 PERSUBENTMGR typed failures now
