@@ -1657,6 +1657,12 @@ public:
     // two final phantom slots. Source handles are not assumed to equal the
     // canonical values used by this library's DWG writer.
     bool hasCompleteDwgLineTypeControlMembership() const noexcept;
+    // Allows only an explicitly selected DWG MLEADERSTYLE dependency slice
+    // when a malformed LTYPE_CONTROL is excluded. The selected source LTYPEs
+    // must be exact hard-pointer targets with matching control owners and
+    // source-bound names. This never qualifies control membership or a whole
+    // drawing.
+    bool hasBoundedDwgLinetypeDependencySubset() const noexcept;
     // Returns the current Layer TABLE control identity and extension-dictionary
     // handle only when the imported control/header is uniquely tied to every
     // retained LAYER row.
@@ -2750,6 +2756,9 @@ private:
     std::uint64_t m_dwgLtypeControlGeneration{0u};
     bool m_dwgLtypeControlPublicationSeen{false};
     bool m_dwgLtypeControlCaptureFailed{false};
+    std::uint64_t m_dwgLtypeDependencySubsetGeneration{0u};
+    std::uint32_t m_dwgLtypeDependencySubsetControl{0u};
+    std::vector<DRW_LType> m_dwgLtypeDependencySubsetSources;
     DRW_DwgFramePublication m_dwgLayerControlPublication;
     std::uint64_t m_dwgLayerControlGeneration{0u};
     bool m_dwgLayerControlPublicationSeen{false};

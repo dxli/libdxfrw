@@ -200,17 +200,21 @@ instead of repeating successful scans or controls.
    still calls the parent a hard owner; the next change requires independent
    owner-semantics or native rewrite evidence. See the [cross-version role
    receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json).
-   A read-only AC1021 `Pool_Detail.dwg` probe found a populated
-   `ACAD_MLEADERSTYLE` root (dictionary `0x7784C`, style `0x7784D`) with a
-   `BYBLOCK` linetype dependency, but its source `LTYPE_CONTROL` has null member
-   slots and fails integrity checks; the same file also has a malformed
-   `BLOCK_CONTROL`. The existing physical MLEADERSTYLE selector therefore
-   refuses the projection because complete source linetype-control membership
-   is not established. Do not treat the capture-failure flag as proof, bypass
-   that gate, or broaden whole-source eligibility. Reopen only if a bounded
-   dependency projection can prove the exact emitted table records and preserve
-   the malformed source controls as refused; otherwise select another eligible
-   subgraph. The source remains external and uncommitted.
+   The AC1021 `Pool_Detail.dwg` MLEADERSTYLE projection now passes in ASCII and
+   Binary through a narrowly scoped dependency proof: NOD `0x7784C` → style
+   `0x7784D` → hard-pointer LTYPE `0x12` (`BYBLOCK`), plus its required APPID and
+   TEXTSTYLE rows. The source LTYPE_CONTROL omits that row and contains null
+   member slots; BLOCK_CONTROL is also malformed, and HEADER current-layer
+   evidence is invalid. The selected output binds the exact emitted BYBLOCK
+   row and the writer's two canonical default linetypes, with fresh typed
+   readback, mutation refusal, destination preservation and same-adapter retry.
+   Only the exact three retained source-integrity observations are excluded by
+   this private AC1021 one-style/one-linetype profile. This does not prove
+   control membership, clear or reinterpret those integrity rows, or admit the
+   source to strict whole-drawing output. Other source-error identities,
+   versions, styles, or dependency shapes remain refused. The source is an
+   unauthenticated local drawing and remains uncommitted. See the [bounded
+   MLEADERSTYLE projection receipt](docs/research/p4-ac1021-pool-detail-mleaderstyle-subset-physical-output-2026-11-07.json).
    For any selected subgraph, freeze source
    identity and expected record/handle roles; implement only the missing
    serializer or planner binding; add ASCII/Binary output, fresh typed
@@ -333,7 +337,7 @@ integration/release checkpoints.
 
 | ID | State | Remaining work | Dependency |
 | --- | --- | --- | --- |
-| P4 | OPEN — source and graph closure | Select the next physically evidenced OBJECTS subgraph; bind source identities, owner/target roles, recursive dependencies, and exact emitted records. The Pool_Detail MLEADERSTYLE profile is currently ineligible because its source LTYPE_CONTROL has null member slots and fails integrity checks; retain the selector refusal unless a bounded dependency projection proves exact emitted records without laundering malformed control evidence. Resolve the tracked ENC dangling-reference profile only with eligible producer evidence. Keep unresolved null members, orphan owners, unsupported frames, and named-block SORTENTSTABLE profiles refused. Broaden beyond individual local sources only with independent producer and native output evidence. | Existing source census, exact frame/profile evidence, ODA role/layout rules, and focused ASCII/Binary output/readback controls. |
+| P4 | OPEN — source and graph closure | Select the next physically evidenced OBJECTS subgraph; bind source identities, owner/target roles, recursive dependencies, and exact emitted records. Pool_Detail MLEADERSTYLE now has selected ASCII/Binary transport/readback under the exact bounded AC1021 one-style/one-BYBLOCK projection; its malformed LTYPE_CONTROL, BLOCK_CONTROL, and HEADER current-layer integrity observations remain excluded, and strict whole-source output remains refused. Do not widen this private gate to other shapes or infer valid control membership. Resolve the tracked ENC dangling-reference profile only with eligible producer evidence. Keep unresolved null members, orphan owners, unsupported frames, and named-block SORTENTSTABLE profiles refused. Broaden beyond individual local sources only with independent producer and native output evidence. | Existing source census, exact frame/profile evidence, ODA role/layout rules, and focused ASCII/Binary output/readback controls. |
 | P5 | OPEN — dynamic-block semantics, rendering and TABLE profiles | Find a complete FIELD/FIELDLIST source graph with a visible root; qualify physical TABLEGEOMETRY spans and remaining CONTENTFORMAT/CELLSTYLEMAP combinations; resolve VIEWPORT override type/value and native activation/rendering; establish native dynamic constraint evaluation. | P4 closure where needed; source-bound spans/roles plus native semantic evidence. |
 | P6 | OPEN — version, schema and semantic residuals | Resolve only evidence-backed source gaps: AC1021/24/27/32 IMAGEDEF parent-role conflict (source capture now retained as unqualified; DXF output still refused); raw-only TABLECONTENT/PERSUBENTMGR/TextObjectContextData; unclaimed AC1027/AC1032 HEADER suffixes; remaining version boundaries, geometry/no-loss, HEADER/CLI, parser disposition and caller-state contracts. Preserve strict refusal for unsupported or unclaimed bytes. | ODA v5.4.1 plus AutoCAD DWG/DXF source pairs; focused fast controls. Owner-semantic promotion still needs independent native rewrite or normative resolution. Suffix work requires a materially changed converter route. See the [IMAGEDEF role receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json). |
 | P7 | OPEN — ACIS/ACDS and independent 3D meaning | Complete entity/owner/key/AcDs/SAT-SAB association, versioned framing/index/suffix/prototype assembly and exact output binding; qualify transforms, units, topology, trims, periodicity and spline meaning with an independent kernel. | P4 graph/output bindings and independent semantic/kernel evidence. |

@@ -1828,8 +1828,13 @@ public:
             || source.mLeaderStyles.size() != 1u)
             return false;
         const DRW_MLeaderStyle& style = source.mLeaderStyles.front();
-        if (style.handle != 0x12Eu
+        const bool childrenRoomProfile = style.handle == 0x12Eu;
+        const bool poolDetailProfile = style.handle == 0x7784Du;
+        if ((!childrenRoomProfile && !poolDetailProfile)
             || style.leaderLineTypeHandle.ref == 0u
+            || style.leaderLineTypeHandle.ref64
+                != style.leaderLineTypeHandle.ref
+            || style.leaderLineTypeHandle.rawCode != DRW::DwgHardPointer
             || style.textStyleHandle.ref == 0u
             || style.arrowHeadBlockHandle.ref != 0u
             || style.blockHandle.ref != 0u)
@@ -1841,6 +1846,12 @@ public:
                 return entry.m_name == "ACAD_MLEADERSTYLE";
             });
         if (root == source.namedObjectDictionary.m_entries.end())
+            return false;
+        if (poolDetailProfile
+            && (root->m_handle != 0x7784Cu
+                || !source.m_dwgLtypeControlCaptureFailed
+                || source.m_dwgLtypeControlPublicationSeen
+                || source.m_dwgLtypeControlGeneration != 0u))
             return false;
         const auto owner = std::find_if(source.dictionaries.begin(),
             source.dictionaries.end(), [&root](const DRW_Dictionary& row) {
@@ -1893,7 +1904,24 @@ public:
             projection.namedObjectDictionary.m_entries.end());
         projection.dictionaries.push_back(*owner);
         projection.mLeaderStyles.push_back(style);
-        projection.lineTypes = source.lineTypes;
+        if (childrenRoomProfile) {
+            projection.lineTypes = source.lineTypes;
+        } else {
+            if (ltype->parentHandle != DRW::DwgLtypeControlHandle
+                || ltype->name != "BYBLOCK"
+                || !ltype->path.empty() || !ltype->segments.empty()
+                || !ltype->shapeHandles.empty() || ltype->size != 0
+                || !ltype->extData.empty()
+                || !ltype->pendingAppIdResolutions.empty()
+                || !ltype->pendingLayerRefResolutions.empty())
+                return false;
+            projection.lineTypes.push_back(*ltype);
+            projection.m_dwgLtypeDependencySubsetGeneration =
+                source.importGeneration;
+            projection.m_dwgLtypeDependencySubsetControl =
+                DRW::DwgLtypeControlHandle;
+            projection.m_dwgLtypeDependencySubsetSources.push_back(*ltype);
+        }
         projection.textStyles.push_back(*textStyle);
         projection.appIds.push_back(*appId);
         projection.dxfClasses = source.dxfClasses;
@@ -1960,7 +1988,9 @@ public:
         projection.m_opaqueDwgSourceFrameIdentities.insert(styleFrame->first);
         return projection.namedObjectDictionary.m_entries.size() == 1u
             && projection.hasSingleSuccessfulNamedResourceImport()
-            && projection.hasCompleteDwgLineTypeControlMembership();
+            && (childrenRoomProfile
+                ? projection.hasCompleteDwgLineTypeControlMembership()
+                : projection.hasBoundedDwgLinetypeDependencySubset());
     }
     static void setDbColorEedSourceBytes(dx_data& data, std::size_t bytes) {
         data.dwgDbColorEedRetainedBytes = bytes;
@@ -63232,6 +63262,45 @@ bool physicalMLeaderStyleOutputReadback(
         || sourceKeys.size() != source.mLeaderStyles.size())
         return fail("physical MLEADERSTYLE owner/key census differs from imported records");
 
+    if (source.sourceVersion == DRW::AC1021
+        && sourceOwners.begin()->first == 0x7784Du) {
+        const auto nonce = std::chrono::steady_clock::now()
+                               .time_since_epoch()
+                               .count();
+        const std::filesystem::path strictPath =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-pool-detail-strict-mleader-"
+               + std::to_string(nonce) + ".dxf");
+        struct StrictCleanup {
+            std::filesystem::path path;
+            ~StrictCleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } strictCleanup{strictPath};
+        const std::string sentinel =
+            "Pool_Detail strict-source refusal sentinel\n";
+        {
+            std::ofstream existing(strictPath,
+                std::ios::binary | std::ios::trunc);
+            if (!existing || !(existing << sentinel))
+                return fail("could not seed strict Pool_Detail destination sentinel");
+        }
+        dx_iface strictWriter;
+        if (strictWriter.fileExport(
+                strictPath.string(), source.sourceVersion, false, &source,
+                false, true, dx_dxfSourceTextPolicy::RequireValidSource,
+                DRW::DxfTextWritePolicy::RequireLossless,
+                dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,
+                dx_dwgReadCompletenessPolicy::RequireComplete))
+            return fail("malformed Pool_Detail source unexpectedly passed strict output");
+        std::ifstream strictOutput(strictPath, std::ios::binary);
+        if (!strictOutput
+            || std::string{std::istreambuf_iterator<char>(strictOutput), {}}
+                != sentinel)
+            return fail("strict Pool_Detail refusal replaced its destination");
+    }
+
     dx_data selectedSource;
     dx_data* outputSource = &source;
     if (source.sourceVersion == DRW::AC1021) {
@@ -63347,6 +63416,26 @@ bool physicalMLeaderStyleOutputReadback(
                 dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,
                 dx_dwgReadCompletenessPolicy::AllowPartial);
         };
+        if (outputSource->hasBoundedDwgLinetypeDependencySubset()) {
+            if (outputSource->lineTypes.size() != 1u
+                || outputSource->dwgReadOutcome.observations.integrity.retained
+                    != 3u)
+                return fail("selected LTYPE dependency proof lost its exact source baseline");
+            const std::string originalDescription =
+                outputSource->lineTypes.front().desc;
+            outputSource->lineTypes.front().desc += " changed after import";
+            if (exportPartial() || !destinationEquals(sentinel))
+                return fail("edited selected LTYPE source was accepted or replaced the destination");
+            outputSource->lineTypes.front().desc = originalDescription;
+
+            DwgReadIntegrityObservation& excludedError =
+                outputSource->dwgReadOutcome.observations.integrity.rows[0];
+            const DwgIntegrityCheckKind originalKind = excludedError.kind;
+            excludedError.kind = DwgIntegrityCheckKind::PageRange;
+            if (exportPartial() || !destinationEquals(sentinel))
+                return fail("unclassified source integrity error was accepted or replaced the destination");
+            excludedError.kind = originalKind;
+        }
         if (exportPartial() || !destinationEquals(sentinel))
             return fail("late physical MLEADERSTYLE mutation did not refuse atomically");
         auto mutableFirst = std::find_if(outputSource->mLeaderStyles.begin(),
@@ -63639,8 +63728,16 @@ bool physicalMLeaderStyleOutputReadback(
                 const std::string roleName(role);
                 if (roleName == "LTYPE") {
                     const DRW_LType* from = sourceLType(sourceReference);
+                    std::string outputName = from == nullptr
+                        ? std::string{} : from->name;
+                    if (outputName == "BYBLOCK")
+                        outputName = "ByBlock";
+                    else if (outputName == "BYLAYER")
+                        outputName = "ByLayer";
+                    else if (outputName == "CONTINUOUS")
+                        outputName = "Continuous";
                     const DRW_LType* to = from == nullptr ? nullptr
-                        : outputLTypeByName(from->name);
+                        : outputLTypeByName(outputName);
                     if (from == nullptr || to == nullptr
                         || outputReference != to->handle)
                         unresolvedReferenceRole = roleName + " source="

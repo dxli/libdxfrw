@@ -5070,7 +5070,8 @@ bool dwgReadOutcomeAllowsBoundedPartialExport(const dx_data& data) noexcept {
     if (!outcome.operationSucceeded || outcome.error != DRW::BAD_NONE
         || outcome.sourceVersion == DRW::UNKNOWNV
         || outcome.sourceVersion != data.sourceVersion
-        || !data.hasCompleteDwgLineTypeControlMembership())
+        || (!data.hasCompleteDwgLineTypeControlMembership()
+            && !data.hasBoundedDwgLinetypeDependencySubset()))
         return false;
 
     const DwgReadObservations& observations = outcome.observations;
@@ -5119,7 +5120,8 @@ bool dwgReadOutcomeAllowsBoundedPartialExport(const dx_data& data) noexcept {
         observations.integrity.rows.size());
     for (std::size_t index = 0; index < integrityRows; ++index) {
         if (observations.integrity.rows[index].severity
-            == DwgIntegritySeverity::Error)
+                == DwgIntegritySeverity::Error
+            && !data.hasBoundedDwgLinetypeDependencySubset())
             return false;
     }
     return true;
@@ -55977,10 +55979,17 @@ bool dx_iface::inspectDxfMLineLinetypes(const dxfRW::DxfTablesWriteView& view) n
 
 bool dx_iface::inspectDwgLineTypeControlOutput(
         const dxfRW::DxfTablesWriteView& view) noexcept {
+    if (m_dwgLtypeControlOutputRequired
+        && m_dwgLtypeControlOutputInspected)
+        return true;
+    const bool completeControl = cData != nullptr
+        && cData->hasCompleteDwgLineTypeControlMembership();
+    const bool selectedDependencySubset = cData != nullptr
+        && cData->hasBoundedDwgLinetypeDependencySubset();
     if (!m_dwgLtypeControlOutputRequired
-        || m_dwgLtypeControlOutputInspected || cData == nullptr || dxfW == nullptr
+        || cData == nullptr || dxfW == nullptr
         || cData->sourceFormat != dx_source_format::DWG
-        || !cData->hasCompleteDwgLineTypeControlMembership()
+        || (!completeControl && !selectedDependencySubset)
         || view.version != dxfW->getVersion()
         || cData->lineTypes.empty()
         || cData->lineTypes.size() > kMaxAdapterBasicTableRecords)
@@ -56019,8 +56028,56 @@ bool dx_iface::inspectDwgLineTypeControlOutput(
             if (!bindingIndex.emplace(lineType.handle, index).second)
                 return false;
         }
-        if (!dx_symbol_output::inspectLineTypeTargetBindings(view, targets))
+        if (selectedDependencySubset) {
+            std::unordered_map<std::uint32_t, const std::string*> expected;
+            std::unordered_set<std::uint32_t> observedTargets;
+            std::unordered_set<std::string> observedNames;
+            expected.reserve(targets.size());
+            observedTargets.reserve(targets.size());
+            observedNames.reserve(targets.size() + 2u);
+            for (const auto& target : targets)
+                if (!expected.emplace(target.emittedHandle,
+                                      &target.outputName).second)
+                    return false;
+            std::size_t observedRows = 0u;
+            bool observedByLayer = false;
+            bool observedContinuous = false;
+            const bool scanned = dx_symbol_output::inspect(
+                view, [&](const auto& actual) {
+                    if (actual.type != dx_symbol_output::Kind::LineType)
+                        return true;
+                    ++observedRows;
+                    std::string nameKey;
+                    if (!actual.qualified || actual.tableHandle != 0x5u
+                        || actual.owner
+                            != (view.version >= DRW::AC1014 ? 0x5u : 0u)
+                        || !dx_symbol_output::nameKey(
+                            actual.name, nameKey)
+                        || !observedNames.insert(std::move(nameKey)).second)
+                        return false;
+                    const auto sourceTarget = expected.find(actual.handle);
+                    if (sourceTarget != expected.end())
+                        return actual.name == *sourceTarget->second
+                            && observedTargets.insert(actual.handle).second;
+                    if (actual.name == "ByLayer" && !observedByLayer) {
+                        observedByLayer = true;
+                        return true;
+                    }
+                    if (actual.name == "Continuous"
+                        && !observedContinuous) {
+                        observedContinuous = true;
+                        return true;
+                    }
+                    return false;
+                });
+            if (!scanned || observedRows != targets.size() + 2u
+                || observedTargets.size() != targets.size()
+                || !observedByLayer || !observedContinuous)
+                return false;
+        } else if (!dx_symbol_output::inspectLineTypeTargetBindings(
+                       view, targets)) {
             return false;
+        }
 
         if (cData->layers.size() > kMaxAdapterBasicTableRecords)
             return false;
@@ -56123,9 +56180,13 @@ bool dx_iface::inspectDwgLineTypeControlOutput(
 bool dx_iface::finalizeDwgLineTypeControlOutput() const noexcept {
     if (!m_dwgLtypeControlOutputRequired)
         return true;
+    const bool completeControl = cData != nullptr
+        && cData->hasCompleteDwgLineTypeControlMembership();
+    const bool selectedDependencySubset = cData != nullptr
+        && cData->hasBoundedDwgLinetypeDependencySubset();
     if (cData == nullptr || dxfW == nullptr
         || !m_dwgLtypeControlOutputInspected
-        || !cData->hasCompleteDwgLineTypeControlMembership()
+        || (!completeControl && !selectedDependencySubset)
         || m_dwgLtypeControlOutputBindings.size() != cData->lineTypes.size()
         || m_dwgLtypeControlOutputBindingIndex.size()
             != m_dwgLtypeControlOutputBindings.size()
@@ -68523,6 +68584,86 @@ bool dx_data::hasCompleteDwgLineTypeControlMembership() const noexcept {
     }
 }
 
+bool dx_data::hasBoundedDwgLinetypeDependencySubset() const noexcept {
+    if (sourceFormat != dx_source_format::DWG
+        || sourceVersion != DRW::AC1021 || importGeneration == 0u
+        || !dwgReadOutcome.attempted || !dwgReadOutcome.operationSucceeded
+        || dwgReadOutcome.sourceVersion != DRW::AC1021
+        || m_dwgLtypeDependencySubsetGeneration != importGeneration
+        || m_dwgLtypeDependencySubsetControl != DRW::DwgLtypeControlHandle
+        || !m_dwgLtypeControlCaptureFailed
+        || m_dwgLtypeControlPublicationSeen
+        || m_dwgLtypeDependencySubsetSources.size() != 1u
+        || lineTypes.size() != 1u || mLeaderStyles.size() != 1u
+        || !layers.empty() || !blockRecords.empty() || !blocks.empty()
+        || (mBlock != nullptr
+            && (!mBlock->ent.empty() || !mBlock->rawEntities.empty()))
+        || basicTableCaptureFailed)
+        return false;
+
+    try {
+        const auto& integrity = dwgReadOutcome.observations.integrity;
+        if (integrity.sourceRecorded != 3u || integrity.retained != 3u
+            || integrity.extractionOmitted != 0u
+            || integrity.reportedUpstreamDropped != 0u
+            || integrity.aggregateSaturated)
+            return false;
+        std::size_t ltypeNullMembers = 0u;
+        std::size_t blockNullMembers = 0u;
+        std::size_t headerLayerReferences = 0u;
+        for (std::size_t index = 0u; index < integrity.retained; ++index) {
+            const DwgReadIntegrityObservation& row = integrity.rows[index];
+            if (row.severity != DwgIntegritySeverity::Error
+                || row.version != DRW::AC1021 || !row.hasLogicalHandle)
+                return false;
+            if (row.kind == DwgIntegrityCheckKind::TableControlNullMember
+                && row.logicalHandle == DRW::DwgLtypeControlHandle) {
+                ++ltypeNullMembers;
+            } else if (row.kind
+                           == DwgIntegrityCheckKind::TableControlNullMember
+                       && row.logicalHandle == 0x01u) {
+                ++blockNullMembers;
+            } else if (row.kind
+                           == DwgIntegrityCheckKind::HeaderCurrentLayerReference
+                       && row.logicalHandle == 0x0Eu) {
+                ++headerLayerReferences;
+            } else {
+                return false;
+            }
+        }
+        if (ltypeNullMembers != 1u || blockNullMembers != 1u
+            || headerLayerReferences != 1u)
+            return false;
+
+        const DRW_LType& lineType = lineTypes.front();
+        const DRW_LType& baseline =
+            m_dwgLtypeDependencySubsetSources.front();
+        const DRW_MLeaderStyle& style = mLeaderStyles.front();
+        if (lineType.handle == 0u || lineType.handle == DRW::NoHandle
+            || lineType.parentHandle != m_dwgLtypeDependencySubsetControl
+            || !sameAsciiName(lineType.name, "BYBLOCK")
+            || !lineType.path.empty() || !lineType.segments.empty()
+            || !lineType.shapeHandles.empty() || lineType.size != 0
+            || !lineType.extData.empty()
+            || !lineType.pendingAppIdResolutions.empty()
+            || !lineType.pendingLayerRefResolutions.empty()
+            || !lineTypeSourceEqual(lineType, baseline, sourceVersion)
+            || style.handle == 0u || style.handle == DRW::NoHandle
+            || style.leaderLineTypeHandle.ref != lineType.handle
+            || style.leaderLineTypeHandle.ref64 != lineType.handle
+            || style.leaderLineTypeHandle.rawCode != DRW::DwgHardPointer)
+            return false;
+
+        for (const dx_ifaceBlock* block : blocks)
+            if (block == nullptr || !block->ent.empty()
+                || !block->rawEntities.empty())
+                return false;
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 bool dx_data::getLayerTableControlExtensionDictionary(
         std::uint32_t& controlHandle,
         std::uint32_t& dictionaryHandle) const noexcept {
@@ -72432,6 +72573,9 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
     fData->m_dwgLtypeControlGeneration = 0u;
     fData->m_dwgLtypeControlPublicationSeen = false;
     fData->m_dwgLtypeControlCaptureFailed = false;
+    fData->m_dwgLtypeDependencySubsetGeneration = 0u;
+    fData->m_dwgLtypeDependencySubsetControl = 0u;
+    fData->m_dwgLtypeDependencySubsetSources.clear();
     fData->m_dwgLayerControlPublication = {};
     fData->m_dwgLayerControlGeneration = 0u;
     fData->m_dwgLayerControlPublicationSeen = false;
@@ -84843,24 +84987,45 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             || needsLayerControlOutput
             || m_dwgLtypeControlOutputRequired
             || m_dxfLayerMaterialState.active || !m_dxfMLineLinetypes.empty()
-            || needsDwgLayoutsOutput || !m_dwgGeoDataGraphs.empty() || usesAc1027DefaultLayerProfile()) && !dxfW->setDxfTablesWriteInspector([this, needsStandardNames, needsRawEntityNameReferences, needsLayerControlOutput, needsDwgLayoutsOutput, debug, requireResolvedOwners](const auto& view) {
+            || needsDwgLayoutsOutput || !m_dwgGeoDataGraphs.empty() || usesAc1027DefaultLayerProfile()) && !dxfW->setDxfTablesWriteInspector([this, needsStandardNames, needsRawEntityNameReferences, needsLayerControlOutput, needsDwgLayoutsOutput, debug, requireResolvedOwners, &reportPreflightFailure](const auto& view) {
             if (m_dwgLtypeControlOutputRequired
-                && !inspectDwgLineTypeControlOutput(view))
-                return false;
-            if (!inspectDwgGeoDataTables(view)) return false;
-            if (!inspectDxfLayerMaterials(view) || !inspectAc1027DefaultLayerOutput(view)) {
+                && !inspectDwgLineTypeControlOutput(view)) {
+                reportPreflightFailure(
+                    "LTYPE_CONTROL emitted table-row identity and reference closure");
                 return false;
             }
-            if (!inspectDxfMLineLinetypes(view)) return false;
-            if ((needsStandardNames || needsLayerControlOutput)
-                && !inspectStandardDwgTablesOutput(view))
+            if (!inspectDwgGeoDataTables(view)) {
+                reportPreflightFailure("GEODATA table-row identity");
                 return false;
+            }
+            if (!inspectDxfLayerMaterials(view) || !inspectAc1027DefaultLayerOutput(view)) {
+                reportPreflightFailure(
+                    "LAYER material or AC1027 default-layer output proof");
+                return false;
+            }
+            if (!inspectDxfMLineLinetypes(view)) {
+                reportPreflightFailure("MLINE LTYPE table-row identity");
+                return false;
+            }
+            if ((needsStandardNames || needsLayerControlOutput)
+                && !inspectStandardDwgTablesOutput(view)) {
+                reportPreflightFailure(
+                    "standard DWG table-name reference output proof");
+                return false;
+            }
             if (needsDwgLayoutsOutput
                 && !inspectDwgLayoutBlockRecords(
-                    view, debug || requireResolvedOwners))
+                    view, debug || requireResolvedOwners)) {
+                reportPreflightFailure("LAYOUT BLOCK_RECORD output proof");
                 return false;
-            return !needsRawEntityNameReferences
-                || inspectRawEntityTableNameReferences(*cData, view);
+            }
+            if (needsRawEntityNameReferences
+                && !inspectRawEntityTableNameReferences(*cData, view)) {
+                reportPreflightFailure(
+                    "raw entity table-name reference output proof");
+                return false;
+            }
+            return true;
         })) {
         delete dxfW; dxfW = nullptr; return false;
     }
