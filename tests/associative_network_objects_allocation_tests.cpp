@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Generated associative-network OBJECTS allocation rollback and retry.
+// Generated associative dependency-graph OBJECTS allocation rollback/retry.
 #include "lc3_compat_check.cpp"
 #include "dx_iface.h"
 
@@ -37,7 +37,7 @@ DRW_AssociativeObject makeNetwork() {
     network.m_networkVersion = 0;
     network.m_networkActionIndex = 0;
     network.m_networkFieldsParsed = true;
-    network.m_actions = {{false, 0xE902u}};
+    network.m_actions = {{false, 0xE902u}, {false, 0xE903u}};
 
     DRW_AssociativePrefixStatus action;
     action.m_kind = DRW_AssociativePrefixStatus::Kind::AcDbAssocAction;
@@ -50,8 +50,8 @@ DRW_AssociativeObject makeNetwork() {
     networkStatus.m_status =
         DRW_AssociativePrefixStatus::ParseStatus::Complete;
     networkStatus.m_classVersion = 1u;
-    networkStatus.m_decodedHandleCount = 1u;
-    networkStatus.m_decodedCountValue = 1;
+    networkStatus.m_decodedHandleCount = 2u;
+    networkStatus.m_decodedCountValue = 2;
     network.m_prefixStatuses = {action, networkStatus};
     return network;
 }
@@ -94,6 +94,39 @@ DRW_AssociativeObject makeVariable() {
     return variable;
 }
 
+DRW_AssociativeObject makeTargetVariable() {
+    DRW_AssociativeObject variable = makeVariable();
+    variable.handle = 0xE903u;
+    variable.parentHandle = 0xE901u;
+    variable.reactorHandles = {0xE904u};
+    variable.m_variableName = "TARGET_VALUE";
+    variable.m_variableExpression = "17";
+    variable.m_variableDescription = "dependency target";
+    variable.m_variableValueReal = 17.0;
+    return variable;
+}
+
+DRW_AssociativeObject makeValueDependency() {
+    DRW_AssociativeObject dependency("ACDBASSOCVALUEDEPENDENCY");
+    dependency.handle = 0xE904u;
+    dependency.parentHandle = 0xE902u;
+    dependency.m_classVersion = 1u;
+    dependency.m_dependencyFieldsParsed = true;
+    dependency.m_dependencyWireComplete = true;
+    dependency.m_dependencyIsRead = true;
+    dependency.m_dependencyIsAttachedToObject = true;
+    dependency.m_dependencyIsDelegatingToOwningAction = true;
+    dependency.m_dependencyHandle = 0xE903u;
+    dependency.m_dependencyBodyId = 2;
+    dependency.m_valueDependencyFieldsParsed = true;
+    dependency.m_valueDependencyClassVersion = 0;
+    dependency.m_valueDependencyValueCode = 90;
+    dependency.m_valueDependencyValueKind =
+        DRW_AssociativeObject::EvalVariantKind::Int32;
+    dependency.m_valueDependencyValueInt32 = 17;
+    return dependency;
+}
+
 class AssociativeNetworkExport final : public LC3CompatCheck {
 public:
     explicit AssociativeNetworkExport(dxfRW& output) : output(output) {
@@ -104,12 +137,16 @@ public:
         dictionary.m_entries.push_back(std::move(entry));
         network = makeNetwork();
         variable = makeVariable();
+        targetVariable = makeTargetVariable();
+        dependency = makeValueDependency();
     }
 
     dxfRW& output;
     DRW_Dictionary dictionary;
     DRW_AssociativeObject network;
     DRW_AssociativeObject variable;
+    DRW_AssociativeObject targetVariable;
+    DRW_AssociativeObject dependency;
     long failAt = -1;
     long reached = 0;
     bool emitted = false;
@@ -118,7 +155,9 @@ public:
         const auto emit = [this]() {
             emitted = output.writeDictionary(&dictionary)
                 && output.writeAssociativeNetwork(&network)
-                && output.writeAssociativeVariable(&variable);
+                && output.writeAssociativeVariable(&variable)
+                && output.writeAssociativeVariable(&targetVariable)
+                && output.writeAssociativeDependency(&dependency);
         };
         if (failAt < 0) {
             emit();
@@ -161,7 +200,7 @@ bool verify(const std::filesystem::path& path) {
     dx_iface reader;
     const bool imported = reader.fileImport(path.string(), &data, false);
     if (!imported || !data.hasNamedObjectDictionary
-        || data.associativeObjects.size() != 2u)
+        || data.associativeObjects.size() != 4u)
         return false;
     const bool rooted = std::any_of(
         data.namedObjectDictionary.m_entries.begin(),
@@ -190,14 +229,27 @@ bool verify(const std::filesystem::path& path) {
             return value.handle == 0xE902u
                 && value.m_recordName == "ACDBASSOCVARIABLE";
         });
+    const auto targetVariable = std::find_if(
+        data.associativeObjects.begin(), data.associativeObjects.end(),
+        [](const DRW_AssociativeObject& value) {
+            return value.handle == 0xE903u
+                && value.m_recordName == "ACDBASSOCVARIABLE";
+        });
+    const auto dependency = std::find_if(data.associativeObjects.begin(),
+        data.associativeObjects.end(), [](const DRW_AssociativeObject& value) {
+            return value.handle == 0xE904u
+                && value.m_recordName == "ACDBASSOCVALUEDEPENDENCY";
+        });
     return network != data.associativeObjects.end()
         && network->parentHandle == 0xE900u
         && network->reactorHandles == std::vector<std::uint32_t>{0xE900u}
         && network->m_classVersion == 1u && network->m_networkVersion == 0
         && network->m_networkFieldsParsed
-        && network->m_actions.size() == 1u
+        && network->m_actions.size() == 2u
         && !network->m_actions.front().m_isOwned
         && network->m_actions.front().m_handle == 0xE902u
+        && !network->m_actions.back().m_isOwned
+        && network->m_actions.back().m_handle == 0xE903u
         && network->m_owningNetworkHandle == 0u
         && variable != data.associativeObjects.end()
         && variable->parentHandle == 0xE900u
@@ -212,7 +264,23 @@ bool verify(const std::filesystem::path& path) {
         && variable->m_variableValueCode == 40
         && variable->m_variableValueKind
             == DRW_AssociativeObject::EvalVariantKind::Real
-        && variable->m_variableValueReal == 3.5;
+        && variable->m_variableValueReal == 3.5
+        && targetVariable != data.associativeObjects.end()
+        && targetVariable->parentHandle == network->handle
+        && targetVariable->m_owningNetworkHandle == network->handle
+        && targetVariable->reactorHandles
+            == std::vector<std::uint32_t>{0xE904u}
+        && targetVariable->m_variableName == "TARGET_VALUE"
+        && targetVariable->m_variableExpression == "17"
+        && dependency != data.associativeObjects.end()
+        && dependency->parentHandle == variable->handle
+        && dependency->m_dependencyWireComplete
+        && dependency->m_dependencyHandle == targetVariable->handle
+        && dependency->m_valueDependencyFieldsParsed
+        && dependency->m_valueDependencyValueCode == 90
+        && dependency->m_valueDependencyValueKind
+            == DRW_AssociativeObject::EvalVariantKind::Int32
+        && dependency->m_valueDependencyValueInt32 == 17;
 }
 
 bool sourceUnchanged(const AssociativeNetworkExport& actual,
@@ -221,6 +289,10 @@ bool sourceUnchanged(const AssociativeNetworkExport& actual,
     const auto& b = expected.network;
     const auto& av = actual.variable;
     const auto& bv = expected.variable;
+    const auto& at = actual.targetVariable;
+    const auto& bt = expected.targetVariable;
+    const auto& ad = actual.dependency;
+    const auto& bd = expected.dependency;
     if (actual.dictionary.handle != expected.dictionary.handle
         || actual.dictionary.m_entries.size() != 1u
         || actual.dictionary.m_entries.front().m_name
@@ -246,7 +318,26 @@ bool sourceUnchanged(const AssociativeNetworkExport& actual,
         || av.m_variableEvaluator != bv.m_variableEvaluator
         || av.m_variableValueCode != bv.m_variableValueCode
         || av.m_variableValueReal != bv.m_variableValueReal
-        || av.m_prefixStatuses.size() != bv.m_prefixStatuses.size())
+        || av.m_prefixStatuses.size() != bv.m_prefixStatuses.size()
+        || at.handle != bt.handle || at.parentHandle != bt.parentHandle
+        || at.reactorHandles != bt.reactorHandles
+        || at.m_owningNetworkHandle != bt.m_owningNetworkHandle
+        || at.m_variableName != bt.m_variableName
+        || at.m_variableExpression != bt.m_variableExpression
+        || at.m_variableValueCode != bt.m_variableValueCode
+        || at.m_variableValueReal != bt.m_variableValueReal
+        || at.m_prefixStatuses.size() != bt.m_prefixStatuses.size()
+        || ad.handle != bd.handle || ad.parentHandle != bd.parentHandle
+        || ad.reactorHandles != bd.reactorHandles
+        || ad.m_dependencyHandle != bd.m_dependencyHandle
+        || ad.m_dependencyFieldsParsed != bd.m_dependencyFieldsParsed
+        || ad.m_dependencyWireComplete != bd.m_dependencyWireComplete
+        || ad.m_valueDependencyFieldsParsed
+            != bd.m_valueDependencyFieldsParsed
+        || ad.m_valueDependencyValueCode != bd.m_valueDependencyValueCode
+        || ad.m_valueDependencyValueKind != bd.m_valueDependencyValueKind
+        || ad.m_valueDependencyValueInt32
+            != bd.m_valueDependencyValueInt32)
         return false;
     for (std::size_t index = 0u; index < a.m_actions.size(); ++index)
         if (a.m_actions[index].m_isOwned != b.m_actions[index].m_isOwned

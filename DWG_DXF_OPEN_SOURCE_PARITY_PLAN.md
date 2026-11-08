@@ -35,19 +35,19 @@ Do not infer a TABLEGEOMETRY writer defect from this incomplete setup. A broad
 global-allocation sweep around the selected associative adapter export was also
 rejected: it terminated on an uncaught `std::bad_alloc` during adapter preflight,
 before a safe writer-callback boundary; the prototype was removed and no
-production files changed. The narrowed low-level AC1024 OBJECTS callback now sweeps a rooted graph with
-one ACDBASSOCNETWORK and one linked ACDBASSOCVARIABLE at 26 ASCII and 24 Binary
-allocation offsets, with destination/caller rollback, same-writer retry and
-typed dictionary/network/variable readback ([receipt](docs/research/p6-dxf-associative-network-objects-allocation-failure-retry-2026-11-08.json)).
-The variable readback leaves `m_associativeVariableWireComplete` false for this
-local source profile, so typed-field roundtrip does not qualify its full wire
-profile or support. This does not cover network branches, dependencies, or
-broader associative support. Next, select the next associative OBJECTS writer
-from an established passing typed output/readback profile, with exact graph
-prerequisites. Keep FIELD/FIELDLIST
-gated. Do not reopen swept families or promote support claims. Each slice must
-update its receipt and checkpoint, commit implementation with evidence, then
-report the commit and next ready slice.
+production files changed. The narrowed low-level AC1024 OBJECTS callback has since been expanded to a
+rooted graph with one NETWORK, two VARIABLE action targets, and one
+VALUEDEPENDENCY pointing to the second variable. Its allocation sweep now
+covers 40 ASCII and 37 Binary callback offsets with destination/source rollback,
+same-writer retry, and typed readback of the root, owners, action targets,
+reactor backlink, dependency target and cached int32 value ([receipt](docs/research/p6-dxf-associative-network-objects-allocation-failure-retry-2026-11-08.json)).
+The generated variable records still read back with
+`m_associativeVariableWireComplete == false`; these controls do not qualify a
+complete variable source profile or support claim. Geometry dependencies,
+constraint groups, parameter/body records, and broader associative semantics
+remain open. Keep FIELD/FIELDLIST gated. Do not reopen swept families or promote
+support claims. Each slice must update its receipt and checkpoint, commit
+implementation with evidence, then report the commit and next ready slice.
 
 **Implementation slice (2026-11-08):** a generated AC1024
 `ACDBASSOCDEPENDENCY` OBJECTS callback now has allocation rollback coverage.
@@ -78,6 +78,18 @@ The [combined receipt](docs/research/p6-dxf-associative-dependency-objects-alloc
 records the base, real-valued, and default-index geometry profiles. Next, use
 the admitted AC1024 source profile to add non-null dependency reference roles
 inside a rooted graph and retain strict graph-closure gates.
+
+**Implementation follow-up (2026-11-08):** that graph step is complete for
+`ACDBASSOCVALUEDEPENDENCY`: the existing allocation target now verifies
+NOD → DICTIONARY → NETWORK → two VARIABLE action targets, plus the dependency's
+owner, non-null target, and reciprocal target reactor. It passes 40/40 ASCII
+and 37/37 Binary allocation failures with same-writer retry/readback. This
+still leaves the two locally-authored variables' wire-completeness flag false
+and is not independent source or semantic evidence. The next slice should apply
+the same rooted graph and allocation proof to a non-null
+`ACDBASSOCGEOMDEPENDENCY` edge targeting an emitted LINE and verify its owner,
+subentity fields, and reciprocal LINE reactor, using the already exercised
+network/group/LINE source profile.
 
 **Resume checkpoint (2026-11-07):** the Mac session was unlocked and the
 audit-enabled ODA 27.1 GUI route has completed the AC1024 civil residual

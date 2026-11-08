@@ -2,35 +2,35 @@
   "schema": "libdxfrw.research-receipt.v1",
   "id": "p6-dxf-associative-network-objects-allocation-failure-retry-2026-11-08",
   "date": "2026-11-08",
-  "status": "GENERATED_ASCII_BINARY_ASSOCIATIVE_NETWORK_AND_VARIABLE_OBJECTS_ALLOCATION_ROLLBACK_RETRY_PASS",
+  "status": "GENERATED_ASCII_BINARY_ROOTED_ASSOCIATIVE_VALUE_DEPENDENCY_GRAPH_ALLOCATION_ROLLBACK_RETRY_PASS",
   "supportClaimEffect": "none",
-  "scope": "Sweep OBJECTS-callback allocations for an AC1024 associative graph containing one named DICTIONARY, one root ACDBASSOCNETWORK, and one typed ACDBASSOCVARIABLE.",
+  "scope": "Sweep OBJECTS-callback allocations for a rooted AC1024 associative graph containing a named DICTIONARY, one root ACDBASSOCNETWORK, two typed variables, and one ACDBASSOCVALUEDEPENDENCY with a non-null target reference.",
   "source": {
     "kind": "deterministic locally-authored in-memory DRW graph",
-    "profile": "NOD ACAD_ASSOCNETWORK entry -> DICTIONARY E900 -> root NETWORK E901 -> soft action edge to VARIABLE E902. The variable has the same dictionary owner, a dictionary reactor, and an owning-network reference; its value is real 3.5.",
+    "profile": "NOD ACAD_ASSOCNETWORK entry -> DICTIONARY E900 -> root NETWORK E901 -> soft action edges to VARIABLE E902 and target VARIABLE E903. The value dependency E904 is owned by E902, targets E903, and appears as a reactor on E903. E902 has real value 3.5; the dependency carries cached int32 value 17.",
     "fixtureFilesAdded": 0
   },
   "implementation": {
-    "parentCommit": "308e2fef",
+    "parentCommit": "2bdf4245",
     "files": {
-      "tests/associative_network_objects_allocation_tests.cpp": "16650ed01333fbb233a3f5676086f4cf9437fe4efaf953d6355be682435bffc4",
+      "tests/associative_network_objects_allocation_tests.cpp": "643c89cac370d60f5fc334d991cbf4b84c2ab57d57ba1dd1d0b6b876089d94be",
       "tests/CMakeLists.txt": "55fe6be4665e0c265768074354ab1973ef247dd9e76aa8adf743d35c12985d1b"
     },
-    "method": "Warm the writer and calibrate callback allocations per encoding. Inject std::bad_alloc at every reached offset; require failed publication, byte-for-byte destination sentinel preservation, dictionary/network caller-state preservation, same-writer retry, and typed import of the rooted dictionary/network graph."
+    "method": "Warm the writer and calibrate callback allocations per encoding. Inject std::bad_alloc at every reached offset; require failed publication, byte-for-byte destination sentinel preservation, all four caller-object states preserved, same-writer retry, and typed import proving the NOD/dictionary/network/action/owner/reactor/dependency-target relationships."
   },
   "validation": {
     "configure": "cmake -S . -B build-gcc -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DLIBDXFRW_ENABLE_FREECAD_DESKTOP_CONTROL=OFF -DLIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_LINE_CONTROL=OFF: PASS",
     "build": "cmake --build build-gcc --target libdxfrw_associative_network_objects_allocation_tests --parallel 4: PASS",
     "focusedCTest": "ctest --test-dir build-gcc -R '^libdxfrw_associative_network_objects_allocation_retry$' --output-on-failure: PASS 1/1",
-    "ascii": "26/26 reached callback allocation offsets injected; destination and caller graph preserved; same-writer retry and typed dictionary/network/variable readback passed.",
-    "binary": "24/24 reached callback allocation offsets injected; destination and caller graph preserved; same-writer retry and typed dictionary/network/variable readback passed.",
+    "ascii": "40/40 reached callback allocation offsets injected; destination and four-object graph preserved; same-writer retry and typed rooted graph/dependency-target readback passed.",
+    "binary": "37/37 reached callback allocation offsets injected; destination and four-object graph preserved; same-writer retry and typed rooted graph/dependency-target readback passed.",
     "fullSuites": "NOT RUN"
   },
   "limitations": [
     "Generated serialization and transaction evidence only; no physical producer prevalence or native associative semantics are established.",
-    "The graph covers one root network and one real-valued variable only; branches, dependencies, constraint groups, parameter/body records, and selected subgraph projection are outside this sweep.",
-    "The readback leaves m_associativeVariableWireComplete false for this locally authored profile. Typed-field readback does not establish a complete variable source profile or support claim.",
+    "This generated graph covers two variable action targets and one cached int32 value dependency only; geometry dependencies, constraint groups, parameter/body records, and selected subgraph projection are outside this sweep.",
+    "Readback leaves m_associativeVariableWireComplete false for the locally authored variables. Typed-field and graph-link readback do not establish complete variable source profiles or support claims.",
     "No support claim is promoted."
   ],
-  "nextAction": "Continue P6 safety work with the next associative OBJECTS writer that has an established passing typed output/readback profile; keep the variable wire-completeness profile gated unless independent source evidence qualifies it."
+  "nextAction": "Add a non-null geometry-dependency source-target edge with explicit reciprocal target reactor/owner roles to a rooted network/group/LINE graph, then sweep allocation rollback and typed readback; retain the variable wire-completeness gate."
 }
