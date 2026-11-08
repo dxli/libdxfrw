@@ -14,7 +14,7 @@
   },
   "generated_control": {
     "authenticity": "locally generated codec vector; no DWG/DXF fixture",
-    "table_style_handle": "0xA902",
+    "table_style_handle": "0xA700",
     "cell_text_style_handle": "0xA903",
     "checks": [
       "typed parse recovers the selected cell handle and retains the distinct TABLESTYLE handle",
