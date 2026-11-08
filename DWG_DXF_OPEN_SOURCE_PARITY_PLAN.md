@@ -2511,9 +2511,14 @@ independently decodes its class number, full identity, entity flag, version
 fields and instance count. The focused `--table-cell-overrides` selector
 passes. This proves entry-encoder and ledger consistency for the generated
 identity, not that a TABLE entity frame or full CLASSES section is independently
-readable. The registration helper is still disconnected from `writeTable`;
-compound staging must bind a real TABLE frame and roll back class metadata and
-counts if entity or `*T` graph staging fails.
+readable. A second generated check stages the TABLE class and a pending instance,
+then applies the writer's existing compound checkpoint rollback and verifies
+the class definition, handle-to-class link and pending/emitted count state are
+gone. This reuses proven transaction machinery; it does not yet exercise a
+TABLE entity frame or linked `*T` graph failure through `dwgRW`. The registration
+helper is still disconnected from `writeTable`; compound staging must bind a
+real TABLE frame and roll back class metadata and counts if entity or `*T` graph
+staging fails.
 
 Speed-oriented implementation sequence:
 

@@ -8186,6 +8186,36 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                      == serializedTableClassEntry.bitCount(),
              "AC1018 TABLE CLASS serialization preserves identity and committed instance count");
 
+    DRW_Header rolledBackTableClassHeader;
+    TableClassSerializationProbe rolledBackTableClassWriter(
+        nullptr, &rolledBackTableClassHeader);
+    const dwgWriter::CompoundWriteCheckpoint tableClassCheckpoint =
+        rolledBackTableClassWriter.checkpointCompoundWrite();
+    DRW_Table rolledBackTable;
+    constexpr std::uint32_t rolledBackTableHandle = 0xFA18u;
+    const bool rollbackClassRegistered =
+        rolledBackTableClassWriter.registerTableEntityClass(&rolledBackTable);
+    const bool rollbackInstanceRegistered = rollbackClassRegistered
+        && rolledBackTableClassWriter.registerDwgEntityClassInstance(
+            rolledBackTable.getDwgClassNum(), rolledBackTableHandle);
+    std::uint16_t rolledBackInstanceClass = 0u;
+    const bool stagedInstanceVisible =
+        rolledBackTableClassWriter.getDwgClassInstanceClass(
+            rolledBackTableHandle, rolledBackInstanceClass);
+    rolledBackTableClassWriter.rollbackCompoundWrite(tableClassCheckpoint);
+    std::uint16_t staleInstanceClass = 0u;
+    const bool stagedClassMetadataRolledBack =
+        rollbackClassRegistered && rollbackInstanceRegistered
+        && stagedInstanceVisible
+        && rolledBackInstanceClass == rolledBackTable.getDwgClassNum()
+        && !rolledBackTableClassWriter.hasDwgClassDefinition(
+            rolledBackInstanceClass)
+        && !rolledBackTableClassWriter.getDwgClassInstanceClass(
+            rolledBackTableHandle, staleInstanceClass)
+        && rolledBackTableClassWriter.validateDwgClassInstanceCounts();
+    t.expect(stagedClassMetadataRolledBack,
+             "AC1018 TABLE registration and class-count ledger roll back with the compound writer checkpoint");
+
     R2007TableFrame unknownFrame;
     const bool unknownBuilt = makeR2007TableFrame(16, unknownFrame);
     t.expect(unknownBuilt, "AC1021 TABLE unknown-cell vector builds from scratch");

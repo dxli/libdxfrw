@@ -234,8 +234,20 @@
       "class registration uses the identity-selected writer-local ordinal",
       "declared count fails ledger validation until frame emission is marked committed",
       "actual CLASS-entry encoder output independently decodes to matching TABLE identity, entity role, one instance and class version fields",
-      "decoded CLASS-entry cursor equals the exact encoded bit end"
+      "decoded CLASS-entry cursor equals the exact encoded bit end",
+      "A writer compound checkpoint removes the staged TABLE class definition, class-instance handle association, and pending count state on rollback."
     ],
-    "disposition": "Encoder/ledger consistency only. Full CLASSES section decoding, real TABLE frame commit, and transaction rollback after entity/*T graph failure remain open."
+    "disposition": "Generated CLASS-entry serializer, instance-ledger, and writer-checkpoint rollback proof only. It does not exercise rollback through dwgRW after an emitted TABLE entity frame or failed *T graph stage, and does not decode a complete serialized CLASSES section."
+  },
+  "generated_ac1018_class_transaction_rollback_control": {
+    "generatedFromScratch": true,
+    "version": "AC1018",
+    "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
+    "result": "PASS",
+    "assertions": [
+      "after identity registration and pending instance staging, the existing compound checkpoint rollback removes the TABLE definition",
+      "rollback removes the handle-to-class mapping and returns pending/emitted count ledgers to their checkpoint state"
+    ],
+    "disposition": "Writer checkpoint infrastructure proof only. No emitted TABLE frame or linked *T graph failure is driven through dwgRW; caller-model state and destination transaction are not covered by this control."
   }
 }
