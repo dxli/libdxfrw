@@ -164,7 +164,14 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-08)
 
-- **Latest local slice:** commit `e19a6170` admits per-style R24 TABLESTYLE
+- **Latest local slice:** commit `05720365` adds bounded R24 TABLESTYLE CMC
+  truecolor/color-book DXF group-62/420/430 output and parser recovery for
+  background, content and border colors. Generated ASCII/Binary controls
+  verify raw fields, typed CMC readback, invalid-RGB refusal, destination
+  preservation and corrected same-adapter retry. This is codec consistency
+  only: independent producer behavior, native color-book meaning and broader
+  document closure remain unqualified. See the [CMC receipt](docs/research/p6-r24-tablestyle-cmc-truecolor-book-2026-11-08.json).
+  Commit `e19a6170` admits per-style R24 TABLESTYLE
   merge flags within ODA's `0x18000` mask. Generated ASCII/Binary controls
   verify raw group-92 order and typed readback; an undocumented bit refuses
   atomically before a same-adapter retry. The focused
@@ -224,20 +231,23 @@ receipts remain in Git and `docs/research/`. Resume from the linked blocker
 instead of repeating successful scans or controls. The generated R24 TABLESTYLE
 border LTYPE, value-domain, scalar format, margin, text-height, merge-flag,
 content-layout, alignment, property-flag, border-override, indexed-color,
-border-detail and border-lineweight slices are complete in commits
+border-detail, border-lineweight and bounded CMC truecolor/book-color slices
+are complete in commits
 `12698d59`, `93c02f0d`,
 `9678d0c2`, `513a8adf`, `37d876cf`, `bff89295`, `e19a6170`, `9b064748`,
-`7781bcfc`, `9d9de967`, `c4bb35ee`, `4432792f`, `55ce3c7c`, and `6463f3b7`. The latest
+`7781bcfc`, `9d9de967`, `c4bb35ee`, `4432792f`, `55ce3c7c`, `6463f3b7`, and
+`05720365`. The latest
 bounded additions follow ODA §20.4.101.3–.4: group 93 admits content-layout
 values 1/2/4; group 94 admits cell alignments 1–9; group 90/91 admit
 documented property-override masks and AutoScale only when its override is
 selected; and border group 90 admits its six defined property bits. Indexed
-group-62 colors are supported where their scalar color methods are
-representable; truecolor/book-color CMC records remain refused. Border types
+group-62 colors and the bounded truecolor/book-color CMC profile (groups
+62/420/430) are supported by the generated codec path. Border types
 1/2, invisibility 0/1, finite nonnegative double-line spacing, and the
 existing 27-value lineweight domain are also admitted. Generated controls
 verify group-92 ordering and typed values; see the
-[lineweight receipt](docs/research/p6-r24-tablestyle-border-lineweights-2026-11-08.json).
+[lineweight receipt](docs/research/p6-r24-tablestyle-border-lineweights-2026-11-08.json)
+and [CMC receipt](docs/research/p6-r24-tablestyle-cmc-truecolor-book-2026-11-08.json).
 Generated ASCII/Binary controls verify exact field positions, raw and typed
 readback, invalid-value/flag refusal, destination preservation and corrected
 same-adapter retries. Each focused build and
