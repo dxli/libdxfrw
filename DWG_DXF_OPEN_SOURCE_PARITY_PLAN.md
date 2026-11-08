@@ -139,13 +139,20 @@ work from the hash-bound AC1024 mechanical source profile
 (`854c8ebed8726add72ba4a9a2a19ba0d010372f5cadefb40e648cdf881cad858`). Its
 existing physical output/readback control passes both encodings for 17 linked
 dimension-dependency/body pairs, 399 constraint nodes, group membership,
-dimension targets, and reactor links. A locally authored graph without that
-source-bound profile is correctly refused by strict adapter preflight; do not
-manufacture a receipt or relax the gate. First measure the existing physical
-route's OBJECTS callback allocation count and elapsed time. If a full callback
-sweep exceeds the fast-validation budget, split the proof into bounded
-source-backed record selections while retaining physical graph closure and
-destination-preserving retry checks.
+dimension targets, and reactor links. It now also proves that each of the 17
+dimension dependencies is referenced by exactly one admitted `Distance` or
+`RadiusDiameter` node in its owning constraint group; that node's hard-pointer
+value edge resolves to one typed, wire-complete `ACDBASSOCVALUEDEPENDENCY`
+listed exactly once in the group's action list; and that value dependency
+targets a typed `ACDBASSOCVARIABLE`. ASCII/Binary output, fresh readback,
+late-mutation refusal, sentinel preservation, and same-adapter retry still
+pass. See the [node dependency closure receipt](docs/research/p6-ac1024-mechanical-dimension-node-dependency-closure-2026-11-08.json).
+A locally authored graph without that source-bound profile is correctly
+refused by strict adapter preflight; do not manufacture a receipt or relax the
+gate. Next measure the existing physical route's OBJECTS callback allocation
+count and elapsed time. If a full callback sweep exceeds the fast-validation
+budget, split the proof into bounded source-backed record selections while
+retaining physical graph closure and destination-preserving retry checks.
 
 **Resume checkpoint (2026-11-07):** the Mac session was unlocked and the
 audit-enabled ODA 27.1 GUI route has completed the AC1024 civil residual

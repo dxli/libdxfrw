@@ -67032,6 +67032,58 @@ bool physicalAssociativeDimensionDependencyOutputReadback(
         || sourceGroups.empty())
         return fail("physical dependency source census differs from 17 linked pairs");
 
+    std::size_t dimensionNodesBound = 0u;
+    std::size_t valueNodesBound = 0u;
+    for (const auto& entry : sourceDependencies) {
+        const DRW_AssociativeObject& dependency = *entry.second;
+        const auto groupEntry = sourceByHandle.find(
+            static_cast<std::uint32_t>(dependency.parentHandle));
+        if (groupEntry == sourceByHandle.end())
+            return fail("dimension dependency lost its source constraint group");
+        const DRW_AssociativeObject& group = *groupEntry->second;
+        const DRW_AssociativeConstraintNode* matchedNode = nullptr;
+        for (const DRW_AssociativeConstraintNode& node :
+             group.m_constraintNodes) {
+            if (node.m_hasDimensionDependencyHandle
+                && node.m_dimensionDependencyHandle == dependency.handle) {
+                if (matchedNode != nullptr)
+                    return fail("dimension dependency is referenced by multiple source constraint nodes");
+                matchedNode = &node;
+            }
+        }
+        if (matchedNode == nullptr
+            || (matchedNode->m_dataKind
+                    != DRW_AssociativeConstraintNode::DataKind::Distance
+                && matchedNode->m_dataKind
+                    != DRW_AssociativeConstraintNode::DataKind::RadiusDiameter)
+            || !matchedNode->m_hasValueDependencyHandle
+            || matchedNode->m_dimensionDependencyCode != DRW::DwgHardPointer
+            || matchedNode->m_valueDependencyCode != DRW::DwgHardPointer)
+            return fail("dimension dependency has no unique admitted source Distance/RadiusDiameter node and value edge");
+        ++dimensionNodesBound;
+        const auto valueDependency = sourceByHandle.find(
+            static_cast<std::uint32_t>(
+                matchedNode->m_valueDependencyHandle));
+        if (valueDependency == sourceByHandle.end()
+            || valueDependency->second->m_recordName
+                != "ACDBASSOCVALUEDEPENDENCY"
+            || !valueDependency->second->m_dependencyWireComplete
+            || !valueDependency->second->m_valueDependencyFieldsParsed
+            || std::count(group.m_constraintActions.begin(),
+                group.m_constraintActions.end(),
+                valueDependency->second->handle) != 1)
+            return fail("dimension constraint node value edge is not a unique typed group action");
+        const auto target = sourceByHandle.find(
+            valueDependency->second->m_dependencyHandle);
+        if (target == sourceByHandle.end()
+            || target->second->m_recordName != "ACDBASSOCVARIABLE")
+            return fail("dimension value dependency target is not a typed associative variable");
+        ++valueNodesBound;
+    }
+    if (dimensionNodesBound != sourceDependencies.size()
+        || valueNodesBound != sourceDependencies.size())
+        return fail("dimension constraint node/dependency closure count changed");
+
     const auto sameCoord = [](const DRW_Coord& left,
                               const DRW_Coord& right) {
         return std::memcmp(&left.x, &right.x, sizeof(double)) == 0
