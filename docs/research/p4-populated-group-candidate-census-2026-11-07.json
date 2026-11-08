@@ -80,7 +80,7 @@
     "limits": "Generated codec mechanics only; it does not qualify any physical DWG producer, selected graph closure, or whole-source output."
   },
   "planImpact": {
-    "nextP4Action": "Before selected output, explain and resolve the AC1012 DICTIONARY UnknownCodePage text issue (0x8) and establish a spec-bounded legacy inline common-link evidence profile for the exact DICTIONARY/GROUP frames. The typed identities and GROUP membership match, but both source frames retain Unknown common-link evidence, so do not weaken source eligibility or attempt serialization. Only then retry the selected projection; preserve the 1 entity/19 object parse failures and the whole-source ModelDocViewStyle refusal.",
+    "nextP4Action": "ODA 27.1 GUI audit now independently emits the ordered GROUP members and dictionary/parent relations for the AC1012 witness, but drops its TREAT_AS_HARD EED and referenced SHAPE object. This partial conversion does not define EED codepage-zero semantics or validate libdxfrw common-link Unknown markers. Do not repeat the unchanged conversion, alter the decoder/evidence gates, or attempt selected serialization. Keep the witness blocked; advance to another ready P4 implementation packet. Preserve the 1 entity/19 object parse failures and whole-source ModelDocViewStyle refusal.",
     "fixtureFilesAdded": 0,
     "externalEvidencePromoted": 0
   },
@@ -149,6 +149,30 @@
     "specCrossCheck": "ODA Open Design Specification v5.4.1 §20.4.72 specifies the R13–R14 GROUP object size and reactor count followed by the common parent/reactor/extension-dictionary references and the ordered group-member references. §§20.4.1–20.4.2 define the corresponding legacy entity common fields and handle roles. This supports inspecting the bounded in-frame parse; it does not by itself validate libdxfrw’s Unknown capture marker or resolve the dictionary text issue.",
     "disposition": "Not output-ready. Although source identities, ordered members, typed baselines and payload matches are established, the selected projection admission gate rejected the DICTIONARY and GROUP frames because common-link evidence is Unknown; the DICTIONARY also carries UnknownCodePage text issue mask 0x8. No selected serialization/readback was attempted. Do not clear the marker, relax standardSourceEligible, or infer support from the imported typed values.",
     "testBinarySha256": "7163ab0f11d3ba45924654bc2dcae7d8c226b1c1bf1d5c5758d29a729c67d9d9",
+    "supportClaimEffect": "none"
+  },
+  "odaGuiConversion": {
+    "date": "2026-11-07",
+    "sourcePath": "/Users/dli/dev/dwgTs/tests/fixtures/committed/libredwg/example_r13.dwg",
+    "sourceSha256": "53558a8ae4bf666f906c9c2e4d3c3ee7ef61690e3b0f4d4a858e4e1bf555fc89",
+    "method": "ODA File Converter 27.1.0 native macOS GUI Audit on a scratch copy, saved as 2010 ASCII DXF; no CLI retry and no repository fixture added.",
+    "outputPath": "/private/tmp/oda-r13-group/out/example_r13.dxf",
+    "outputSha256": "ddbc376f4c1c66c9e4dadad812d6c36a272941ea13c697572c003705720d242a",
+    "outputBytes": 1063395,
+    "observations": {
+      "auditErrorReport": false,
+      "groupHandle": "0x257",
+      "groupParentDictionary": "0xD",
+      "orderedMemberHandles": ["0x256", "0x255", "0x254", "0x253", "0x252", "0x251", "0x250"],
+      "dictionaryEntry": {"name": "*A1", "handle": "0x257"},
+      "dictionaryParentHandle": "0xC",
+      "groupParentAndMemberRelationsEmitted": true,
+      "sourceEedValueTreatAsHardEmitted": false,
+      "shapeStyleReferencedBySourceEmitted": false
+    },
+    "interpretation": "This independent conversion supports only that ODA emitted the candidate GROUP's ordered member references and dictionary/parent relations for this source. It dropped the source DICTIONARY EED value TREAT_AS_HARD and the referenced SHAPE object, so it is not a lossless conversion, does not define EED codepage-zero semantics, and cannot clear either libdxfrw common-link Unknown marker or the dictionary UnknownCodePage gate.",
+    "libdxfrwSelectedOutputAttempted": false,
+    "fixtureFilesAdded": 0,
     "supportClaimEffect": "none"
   },
   "eedCodepageZeroDiagnostic": {
