@@ -8934,6 +8934,29 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             table.lWeight = static_cast<DRW_LW_Conv::lineWidth>(28);
         });
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects ACI outside its domain without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.color = 257; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects oversized RGB without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.color24 = 0x01000000; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects invalid negative RGB without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.color24 = -2; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects color name without AcDbColor target",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.colorName = "NamedColor"; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects inline RGB alongside AcDbColor target",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.setRawAcDbColorHandleState(true, 0xA906u);
+            table.color24 = 0x123456;
+        });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects a missing entity handle without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) { table.handle = 0u; });

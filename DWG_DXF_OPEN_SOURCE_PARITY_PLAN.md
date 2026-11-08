@@ -2580,7 +2580,9 @@ that a null layer target, or a named linetype without its required handle,
 could be serialized as a null reference; these cases now fail preflight too.
 Malformed common state is also refused: non-finite linetype scale, lineweight
 codes outside the DWG domain, negative plot-style sentinels, and inconsistent
-AcDbColor-presence/handle pairs.
+AcDbColor-presence/handle pairs. The preflight also rejects out-of-domain ACI/
+RGB values and color names or inline RGB data that the selected AcDbColor
+encoding would otherwise discard.
 The common writer itself is unchanged; this protection applies only to the
 generated AC1018 TABLE codec.
 The direct encoder builds both streams in private copies, catches emission
