@@ -2441,6 +2441,14 @@ raw-only AcSh exceptions. The focused 13-test AC1024 reader/retention cohort
 passes; this corrects the test expectation without claiming typed LOFT/REVOLVE
 semantics or strict output
 ([receipt](docs/research/p4-ac1024-acsh-sample-read-disposition-test-2026-11-07.json)).
+The 2026-11-08 source screen found no ready field-layout oracle: ODA v5.4.1 has
+no class-specific LOFT/REVOLVE body entries; LibreDWG marks both types
+`DEBUGGING` and its same-input runtime reports the same suspect fields; the
+additional local `dwg-writer` parser follows the same `dwg-parser` project
+lineage and candidate field sequence; the local ACadSharp source has no parser
+for either class. Keep the frames raw-only and do not port the candidate schema
+or change parser boundaries without new authoritative or provenance-qualified
+independent evidence ([source screen](docs/research/p6-ac1024-acsh-independent-layout-source-screen-2026-11-08.json)).
 
 | Boundary | Remaining decision or proof |
 | --- | --- |
