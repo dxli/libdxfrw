@@ -2468,6 +2468,16 @@ public:
     static std::size_t standardSourceFrameCount(const dx_data& data) {
         return data.m_standardDwgObjectFrames.size();
     }
+    static std::vector<std::uint32_t> standardDictionarySourceHandles(
+            const dx_data& data, std::uint64_t generation) {
+        std::vector<std::uint32_t> handles;
+        for (const auto& entry : data.m_standardDwgObjectFrames) {
+            if (entry.first.first == generation
+                && entry.second.raw.m_objectType == 42)
+                handles.push_back(entry.first.second);
+        }
+        return handles;
+    }
     static bool standardDwgOutputQualified(const dx_iface& iface,
                                            std::uint64_t generation,
                                            std::uint32_t handle) {
@@ -22548,6 +22558,215 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
             << " layers=" << data.layers.size()
             << " dimStyles=" << data.dimStyles.size()
             << " vports=" << data.VPorts.size() << '\n';
+  const DRW_Dictionary* scaleList = nullptr;
+  std::size_t scaleListRoots = 0u;
+  for (const DRW_Dictionary::Entry& entry :
+       data.namedObjectDictionary.m_entries) {
+    if (entry.m_name != "ACAD_SCALELIST")
+      continue;
+    ++scaleListRoots;
+    for (const DRW_Dictionary& dictionary : data.dictionaries) {
+      if (dictionary.handle != entry.m_handle)
+        continue;
+      ++scaleListRoots;
+      scaleList = &dictionary;
+    }
+  }
+  if (!data.scales.empty()
+      && (scaleListRoots != 2u || scaleList == nullptr
+          || !scaleList->hasCompleteDwgEntries())) {
+    std::cerr << "SCALE source inventory lacks one complete ACAD_SCALELIST root\n";
+    return false;
+  }
+  std::set<std::uint32_t> scaleHandles;
+  std::set<UTF8STRING> scaleNames;
+  std::set<UTF8STRING> scaleDictionaryKeys;
+  for (const DRW_Scale& scale : data.scales) {
+    const DRW_UnsupportedObject* rawFrame =
+        DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+            data, data.importGeneration, scale.handle);
+    const DRW_Dictionary::Entry* membership = nullptr;
+    std::size_t membershipMatches = 0u;
+    if (scaleList != nullptr) {
+      for (const DRW_Dictionary::Entry& entry : scaleList->m_entries) {
+        if (entry.m_handle != scale.handle)
+          continue;
+        membership = &entry;
+        ++membershipMatches;
+      }
+    }
+    if (rawFrame == nullptr || rawFrame->m_version != data.sourceVersion
+        || rawFrame->m_objectType != 503
+        || !drwDwgCommonLinkEvidenceValidated(rawFrame->m_commonLinkEvidence)
+        || !scaleHandles.insert(scale.handle).second
+        || scaleList == nullptr || membershipMatches != 1u
+        || membership == nullptr
+        || !scaleDictionaryKeys.insert(membership->m_name).second
+        || !scaleNames.insert(scale.name).second
+        || scale.parentHandle != scaleList->handle
+        || scale.reactorHandles.size() != 1u
+        || scale.reactorHandles.front() != scaleList->handle
+        || scale.xDictHandle != 0u) {
+      std::cerr << "SCALE source inventory identity or ACAD_SCALELIST edge mismatch at handle "
+                << scale.handle
+                << " raw=" << (rawFrame != nullptr)
+                << " rawVersion="
+                << (rawFrame == nullptr ? -1
+                    : static_cast<int>(rawFrame->m_version))
+                << " rawType="
+                << (rawFrame == nullptr ? -1 : rawFrame->m_objectType)
+                << " common="
+                << (rawFrame != nullptr
+                    && drwDwgCommonLinkEvidenceValidated(
+                        rawFrame->m_commonLinkEvidence))
+                << " uniqueHandle=" << scaleHandles.count(scale.handle)
+                << " rootCount=" << scaleListRoots
+                << " membershipMatches=" << membershipMatches
+                << " scaleName=" << scale.name
+                << " key=" << (membership == nullptr ? "<none>"
+                                                       : membership->m_name)
+                << " uniqueName=" << scaleNames.count(scale.name)
+                << " owner=" << scale.parentHandle
+                << " scaleList=" << (scaleList == nullptr
+                    ? 0u : scaleList->handle)
+                << " reactors=" << scale.reactorHandles.size()
+                << " xdict=" << scale.xDictHandle << '\n';
+      return false;
+    }
+    std::cout << " typedBodyFrame type=SCALE handle=" << scale.handle
+              << " name=" << scale.name
+              << " parent=" << scale.parentHandle
+              << " reactor=" << scale.reactorHandles.front()
+              << " xdict=" << scale.xDictHandle
+              << " paperUnits=" << scale.paperUnits
+              << " drawingUnits=" << scale.drawingUnits
+              << " unitScale=" << scale.isUnitScale
+              << " dictionaryOwner=" << scaleList->handle
+              << " dictionaryKey=" << membership->m_name
+              << " bodyHandleFields=0 bodyReferenceRule=ODA-20.4.92\n";
+  }
+  if (scaleList != nullptr
+      && scaleList->m_entries.size() != data.scales.size()) {
+    std::cerr << "SCALE source inventory found unmodeled ACAD_SCALELIST members\n";
+    return false;
+  }
+  const DRW_Dictionary* variableDictionary = nullptr;
+  std::size_t variableDictionaryRoots = 0u;
+  for (const DRW_Dictionary::Entry& entry :
+       data.namedObjectDictionary.m_entries) {
+    if (entry.m_name != "AcDbVariableDictionary")
+      continue;
+    ++variableDictionaryRoots;
+    for (const DRW_Dictionary& dictionary : data.dictionaries) {
+      if (dictionary.handle != entry.m_handle)
+        continue;
+      ++variableDictionaryRoots;
+      variableDictionary = &dictionary;
+    }
+  }
+  if (!data.dictionaryVars.empty()
+      && (variableDictionaryRoots != 2u || variableDictionary == nullptr
+          || !variableDictionary->hasCompleteDwgEntries())) {
+    std::cerr << "DICTIONARYVAR source inventory lacks one complete variable dictionary root\n";
+    return false;
+  }
+  std::set<std::uint32_t> variableHandles;
+  std::set<UTF8STRING> variableDictionaryKeys;
+  for (const DRW_DictionaryVar& variable : data.dictionaryVars) {
+    const DRW_UnsupportedObject* rawFrame =
+        DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+            data, data.importGeneration, variable.handle);
+    const DRW_Dictionary::Entry* membership = nullptr;
+    std::size_t membershipMatches = 0u;
+    if (variableDictionary != nullptr) {
+      for (const DRW_Dictionary::Entry& entry :
+           variableDictionary->m_entries) {
+        if (entry.m_handle == variable.handle) {
+          membership = &entry;
+          ++membershipMatches;
+        }
+      }
+    }
+    if (rawFrame == nullptr || rawFrame->m_version != data.sourceVersion
+        || rawFrame->m_recordName != "DICTIONARYVAR"
+        || rawFrame->m_className != "AcDbDictionaryVar"
+        || !drwDwgCommonLinkEvidenceValidated(rawFrame->m_commonLinkEvidence)
+        || !variableHandles.insert(variable.handle).second
+        || variableDictionary == nullptr || membershipMatches != 1u
+        || membership == nullptr
+        || !variableDictionaryKeys.insert(membership->m_name).second
+        || variable.parentHandle != variableDictionary->handle
+        || variable.reactorHandles.size() != 1u
+        || variable.reactorHandles.front() != variableDictionary->handle
+        || variable.xDictHandle != 0u) {
+      std::cerr << "DICTIONARYVAR source inventory identity or root edge mismatch at handle "
+                << variable.handle << '\n';
+      return false;
+    }
+    std::cout << " typedBodyFrame type=DICTIONARYVAR handle="
+              << variable.handle << " schema=" << variable.m_schema
+              << " owner=" << variable.parentHandle
+              << " reactor=" << variable.reactorHandles.front()
+              << " xdict=" << variable.xDictHandle
+              << " dictionaryOwner=" << variableDictionary->handle
+              << " dictionaryKey=" << membership->m_name
+              << " value=" << variable.m_value
+              << " bodyHandleFields=0 bodyReferenceRule=ODA-20.4.74\n";
+  }
+  if (variableDictionary != nullptr
+      && variableDictionary->m_entries.size() != data.dictionaryVars.size()) {
+    std::cerr << "DICTIONARYVAR source inventory found unmodeled dictionary members\n";
+    return false;
+  }
+  std::set<std::uint32_t> reportedDictionaryHandles;
+  const auto reportDictionary = [&](const DRW_Dictionary& dictionary,
+                                    const char *role) {
+    const DRW_UnsupportedObject* rawFrame =
+        DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+            data, data.importGeneration, dictionary.handle);
+    if (rawFrame == nullptr || rawFrame->m_version != data.sourceVersion
+        || rawFrame->m_objectType != 42
+        || !drwDwgCommonLinkEvidenceValidated(rawFrame->m_commonLinkEvidence)
+        || !dictionary.hasCompleteDwgEntries()
+        || !reportedDictionaryHandles.insert(dictionary.handle).second
+        || dictionary.handle != rawFrame->m_handle
+        || dictionary.parentHandle != rawFrame->m_parentHandle
+        || dictionary.reactorHandles != rawFrame->m_reactorHandles
+        || dictionary.xDictHandle != rawFrame->m_xDictHandle) {
+      std::cerr << "DICTIONARY source inventory frame or common-link mismatch for "
+                << role << " handle " << dictionary.handle << '\n';
+      return false;
+    }
+    for (const DRW_Dictionary::Entry& entry : dictionary.m_entries) {
+      std::cout << " typedBodyReference owner=" << dictionary.handle
+                << " role=" << role << ".entry[" << entry.m_name
+                << "] target=" << entry.m_handle << '\n';
+    }
+    std::cout << " typedBodyFrame type=DICTIONARY handle="
+              << dictionary.handle << " role=" << role
+              << " entries=" << dictionary.m_entries.size()
+              << " owner=" << dictionary.parentHandle
+              << " reactors=" << dictionary.reactorHandles.size()
+              << " xdict=" << dictionary.xDictHandle
+              << " bodyHandleFields=" << dictionary.m_entries.size()
+              << " bodyReferenceRule=ODA-20.4.44\n";
+    return true;
+  };
+  if (data.hasNamedObjectDictionary
+      && !reportDictionary(data.namedObjectDictionary, "NOD"))
+    return false;
+  for (const DRW_Dictionary& dictionary : data.dictionaries)
+    if (!reportDictionary(dictionary, "dictionary"))
+      return false;
+  const auto expectedDictionaryHandleRows =
+      DxIfaceStandardDwgCaptureTestAccess::standardDictionarySourceHandles(
+          data, data.importGeneration);
+  const std::set<std::uint32_t> expectedDictionaryHandles(
+      expectedDictionaryHandleRows.begin(), expectedDictionaryHandleRows.end());
+  if (expectedDictionaryHandles != reportedDictionaryHandles) {
+    std::cerr << "DICTIONARY source inventory did not report every captured type-42 frame\n";
+    return false;
+  }
   for (const DRW_DictionaryWithDefault &dictionary :
        data.dictionaryWithDefaults) {
     std::cout << " typedBodyFrame type=DICTIONARYWDFLT"
@@ -22563,10 +22782,97 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
                 << " role=default-entry target="
                 << dictionary.m_defaultEntryHandle << '\n';
   }
-  for (const DRW_Layout &layout : data.layouts)
+  std::set<std::uint32_t> layoutHandles;
+  for (const DRW_Layout &layout : data.layouts) {
+    const DRW_UnsupportedObject* rawFrame =
+        DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+            data, data.importGeneration, layout.handle);
+    if (rawFrame == nullptr || rawFrame->m_version != data.sourceVersion
+        || rawFrame->m_objectType != 82
+        || !drwDwgCommonLinkEvidenceValidated(rawFrame->m_commonLinkEvidence)
+        || !layoutHandles.insert(layout.handle).second
+        || layout.viewportCount < 0
+        || static_cast<std::size_t>(layout.viewportCount)
+            != layout.viewportHandles.size()
+        || layout.parentHandle != rawFrame->m_parentHandle
+        || layout.reactorHandles != rawFrame->m_reactorHandles
+        || layout.xDictHandle != rawFrame->m_xDictHandle) {
+      std::cerr << "LAYOUT source inventory identity, common links, or viewport count mismatch at handle "
+                << layout.handle << '\n';
+      return false;
+    }
+    std::size_t bodyHandleFields = 0u;
+    const auto reportLayoutReference = [&](const char *role,
+                                           std::uint32_t target) {
+      std::cout << " typedBodyReference owner=" << layout.handle
+                << " role=" << role << " target=" << target << '\n';
+      ++bodyHandleFields;
+    };
+    if (data.sourceVersion >= DRW::AC1018)
+      reportLayoutReference("plotView", layout.plotViewHandle.ref);
+    if (data.sourceVersion > DRW::AC1018)
+      reportLayoutReference("shadePlot", layout.shadePlotHandle.ref);
+    reportLayoutReference("paperSpaceBlockRecord",
+                          layout.paperSpaceBlockRecordHandle.ref);
+    reportLayoutReference("lastActiveViewport",
+                          layout.lastActiveViewportHandle.ref);
+    reportLayoutReference("baseUcs", layout.baseUcsHandle.ref);
+    reportLayoutReference("namedUcs", layout.namedUcsHandle.ref);
+    if (data.sourceVersion >= DRW::AC1018) {
+      for (std::size_t index = 0u; index < layout.viewportHandles.size(); ++index)
+        reportLayoutReference(
+            ("viewport[" + std::to_string(index) + "]").c_str(),
+            layout.viewportHandles[index]);
+    }
     std::cout << " typedBodyFrame type=LAYOUT handle=" << layout.handle
+              << " name=" << layout.name
               << " blockHeader=" << layout.paperSpaceBlockRecordHandle.ref
-              << '\n';
+              << " owner=" << layout.parentHandle
+              << " bodyHandleFields=" << bodyHandleFields
+              << " bodyReferenceRule=ODA-20.4.84\n";
+  }
+  for (const auto& source : data.dwgRasterVariables) {
+    if (source.first.first != data.importGeneration)
+      continue;
+    const DRW_RasterVariables& variables = source.second;
+    const DRW_UnsupportedObject* rawFrame =
+        DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+            data, data.importGeneration, variables.handle);
+    std::size_t rootMatches = 0u;
+    for (const DRW_Dictionary::Entry& entry :
+         data.namedObjectDictionary.m_entries)
+      if (entry.m_name == "ACAD_IMAGE_VARS"
+          && entry.m_handle == variables.handle)
+        ++rootMatches;
+    if (rawFrame == nullptr || rawFrame->m_version != data.sourceVersion
+        || rawFrame->m_objectType != 507
+        || rawFrame->m_recordName != "RASTERVARIABLES"
+        || rawFrame->m_className != "AcDbRasterVariables"
+        || !drwDwgCommonLinkEvidenceValidated(rawFrame->m_commonLinkEvidence)
+        || source.first.second != variables.handle
+        || rootMatches != 1u
+        || variables.parentHandle != data.namedObjectDictionary.handle
+        || variables.reactorHandles.size() != 1u
+        || variables.reactorHandles.front()
+            != data.namedObjectDictionary.handle
+        || variables.xDictHandle != 0u) {
+      std::cerr << "RASTERVARIABLES source inventory identity or NOD edge mismatch at handle "
+                << variables.handle << '\n';
+      return false;
+    }
+    std::cout << " typedBodyFrame type=RASTERVARIABLES handle="
+              << variables.handle
+              << " classVersion=" << variables.m_classVersion
+              << " imageFrame=" << variables.m_imageFrame
+              << " imageQuality=" << variables.m_imageQuality
+              << " units=" << variables.m_units
+              << " owner=" << variables.parentHandle
+              << " reactor=" << variables.reactorHandles.front()
+              << " xdict=" << variables.xDictHandle
+              << " dictionaryOwner=" << data.namedObjectDictionary.handle
+              << " dictionaryKey=ACAD_IMAGE_VARS bodyHandleFields=0"
+                 " bodyReferenceRule=ODA-20.4.91\n";
+  }
   for (const DRW_TableStyle &style : data.tableStyles) {
     std::cout << " typedBodyFrame type=TABLESTYLE handle=" << style.handle
               << " rows=" << style.m_rowStyles.size()

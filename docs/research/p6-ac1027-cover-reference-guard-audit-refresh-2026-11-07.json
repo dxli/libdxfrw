@@ -1,85 +1,3483 @@
 {
-  "schema": "libdxfrw-research-receipt-v1",
-  "title": "AC1027 Cover source-reference guard audit refresh",
-  "date": "2026-11-07",
-  "supportClaimEffect": "none",
-  "source": {
-    "path": "/Users/dli/doc/dwg/Cover.dwg",
-    "sha256Before": "3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42",
-    "sha256After": "3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42",
-    "version": "AC1027",
-    "provenanceLimit": "Existing local source; producer is not independently authenticated and no DWG/DXF fixture is committed."
-  },
-  "execution": {
-    "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --opaque-dwg-source-inventory /Users/dli/doc/dwg/Cover.dwg",
-    "exitCode": 0,
-    "repositoryHead": "574e063e21d71c2a887acbf23a39986da838feb0",
-    "executable": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests",
-    "executableSha256": "3e00890895bf33ac778e03c8259a0e51b825d479378149e39d1c856794a19e2c",
-    "outputPath": "/private/tmp/ac1027-cover-reference-audit-current.log",
-    "outputSha256": "306de923b736bc40e5efe6c9984b5f0db0948816ae961bc458e6bb218ff6ad0c",
-    "outputBinding": "Input was hashed immediately before and after this invocation; the test utility itself reports sourceHashBoundByUtility=0."
-  },
-  "readAndFrameDisposition": {
-    "readerSucceeded": true,
-    "sourceVersion": "AC1027",
-    "observedFrames": 111,
-    "publishedFrames": 111,
-    "entityParseFailures": 0,
-    "objectParseFailures": 0,
-    "dataStorageLinkFailures": 0,
-    "dataStorageOrphanRecords": 0,
-    "opaqueCallbacks": 88,
-    "opaqueFramesRetained": 75,
-    "standardObjectsRetained": 13,
-    "standardTypedPayloadsMatched": 13,
-    "dwgIntegrityObservations": [
+  "commonLinks": {
+    "blockOwnerEdges": [
       {
-        "kind": 24,
-        "offset": 16,
-        "expected": 822,
-        "observed": 826,
-        "severity": 1
+        "role": "block owner",
+        "sourceHandle": "0x6f",
+        "targetHandle": "0x1f",
+        "targetObservedAs": "model-space BLOCK_RECORD"
+      }
+    ],
+    "extensionDictionaryEdges": 0,
+    "externalOwnerEdges": [
+      {
+        "role": "owner",
+        "sourceHandle": "0x6d",
+        "targetHandle": "0x29",
+        "targetObservedAs": "typed VPORT table record"
+      }
+    ],
+    "interpretation": "The inventory exposes identities and common-header values; it does not independently qualify every wire role or prove the selected DXF route.",
+    "ownerEdges": 86,
+    "ownerTargetsAmongRetainedObjectFrames": 85,
+    "reactorEdges": 85,
+    "reactorTargetsAmongRetainedObjectFrames": 85
+  },
+  "coverageRows": {
+    "capturedFrameCount": 88,
+    "dictionaryMembershipEdgeCount": 38,
+    "dictionaryMembershipEdges": [
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "A0",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 72,
+        "targetHandle": 72
       },
       {
-        "kind": 25,
-        "offset": 844,
-        "expected": 844,
-        "observed": 1575,
-        "severity": 1
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "A1",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 73,
+        "targetHandle": 73
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "A2",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 74,
+        "targetHandle": 74
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "A3",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 75,
+        "targetHandle": 75
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "A4",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 76,
+        "targetHandle": 76
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "A5",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 77,
+        "targetHandle": 77
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "A6",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 78,
+        "targetHandle": 78
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "A7",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 79,
+        "targetHandle": 79
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "A8",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 80,
+        "targetHandle": 80
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "A9",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 81,
+        "targetHandle": 81
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "B0",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 82,
+        "targetHandle": 82
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "B1",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 83,
+        "targetHandle": 83
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "B2",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 84,
+        "targetHandle": 84
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "B3",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 85,
+        "targetHandle": 85
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "B4",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 86,
+        "targetHandle": 86
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "B5",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 87,
+        "targetHandle": 87
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "B6",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 88,
+        "targetHandle": 88
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "B7",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 89,
+        "targetHandle": 89
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "B8",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 90,
+        "targetHandle": 90
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "B9",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 91,
+        "targetHandle": 91
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "C0",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 92,
+        "targetHandle": 92
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "C1",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 93,
+        "targetHandle": 93
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "C2",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 94,
+        "targetHandle": 94
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "C3",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 95,
+        "targetHandle": 95
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "C4",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 96,
+        "targetHandle": 96
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "C5",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 97,
+        "targetHandle": 97
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "C6",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 98,
+        "targetHandle": 98
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "C7",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 99,
+        "targetHandle": 99
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "C8",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 100,
+        "targetHandle": 100
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "C9",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 101,
+        "targetHandle": 101
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "D0",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 102,
+        "targetHandle": 102
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "D1",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 103,
+        "targetHandle": 103
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.92",
+        "dictionaryHandle": 71,
+        "dictionaryKey": "D2",
+        "objectType": "SCALE",
+        "sourceFrameHandle": 104,
+        "targetHandle": 104
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.74",
+        "dictionaryHandle": 112,
+        "dictionaryKey": "CANNOSCALE value=1:1",
+        "objectType": "DICTIONARYVAR",
+        "sourceFrameHandle": 113,
+        "targetHandle": 113
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.74",
+        "dictionaryHandle": 112,
+        "dictionaryKey": "CTABLESTYLE value=Standard",
+        "objectType": "DICTIONARYVAR",
+        "sourceFrameHandle": 114,
+        "targetHandle": 114
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.74",
+        "dictionaryHandle": 112,
+        "dictionaryKey": "CMLEADERSTYLE value=Standard",
+        "objectType": "DICTIONARYVAR",
+        "sourceFrameHandle": 115,
+        "targetHandle": 115
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.74",
+        "dictionaryHandle": 112,
+        "dictionaryKey": "CENTEREXE value=3.500000",
+        "objectType": "DICTIONARYVAR",
+        "sourceFrameHandle": 118,
+        "targetHandle": 118
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.74",
+        "dictionaryHandle": 112,
+        "dictionaryKey": "CENTERLTYPEFILE value=acadiso.lin",
+        "objectType": "DICTIONARYVAR",
+        "sourceFrameHandle": 119,
+        "targetHandle": 119
+      }
+    ],
+    "frames": [
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "selected-typed-report-only",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbDictionaryWithDefault",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 500,
+        "extensionDictionaryHandle": 0,
+        "handle": 14,
+        "hasDataStorage": false,
+        "objectSize": 32,
+        "ownerHandle": 12,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          12
+        ],
+        "recordName": "ACDBDICTIONARYWDFLT",
+        "reportedTypedBodyReferenceCount": 2,
+        "sourceOffset": 1353,
+        "typedBodyReport": "DICTIONARYWDFLT"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": null,
+        "commonLinkEvidence": 1,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 80,
+        "extensionDictionaryHandle": 0,
+        "handle": 15,
+        "hasDataStorage": false,
+        "objectSize": 10,
+        "ownerHandle": 14,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          14
+        ],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 2834,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": null,
+        "commonLinkEvidence": 1,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 73,
+        "extensionDictionaryHandle": 0,
+        "handle": 24,
+        "hasDataStorage": false,
+        "objectSize": 84,
+        "ownerHandle": 23,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          23
+        ],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 2849,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-handle-references",
+        "bodyReferenceRule": {
+          "fieldCount": 6,
+          "objectType": "LAYOUT",
+          "rule": "ODA-20.4.84"
+        },
+        "captureKind": "opaque",
+        "className": null,
+        "commonLinkEvidence": 1,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 82,
+        "extensionDictionaryHandle": 0,
+        "handle": 30,
+        "hasDataStorage": false,
+        "objectSize": 160,
+        "ownerHandle": 26,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          26
+        ],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 6,
+        "sourceOffset": 2938,
+        "typedBodyReport": "LAYOUT"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-handle-references",
+        "bodyReferenceRule": {
+          "fieldCount": 6,
+          "objectType": "LAYOUT",
+          "rule": "ODA-20.4.84"
+        },
+        "captureKind": "opaque",
+        "className": null,
+        "commonLinkEvidence": 1,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 82,
+        "extensionDictionaryHandle": 0,
+        "handle": 34,
+        "hasDataStorage": false,
+        "objectSize": 258,
+        "ownerHandle": 26,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          26
+        ],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 6,
+        "sourceOffset": 3103,
+        "typedBodyReport": "LAYOUT"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 43,
+        "hasDataStorage": false,
+        "objectSize": 215,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 3366,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 44,
+        "hasDataStorage": false,
+        "objectSize": 234,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 3586,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 45,
+        "hasDataStorage": false,
+        "objectSize": 221,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 3825,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 46,
+        "hasDataStorage": false,
+        "objectSize": 240,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 4051,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 47,
+        "hasDataStorage": false,
+        "objectSize": 228,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 4296,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 48,
+        "hasDataStorage": false,
+        "objectSize": 224,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 4529,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 49,
+        "hasDataStorage": false,
+        "objectSize": 228,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 4758,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 50,
+        "hasDataStorage": false,
+        "objectSize": 217,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 4991,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 51,
+        "hasDataStorage": false,
+        "objectSize": 225,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 5213,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 52,
+        "hasDataStorage": false,
+        "objectSize": 236,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 5443,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 53,
+        "hasDataStorage": false,
+        "objectSize": 222,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 5684,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 54,
+        "hasDataStorage": false,
+        "objectSize": 232,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 5911,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 55,
+        "hasDataStorage": false,
+        "objectSize": 222,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 6148,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 56,
+        "hasDataStorage": false,
+        "objectSize": 230,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 6375,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 57,
+        "hasDataStorage": false,
+        "objectSize": 230,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 6610,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 58,
+        "hasDataStorage": false,
+        "objectSize": 231,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 6845,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 59,
+        "hasDataStorage": false,
+        "objectSize": 171,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 7081,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 60,
+        "hasDataStorage": false,
+        "objectSize": 175,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 7257,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 61,
+        "hasDataStorage": false,
+        "objectSize": 177,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 7437,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 62,
+        "hasDataStorage": false,
+        "objectSize": 245,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 7619,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 63,
+        "hasDataStorage": false,
+        "objectSize": 231,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 7869,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 64,
+        "hasDataStorage": false,
+        "objectSize": 219,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 8105,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 65,
+        "hasDataStorage": false,
+        "objectSize": 244,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 8329,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbVisualStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 501,
+        "extensionDictionaryHandle": 0,
+        "handle": 66,
+        "hasDataStorage": false,
+        "objectSize": 221,
+        "ownerHandle": 42,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          42
+        ],
+        "recordName": "VISUALSTYLE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 8578,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbMaterial",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 502,
+        "extensionDictionaryHandle": 0,
+        "handle": 68,
+        "hasDataStorage": false,
+        "objectSize": 93,
+        "ownerHandle": 67,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          67
+        ],
+        "recordName": "MATERIAL",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 8804,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbMaterial",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 502,
+        "extensionDictionaryHandle": 0,
+        "handle": 69,
+        "hasDataStorage": false,
+        "objectSize": 93,
+        "ownerHandle": 67,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          67
+        ],
+        "recordName": "MATERIAL",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 8902,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbMaterial",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 502,
+        "extensionDictionaryHandle": 0,
+        "handle": 70,
+        "hasDataStorage": false,
+        "objectSize": 91,
+        "ownerHandle": 67,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          67
+        ],
+        "recordName": "MATERIAL",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9000,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "A0",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 72,
+        "hasDataStorage": false,
+        "objectSize": 20,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9096,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "A1",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 73,
+        "hasDataStorage": false,
+        "objectSize": 28,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9121,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "A2",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 74,
+        "hasDataStorage": false,
+        "objectSize": 28,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9154,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "A3",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 75,
+        "hasDataStorage": false,
+        "objectSize": 28,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9187,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "A4",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 76,
+        "hasDataStorage": false,
+        "objectSize": 28,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9220,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "A5",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 77,
+        "hasDataStorage": false,
+        "objectSize": 30,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9253,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "A6",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 78,
+        "hasDataStorage": false,
+        "objectSize": 30,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9288,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "A7",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 79,
+        "hasDataStorage": false,
+        "objectSize": 30,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9323,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "A8",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 80,
+        "hasDataStorage": false,
+        "objectSize": 30,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9358,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "A9",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 81,
+        "hasDataStorage": false,
+        "objectSize": 30,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9393,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "B0",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 82,
+        "hasDataStorage": false,
+        "objectSize": 30,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9428,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "B1",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 83,
+        "hasDataStorage": false,
+        "objectSize": 32,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9463,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "B2",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 84,
+        "hasDataStorage": false,
+        "objectSize": 28,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9500,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "B3",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 85,
+        "hasDataStorage": false,
+        "objectSize": 28,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9533,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "B4",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 86,
+        "hasDataStorage": false,
+        "objectSize": 28,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9566,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "B5",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 87,
+        "hasDataStorage": false,
+        "objectSize": 30,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9599,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "B6",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 88,
+        "hasDataStorage": false,
+        "objectSize": 32,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9634,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "B7",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 89,
+        "hasDataStorage": false,
+        "objectSize": 58,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9671,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "B8",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 90,
+        "hasDataStorage": false,
+        "objectSize": 56,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9734,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "B9",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 91,
+        "hasDataStorage": false,
+        "objectSize": 56,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9795,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "C0",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 92,
+        "hasDataStorage": false,
+        "objectSize": 56,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9856,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "C1",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 93,
+        "hasDataStorage": false,
+        "objectSize": 56,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9917,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "C2",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 94,
+        "hasDataStorage": false,
+        "objectSize": 54,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 9978,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "C3",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 95,
+        "hasDataStorage": false,
+        "objectSize": 56,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 10037,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "C4",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 96,
+        "hasDataStorage": false,
+        "objectSize": 54,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 10098,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "C5",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 97,
+        "hasDataStorage": false,
+        "objectSize": 54,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 10157,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "C6",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 98,
+        "hasDataStorage": false,
+        "objectSize": 54,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 10216,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "C7",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 99,
+        "hasDataStorage": false,
+        "objectSize": 54,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 10275,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "C8",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 100,
+        "hasDataStorage": false,
+        "objectSize": 42,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 10334,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "C9",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 101,
+        "hasDataStorage": false,
+        "objectSize": 58,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 10381,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "D0",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 102,
+        "hasDataStorage": false,
+        "objectSize": 50,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 10444,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "D1",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 103,
+        "hasDataStorage": false,
+        "objectSize": 50,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 10499,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.92",
+        "captureKind": "opaque",
+        "className": "AcDbScale",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.92",
+          "dictionaryHandle": 71,
+          "dictionaryKey": "D2",
+          "objectType": "SCALE"
+        },
+        "encodedType": 503,
+        "extensionDictionaryHandle": 0,
+        "handle": 104,
+        "hasDataStorage": false,
+        "objectSize": 56,
+        "ownerHandle": 71,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          71
+        ],
+        "recordName": "SCALE",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 10554,
+        "typedBodyReport": "SCALE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "selected-typed-report-only",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbTableStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 504,
+        "extensionDictionaryHandle": 0,
+        "handle": 106,
+        "hasDataStorage": false,
+        "objectSize": 924,
+        "ownerHandle": 105,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          105
+        ],
+        "recordName": "TABLESTYLE",
+        "reportedTypedBodyReferenceCount": 21,
+        "sourceOffset": 10615,
+        "typedBodyReport": "TABLESTYLE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "selected-typed-report-only",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbMLeaderStyle",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 505,
+        "extensionDictionaryHandle": 0,
+        "handle": 108,
+        "hasDataStorage": false,
+        "objectSize": 122,
+        "ownerHandle": 107,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          107
+        ],
+        "recordName": "MLEADERSTYLE",
+        "reportedTypedBodyReferenceCount": 2,
+        "sourceOffset": 11545,
+        "typedBodyReport": "MLEADERSTYLE"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "not-exhaustively-decoded",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": "AcDbSun",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 506,
+        "extensionDictionaryHandle": 0,
+        "handle": 109,
+        "hasDataStorage": false,
+        "objectSize": 25,
+        "ownerHandle": 41,
+        "ownerTargetsRetainedObjectFrame": false,
+        "reactorHandles": [],
+        "recordName": "SUN",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 2804,
+        "typedBodyReport": null
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.91",
+        "captureKind": "opaque",
+        "className": "AcDbRasterVariables",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": null,
+        "encodedType": 507,
+        "extensionDictionaryHandle": 0,
+        "handle": 110,
+        "hasDataStorage": false,
+        "objectSize": 13,
+        "ownerHandle": 12,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          12
+        ],
+        "recordName": "RASTERVARIABLES",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 2449,
+        "typedBodyReport": "RASTERVARIABLES"
+      },
+      {
+        "blockOwnerHandle": 31,
+        "bodyReferenceDisposition": "selected-typed-report-only",
+        "bodyReferenceRule": null,
+        "captureKind": "opaque",
+        "className": null,
+        "commonLinkEvidence": 2,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 38,
+        "extensionDictionaryHandle": 0,
+        "handle": 111,
+        "hasDataStorage": true,
+        "objectSize": 28,
+        "ownerHandle": 0,
+        "ownerTargetsRetainedObjectFrame": null,
+        "reactorHandles": [],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 1,
+        "sourceOffset": 2696,
+        "typedBodyReport": "3DSOLID"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.74",
+        "captureKind": "opaque",
+        "className": "AcDbDictionaryVar",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.74",
+          "dictionaryHandle": 112,
+          "dictionaryKey": "CANNOSCALE value=1:1",
+          "objectType": "DICTIONARYVAR"
+        },
+        "encodedType": 508,
+        "extensionDictionaryHandle": 0,
+        "handle": 113,
+        "hasDataStorage": false,
+        "objectSize": 20,
+        "ownerHandle": 112,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          112
+        ],
+        "recordName": "DICTIONARYVAR",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 11672,
+        "typedBodyReport": "DICTIONARYVAR"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.74",
+        "captureKind": "opaque",
+        "className": "AcDbDictionaryVar",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.74",
+          "dictionaryHandle": 112,
+          "dictionaryKey": "CTABLESTYLE value=Standard",
+          "objectType": "DICTIONARYVAR"
+        },
+        "encodedType": 508,
+        "extensionDictionaryHandle": 0,
+        "handle": 114,
+        "hasDataStorage": false,
+        "objectSize": 30,
+        "ownerHandle": 112,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          112
+        ],
+        "recordName": "DICTIONARYVAR",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 11697,
+        "typedBodyReport": "DICTIONARYVAR"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.74",
+        "captureKind": "opaque",
+        "className": "AcDbDictionaryVar",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.74",
+          "dictionaryHandle": 112,
+          "dictionaryKey": "CMLEADERSTYLE value=Standard",
+          "objectType": "DICTIONARYVAR"
+        },
+        "encodedType": 508,
+        "extensionDictionaryHandle": 0,
+        "handle": 115,
+        "hasDataStorage": false,
+        "objectSize": 30,
+        "ownerHandle": 112,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          112
+        ],
+        "recordName": "DICTIONARYVAR",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 11732,
+        "typedBodyReport": "DICTIONARYVAR"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.74",
+        "captureKind": "opaque",
+        "className": "AcDbDictionaryVar",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.74",
+          "dictionaryHandle": 112,
+          "dictionaryKey": "CENTEREXE value=3.500000",
+          "objectType": "DICTIONARYVAR"
+        },
+        "encodedType": 508,
+        "extensionDictionaryHandle": 0,
+        "handle": 118,
+        "hasDataStorage": false,
+        "objectSize": 30,
+        "ownerHandle": 112,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          112
+        ],
+        "recordName": "DICTIONARYVAR",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 11767,
+        "typedBodyReport": "DICTIONARYVAR"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.74",
+        "captureKind": "opaque",
+        "className": "AcDbDictionaryVar",
+        "commonLinkEvidence": 1,
+        "customClass": true,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.74",
+          "dictionaryHandle": 112,
+          "dictionaryKey": "CENTERLTYPEFILE value=acadiso.lin",
+          "objectType": "DICTIONARYVAR"
+        },
+        "encodedType": 508,
+        "extensionDictionaryHandle": 0,
+        "handle": 119,
+        "hasDataStorage": false,
+        "objectSize": 36,
+        "ownerHandle": 112,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          112
+        ],
+        "recordName": "DICTIONARYVAR",
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 11802,
+        "typedBodyReport": "DICTIONARYVAR"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-handle-references",
+        "bodyReferenceRule": {
+          "fieldCount": 14,
+          "objectType": "DICTIONARY",
+          "rule": "ODA-20.4.44"
+        },
+        "captureKind": "standard",
+        "className": null,
+        "commonLinkEvidence": 2,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 42,
+        "extensionDictionaryHandle": 0,
+        "handle": 12,
+        "hasDataStorage": false,
+        "objectSize": 505,
+        "ownerHandle": 0,
+        "ownerTargetsRetainedObjectFrame": null,
+        "reactorHandles": [],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 14,
+        "sourceOffset": 132,
+        "typedBodyReport": "DICTIONARY"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-handle-references",
+        "bodyReferenceRule": {
+          "fieldCount": 0,
+          "objectType": "DICTIONARY",
+          "rule": "ODA-20.4.44"
+        },
+        "captureKind": "standard",
+        "className": null,
+        "commonLinkEvidence": 1,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 42,
+        "extensionDictionaryHandle": 0,
+        "handle": 13,
+        "hasDataStorage": false,
+        "objectSize": 12,
+        "ownerHandle": 12,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          12
+        ],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 1336,
+        "typedBodyReport": "DICTIONARY"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-handle-references",
+        "bodyReferenceRule": {
+          "fieldCount": 1,
+          "objectType": "DICTIONARY",
+          "rule": "ODA-20.4.44"
+        },
+        "captureKind": "standard",
+        "className": null,
+        "commonLinkEvidence": 1,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 42,
+        "extensionDictionaryHandle": 0,
+        "handle": 23,
+        "hasDataStorage": false,
+        "objectSize": 34,
+        "ownerHandle": 12,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          12
+        ],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 1,
+        "sourceOffset": 1390,
+        "typedBodyReport": "DICTIONARY"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-handle-references",
+        "bodyReferenceRule": {
+          "fieldCount": 0,
+          "objectType": "DICTIONARY",
+          "rule": "ODA-20.4.44"
+        },
+        "captureKind": "standard",
+        "className": null,
+        "commonLinkEvidence": 1,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 42,
+        "extensionDictionaryHandle": 0,
+        "handle": 25,
+        "hasDataStorage": false,
+        "objectSize": 12,
+        "ownerHandle": 12,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          12
+        ],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 1429,
+        "typedBodyReport": "DICTIONARY"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-handle-references",
+        "bodyReferenceRule": {
+          "fieldCount": 3,
+          "objectType": "DICTIONARY",
+          "rule": "ODA-20.4.44"
+        },
+        "captureKind": "standard",
+        "className": null,
+        "commonLinkEvidence": 1,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 42,
+        "extensionDictionaryHandle": 0,
+        "handle": 26,
+        "hasDataStorage": false,
+        "objectSize": 47,
+        "ownerHandle": 12,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          12
+        ],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 3,
+        "sourceOffset": 1446,
+        "typedBodyReport": "DICTIONARY"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-handle-references",
+        "bodyReferenceRule": {
+          "fieldCount": 24,
+          "objectType": "DICTIONARY",
+          "rule": "ODA-20.4.44"
+        },
+        "captureKind": "standard",
+        "className": null,
+        "commonLinkEvidence": 1,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 42,
+        "extensionDictionaryHandle": 0,
+        "handle": 42,
+        "hasDataStorage": false,
+        "objectSize": 537,
+        "ownerHandle": 12,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          12
+        ],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 24,
+        "sourceOffset": 1498,
+        "typedBodyReport": "DICTIONARY"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-handle-references",
+        "bodyReferenceRule": {
+          "fieldCount": 3,
+          "objectType": "DICTIONARY",
+          "rule": "ODA-20.4.44"
+        },
+        "captureKind": "standard",
+        "className": null,
+        "commonLinkEvidence": 1,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 42,
+        "extensionDictionaryHandle": 0,
+        "handle": 67,
+        "hasDataStorage": false,
+        "objectSize": 65,
+        "ownerHandle": 12,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          12
+        ],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 3,
+        "sourceOffset": 2041,
+        "typedBodyReport": "DICTIONARY"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-handle-references",
+        "bodyReferenceRule": {
+          "fieldCount": 33,
+          "objectType": "DICTIONARY",
+          "rule": "ODA-20.4.44"
+        },
+        "captureKind": "standard",
+        "className": null,
+        "commonLinkEvidence": 1,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 42,
+        "extensionDictionaryHandle": 0,
+        "handle": 71,
+        "hasDataStorage": false,
+        "objectSize": 254,
+        "ownerHandle": 12,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          12
+        ],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 33,
+        "sourceOffset": 2111,
+        "typedBodyReport": "DICTIONARY"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-handle-references",
+        "bodyReferenceRule": {
+          "fieldCount": 1,
+          "objectType": "DICTIONARY",
+          "rule": "ODA-20.4.44"
+        },
+        "captureKind": "standard",
+        "className": null,
+        "commonLinkEvidence": 1,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 42,
+        "extensionDictionaryHandle": 0,
+        "handle": 105,
+        "hasDataStorage": false,
+        "objectSize": 34,
+        "ownerHandle": 12,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          12
+        ],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 1,
+        "sourceOffset": 2371,
+        "typedBodyReport": "DICTIONARY"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-handle-references",
+        "bodyReferenceRule": {
+          "fieldCount": 1,
+          "objectType": "DICTIONARY",
+          "rule": "ODA-20.4.44"
+        },
+        "captureKind": "standard",
+        "className": null,
+        "commonLinkEvidence": 1,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 42,
+        "extensionDictionaryHandle": 0,
+        "handle": 107,
+        "hasDataStorage": false,
+        "objectSize": 34,
+        "ownerHandle": 12,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          12
+        ],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 1,
+        "sourceOffset": 2410,
+        "typedBodyReport": "DICTIONARY"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-handle-references",
+        "bodyReferenceRule": {
+          "fieldCount": 5,
+          "objectType": "DICTIONARY",
+          "rule": "ODA-20.4.44"
+        },
+        "captureKind": "standard",
+        "className": null,
+        "commonLinkEvidence": 1,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 42,
+        "extensionDictionaryHandle": 0,
+        "handle": 112,
+        "hasDataStorage": false,
+        "objectSize": 147,
+        "ownerHandle": 12,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          12
+        ],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 5,
+        "sourceOffset": 2467,
+        "typedBodyReport": "DICTIONARY"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-handle-references",
+        "bodyReferenceRule": {
+          "fieldCount": 0,
+          "objectType": "DICTIONARY",
+          "rule": "ODA-20.4.44"
+        },
+        "captureKind": "standard",
+        "className": null,
+        "commonLinkEvidence": 1,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 42,
+        "extensionDictionaryHandle": 0,
+        "handle": 116,
+        "hasDataStorage": false,
+        "objectSize": 12,
+        "ownerHandle": 12,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          12
+        ],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 2619,
+        "typedBodyReport": "DICTIONARY"
+      },
+      {
+        "blockOwnerHandle": 0,
+        "bodyReferenceDisposition": "spec-profile-handle-references",
+        "bodyReferenceRule": {
+          "fieldCount": 0,
+          "objectType": "DICTIONARY",
+          "rule": "ODA-20.4.44"
+        },
+        "captureKind": "standard",
+        "className": null,
+        "commonLinkEvidence": 1,
+        "customClass": false,
+        "dictionaryMembership": null,
+        "encodedType": 42,
+        "extensionDictionaryHandle": 0,
+        "handle": 117,
+        "hasDataStorage": false,
+        "objectSize": 12,
+        "ownerHandle": 12,
+        "ownerTargetsRetainedObjectFrame": true,
+        "reactorHandles": [
+          12
+        ],
+        "recordName": null,
+        "reportedTypedBodyReferenceCount": 0,
+        "sourceOffset": 2636,
+        "typedBodyReport": "DICTIONARY"
+      }
+    ],
+    "namedObjectDictionaryEntries": [
+      {
+        "key": "ACAD_GROUP",
+        "targetHandle": 13
+      },
+      {
+        "key": "ACAD_PLOTSTYLENAME",
+        "targetHandle": 14
+      },
+      {
+        "key": "ACAD_MLINESTYLE",
+        "targetHandle": 23
+      },
+      {
+        "key": "ACAD_PLOTSETTINGS",
+        "targetHandle": 25
+      },
+      {
+        "key": "ACAD_LAYOUT",
+        "targetHandle": 26
+      },
+      {
+        "key": "ACAD_VISUALSTYLE",
+        "targetHandle": 42
+      },
+      {
+        "key": "ACAD_MATERIAL",
+        "targetHandle": 67
+      },
+      {
+        "key": "ACAD_SCALELIST",
+        "targetHandle": 71
+      },
+      {
+        "key": "ACAD_TABLESTYLE",
+        "targetHandle": 105
+      },
+      {
+        "key": "ACAD_MLEADERSTYLE",
+        "targetHandle": 107
+      },
+      {
+        "key": "ACAD_IMAGE_VARS",
+        "targetHandle": 110
+      },
+      {
+        "key": "AcDbVariableDictionary",
+        "targetHandle": 112
+      },
+      {
+        "key": "ACAD_DETAILVIEWSTYLE",
+        "targetHandle": 116
+      },
+      {
+        "key": "ACAD_SECTIONVIEWSTYLE",
+        "targetHandle": 117
+      }
+    ],
+    "namedObjectDictionaryEntryCount": 14,
+    "selectedTypedBodyReferenceCount": 129,
+    "selectedTypedBodyReferences": [
+      {
+        "ownerHandle": 12,
+        "role": "NOD.entry[ACAD_GROUP]",
+        "targetHandle": 13
+      },
+      {
+        "ownerHandle": 12,
+        "role": "NOD.entry[ACAD_PLOTSTYLENAME]",
+        "targetHandle": 14
+      },
+      {
+        "ownerHandle": 12,
+        "role": "NOD.entry[ACAD_MLINESTYLE]",
+        "targetHandle": 23
+      },
+      {
+        "ownerHandle": 12,
+        "role": "NOD.entry[ACAD_PLOTSETTINGS]",
+        "targetHandle": 25
+      },
+      {
+        "ownerHandle": 12,
+        "role": "NOD.entry[ACAD_LAYOUT]",
+        "targetHandle": 26
+      },
+      {
+        "ownerHandle": 12,
+        "role": "NOD.entry[ACAD_VISUALSTYLE]",
+        "targetHandle": 42
+      },
+      {
+        "ownerHandle": 12,
+        "role": "NOD.entry[ACAD_MATERIAL]",
+        "targetHandle": 67
+      },
+      {
+        "ownerHandle": 12,
+        "role": "NOD.entry[ACAD_SCALELIST]",
+        "targetHandle": 71
+      },
+      {
+        "ownerHandle": 12,
+        "role": "NOD.entry[ACAD_TABLESTYLE]",
+        "targetHandle": 105
+      },
+      {
+        "ownerHandle": 12,
+        "role": "NOD.entry[ACAD_MLEADERSTYLE]",
+        "targetHandle": 107
+      },
+      {
+        "ownerHandle": 12,
+        "role": "NOD.entry[ACAD_IMAGE_VARS]",
+        "targetHandle": 110
+      },
+      {
+        "ownerHandle": 12,
+        "role": "NOD.entry[AcDbVariableDictionary]",
+        "targetHandle": 112
+      },
+      {
+        "ownerHandle": 12,
+        "role": "NOD.entry[ACAD_DETAILVIEWSTYLE]",
+        "targetHandle": 116
+      },
+      {
+        "ownerHandle": 12,
+        "role": "NOD.entry[ACAD_SECTIONVIEWSTYLE]",
+        "targetHandle": 117
+      },
+      {
+        "ownerHandle": 23,
+        "role": "dictionary.entry[Standard]",
+        "targetHandle": 24
+      },
+      {
+        "ownerHandle": 26,
+        "role": "dictionary.entry[Layout1]",
+        "targetHandle": 30
+      },
+      {
+        "ownerHandle": 26,
+        "role": "dictionary.entry[Model]",
+        "targetHandle": 34
+      },
+      {
+        "ownerHandle": 26,
+        "role": "dictionary.entry[]",
+        "targetHandle": 0
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[Flat]",
+        "targetHandle": 43
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[FlatWithEdges]",
+        "targetHandle": 44
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[Gouraud]",
+        "targetHandle": 45
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[GouraudWithEdges]",
+        "targetHandle": 46
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[2dWireframe]",
+        "targetHandle": 47
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[Wireframe]",
+        "targetHandle": 48
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[Hidden]",
+        "targetHandle": 49
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[Basic]",
+        "targetHandle": 50
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[Realistic]",
+        "targetHandle": 51
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[Conceptual]",
+        "targetHandle": 52
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[Dim]",
+        "targetHandle": 53
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[Brighten]",
+        "targetHandle": 54
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[Thicken]",
+        "targetHandle": 55
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[Linepattern]",
+        "targetHandle": 56
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[Facepattern]",
+        "targetHandle": 57
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[ColorChange]",
+        "targetHandle": 58
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[JitterOff]",
+        "targetHandle": 59
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[OverhangOff]",
+        "targetHandle": 60
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[EdgeColorOff]",
+        "targetHandle": 61
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[Shades of Gray]",
+        "targetHandle": 62
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[Sketchy]",
+        "targetHandle": 63
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[X-Ray]",
+        "targetHandle": 64
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[Shaded with edges]",
+        "targetHandle": 65
+      },
+      {
+        "ownerHandle": 42,
+        "role": "dictionary.entry[Shaded]",
+        "targetHandle": 66
+      },
+      {
+        "ownerHandle": 67,
+        "role": "dictionary.entry[ByLayer]",
+        "targetHandle": 68
+      },
+      {
+        "ownerHandle": 67,
+        "role": "dictionary.entry[ByBlock]",
+        "targetHandle": 69
+      },
+      {
+        "ownerHandle": 67,
+        "role": "dictionary.entry[Global]",
+        "targetHandle": 70
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[A0]",
+        "targetHandle": 72
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[A1]",
+        "targetHandle": 73
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[A2]",
+        "targetHandle": 74
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[A3]",
+        "targetHandle": 75
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[A4]",
+        "targetHandle": 76
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[A5]",
+        "targetHandle": 77
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[A6]",
+        "targetHandle": 78
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[A7]",
+        "targetHandle": 79
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[A8]",
+        "targetHandle": 80
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[A9]",
+        "targetHandle": 81
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[B0]",
+        "targetHandle": 82
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[B1]",
+        "targetHandle": 83
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[B2]",
+        "targetHandle": 84
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[B3]",
+        "targetHandle": 85
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[B4]",
+        "targetHandle": 86
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[B5]",
+        "targetHandle": 87
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[B6]",
+        "targetHandle": 88
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[B7]",
+        "targetHandle": 89
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[B8]",
+        "targetHandle": 90
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[B9]",
+        "targetHandle": 91
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[C0]",
+        "targetHandle": 92
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[C1]",
+        "targetHandle": 93
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[C2]",
+        "targetHandle": 94
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[C3]",
+        "targetHandle": 95
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[C4]",
+        "targetHandle": 96
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[C5]",
+        "targetHandle": 97
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[C6]",
+        "targetHandle": 98
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[C7]",
+        "targetHandle": 99
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[C8]",
+        "targetHandle": 100
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[C9]",
+        "targetHandle": 101
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[D0]",
+        "targetHandle": 102
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[D1]",
+        "targetHandle": 103
+      },
+      {
+        "ownerHandle": 71,
+        "role": "dictionary.entry[D2]",
+        "targetHandle": 104
+      },
+      {
+        "ownerHandle": 105,
+        "role": "dictionary.entry[Standard]",
+        "targetHandle": 106
+      },
+      {
+        "ownerHandle": 107,
+        "role": "dictionary.entry[Standard]",
+        "targetHandle": 108
+      },
+      {
+        "ownerHandle": 112,
+        "role": "dictionary.entry[CANNOSCALE]",
+        "targetHandle": 113
+      },
+      {
+        "ownerHandle": 112,
+        "role": "dictionary.entry[CTABLESTYLE]",
+        "targetHandle": 114
+      },
+      {
+        "ownerHandle": 112,
+        "role": "dictionary.entry[CMLEADERSTYLE]",
+        "targetHandle": 115
+      },
+      {
+        "ownerHandle": 112,
+        "role": "dictionary.entry[CENTEREXE]",
+        "targetHandle": 118
+      },
+      {
+        "ownerHandle": 112,
+        "role": "dictionary.entry[CENTERLTYPEFILE]",
+        "targetHandle": 119
+      },
+      {
+        "ownerHandle": 14,
+        "role": "dictionary-entry key=Normal",
+        "targetHandle": 15
+      },
+      {
+        "ownerHandle": 14,
+        "role": "default-entry",
+        "targetHandle": 15
+      },
+      {
+        "ownerHandle": 30,
+        "role": "plotView",
+        "targetHandle": 0
+      },
+      {
+        "ownerHandle": 30,
+        "role": "shadePlot",
+        "targetHandle": 0
+      },
+      {
+        "ownerHandle": 30,
+        "role": "paperSpaceBlockRecord",
+        "targetHandle": 27
+      },
+      {
+        "ownerHandle": 30,
+        "role": "lastActiveViewport",
+        "targetHandle": 0
+      },
+      {
+        "ownerHandle": 30,
+        "role": "baseUcs",
+        "targetHandle": 0
+      },
+      {
+        "ownerHandle": 30,
+        "role": "namedUcs",
+        "targetHandle": 0
+      },
+      {
+        "ownerHandle": 34,
+        "role": "plotView",
+        "targetHandle": 0
+      },
+      {
+        "ownerHandle": 34,
+        "role": "shadePlot",
+        "targetHandle": 0
+      },
+      {
+        "ownerHandle": 34,
+        "role": "paperSpaceBlockRecord",
+        "targetHandle": 31
+      },
+      {
+        "ownerHandle": 34,
+        "role": "lastActiveViewport",
+        "targetHandle": 0
+      },
+      {
+        "ownerHandle": 34,
+        "role": "baseUcs",
+        "targetHandle": 0
+      },
+      {
+        "ownerHandle": 34,
+        "role": "namedUcs",
+        "targetHandle": 0
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[0].textStyle",
+        "targetHandle": 17
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[0].border[0].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[0].border[1].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[0].border[2].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[0].border[3].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[0].border[4].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[0].border[5].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[1].textStyle",
+        "targetHandle": 17
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[1].border[0].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[1].border[1].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[1].border[2].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[1].border[3].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[1].border[4].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[1].border[5].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[2].textStyle",
+        "targetHandle": 17
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[2].border[0].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[2].border[1].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[2].border[2].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[2].border[3].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[2].border[4].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 106,
+        "role": "cellStyle[2].border[5].lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 108,
+        "role": "lineType",
+        "targetHandle": 20
+      },
+      {
+        "ownerHandle": 108,
+        "role": "textStyle",
+        "targetHandle": 17
+      },
+      {
+        "ownerHandle": 16,
+        "role": "plotStyle",
+        "targetHandle": 15
+      },
+      {
+        "ownerHandle": 16,
+        "role": "material",
+        "targetHandle": 70
+      },
+      {
+        "ownerHandle": 16,
+        "role": "lineType",
+        "targetHandle": 22
+      },
+      {
+        "ownerHandle": 39,
+        "role": "textStyle",
+        "targetHandle": 17
+      },
+      {
+        "ownerHandle": 41,
+        "role": "visualStyle",
+        "targetHandle": 47
+      },
+      {
+        "ownerHandle": 41,
+        "role": "sun",
+        "targetHandle": 109
+      },
+      {
+        "ownerHandle": 111,
+        "role": "layer",
+        "targetHandle": 16
       }
     ]
   },
-  "commonLinks": {
-    "ownerEdges": 86,
-    "ownerTargetsAmongRetainedObjectFrames": 85,
-    "externalOwnerEdges": [
+  "date": "2026-11-07",
+  "execution": {
+    "command": [
+      "/private/tmp/libdxfrw-legacy-common-build/tests/libdxfrw_dwg2dxf_adapter_tests",
+      "--opaque-dwg-source-inventory",
+      "/Users/dli/doc/dwg/Cover.dwg"
+    ],
+    "executable": "private/tmp/libdxfrw-legacy-common-build/tests/libdxfrw_dwg2dxf_adapter_tests",
+    "executableSha256": "2ba0d5964f7264c482939b387495ed389017c03dd419f0fdaa959f6c8df52e57",
+    "exitCode": 0,
+    "outputBinding": "Input was hashed immediately before and after this invocation; the test utility itself reports sourceHashBoundByUtility=0.",
+    "outputPath": "/private/tmp/ac1027-cover-reference-audit-v10.json",
+    "outputSha256": "9d0dd9153110da71eab6532afd884ef3e43da56722010653a644ce6e93322f9e",
+    "repeatableAuditRunner": {
+      "capturedFrameIdentities": 88,
+      "diagnosticOutputSha256": "f260e4fae8d3d6e58f4433410401761ae8cac5e1778c4a55ec10f3769e9050b3",
+      "dictionaryMembershipEdges": 38,
+      "framesWithNormativeHandleReferenceProfile": 15,
+      "framesWithNormativeNoBodyHandleProfile": 39,
+      "framesWithSelectedTypedBodyReport": 4,
+      "framesWithoutExhaustiveBodyReferenceDecode": 30,
+      "namedObjectDictionaryEntries": 14,
+      "path": "tools/research/audit_ac1027_source_references.py",
+      "selectedTypedBodyReferenceRows": 129,
+      "sha256": "7b4e3d59281231002e40f1b16c253f2e0e1e87dbae10be39525f52dec03db0cc",
+      "sourceCodeHashes": {
+        "src/drw_objects.cpp": "499467feb7f1415327d4abb949abbd537cc47ae5c2a23c4385e3985ed938b881",
+        "src/intern/dwgreader.cpp": "36ebc06b6cb6031689a1b06fdf074c8b1fae6c9d518dfc53b58eb4c9a9668327",
+        "tests/dwg2dxf_adapter_tests.cpp": "cdf6b4cb13011eae7d564572539d8b3db7e455e4a14c2ac27d17ede2be06692a"
+      },
+      "sourceHashBeforeAfterCheck": true,
+      "sourceHashBoundInsideDiagnostic": false
+    },
+    "repositoryHead": "574e063e21d71c2a887acbf23a39986da838feb0"
+  },
+  "limitations": {
+    "aggregateAc1027GuardCleared": false,
+    "allEntityAndTableReferencesBound": false,
+    "allOwnerRolesIndependentlyProven": false,
+    "bodyReferenceCoverage": "The repeatable hash-binding audit captures 88 retained object identities and 129 selected typed body-reference rows. Normative no-body-handle checks cover 33 SCALE frames (ODA v5.4.1 \u00a720.4.92), five DICTIONARYVAR frames (\u00a720.4.74), and one RASTERVARIABLES frame (\u00a720.4.91). Normative handle-list checks cover 13 DICTIONARY frames (\u00a720.4.44) and two LAYOUT frames (\u00a720.4.84), including null fields and ordered dictionary entries. Four frames have selected typed body reports only; 30 remain not exhaustively decoded. Unknown does not mean no references. The inventory does not independently resolve every target type/role or qualify its DXF output route. The LAYOUT report does not resolve the separate ODA RL versus observed BL viewport-count discrepancy.",
+    "decision": "Preserve the global AC1027 strict-source guard. Bounded normative body profiles now cover 54/88 retained object bodies (39 with no body handles; 15 with enumerated handle fields) and record rooted dictionary memberships. Thirty bodies remain not exhaustively decoded and four typed reports are partial. Continue with one exact source-bound class profile; no guard narrowing or output-support promotion follows from this inventory.",
+    "independentProducerQualification": false,
+    "omittedFrameDependenciesClosed": false,
+    "selectedDxfDispositionComplete": false,
+    "separateHeaderSuffixGate": "unclaimed HEADER suffix remains; it independently blocks strict complete output",
+    "strictOutputPublished": false
+  },
+  "readAndFrameDisposition": {
+    "dataStorageLinkFailures": 0,
+    "dataStorageOrphanRecords": 0,
+    "dwgIntegrityObservations": [
       {
-        "sourceHandle": "0x6d",
-        "targetHandle": "0x29",
-        "targetObservedAs": "typed VPORT table record",
-        "role": "owner"
+        "expected": 822,
+        "kind": 24,
+        "observed": 826,
+        "offset": 16,
+        "severity": 1
+      },
+      {
+        "expected": 844,
+        "kind": 25,
+        "observed": 1575,
+        "offset": 844,
+        "severity": 1
       }
     ],
-    "blockOwnerEdges": [
-      {
-        "sourceHandle": "0x6f",
-        "targetHandle": "0x1f",
-        "targetObservedAs": "model-space BLOCK_RECORD",
-        "role": "block owner"
-      }
-    ],
-    "reactorEdges": 85,
-    "reactorTargetsAmongRetainedObjectFrames": 85,
-    "extensionDictionaryEdges": 0,
-    "interpretation": "The inventory exposes identities and common-header values; it does not independently qualify every wire role or prove the selected DXF route."
+    "entityParseFailures": 0,
+    "objectParseFailures": 0,
+    "observedFrames": 111,
+    "opaqueCallbacks": 88,
+    "opaqueFramesRetained": 75,
+    "publishedFrames": 111,
+    "readerSucceeded": true,
+    "sourceVersion": "AC1027",
+    "standardObjectsRetained": 13,
+    "standardTypedPayloadsMatched": 13
   },
   "retainedObjectProfiles": {
     "opaqueByEncodedType": {
       "38": 1,
-      "73": 1,
-      "80": 1,
-      "82": 2,
       "500": 1,
       "501": 24,
       "502": 3,
@@ -88,9 +3486,11 @@
       "505": 1,
       "506": 1,
       "507": 1,
-      "508": 5
+      "508": 5,
+      "73": 1,
+      "80": 1,
+      "82": 2
     },
-    "standardObjectType42Count": 13,
     "selectedTypedBodyReferenceClasses": [
       "DICTIONARYWDFLT membership/default-entry",
       "LAYOUT block-header handle",
@@ -100,18 +3500,40 @@
       "DIMSTYLE text-style and block/linetype handles",
       "VPORT visual-style/sun/UCS/xref handles",
       "3DSOLID layer-name-to-LAYER lookup"
-    ]
+    ],
+    "standardObjectType42Count": 13
   },
-  "limitations": {
-    "bodyReferenceCoverage": "partial typed models only; the 75 opaque frame bodies are not exhaustively decoded into typed reference roles, and not every typed callback family has an immutable source-reference inventory",
-    "allOwnerRolesIndependentlyProven": false,
-    "allEntityAndTableReferencesBound": false,
-    "omittedFrameDependenciesClosed": false,
-    "selectedDxfDispositionComplete": false,
-    "aggregateAc1027GuardCleared": false,
-    "strictOutputPublished": false,
-    "independentProducerQualification": false,
-    "separateHeaderSuffixGate": "unclaimed HEADER suffix remains; it independently blocks strict complete output",
-    "decision": "Preserve the global AC1027 strict-source guard. Implement frame-complete, import-generation-bound source-reference coverage for remaining callback/body families before considering any profile-specific narrowing."
+  "schema": "libdxfrw-research-receipt-v1",
+  "source": {
+    "path": "/Users/dli/doc/dwg/Cover.dwg",
+    "provenanceLimit": "Existing local source; producer is not independently authenticated and no DWG/DXF fixture is committed.",
+    "sha256After": "3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42",
+    "sha256Before": "3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42",
+    "version": "AC1027"
+  },
+  "supportClaimEffect": "none",
+  "title": "AC1027 Cover source-reference guard audit refresh",
+  "validation": {
+    "assertedCounts": {
+      "bodyDispositionCounts": {
+        "not-exhaustively-decoded": 30,
+        "selected-typed-report-only": 4,
+        "spec-profile-handle-references": 15,
+        "spec-profile-no-body-handles": 39
+      },
+      "dictionaryMembershipEdges": 38,
+      "namedObjectDictionaryEntries": 14,
+      "retainedObjectFrames": 88,
+      "selectedTypedBodyReferenceRows": 129
+    },
+    "build": "passed with configured -Werror flags",
+    "buildCommand": "cmake --build /private/tmp/libdxfrw-legacy-common-build --target libdxfrw_dwg2dxf_adapter_tests -j2",
+    "diagnostic": "passed; verified 88 unique retained object identities and unchanged input SHA-256 before/after",
+    "diagnosticCommand": [
+      "/private/tmp/libdxfrw-legacy-common-build/tests/libdxfrw_dwg2dxf_adapter_tests",
+      "--opaque-dwg-source-inventory",
+      "/Users/dli/doc/dwg/Cover.dwg"
+    ],
+    "newDwgDxfFixturesCommitted": false
   }
 }

@@ -22907,7 +22907,7 @@ bool DRW_UnderlayDefinition::encodeDwg(DRW::Version version, dwgBufferW *buf,
     return buf->isGood() && sb->isGood() && hb->isGood();
 }
 
-// SCALE (AcDbScale) — annotation-scale entry, ODA §20.4.93,
+// SCALE (AcDbScale) — annotation-scale entry, ODA §20.4.92,
 // libreDWG dwg2.spec:1195-1203:
 //   BS  flag           (always 0, group code 70)
 //   T   name           (e.g. "1:48", group code 300)

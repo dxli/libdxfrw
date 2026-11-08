@@ -14631,7 +14631,7 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                 break;
               }
             }
-            // SCALE (AcDbScale) — annotation-scale entry, ODA §20.4.93.
+            // SCALE (AcDbScale) — annotation-scale entry, ODA §20.4.92.
             // Lives under ACAD_SCALELIST in the named-object dictionary.
             // libreDWG dwg2.spec:1195 (DWG_OBJECT (SCALE)).  recName
             // "SCALE" or className "AcDbScale".  RS_FilterDXFRW currently
