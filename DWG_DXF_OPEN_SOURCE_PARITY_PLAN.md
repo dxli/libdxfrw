@@ -2522,6 +2522,19 @@ through `dwgRW`. The registration helper is still disconnected from `writeTable`
 compound staging must bind a real TABLE frame and roll back class metadata and
 counts if entity or `*T` graph staging fails.
 
+**Independent writer caution:** ACadSharp merged TABLE DWG write support in
+PR #1040, but a later ACadSharp 3.8.0 report reproduced a TABLE-containing
+AC1032 read/write round trip that AutoCAD 2020 rejects (`ErrorStatus=53`) and
+that loses one of two tables. The reporter traced a likely cause to FIELD and
+BLOCK cell-content handle references being written as null; this is a reported
+root-cause hypothesis, not an independently confirmed fix. Do not treat the
+presence of an upstream writer or successful self-readback as support proof.
+Our candidate excludes FIELD/BLOCK cell content, and its compound-writer gate
+must assert exact content-handle roles, preserve every table, and qualify with
+an independent reader/producer or native platform before promoting support.
+See [ACadSharp PR #1040](https://github.com/DomCR/ACadSharp/pull/1040) and
+[ACadSharp issue #1321](https://github.com/DomCR/ACadSharp/issues/1321).
+
 Speed-oriented implementation sequence:
 
 1. The direct **AC1018 plain-text-cell** codec is implemented for a generated

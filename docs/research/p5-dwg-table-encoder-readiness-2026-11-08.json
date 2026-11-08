@@ -264,5 +264,26 @@
       "the eight-byte AC1018 tail is zero and the ending sentinel is exact"
     ],
     "disposition": "Generated serializer/decoder consistency only. The decoder is test-local and not an independent DWG implementation; it does not qualify physical TABLE output or consumer interoperability."
+  },
+  "external_writer_differential": {
+    "project": "ACadSharp",
+    "mergedWriterChange": {
+      "url": "https://github.com/DomCR/ACadSharp/pull/1040",
+      "observation": "Merged PR adds/admits TableEntity DWG serialization, while its description says no functional changes to serialization logic."
+    },
+    "reportedRegression": {
+      "url": "https://github.com/DomCR/ACadSharp/issues/1321",
+      "reportedVersion": "ACadSharp 3.8.0, AC1032 round trip, AutoCAD 2020",
+      "observations": [
+        "A no-edit DWG read/write reportedly changes two TABLE entities to one and produces a file AutoCAD rejects with ErrorStatus=53.",
+        "The report identifies BLOCK/FIELD cell-content references emitted as null as a likely cause; this is the reporter\u2019s diagnosis, not independently verified here."
+      ]
+    },
+    "implementationImpact": [
+      "Do not use the existence of another open-source TABLE writer or its self-readback as support evidence.",
+      "Keep BLOCK and FIELD cells excluded from the candidate profile until their handle roles and targets are fully modeled.",
+      "Require table-count preservation, exact content-reference role closure, and an independent reader/producer or native platform check before promoting support."
+    ],
+    "disposition": "Risk evidence and gate refinement only; not a codec specification or physical AC1018 witness."
   }
 }
