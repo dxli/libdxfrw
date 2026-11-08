@@ -180,7 +180,7 @@ created locally from scratch for the specific control.
   commit `1eb10dcc`). A heap-backed header copy fault exposed partial caller-
   header publication; commit `304f6fc7` changes final publication to a
   statically verified nonthrowing move. The expanded control passes for each
-  stage. The
+  stage (test/receipt commit `03bb9717`). The
   pinned independent parser
   matches the physical source SAB
   fields exactly. Native B-rep and independent-kernel gates remain open; see
