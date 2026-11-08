@@ -164,14 +164,18 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-08)
 
-- **Latest local slice:** commit `6106bfd4` changes the ACSH action-body status
-  to `Complete` only when parsing consumes the exact bounded body span. The
-  pinned AC1027 Sweep action body therefore stays `Partial` (174 of 2,571
-  bits); no undocumented tail layout or Sweep output is inferred. The focused
-  `libdxfrw_acsh_action_body_exact_span` test passes. Do not reopen this guard
-  without contradictory source evidence. See the [exact-span receipt](docs/research/p4-ac1027-sweep-action-body-exact-span-2026-11-08.json).
-- **Next local implementation packet — R24 TABLESTYLE border linetype reference:** ODA v5.4.1 §20.4.101.4 defines each border's group-340 LTYPE as a hard-pointer handle. The R24 typed writer currently emits `0` for this field, while its source-profile gate accepts only the zero/null profile; therefore non-null borders are not yet transported. Implement only after the adapter can prove the source LTYPE is uniquely present, has the expected table-record role, and resolves to its emitted handle. Use a strict resolver/target check: `remapObjectHandle()` alone preserves unknown nonzero source handles and is not proof of a resolved dependency. Preserve null-border behavior, refuse missing/ambiguous/wrong-kind targets atomically, and do not relax the AC1027 aggregate source-reference or HEADER gates. Add a from-scratch in-memory generated profile for a valid LTYPE plus a missing-target mutation; verify exact group-340 output, ASCII/Binary fresh typed readback, destination preservation, correction/retry, and no committed drawing fixture. The initial test probe failed because the current writer fallback accepted the synthetic missing handle; its experimental code and test edits were removed. This is an identified bounded serializer gap, not a completed support claim. Once this slice passes, record the focused receipt and remove this packet.
-- **Next broader source step:** read the existing [same-version census](docs/research/p4-local-same-version-strict-output-census-2026-11-06.json)
+- **Latest local slice:** commit `12698d59` adds non-null R24 TABLESTYLE border
+  LTYPE transport. It requires a registered, uniquely emitted source LTYPE,
+  writes that target's mapped handle as group 340, preserves null references,
+  and refuses unresolved targets. Generated ASCII/Binary controls pass exact
+  typed/readback identity checks, destination preservation, and same-adapter
+  correction/retry. The focused `libdxfrw_tablestyle_r24_typed_writer` CTest
+  passes (1/1); see the [transport receipt](docs/research/p6-r24-tablestyle-border-ltype-dxf-transport-2026-11-08.json).
+  This does not qualify a physical DWG producer, rendering, or whole-source
+  conversion. The preceding ACSH exact-span guard remains in commit `6106bfd4`:
+  the pinned AC1027 Sweep body remains `Partial` (174/2,571 bits); do not infer
+  its undocumented tail or output route. See its [receipt](docs/research/p4-ac1027-sweep-action-body-exact-span-2026-11-08.json).
+- **Next local step:** read the existing [same-version census](docs/research/p4-local-same-version-strict-output-census-2026-11-06.json)
   and [source inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json),
   then select the first OBJECTS profile with already-established frame
   disposition, identity, owner roles, and recursive targets. If none qualifies,
@@ -206,26 +210,11 @@ created locally from scratch for the specific control.
 The queue below contains only unfinished actions. Completed source profiles,
 codecs, tests, and controls have been removed from the queue; their commits and
 receipts remain in Git and `docs/research/`. Resume from the linked blocker
-instead of repeating successful scans or controls. Current fastest local packet
-is the bounded generated TABLESTYLE edge below; keep the inventory scan as the
-next P4 source-profile branch after that serializer gap is either closed or
-precisely blocked.
+instead of repeating successful scans or controls. The bounded R24 TABLESTYLE
+border LTYPE transport is complete in commit `12698d59`; continue with the
+saved P4 source inventory.
 
-1. **P4/P6 / transport one non-null R24 TABLESTYLE border LTYPE.** ODA
-   v5.4.1 §20.4.101.4 defines the border's group-340 LTYPE handle, but the
-   current R24 typed writer emits null and the source profile admits only null.
-   Before editing, trace the existing dxfRW/adapter reference resolver and
-   prove it rejects missing and wrong-kind handles instead of falling back to
-   their source numeric values. Then add the narrow typed output path and
-   generated in-memory ASCII/Binary controls: one uniquely emitted LTYPE,
-   exact group-340 remapping and typed readback, missing/ambiguous target
-   refusal with destination preservation, corrected same-adapter retry.
-   Keep null output unchanged; do not weaken source-wide strict gates or add a
-   DWG/DXF fixture. The first probe failed because an unresolved synthetic
-   handle was passed through unchanged; its exploratory code/test edits were
-   removed. Keep this packet open until the focused selector and receipt pass.
-
-2. **P4 / choose and close the next physical OBJECTS subgraph.** Start with the
+1. **P4 / choose and close the next physical OBJECTS subgraph.** Start with the
    already saved [same-version census](docs/research/p4-local-same-version-strict-output-census-2026-11-06.json)
    and [current source inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json);
    do not run a new corpus-wide scan. Select the first profile whose frame
