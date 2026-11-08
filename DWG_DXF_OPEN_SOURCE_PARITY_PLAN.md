@@ -167,21 +167,25 @@ created locally from scratch for the specific control.
 - **Latest local slice:** commit `12698d59` adds non-null R24 TABLESTYLE border
   LTYPE transport. It requires a registered, uniquely emitted source LTYPE,
   writes that target's mapped handle as group 340, preserves null references,
-  and refuses unresolved targets. Generated ASCII/Binary controls pass exact
-  typed/readback identity checks, destination preservation, and same-adapter
-  correction/retry. The focused `libdxfrw_tablestyle_r24_typed_writer` CTest
-  passes (1/1); see the [transport receipt](docs/research/p6-r24-tablestyle-border-ltype-dxf-transport-2026-11-08.json).
+  and refuses unresolved targets. Follow-up commit `93c02f0d` adds the wrong-
+  kind TEXTSTYLE-as-LTYPE negative control. Generated ASCII/Binary controls
+  pass exact typed/readback identity checks, missing/wrong-kind refusal,
+  destination preservation, and same-adapter correction/retry. The focused
+  `libdxfrw_tablestyle_r24_typed_writer` CTest passes (1/1); see the
+  [transport receipt](docs/research/p6-r24-tablestyle-border-ltype-dxf-transport-2026-11-08.json).
   This does not qualify a physical DWG producer, rendering, or whole-source
   conversion. The preceding ACSH exact-span guard remains in commit `6106bfd4`:
   the pinned AC1027 Sweep body remains `Partial` (174/2,571 bits); do not infer
   its undocumented tail or output route. See its [receipt](docs/research/p4-ac1027-sweep-action-body-exact-span-2026-11-08.json).
-- **Next local step:** read the existing [same-version census](docs/research/p4-local-same-version-strict-output-census-2026-11-06.json)
-  and [source inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json),
-  then select the first OBJECTS profile with already-established frame
-  disposition, identity, owner roles, and recursive targets. If none qualifies,
-  record the specific gates from those saved inventories and choose the next
-  locally testable P4/P6 task. Do not restart a corpus-wide scan or speculate
-  about the remaining Sweep body.
+- **P4 inventory decision:** the saved [same-version census](docs/research/p4-local-same-version-strict-output-census-2026-11-06.json)
+  reports four already-qualified whole-source passes, 20 strict refusals, and
+  zero newly qualified source profiles. The saved [AC1021 source inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)
+  contains only selected graph proofs already represented below; it yields no
+  distinct ready physical OBJECTS candidate. Keep the R13 GROUP EED/codepage-0,
+  AC1021 TORUS carrier/ACDS owner, and AC1027 Sweep-body gates as recorded in
+  the P4 section; do not repeat their probes or weaken strict output. Continue
+  with a distinct locally testable P5/P6 implementation gap; do not repeat the
+  corpus census or speculate about the remaining Sweep body.
 - **ODA suffix lane:** the user unlocked the Mac and the planned direct ODA
   27.1 retry was made; it again aborted during Pasteboard/XPC initialization
   before document processing, produced no output, and matched the prior source
@@ -211,17 +215,17 @@ The queue below contains only unfinished actions. Completed source profiles,
 codecs, tests, and controls have been removed from the queue; their commits and
 receipts remain in Git and `docs/research/`. Resume from the linked blocker
 instead of repeating successful scans or controls. The bounded R24 TABLESTYLE
-border LTYPE transport is complete in commit `12698d59`; continue with the
-saved P4 source inventory.
+border LTYPE transport is complete in commits `12698d59` and `93c02f0d`; the
+saved P4 inventory decision is complete and has no new ready physical graph.
+Continue with a distinct locally testable P5/P6 gap without rescanning it.
 
-1. **P4 / choose and close the next physical OBJECTS subgraph.** Start with the
-   already saved [same-version census](docs/research/p4-local-same-version-strict-output-census-2026-11-06.json)
-   and [current source inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json);
-   do not run a new corpus-wide scan. Select the first profile whose frame
-   disposition, source identity, owner roles, and recursive targets are already
-   established. If no row qualifies, capture a short candidate/blocker table
-   from those saved inventories and switch to the next P4/P6 implementation
-   task that has locally testable, evidence-backed semantics. Do not rescan
+1. **P4 / resume physical OBJECTS closure only on a new ready witness.** The
+   saved census and inventory have been reviewed: every current selected-output
+   pass is already recorded, and no distinct physical graph has a closed
+   source-to-output route. Keep the exact R13 GROUP, AC1021 TORUS/ACDS, and
+   AC1027 Sweep blockers above. Resume this branch only when new eligible
+   producer evidence closes source identity, frame disposition, owner/target
+   roles and recursive dependencies; do not rescan
    colorwh, plot-screening, lineweights,
    children-room, civil Edge, Pool_Detail VISUALSTYLE, Pool_Detail MATERIAL, or
    the tablet strict-output profile.
