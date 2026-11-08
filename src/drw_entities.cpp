@@ -3544,19 +3544,22 @@ bool skipR2007TableOverrides(DRW::Version version, dwgBuffer *buf,
                 semanticComplete = false;
         }
         if (flags & 0x020000)
-            if (readTableHandle(hdlBuf, bounds.handleEndBit,
-                                "style-text-style", buf, strBuf) == 0
-                && hdlBuf != nullptr && !hdlBuf->isGood())
+            if (!readTableHandleWithRole(
+                    hdlBuf, bounds.handleEndBit, DRW::DwgHardPointer,
+                    table.m_tableRowTextStyleHandles[0],
+                    "title-row-text-style", buf, strBuf))
                 return false;
         if (flags & 0x040000)
-            if (readTableHandle(hdlBuf, bounds.handleEndBit,
-                                "style-line-type", buf, strBuf) == 0
-                && hdlBuf != nullptr && !hdlBuf->isGood())
+            if (!readTableHandleWithRole(
+                    hdlBuf, bounds.handleEndBit, DRW::DwgHardPointer,
+                    table.m_tableRowTextStyleHandles[1],
+                    "header-row-text-style", buf, strBuf))
                 return false;
         if (flags & 0x080000)
-            if (readTableHandle(hdlBuf, bounds.handleEndBit,
-                                "style-material", buf, strBuf) == 0
-                && hdlBuf != nullptr && !hdlBuf->isGood())
+            if (!readTableHandleWithRole(
+                    hdlBuf, bounds.handleEndBit, DRW::DwgHardPointer,
+                    table.m_tableRowTextStyleHandles[2],
+                    "data-row-text-style", buf, strBuf))
                 return false;
         if (flags & 0x100000)
             if (!readBoundedBitDouble(
@@ -13187,6 +13190,7 @@ void DRW_Table::resetDwgState() {
     m_verticalCellMargin = 0.0;
     m_tableRowHeightOverrides = {{0.0, 0.0, 0.0}};
     m_tableRowAlignmentOverrides = {{0, 0, 0}};
+    m_tableRowTextStyleHandles = {{0u, 0u, 0u}};
     m_titleSuppressed = false;
     m_headerSuppressed = false;
     m_tableStyleHandle = 0;

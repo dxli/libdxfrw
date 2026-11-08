@@ -36752,11 +36752,12 @@ bool tableScalarOverrideOutput(bool binary) {
     // Force the writer to exercise its own unsupported-mask guard, even though
     // the DWG reader conservatively marks this not-yet-serialized profile
     // semantically incomplete.
-    data.tables.front().m_tableOverrideFlags |= 0x0071C000u;
+    data.tables.front().m_tableOverrideFlags |= 0x007FC000u;
     data.tables.front().m_tableRowHeightOverrides[0] = 3.5;
     data.tables.front().m_tableRowHeightOverrides[1] = 4.5;
     data.tables.front().m_tableRowHeightOverrides[2] = 5.5;
     data.tables.front().m_tableRowAlignmentOverrides = {{2, 5, 8}};
+    data.tables.front().m_tableRowTextStyleHandles = {{0xA900u, 0xAA00u, 0xAB00u}};
     data.tables.front().m_semanticContentComplete = true;
     if (exportCurrent())
         return fail("unmapped TABLE row-height/alignment overrides were emitted");
@@ -36770,8 +36771,20 @@ bool tableScalarOverrideOutput(bool binary) {
             return fail("unmapped TABLE row-height/alignment overrides replaced the destination");
     }
     data.tables.front().m_tableOverrideFlags = 0x0000001Fu;
+    if (exportCurrent())
+        return fail("unflagged TABLE row override values were emitted");
+    {
+        std::ifstream stream(output, std::ios::binary);
+        const std::string contents((std::istreambuf_iterator<char>(stream)),
+                                   std::istreambuf_iterator<char>());
+        if (!stream.good() && !stream.eof())
+            return fail("unflagged TABLE row override sentinel could not be read");
+        if (contents != sentinel)
+            return fail("unflagged TABLE row override values replaced the destination");
+    }
     data.tables.front().m_tableRowHeightOverrides = {{0.0, 0.0, 0.0}};
     data.tables.front().m_tableRowAlignmentOverrides = {{0, 0, 0}};
+    data.tables.front().m_tableRowTextStyleHandles = {{0u, 0u, 0u}};
     if (!exportCurrent() || !checkWire() || !checkReadback())
         return fail("TABLE row-height/alignment refusal corrected retry failed");
     return true;

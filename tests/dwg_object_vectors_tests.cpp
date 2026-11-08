@@ -7820,14 +7820,16 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
                          DRW::Version version = DRW::AC1021,
                          std::uint8_t cellEdgeFlags = 0u,
                          std::uint8_t virtualEdgeFlags = 0u,
-                         std::uint16_t topVisibility = 1u) {
+                         std::uint16_t topVisibility = 1u,
+                         std::uint8_t tableRowTextStyleHandleCode =
+                             DRW::DwgHardPointer) {
     constexpr std::uint32_t ac1018CellOverrideFlags = 0x0003FFE0u;
     const bool knownCellOverrideProfile = cellOverrideFlags == 0u
         || (version == DRW::AC1018 && cellOverrideFlags != 0u
             && (cellOverrideFlags & ~ac1018CellOverrideFlags) == 0u)
         || (version == DRW::AC1021 && cellOverrideFlags == 0x00000004u);
     constexpr std::uint32_t generatedTableOverrideFlags =
-        0x0071C03Fu;
+        0x007FC03Fu;
     if (!knownCellOverrideProfile
         || (tableOverrideFlags & ~generatedTableOverrideFlags) != 0u)
         return false;
@@ -7861,6 +7863,17 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
     handles.putHandle(handle(0xA600u)); // block record
     handles.putHandle(handle(0xA700u)); // table style
     handles.putHandle(handle(cellType == 2 ? 0xA800u : 0u));
+    for (const auto& rowStyle : {
+             std::pair<std::uint32_t, std::uint32_t>{0x00020000u, 0xA900u},
+             std::pair<std::uint32_t, std::uint32_t>{0x00040000u, 0xAA00u},
+             std::pair<std::uint32_t, std::uint32_t>{0x00080000u, 0xAB00u}}) {
+        if ((tableOverrideFlags & rowStyle.first) != 0u) {
+            dwgHandle style = handle(rowStyle.second);
+            style.code = tableRowTextStyleHandleCode;
+            style.size = 2u;
+            handles.putHandle(style);
+        }
+    }
 
     body.putBitShort(cellType);
     body.putRawChar8(cellEdgeFlags);
@@ -8300,7 +8313,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     R2007TableFrame tableRowHeightOverridesFrame;
     const bool tableRowHeightOverridesBuilt = makeR2007TableFrame(
         1, tableRowHeightOverridesFrame, TablePlacement{}, 0u,
-        0x0071C000u);
+        0x007FC000u);
     t.expect(tableRowHeightOverridesBuilt,
              "AC1021 TABLE row-height-override vector builds from scratch");
     if (!tableRowHeightOverridesBuilt)
@@ -8311,21 +8324,43 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     const bool tableRowHeightOverridesRead = table.parseDwg(
         DRW::AC1021, &tableRowHeightOverridesInput);
     t.expect(tableRowHeightOverridesRead && tableRowHeightOverridesInput.isGood()
-                 && table.m_tableOverrideFlags == 0x0071C000u
+                 && table.m_tableOverrideFlags == 0x007FC000u
                  && table.m_tableRowHeightOverrides
                      == std::array<double, 3>{{3.5, 4.5, 5.5}}
                  && table.m_tableRowAlignmentOverrides
                      == std::array<int, 3>{{2, 5, 8}}
+                 && table.m_tableRowTextStyleHandles
+                     == std::array<std::uint32_t, 3>{{0xA900u, 0xAA00u, 0xAB00u}}
                  && !table.m_semanticContentComplete
                  && cursorBit(tableRowHeightOverridesInput)
                      == tableRowHeightOverridesFrame.tableDataEndBit,
-             "AC1021 TABLE retains all ODA row-height and row-alignment overrides while keeping output semantics gated");
+             "AC1021 TABLE retains ODA row-height, alignment and text-style overrides while keeping output semantics gated");
     if (tableRowHeightOverridesRead) {
         const std::int32_t sentinel = tableRowHeightOverridesInput.getBitLong();
         t.expect(tableRowHeightOverridesInput.isGood()
                      && sentinel == kTablePlacementTailSentinel,
                  "AC1021 TABLE row-height overrides leave the following field aligned");
     }
+
+    R2007TableFrame wrongTableTextStyleRoleFrame;
+    const bool wrongTableTextStyleRoleBuilt = makeR2007TableFrame(
+        1, wrongTableTextStyleRoleFrame, TablePlacement{}, 0u, 0x000E0000u,
+        DRW::AC1021, 0u, 0u, 1u, DRW::DwgSoftPointer);
+    t.expect(wrongTableTextStyleRoleBuilt,
+             "AC1021 TABLE wrong text-style handle-role vector builds from scratch");
+    if (!wrongTableTextStyleRoleBuilt)
+        return;
+    dwgBuffer wrongTableTextStyleRoleInput(
+        wrongTableTextStyleRoleFrame.bytes.data(),
+        wrongTableTextStyleRoleFrame.bytes.size());
+    const bool wrongTableTextStyleRoleRead = table.parseDwg(
+        DRW::AC1021, &wrongTableTextStyleRoleInput);
+    t.expect(wrongTableTextStyleRoleRead
+                 && wrongTableTextStyleRoleInput.isGood()
+                 && !table.m_semanticContentComplete
+                 && table.m_tableRowTextStyleHandles
+                     == std::array<std::uint32_t, 3>{{0u, 0u, 0u}},
+             "AC1021 TABLE keeps a wrong-role row style ref semantically incomplete and does not expose it as typed");
 
     R2007TableFrame secondUnknownFrame;
     const bool secondUnknownBuilt = makeR2007TableFrame(92, secondUnknownFrame);

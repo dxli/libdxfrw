@@ -227,14 +227,19 @@ created locally from scratch for the specific control.
   not producer or whole-drawing qualification. The current local metric TABLE
   parser stops earlier at cell-value types 16/92, and the imperial census has
   no TABLECONTENT evidence. See the [scalar override receipt](docs/research/p5-ac1018-ac1021-table-scalar-overrides-2026-11-08.json).
-  The three row-height override fields (`0x100000`, `0x200000`, `0x400000`)
-  now retain their decoded finite values in the typed TABLE model. A generated
-  AC1021 vector also retains title/header/data alignment fields (`0x4000`,
-  `0x8000`, `0x10000`) and checks field order, values, body boundary and a
-  following sentinel. ASCII/Binary output refuses these unmapped fields
-  atomically and corrected retry succeeds; no row-height DXF mapping or native
-  style behavior is claimed. See the [row-height receipt](docs/research/p5-ac1021-table-row-height-overrides-2026-11-08.json)
-  and [alignment receipt](docs/research/p5-ac1021-table-row-alignments-2026-11-08.json).
+  The three row-height values (`0x100000`, `0x200000`, `0x400000`), row
+  alignments (`0x4000`, `0x8000`, `0x10000`), and text-style handles
+  (`0x20000`, `0x40000`, `0x80000`) now have typed retention. ODA classifies
+  the selected text-style handles as hard pointers; the parser publishes only
+  matching roles as typed, while retaining a mismatched-role record as
+  semantically incomplete. A generated AC1021 vector checks field/handle order,
+  values, body boundary, a following sentinel, and wrong-role refusal. ASCII/Binary output refuses these
+  unmapped fields atomically, also refuses orphaned values if their mask is
+  cleared, preserves the destination and succeeds after correction/retry. No
+  row-style DXF mapping or native style behavior is claimed. See the
+  [row-height receipt](docs/research/p5-ac1021-table-row-height-overrides-2026-11-08.json),
+  [alignment receipt](docs/research/p5-ac1021-table-row-alignments-2026-11-08.json),
+  and [text-style receipt](docs/research/p5-ac1021-table-row-text-style-overrides-2026-11-08.json).
 - **ODA suffix lane:** the user unlocked the Mac and the planned direct ODA
   27.1 retry was made; it again aborted during Pasteboard/XPC initialization
   before document processing, produced no output, and matched the prior source
@@ -691,7 +696,7 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    pre-R24 TABLE scalar override profile for ODA §20.4.96.1 bits `0x01`–`0x10`
    is implemented, and the three row-height and three row-alignment values now
    have typed read retention. Keep both output routes refused until their DXF
-   mappings are proven; remaining table color/fill/text-style bits and all three border
+   mappings are proven; remaining table color/fill bits and all three border
    override masks still need typed storage and complete serialization.
    Physical-source coverage remains open: the available metric TABLE fails
    before these fields at

@@ -12089,6 +12089,15 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
         || ent->m_tableOverrideFlags > static_cast<std::uint32_t>(
                std::numeric_limits<int>::max())
         || (ent->m_tableOverrideFlags & ~0x0000001Fu) != 0u
+        || std::any_of(ent->m_tableRowHeightOverrides.begin(),
+                       ent->m_tableRowHeightOverrides.end(),
+            [](double value) { return value != 0.0; })
+        || std::any_of(ent->m_tableRowAlignmentOverrides.begin(),
+                       ent->m_tableRowAlignmentOverrides.end(),
+            [](int value) { return value != 0; })
+        || std::any_of(ent->m_tableRowTextStyleHandles.begin(),
+                       ent->m_tableRowTextStyleHandles.end(),
+            [](std::uint32_t value) { return value != 0u; })
         || ent->m_borderColorOverrideFlags > static_cast<std::uint32_t>(
                std::numeric_limits<int>::max())
         || ent->m_borderColorOverrideFlags != 0u
