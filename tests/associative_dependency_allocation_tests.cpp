@@ -15,7 +15,7 @@ namespace {
 long allocationsBeforeFailure = -1;
 std::size_t failedAllocations = 0;
 
-enum class DependencyProfile { Base, Value, Geometry };
+enum class DependencyProfile { Base, Value, IntegerValue, Geometry };
 
 struct AllocationFailure {
     explicit AllocationFailure(long count) { allocationsBeforeFailure = count; }
@@ -23,7 +23,8 @@ struct AllocationFailure {
 };
 
 DRW_AssociativeObject makeDependency(DependencyProfile profile) {
-    const char* recordName = profile == DependencyProfile::Value
+    const char* recordName = (profile == DependencyProfile::Value
+                              || profile == DependencyProfile::IntegerValue)
         ? "ACDBASSOCVALUEDEPENDENCY"
         : profile == DependencyProfile::Geometry
             ? "ACDBASSOCGEOMDEPENDENCY" : "ACDBASSOCDEPENDENCY";
@@ -41,14 +42,21 @@ DRW_AssociativeObject makeDependency(DependencyProfile profile) {
     dependency.m_dependencyBodyId = -9;
     if (profile == DependencyProfile::Base)
         dependency.m_dependencyBodyHandle = 0xE902u;
-    if (profile == DependencyProfile::Value) {
+    if (profile == DependencyProfile::Value
+        || profile == DependencyProfile::IntegerValue) {
         dependency.m_valueDependencyFieldsParsed = true;
         dependency.m_valueDependencyClassVersion = 0;
         dependency.m_valueDependencyName = "VALUE_DEPENDENCY";
-        dependency.m_valueDependencyValueCode = 40;
+        dependency.m_valueDependencyValueCode =
+            profile == DependencyProfile::IntegerValue ? 90 : 40;
         dependency.m_valueDependencyValueKind =
-            DRW_AssociativeObject::EvalVariantKind::Real;
-        dependency.m_valueDependencyValueReal = 12.5;
+            profile == DependencyProfile::IntegerValue
+                ? DRW_AssociativeObject::EvalVariantKind::Int32
+                : DRW_AssociativeObject::EvalVariantKind::Real;
+        dependency.m_valueDependencyValueReal =
+            profile == DependencyProfile::IntegerValue ? 0.0 : 12.5;
+        dependency.m_valueDependencyValueInt32 =
+            profile == DependencyProfile::IntegerValue ? 17 : 0;
     } else if (profile == DependencyProfile::Geometry) {
         dependency.m_geomDependencyFieldsParsed = true;
         dependency.m_geomClassVersion = 0;
@@ -154,7 +162,9 @@ bool verify(const std::filesystem::path& path, DependencyProfile profile) {
     if (dependencyIt == data.associativeObjects.end())
         return false;
     const DRW_AssociativeObject& actual = *dependencyIt;
-    const bool dependencyMatches = actual.m_recordName == (profile == DependencyProfile::Value
+    const bool dependencyMatches = actual.m_recordName ==
+        ((profile == DependencyProfile::Value
+          || profile == DependencyProfile::IntegerValue)
             ? "ACDBASSOCVALUEDEPENDENCY"
             : profile == DependencyProfile::Geometry
                 ? "ACDBASSOCGEOMDEPENDENCY" : "ACDBASSOCDEPENDENCY")
@@ -169,14 +179,20 @@ bool verify(const std::filesystem::path& path, DependencyProfile profile) {
         && actual.m_dependencyBodyId == -9
         && actual.m_dependencyBodyHandle
             == (profile == DependencyProfile::Base ? 0xE902u : 0u)
-        && (profile != DependencyProfile::Value
+        && ((profile != DependencyProfile::Value
+             && profile != DependencyProfile::IntegerValue)
             || (actual.m_valueDependencyFieldsParsed
                 && actual.m_valueDependencyClassVersion == 0
                 && actual.m_valueDependencyName == "VALUE_DEPENDENCY"
-                && actual.m_valueDependencyValueCode == 40
+                && actual.m_valueDependencyValueCode
+                    == (profile == DependencyProfile::IntegerValue ? 90 : 40)
                 && actual.m_valueDependencyValueKind
-                    == DRW_AssociativeObject::EvalVariantKind::Real
-                && actual.m_valueDependencyValueReal == 12.5))
+                    == (profile == DependencyProfile::IntegerValue
+                        ? DRW_AssociativeObject::EvalVariantKind::Int32
+                        : DRW_AssociativeObject::EvalVariantKind::Real)
+                && (profile == DependencyProfile::IntegerValue
+                    ? actual.m_valueDependencyValueInt32 == 17
+                    : actual.m_valueDependencyValueReal == 12.5)))
         && (profile != DependencyProfile::Geometry
             || (actual.m_geomDependencyFieldsParsed
                 && actual.m_geomClassVersion == 0
@@ -279,6 +295,7 @@ bool run(const std::filesystem::path& directory) {
     for (const bool binary : {false, true}) {
         for (const DependencyProfile profile : {
                  DependencyProfile::Base, DependencyProfile::Value,
+                 DependencyProfile::IntegerValue,
                  DependencyProfile::Geometry}) {
             AssociativeDependencyExport exporter(codec, profile);
             AssociativeDependencyExport expected(codec, profile);
@@ -326,7 +343,9 @@ bool run(const std::filesystem::path& directory) {
                     return fail("retry changed the caller object");
             }
             std::cout << "AC1024 "
-                      << (profile == DependencyProfile::Value ? "value"
+                      << (profile == DependencyProfile::Value ? "real value"
+                          : profile == DependencyProfile::IntegerValue
+                              ? "integer value"
                           : profile == DependencyProfile::Geometry ? "geometry"
                           : "base")
                       << " associative dependency OBJECTS "

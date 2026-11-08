@@ -112,22 +112,40 @@ value-dependency edge, group membership, reactor closure, and body ownership
 verified together. Keep the generated pair separate from source prevalence,
 native associative meaning, and support claims.
 
+**Implementation follow-up (2026-11-08):** the same focused target now covers
+the admitted AC1024 signed-int32 `ACDBASSOCVALUEDEPENDENCY` variant (group 90,
+value 17), in addition to the real-valued group-40 profile. Integer-value
+allocation rollback passes 8/8 ASCII and 7/7 Binary callback offsets with
+destination/source preservation, same-codec retry, and typed readback. The
+[combined receipt](docs/research/p6-dxf-associative-dependency-objects-allocation-failure-retry-2026-11-08.json)
+records this generated record profile only; it does not add a value target or
+rooted dimension graph.
+
 **Implementation checkpoint (2026-11-08):** an initial attempt to place the
 dimension body under the geometry dependency was rejected by the existing
 profile validator because geometry dependencies require a null body handle.
 The invalid prototype was removed; no production change or evidence was
 committed. The desktop inventory after the user's unlock message still reports
 the Mac locked, so no new ODA/FreeCAD qualification is available. Continue the
-local paired-record slice above; do not retry the unchanged ODA CLI launch or
-claim platform qualification until a native session is observable.
+local implementation; do not retry the unchanged ODA CLI launch or claim
+platform qualification until a native session is observable. A separate
+locally authored full-file dimension graph was also refused by strict adapter
+preflight because it lacks the source-bound AC1024 group-owned dimension
+profile. Its temporary prototype was removed; neither output policy nor source
+gates were changed.
 
-**Next implementation gate:** inspect the exact AC1024 constraint-node writer
-profiles and existing source-backed dimension/dependency records. Select a
-rooted dimension graph only if one node can close the actual dimension target,
-value dependency, group membership, dependency-body ownership, and reciprocal
-reactors without relying on default or dangling references. If the available
-source evidence cannot support that graph, advance to the next fully admitted
-local profile instead of weakening these gates.
+**Next implementation gate:** continue rooted dimension-constraint transaction
+work from the hash-bound AC1024 mechanical source profile
+(`854c8ebed8726add72ba4a9a2a19ba0d010372f5cadefb40e648cdf881cad858`). Its
+existing physical output/readback control passes both encodings for 17 linked
+dimension-dependency/body pairs, 399 constraint nodes, group membership,
+dimension targets, and reactor links. A locally authored graph without that
+source-bound profile is correctly refused by strict adapter preflight; do not
+manufacture a receipt or relax the gate. First measure the existing physical
+route's OBJECTS callback allocation count and elapsed time. If a full callback
+sweep exceeds the fast-validation budget, split the proof into bounded
+source-backed record selections while retaining physical graph closure and
+destination-preserving retry checks.
 
 **Resume checkpoint (2026-11-07):** the Mac session was unlocked and the
 audit-enabled ODA 27.1 GUI route has completed the AC1024 civil residual
