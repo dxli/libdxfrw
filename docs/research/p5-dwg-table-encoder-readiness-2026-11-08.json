@@ -435,11 +435,15 @@
       {
         "field": "DRW_Table private DXF parser disposition",
         "reason": "Unsupported group 97/98/4 metadata can set m_dxfUnsupportedData before a grid exists, when m_hasSemanticContent is false; incomplete/open-value/invalid-merge parser state must independently block encoding."
+      },
+      {
+        "field": "DRW_Insert::blockRecH code/size/rawCode/ref64",
+        "reason": "The bounded AC1018 encoder rebuilds the BLOCK_RECORD target as a canonical hard pointer using only the 32-bit ref; retained source wire metadata has no qualified role/width replay mapping and is refused."
       }
     ],
-    "implementation": "src/drw_entities.cpp: DRW_Table::encodeDwg refuses all listed public and retained states during bounded preflight, including arbitrary DXF appData and pre-grid parser incompleteness; src/intern/dwgwriter15.cpp leaves BYLAYER/BYBLOCK/CONTINUOUS implicit during name-to-handle resolution.",
+    "implementation": "src/drw_entities.cpp: DRW_Table::encodeDwg refuses all listed public and retained states during bounded preflight, including arbitrary DXF appData, pre-grid parser incompleteness, and retained BLOCK_RECORD wire metadata; src/intern/dwgwriter15.cpp leaves BYLAYER/BYBLOCK/CONTINUOUS implicit during name-to-handle resolution.",
     "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
-    "assertion": "Generated refusal cases preserve pre-seeded body and handle buffers, including unsupported pre-grid DXF metadata parsed after the AcDbTable subclass marker.",
+    "assertion": "Generated refusal cases preserve pre-seeded body and handle buffers, including unsupported pre-grid DXF metadata and each retained BLOCK_RECORD wire metadata field.",
     "disposition": "Closes only the enumerated omission and malformed-state paths for the direct generated AC1018 codec. Continue auditing remaining public fields and private retained DXF state; no output support claim."
   },
   "generated_ac1018_entity_frame_commit_rollback_control": {

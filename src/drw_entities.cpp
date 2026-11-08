@@ -13675,6 +13675,8 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
             || (lineWeightCode >= 29 && lineWeightCode <= 31));
     if (version != DRW::AC1018 || buf == nullptr || strBuf != nullptr
         || oType < 500 || handle == 0 || blockRecH.ref == 0
+        || blockRecH.code != 0u || blockRecH.size != 0u
+        || blockRecH.rawCode != 0u || blockRecH.ref64 != 0u
         || dwgLayerHandle() == 0u
         || ltFlags > 3u
         || (space != DRW::ModelSpace && space != DRW::PaperSpace)

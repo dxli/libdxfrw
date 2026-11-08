@@ -2601,6 +2601,12 @@ can mark DXF parsing incomplete before the TABLE grid exists, so the public
 unsupported/open-value/invalid-merge parser state independently of that public
 flag. A generated `AcDbTable` subclass + group-97 control verifies pre-grid
 refusal with both output streams unchanged; no fixture was added.
+The inherited INSERT audit also found `blockRecH`'s parsed wire code, size,
+raw role, and 64-bit reference were ignored while the TABLE encoder rebuilt a
+canonical hard pointer from the 32-bit `ref`. This generated-only codec now
+accepts caller-created handle references with no retained wire metadata and
+refuses each retained source-metadata field until its role/width mapping is
+qualified; four atomic refusal vectors cover those fields.
 The common writer itself is unchanged; this protection applies only to the
 generated AC1018 TABLE codec.
 The direct encoder builds both streams in private copies, catches emission

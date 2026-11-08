@@ -8939,6 +8939,22 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1018,
         [](TableDwgCodecProbe& table) { table.blockRecH.ref = 0u; });
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects retained BLOCK_RECORD wire code without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.blockRecH.code = 5u; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects retained BLOCK_RECORD wire size without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.blockRecH.size = 2u; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects retained BLOCK_RECORD raw role without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.blockRecH.rawCode = 5u; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects retained BLOCK_RECORD wide handle without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.blockRecH.ref64 = 0x1A600u; });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects a missing TABLESTYLE handle without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) { table.m_tableStyleHandle = 0u; });
