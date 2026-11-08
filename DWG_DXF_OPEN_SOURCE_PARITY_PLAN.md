@@ -164,12 +164,14 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-08)
 
-- **Latest local slice:** commit `37d876cf` now validates each R24 TABLESTYLE
-  margin override independently. It preserves mixed explicit/inherited styles,
-  checks exact six-value order and typed readback, and refuses negative or
-  non-finite margins, unsupported override flags, and unflagged payloads
-  atomically. The focused `libdxfrw_tablestyle_r24_typed_writer` CTest passes
-  (1/1, 1.90 seconds); see the [margin receipt](docs/research/p6-r24-tablestyle-style-margins-2026-11-08.json).
+- **Latest local slice:** commit `bff89295` now admits finite, nonnegative
+  per-style R24 TABLESTYLE text heights. Generated ASCII/Binary readback
+  checks exact raw group-144 order; negative and infinite values refuse
+  atomically and corrected values succeed on the same adapter. The focused
+  `libdxfrw_tablestyle_r24_typed_writer` CTest passes (1/1, 1.85 seconds); see
+  the [text-height receipt](docs/research/p6-r24-tablestyle-text-height-transport-2026-11-08.json).
+  Commit `37d876cf` admits per-style explicit/inherited margin profiles with
+  exact readback and refusal controls ([receipt](docs/research/p6-r24-tablestyle-style-margins-2026-11-08.json)).
   Commit `513a8adf` covers non-default safe group-300 format strings and finite
   group-40/140 scalars ([receipt](docs/research/p6-r24-tablestyle-format-scalar-transport-2026-11-08.json)).
   Commits `9678d0c2`, `12698d59`, and `93c02f0d` cover ODA value/unit code
@@ -218,20 +220,20 @@ The queue below contains only unfinished actions. Completed source profiles,
 codecs, tests, and controls have been removed from the queue; their commits and
 receipts remain in Git and `docs/research/`. Resume from the linked blocker
 instead of repeating successful scans or controls. The generated R24 TABLESTYLE
-border LTYPE, value-domain, scalar format and per-style margin slices are
-complete in commits `12698d59`, `93c02f0d`, `9678d0c2`, `513a8adf`, and
-`37d876cf`; the saved P4 inventory decision has no new ready physical graph.
-Continue with the following bounded R24 text-height packet.
+border LTYPE, value-domain, scalar format, per-style margin and text-height
+slices are complete in commits `12698d59`, `93c02f0d`, `9678d0c2`, `513a8adf`,
+`37d876cf`, and `bff89295`; the saved P4 inventory decision has no new ready
+physical graph. Continue with the following bounded R24 merge-flag packet.
 
-1. **P6 / admit bounded R24 TABLESTYLE text heights.** ODA §20.4.101.3 maps
-   content text height to BD group 144. The typed writer currently requires
-   the witnessed 0.25 title and 0.18 header/data values. Preserve the named
-   style identities, alignments and all other gates, but allow finite,
-   nonnegative per-style text heights. Add distinct positive heights to the
-   generated title/header/data styles; verify exact raw group-144 order and
-   typed readback in ASCII/Binary. Refuse negative and non-finite values with
-   destination preservation and verify corrected same-adapter retry. Keep
-   native rendering and physical producer qualification open.
+1. **P6 / admit documented R24 TABLESTYLE merge flags.** ODA §20.4.101.4
+   defines BL group 92 merge flags and limits them to bits `0x8000` and
+   `0x10000`. The writer currently hard-codes the witnessed title/header/data
+   combination. Preserve style identity and all other gates, but admit any
+   combination within that documented mask per cell style. Generated
+   ASCII/Binary controls must verify the exact group-92 positions and typed
+   readback, refuse an unknown bit with destination preservation, and retry
+   successfully on the same adapter. Keep native merge behavior and physical
+   producer qualification open.
 
 2. **P4 / resume physical OBJECTS closure only on a new ready witness.** The
    saved census and inventory have been reviewed: every current selected-output
