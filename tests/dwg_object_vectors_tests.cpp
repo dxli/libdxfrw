@@ -2695,12 +2695,12 @@ bool makeTableStyleFrame(DRW::Version version, std::int32_t styleType,
     parent.ref = 0xA200u;
     parent.ref64 = parent.ref;
     handles.putHandle(parent);
-    dwgHandle unknown;
-    unknown.code = DRW::DwgHardPointer;
-    unknown.size = 2;
-    unknown.ref = 0xA300u;
-    unknown.ref64 = unknown.ref;
-    handles.putHandle(unknown);
+    dwgHandle tableCellStyleOwner;
+    tableCellStyleOwner.code = DRW::DwgHardOwnership;
+    tableCellStyleOwner.size = 2;
+    tableCellStyleOwner.ref = 0xA300u;
+    tableCellStyleOwner.ref64 = tableCellStyleOwner.ref;
+    handles.putHandle(tableCellStyleOwner);
     if (dataFlag != 0u) {
         dwgHandle textStyle;
         textStyle.code = DRW::DwgHardPointer;

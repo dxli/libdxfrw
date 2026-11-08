@@ -202,6 +202,13 @@ created locally from scratch for the specific control.
   preceding ACSH exact-span guard remains in commit `6106bfd4`: the pinned
   AC1027 Sweep body remains `Partial` (174/2,571 bits); do not infer its
   undocumented tail or output route. See its [receipt](docs/research/p4-ac1027-sweep-action-body-exact-span-2026-11-08.json).
+- **AC1032 TABLESTYLE control correction:** the generated R24 frame helper
+  encoded the TABLESTYLE “Table” cell-style owner as a hard pointer, although
+  ODA v5.4.1 §20.4.101.2 specifies a hard owner. The helper now emits the
+  documented role. The focused data-flag, cell-style-type, and margin-flag
+  selectors and the aggregate `libdxfrw_dwg_object_vectors` CTest pass. This
+  corrects invalid test input only; no parser behavior or support claim changed.
+  See the [control receipt](docs/research/p6-r24-tablestyle-control-owner-role-2026-11-08.json).
 - **P4 inventory decision:** the saved [same-version census](docs/research/p4-local-same-version-strict-output-census-2026-11-06.json)
   reports four already-qualified whole-source passes, 20 strict refusals, and
   zero newly qualified source profiles. The saved [AC1021 source inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)
@@ -605,9 +612,13 @@ selection.
    output entity. Treat this as a negative peer observation, not a positive
    carrier witness. Resolve why the exact peer entity has no carrier and bind
    the bytes to it before using this source to qualify a conversion. The
-   installed ODA File Converter still aborts before conversion with
-   PasteBoard/XPC errors while the Mac is locked; retry it after the session is
-   unlocked. See the [Autodesk 3DSOLID DXF
+   installed ODA File Converter's direct CLI route still aborts before
+   conversion with PasteBoard/XPC errors after the Mac was unlocked; the same
+   invocation is exhausted. The functioning GUI route does not bind a SAB
+   carrier to this entity, so continue by tracing the exact source entity and
+   its SAB bytes through an independent LibreDWG/ODA diagnostic or a controlled
+   scratch mutation; do not infer a carrier from the negative peer output.
+   See the [Autodesk 3DSOLID DXF
    reference](https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-19AB1C40-0BE0-4F32-BCAB-04B37044A0D3.htm),
    [ODA v5.4.1 §20.4.41](https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf),
    and the [carrier gate receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).
