@@ -164,15 +164,21 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-08)
 
-- **Latest local slice:** commit `12698d59` adds non-null R24 TABLESTYLE border
-  LTYPE transport. It requires a registered, uniquely emitted source LTYPE,
-  writes that target's mapped handle as group 340, preserves null references,
-  and refuses unresolved targets. Follow-up commit `93c02f0d` adds the wrong-
-  kind TEXTSTYLE-as-LTYPE negative control. Generated ASCII/Binary controls
-  pass exact typed/readback identity checks, missing/wrong-kind refusal,
-  destination preservation, and same-adapter correction/retry. The focused
-  `libdxfrw_tablestyle_r24_typed_writer` CTest passes (1/1); see the
-  [transport receipt](docs/research/p6-r24-tablestyle-border-ltype-dxf-transport-2026-11-08.json).
+- **Latest local slice:** commit `9678d0c2` admits ODA §20.4.99's R24
+  TABLESTYLE group-92 value-data codes and R2007+ group-93 unit codes, while
+  retaining refusal for undocumented values. All documented codes pass
+  generated ASCII/Binary typed readback; type 3 and unit 0x10 refuse while
+  preserving the destination. The focused `libdxfrw_tablestyle_r24_typed_writer`
+  CTest passes (1/1, 1.73 seconds); see the [value-domain receipt](docs/research/p6-r24-tablestyle-value-format-domains-2026-11-08.json).
+  The same selector also verifies the earlier non-null border LTYPE transport
+  in commits `12698d59` and `93c02f0d`, including exact mapped group 340,
+  missing/wrong-kind refusal, destination preservation and same-adapter retry
+  ([receipt](docs/research/p6-r24-tablestyle-border-ltype-dxf-transport-2026-11-08.json)).
+  These are bounded generated writer/readback results; physical source,
+  rendering, whole-source conversion and untested field semantics remain open.
+  The preceding ACSH exact-span guard remains in commit `6106bfd4`: the pinned
+  AC1027 Sweep body remains `Partial` (174/2,571 bits); do not infer its
+  undocumented tail or output route. See its [receipt](docs/research/p4-ac1027-sweep-action-body-exact-span-2026-11-08.json).
   This does not qualify a physical DWG producer, rendering, or whole-source
   conversion. The preceding ACSH exact-span guard remains in commit `6106bfd4`:
   the pinned AC1027 Sweep body remains `Partial` (174/2,571 bits); do not infer
@@ -214,12 +220,23 @@ created locally from scratch for the specific control.
 The queue below contains only unfinished actions. Completed source profiles,
 codecs, tests, and controls have been removed from the queue; their commits and
 receipts remain in Git and `docs/research/`. Resume from the linked blocker
-instead of repeating successful scans or controls. The bounded R24 TABLESTYLE
-border LTYPE transport is complete in commits `12698d59` and `93c02f0d`; the
-saved P4 inventory decision is complete and has no new ready physical graph.
-Continue with a distinct locally testable P5/P6 gap without rescanning it.
+instead of repeating successful scans or controls. The generated R24 TABLESTYLE
+border LTYPE and documented value-domain slices are complete in commits
+`12698d59`, `93c02f0d`, and `9678d0c2`; the saved P4 inventory decision has no
+new ready physical graph. Continue with the following bounded P6 field packet.
 
-1. **P4 / resume physical OBJECTS closure only on a new ready witness.** The
+1. **P6 / admit bounded R24 TABLESTYLE content-format scalar fields.** ODA
+   §20.4.101.3 defines the format string (group 300), rotation (40), and block
+   scale (140). The typed R24 writer already serializes these fields but its
+   exact-profile gate only accepts an empty string, zero rotation and unit
+   scale. Extend the generated profile only for safe bounded text and finite
+   scalar values; preserve refusal for property override/flag combinations
+   without their own field/meaning proof. Test non-default values in ASCII and
+   Binary, exact raw group sequence and typed readback, invalid text/numeric
+   refusal with destination preservation, then same-adapter correction/retry.
+   Keep native rendering and physical producer qualification open.
+
+2. **P4 / resume physical OBJECTS closure only on a new ready witness.** The
    saved census and inventory have been reviewed: every current selected-output
    pass is already recorded, and no distinct physical graph has a closed
    source-to-output route. Keep the exact R13 GROUP, AC1021 TORUS/ACDS, and
@@ -596,13 +613,13 @@ identified but the typed body/output route is incomplete. Keep this profile
 refused and advance to the next locally implementable P4/P6 packet. Do not
 repeat the corpus census or alter the aggregate strict guard from this audit.
 
-2. **P5 / FIELD and TABLE residuals.** No eligible AC1021 FIELD graph currently
+3. **P5 / FIELD and TABLE residuals.** No eligible AC1021 FIELD graph currently
    supplies complete FIELDLIST membership plus a consumer-visible root; keep
    FIELD output refused and do not retry the screened samples. Resume only with
    a source profile that closes that graph. Continue other P5 work only where
    exact source spans and target roles are available; keep TABLEGEOMETRY,
    dynamic evaluation and native rendering claims gated.
-3. **P6 / source-backed parser and no-loss gaps.** The
+4. **P6 / source-backed parser and no-loss gaps.** The
    raster wire observer now recognizes the witnessed IMAGEDEF code-`0xC`
    parent in AC1021/24/27/32 as `UnqualifiedOwnerRole`; the generated control
    verifies offset arithmetic and later reactor spans for all four releases.
@@ -773,7 +790,7 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    qualified, failed capture remains fail-closed, and ASCII/Binary output plus
    fresh typed readback pass. The Cover HEADER suffix is an independent blocker;
    these inventories do not qualify output or support claims.
-4. **P7/P8/P9 / qualification gates.** P7 needs independent ACIS/ACDS semantic
+5. **P7/P8/P9 / qualification gates.** P7 needs independent ACIS/ACDS semantic
    evidence. P8's current-head LibreCAD_3 CONFIG-package build, focused export
    tests, and planar save/open/reopen probe are refreshed; next qualify on a
    clean consumer revision, then native Linux/Windows FreeCAD and LibreCAD/LibreCAD_3
