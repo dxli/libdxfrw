@@ -165,6 +165,7 @@ class DrwVisibilityTestAccess;    // test-only friend; defined in
 class DwgPolylineTraceTestAccess; // test-only friend; defined in
                                   // dwg_safety_tests.cpp
 class DxfAcisCarrierTestAccess;   // test-only retained-owner inspection
+class DwgModelerHistoryFieldTestAccess; // test-only bounded History H parser
 class DxfDimensionDstyleTestAccess; // test-only DIMENSION projection checks
 class DrwMLeaderProxyTestAccess; // test-only parsed-provenance proxy controls
 class DrwBlockStateTestAccess;       // test-only BLOCK reset-state checks
@@ -179,6 +180,7 @@ class DrwBlockStateTestAccess;       // test-only BLOCK reset-state checks
                        friend class DrwVisibilityTestAccess; \
                        friend class DwgPolylineTraceTestAccess; \
                        friend class DxfAcisCarrierTestAccess; \
+                       friend class DwgModelerHistoryFieldTestAccess; \
                        friend class DrwMLeaderProxyTestAccess;
 
 //! Base class for entities
@@ -1164,6 +1166,12 @@ public:
     bool m_hasDwgHistoryHandleField = false;
     dwgHandle m_dwgHistoryHandleField{};
     DRW_DwgSubrecordRange m_dwgHistoryHandleFieldSpan;
+private:
+    static bool parseDwgHistoryHandleField(
+        DRW::Version version, dwgBuffer& buffer, std::uint64_t endBit,
+        bool& present, dwgHandle& field,
+        DRW_DwgSubrecordRange& fieldSpan);
+public:
     //! Decode an identified ACIS wireframe on demand. Idempotent; never throws.
     bool decodeWireframe() {
         if (!m_wireframeDecoded) {

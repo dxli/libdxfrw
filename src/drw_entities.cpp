@@ -8500,6 +8500,47 @@ bool DRW_3Dface::parseDwg(DRW::Version v, dwgBuffer *buf,
     return true;
 }
 
+bool DRW_ModelerGeometry::parseDwgHistoryHandleField(
+    DRW::Version version, dwgBuffer& buffer, std::uint64_t endBit,
+    bool& present, dwgHandle& field,
+    DRW_DwgSubrecordRange& fieldSpan) {
+    present = false;
+    field = dwgHandle{};
+    fieldSpan = DRW_DwgSubrecordRange{};
+    fieldSpan.m_parseComplete = false;
+    if (!buffer.isGood())
+        return false;
+    const std::uint64_t startBit = currentDwgBit(&buffer);
+    if (startBit > endBit)
+        return false;
+    const std::uint64_t remainingBits = endBit - startBit;
+    if (remainingBits == 0u)
+        return true;
+    if (remainingBits < 8u)
+        return false;
+
+    dwgBuffer probe = buffer.forkIndependent();
+    dwgHandle parsed;
+    if (!readBoundedDwgHandle(probe, endBit, 0u, false, parsed))
+        return false;
+    const std::uint64_t finishBit = currentDwgBit(&probe);
+    if (finishBit < startBit || finishBit > endBit)
+        return false;
+
+    DRW_DwgSubrecordRange parsedSpan;
+    parsedSpan.m_name = "3dsolid-history-id-handle";
+    parsedSpan.m_startBit = startBit;
+    parsedSpan.m_bitSize = finishBit - startBit;
+    parsedSpan.m_version = version;
+    parsedSpan.m_count = 1u;
+    parsedSpan.m_parseComplete = true;
+    buffer = probe;
+    field = parsed;
+    fieldSpan = std::move(parsedSpan);
+    present = true;
+    return true;
+}
+
 void DRW_ModelerGeometry::resetDwgState() {
     DRW_Entity::reset();
     m_modelerVersion = 0;
@@ -8744,30 +8785,27 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
     DRW_DwgSubrecordRange parsedHistoryHandleFieldSpan;
     parsedHistoryHandleFieldSpan.m_parseComplete = false;
     bool hasParsedHistoryHandleField = false;
-    if (eType == DRW::E3DSOLID && v > DRW::AC1018
-        && proxyEntityHasBits(handleProbe, handleEndBit, 8)) {
-        const std::uint64_t historyStartBit = currentDwgBit(&handleProbe);
-        dwgHandle historyH;
-        if (!readBoundedDwgHandle(handleProbe, handleEndBit, 0, false,
-                                  historyH))
+    if (eType == DRW::E3DSOLID && v > DRW::AC1018) {
+        if (!parseDwgHistoryHandleField(
+                v, handleProbe, handleEndBit, hasParsedHistoryHandleField,
+                parsedHistoryHandleField, parsedHistoryHandleFieldSpan))
             return fail();
-        const std::uint64_t historyEndBit = currentDwgBit(&handleProbe);
-        parsedHistoryHandle = historyH.ref;
-        parsedHistoryHandleField = historyH;
-        parsedHistoryHandleFieldSpan.m_name = "3dsolid-history-id-handle";
-        parsedHistoryHandleFieldSpan.m_startBit = historyStartBit;
-        parsedHistoryHandleFieldSpan.m_bitSize =
-            historyEndBit - historyStartBit;
-        parsedHistoryHandleFieldSpan.m_version = v;
-        parsedHistoryHandleFieldSpan.m_count = 1u;
-        parsedHistoryHandleFieldSpan.m_parseComplete = true;
-        hasParsedHistoryHandleField = true;
-        DRW_DBG(" 3DSOLID history Handle: ");
-        DRW_DBGHL(historyH.code, historyH.size, historyH.ref); DRW_DBG("\n");
-        DRW_DBG(" 3DSOLID history H span bits: ");
-        DRW_DBG(historyStartBit); DRW_DBG(".. "); DRW_DBG(historyEndBit);
-        DRW_DBG(" (size "); DRW_DBG(historyEndBit - historyStartBit);
-        DRW_DBG(")\n");
+        if (hasParsedHistoryHandleField) {
+            parsedHistoryHandle = parsedHistoryHandleField.ref;
+            DRW_DBG(" 3DSOLID history Handle: ");
+            DRW_DBGHL(parsedHistoryHandleField.code,
+                      parsedHistoryHandleField.size,
+                      parsedHistoryHandleField.ref);
+            DRW_DBG("\n");
+            DRW_DBG(" 3DSOLID history H span bits: ");
+            DRW_DBG(parsedHistoryHandleFieldSpan.m_startBit);
+            DRW_DBG(".. ");
+            DRW_DBG(parsedHistoryHandleFieldSpan.m_startBit
+                    + parsedHistoryHandleFieldSpan.m_bitSize);
+            DRW_DBG(" (size ");
+            DRW_DBG(parsedHistoryHandleFieldSpan.m_bitSize);
+            DRW_DBG(")\n");
+        }
     }
 
     if (handleProbe.size() > std::numeric_limits<std::uint32_t>::max())

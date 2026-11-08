@@ -15,10 +15,11 @@
     "files": [
       "src/drw_entities.h",
       "src/drw_entities.cpp",
+      "tests/hardening_tests.cpp",
       "tests/ac1027_acds_source_probe.cpp",
       "tests/ac1027_acds_source_compare.py"
     ],
-    "change": "DRW_ModelerGeometry now retains the encoded history H handle, including raw role code and 64-bit value, plus the exact parser handle-stream bit span and source revision. Reset clears all appended evidence. The opt-in physical probe emits this row; its self-test rejects the wrong source-profile role and truncated span and accepts a corrected retry.",
+    "change": "DRW_ModelerGeometry now retains the encoded history H handle, including raw role code and 64-bit value, plus the exact parser handle-stream bit span and source revision. Reset clears all appended evidence. A private production helper handles exact absence, full H fields and partial/truncated bounds; the opt-in physical probe emits the captured values.",
     "semanticPolicy": "Capture is diagnostic only. It does not translate DWG hard ownership to DXF group 350, validate a recursive target graph, or enable strict output."
   },
   "coverSource": {
@@ -27,7 +28,7 @@
     "version": "AC1027",
     "provenanceLimit": "Existing local source; producer is not independently authenticated and no drawing fixture is committed.",
     "traceExecutable": "/private/tmp/libdxfrw-legacy-common-build/libdxfrw_ac1027_acds_source_probe",
-    "traceExecutableSha256": "b7747140268f220d6c875cda5f91c36742a78bdbb48415f3a2dd823eb93c3e49",
+    "traceExecutableSha256": "31c6a08345695f72570d65fc4f48ca74299ffa6e2251be1c2f5e7a80cd08dc8c",
     "probeOutput": "/private/tmp/cover-acds-probe-updated.txt",
     "probeOutputSha256": "1460c2e41895f0935bfaa6dc9af550af698c5ba212f117ebff10ce6c6032f757",
     "frame": {
@@ -67,6 +68,7 @@
     "source": "realDragonium/dwg-verifier fixtures/libredwg/example_2013.dwg",
     "sourceSha256": "ce80953e4881899cde8c42b97919feb2697259554ca54dc4005b19068a12c18f",
     "provenanceLimit": "Original authoring application and production history are not established.",
+    "probeExecutableSha256": "31c6a08345695f72570d65fc4f48ca74299ffa6e2251be1c2f5e7a80cd08dc8c",
     "probeOutputSha256": "817caea1a51a97315cb36f1b77719115ed78890e8d6078441ebd1f9692457fd5",
     "entity": "3DSOLID 0x2e1",
     "historyField": {
@@ -85,15 +87,19 @@
   "validation": {
     "build": "cmake --build /private/tmp/libdxfrw-legacy-common-build --target libdxfrw_ac1027_acds_source_probe -j4",
     "buildResult": "PASS",
-    "focusedTest": "ctest --test-dir /private/tmp/libdxfrw-legacy-common-build -R '^libdxfrw_ac1027_acds_source_compare_self_test$' --output-on-failure",
-    "focusedTestResult": "PASS 1/1 in 0.05 seconds",
-    "generatedControls": [
-      "valid code-3 history H profile accepted",
-      "mutated code-5 source-profile role rejected by the evidence comparator",
-      "shortened bit span rejected",
-      "corrected profile accepted after each refusal"
+    "focusedTest": "/private/tmp/libdxfrw-legacy-common-build/libdxfrw_hardening_tests --dwg-modeler-history-handle-field",
+    "focusedTestExecutableSha256": "2093554fe155d782ee73225986f1767c165d3b1df54365e70e03a4d49e2fae15",
+    "focusedTestResult": "PASS",
+    "parserBoundGeneratedControls": [
+      "locally authored null code-3 H: exact 8-bit span and zero target",
+      "locally authored non-null code-3 H: full 0x2e4 value and exact 24-bit span",
+      "locally authored alternate code-5 H: preserved raw role, no guessed semantic mapping",
+      "seven-bit partial H boundary: rejected without moving the source cursor",
+      "corrected non-null H succeeds after the partial-bound refusal",
+      "zero-bit remaining tail is reported as bounded absence, distinct from truncation"
     ],
-    "scopeLimit": "The generated self-test exercises the profile comparator, not a synthetic invocation of DRW_ModelerGeometry::parseDwg. Source probes exercised the production parser against the two hash-identified AC1027 files. No full test suite was run."
+    "profileComparatorTest": "ctest --test-dir /private/tmp/libdxfrw-legacy-common-build -R '^libdxfrw_ac1027_acds_source_compare_self_test$' --output-on-failure passed 1/1 in 0.08 seconds; it rejects wrong role and malformed span and accepts corrected retry.",
+    "scopeLimit": "The generated C++ controls exercise the exact production bounded-H helper used by DRW_ModelerGeometry::parseDwg, while the two source probes exercise complete modeler entity parsing. No full test suite was run."
   },
   "remaining": [
     "Establish a producer-independent normative or native explanation for the code-3 DWG owner role and the ODA DXF group-350 projection.",

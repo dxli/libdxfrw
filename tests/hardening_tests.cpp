@@ -45,6 +45,16 @@ public:
     }
 };
 
+class DwgModelerHistoryFieldTestAccess {
+public:
+    static bool parse(DRW::Version version, dwgBuffer& buffer,
+                      std::uint64_t endBit, bool& present,
+                      dwgHandle& field, DRW_DwgSubrecordRange& span) {
+        return DRW_ModelerGeometry::parseDwgHistoryHandleField(
+            version, buffer, endBit, present, field, span);
+    }
+};
+
 namespace {
 
 struct TestContext {
@@ -20295,6 +20305,67 @@ void testDwgModelerDataStorageLinking(TestContext& t) {
              "unadvertised DataStorage handle fields do not claim an out-of-line record");
 }
 
+void testDwgModelerHistoryHandleField(TestContext& t) {
+    const auto read = [](const std::vector<std::uint8_t>& bytes,
+                         std::uint64_t endBit, bool& present,
+                         dwgHandle& field, DRW_DwgSubrecordRange& span,
+                         std::unique_ptr<dwgBuffer>& buffer) {
+        buffer = std::make_unique<dwgBuffer>(bytes.data(), bytes.size());
+        return DwgModelerHistoryFieldTestAccess::parse(
+            DRW::AC1027, *buffer, endBit, present, field, span);
+    };
+
+    bool present = false;
+    dwgHandle field;
+    DRW_DwgSubrecordRange span;
+    std::unique_ptr<dwgBuffer> buffer;
+    const std::vector<std::uint8_t> nullField{0x30u};
+    const bool nullRead = read(nullField, 8u, present, field, span, buffer);
+    t.expect(nullRead && present && field.rawCode == DRW::DwgHardOwnership
+                 && field.code == DRW::DwgHardOwnership && field.size == 0u
+                 && field.ref64 == 0u && span.m_startBit == 0u
+                 && span.m_bitSize == 8u && span.m_version == DRW::AC1027
+                 && span.m_count == 1u && span.m_parseComplete,
+             "AC1027 null History ID retains its encoded role and exact H span");
+
+    const std::vector<std::uint8_t> nonNullField{0x32u, 0x02u, 0xE4u};
+    const bool nonNullRead = read(nonNullField, 24u, present, field, span,
+                                  buffer);
+    t.expect(nonNullRead && present
+                 && field.rawCode == DRW::DwgHardOwnership
+                 && field.size == 2u && field.ref64 == 0x2E4u
+                 && span.m_bitSize == 24u,
+             "AC1027 non-null History ID retains its full encoded value");
+
+    const std::vector<std::uint8_t> otherRole{0x52u, 0x02u, 0xE4u};
+    const bool otherRoleRead = read(otherRole, 24u, present, field, span,
+                                    buffer);
+    t.expect(otherRoleRead && present && field.rawCode == DRW::DwgHardPointer
+                 && field.ref64 == 0x2E4u,
+             "History ID parser preserves an alternate wire role without guessing semantics");
+
+    const bool truncatedRead = read(nullField, 7u, present, field, span,
+                                    buffer);
+    t.expect(!truncatedRead && !present && field.rawCode == 0u
+                 && field.ref64 == 0u && !span.m_parseComplete
+                 && buffer->isGood()
+                 && buffer->getPosition() == 0u && buffer->getBitPos() == 0u,
+             "partial History ID H is rejected without advancing the source cursor");
+
+    const bool retriedRead = read(nonNullField, 24u, present, field, span,
+                                  buffer);
+    t.expect(retriedRead && present && field.rawCode == DRW::DwgHardOwnership
+                 && field.ref64 == 0x2E4u && span.m_bitSize == 24u,
+             "corrected History ID H succeeds after partial-field refusal");
+
+    const std::vector<std::uint8_t> emptyTail{0u};
+    const bool absentRead = read(emptyTail, 0u, present, field, span,
+                                 buffer);
+    t.expect(absentRead && !present && field.rawCode == 0u
+                 && !span.m_parseComplete,
+             "bounded empty History ID tail remains distinct from truncation");
+}
+
 class ExposedMLeader final : public DRW_MLeader {
 public:
     using DRW_MLeader::parseCode;
@@ -25840,6 +25911,14 @@ void testEmbeddedAttributeDefinitionTextRouting(TestContext& t) {
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 2
+        && std::string(argv[1]) == "--dwg-modeler-history-handle-field") {
+        TestContext focused;
+        testDwgModelerHistoryHandleField(focused);
+        std::cout << "DWG modeler History ID H field: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
     if (argc == 2 && std::string(argv[1]) == "--dxf-operation-admission") {
         TestContext focused;
         testDxfOperationAdmission(focused);
@@ -27447,6 +27526,7 @@ int main(int argc, char** argv) {
     testDxfTokenFacadeBudget(context);
     testDwgAggregateObjectBudget(context);
     testDwgModelerDataStorageLinking(context);
+    testDwgModelerHistoryHandleField(context);
     testMLeaderParserStateCopyIsolation(context);
     testMTextOrientationState(context);
     testDimensionParserStateCopyIsolation(context);
