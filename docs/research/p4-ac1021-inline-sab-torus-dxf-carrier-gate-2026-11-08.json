@@ -63,7 +63,22 @@
         "acisPayloadGroups": [],
         "interpretation": "No group-1/3 SAT payload or group-310 binary payload is present for this exact entity; the peer output is not a positive carrier witness."
       },
-      "evidenceLimit": "implementation comparison only; the emitted entity omits this source body's carrier and neither successful transport nor geometry semantics is independently established"
+      "scratchCorrectedPeerControl": {
+        "archiveRevision": "6d6a33987a1a97095b069c799c3d8a793320f812",
+        "sourceArchive": "git archive HEAD from /Users/dli/dev/libredwg; extracted under /private/tmp/libredwg-inline-sab-probe",
+        "scratchPatch": "src/out_dxf.c: _obj->num_blocks = i changed to _obj->num_blocks = i + 1, including the final short block",
+        "build": "./configure --disable-shared --disable-json; make -j4 -C src libredwg.la; make -j4 -C programs dwg2dxf — PASS",
+        "command": "./programs/dwg2dxf -y -v5 --as r2010 -o <scratch output> <pinned source>",
+        "outputPath": "/private/tmp/libdxfrw-atmos-peer-fixed.dxf",
+        "outputSha256": "5b9473aaf8b185f20dff82db77a7ca37956b134dd36bb3e062ddd2dc08a7d141",
+        "tracePath": "/private/tmp/libdxfrw-atmos-peer-fixed.log",
+        "traceSha256": "b79b29255e48a55a908d3937233e44e553d2333d5989ff2cafbb991c4839fd0c",
+        "handle": "0x452",
+        "entityPairCountIncludingType": 27,
+        "groups": {"1": 17, "70": 1, "350": "453"},
+        "interpretation": "The corrected LibreDWG scratch peer emits SAT text chunks for the exact source SAB entity. This is a differential implementation reference, not independent producer evidence or geometry validation."
+      },
+      "evidenceLimit": "implementation comparison only; neither peer output independently establishes geometry semantics"
     },
     "authoritativeReferences": {
       "autodesk3dsolidDxf": "https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-19AB1C40-0BE0-4F32-BCAB-04B37044A0D3.htm",
@@ -107,7 +122,8 @@
     "diffCheck": "git diff --check — PASS",
     "fixturesAdded": 0,
     "fullSuites": "NOT RUN",
-    "libreDwgVerboseEntityTrace": "PASS as a diagnostic: exact handle 0x452 is followed through SAB-to-SAT conversion; source-code inspection explains why the current peer output drops the final block. Scratch DXF still has only groups 70 and 350; support claim unchanged.",
+    "libreDwgVerboseEntityTrace": "PASS as a diagnostic: exact handle 0x452 is followed through SAB-to-SAT conversion; source-code inspection explains why the unmodified peer output drops the final block.",
+    "libreDwgScratchCorrectedPeer": "PASS: disposable source archive built with the final chunk-count correction; the resulting scratch DXF has 17 group-1 chunks for handle 0x452. This is implementation-derived differential evidence only; support claim unchanged.",
     "postUnlockOdaStartupRetry": {
       "binary": "/Applications/ODAFileConverter.app/Contents/MacOS/ODAFileConverter",
       "command": "--help",

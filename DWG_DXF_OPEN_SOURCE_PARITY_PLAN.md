@@ -756,10 +756,15 @@ selection.
    to `num_blocks`, so it omits that final chunk (and group 1/3) when the
    output fits one chunk. The reproduced entity still has only groups 70 and
    350. This explains the negative peer output as a serializer defect; it is
-   not a positive carrier witness. The next peer control must correct the
-   chunk-count behavior in a scratch diagnostic or use another independent
-   producer, then bind the resulting SAT bytes to this exact handle before
-   using it to qualify a conversion. The
+   not a positive carrier witness. A disposable archive of LibreDWG revision
+   `6d6a33987a1a97095b069c799c3d8a793320f812` was rebuilt with only the
+   final count corrected to `i + 1`; conversion of the hash-pinned source
+   then emitted 17 group-1 SAT chunks for handle `0x452` (plus groups 70 and
+   350). The unmodified output had no SAT groups. This is an implementation
+   comparison and a concrete carrier-format control, not independent
+   producer or geometry evidence. Use its bytes as a differential target for
+   the local SAB-to-SAT implementation, then require a native independent
+   reader/semantic check before promoting support. The
    installed ODA File Converter's direct CLI route still aborts before
    conversion with PasteBoard/XPC errors. On 2026-11-08 the user reported
    unlocking the Mac; a fresh `--help` startup attempt still exited 134 with
@@ -768,9 +773,9 @@ selection.
    failure, not evidence about the drawing. Do not repeat the same direct
    launch; use a materially different supported GUI/session route or continue
    local work. The functioning GUI route does not bind a SAB
-   carrier to this entity, so continue by tracing the exact source entity and
-   its SAB bytes through an independent LibreDWG/ODA diagnostic or a controlled
-   scratch mutation; do not infer a carrier from the negative peer output.
+   carrier to this entity. The scratch-corrected LibreDWG output provides an
+   implementation-derived carrier reference only; seek independent producer
+   and native-reader evidence before promoting the profile.
    See the [Autodesk 3DSOLID DXF
    reference](https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-19AB1C40-0BE0-4F32-BCAB-04B37044A0D3.htm),
    [ODA v5.4.1 §20.4.41](https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf),
@@ -819,13 +824,18 @@ reach the modeler serializer or qualify the inline-SAB carrier gate. Strict
 full-source export also preserves its destination but stops first at the
 unrelated unqualified DWG IMAGEDEF owner role, so the later opaque-frame gate
 was not reached. A fresh LibreDWG 0.14 peer conversion again emitted only
-group 70 and history handle `453` for output handle `452`; its verbose output
-did not explain the missing carrier. The later verbose LibreDWG trace shows
+group 70 and history handle `453` for output handle `452`. The later verbose LibreDWG trace shows
 that its SAB-to-SAT converter runs for handle `0x452`, but the source writer
 sets the emitted chunk count to the last chunk index and consequently omits
 the final chunk; the exact output entity has only groups 70 and 350. This is a
-peer serializer defect, not a positive carrier witness. The post-unlock ODA startup retry still
-aborts before conversion during PasteBoard/XPC initialization. The existing generated TORUS/CMC
+peer serializer defect, not a positive carrier witness. A disposable archive
+of that exact LibreDWG revision was rebuilt with the final block count corrected
+from `i` to `i + 1`; its conversion emits 17 group-1 SAT chunks for handle
+`0x452`. The output hash and scratch patch/build details are in the receipt.
+This gives a peer-derived byte target for implementing our own SAB-to-SAT
+route, but does not independently validate the DXF carrier or geometry. The
+post-unlock ODA startup retry still aborts before conversion during
+PasteBoard/XPC initialization. The existing generated TORUS/CMC
 controls pass (2/2); no fixture was added. These are refusal results, not
 successful physical-source output. See the
 [inline-SAB carrier gate receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).
