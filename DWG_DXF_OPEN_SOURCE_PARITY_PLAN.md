@@ -2443,9 +2443,12 @@ source-specific observations, not stable AC1018 class IDs. Do not hardcode
 either value or skip the unknown override payload. Keep `writeTable` refused
 until the parser can identify the exact physical body span and the output
 profile has independent source-to-output evidence. The speed-first next slice
-is a small generated refusal control that preserves the known flag prefix as
-an explicitly incomplete diagnostic range, followed by retry/sentinel checks;
-it must leave TABLE support fail-closed. Then resume the bounded AC1018 writer
+is now implemented: unknown override masks preserve the consumed flag word and
+virtual-edge byte as an exact, explicitly incomplete range; the generated
+`0x40020` case confirms bounded cursor position, incomplete semantics, and
+same-object recovery on a corrected retry. The route does not skip the
+unknown payload or authorize output. The focused
+`--table-cell-overrides` selector passes. Resume the bounded AC1018 writer
 profile only with a physical source whose cell fields and compound `*T` graph
 are fully modeled. Trace hashes, source hashes, and dispositions are in the
 [encoder-readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).

@@ -7764,6 +7764,8 @@ void testR2010CommonEntityVisualStyleHandleVector(TestContext& t) {
 struct R2007TableFrame {
     std::vector<std::uint8_t> bytes;
     std::uint64_t cellPrefixEndBit {0};
+    std::uint64_t cellOverrideStartBit {0};
+    std::uint64_t cellOverridePrefixEndBit {0};
     std::uint64_t tableDataEndBit {0};
 };
 
@@ -7830,6 +7832,9 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
     const bool knownCellOverrideProfile = cellOverrideFlags == 0u
         || (version == DRW::AC1018 && cellOverrideFlags != 0u
             && (cellOverrideFlags & ~ac1018CellOverrideFlags) == 0u)
+        || (version == DRW::AC1018
+            && (cellOverrideFlags == 0x00040000u
+                || cellOverrideFlags == 0x00040020u))
         || (version == DRW::AC1021 && cellOverrideFlags == 0x00000004u);
     constexpr std::uint32_t generatedTableOverrideFlags =
         0x007FFFFFu;
@@ -7906,8 +7911,10 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
         }
         body.putBit(cellOverrideFlags != 0u);
         if (cellOverrideFlags != 0u) {
+            frame.cellOverrideStartBit = body.bitCount();
             body.putBitLong(static_cast<std::int32_t>(cellOverrideFlags));
             body.putRawChar8(virtualEdgeFlags);
+            frame.cellOverridePrefixEndBit = body.bitCount();
             if (version == DRW::AC1021
                 && cellOverrideFlags == 0x00000004u) {
                 // ODA v5.4.1 §20.4.96.1: bit 0x04 selects Background color
@@ -8081,6 +8088,70 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  && unknownRange->m_count == 16u
                  && cursorBit(unknownInput) == unknownFrame.cellPrefixEndBit,
              "unknown AC1021 TABLE cell stops at its bounded common prefix and keeps fallback semantics partial");
+
+    constexpr std::uint32_t unknownAc1018OverrideFlags = 0x00040020u;
+    R2007TableFrame unknownAc1018OverrideFrame;
+    const bool unknownAc1018OverrideBuilt = makeR2007TableFrame(
+        1u, unknownAc1018OverrideFrame, TablePlacement{},
+        unknownAc1018OverrideFlags, 0u, DRW::AC1018);
+    t.expect(unknownAc1018OverrideBuilt,
+             "AC1018 unknown cell-override vector builds from scratch");
+    if (!unknownAc1018OverrideBuilt)
+        return;
+    dwgBuffer unknownAc1018OverrideInput(
+        unknownAc1018OverrideFrame.bytes.data(),
+        unknownAc1018OverrideFrame.bytes.size());
+    const bool unknownAc1018OverrideRead = table.parseDwg(
+        DRW::AC1018, &unknownAc1018OverrideInput);
+    const auto unknownAc1018OverrideRange = std::find_if(
+        table.m_content.m_subrecordRanges.begin(),
+        table.m_content.m_subrecordRanges.end(),
+        [](const DRW_DwgSubrecordRange& range) {
+            return range.m_name
+                == "r2007-table-cell-overrides-unknown-flags";
+        });
+    t.expect(unknownAc1018OverrideRead
+                 && unknownAc1018OverrideInput.isGood()
+                 && table.m_hasSemanticContent
+                 && !table.m_semanticContentComplete
+                 && unknownAc1018OverrideRange
+                     != table.m_content.m_subrecordRanges.end()
+                 && unknownAc1018OverrideRange->m_startBit
+                     == unknownAc1018OverrideFrame.cellOverrideStartBit
+                 && unknownAc1018OverrideRange->m_bitSize
+                     == unknownAc1018OverrideFrame.cellOverridePrefixEndBit
+                         - unknownAc1018OverrideFrame.cellOverrideStartBit
+                 && unknownAc1018OverrideRange->m_count
+                     == unknownAc1018OverrideFlags
+                 && !unknownAc1018OverrideRange->m_parseComplete
+                 && cursorBit(unknownAc1018OverrideInput)
+                     == unknownAc1018OverrideFrame.cellOverridePrefixEndBit,
+             "unknown AC1018 TABLE override retains only its exact incomplete flag-prefix span");
+
+    R2007TableFrame ac1018RetryFrame;
+    const bool ac1018RetryBuilt = makeR2007TableFrame(
+        1u, ac1018RetryFrame, TablePlacement{}, 0u, 0u, DRW::AC1018);
+    t.expect(ac1018RetryBuilt,
+             "AC1018 TABLE corrected-retry vector builds from scratch");
+    if (!ac1018RetryBuilt)
+        return;
+    dwgBuffer ac1018RetryInput(ac1018RetryFrame.bytes.data(),
+                               ac1018RetryFrame.bytes.size());
+    const bool ac1018RetryRead = table.parseDwg(DRW::AC1018,
+                                                &ac1018RetryInput);
+    const bool staleUnknownOverrideRange = std::any_of(
+        table.m_content.m_subrecordRanges.begin(),
+        table.m_content.m_subrecordRanges.end(),
+        [](const DRW_DwgSubrecordRange& range) {
+            return range.m_name
+                == "r2007-table-cell-overrides-unknown-flags";
+        });
+    t.expect(ac1018RetryRead && ac1018RetryInput.isGood()
+                 && table.m_semanticContentComplete
+                 && !staleUnknownOverrideRange
+                 && cursorBit(ac1018RetryInput)
+                     == ac1018RetryFrame.tableDataEndBit,
+             "same AC1018 TABLE parser retries a valid frame after unknown override refusal");
 
     R2007TableFrame ac1018InvalidVisibilityFrame;
     const bool ac1018InvalidVisibilityBuilt = makeR2007TableFrame(
@@ -8321,10 +8392,12 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1021, &tableColorOverrideInput);
     t.expect(tableColorOverrideRead && tableColorOverrideInput.isGood()
                  && table.m_hasSemanticContent
-                 && !table.m_semanticContentComplete
+                 && table.m_semanticContentComplete
+                 && table.m_tableOverrideFlags == 0x00000020u
+                 && table.m_tableRowTextColors[0].method == 0xC0u
                  && cursorBit(tableColorOverrideInput)
                      == tableColorOverrideFrame.tableDataEndBit,
-             "unretained AC1021 TABLE-level CMC override remains structurally parsed but is not marked semantically complete");
+             "AC1021 TABLE-level ByLayer CMC override is retained with complete typed semantics");
 
     R2007TableFrame tableScalarOverridesFrame;
     const bool tableScalarOverridesBuilt = makeR2007TableFrame(

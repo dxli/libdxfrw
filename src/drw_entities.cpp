@@ -3191,6 +3191,12 @@ bool parseR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
     if ((cell.m_overrideFlags & ~0x0003FFFFu) != 0u) {
         DRW_DBG("Unknown R2007 TABLE cell override flags: ");
         DRW_DBGH(cell.m_overrideFlags); DRW_DBG("\n");
+        semanticComplete = false;
+        if (!appendDwgSubrecordRange(
+                ranges, "r2007-table-cell-overrides-unknown-flags",
+                startBit, currentDwgBit(buf), version,
+                cell.m_overrideFlags, false))
+            return false;
         return false;
     }
     // ODA §20.4.96.1 specifies the AC1018 text-cell field order. Retain the

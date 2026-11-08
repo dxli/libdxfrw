@@ -57,6 +57,20 @@
       "disposition": "Not a complete TABLE writer witness; do not infer the unknown override payload or hardcode class number 523."
     }
   ],
+  "unknown_override_prefix_control": {
+    "generatedFromScratch": true,
+    "version": "AC1018",
+    "overrideFlags": "0x40020",
+    "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
+    "result": "PASS",
+    "assertions": [
+      "The parser records exactly the consumed override-flag and virtual-edge prefix as r2007-table-cell-overrides-unknown-flags with parseComplete=false.",
+      "The recorded bit start, bit size, count and parser cursor match the independently authored vector boundaries.",
+      "The TABLE remains semantically incomplete; the unknown payload is not skipped, decoded or admitted for output.",
+      "The same DRW_Table parser instance accepts a corrected supported AC1018 frame after the refusal and clears the prior incomplete range."
+    ],
+    "disposition": "Diagnostic and retry evidence only; unknown override payload boundaries/semantics and physical TABLE writer support remain unresolved."
+  },
   "first_candidate": {
     "version": "AC1018",
     "profile": "one row, one column, one plain text value-content cell",
@@ -82,6 +96,7 @@
     "No complete AC1018 source-to-writer profile is currently recorded; the two screened AC1018 sources stop at undocumented 0x40000/0x40020 cell override flags.",
     "Observed AC1018 AcDbTable class numbers differ by source (528 and 523); determine the supported CLASS-map resolution policy and never treat either ordinal as a version constant.",
     "The only newly captured table class number is 506 in one AC1021 file; an AC1018 class number must be captured empirically before registering an AC1018 writer.",
+    "The AC1018 unknown-override control now captures only the known prefix; the physical payload span and meaning of 0x40000/0x40020 remain unresolved and must not be skipped or emitted.",
     "The available AC1021 table source is semantically incomplete at cell CadValue type 48 and cannot validate a complete output route.",
     "R24+ TABLECONTENT/TABLEGEOMETRY relationship is outside the available ODA v5.4.1 layout and must remain refused."
   ]
