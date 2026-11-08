@@ -1,6 +1,19 @@
 # DWG/DXF parity — remaining implementation plan
 
 Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectContextData, PERSUBENTMGR, and TABLECONTENT shell recovery now reaches 842/842 published frames with zero entity/object parse failures; the bounded AC1032 MentalRay recovery separately reaches 182/182 frames with zero entity/object parse failures, while strict output remains refused at unrelated HEADER integrity rows ([receipt](docs/research/p6-ac1032-acad-table-cells-reader-fix-2026-11-07.json)); generated AC1032 TABLECONTENT detached-TV controls publish complete typed values, while the alternative body-byte-count control stays raw-only and verifies rollback, retry, destination preservation and following-frame recovery; the PERSUBENTMGR/TABLECONTENT source bodies remain disputed and raw-only; AutoCAD SAVEAS AC1021/24/27/32 samples now establish the same IMAGEDEF code-0xC parent and group-350 dictionary membership, and the independent wire observer captures that cross-version pattern as explicitly unqualified while strict output remains refused ([receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json)); an unlocked Aqua session was observed, but the Launch Services attempt for ODA 27.1 failed with `kLSNoExecutableErr`; the installed 27.1 app passes native verification outside the sandbox; the downloaded official ODA 27.10 ARM64 bundle still fails local code-signature verification although the 27.10 DMG's internal checksums pass, so 27.10 was not executed and no signature was modified ([package receipt](docs/research/p6-oda-27-10-official-arm64-package-signature-2026-11-07.json)); repeated direct 27.1 attempts, including the latest post-unlock retry, aborted during Pasteboard/XPC initialization before document processing. A materially changed GUI route then produced two same-version AC1027 resaves from scratch copies; both validated trailers end at byte 844 and both 739-byte suffixes remain unclaimed. The hashes differ, with no equal byte positions but matching low three bits at every position ([receipt](docs/research/p6-ac1027-oda-gui-same-version-resave-2026-11-07.json)). The read publishes 119/119 frames with zero entity/object parse failures, while strict DXF output remains blocked by the separate AC1027 source-reference gate. Do not repeat the unchanged direct launch method; continue local work and suffix analysis without promoting support claims; the R13 GROUP trace now binds the DICTIONARY issue to EED app `ACAD`, value `TREAT_AS_HARD`, raw ASCII bytes and per-value codepage `0`; ODA v5.4.1 does not define zero as file-codepage inheritance, so the source remains blocked without a production decoder change ([receipt](docs/research/p4-populated-group-candidate-census-2026-11-07.json)); current strict `blocks_and_tables` diagnostic reaches 3,586/3,586 frames, and LibreDWG 0.14 repeats the unqualified FIELD child flag values without resolving their semantics, so strict FIELD/FIELDLIST output remains refused; ODA §2's detached-string rule conflicts with ACadSharp-derived TABLE value byte-count parsing; a debug-only alternate body-string parse of both AC1032 TABLECONTENT objects reaches the exact body and detached-string boundaries; the 17-bit interval is the encoded string-size word plus presence bit, and the final handle bit is byte-alignment padding under ODA §20.1; the candidate still conflicts with the TABLECONTENT schema and remains semantically incomplete, so both objects stay raw/refused with no production parser interpretation change; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the focused named-resource import selector now passes after synthetic receipts stopped authorizing strict-complete DWG output, with destination-preserving refusals and no support-claim change; AC1024 mechanical physical selected-output routes now cover 17 associative dependency/body pairs, 399 constraint nodes, and 17 variables across two networks and 13 value-dependency children in ASCII/Binary; the DXF `AcDbAssocEdgePersSubentId` codec slice is complete, and ten AC1024 civil Edge bodies decode to source-matched vertex-index cycles and their bounded selected ASCII/Binary output/readback passes; whole-source conversion and native meaning remain open ([read receipt](docs/research/p4-ac1024-civil-assoc-edge-dwg-read-2026-11-07.json), [selected-route receipt](docs/research/p4-ac1024-civil-assoc-selected-route-readiness-2026-11-07.json)); the viewport DWG debug trace now prints `centerPY` for its Y coordinate (diagnostic only; [receipt](docs/research/p6-viewport-debug-center-y-log-fix-2026-11-07.json)); a LibreCAD_3 persistence probe using raw include/library paths fails because the consumer compiles as C++14 while current upstream libdxfrw requires C++17, and this configuration bypasses libdxfrw's PUBLIC compile-feature propagation ([receipt](docs/research/p8-librecad3-cxx-standard-consumer-compat-2026-11-07.json)); AC1021 tablet now passes strict same-version output and fresh DXF readback after the WCS mesh extrusion default fix; generated WCS mesh round-trip controls pass across all six DWG writer releases ([receipt](docs/research/p4-ac1021-tablet-wcs-mesh-default-2026-11-07.json)); broader source graph closure remains open). This file
+
+**Resume checkpoint (2026-11-07):** the Mac session is unlocked and the
+audit-enabled ODA 27.1 GUI route has completed both the AC1024 civil residual
+attempt and the four-variant AC1021 writer matrix. The matrix result, paired
+layer-reference assertion, limits, and receipts are recorded below; no more
+authorization or identical ODA launch/retry is required. The AC1021 writer
+probe is complete and must not be repeated. Continue with the first P4
+OBJECTS profile already present in the saved census/inventory that has closed
+source identity, ownership, dependencies, and byte/frame disposition. If the
+first candidate fails any evidence gate, record that precise gate once and
+advance to the next inventory row; do not restart a corpus scan or weaken
+strict output. The implementation slice, focused control, plan/receipt update,
+commit, and concise progress report form one uninterrupted loop.
 **ODA converter retry result (2026-11-07):** after the user unlocked the
 macOS session, ODA File Converter 27.1.0 completed an audit-enabled native GUI
 conversion of a scratch copy of the AC1024 civil source to 2010 ASCII DXF. Its
@@ -173,10 +186,15 @@ codecs, tests, and controls have been removed from the queue; their commits and
 receipts remain in Git and `docs/research/`. Resume from the linked blocker
 instead of repeating successful scans or controls.
 
-1. **P4 / choose and close the next physical OBJECTS subgraph.** Use the existing
-   same-version census and source inventories to select the next profile whose
-   frame disposition, source identity, owner roles, and recursive targets are
-   already established. Do not rescan colorwh, plot-screening, lineweights,
+1. **P4 / choose and close the next physical OBJECTS subgraph.** Start with the
+   already saved [same-version census](docs/research/p4-local-same-version-strict-output-census-2026-11-06.json)
+   and [current source inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json);
+   do not run a new corpus-wide scan. Select the first profile whose frame
+   disposition, source identity, owner roles, and recursive targets are already
+   established. If no row qualifies, capture a short candidate/blocker table
+   from those saved inventories and switch to the next P4/P6 implementation
+   task that has locally testable, evidence-backed semantics. Do not rescan
+   colorwh, plot-screening, lineweights,
    children-room, civil Edge, Pool_Detail VISUALSTYLE, Pool_Detail MATERIAL, or
    the tablet strict-output profile.
    The Pool_Detail AC1021 `ACAD_VISUALSTYLE` graph (NOD `0xC` to dictionary `0x33CC`, 16
@@ -653,8 +671,14 @@ profile's validity or rendering semantics. Keep strict output refused; do not
 invent a name, discard a referenced STYLE, or treat peer output as semantic
 proof. Resolve with a producer-backed source and an independent native consumer;
 only then bind the exact source identities, output references and readback and
-add a scoped serializer regression. Source provenance is unverified, so neither
-the DWG nor peer DXF is a fixture. See the [focused receipt](docs/research/p4-ac1015-entities3d-style-empty-name-output-blocker-2026-11-07.json).
+add a scoped serializer regression. The post-unlock ODA 27.1 GUI audit pass
+produced an AC1024 DXF without an `.err` report and retained the empty-name
+STYLE row, but omitted SHAPE `0x39`; this does not establish lossless native
+acceptance or the pair's semantics. Keep this candidate blocked and do not
+repeat the unchanged conversion. See the [ODA receipt](docs/research/p4-ac1015-entities3d-style-empty-name-oda-gui-2026-11-07.json)
+and [focused blocker receipt](docs/research/p4-ac1015-entities3d-style-empty-name-output-blocker-2026-11-07.json).
+Source provenance is unverified, so neither the DWG nor peer/ODA DXF is a
+fixture.
 The existing generated TABLES inspection selector now also exercises STYLE
 stage diagnostics in ASCII/Binary, destination preservation, and same-codec
 retry; this verifies the diagnostic path without making the physical profile
