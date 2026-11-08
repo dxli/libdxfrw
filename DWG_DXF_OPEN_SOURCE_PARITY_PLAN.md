@@ -752,8 +752,13 @@ selection.
    carrier witness. Resolve why the exact peer entity has no carrier and bind
    the bytes to it before using this source to qualify a conversion. The
    installed ODA File Converter's direct CLI route still aborts before
-   conversion with PasteBoard/XPC errors after the Mac was unlocked; the same
-   invocation is exhausted. The functioning GUI route does not bind a SAB
+   conversion with PasteBoard/XPC errors. On 2026-11-08 the user reported
+   unlocking the Mac; a fresh `--help` startup attempt still exited 134 with
+   PasteBoard `-4960` errors and an invalid `com.apple.hiservices-xpcservice`
+   connection before opening an input. This is a platform/tool initialization
+   failure, not evidence about the drawing. Do not repeat the same direct
+   launch; use a materially different supported GUI/session route or continue
+   local work. The functioning GUI route does not bind a SAB
    carrier to this entity, so continue by tracing the exact source entity and
    its SAB bytes through an independent LibreDWG/ODA diagnostic or a controlled
    scratch mutation; do not infer a carrier from the negative peer output.
@@ -767,10 +772,12 @@ selection.
    typed closure. Its next refusal is `EvaluationGraph owner is unresolved or
    not representable`: the typed ACDS collector is only entered when
    `dataStorageSections` is nonempty, while this AC1021 source has no
-   DataStorage and no same-profile raw DXF history receipt. Resolve how the
-   DWG-origin history/graph can enter the typed output closure without
-   fabricating a DataStorage section; only then can source-bound ASCII/Binary
-   controls reach the modeler serializer. Require exact carrier and graph-role
+   DataStorage and no same-profile raw DXF history receipt. Do not route these
+   DWG-origin records through that DataStorage-only collector or synthesize an
+   ACDSDATA envelope. First define a dedicated inline-SAB projection contract
+   with source-class and graph-role closure independent of DataStorage;
+   implement a carrier only if the DXF schema and an eligible producer
+   witness establish its representation. Require exact carrier and graph-role
    readback, rollback plus corrected retry for injectable dependency failures,
    and the same complete-source refusal guard. Generated-output checks remain
    separate from physical-source evidence.
@@ -794,14 +801,18 @@ sentinel. The projection includes the exact layer-0 extension DICTIONARY
 closure (`0x1C1`, decimal handle 449), then stops at extension-graph
 validation: `EvaluationGraph owner is unresolved or not representable`. The
 typed ACDS collector is gated on a nonempty DataStorage section, which this
-AC1021 source does not have. The probe validates atomic refusal but does not
+AC1021 source does not have. Do not reuse that DataStorage-only collector or
+synthesize an ACDSDATA envelope for this inline-SAB source. After the user
+reported unlocking the Mac, a fresh ODA 27.1 `--help` startup attempt still
+exited 134 during PasteBoard/XPC initialization before processing an input;
+this produced no drawing-level evidence. The probe validates atomic refusal but does not
 reach the modeler serializer or qualify the inline-SAB carrier gate. Strict
 full-source export also preserves its destination but stops first at the
 unrelated unqualified DWG IMAGEDEF owner role, so the later opaque-frame gate
 was not reached. A fresh LibreDWG 0.14 peer conversion again emitted only
 group 70 and history handle `453` for output handle `452`; its verbose output
-did not explain the missing carrier. The ODA converter retry aborts while the
-Mac session remains locked (PasteBoard/XPC). The existing generated TORUS/CMC
+did not explain the missing carrier. The post-unlock ODA startup retry still
+aborts before conversion during PasteBoard/XPC initialization. The existing generated TORUS/CMC
 controls pass (2/2); no fixture was added. These are refusal results, not
 successful physical-source output. See the
 [inline-SAB carrier gate receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).

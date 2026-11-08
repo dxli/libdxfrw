@@ -96,10 +96,19 @@
     "focusedCtest": "ctest --test-dir build -R '^(dxf_acsh_torus_typed_roundtrip|dxf_acsh_cmc_loss_guard)$' --output-on-failure — 2/2 PASS",
     "diffCheck": "git diff --check — PASS",
     "fixturesAdded": 0,
-    "fullSuites": "NOT RUN"
+    "fullSuites": "NOT RUN",
+    "postUnlockOdaStartupRetry": {
+      "binary": "/Applications/ODAFileConverter.app/Contents/MacOS/ODAFileConverter",
+      "command": "--help",
+      "result": "ABORTED_BEFORE_INPUT_PROCESSING",
+      "exitCode": 134,
+      "stderr": "PasteBoard errors creating clipboard/find pasteboards (-4960), then invalid com.apple.hiservices-xpcservice connection",
+      "platformState": "User reported unlocking the Mac immediately before this retry; the startup failure persisted.",
+      "supportClaimEffect": "none"
+    }
   },
   "remaining": [
-    "Admit the exact DWG-origin typed history/graph closure without requiring a fabricated DataStorage section, or establish a standards-backed AC1021 inline-SAB DXF carrier route without loss or fabricated shell values.",
+    "Define a dedicated source-class and graph-role closure for the AC1021 inline-SAB selection without fabricating DataStorage; then establish an eligible DXF carrier route from the DXF schema and producer evidence. ODA File Converter startup still fails after the user-reported unlock, so do not repeat the same CLI launch.",
     "After route selection, prove exact carrier and graph-role readback in ASCII and Binary, plus rollback/retry and complete-source refusal.",
     "Independent ACIS kernel/native semantic evidence remains separate and open."
   ]
