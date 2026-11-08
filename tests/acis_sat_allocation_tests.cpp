@@ -407,9 +407,225 @@ int main() {
                      headerFirstSuccess);
         return 18;
     }
+
+    DRW_SabData expectedSab;
+    DRW_SabParseOutcome expectedSabOutcome;
+    if (!drw_parseSabWithOutcome(modelerSab.data(), modelerSab.size(),
+                                 expectedSab, expectedSabOutcome)
+        || !expectedSabOutcome.complete
+        || !matchesExpectedHeader(expectedSab.header)
+        || expectedSab.records.size() != 3u
+        || expectedSab.records[0].type != "point"
+        || expectedSab.records[0].tokens.size() != 4u
+        || expectedSab.records[0].tokens[1].ival != -1
+        || expectedSab.records[0].tokens[2].ival != 101
+        || expectedSab.records[0].tokens[3].vec.x != 1.0
+        || expectedSab.records[0].tokens[3].vec.y != 2.0
+        || expectedSab.records[0].tokens[3].vec.z != 3.0
+        || expectedSab.records[1].type != "vertex"
+        || expectedSab.records[1].tokens.size() != 4u
+        || expectedSab.records[1].tokens[1].ival != -1
+        || expectedSab.records[1].tokens[2].ival != 202
+        || expectedSab.records[1].tokens[3].ival != 0
+        || expectedSab.records[2].type != "End-of-ACIS-data") {
+        std::fprintf(stderr,
+                     "baseline raw SAB parse failed: complete=%d records=%zu "
+                     "types=%s,%s,%s tokenCounts=%zu,%zu,%zu "
+                     "pointId=%lld vertexId=%lld point=(%.17g,%.17g,%.17g) "
+                     "vertexRef=%lld\n",
+                     expectedSabOutcome.complete ? 1 : 0,
+                     expectedSab.records.size(),
+                     expectedSab.records.size() > 0u
+                         ? expectedSab.records[0].type.c_str() : "-",
+                     expectedSab.records.size() > 1u
+                         ? expectedSab.records[1].type.c_str() : "-",
+                     expectedSab.records.size() > 2u
+                         ? expectedSab.records[2].type.c_str() : "-",
+                     expectedSab.records.size() > 0u
+                         ? expectedSab.records[0].tokens.size() : 0u,
+                     expectedSab.records.size() > 1u
+                         ? expectedSab.records[1].tokens.size() : 0u,
+                     expectedSab.records.size() > 2u
+                         ? expectedSab.records[2].tokens.size() : 0u,
+                     expectedSab.records.size() > 0u
+                         && expectedSab.records[0].tokens.size() > 2u
+                         ? expectedSab.records[0].tokens[2].ival : -1LL,
+                     expectedSab.records.size() > 1u
+                         && expectedSab.records[1].tokens.size() > 2u
+                         ? expectedSab.records[1].tokens[2].ival : -1LL,
+                     expectedSab.records.size() > 0u
+                         && expectedSab.records[0].tokens.size() > 3u
+                         ? expectedSab.records[0].tokens[3].vec.x : 0.0,
+                     expectedSab.records.size() > 0u
+                         && expectedSab.records[0].tokens.size() > 3u
+                         ? expectedSab.records[0].tokens[3].vec.y : 0.0,
+                     expectedSab.records.size() > 0u
+                         && expectedSab.records[0].tokens.size() > 3u
+                         ? expectedSab.records[0].tokens[3].vec.z : 0.0,
+                     expectedSab.records.size() > 1u
+                         && expectedSab.records[1].tokens.size() > 3u
+                         ? expectedSab.records[1].tokens[3].ival : -1LL);
+        return 19;
+    }
+    const auto matchesExpectedSab = [&expectedSab, &matchesExpectedHeader](
+            const DRW_SabData& value) {
+        return matchesExpectedHeader(value.header)
+            && value.records.size() == expectedSab.records.size()
+            && value.records[0].type == expectedSab.records[0].type
+            && value.records[0].tokens.size() == 4u
+            && value.records[0].tokens[3].vec.x == 1.0
+            && value.records[0].tokens[3].vec.y == 2.0
+            && value.records[0].tokens[3].vec.z == 3.0
+            && value.records[1].type == expectedSab.records[1].type
+            && value.records[1].tokens.size() == 4u
+            && value.records[1].tokens[3].ival == 0
+            && value.records[2].type == expectedSab.records[2].type;
+    };
+    int parseFirstSuccess = -1;
+    for (int failIndex = 0; failIndex < 512; ++failIndex) {
+        DRW_SabData output;
+        output.header.signature = "caller-signature";
+        output.header.productId = "caller-product-id";
+        output.records.push_back(DRW_SabRecord());
+        output.records.back().type = "caller-record";
+        DRW_SabParseOutcome outcome;
+        outcome.complete = true;
+        outcome.sourceByteCount = 99u;
+
+        failAfter.store(failIndex, std::memory_order_relaxed);
+        bool parsed = false;
+        bool threw = false;
+        try {
+            parsed = drw_parseSabWithOutcome(
+                modelerSab.data(), modelerSab.size(), output, outcome);
+        } catch (...) {
+            threw = true;
+        }
+        failAfter.store(-1, std::memory_order_relaxed);
+
+        if (threw) {
+            std::fprintf(stderr, "raw SAB parse allocation %d escaped\n",
+                         failIndex);
+            return 20;
+        }
+        if (parsed) {
+            if (!matchesExpectedSab(output) || !outcome.complete) {
+                std::fprintf(stderr, "raw SAB parse output mismatch\n");
+                return 21;
+            }
+            parseFirstSuccess = failIndex;
+            break;
+        }
+        if (!output.records.empty() || !isResetHeader(output.header)
+            || !outcome.allocationFailure || outcome.complete
+            || outcome.sourceByteCount != modelerSab.size()) {
+            std::fprintf(stderr,
+                         "raw SAB parse allocation %d did not roll back\n",
+                         failIndex);
+            return 22;
+        }
+        if (!drw_parseSabWithOutcome(modelerSab.data(), modelerSab.size(),
+                                     output, outcome)
+            || !matchesExpectedSab(output) || !outcome.complete) {
+            std::fprintf(stderr, "raw SAB parse allocation %d retry failed\n",
+                         failIndex);
+            return 23;
+        }
+    }
+    if (parseFirstSuccess < 8) {
+        std::fprintf(stderr, "raw SAB parse sweep too short: %d\n",
+                     parseFirstSuccess);
+        return 24;
+    }
+
+    DRW_AcisModel expectedModel;
+    DRW_SabParseOutcome expectedModelOutcome;
+    if (!drw_buildAcisModelWithLimits(expectedSab, expectedModel,
+                                      expectedModelOutcome,
+                                      DRW_SabParseLimits())
+        || !matchesExpectedHeader(expectedModel.header)
+        || expectedModel.nodes.size() != 3u
+        || expectedModel.nodes[0].type != "point"
+        || expectedModel.nodes[0].refs.size() != 0u
+        || expectedModel.nodes[1].type != "vertex"
+        || expectedModel.nodes[1].refs.size() != 1u
+        || expectedModel.nodes[1].refs[0] != 0
+        || expectedModel.nodes[2].type != "End-of-ACIS-data") {
+        std::fprintf(stderr, "baseline ACIS graph build failed\n");
+        return 25;
+    }
+    const auto matchesExpectedModel = [&expectedModel,
+                                       &matchesExpectedHeader](
+            const DRW_AcisModel& value) {
+        return matchesExpectedHeader(value.header)
+            && value.nodes.size() == expectedModel.nodes.size()
+            && value.nodes[0].type == expectedModel.nodes[0].type
+            && value.nodes[0].refs == expectedModel.nodes[0].refs
+            && value.nodes[1].type == expectedModel.nodes[1].type
+            && value.nodes[1].refs == expectedModel.nodes[1].refs
+            && value.nodes[2].type == expectedModel.nodes[2].type
+            && value.nodes[2].refs == expectedModel.nodes[2].refs;
+    };
+    int modelFirstSuccess = -1;
+    for (int failIndex = 0; failIndex < 512; ++failIndex) {
+        DRW_AcisModel output;
+        output.header.signature = "caller-signature";
+        output.nodes.push_back(DRW_AcisNode());
+        output.nodes.back().type = "caller-node";
+        DRW_SabParseOutcome outcome;
+        outcome.complete = true;
+        outcome.graphItemsAccounted = 99u;
+
+        failAfter.store(failIndex, std::memory_order_relaxed);
+        bool built = false;
+        bool threw = false;
+        try {
+            built = drw_buildAcisModelWithLimits(
+                expectedSab, output, outcome, DRW_SabParseLimits());
+        } catch (...) {
+            threw = true;
+        }
+        failAfter.store(-1, std::memory_order_relaxed);
+
+        if (threw) {
+            std::fprintf(stderr, "ACIS graph allocation %d escaped\n",
+                         failIndex);
+            return 26;
+        }
+        if (built) {
+            if (!matchesExpectedModel(output)) {
+                std::fprintf(stderr, "ACIS graph output mismatch\n");
+                return 27;
+            }
+            modelFirstSuccess = failIndex;
+            break;
+        }
+        if (!output.nodes.empty() || !isResetHeader(output.header)
+            || !outcome.allocationFailure || outcome.complete) {
+            std::fprintf(stderr,
+                         "ACIS graph allocation %d did not roll back\n",
+                         failIndex);
+            return 28;
+        }
+        if (!drw_buildAcisModelWithLimits(
+                expectedSab, output, outcome, DRW_SabParseLimits())
+            || !matchesExpectedModel(output)) {
+            std::fprintf(stderr, "ACIS graph allocation %d retry failed\n",
+                         failIndex);
+            return 29;
+        }
+    }
+    if (modelFirstSuccess < 8) {
+        std::fprintf(stderr, "ACIS graph allocation sweep too short: %d\n",
+                     modelFirstSuccess);
+        return 30;
+    }
     std::printf("SAT allocation rollback/retry passed at %d points; "
                 "ACIS decode rollback/retry passed at %d points; "
-                "ACIS header decode rollback/retry passed at %d points\n",
-                firstSuccess, decodeFirstSuccess, headerFirstSuccess);
+                "ACIS header decode rollback/retry passed at %d points; "
+                "raw SAB parse rollback/retry passed at %d points; "
+                "ACIS graph rollback/retry passed at %d points\n",
+                firstSuccess, decodeFirstSuccess, headerFirstSuccess,
+                parseFirstSuccess, modelFirstSuccess);
     return 0;
 }

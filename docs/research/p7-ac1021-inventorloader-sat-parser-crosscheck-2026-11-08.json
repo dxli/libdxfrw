@@ -154,6 +154,26 @@
       "build": "cmake --build build --target libdxfrw_acis_sat_allocation_tests -j4 — PASS",
       "ctest": "ctest --test-dir build -R \"^(acis_sat_allocation_rollback_retry|acis_sab21200_sat_v1_token_controls|dxf_acsh_torus_typed_roundtrip|dxf_acsh_cmc_loss_guard)$\" --output-on-failure — 4/4 PASS",
       "fullSuites": "NOT RUN"
+    },
+    "rawSabParseAllocationSweep": {
+      "testName": "acis_sat_allocation_rollback_retry",
+      "profile": "locally authored in-memory ACIS BinaryFile v21800 point-to-vertex graph with heap-backed header strings",
+      "observedAllocationPoints": 14,
+      "result": "PASS: every injected parser allocation failure returns false, clears the caller DRW_SabData, reports allocationFailure=true and complete=false with the input byte count retained; retry on the same input and output objects reproduces the header, point coordinates, vertex reference, and terminal record.",
+      "source": "generated in test memory; no DWG/DXF/SAB fixture file",
+      "build": "cmake --build build --target libdxfrw_acis_sat_allocation_tests -j4 — PASS",
+      "ctest": "ctest --test-dir build -R \"^(acis_sat_allocation_rollback_retry|acis_sab21200_sat_v1_token_controls|dxf_acsh_torus_typed_roundtrip|dxf_acsh_cmc_loss_guard)$\" --output-on-failure — 4/4 PASS",
+      "fullSuites": "NOT RUN"
+    },
+    "rawAcisGraphBuildAllocationSweep": {
+      "testName": "acis_sat_allocation_rollback_retry",
+      "profile": "locally authored in-memory ACIS BinaryFile v21800 point-to-vertex graph parsed before the graph-builder allocation sweep",
+      "observedAllocationPoints": 9,
+      "result": "PASS: every injected graph-builder allocation failure returns false, clears the caller DRW_AcisModel, reports allocationFailure=true and complete=false; retry on the same parsed input and output objects reproduces the three node types, resolved vertex-to-point reference, and full header.",
+      "source": "generated in test memory; no DWG/DXF/SAB fixture file",
+      "build": "cmake --build build --target libdxfrw_acis_sat_allocation_tests -j4 — PASS",
+      "ctest": "ctest --test-dir build -R \"^(acis_sat_allocation_rollback_retry|acis_sab21200_sat_v1_token_controls|dxf_acsh_torus_typed_roundtrip|dxf_acsh_cmc_loss_guard)$\" --output-on-failure — 4/4 PASS",
+      "fullSuites": "NOT RUN"
     }
   },
   "nativeRuntime": {
