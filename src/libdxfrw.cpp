@@ -12391,7 +12391,12 @@ bool dxfRW::writeTableStyle(
             return false;
         switch (cmc.m_method) {
         case 0:
-            return true;
+            // DXF groups 420/430 carry the C2 truecolor form.  Method zero
+            // can use only the scalar group-62 projection here; accepting
+            // extension fields would either normalize the method on readback
+            // or emit a book name without its required truecolor base.
+            return cmc.m_rgb < 0 && cmc.m_name.empty()
+                && cmc.m_bookName.empty();
         case 0xC1:
             return cmc.m_rgb < 0 && cmc.m_name.empty()
                 && cmc.m_bookName.empty() && value == 0;

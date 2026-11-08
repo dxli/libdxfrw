@@ -37759,6 +37759,22 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
     if (variedCmcColors) {
         DRW_TableStyleContentFormat& format =
             firstCustomStyle.m_contentFormat;
+        const std::uint8_t savedMethod = format.m_contentColorCmc.m_method;
+        format.m_contentColorCmc.m_method = 0u;
+        if (writer.fileExport(output.string(), DRW::AC1024, binary,
+                              &data, false)
+            || !destinationIsSentinel())
+            return fail("R24 TABLESTYLE accepted RGB metadata with a non-C2 CMC method or replaced the destination");
+        format.m_contentColorCmc.m_method = savedMethod;
+
+        const int savedRgbForBook = format.m_contentColorCmc.m_rgb;
+        format.m_contentColorCmc.m_rgb = -1;
+        if (writer.fileExport(output.string(), DRW::AC1024, binary,
+                              &data, false)
+            || !destinationIsSentinel())
+            return fail("R24 TABLESTYLE accepted a color-book name without its truecolor base or replaced the destination");
+        format.m_contentColorCmc.m_rgb = savedRgbForBook;
+
         const int savedRgb = format.m_contentColorCmc.m_rgb;
         format.m_contentColorCmc.m_rgb = 0x1000000;
         if (writer.fileExport(output.string(), DRW::AC1024, binary,
