@@ -3467,7 +3467,9 @@ bool skipR2007TableOverrides(DRW::Version version, dwgBuffer *buf,
         if ((flags & ~0x007FFFFFu) != 0u)
             return false;
         table.m_tableOverrideFlags = flags;
-        constexpr std::uint32_t retainedFlags = 0x0000001Fu;
+        // The complete ODA R21 override mask has typed TABLE fields. Output
+        // still applies stricter per-field reference and border guards.
+        constexpr std::uint32_t retainedFlags = 0x007FFFFFu;
         if ((flags & ~retainedFlags) != 0u)
             semanticComplete = false;
         ++maskCount;
@@ -12501,6 +12503,8 @@ bool DRW_Table::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     case 171:
         m_dxfStructuredCellValue=false;m_dxfValueFields=0u;
         m_dxfCurrentCellAlignmentRead = false;
+        m_dxfCurrentCellTextStyleRead = false;
+        m_dxfCurrentCellTextHeightRead = false;
         m_dxfCurrentCellOverridesRead = 0u;
         if (m_dxfCurrentCell >= 0) {
             if (m_dxfMergeCurrentFields != 7u)
@@ -12683,25 +12687,94 @@ bool DRW_Table::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         }
         break;
     case 7:
-        if (!m_dxfTablePropertiesStarted && currentCell() != nullptr) {
-            DRW_TableCell *cell = currentCell();
+    {
+        constexpr std::uint32_t rowTextStyleFlags[] = {
+            0x00020000u, 0x00040000u, 0x00080000u
+        };
+        std::size_t expected = 0u;
+        std::size_t slot = 0u;
+        for (std::size_t i = 0u; i < 3u; ++i) {
+            if ((m_tableOverrideFlags & rowTextStyleFlags[i]) != 0u) {
+                if (expected == m_dxfTableRowTextStylesRead)
+                    slot = i;
+                ++expected;
+            }
+        }
+        const bool allCellsStarted = m_dxfRowsExpected >= 0
+            && m_dxfColumnsExpected >= 0
+            && m_dxfNextCell >= static_cast<std::size_t>(m_dxfRowsExpected)
+                * static_cast<std::size_t>(m_dxfColumnsExpected);
+        DRW_TableCell *cell = currentCell();
+        const bool cellStyleSelected = cell != nullptr
+            && (cell->m_overrideFlags & 0x00000010u) != 0u
+            && !m_dxfCurrentCellTextStyleRead;
+        const bool tableStyleField = expected != 0u
+            && (m_dxfTablePropertiesStarted
+                || (allCellsStarted && !cellStyleSelected)
+                || m_dxfTableRowTextStylesRead != 0u);
+        UTF8STRING name = reader->getUtf8String();
+        if (tableStyleField) {
+            if (m_dxfTableRowTextStylesRead >= expected
+                || name.empty() || name.size() > 255u) {
+                markIncomplete();
+            } else {
+                m_tableRowTextStyleNames[slot] = std::move(name);
+            }
+            ++m_dxfTableRowTextStylesRead;
+        } else if (!m_dxfTablePropertiesStarted && cell != nullptr) {
             if (!replaceDxfRetainedStringField(
                     reader, cell->m_dxfRetainedTextStyleBytes,
-                    cell->m_textStyleName, reader->getUtf8String()))
+                    cell->m_textStyleName, std::move(name)))
                 return false;
+            m_dxfCurrentCellTextStyleRead = true;
         } else {
-            reader->getUtf8String();
             markIncomplete();
         }
         break;
+    }
     case 140:
-        if (!m_dxfTablePropertiesStarted && currentCell() != nullptr)
-            currentCell()->m_textHeight = reader->getDouble();
-        else {
-            reader->getDouble();
+    {
+        constexpr std::uint32_t rowTextHeightFlags[] = {
+            0x00100000u, 0x00200000u, 0x00400000u
+        };
+        std::size_t expected = 0u;
+        std::size_t slot = 0u;
+        for (std::size_t i = 0u; i < 3u; ++i) {
+            if ((m_tableOverrideFlags & rowTextHeightFlags[i]) != 0u) {
+                if (expected == m_dxfTableRowTextHeightsRead)
+                    slot = i;
+                ++expected;
+            }
+        }
+        const bool allCellsStarted = m_dxfRowsExpected >= 0
+            && m_dxfColumnsExpected >= 0
+            && m_dxfNextCell >= static_cast<std::size_t>(m_dxfRowsExpected)
+                * static_cast<std::size_t>(m_dxfColumnsExpected);
+        DRW_TableCell *cell = currentCell();
+        const bool cellHeightSelected = cell != nullptr
+            && (cell->m_overrideFlags & 0x00000020u) != 0u
+            && !m_dxfCurrentCellTextHeightRead;
+        const bool tableHeightField = expected != 0u
+            && (m_dxfTablePropertiesStarted
+                || (allCellsStarted && !cellHeightSelected)
+                || m_dxfTableRowTextHeightsRead != 0u);
+        const double value = reader->getDouble();
+        if (tableHeightField) {
+            if (m_dxfTableRowTextHeightsRead >= expected
+                || !std::isfinite(value)) {
+                markIncomplete();
+            } else {
+                m_tableRowHeightOverrides[slot] = value;
+            }
+            ++m_dxfTableRowTextHeightsRead;
+        } else if (!m_dxfTablePropertiesStarted && cell != nullptr) {
+            cell->m_textHeight = value;
+            m_dxfCurrentCellTextHeightRead = true;
+        } else {
             markIncomplete();
         }
         break;
+    }
     case 170: {
         constexpr std::uint32_t rowAlignmentFlags[] = {
             0x00004000u, 0x00008000u, 0x00010000u
@@ -13007,6 +13080,28 @@ void DRW_Table::finalizeDxfParse() noexcept {
     }
     if ((m_tableOverrideFlags & rowAlignmentFlags) != 0u
         && m_dxfTableAlignmentOverridesRead != expectedRowAlignmentOverrides) {
+        m_dxfUnsupportedData = true;
+        m_semanticContentComplete = false;
+    }
+    constexpr std::array<std::uint32_t, 3> rowTextStyleFlags{{
+        0x00020000u, 0x00040000u, 0x00080000u
+    }};
+    std::size_t expectedRowTextStyles = 0u;
+    for (const std::uint32_t bit : rowTextStyleFlags)
+        if ((m_tableOverrideFlags & bit) != 0u)
+            ++expectedRowTextStyles;
+    if (m_dxfTableRowTextStylesRead != expectedRowTextStyles) {
+        m_dxfUnsupportedData = true;
+        m_semanticContentComplete = false;
+    }
+    constexpr std::array<std::uint32_t, 3> rowTextHeightFlags{{
+        0x00100000u, 0x00200000u, 0x00400000u
+    }};
+    std::size_t expectedRowTextHeights = 0u;
+    for (const std::uint32_t bit : rowTextHeightFlags)
+        if ((m_tableOverrideFlags & bit) != 0u)
+            ++expectedRowTextHeights;
+    if (m_dxfTableRowTextHeightsRead != expectedRowTextHeights) {
         m_dxfUnsupportedData = true;
         m_semanticContentComplete = false;
     }
@@ -13409,6 +13504,7 @@ void DRW_Table::resetDwgState() {
     m_tableRowHeightOverrides = {{0.0, 0.0, 0.0}};
     m_tableRowAlignmentOverrides = {{0, 0, 0}};
     m_tableRowTextStyleHandles = {{0u, 0u, 0u}};
+    m_tableRowTextStyleNames = {{}};
     m_tableRowTextColors = {{DRW_DwgCmColor{}, DRW_DwgCmColor{},
                              DRW_DwgCmColor{}}};
     m_tableRowFillNone = {{false, false, false}};
@@ -13436,8 +13532,12 @@ void DRW_Table::resetDwgState() {
     m_dxfDataVersionRead = false;
     m_dxfTablePropertiesStarted = false;
     m_dxfCurrentCellAlignmentRead = false;
+    m_dxfCurrentCellTextStyleRead = false;
+    m_dxfCurrentCellTextHeightRead = false;
     m_dxfCurrentCellOverridesRead = 0u;
     m_dxfTableAlignmentOverridesRead = 0u;
+    m_dxfTableRowTextStylesRead = 0u;
+    m_dxfTableRowTextHeightsRead = 0u;
     m_dxfTableRowTextColorsRead = 0u;
     m_dxfTableRowFillNoneRead = 0u;
     m_dxfTableRowFillColorsRead = 0u;

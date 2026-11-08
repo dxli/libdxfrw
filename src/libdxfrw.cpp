@@ -12097,6 +12097,52 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
     constexpr std::uint32_t rowFillColorFlags[] = {
         0x00000800u, 0x00001000u, 0x00002000u
     };
+    constexpr std::uint32_t rowTextStyleFlags[] = {
+        0x00020000u, 0x00040000u, 0x00080000u
+    };
+    constexpr std::uint32_t rowTextHeightFlags[] = {
+        0x00100000u, 0x00200000u, 0x00400000u
+    };
+    std::array<std::string, 3> rowTextStyleNames;
+    const auto resolveTableRowTextStyle = [&](std::size_t index) {
+        const bool selected =
+            (ent->m_tableOverrideFlags & rowTextStyleFlags[index]) != 0u;
+        const std::uint32_t sourceHandle =
+            ent->m_tableRowTextStyleHandles[index];
+        std::string name = ent->m_tableRowTextStyleNames[index];
+        if (!selected)
+            return sourceHandle == 0u && name.empty();
+        if (sourceHandle != 0u) {
+            if (sourceHandle == DRW::NoHandle
+                || m_writingContext.ambiguousSourceHandles.count(sourceHandle))
+                return false;
+            const auto sourceName = m_sourceTextStyleNamesByHandle.find(
+                sourceHandle);
+            if (sourceName == m_sourceTextStyleNamesByHandle.end()
+                || (!name.empty()
+                    && dxfSymbolNameKey(name) != sourceName->second))
+                return false;
+            name = sourceName->second;
+        }
+        const std::string key = dxfSymbolNameKey(name);
+        const auto emitted = textStyleMap.find(key);
+        const std::size_t sourceNameMatches = static_cast<std::size_t>(
+            std::count_if(m_sourceTextStyleNamesByHandle.begin(),
+                          m_sourceTextStyleNamesByHandle.end(),
+                [&key](const auto& sourceName) {
+                    return sourceName.second == key;
+                }));
+        if (key.empty() || emitted == textStyleMap.end()
+            || sourceNameMatches != 1u
+            || !isSafeDxfRecordText(name))
+            return false;
+        rowTextStyleNames[index] = std::move(name);
+        return true;
+    };
+    bool rowTextStylesResolved = true;
+    for (std::size_t i = 0u; i < rowTextStyleNames.size(); ++i)
+        rowTextStylesResolved = resolveTableRowTextStyle(i)
+            && rowTextStylesResolved;
     const auto tableColorToDxf = [](const DRW_DwgCmColor& color,
                                     int& dxfColor) {
         if (color.flags != 0u || color.rgb24 != -1 || color.hasRgbColor
@@ -12124,6 +12170,17 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
             const int alignment = ent->m_tableRowAlignmentOverrides[i];
             if (selected ? (alignment < 1 || alignment > 9)
                          : (alignment != 0))
+                return true;
+        }
+        return false;
+    };
+    const auto hasUnmappedTableRowHeights = [&]() {
+        for (std::size_t i = 0u; i < 3u; ++i) {
+            const bool selected =
+                (ent->m_tableOverrideFlags & rowTextHeightFlags[i]) != 0u;
+            const double value = ent->m_tableRowHeightOverrides[i];
+            if (selected ? !std::isfinite(value)
+                         : (value != 0.0 || !std::isfinite(value)))
                 return true;
         }
         return false;
@@ -12158,14 +12215,10 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
             && !ent->m_headerSuppressed)
         || ent->m_tableOverrideFlags > static_cast<std::uint32_t>(
                std::numeric_limits<int>::max())
-        || (ent->m_tableOverrideFlags & ~0x0001FFFFu) != 0u
-        || std::any_of(ent->m_tableRowHeightOverrides.begin(),
-                       ent->m_tableRowHeightOverrides.end(),
-            [](double value) { return value != 0.0; })
+        || (ent->m_tableOverrideFlags & ~0x007FFFFFu) != 0u
         || hasUnmappedTableRowAlignment()
-        || std::any_of(ent->m_tableRowTextStyleHandles.begin(),
-                       ent->m_tableRowTextStyleHandles.end(),
-            [](std::uint32_t value) { return value != 0u; })
+        || hasUnmappedTableRowHeights()
+        || !rowTextStylesResolved
         || hasUnmappedTableRowColors()
         || std::any_of(ent->m_tableBorderColors.begin(),
                        ent->m_tableBorderColors.end(), hasDwgCmColor)
@@ -12435,6 +12488,14 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
     if (ent->m_headerSuppressed
         || (ent->m_tableOverrideFlags & 0x00000002u) != 0u)
         writer->writeInt16(281, ent->m_headerSuppressed ? 1 : 0);
+    for (std::size_t i = 0u; i < 3u; ++i) {
+        if ((ent->m_tableOverrideFlags & rowTextStyleFlags[i]) != 0u)
+            writer->writeUtf8String(7, rowTextStyleNames[i]);
+    }
+    for (std::size_t i = 0u; i < 3u; ++i) {
+        if ((ent->m_tableOverrideFlags & rowTextHeightFlags[i]) != 0u)
+            writer->writeDouble(140, ent->m_tableRowHeightOverrides[i]);
+    }
     for (std::size_t i = 0u; i < 3u; ++i) {
         if ((ent->m_tableOverrideFlags & rowAlignmentFlags[i]) != 0u)
             writer->writeInt16(170, ent->m_tableRowAlignmentOverrides[i]);

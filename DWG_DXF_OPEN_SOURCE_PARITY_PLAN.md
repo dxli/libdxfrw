@@ -243,8 +243,16 @@ created locally from scratch for the specific control.
   title/header/data DWG field order and Autodesk documents one DXF group-170
   entry per cell type, but the Autodesk page does not state the repeated-entry
   order; this is bounded codec mapping, not a physical DXF producer witness or
-  native precedence/rendering qualification. Row-height and text-style-handle
-  output remain refused. See the [alignment mapping receipt](docs/research/p5-ac1021-table-row-alignment-dxf-map-2026-11-08.json),
+  native precedence/rendering qualification. Row text-style handles now map
+  through repeated entity-level group 7 names only when the staged STYLE
+  registry proves exactly one emitted target. ODA §20.4.96.1 identifies the
+  three table row heights as repeated group 140 values; group 141 remains the
+  separate physical per-row height array. Both mappings have generated
+  ASCII/Binary parseback, cardinality, strict refusal and retry controls.
+  Autodesk does not specify repeated-value order, so producer order and native
+  precedence remain unqualified. See the [row text-style/height mapping
+  receipt](docs/research/p5-ac1021-table-row-text-style-height-dxf-map-2026-11-08.json),
+  the [alignment mapping receipt](docs/research/p5-ac1021-table-row-alignment-dxf-map-2026-11-08.json),
   the
   [row-height receipt](docs/research/p5-ac1021-table-row-height-overrides-2026-11-08.json),
   [alignment receipt](docs/research/p5-ac1021-table-row-alignments-2026-11-08.json),
@@ -266,8 +274,8 @@ created locally from scratch for the specific control.
   ASCII/Binary output refuses selected or orphaned metadata atomically and
   preserves corrected retry. This does not qualify native edge precedence or
   rendering. See the [border override receipt](docs/research/p5-ac1021-table-border-overrides-2026-11-08.json).
-- **Next P5 implementation packet — TABLE override DXF mapping (bounded, fast):**
-  keep row heights, text-style handles, borders, and other unmapped values
+- **Next P5 implementation packet — TABLE border overrides (bounded, fast):**
+  keep border CMC, lineweight, visibility, and other unproved mappings
   output-refused. Autodesk's
   [TABLE DXF group-code definition](https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-D8CCD2F0-18A3-42BB-A64D-539114A07DA0.htm)
   establishes that entity-level groups 7/140/170/63/64/283 may repeat once per
@@ -281,21 +289,21 @@ created locally from scratch for the specific control.
      so keep generated-only results bounded pending a physical DXF witness.
      Reject missing/excess values and invalid enums as semantically incomplete;
      keep cell-level and entity-level values distinct. **Done for groups
-     170/63/64/283:** exact alignment, ACI/ByLayer/ByBlock, and fill-enabled
-     mappings with ASCII/Binary parseback and fail-closed unsupported color
-     methods are implemented. No public virtuals were added.
-  2. Next implement group 7 row text-style names. Resolve each selected DWG hard
-     pointer to one unique emitted STYLE name through the staged registry; refuse
-     missing, duplicate, wrong-type, or un-emitted targets. Keep text-height
-     group 140 refused unless ODA establishes its relationship to this TABLE
-     override mask. Keep groups 93–96 consistent; selected-zero values must not
-     disappear when a mask is cleared.
-  3. Keep row-height override values refused: DXF group 141 is one physical row
-     height per row, not demonstrated equivalent to three title/header/data
-     style defaults. Track a separate follow-up only if ODA and DXF evidence
-     establish an exact transformation. Likewise retain/refuse border CMC
-     values until group 65/66/68/69 and six edge lineweight/visibility values
-     have unambiguous orientation and precedence proofs.
+     7/140/170/63/64/283:** STYLE hard-pointer-to-name resolution, title/header/
+     data row heights, alignment, bounded indexed CMC, and fill-enabled mapping
+     have ASCII/Binary parseback. Missing, excess, invalid, ambiguous, wrong-
+     type, or un-emitted STYLE targets fail closed; non-finite heights refuse
+     output, while selected zero is preserved. No public virtuals were added.
+  2. Next audit the 18-slot border lineweight and visibility sequences against
+     ODA and Autodesk groups 274–279/284–289. Map only if each of the six edge
+     indices has an exact DXF code and repeated title/header/data order;
+     otherwise keep the fields refused and record the specific missing proof.
+     Border CMC slots remain refused unless all 18 DWG color slots have a
+     lossless DXF representation; Autodesk's groups 65/66/68/69 are shared
+     border categories and do not establish a per-row mapping.
+  3. Keep group 141 physical row heights separate from the three group 140
+     title/header/data style heights. Keep groups 94–96 count/mask relationships
+     consistent; selected-zero values must not disappear when a mask is cleared.
   4. Generated controls (no new fixture files): for each admitted field, verify
      exact DWG field order/value and body sentinel; ASCII and Binary output;
      parse-back of group-code order, count, and value; unsupported-CMC and
@@ -306,14 +314,14 @@ created locally from scratch for the specific control.
      relevant single CTest, and `git diff --check`. Keep full suites to the
      integration checkpoint. This establishes codec mapping only—not producer
      coverage, native style precedence, rendering, or whole-drawing support.
-  Group 170 alignment and groups 63/64/283 row color/fill mappings are
-  implemented and covered by `libdxfrw_table_row_alignment_override_parse` and
-  `libdxfrw_table_scalar_override_output`. Next sub-slice: resolve row
-  text-style handles to unique staged STYLE names; keep group 140/text-height
-  and row heights refused pending an ODA mapping. Map border fields only after
-  their 18-slot to DXF edge ordering
-  and shared-edge precedence are proven. Keep row heights refused until an
-  exact group-141 transformation is demonstrated. Do not block
+  Groups 7/140/170/63/64/283 are implemented and covered by
+  `libdxfrw_table_row_alignment_override_parse` and
+  `libdxfrw_table_scalar_override_output`; details are in the row
+  text-style/height mapping receipt. Next sub-slice: audit 18-slot border
+  lineweight/visibility order for groups 274–279/284–289. Keep border colors
+  refused where the shared DXF categories cannot preserve per-row selections.
+  Keep group 141 physical row heights distinct from group 140 row-style heights.
+  Do not block
   independent P4/P6/P7/P8 work on unavailable samples.
 - **ODA suffix lane:** the user unlocked the Mac and the planned direct ODA
   27.1 retry was made; it again aborted during Pasteboard/XPC initialization
@@ -966,7 +974,7 @@ integration/release checkpoints.
 | ID | State | Remaining work | Dependency |
 | --- | --- | --- | --- |
 | P4 | OPEN — source and graph closure | Continue with the next distinct physically evidenced OBJECTS subgraph; bind source identities, owner/target roles, recursive dependencies, and exact emitted records. Pool_Detail MLEADERSTYLE passes selected ASCII/Binary transport under the exact bounded AC1021 one-style/one-BYBLOCK projection; malformed LTYPE_CONTROL, BLOCK_CONTROL, and HEADER current-layer integrity observations remain excluded, and strict whole-source output remains refused. The AC1021 truetype whole source passes `RequireComplete` ASCII/Binary output and fresh whole-DXF import readback at 173/173 published frames; its group-330 LAYER/group-331 LTYPE references and exact LayerStates DXF-origin group-370 replay now pass under source snapshots and the complete dictionary path, with mutation refusal/retry. Other group-370 XRECORDs remain refused. Do not infer producer-wide support or generalize either source-specific gate. Resolve the tracked ENC dangling-reference profile only with eligible producer evidence. Keep unresolved null members, orphan owners, unsupported frames, and named-block SORTENTSTABLE profiles refused. Broaden beyond individual local sources only with independent producer and native output evidence. **The AC1027 Cover 3DSOLID history field/span and the public-source `0x2e1` → `0x2e4` → `0x2e3` → `0x2e2` identity/edge path are captured and match LibreDWG 0.14 (receipt `p4-ac1027-cover-3dsolid-history-wire-span-2026-11-08`). The production helper has null/non-null/alternate-role and truncation/reset/retry controls. `ACSH_HISTORY_CLASS` direct fields are complete; the graph targets `ACSH_SWEEP_CLASS`, whose EvalExpr/HistoryNode prefixes parse but whose embedded sweep/path entity and SweepOptions action-body tail remains incomplete. The production action-body status now requires exact bounded-body-end consumption before it reports `Complete`; on the pinned AC1027 sample it correctly reports `Partial` after a 174-bit decoded prefix of a 2,571-bit body ([exact-span receipt](docs/research/p4-ac1027-sweep-action-body-exact-span-2026-11-08.json)). This fixes false completeness only; no tail layout is inferred and the profile remains output-refused. The typed BOX-history writer has no Sweep route, and raw-DXF preservation applies only to DXF input; the opaque proxy writer is AC1024-only. Keep output and strict conversion refused. The DWG code-3 to DXF group-350 role mapping remains unqualified; do not alter writer roles from converter output alone.** | Existing Cover inventory, ODA v5.4.1 §§2.13 and 20.4.41, hash-bound source probes, production-helper controls, LibreDWG 0.14 graph view, output-route code audit, and Autodesk DXF group-code authority. |
-| P5 | OPEN — dynamic-block semantics, rendering and TABLE profiles | Find a complete FIELD/FIELDLIST source graph with a visible root; qualify physical TABLEGEOMETRY spans and remaining CONTENTFORMAT/CELLSTYLEMAP combinations; resolve VIEWPORT override type/value and native activation/rendering; establish native dynamic constraint evaluation. For pre-R24 TABLE, groups 170/63/64/283 now have bounded parser/writer/readback mappings using ODA title/header/data order; Autodesk documents the repeated fields but not their order, so retain the physical DXF order witness for broad producer/native claims. Next resolve group 7 row text-style handles to unique emitted STYLE names. Keep group 140/text height, row-height (group 141 is per physical row), border colors 65/66/68/69 and border lineweight/visibility refused until mappings, ordering, and precedence are proven. | P4 closure where needed; ODA §20.4.96.1 + Autodesk TABLE group definitions; source-bound spans/roles plus native semantic evidence for promotion. |
+| P5 | OPEN — dynamic-block semantics, rendering and TABLE profiles | Find a complete FIELD/FIELDLIST source graph with a visible root; qualify physical TABLEGEOMETRY spans and remaining CONTENTFORMAT/CELLSTYLEMAP combinations; resolve VIEWPORT override type/value and native activation/rendering; establish native dynamic constraint evaluation. For pre-R24 TABLE, groups 7/140/170/63/64/283 now have bounded parser/writer/readback mappings using ODA title/header/data order; Autodesk documents repeated groups per cell type but not their order, so retain a physical DXF order witness for broad producer/native claims. Keep group 141 as physical row height. Audit 18-slot border lineweight/visibility to groups 274–279/284–289; keep border CMC groups 65/66/68/69 refused unless their per-row slots map losslessly. | P4 closure where needed; ODA §20.4.96.1 + Autodesk TABLE group definitions; source-bound spans/roles plus native semantic evidence for promotion. |
 | P6 | OPEN — version, schema and semantic residuals | Resolve only evidence-backed source gaps: AC1021/24/27/32 IMAGEDEF parent-role conflict (source capture now retained as unqualified; DXF output still refused); raw-only TABLECONTENT/PERSUBENTMGR/TextObjectContextData; unclaimed AC1027/AC1032 HEADER suffixes; remaining version boundaries, geometry/no-loss, HEADER/CLI, parser disposition and caller-state contracts. The minimal generated AC1021 ODA matrix passes only when both default-layer graph opt-ins are enabled; the AC1021/24/27 fast material control now checks both output layer-0 references against planned targets. This is bounded writer evidence, not a broad support claim. Preserve strict refusal for unsupported or unclaimed bytes. | ODA v5.4.1 plus AutoCAD DWG/DXF source pairs; focused fast controls. Owner-semantic promotion still needs independent native rewrite or normative resolution. Suffix work requires a materially changed converter route. See the [IMAGEDEF role receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json) and [AC1021 writer probe receipt](docs/research/p6-ac1021-minimal-writer-oda-gui-rejection-2026-11-07.json). |
 | P7 | OPEN — ACIS/ACDS and independent 3D meaning | Complete entity/owner/key/AcDs/SAT-SAB association, versioned framing/index/suffix/prototype assembly and exact output binding; qualify transforms, units, topology, trims, periodicity and spline meaning with an independent kernel. | P4 graph/output bindings and independent semantic/kernel evidence. |
 | P8 | OPEN — consumers, platforms and release | Qualify LibreCAD and LibreCAD_3 callbacks/defaults; adapt LibreCAD's `RS_FilterDXFRW` to the upstream AC1021+ default plotstyle/material graph providers and establish the material opaque-reference predicate for its supported export profiles; run a clean consumer build and tests; run native Linux/Windows FreeCAD open/insert checks; qualify intended 3D consumers, ABI, packaging and release behavior. Existing evidence is source inspection only: LibreCAD currently links its bundled fork and its dirty adapter does not implement these upstream provider interfaces. | Stable candidate and native platform access with tool/version receipts; adapter migration must preserve LibreCAD 2D behavior and refuse unresolved references. |

@@ -989,13 +989,15 @@ bool tableRowAlignmentOverrideParseTests(const std::filesystem::path& dir) {
             {0,"ACAD_TABLE"},{5,"4F2"},{100,"AcDbEntity"},{8,"0"},
             {100,"AcDbBlockReference"},{2,"*T1"},{10,"1"},{20,"2"},
             {30,"3"},{100,"AcDbTable"},{90,"6"},{91,"1"},{92,"1"},
-            {93,"131071"},{141,"8"},{142,"20"},{171,"1"},{172,"0"},
+            {93,"8388607"},{141,"8"},{142,"20"},{171,"1"},{172,"0"},
             {173,"0"},{174,"0"},{175,"1"},{176,"1"},{91,"15"},
             {170,"4"},{283,"1"},{63,"3"},{64,"4"},{1,"cell"},
             // The row override mask and complete cell sequence make these
             // trailing groups entity-level without requiring an unrelated
             // flow-direction property as a parser phase marker.
             {170,"2"},{170,"5"},{170,"8"},
+            {7,"TABLE_TITLE"},{7,"TABLE_HEADER"},{7,"TABLE_DATA"},
+            {140,"0"},{140,"2.5"},{140,"3.75"},
             {63,"256"},{63,"0"},{63,"3"},
             {64,"256"},{64,"0"},{64,"7"},
             {283,"0"},{283,"1"},{283,"0"},
@@ -1021,8 +1023,13 @@ bool tableRowAlignmentOverrideParseTests(const std::filesystem::path& dir) {
                 && !color.hasRgbColor && color.colorName.empty()
                 && color.bookName.empty();
         };
-        if (table.m_tableOverrideFlags != 0x0001FFFFu
+        if (table.m_tableOverrideFlags != 0x007FFFFFu
             || table.m_tableRowAlignmentOverrides != expected
+            || table.m_tableRowHeightOverrides
+                != std::array<double, 3>{{0.0, 2.5, 3.75}}
+            || table.m_tableRowTextStyleNames
+                != std::array<UTF8STRING, 3>{{"TABLE_TITLE", "TABLE_HEADER",
+                                               "TABLE_DATA"}}
             || table.m_content.m_rows[0].m_cells[0].m_textAlignment != 4
             || !table.m_tableRowFillNone[0]
             || table.m_tableRowFillNone[1]
@@ -1057,6 +1064,42 @@ bool tableRowAlignmentOverrideParseTests(const std::filesystem::path& dir) {
                 return fail("missing selected row alignment was accepted as complete");
         }
 
+        for (std::size_t missingIndex : {0u, 1u, 2u}) {
+            Tags missing = source();
+            std::size_t seen = 0u;
+            for (auto it = missing.begin(); it != missing.end(); ++it) {
+                if (it->code != 7)
+                    continue;
+                if (seen++ == missingIndex) {
+                    missing.erase(it);
+                    break;
+                }
+            }
+            dx_data incomplete;
+            if (!import(missing, binary, incomplete)
+                || incomplete.tables.size() != 1u
+                || incomplete.tables.front().m_semanticContentComplete)
+                return fail("missing selected row STYLE name was accepted as complete");
+        }
+
+        for (std::size_t missingIndex : {0u, 1u, 2u}) {
+            Tags missing = source();
+            std::size_t seen = 0u;
+            for (auto it = missing.begin(); it != missing.end(); ++it) {
+                if (it->code != 140)
+                    continue;
+                if (seen++ == missingIndex) {
+                    missing.erase(it);
+                    break;
+                }
+            }
+            dx_data incomplete;
+            if (!import(missing, binary, incomplete)
+                || incomplete.tables.size() != 1u
+                || incomplete.tables.front().m_semanticContentComplete)
+                return fail("missing selected row height was accepted as complete");
+        }
+
         Tags excess = source();
         const auto end = std::find_if(excess.rbegin(), excess.rend(),
             [](const Tag& tag) { return tag.code == 0 && tag.value == "ENDSEC"; });
@@ -1068,6 +1111,30 @@ bool tableRowAlignmentOverrideParseTests(const std::filesystem::path& dir) {
             || incomplete.tables.size() != 1u
             || incomplete.tables.front().m_semanticContentComplete)
             return fail("excess row alignment was accepted as complete");
+
+        Tags excessStyle = source();
+        const auto styleEnd = std::find_if(excessStyle.rbegin(), excessStyle.rend(),
+            [](const Tag& tag) { return tag.code == 0 && tag.value == "ENDSEC"; });
+        if (styleEnd == excessStyle.rend())
+            return fail("could not locate TABLE section end for excess STYLE");
+        excessStyle.insert(styleEnd.base() - 1, Tag{7, "EXTRA_STYLE"});
+        dx_data incompleteStyle;
+        if (!import(excessStyle, binary, incompleteStyle)
+            || incompleteStyle.tables.size() != 1u
+            || incompleteStyle.tables.front().m_semanticContentComplete)
+            return fail("excess row STYLE name was accepted as complete");
+
+        Tags excessHeight = source();
+        const auto heightEnd = std::find_if(excessHeight.rbegin(), excessHeight.rend(),
+            [](const Tag& tag) { return tag.code == 0 && tag.value == "ENDSEC"; });
+        if (heightEnd == excessHeight.rend())
+            return fail("could not locate TABLE section end for excess height");
+        excessHeight.insert(heightEnd.base() - 1, Tag{140, "4.5"});
+        dx_data incompleteHeight;
+        if (!import(excessHeight, binary, incompleteHeight)
+            || incompleteHeight.tables.size() != 1u
+            || incompleteHeight.tables.front().m_semanticContentComplete)
+            return fail("excess row height was accepted as complete");
 
         for (const char* invalidValue : {"0", "10", "-1"}) {
             Tags invalid = source();

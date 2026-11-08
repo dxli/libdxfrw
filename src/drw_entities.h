@@ -2057,6 +2057,7 @@ public:
         m_tableRowHeightOverrides(o.m_tableRowHeightOverrides),
         m_tableRowAlignmentOverrides(o.m_tableRowAlignmentOverrides),
         m_tableRowTextStyleHandles(o.m_tableRowTextStyleHandles),
+        m_tableRowTextStyleNames(o.m_tableRowTextStyleNames),
         m_tableRowTextColors(o.m_tableRowTextColors),
         m_tableRowFillNone(o.m_tableRowFillNone),
         m_tableRowFillColors(o.m_tableRowFillColors),
@@ -2090,6 +2091,7 @@ public:
             m_tableRowHeightOverrides = o.m_tableRowHeightOverrides;
             m_tableRowAlignmentOverrides = o.m_tableRowAlignmentOverrides;
             m_tableRowTextStyleHandles = o.m_tableRowTextStyleHandles;
+            m_tableRowTextStyleNames = o.m_tableRowTextStyleNames;
             m_tableRowTextColors = o.m_tableRowTextColors;
             m_tableRowFillNone = o.m_tableRowFillNone;
             m_tableRowFillColors = o.m_tableRowFillColors;
@@ -2148,6 +2150,9 @@ public:
     std::array<int, 3> m_tableRowAlignmentOverrides{{0, 0, 0}};
     // ODA §20.4.96.1 row text-style overrides (title, header, data).
     std::array<std::uint32_t, 3> m_tableRowTextStyleHandles{{0, 0, 0}};
+    // DXF TABLE group-7 names for selected title/header/data overrides. DWG
+    // input retains the corresponding hard-pointer handles above.
+    std::array<UTF8STRING, 3> m_tableRowTextStyleNames;
     // ODA §20.4.96.1 title/header/data row color and fill overrides.
     std::array<DRW_DwgCmColor, 3> m_tableRowTextColors;
     std::array<bool, 3> m_tableRowFillNone{{false, false, false}};
@@ -2182,8 +2187,12 @@ private:
     bool m_dxfDataVersionRead = false;
     bool m_dxfTablePropertiesStarted = false;
     bool m_dxfCurrentCellAlignmentRead = false;
+    bool m_dxfCurrentCellTextStyleRead = false;
+    bool m_dxfCurrentCellTextHeightRead = false;
     unsigned m_dxfCurrentCellOverridesRead = 0u;
     std::size_t m_dxfTableAlignmentOverridesRead = 0u;
+    std::size_t m_dxfTableRowTextStylesRead = 0u;
+    std::size_t m_dxfTableRowTextHeightsRead = 0u;
     std::size_t m_dxfTableRowTextColorsRead = 0u;
     std::size_t m_dxfTableRowFillNoneRead = 0u;
     std::size_t m_dxfTableRowFillColorsRead = 0u;
@@ -2224,8 +2233,12 @@ private:
         m_dxfDataVersionRead = false;
         m_dxfTablePropertiesStarted = false;
         m_dxfCurrentCellAlignmentRead = false;
+        m_dxfCurrentCellTextStyleRead = false;
+        m_dxfCurrentCellTextHeightRead = false;
         m_dxfCurrentCellOverridesRead = 0u;
         m_dxfTableAlignmentOverridesRead = 0u;
+        m_dxfTableRowTextStylesRead = 0u;
+        m_dxfTableRowTextHeightsRead = 0u;
         m_dxfTableRowTextColorsRead = 0u;
         m_dxfTableRowFillNoneRead = 0u;
         m_dxfTableRowFillColorsRead = 0u;

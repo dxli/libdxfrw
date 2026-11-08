@@ -36638,8 +36638,20 @@ bool tableScalarOverrideOutput(bool binary) {
     writer.cData = &data;
     writer.currentBlock = data.mBlock;
     DRW_Table table = makeTextTableControl();
-    table.m_tableOverrideFlags = 0x0001FFFFu;
+    table.m_tableOverrideFlags = 0x007FFFFFu;
     table.m_tableRowAlignmentOverrides = {{2, 5, 8}};
+    table.m_tableRowHeightOverrides = {{0.0, 2.5, 3.5}};
+    table.m_tableRowTextStyleHandles = {{0xA901u, 0xA902u, 0xA903u}};
+    const std::array<std::pair<std::uint32_t, const char*>, 3> rowTextStyles{{
+        {0xA901u, "TABLE_TITLE"},
+        {0xA902u, "TABLE_HEADER"},
+        {0xA903u, "TABLE_DATA"}}};
+    for (const auto& style : rowTextStyles) {
+        DRW_Textstyle textStyle;
+        textStyle.handle = style.first;
+        textStyle.name = style.second;
+        data.textStyles.push_back(textStyle);
+    }
     const auto setRowColorProfile = [](DRW_Table& value) {
         value.m_tableRowTextColors = {{DRW_DwgCmColor{}, DRW_DwgCmColor{},
                                        DRW_DwgCmColor{}}};
@@ -36691,13 +36703,18 @@ bool tableScalarOverrideOutput(bool binary) {
             || readback.tables.size() != 1u)
             return false;
         const DRW_Table& actual = readback.tables.front();
-        return actual.m_tableOverrideFlags == 0x0001FFFFu
+        return actual.m_tableOverrideFlags == 0x007FFFFFu
             && !actual.m_titleSuppressed && actual.m_headerSuppressed
             && actual.m_flowDirection == 0
             && actual.m_horizontalCellMargin == 0.0
             && actual.m_verticalCellMargin == 0.0
             && actual.m_tableRowAlignmentOverrides
                 == std::array<int, 3>{{2, 5, 8}}
+            && actual.m_tableRowHeightOverrides
+                == std::array<double, 3>{{0.0, 2.5, 3.5}}
+            && actual.m_tableRowTextStyleNames
+                == std::array<UTF8STRING, 3>{{"TABLE_TITLE", "TABLE_HEADER",
+                                               "TABLE_DATA"}}
             && actual.m_tableRowFillNone
                 == std::array<bool, 3>{{true, false, true}}
             && actual.m_tableRowTextColors[0].method == 0xC0u
@@ -36732,6 +36749,8 @@ bool tableScalarOverrideOutput(bool binary) {
         std::vector<int> fillColors;
         std::vector<int> textColors;
         std::vector<int> fillEnabled;
+        std::vector<std::string> rowTextStyles;
+        std::vector<double> rowTextHeights;
         int code = 0;
         while (dxf->readRec(&code)) {
             if (code == 0) {
@@ -36742,7 +36761,7 @@ bool tableScalarOverrideOutput(bool binary) {
             } else if (inTable) {
                 switch (code) {
                 case 93:
-                    seen[0] = dxf->getInt32() == 0x1FFFF;
+                    seen[0] = dxf->getInt32() == 0x7FFFFF;
                     break;
                 case 70:
                     seen[1] = dxf->getInt32() == 0;
@@ -36762,6 +36781,12 @@ bool tableScalarOverrideOutput(bool binary) {
                 case 170:
                     alignments.push_back(dxf->getInt32());
                     break;
+                case 7:
+                    rowTextStyles.push_back(dxf->getUtf8String());
+                    break;
+                case 140:
+                    rowTextHeights.push_back(dxf->getDouble());
+                    break;
                 case 63:
                     fillColors.push_back(dxf->getInt32());
                     break;
@@ -36779,6 +36804,9 @@ bool tableScalarOverrideOutput(bool binary) {
         return inTable && std::all_of(seen.begin(), seen.end(),
                                       [](bool value) { return value; })
             && alignments == std::vector<int>({4, 2, 5, 8})
+            && rowTextStyles == std::vector<std::string>(
+                {"TABLE_TITLE", "TABLE_HEADER", "TABLE_DATA"})
+            && rowTextHeights == std::vector<double>({0.0, 2.5, 3.5})
             && fillColors == std::vector<int>({3, 256, 0, 3})
             && textColors == std::vector<int>({4, 256, 0, 7})
             && fillEnabled == std::vector<int>({1, 0, 1, 0});
@@ -36797,6 +36825,76 @@ bool tableScalarOverrideOutput(bool binary) {
                      static_cast<std::streamsize>(sentinel.size()));
         if (!stream.good())
             return fail("TABLE scalar override sentinel could not be written");
+    }
+    DRW_Textstyle duplicateStyle;
+    duplicateStyle.handle = 0xA904u;
+    duplicateStyle.name = "TABLE_TITLE";
+    data.textStyles.push_back(duplicateStyle);
+    if (exportCurrent())
+        return fail("ambiguous TABLE row STYLE name was emitted");
+    {
+        std::ifstream stream(output, std::ios::binary);
+        const std::string contents((std::istreambuf_iterator<char>(stream)),
+                                   std::istreambuf_iterator<char>());
+        if (!stream.good() && !stream.eof())
+            return fail("TABLE duplicate STYLE sentinel could not be read");
+        if (contents != sentinel)
+            return fail("ambiguous TABLE row STYLE replaced the destination");
+    }
+    data.textStyles.pop_back();
+    if (!exportCurrent() || !checkWire() || !checkReadback())
+        return fail("TABLE duplicate STYLE corrected retry failed");
+    {
+        std::ofstream stream(output, std::ios::binary | std::ios::trunc);
+        stream.write(sentinel.data(),
+                     static_cast<std::streamsize>(sentinel.size()));
+        if (!stream.good())
+            return fail("TABLE unresolved STYLE sentinel could not be written");
+    }
+    data.tables.front().m_tableRowTextStyleHandles[1] = 0xFFFFu;
+    if (exportCurrent())
+        return fail("unresolved TABLE row STYLE handle was emitted");
+    {
+        std::ifstream stream(output, std::ios::binary);
+        const std::string contents((std::istreambuf_iterator<char>(stream)),
+                                   std::istreambuf_iterator<char>());
+        if (!stream.good() && !stream.eof())
+            return fail("TABLE unresolved STYLE sentinel could not be read");
+        if (contents != sentinel)
+            return fail("unresolved TABLE row STYLE replaced the destination");
+    }
+    data.tables.front().m_tableRowTextStyleHandles[1] = 0xA902u;
+    if (!exportCurrent() || !checkWire() || !checkReadback())
+        return fail("TABLE unresolved STYLE corrected retry failed");
+    {
+        std::ofstream stream(output, std::ios::binary | std::ios::trunc);
+        stream.write(sentinel.data(),
+                     static_cast<std::streamsize>(sentinel.size()));
+        if (!stream.good())
+            return fail("TABLE invalid row-height sentinel could not be written");
+    }
+    data.tables.front().m_tableRowHeightOverrides[0] =
+        std::numeric_limits<double>::infinity();
+    if (exportCurrent())
+        return fail("non-finite TABLE row height was emitted");
+    {
+        std::ifstream stream(output, std::ios::binary);
+        const std::string contents((std::istreambuf_iterator<char>(stream)),
+                                   std::istreambuf_iterator<char>());
+        if (!stream.good() && !stream.eof())
+            return fail("TABLE invalid row-height sentinel could not be read");
+        if (contents != sentinel)
+            return fail("non-finite TABLE row height replaced the destination");
+    }
+    data.tables.front().m_tableRowHeightOverrides[0] = 0.0;
+    if (!exportCurrent() || !checkWire() || !checkReadback())
+        return fail("TABLE row-height corrected retry failed");
+    {
+        std::ofstream stream(output, std::ios::binary | std::ios::trunc);
+        stream.write(sentinel.data(),
+                     static_cast<std::streamsize>(sentinel.size()));
+        if (!stream.good())
+            return fail("TABLE border override sentinel could not be written");
     }
     data.tables.front().m_borderColorOverrideFlags = 1u;
     if (exportCurrent())
@@ -36847,9 +36945,7 @@ bool tableScalarOverrideOutput(bool binary) {
         if (!stream.good())
             return fail("TABLE row-height override sentinel could not be written");
     }
-    // Force the writer to exercise its own unsupported-mask guard, even though
-    // the DWG reader conservatively marks this not-yet-serialized profile
-    // semantically incomplete.
+    // Force the writer to exercise its fail-closed border metadata guard.
     data.tables.front().m_tableOverrideFlags |= 0x007FC000u;
     data.tables.front().m_tableRowHeightOverrides[0] = 3.5;
     data.tables.front().m_tableRowHeightOverrides[1] = 4.5;
@@ -36898,9 +36994,9 @@ bool tableScalarOverrideOutput(bool binary) {
             return fail("unflagged TABLE row/border override values replaced the destination");
     }
     data.tables.front().m_tableRowHeightOverrides = {{0.0, 0.0, 0.0}};
-    data.tables.front().m_tableOverrideFlags = 0x0001FFFFu;
+    data.tables.front().m_tableOverrideFlags = 0x007FFFFFu;
     data.tables.front().m_tableRowAlignmentOverrides = {{2, 5, 8}};
-    data.tables.front().m_tableRowTextStyleHandles = {{0u, 0u, 0u}};
+    data.tables.front().m_tableRowTextStyleHandles = {{0xA901u, 0xA902u, 0xA903u}};
     setRowColorProfile(data.tables.front());
     data.tables.front().m_borderColorOverrideFlags = 0u;
     data.tables.front().m_tableBorderColors.fill(DRW_DwgCmColor{});
@@ -36910,8 +37006,9 @@ bool tableScalarOverrideOutput(bool binary) {
     data.tables.front().m_borderVisibilityOverrideFlags = 0u;
     data.tables.front().m_tableBorderVisibilities.fill(0);
     data.tables.front().m_hasTableBorderVisibilityOverrides.fill(false);
+    data.tables.front().m_tableRowHeightOverrides = {{0.0, 2.5, 3.5}};
     if (!exportCurrent() || !checkWire() || !checkReadback())
-        return fail("TABLE row-height/alignment refusal corrected retry failed");
+        return fail("TABLE row-height/style corrected retry failed");
     return true;
 }
 
