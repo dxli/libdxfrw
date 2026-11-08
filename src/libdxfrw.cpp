@@ -12541,7 +12541,7 @@ bool dxfRW::writeTableStyle(
                  ++index) {
                 const DRW_TableStyleBorder& border = style.m_borders[index];
                 if (border.m_edgeFlags != (1 << index)
-                    || border.m_propertyOverrideFlags != 0
+                    || (border.m_propertyOverrideFlags & ~0x3F) != 0
                     || border.m_borderType != 1
                     || !byBlockColor(border.m_color, border.m_colorCmc)
                     || border.m_lineWeight != -2

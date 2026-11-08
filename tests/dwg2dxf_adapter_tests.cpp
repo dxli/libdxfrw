@@ -37210,7 +37210,8 @@ void populateR24DwgTableStyleGraph(dx_data& data,
                                   bool variedMergeFlags = false,
                                   bool variedContentLayouts = false,
                                   bool variedAlignments = false,
-                                  bool variedPropertyFlags = false) {
+                                  bool variedPropertyFlags = false,
+                                  bool variedBorderOverrides = false) {
     data.sourceFormat = dx_source_format::DWG;
     data.sourceVersion = DRW::AC1024;
     data.hasNamedObjectDictionary = true;
@@ -37330,6 +37331,12 @@ void populateR24DwgTableStyleGraph(dx_data& data,
         style.m_cellStyles[2].m_contentFormat.m_propertyOverrideFlags =
             0x080u;
     }
+    if (variedBorderOverrides) {
+        for (std::size_t index = 0;
+             index < style.m_cellStyles[0].m_borders.size(); ++index)
+            style.m_cellStyles[0].m_borders[index]
+                .m_propertyOverrideFlags = 1 << index;
+    }
     if (extendedFormatProfile) {
         for (DRW_TableStyleCellStyle& cellStyle : style.m_cellStyles) {
             cellStyle.m_contentFormat.m_valueFormatString = "0.00";
@@ -37386,7 +37393,8 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
                                       bool variedMergeFlags = false,
                                       bool variedContentLayouts = false,
                                       bool variedAlignments = false,
-                                      bool variedPropertyFlags = false) {
+                                      bool variedPropertyFlags = false,
+                                      bool variedBorderOverrides = false) {
     const std::string profileSuffix = inheritedCustomMargins
         ? "-inherited-margins" : "-explicit-margins";
     const std::filesystem::path output =
@@ -37405,7 +37413,7 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
         data, inheritedCustomMargins, prefixValue1,
         valueDataType, valueUnitType, extendedFormatProfile, variedMargins,
         variedTextHeights, variedMergeFlags, variedContentLayouts,
-        variedAlignments, variedPropertyFlags);
+        variedAlignments, variedPropertyFlags, variedBorderOverrides);
     constexpr std::uint32_t kBorderLineTypeHandle = 0x570u;
     if (lineTypeProfile) {
         DRW_LType lineType;
@@ -37621,6 +37629,16 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
         format.m_propertyOverrideFlags = savedOverrides;
         format.m_propertyFlags = savedFlags;
     }
+    if (variedBorderOverrides) {
+        DRW_TableStyleBorder& border = firstCustomStyle.m_borders.front();
+        const int savedBorderOverrides = border.m_propertyOverrideFlags;
+        border.m_propertyOverrideFlags = 0x40;
+        if (writer.fileExport(output.string(), DRW::AC1024, binary,
+                              &data, false)
+            || !destinationIsSentinel())
+            return fail("R24 TABLESTYLE accepted an undocumented border override flag or replaced the destination");
+        border.m_propertyOverrideFlags = savedBorderOverrides;
+    }
     if (!writer.fileExport(output.string(), DRW::AC1024, binary,
                            &data, false)) {
         std::error_code ignored;
@@ -37772,6 +37790,15 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
             || typedStyle.m_cellStyles[index].m_contentLayout
                 != data.tableStyles.front().m_cellStyles[index].m_contentLayout)
             return fail("R24 TABLESTYLE per-style text height, merge flags, or content layout changed on typed readback");
+        for (std::size_t borderIndex = 0;
+             borderIndex < typedStyle.m_cellStyles[index].m_borders.size();
+             ++borderIndex) {
+            if (typedStyle.m_cellStyles[index].m_borders[borderIndex]
+                    .m_propertyOverrideFlags
+                != data.tableStyles.front().m_cellStyles[index]
+                    .m_borders[borderIndex].m_propertyOverrideFlags)
+                return fail("R24 TABLESTYLE border override flags changed on typed readback");
+        }
     }
 
     const DRW_RawDxfObject& raw = readback.rawTableStyles.front();
@@ -37856,6 +37883,7 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
     std::vector<std::uint32_t> rawMergeFlags;
     std::vector<std::uint32_t> rawContentLayouts;
     std::vector<std::uint32_t> rawStyleOverrideFlags;
+    std::vector<int> rawBorderOverrideFlags;
     for (std::size_t index = 0; index + 4u < raw.groups.size(); ++index) {
         const DRW_Variant& marker = raw.groups[index];
         if (marker.code() != 1 || marker.type() != DRW_Variant::STRING
@@ -37905,6 +37933,18 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
             return fail("R24 TABLESTYLE cell-style identity span is malformed");
         identities.emplace_back(id.i_val(), styleClass.i_val(), name.c_str());
     }
+    for (std::size_t index = 0; index + 1u < raw.groups.size(); ++index) {
+        const DRW_Variant& marker = raw.groups[index];
+        if (marker.code() != 1 || marker.type() != DRW_Variant::STRING
+            || marker.c_str() == nullptr
+            || std::string(marker.c_str()) != "GRIDFORMAT_BEGIN")
+            continue;
+        const DRW_Variant& overrideFlags = raw.groups[index + 1u];
+        if (overrideFlags.code() != 90
+            || overrideFlags.type() != DRW_Variant::INTEGER)
+            return fail("R24 TABLESTYLE border override field order is malformed");
+        rawBorderOverrideFlags.push_back(overrideFlags.i_val());
+    }
     const DRW_TableStyle& sourceTableStyle = data.tableStyles.front();
     const std::vector<std::tuple<int, int, std::string>> expectedIdentities {
         {4, 2, "Table"}, {1, 1, "_TITLE"},
@@ -37942,6 +37982,12 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
     const std::vector<int> expectedGridMasks {
         1, 2, 4, 8, 16, 32, 1, 2, 4, 8, 16, 32,
         1, 2, 4, 8, 16, 32};
+    std::vector<int> expectedBorderOverrideFlags(18u, 0);
+    if (variedBorderOverrides) {
+        for (int index = 0; index < 6; ++index)
+            expectedBorderOverrideFlags[static_cast<std::size_t>(index)] =
+                1 << index;
+    }
     std::vector<double> expectedGroup40;
     std::vector<int> expectedMarginFlags;
     std::size_t expectedMarginBeginCount = 0u;
@@ -37990,6 +38036,7 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
         || rawStyleOverrideFlags != expectedStyleOverrideFlags
         || rawContentOverrideFlags != expectedContentOverrideFlags
         || rawContentPropertyFlags != expectedContentPropertyFlags
+        || rawBorderOverrideFlags != expectedBorderOverrideFlags
         || countString(1, "TABLEFORMAT_BEGIN") != 4u
         || countString(1, "CONTENTFORMAT_BEGIN") != 4u
         || countString(1, "CELLMARGIN_BEGIN")
@@ -87362,6 +87409,12 @@ int main(int argc, char** argv) {
                 && typedDwgR24TableStyleDxfRoundTrip(
                     true, nonce, false, 8, false, 512, 0,
                     false, false, false, false, false, false, true)
+                && typedDwgR24TableStyleDxfRoundTrip(
+                    false, nonce, false, 8, false, 512, 0,
+                    false, false, false, false, false, false, false, true)
+                && typedDwgR24TableStyleDxfRoundTrip(
+                    true, nonce, false, 8, false, 512, 0,
+                    false, false, false, false, false, false, false, true)
             ? 0 : 1;
     }
     if (argc == 2 && std::string(argv[1]) == "--raster-dwg-source-profile-eed")
