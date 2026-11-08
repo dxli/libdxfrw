@@ -8886,6 +8886,51 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  "AC1018 TABLE cell appearance overrides preserve following body sentinel");
     }
 
+    TableDwgCodecProbe cellTextStyleTable = makeEncodableAc1018Table();
+    DRW_TableCell& cellTextStyleCell =
+        cellTextStyleTable.m_content.m_rows.front().m_cells.front();
+    cellTextStyleCell.m_overrideFlags = 0x00000010u;
+    cellTextStyleCell.m_textStyleOverrideHandle = 0xA903u;
+    dwgBufferW cellTextStyleBody;
+    dwgBufferW cellTextStyleHandles;
+    dwgBufferW cellTextStyleTypePrefix;
+    cellTextStyleTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t cellTextStyleObjectSizeBit =
+        cellTextStyleTypePrefix.bitCount();
+    const bool cellTextStyleEncoded = cellTextStyleTable.encodeAsTableClass(
+        DRW::AC1018, cellTextStyleBody, cellTextStyleHandles);
+    const std::uint64_t cellTextStyleBodyEndBit = cellTextStyleBody.bitCount();
+    constexpr std::int32_t cellTextStyleSentinel = 0x51CA0010;
+    cellTextStyleBody.putBitLong(cellTextStyleSentinel);
+    cellTextStyleBody.patchRawLong32AtBit(
+        cellTextStyleObjectSizeBit,
+        static_cast<std::uint32_t>(cellTextStyleBody.bitCount()));
+    appendBits(cellTextStyleBody, cellTextStyleHandles);
+    dwgBuffer cellTextStyleInput(cellTextStyleBody.data().data(),
+                                 cellTextStyleBody.data().size());
+    TableDwgCodecProbe cellTextStyleReadback;
+    const bool cellTextStyleRead = cellTextStyleEncoded
+        && cellTextStyleReadback.parseDwg(DRW::AC1018,
+                                          &cellTextStyleInput);
+    const bool cellTextStyleMatches = cellTextStyleRead
+        && cellTextStyleInput.isGood()
+        && cellTextStyleReadback.m_semanticContentComplete
+        && cellTextStyleReadback.m_content.m_rows.front().m_cells.front()
+            .m_overrideFlags == 0x10u
+        && cellTextStyleReadback.m_content.m_rows.front().m_cells.front()
+            .m_textStyleOverrideHandle == 0xA903u
+        && cellTextStyleReadback.m_tableStyleHandle
+            == cellTextStyleTable.m_tableStyleHandle
+        && cursorBit(cellTextStyleInput) == cellTextStyleBodyEndBit;
+    t.expect(cellTextStyleMatches,
+             "AC1018 TABLE cell text-style hard pointer lands in the override slot while table/style handles remain distinct");
+    if (cellTextStyleMatches) {
+        const std::int32_t sentinel = cellTextStyleInput.getBitLong();
+        t.expect(cellTextStyleInput.isGood()
+                     && sentinel == cellTextStyleSentinel,
+                 "AC1018 TABLE cell text-style override preserves following body sentinel");
+    }
+
     TableDwgCodecProbe cellBorderTable = makeEncodableAc1018Table();
     DRW_TableCell& cellBorderCell =
         cellBorderTable.m_content.m_rows.front().m_cells.front();
@@ -9253,7 +9298,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             table.m_content.m_rows.front().m_cells.front().m_valueHandle = 0xA800u;
         });
     expectAtomicPreflightRefusal(
-        "AC1018 TABLE encoder rejects unsupported cell text-style override bit without writing",
+        "AC1018 TABLE encoder rejects cell text-style flag with a missing hard pointer without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
             table.m_content.m_rows.front().m_cells.front().m_overrideFlags = 0x10u;
@@ -9297,7 +9342,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         "AC1018 TABLE encoder rejects an unsupported cell override bit without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
-            table.m_content.m_rows.front().m_cells.front().m_overrideFlags = 0x40u;
+            table.m_content.m_rows.front().m_cells.front().m_overrideFlags = 0x40000u;
         });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects nonpositive selected cell text height without writing",

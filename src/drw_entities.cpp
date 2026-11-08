@@ -3274,10 +3274,11 @@ bool parseR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
     constexpr std::uint32_t backgroundFillNoneFlag = 0x00000002u;
     constexpr std::uint32_t backgroundColorFlag = 0x00000004u;
     constexpr std::uint32_t contentColorFlag = 0x00000008u;
+    constexpr std::uint32_t textStyleFlag = 0x00000010u;
     constexpr std::uint32_t textHeightFlag = 0x00000020u;
     std::uint32_t representableOverrideFlags =
         cellAlignmentFlag | backgroundFillNoneFlag | backgroundColorFlag
-        | contentColorFlag | textHeightFlag;
+        | contentColorFlag | textStyleFlag | textHeightFlag;
     for (std::size_t edge = 0u; edge < borderColorFlags.size(); ++edge)
         representableOverrideFlags |= borderColorFlags[edge]
             | borderLineweightFlags[edge] | borderVisibilityFlags[edge];
@@ -3342,10 +3343,15 @@ bool parseR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
     if ((cell.m_overrideFlags & contentColorFlag) != 0u
         && !readIndexedCellColor(cell.m_textColorRgb))
         return false;
-    if (cell.m_overrideFlags & 0x00010)
-        cell.m_textStyleOverrideHandle = readTableHandle(
-            hdlBuf, bounds.handleEndBit, "cell-text-style-override", buf,
-            strBuf);
+    if (cell.m_overrideFlags & textStyleFlag) {
+        std::uint32_t textStyleHandle = 0u;
+        if (!readTableHandleWithRole(
+                hdlBuf, bounds.handleEndBit, DRW::DwgHardPointer,
+                textStyleHandle, "cell-text-style-override", buf, strBuf))
+            return false;
+        if (legacyAc1018CellOverrideProfile)
+            cell.m_textStyleOverrideHandle = textStyleHandle;
+    }
     if (cell.m_overrideFlags & 0x00020) {
         double textHeight = 0.0;
         if (!readBoundedBitDouble(*buf, bounds.bodyEndBit, textHeight))
@@ -13923,6 +13929,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
     const bool hasCellTextHeightOverride =
         (cell.m_overrideFlags & 0x00000020u) != 0u;
     constexpr std::uint32_t cellAlignmentFlag = 0x00000001u;
+    constexpr std::uint32_t cellTextStyleFlag = 0x00000010u;
     constexpr std::uint32_t backgroundFillNoneFlag = 0x00000002u;
     constexpr std::uint32_t backgroundColorFlag = 0x00000004u;
     constexpr std::uint32_t contentColorFlag = 0x00000008u;
@@ -13937,7 +13944,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
     }};
     std::uint32_t supportedCellOverrideMask =
         cellAlignmentFlag | backgroundFillNoneFlag | backgroundColorFlag
-        | contentColorFlag | 0x00000020u;
+        | contentColorFlag | cellTextStyleFlag | 0x00000020u;
     for (std::size_t edge = 0u; edge < cellBorderColorFlags.size(); ++edge)
         supportedCellOverrideMask |= cellBorderColorFlags[edge]
             | cellBorderLineweightFlags[edge]
@@ -13992,6 +13999,9 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
                 && cell.m_textColorMethod == 0u)
             : (cell.m_textColorRgb == -1
                 && cell.m_textColorMethod == 0u))
+        && (((cell.m_overrideFlags & cellTextStyleFlag) != 0u)
+            ? cell.m_textStyleOverrideHandle != 0u
+            : cell.m_textStyleOverrideHandle == 0u)
         && (hasCellTextHeightOverride
             ? (std::isfinite(cell.m_textHeight) && cell.m_textHeight > 0.0)
             : cell.m_textHeight == 0.0)
@@ -14006,7 +14016,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || cell.m_mergedWidth != 1 || cell.m_mergedHeight != 1
         || !std::isfinite(cell.m_rotation) || cell.m_rotation != 0.0
         || cell.m_valueHandle != 0u || cell.m_textStyleHandle != 0u
-        || cell.m_textStyleOverrideHandle != 0u || cell.m_styleId != 0
+        || cell.m_styleId != 0
         || cell.m_blockHandle != 0u || !cell.m_attributes.empty()
         || cell.m_flags != 0 || cell.m_overrideStyleType != 1
         || !cell.m_toolTip.empty() || !cell.m_textStyleName.empty()
@@ -14169,6 +14179,8 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         putHardPointerHandle(handles, blockRecH.ref);
         putHardPointerHandle(handles, m_tableStyleHandle);
         putDwgReference(handles, 0, 0u); // no text-style/value handle
+        if ((cell.m_overrideFlags & cellTextStyleFlag) != 0u)
+            putHardPointerHandle(handles, cell.m_textStyleOverrideHandle);
         if (!stagedBody.isGood() || !handles->isGood())
             return false;
     } catch (...) {
