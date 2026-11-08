@@ -503,9 +503,12 @@ physical source DataStorage record or call this graph an ACDSDATA record
 selection.
 
 **Next implementation slice — resolve the inline-SAB to DXF carrier route:**
-1. Extend the manual source inspector to pin the input hash, unique graph roles,
-   the inline SAB prefix and terminator/span, payload length and modeler version;
-   assert that DataStorage is absent. Do not check in a DWG/DXF fixture.
+1. Hash-pin the manual source probe before import. The wrapper
+   `tools/research/run_acsh_torus_source_probe.py` streams SHA-256 and accepts
+   only the receipt's exact LibreDWG source digest; the C++ inspector then
+   verifies unique graph roles, inline-SAB signature/terminator/span, payload
+   length/modeler version and DataStorage absence. Keep the external DWG/DXF
+   outside the repository; do not check in a fixture.
 2. Trace the current writer gate for this exact source entity in both target
    DXF families. The code admits DWG-associated AC1015 SAT-v1 payloads and
    R2013+ SAB linked through ACDSDATA; the AC1021 inline SAB is neither, so it
@@ -523,10 +526,15 @@ selection.
    so do not infer that it carries SAB. ODA §20.4.41 distinguishes inline
    version-2 DWG SAB by the `ACIS BinaryFile` header and tagged terminator.
    The existing LibreDWG peer output for this exact source emits handle `452`
-   with group 70 = 1 and history `453`, but no groups 1/3/310. This is not a
-   positive carrier witness. Resolve whether LibreDWG declined an unavailable
-   or invalid body and bind the bytes to the exact peer entity before using
-   this source to qualify a conversion. See the [Autodesk 3DSOLID DXF
+   with group 70 = 1 and history `453`, but no groups 1/3/310. A fresh local
+   LibreDWG 0.14 conversion reproduced that ten-pair record, while verbose
+   conversion of the full drawing did not bind a SAB-to-SAT trace to this
+   output entity. Treat this as a negative peer observation, not a positive
+   carrier witness. Resolve why the exact peer entity has no carrier and bind
+   the bytes to it before using this source to qualify a conversion. The
+   installed ODA File Converter still aborts before conversion with
+   PasteBoard/XPC errors while the Mac is locked; retry it after the session is
+   unlocked. See the [Autodesk 3DSOLID DXF
    reference](https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-19AB1C40-0BE0-4F32-BCAB-04B37044A0D3.htm),
    [ODA v5.4.1 §20.4.41](https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf),
    and the [carrier gate receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).
@@ -545,14 +553,16 @@ selection.
    separate from physical-source evidence.
 
 Use the pinned existing local source only as an opt-in/manual probe. During the
-edit loop, rebuild `libdxfrw_dwg_local_roundtrip` once and run the source
-selector plus `dxf_acsh_torus_typed_roundtrip` and `dxf_acsh_cmc_loss_guard`;
+edit loop, rebuild `libdxfrw_dwg_local_roundtrip` once and run the hash-pinned
+wrapper plus `dxf_acsh_torus_typed_roundtrip` and `dxf_acsh_cmc_loss_guard`;
 run the owning ACDS cohort only if its production hook changes. No full-suite
 run is warranted for this isolated slice. Record the exact source/writer gate
 result here and in its receipt; do not promote support claims from a refusal
 control.
 
-**Current checkpoint:** the source inspector now requires unique graph roles,
+**Current checkpoint:** the source wrapper verifies the receipt's exact SHA-256
+before invoking the C++ inspector; a one-byte-mutated scratch copy is refused
+before import. The inspector requires unique graph roles,
 the exact inline SAB signature and tagged terminator, the 1,059-byte payload,
 the AC1021/modeler-version-2 identity, and absence of a DataStorage link. The
 opt-in `--check-acsh-torus-source-projection` attempts selected ASCII and
@@ -563,11 +573,14 @@ validation: `EvaluationGraph owner is unresolved or not representable`. The
 typed ACDS collector is gated on a nonempty DataStorage section, which this
 AC1021 source does not have. The probe validates atomic refusal but does not
 reach the modeler serializer or qualify the inline-SAB carrier gate. Strict
-full-source export also
-preserves its destination but stops first at the unrelated unqualified DWG
-IMAGEDEF owner role, so the later opaque-frame gate was not reached. The
-existing generated TORUS/CMC controls pass (2/2); no fixture was added. These
-are refusal results, not successful physical-source output. See the
+full-source export also preserves its destination but stops first at the
+unrelated unqualified DWG IMAGEDEF owner role, so the later opaque-frame gate
+was not reached. A fresh LibreDWG 0.14 peer conversion again emitted only
+group 70 and history handle `453` for output handle `452`; its verbose output
+did not explain the missing carrier. The ODA converter retry aborts while the
+Mac session remains locked (PasteBoard/XPC). The existing generated TORUS/CMC
+controls pass (2/2); no fixture was added. These are refusal results, not
+successful physical-source output. See the
 [inline-SAB carrier gate receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).
 
 The local P6 AC1027
