@@ -148,8 +148,8 @@
     "rawSabDecodeAllocationSweep": {
       "testName": "acis_sat_allocation_rollback_retry",
       "profile": "locally authored in-memory ACIS BinaryFile v21800 point-to-vertex graph",
-      "observedAllocationPoints": 20,
-      "result": "PASS: the baseline produces one valid vertex at (1,2,3) and a point-sized bounding box. At every injected allocation failure the decoder returns false, clears the projected B-rep, reports allocationFailure and retains the source byte count; complete reflects how far parsing progressed and can be true when projection allocation fails after framing. A retry using the same input and output objects succeeds with matching vertex coordinates, bounds, and graph counts.",
+      "observedAllocationPoints": 26,
+      "result": "PASS: the baseline produces one valid vertex at (1,2,3) and a point-sized bounding box. At every injected allocation failure the decoder returns false, clears the projected B-rep, reports allocationFailure and retains the source byte count; complete reflects how far parsing progressed and can be true when projection allocation fails after framing. The WithHeader overload also leaves its caller header at the documented reset value for each failure, and retries using the same input/output objects reproduce matching vertex coordinates, bounds, graph counts, and every SAB header field. Heap-backed header strings make allocation during final header publication part of the exercised path; publication is now a statically verified nonthrowing move.",
       "source": "generated in test memory; no DWG/DXF/SAB fixture file",
       "build": "cmake --build build --target libdxfrw_acis_sat_allocation_tests -j4 — PASS",
       "ctest": "ctest --test-dir build -R \"^(acis_sat_allocation_rollback_retry|acis_sab21200_sat_v1_token_controls|dxf_acsh_torus_typed_roundtrip|dxf_acsh_cmc_loss_guard)$\" --output-on-failure — 4/4 PASS",

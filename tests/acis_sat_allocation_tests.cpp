@@ -79,9 +79,9 @@ std::vector<std::uint8_t> makeModelerSab() {
     appendU32(bytes, 3u);
     appendU32(bytes, 2u);
     appendU32(bytes, 0u);
-    appendString(bytes, 7u, "LOCAL_PRODUCT", 13u);
-    appendString(bytes, 7u, "LOCAL_ACIS", 10u);
-    appendString(bytes, 7u, "LOCAL_DATE", 10u);
+    appendString(bytes, 7u, "LOCAL_PRODUCT_IDENTIFIER_WITH_HEAP_STORAGE", 42u);
+    appendString(bytes, 7u, "LOCAL_ACIS_VERSION_FOR_ALLOCATION_SWEEP", 39u);
+    appendString(bytes, 7u, "LOCAL_CREATION_DATE_FOR_TESTING", 31u);
     appendDouble(bytes, 1.0);
     appendDouble(bytes, 1.0e-6);
     appendDouble(bytes, 1.0e-6);
@@ -297,8 +297,119 @@ int main() {
                      decodeFirstSuccess);
         return 12;
     }
+
+    DRW_AcisBrep headerBrep;
+    DRW_SabHeader expectedHeader;
+    DRW_SabParseOutcome headerOutcome;
+    if (!drw_decodeAcisWireframeWithHeader(
+            modelerSab, headerBrep, expectedHeader, headerOutcome,
+            DRW_SabParseLimits())
+        || !headerOutcome.complete
+        || expectedHeader.signature != "ACIS BinaryFile"
+        || expectedHeader.version != 21800
+        || expectedHeader.numRecords != 3
+        || expectedHeader.numEntities != 2
+        || expectedHeader.productId
+            != "LOCAL_PRODUCT_IDENTIFIER_WITH_HEAP_STORAGE"
+        || expectedHeader.acisVersion
+            != "LOCAL_ACIS_VERSION_FOR_ALLOCATION_SWEEP"
+        || expectedHeader.creationDate != "LOCAL_CREATION_DATE_FOR_TESTING") {
+        std::fprintf(stderr, "baseline ACIS header decode failed\n");
+        return 13;
+    }
+    const auto matchesExpectedHeader = [&expectedHeader](
+            const DRW_SabHeader& value) {
+        return value.signature == expectedHeader.signature
+            && value.version == expectedHeader.version
+            && value.numRecords == expectedHeader.numRecords
+            && value.numEntities == expectedHeader.numEntities
+            && value.flags == expectedHeader.flags
+            && value.productId == expectedHeader.productId
+            && value.acisVersion == expectedHeader.acisVersion
+            && value.creationDate == expectedHeader.creationDate
+            && value.unitsInMm == expectedHeader.unitsInMm
+            && value.resTol == expectedHeader.resTol
+            && value.norTol == expectedHeader.norTol;
+    };
+    const auto isResetHeader = [](const DRW_SabHeader& value) {
+        return value.signature.empty() && value.version == 0
+            && value.numRecords == 0 && value.numEntities == 0
+            && value.flags == 0 && value.productId.empty()
+            && value.acisVersion.empty() && value.creationDate.empty()
+            && value.unitsInMm == 1.0 && value.resTol == 0.0
+            && value.norTol == 0.0;
+    };
+    int headerFirstSuccess = -1;
+    for (int failIndex = 0; failIndex < 512; ++failIndex) {
+        DRW_AcisBrep output;
+        DRW_AcisVertex sentinel;
+        sentinel.nodeIndex = 99;
+        sentinel.valid = true;
+        sentinel.point.x = 99.0;
+        output.vertices.push_back(sentinel);
+        output.hasBBox = true;
+        output.diagnostics.push_back("sentinel");
+        DRW_SabHeader header;
+        header.signature = "caller-signature";
+        header.version = 99;
+        header.productId = "caller-product-id";
+        header.acisVersion = "caller-acis-version";
+        header.creationDate = "caller-date";
+        DRW_SabParseOutcome outcome;
+        outcome.complete = true;
+        outcome.sourceByteCount = 99u;
+
+        failAfter.store(failIndex, std::memory_order_relaxed);
+        bool decoded = false;
+        bool threw = false;
+        try {
+            decoded = drw_decodeAcisWireframeWithHeader(
+                modelerSab, output, header, outcome, DRW_SabParseLimits());
+        } catch (...) {
+            threw = true;
+        }
+        failAfter.store(-1, std::memory_order_relaxed);
+
+        if (threw) {
+            std::fprintf(stderr, "ACIS header allocation %d escaped\n",
+                         failIndex);
+            return 14;
+        }
+        if (decoded) {
+            if (!matchesExpectedBrep(output) || !outcome.complete
+                || !matchesExpectedHeader(header)) {
+                std::fprintf(stderr, "ACIS header decode output mismatch\n");
+                return 15;
+            }
+            headerFirstSuccess = failIndex;
+            break;
+        }
+        if (!output.empty() || !output.vertices.empty() || output.hasBBox
+            || !output.diagnostics.empty() || !isResetHeader(header)
+            || !outcome.allocationFailure
+            || outcome.sourceByteCount != modelerSab.size()) {
+            std::fprintf(stderr,
+                         "ACIS header allocation %d did not roll back\n",
+                         failIndex);
+            return 16;
+        }
+        if (!drw_decodeAcisWireframeWithHeader(
+                modelerSab, output, header, outcome, DRW_SabParseLimits())
+            || !outcome.complete || !matchesExpectedBrep(output)
+            || !matchesExpectedHeader(header)) {
+            std::fprintf(stderr, "ACIS header allocation %d retry failed\n",
+                         failIndex);
+            return 17;
+        }
+    }
+    if (headerFirstSuccess < 8) {
+        std::fprintf(stderr, "ACIS header allocation sweep too short: %d\n",
+                     headerFirstSuccess);
+        return 18;
+    }
     std::printf("SAT allocation rollback/retry passed at %d points; "
-                "ACIS decode rollback/retry passed at %d points\n",
-                firstSuccess, decodeFirstSuccess);
+                "ACIS decode rollback/retry passed at %d points; "
+                "ACIS header decode rollback/retry passed at %d points\n",
+                firstSuccess, decodeFirstSuccess, headerFirstSuccess);
     return 0;
 }

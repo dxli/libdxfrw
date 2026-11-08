@@ -29,9 +29,14 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace {
+
+static_assert(std::is_nothrow_move_assignable<DRW_SabHeader>::value,
+              "SAB header publication must not throw after projection");
 
 // ── Layer 1: SAB byte reader (sab.ts) ──────────────────────────────────────
 
@@ -8244,7 +8249,7 @@ static bool decodeAcisWireframeWithLimitsImpl(
         }
         captureBudget(outcome, budget);
         if (sourceHeader)
-            *sourceHeader = sab.header;
+            *sourceHeader = std::move(sab.header);
         return true;
     } catch (const SabError& error) {
         out = DRW_AcisBrep();
