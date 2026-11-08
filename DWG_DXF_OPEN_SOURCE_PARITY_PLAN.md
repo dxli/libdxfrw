@@ -2564,6 +2564,14 @@ when the 32-bit footer reference is absent. The direct AC1018 codec now rejects
 each before writing, and the focused matrix confirms buffer preservation.
 This closes those specific omission paths; continue auditing the public model
 and private retained DXF state before widening the profile.
+The follow-up common-header audit found more ignored state in this AC1018-only
+profile: proxy/reactor counts that disagree with their empty vectors; material,
+shadow, and R2010+ visual-style references that the AC1018 common writer omits;
+and the AC1027+ DataStorage flag, linkage, payload, indices, and marker fields.
+The direct TABLE preflight now refuses those states. Focused tests exercise the
+count mismatches, newer-version common fields, and each DataStorage state
+family while checking output-buffer preservation. The common writer itself is
+unchanged; this protection applies only to the generated AC1018 TABLE codec.
 The direct encoder builds both streams in private copies, catches emission
 exceptions, and swaps the staged buffers into the caller only when both are
 good. A generated success append preserves pre-existing body and handle

@@ -13660,7 +13660,19 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || seqendH.ref64 != DRW::NoHandle || seqEndEntity != nullptr
         || colcount != 1 || rowcount != 1
         || colspace != 0.0 || rowspace != 0.0 || !extData.empty()
-        || !proxyGraphics.empty() || reactorHandles.size() != 0u
+        || !proxyGraphics.empty() || numProxyGraph != 0
+        || reactorHandles.size() != 0u || dwgReactorCount() != 0
+        || material != DRW::MaterialByLayer
+        || shadow != DRW::CastAndReceieveShadows || shadowHandle != 0u
+        || fullVisualStyleHandle != 0u || faceVisualStyleHandle != 0u
+        || edgeVisualStyleHandle != 0u || hasDataStorageBinaryData()
+        || hasDataStorageRecord || dataStorageHandle != 0u
+        || !dataStorageHandleKey.empty() || !dataStorageData.empty()
+        || dataStorageSegmentIndex != 0u || dataStorageSchemaIndex != 0u
+        || hasDataStoragePayloadMarker
+        || dataStoragePayloadMarkerOffset != 0u
+        || dataStoragePayloadMarkerLength != 0u
+        || !dataStoragePayloadMarkerSection.empty()
         || (m_ownerBlockRecordHandle != 0u
             && m_ownerBlockRecordHandle != blockRecH.ref)
         || (m_hasSemanticContent && !m_semanticContentComplete)

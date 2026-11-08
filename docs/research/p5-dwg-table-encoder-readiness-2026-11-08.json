@@ -339,12 +339,56 @@
       {
         "field": "DRW_Insert::seqendH.ref64",
         "reason": "The one-frame TABLE profile has no retained SEQEND handle; a wide reference cannot be ignored when the legacy ref is NoHandle."
+      },
+      {
+        "field": "DRW_Entity::numProxyGraph",
+        "reason": "The common encoder derives proxy-graphics presence and byte length from proxyGraphics; a stale nonzero count with an empty cache would be ignored."
+      },
+      {
+        "field": "DRW_Entity::numReactors",
+        "reason": "The common encoder writes the vector length; the AC1018 TABLE profile has no reactors, so a stale declared count must not be ignored."
+      },
+      {
+        "field": "DRW_Entity::material",
+        "reason": "The common entity body emits material references only after AC1018; this AC1018 TABLE profile cannot retain a non-default material."
+      },
+      {
+        "field": "DRW_Entity::shadow",
+        "reason": "The common entity body emits shadow mode only after AC1018; this AC1018 TABLE profile cannot retain a non-default shadow mode."
+      },
+      {
+        "field": "DRW_Entity::shadowHandle",
+        "reason": "Shadow handles are a later-version field and are not serialized by the AC1018 common entity writer."
+      },
+      {
+        "field": "DRW_Entity::fullVisualStyleHandle/faceVisualStyleHandle/edgeVisualStyleHandle",
+        "reason": "These R2010+ references are not serialized by the AC1018 common entity writer."
+      },
+      {
+        "field": "DRW_Entity::hasDsData",
+        "reason": "The AC1027+ DataStorage advertisement bit is not emitted in the AC1018 common entity header."
+      },
+      {
+        "field": "DRW_Entity::hasDataStorageRecord/dataStorageHandle",
+        "reason": "The AC1018 TABLE profile has no DataStorage object link."
+      },
+      {
+        "field": "DRW_Entity::dataStorageHandleKey/dataStorageData",
+        "reason": "DataStorage key and payload bytes have no AC1018 TABLE body or linked-object encoding."
+      },
+      {
+        "field": "DRW_Entity::dataStorageSegmentIndex/dataStorageSchemaIndex",
+        "reason": "DataStorage segment/schema indices have no AC1018 TABLE representation."
+      },
+      {
+        "field": "DRW_Entity::hasDataStoragePayloadMarker/dataStoragePayloadMarkerOffset/dataStoragePayloadMarkerLength/dataStoragePayloadMarkerSection",
+        "reason": "AC1027+ DataStorage payload-marker state is not representable in the AC1018 TABLE profile."
       }
     ],
     "implementation": "src/drw_entities.cpp: DRW_Table::encodeDwg refuses all listed states during bounded preflight.",
     "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
-    "assertion": "Each generated refusal preserves pre-seeded body and handle buffers.",
-    "disposition": "Closes only these eleven omission paths for the direct generated AC1018 codec. Continue auditing remaining public fields and private retained DXF state; no output support claim."
+    "assertion": "Generated refusal cases preserve pre-seeded body and handle buffers.",
+    "disposition": "Closes only the enumerated omission paths for the direct generated AC1018 codec. Continue auditing remaining public fields and private retained DXF state; no output support claim."
   },
   "generated_ac1018_entity_frame_commit_rollback_control": {
     "generatedFromScratch": true,

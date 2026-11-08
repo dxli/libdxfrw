@@ -7529,6 +7529,10 @@ class TableDwgCodecProbe final : public DRW_Table {
 public:
     using DRW_Table::parseDwg;
 
+    void setDeclaredReactorCount(std::int32_t count) {
+        numReactors = count;
+    }
+
     std::int16_t encodedObjectType() const { return oType; }
     std::uint32_t encodedObjectSize() const { return objSize; }
 
@@ -8952,10 +8956,76 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1018,
         [](TableDwgCodecProbe& table) { table.proxyGraphics = "x"; });
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects stale proxy byte count without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.numProxyGraph = 1; });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects reactors without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
             table.reactorHandles.push_back(0xA900u);
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects stale reactor count without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.setDeclaredReactorCount(1); });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects newer material state without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.material = 0xA900u; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects newer shadow state without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.shadow = DRW::IgnoreShadows;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects newer shadow handle without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.shadowHandle = 0xA900u; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects newer visual-style references without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.fullVisualStyleHandle = 0xA901u;
+            table.faceVisualStyleHandle = 0xA902u;
+            table.edgeVisualStyleHandle = 0xA903u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects DataStorage header flag without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.setHasDataStorageBinaryData(true);
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects DataStorage record linkage without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.hasDataStorageRecord = true;
+            table.dataStorageHandle = 0xA904u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects retained DataStorage key and bytes without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.dataStorageHandleKey = "TABLE_DATA";
+            table.dataStorageData.push_back(0xA5u);
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects DataStorage segment schema indices without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.dataStorageSegmentIndex = 1u;
+            table.dataStorageSchemaIndex = 1u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects DataStorage payload marker metadata without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.hasDataStoragePayloadMarker = true;
+            table.dataStoragePayloadMarkerOffset = 1u;
+            table.dataStoragePayloadMarkerLength = 1u;
+            table.dataStoragePayloadMarkerSection = "AcDb:AcDsPrototype_1b";
         });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects extra rows without writing",
