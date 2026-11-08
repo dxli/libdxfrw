@@ -2,35 +2,36 @@
   "schema": "libdxfrw.research-receipt.v1",
   "id": "p6-dxf-associative-dependency-objects-allocation-failure-retry-2026-11-08",
   "date": "2026-11-08",
-  "status": "GENERATED_AC1024_BASE_VALUE_AND_GEOMETRY_ASSOCIATIVE_DEPENDENCY_OBJECTS_ALLOCATION_ROLLBACK_RETRY_PASS",
+  "status": "GENERATED_AC1024_BASE_DIM_BODY_PAIR_VALUE_AND_GEOMETRY_ASSOCIATIVE_DEPENDENCY_ALLOCATION_ROLLBACK_RETRY_PASS",
   "supportClaimEffect": "none",
-  "scope": "Sweep allocations reached inside the AC1024 OBJECTS callback while emitting typed base, value, and geometry associative dependency records.",
+  "scope": "Sweep allocations reached inside the AC1024 OBJECTS callback while emitting typed base, dimension-body pair, value, and geometry associative dependency records.",
   "source": {
     "kind": "deterministic locally-authored in-memory DRW_AssociativeObject",
-    "profile": "The base dependency profile has class version 3, status -7, read/attached flags, dependency order -2, present name allocation-retry, null dependency references, and body id -9. The value-dependency profile adds class version 0, name VALUE_DEPENDENCY, and a real value 12.5. The geometry profile adds class version 0, enabled state, AcDbAssocSingleEdgePersSubentId, and dependent-on-compound-object state; dependency references and subentity indices remain null/default.",
+    "profile": "The base dependency profile has class version 3, status -7, read/attached flags, dependency order -2, present name allocation-retry, body id -9, and a non-null body handle to the paired dimension body. The paired ASSOCDIMDEPENDENCYBODY has handle 0xE902, parent 0xE901, name BOLTHOLE, version-1 body/base/class fields, and one complete 30-bit dependency-body prefix with four decoded values. The value-dependency profile adds class version 0, name VALUE_DEPENDENCY, and a real value 12.5. The geometry profile adds class version 0, enabled state, AcDbAssocSingleEdgePersSubentId, and dependent-on-compound-object state; dependency references and subentity indices remain null/default.",
     "fixtureFilesAdded": 0
   },
   "implementation": {
-    "parentCommit": "cf276070",
+    "parentCommit": "cec9124a",
     "files": {
-      "tests/associative_dependency_allocation_tests.cpp": "f0a856c9c87a70977058d90aed65937f3579d2c8a0a658bea4321a20d0253368",
+      "tests/associative_dependency_allocation_tests.cpp": "0962f117aa64951507ac179d14268c1909ade5d764bea1d18beb4bc78c50b388",
       "tests/CMakeLists.txt": "4bd71e4d6dadadfd865415a2dba371d6edd5116ce9fb6ec174d86b4c338b9b12"
     },
-    "method": "Warm and calibrate each record profile in ASCII and Binary. Inject std::bad_alloc at every reached callback offset; require failed whole-file publication, byte-identical destination sentinel preservation, caller-object preservation, same-codec retry, and fresh DXF typed readback of the base, value, and geometry dependency fields.",
+    "method": "Warm and calibrate each record profile in ASCII and Binary. For the base profile, emit the dependency and linked dimension body in one OBJECTS callback. Inject std::bad_alloc at every reached callback offset; require failed whole-file publication, byte-identical destination sentinel preservation, caller-record preservation, same-codec retry, and fresh DXF typed readback of the dependency/body links and fields plus the value and geometry dependency fields.",
     "productionCodeChanged": false
   },
   "validation": {
     "configure": "cmake -S . -B build-gcc -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DLIBDXFRW_ENABLE_FREECAD_DESKTOP_CONTROL=OFF -DLIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_LINE_CONTROL=OFF: PASS",
     "build": "cmake --build build-gcc --target libdxfrw_associative_dependency_allocation_tests -j4: PASS",
     "focusedCTest": "ctest --test-dir build-gcc -R '^libdxfrw_associative_dependency_allocation_retry$' --output-on-failure: PASS 1/1",
-    "ascii": "Base dependency: 6/6; value dependency: 8/8; geometry dependency: 8/8 callback allocation offsets injected. Destination and source were preserved; same-codec retry and typed readback passed.",
-    "binary": "Base dependency: 6/6; value dependency: 7/7; geometry dependency: 7/7 callback allocation offsets injected. Destination and source were preserved; same-codec retry and typed readback passed.",
+    "ascii": "Base dependency + dimension body pair: 12/12; value dependency: 8/8; geometry dependency: 8/8 callback allocation offsets injected. Destination and source records were preserved; same-codec retry and typed readback passed.",
+    "binary": "Base dependency + dimension body pair: 12/12; value dependency: 7/7; geometry dependency: 7/7 callback allocation offsets injected. Destination and source records were preserved; same-codec retry and typed readback passed.",
     "fullSuites": "NOT RUN"
   },
   "limitations": [
     "Generated serialization and transaction evidence only; no physical producer prevalence or native associative semantics are established.",
-    "The value dependency control covers only one AC1024 real-valued profile; integer values remain outside scope. Geometry coverage is limited to a generated default-index SingleEdge profile and does not establish source prevalence, reference graph closure, or native geometry semantics.",
+    "The DWG prefix bit span and decoded-count metadata used to admit the generated body are not DXF fields; typed DXF readback asserts only serialized body versions/name/owner and the dependency handle link.",
+    "The paired dependency/body route closes only its generated body-handle and owner link. It has no actual dimension entity, constraint group, node, value-dependency edge, source-backed profile, or native constraint semantics. Integer values remain outside scope; geometry coverage is limited to a generated default-index SingleEdge profile.",
     "No support claim is promoted."
   ],
-  "nextAction": "Extend associative dependency allocation coverage to non-null, source-backed reference roles within a rooted graph; preserve strict source/graph closure and semantic gates."
+  "nextAction": "Qualify a complete rooted dimension-constraint graph only after admitting a coherent constraint node profile, actual dimension entity, value-dependency edge, group membership, reactor closure, and body ownership; keep the generated pair as transport evidence only."
 }

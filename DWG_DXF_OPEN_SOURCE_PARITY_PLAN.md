@@ -95,17 +95,22 @@ LINE reactor. All 52 ASCII and 50 Binary callback allocation offsets preserve
 the destination and source graph, then pass same-adapter retry and typed
 readback. This is generated graph/transaction evidence, not native constraint
 or geometry qualification ([receipt](docs/research/p6-dxf-associative-geometry-graph-allocation-failure-retry-2026-11-08.json)).
-The next fast slice is a **standalone paired record**: an `ACDBASSOCDEPENDENCY`
-with a non-null dimension-body handle plus its `ASSOCDIMDEPENDENCYBODY`, swept
-through the existing ASCII/Binary allocation rollback, same-writer retry and
-typed-readback harness. Do not attach a dimension body to
-`ACDBASSOCGEOMDEPENDENCY`: its admitted geometry profile requires a null body
-handle. This isolated pair will prove only generated transport and transaction
-behavior. After it passes, build a separate rooted dimension-constraint graph
-only when the constraint node profile, actual dimension entity, value-dependency
-edge, group membership, reactor closure and body ownership are all admitted and
-verified together. Keep standalone codec evidence separate from source
-prevalence, native associative meaning and support claims.
+**Implementation follow-up (2026-11-08):** the standalone paired-record slice
+now emits an `ACDBASSOCDEPENDENCY` with a non-null body handle together with its
+`ASSOCDIMDEPENDENCYBODY`. The fast allocation selector passes 12/12 ASCII and
+12/12 Binary callback offsets for the pair; base dependency-only fields,
+version-1 body fields, the body-to-dependency owner link, and
+dependency-to-body handle all pass typed readback. Failures preserve the output
+sentinel and both caller records, then same-codec retry succeeds. Value and
+geometry profiles remain covered at 8/7 offsets in ASCII/Binary. See the
+[combined receipt](docs/research/p6-dxf-associative-dependency-objects-allocation-failure-retry-2026-11-08.json).
+This proves generated transport and transaction behavior only. Do not attach a
+dimension body to `ACDBASSOCGEOMDEPENDENCY`: its admitted geometry profile
+requires a null body handle. A separate rooted dimension-constraint graph
+still needs an admitted node profile, actual dimension entity,
+value-dependency edge, group membership, reactor closure, and body ownership
+verified together. Keep the generated pair separate from source prevalence,
+native associative meaning, and support claims.
 
 **Implementation checkpoint (2026-11-08):** an initial attempt to place the
 dimension body under the geometry dependency was rejected by the existing
@@ -115,6 +120,14 @@ committed. The desktop inventory after the user's unlock message still reports
 the Mac locked, so no new ODA/FreeCAD qualification is available. Continue the
 local paired-record slice above; do not retry the unchanged ODA CLI launch or
 claim platform qualification until a native session is observable.
+
+**Next implementation gate:** inspect the exact AC1024 constraint-node writer
+profiles and existing source-backed dimension/dependency records. Select a
+rooted dimension graph only if one node can close the actual dimension target,
+value dependency, group membership, dependency-body ownership, and reciprocal
+reactors without relying on default or dangling references. If the available
+source evidence cannot support that graph, advance to the next fully admitted
+local profile instead of weakening these gates.
 
 **Resume checkpoint (2026-11-07):** the Mac session was unlocked and the
 audit-enabled ODA 27.1 GUI route has completed the AC1024 civil residual

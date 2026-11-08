@@ -3,6 +3,7 @@
 #include "lc3_compat_check.cpp"
 #include "dx_iface.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -38,6 +39,8 @@ DRW_AssociativeObject makeDependency(DependencyProfile profile) {
     dependency.m_dependencyNamePresent = true;
     dependency.m_dependencyName = "allocation-retry";
     dependency.m_dependencyBodyId = -9;
+    if (profile == DependencyProfile::Base)
+        dependency.m_dependencyBodyHandle = 0xE902u;
     if (profile == DependencyProfile::Value) {
         dependency.m_valueDependencyFieldsParsed = true;
         dependency.m_valueDependencyClassVersion = 0;
@@ -57,16 +60,40 @@ DRW_AssociativeObject makeDependency(DependencyProfile profile) {
     return dependency;
 }
 
+DRW_AssociativeObject makeDimensionDependencyBody() {
+    DRW_AssociativeObject body("ASSOCDIMDEPENDENCYBODY");
+    body.handle = 0xE902u;
+    body.parentHandle = 0xE901u;
+    body.name = "BOLTHOLE";
+    body.m_dependencyBodyVersion = 1u;
+    body.m_dimBaseVersion = 1u;
+    body.m_classVersion = 1u;
+    body.m_dimensionDependencyBodyParsed = true;
+    DRW_AssociativePrefixStatus status;
+    status.m_kind =
+        DRW_AssociativePrefixStatus::Kind::AcDbAssocDependencyBody;
+    status.m_bitSize = 30u;
+    status.m_classVersion = 1u;
+    status.m_status = DRW_AssociativePrefixStatus::ParseStatus::Complete;
+    status.m_decodedValueCount = 4u;
+    body.m_prefixStatuses.push_back(status);
+    return body;
+}
+
 class AssociativeDependencyExport final : public LC3CompatCheck {
 public:
     explicit AssociativeDependencyExport(dxfRW& output,
                                          DependencyProfile profile)
-        : output(output) {
+        : output(output), profile(profile) {
         dependency = makeDependency(profile);
+        if (profile == DependencyProfile::Base)
+            body = makeDimensionDependencyBody();
     }
 
     dxfRW& output;
     DRW_AssociativeObject dependency;
+    DRW_AssociativeObject body;
+    DependencyProfile profile;
     long failAt = -1;
     long reached = 0;
     bool emitted = false;
@@ -74,6 +101,8 @@ public:
     void writeObjects() override {
         const auto emit = [this]() {
             emitted = output.writeAssociativeDependency(&dependency);
+            if (emitted && profile == DependencyProfile::Base)
+                emitted = output.writeAssociativeDependencyBody(&body);
         };
         if (failAt < 0) {
             emit();
@@ -114,11 +143,18 @@ bool verify(const std::filesystem::path& path, DependencyProfile profile) {
     dx_data data;
     dx_iface reader;
     if (!reader.fileImport(path.string(), &data, false)
-        || data.associativeObjects.size() != 1u)
+        || data.associativeObjects.size()
+            != (profile == DependencyProfile::Base ? 2u : 1u))
         return false;
-    const DRW_AssociativeObject& actual = data.associativeObjects.front();
-    return actual.handle == 0xE901u
-        && actual.m_recordName == (profile == DependencyProfile::Value
+    const auto dependencyIt = std::find_if(
+        data.associativeObjects.begin(), data.associativeObjects.end(),
+        [](const DRW_AssociativeObject& object) {
+            return object.handle == 0xE901u;
+        });
+    if (dependencyIt == data.associativeObjects.end())
+        return false;
+    const DRW_AssociativeObject& actual = *dependencyIt;
+    const bool dependencyMatches = actual.m_recordName == (profile == DependencyProfile::Value
             ? "ACDBASSOCVALUEDEPENDENCY"
             : profile == DependencyProfile::Geometry
                 ? "ACDBASSOCGEOMDEPENDENCY" : "ACDBASSOCDEPENDENCY")
@@ -131,6 +167,8 @@ bool verify(const std::filesystem::path& path, DependencyProfile profile) {
         && actual.m_dependencyNamePresent
         && actual.m_dependencyName == "allocation-retry"
         && actual.m_dependencyBodyId == -9
+        && actual.m_dependencyBodyHandle
+            == (profile == DependencyProfile::Base ? 0xE902u : 0u)
         && (profile != DependencyProfile::Value
             || (actual.m_valueDependencyFieldsParsed
                 && actual.m_valueDependencyClassVersion == 0
@@ -146,6 +184,21 @@ bool verify(const std::filesystem::path& path, DependencyProfile profile) {
                 && actual.m_geomPersistentSubentityClassName
                     == "AcDbAssocSingleEdgePersSubentId"
                 && actual.m_geomDependentOnCompoundObject));
+    if (!dependencyMatches || profile != DependencyProfile::Base)
+        return dependencyMatches;
+    const auto bodyIt = std::find_if(
+        data.associativeObjects.begin(), data.associativeObjects.end(),
+        [](const DRW_AssociativeObject& object) {
+            return object.handle == 0xE902u;
+        });
+    return bodyIt != data.associativeObjects.end()
+        && bodyIt->m_recordName == "ASSOCDIMDEPENDENCYBODY"
+        && bodyIt->parentHandle == 0xE901u
+        && bodyIt->name == "BOLTHOLE"
+        && bodyIt->m_dimensionDependencyBodyParsed
+        && bodyIt->m_dependencyBodyVersion == 1u
+        && bodyIt->m_dimBaseVersion == 1u
+        && bodyIt->m_classVersion == 1u;
 }
 
 bool sourceUnchanged(const DRW_AssociativeObject& actual,
@@ -160,6 +213,8 @@ bool sourceUnchanged(const DRW_AssociativeObject& actual,
             == expected.m_dependencyWireComplete
         && actual.m_dependencyName == expected.m_dependencyName
         && actual.m_dependencyBodyId == expected.m_dependencyBodyId
+        && actual.m_dependencyBodyHandle
+            == expected.m_dependencyBodyHandle
         && actual.m_valueDependencyFieldsParsed
             == expected.m_valueDependencyFieldsParsed
         && actual.m_valueDependencyClassVersion
@@ -181,6 +236,32 @@ bool sourceUnchanged(const DRW_AssociativeObject& actual,
             == expected.m_geomPersistentSubentityFieldsParsed
         && actual.m_geomDependentOnCompoundObject
             == expected.m_geomDependentOnCompoundObject;
+}
+
+bool bodyUnchanged(const DRW_AssociativeObject& actual,
+                   const DRW_AssociativeObject& expected) {
+    return actual.handle == expected.handle
+        && actual.parentHandle == expected.parentHandle
+        && actual.m_recordName == expected.m_recordName
+        && actual.name == expected.name
+        && actual.m_dimensionDependencyBodyParsed
+            == expected.m_dimensionDependencyBodyParsed
+        && actual.m_dependencyBodyVersion == expected.m_dependencyBodyVersion
+        && actual.m_dimBaseVersion == expected.m_dimBaseVersion
+        && actual.m_classVersion == expected.m_classVersion
+        && actual.m_prefixStatuses.size()
+            == expected.m_prefixStatuses.size()
+        && (actual.m_prefixStatuses.empty()
+            || (actual.m_prefixStatuses.front().m_kind
+                    == expected.m_prefixStatuses.front().m_kind
+                && actual.m_prefixStatuses.front().m_bitSize
+                    == expected.m_prefixStatuses.front().m_bitSize
+                && actual.m_prefixStatuses.front().m_classVersion
+                    == expected.m_prefixStatuses.front().m_classVersion
+                && actual.m_prefixStatuses.front().m_status
+                    == expected.m_prefixStatuses.front().m_status
+                && actual.m_prefixStatuses.front().m_decodedValueCount
+                    == expected.m_prefixStatuses.front().m_decodedValueCount));
 }
 
 bool run(const std::filesystem::path& directory) {
@@ -223,6 +304,7 @@ bool run(const std::filesystem::path& directory) {
                 exporter.reached = 0;
                 exporter.emitted = false;
                 const DRW_AssociativeObject sourceBefore = exporter.dependency;
+                const DRW_AssociativeObject bodyBefore = exporter.body;
                 const bool wrote = write(exporter, codec, binary);
                 exporter.failAt = -1;
                 std::string current;
@@ -231,13 +313,16 @@ bool run(const std::filesystem::path& directory) {
                     return fail("injected allocation published bytes or was missed");
                 if (!sourceUnchanged(exporter.dependency, sourceBefore)
                     || !sourceUnchanged(exporter.dependency,
-                                        expected.dependency))
+                                        expected.dependency)
+                    || !bodyUnchanged(exporter.body, bodyBefore)
+                    || !bodyUnchanged(exporter.body, expected.body))
                     return fail("injected failure changed the caller object");
                 if (!write(exporter, codec, binary)
                     || !verify(output, profile))
                     return fail("same-codec retry failed typed readback");
                 if (!sourceUnchanged(exporter.dependency,
-                                     expected.dependency))
+                                     expected.dependency)
+                    || !bodyUnchanged(exporter.body, expected.body))
                     return fail("retry changed the caller object");
             }
             std::cout << "AC1024 "
