@@ -22873,6 +22873,171 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
               << " dictionaryKey=ACAD_IMAGE_VARS bodyHandleFields=0"
                  " bodyReferenceRule=ODA-20.4.91\n";
   }
+  if (!data.mLineStyles.empty()) {
+    if (data.sourceVersion >= DRW::AC1032
+        || !data.namedObjectDictionary.hasCompleteDwgEntries()) {
+      std::cerr << "pre-R2018 MLINESTYLE profile has an unsupported source version or incomplete NOD\n";
+      return false;
+    }
+    const DRW_Dictionary* mlineStyleDictionary = nullptr;
+    std::size_t nodRootMatches = 0u;
+    for (const DRW_Dictionary::Entry& entry :
+         data.namedObjectDictionary.m_entries) {
+      if (entry.m_name != "ACAD_MLINESTYLE")
+        continue;
+      ++nodRootMatches;
+      for (const DRW_Dictionary& dictionary : data.dictionaries) {
+        if (dictionary.handle != entry.m_handle)
+          continue;
+        if (mlineStyleDictionary != nullptr) {
+          std::cerr << "MLINESTYLE source inventory has duplicate root dictionaries\n";
+          return false;
+        }
+        mlineStyleDictionary = &dictionary;
+      }
+    }
+    if (nodRootMatches != 1u || mlineStyleDictionary == nullptr
+        || !mlineStyleDictionary->hasCompleteDwgEntries()) {
+      std::cerr << "MLINESTYLE source inventory lacks one complete ACAD_MLINESTYLE dictionary\n";
+      return false;
+    }
+    std::set<std::uint32_t> reportedMlineStyleHandles;
+    for (const DRW_MLineStyle& style : data.mLineStyles) {
+      const DRW_UnsupportedObject* rawFrame =
+          DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+              data, data.importGeneration, style.handle);
+      const DRW_Dictionary::Entry* membership = nullptr;
+      std::size_t membershipMatches = 0u;
+      for (const DRW_Dictionary::Entry& entry :
+           mlineStyleDictionary->m_entries) {
+        if (entry.m_handle == style.handle) {
+          membership = &entry;
+          ++membershipMatches;
+        }
+      }
+      if (rawFrame == nullptr || rawFrame->m_version != data.sourceVersion
+          || rawFrame->m_objectType != 73 || rawFrame->m_isEntity
+          || !drwDwgCommonLinkEvidenceValidated(
+              rawFrame->m_commonLinkEvidence)
+          || rawFrame->m_handle != style.handle
+          || rawFrame->m_parentHandle != style.parentHandle
+          || rawFrame->m_reactorHandles != style.reactorHandles
+          || rawFrame->m_xDictHandle != style.xDictHandle
+          || style.tType != DRW::MLINESTYLE
+          || style.parentHandle != mlineStyleDictionary->handle
+          || membershipMatches != 1u || membership == nullptr
+          || !reportedMlineStyleHandles.insert(style.handle).second) {
+        std::cerr << "MLINESTYLE source identity, common links, or dictionary membership mismatch at handle "
+                  << style.handle << '\n';
+        return false;
+      }
+      for (std::size_t index = 0u; index < style.elements.size(); ++index) {
+        if (style.elements[index].linetypeHandle != 0u) {
+          std::cerr << "pre-R2018 MLINESTYLE contains an unexpected body linetype handle at "
+                    << style.handle << '[' << index << "]\n";
+          return false;
+        }
+      }
+      std::cout << " typedBodyFrame type=MLINESTYLE handle=" << style.handle
+                << " elements=" << style.elements.size()
+                << " owner=" << style.parentHandle
+                << " reactors=" << style.reactorHandles.size()
+                << " xdict=" << style.xDictHandle
+                << " dictionaryOwner=" << mlineStyleDictionary->handle
+                << " dictionaryKey=" << membership->m_name
+                << " bodyHandleFields=0 bodyReferenceRule=ODA-20.4.73\n";
+    }
+    if (reportedMlineStyleHandles.size() != mlineStyleDictionary->m_entries.size()) {
+      std::cerr << "MLINESTYLE source inventory found unmodeled ACAD_MLINESTYLE members\n";
+      return false;
+    }
+  }
+  for (const DRW_AcDbPlaceholder& placeholder : data.placeholders) {
+    const DRW_UnsupportedObject* rawFrame =
+        DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+            data, data.importGeneration, placeholder.handle);
+    if (rawFrame == nullptr || rawFrame->m_version != data.sourceVersion
+        || rawFrame->m_objectType != 80 || rawFrame->m_isEntity
+        || !drwDwgCommonLinkEvidenceValidated(
+            rawFrame->m_commonLinkEvidence)
+        || rawFrame->m_handle != placeholder.handle
+        || rawFrame->m_parentHandle != placeholder.parentHandle
+        || rawFrame->m_reactorHandles != placeholder.reactorHandles
+        || rawFrame->m_xDictHandle != placeholder.xDictHandle
+        || placeholder.tType != DRW::ACDBPLACEHOLDER) {
+      std::cerr << "ACDBPLACEHOLDER typed identity or common-link mismatch at handle "
+                << placeholder.handle << '\n';
+      return false;
+    }
+    const DRW_DictionaryWithDefault* owner = nullptr;
+    for (const DRW_DictionaryWithDefault& dictionary :
+         data.dictionaryWithDefaults) {
+      if (dictionary.handle != placeholder.parentHandle)
+        continue;
+      if (owner != nullptr) {
+        std::cerr << "ACDBPLACEHOLDER owner dictionary is ambiguous\n";
+        return false;
+      }
+      owner = &dictionary;
+    }
+    const DRW_Dictionary::Entry* membership = nullptr;
+    std::size_t membershipMatches = 0u;
+    if (owner != nullptr) {
+      for (const DRW_Dictionary::Entry& entry : owner->m_entries) {
+        if (entry.m_handle == placeholder.handle) {
+          membership = &entry;
+          ++membershipMatches;
+        }
+      }
+    }
+    const bool peerProfile = data.sourceVersion == DRW::AC1027
+        && placeholder.handle == 15u && rawFrame->m_objectSize == 10u
+        && placeholder.parentHandle == 14u
+        && placeholder.reactorHandles == std::vector<std::uint32_t>{14u}
+        && placeholder.xDictHandle == 0u
+        && owner != nullptr && owner->m_defaultEntryHandle == placeholder.handle
+        && membershipMatches == 1u && membership != nullptr
+        && membership->m_name == "Normal";
+    std::cout << " typedBodyFrame type=ACDBPLACEHOLDER handle="
+              << placeholder.handle << " owner=" << placeholder.parentHandle
+              << " reactors=" << placeholder.reactorHandles.size()
+              << " xdict=" << placeholder.xDictHandle;
+    if (peerProfile) {
+      std::cout << " defaultEntry=" << owner->m_defaultEntryHandle
+                << " dictionaryOwner=" << owner->handle
+                << " dictionaryKey=" << membership->m_name
+                << " bodyHandleFields=0"
+                   " bodyReferenceRule=LIBREDWG-dwg2.spec-PLACEHOLDER";
+    }
+    std::cout << '\n';
+  }
+  for (const DRW_VisualStyle& style : data.visualStyles) {
+    const DRW_UnsupportedObject* rawFrame =
+        DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+            data, data.importGeneration, style.handle);
+    if (rawFrame == nullptr || rawFrame->m_version != data.sourceVersion
+        || rawFrame->m_objectType != 501 || !rawFrame->m_isCustomClass
+        || rawFrame->m_recordName != "VISUALSTYLE"
+        || rawFrame->m_className != "AcDbVisualStyle"
+        || rawFrame->m_isEntity
+        || !drwDwgCommonLinkEvidenceValidated(
+            rawFrame->m_commonLinkEvidence)
+        || rawFrame->m_handle != style.handle
+        || rawFrame->m_parentHandle != style.parentHandle
+        || rawFrame->m_reactorHandles != style.reactorHandles
+        || rawFrame->m_xDictHandle != style.xDictHandle
+        || style.tType != DRW::VISUALSTYLE) {
+      std::cerr << "VISUALSTYLE source identity or common-link mismatch at handle "
+                << style.handle << '\n';
+      return false;
+    }
+    std::cout << " typedBodyFrame type=VISUALSTYLE handle=" << style.handle
+              << " owner=" << style.parentHandle
+              << " reactors=" << style.reactorHandles.size()
+              << " xdict=" << style.xDictHandle
+              << " bodyHandleFields=0"
+                 " bodyReferenceRule=LIBREDWG-dwg2.spec-VISUALSTYLE\n";
+  }
   for (const DRW_TableStyle &style : data.tableStyles) {
     std::cout << " typedBodyFrame type=TABLESTYLE handle=" << style.handle
               << " rows=" << style.m_rowStyles.size()

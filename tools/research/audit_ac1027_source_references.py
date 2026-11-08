@@ -12,6 +12,9 @@ from collections import Counter
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
+COVER_AC1027_SHA256 = (
+    "3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42"
+)
 sys.path.insert(0, str(REPO / "tools"))
 from bounded_process import run_bounded  # noqa: E402
 
@@ -34,9 +37,10 @@ BODY_FRAME = re.compile(
     r"^ typedBodyFrame type=(\S+) handle=(\d+)(?: |$)", re.MULTILINE
 )
 NO_BODY_HANDLE_PROFILE = re.compile(
-    r"^ typedBodyFrame type=(SCALE|DICTIONARYVAR|RASTERVARIABLES) "
+    r"^ typedBodyFrame type=(SCALE|DICTIONARYVAR|RASTERVARIABLES|MLINESTYLE|ACDBPLACEHOLDER|VISUALSTYLE) "
     r"handle=(\d+) .*?"
-    r"bodyHandleFields=0 bodyReferenceRule=(ODA-20\.4\.(?:92|74|91))$",
+    r"bodyHandleFields=0 bodyReferenceRule="
+    r"(ODA-20\.4\.(?:92|74|91|73)|LIBREDWG-dwg2\.spec-(?:PLACEHOLDER|VISUALSTYLE))$",
     re.MULTILINE,
 )
 HANDLE_BODY_PROFILE = re.compile(
@@ -45,9 +49,10 @@ HANDLE_BODY_PROFILE = re.compile(
     re.MULTILINE,
 )
 DICTIONARY_MEMBERSHIP = re.compile(
-    r"^ typedBodyFrame type=(SCALE|DICTIONARYVAR) handle=(\d+) .*?"
+    r"^ typedBodyFrame type=(SCALE|DICTIONARYVAR|MLINESTYLE|ACDBPLACEHOLDER) handle=(\d+) .*?"
     r"dictionaryOwner=(\d+) dictionaryKey=(.*?) "
-    r"bodyHandleFields=0 bodyReferenceRule=(ODA-20\.4\.(?:92|74))$",
+    r"bodyHandleFields=0 bodyReferenceRule="
+    r"(ODA-20\.4\.(?:92|74|73)|LIBREDWG-dwg2\.spec-PLACEHOLDER)$",
     re.MULTILINE,
 )
 NOD_ENTRY = re.compile(r"^ NOD key=(.*?) target=(\d+)(?: |$)", re.MULTILINE)
@@ -65,16 +70,135 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def peer_handle(value: object) -> int | None:
+    if isinstance(value, list) and value:
+        tail = value[-1]
+        return int(tail) if isinstance(tail, int) else None
+    return None
+
+
+def verify_peer_profiles(
+    peer_json_path: Path,
+    peer_schema_path: Path,
+    source_hash: str,
+    frames: list[dict[str, object]],
+) -> dict[str, object]:
+    peer_json = json.loads(peer_json_path.read_text())
+    peer_objects = peer_json.get("OBJECTS")
+    if not isinstance(peer_objects, list):
+        raise SystemExit("LibreDWG minJSON has no OBJECTS array")
+    peer_by_handle: dict[int, dict[str, object]] = {}
+    for obj in peer_objects:
+        if not isinstance(obj, dict):
+            continue
+        handle = peer_handle(obj.get("handle"))
+        if handle is None or int(obj.get("type", -1)) not in (73, 80, 501):
+            continue
+        if handle in peer_by_handle:
+            raise SystemExit("LibreDWG minJSON repeats a profiled object handle")
+        peer_by_handle[handle] = obj
+
+    names = {73: "MLINESTYLE", 80: "ACDBPLACEHOLDER", 501: "VISUALSTYLE"}
+    rows = []
+    for frame in frames:
+        object_type = int(frame["encodedType"])
+        if object_type not in names:
+            continue
+        obj = peer_by_handle.get(int(frame["handle"]))
+        expected_object = {
+            73: "MLINESTYLE",
+            80: "PLACEHOLDER",
+            501: "VISUALSTYLE",
+        }[object_type]
+        expected_dxf = {
+            73: None,
+            80: "ACDBPLACEHOLDER",
+            501: None,
+        }[object_type]
+        reactors = obj.get("reactors", []) if obj else []
+        peer_reactors = [
+            handle for handle in (peer_handle(item) for item in reactors)
+            if handle is not None
+        ]
+        peer_owner = peer_handle(obj.get("ownerhandle")) if obj else None
+        if (
+            obj is None
+            or obj.get("object") != expected_object
+            or obj.get("dxfname") != expected_dxf
+            or int(obj.get("size", -1)) != int(frame["objectSize"])
+            or peer_owner != int(frame["ownerHandle"])
+            or peer_reactors != frame["reactorHandles"]
+        ):
+            raise SystemExit(
+                f"LibreDWG minJSON identity/common-link mismatch for "
+                f"{names[object_type]} handle {frame['handle']}"
+            )
+        rows.append({
+            "handle": int(frame["handle"]),
+            "encodedType": object_type,
+            "object": expected_object,
+            "dxfName": expected_dxf,
+            "size": int(obj["size"]),
+            "ownerHandle": peer_owner,
+            "reactorHandles": peer_reactors,
+            "matchesLibdxfrwFrame": True,
+        })
+
+    schema_text = peer_schema_path.read_text(errors="replace")
+    schema_blocks: dict[str, str] = {}
+    for name in ("PLACEHOLDER", "VISUALSTYLE"):
+        start = schema_text.find(f"DWG_OBJECT ({name})")
+        end = schema_text.find("DWG_OBJECT_END", start)
+        if start < 0 or end < 0:
+            raise SystemExit(f"LibreDWG dwg2.spec lacks {name} object block")
+        block = schema_text[start:end]
+        body = block.split("START_OBJECT_HANDLE_STREAM", 1)[0]
+        if "START_OBJECT_HANDLE_STREAM" not in block or re.search(
+            r"\b(?:FIELD_H|HANDLE_VECTOR)\b", body
+        ):
+            raise SystemExit(
+                f"LibreDWG {name} body schema has handle fields before the common handle stream"
+            )
+        if name == "PLACEHOLDER" and "no own data members" not in body:
+            raise SystemExit("LibreDWG PLACEHOLDER schema no longer declares an empty body")
+        schema_blocks[name] = hashlib.sha256(block.encode()).hexdigest()
+
+    source_types = Counter(int(frame["encodedType"]) for frame in frames)
+    peer_types = Counter(int(obj.get("type", -1)) for obj in peer_by_handle.values())
+    if source_hash == COVER_AC1027_SHA256 and any(
+        peer_types[object_type] != source_types[object_type]
+        for object_type in (73, 80, 501)
+    ):
+        raise SystemExit("LibreDWG minJSON profile frame counts differ from Cover source inventory")
+    return {
+        "createdBy": peer_json.get("created_by"),
+        "objectCountsByEncodedType": {
+            str(object_type): peer_types[object_type]
+            for object_type in (73, 80, 501)
+        },
+        "matchedFrames": rows,
+        "schemaPath": str(peer_schema_path),
+        "schemaSha256": sha256(peer_schema_path),
+        "schemaBlockSha256": schema_blocks,
+        "schemaBodyHandleFieldsBeforeCommonStream": False,
+        "sourceSha256": source_hash,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--executable", required=True, type=Path)
     parser.add_argument("--source", required=True, type=Path)
+    parser.add_argument("--peer-json", type=Path)
+    parser.add_argument("--peer-schema", type=Path)
     parser.add_argument("--timeout", type=float, default=30.0)
     args = parser.parse_args()
     executable = args.executable.resolve(strict=True)
     source = args.source.resolve(strict=True)
     if not executable.is_file() or not source.is_file():
         parser.error("executable and source must be regular files")
+    if (args.peer_json is None) != (args.peer_schema is None):
+        parser.error("--peer-json and --peer-schema must be supplied together")
 
     source_before = sha256(source)
     result = run_bounded(
@@ -157,9 +281,12 @@ def main() -> int:
     for frame in frames:
         frame["typedBodyReport"] = typed_frames.get(frame["handle"])
         frame["reportedTypedBodyReferenceCount"] = reference_counts[frame["handle"]]
+        no_body_rule = no_body_handle_profiles.get(frame["handle"])
         frame["bodyReferenceDisposition"] = (
-            "spec-profile-no-body-handles"
-            if frame["handle"] in no_body_handle_profiles
+            "peer-profile-no-body-handles"
+            if no_body_rule is not None and no_body_rule.startswith("LIBREDWG-")
+            else "spec-profile-no-body-handles"
+            if no_body_rule is not None
             else "spec-profile-handle-references"
             if frame["handle"] in handle_body_profiles
             else "selected-typed-report-only"
@@ -182,6 +309,97 @@ def main() -> int:
             f"captured identity rows mismatch: rows={len(frames)} "
             f"declared={declared_frames} callbacksCaptured={captured}"
         )
+    peer_evidence = None
+    if args.peer_json is not None and args.peer_schema is not None:
+        peer_evidence = verify_peer_profiles(
+            args.peer_json.resolve(strict=True),
+            args.peer_schema.resolve(strict=True),
+            source_before,
+            frames,
+        )
+    if version == "AC1027":
+        fixed_mline_styles = [
+            frame for frame in frames if frame["encodedType"] == 73
+        ]
+        for frame in fixed_mline_styles:
+            membership = frame["dictionaryMembership"]
+            if (
+                frame["typedBodyReport"] != "MLINESTYLE"
+                or frame["bodyReferenceDisposition"]
+                != "spec-profile-no-body-handles"
+                or frame["bodyReferenceRule"] != "ODA-20.4.73"
+                or membership is None
+                or membership["objectType"] != "MLINESTYLE"
+                or membership["dictionaryHandle"] != frame["ownerHandle"]
+                or not any(
+                    edge["sourceFrameHandle"] == frame["handle"]
+                    and edge["dictionaryHandle"] == frame["ownerHandle"]
+                    and edge["targetHandle"] == frame["handle"]
+                    for edge in dictionary_membership_edges
+                )
+            ):
+                raise SystemExit(
+                    "AC1027 type-73 frame lacks its typed identity, ODA body "
+                    "profile, or exact ACAD_MLINESTYLE membership edge"
+                )
+        visual_styles = [
+            frame for frame in frames if frame["encodedType"] == 501
+        ]
+        for frame in visual_styles:
+            if (
+                frame["className"] != "AcDbVisualStyle"
+                or frame["typedBodyReport"] != "VISUALSTYLE"
+                or frame["bodyReferenceDisposition"]
+                != "peer-profile-no-body-handles"
+                or frame["bodyReferenceRule"]
+                != "LIBREDWG-dwg2.spec-VISUALSTYLE"
+            ):
+                raise SystemExit(
+                    "AC1027 VISUALSTYLE frame lacks its typed identity "
+                    "or peer-supported no-body-handle profile"
+                )
+        placeholders = [
+            frame for frame in frames if frame["encodedType"] == 80
+        ]
+        if source_before == COVER_AC1027_SHA256 and len(placeholders) != 1:
+            raise SystemExit(
+                "hash-bound Cover source did not publish exactly one type-80 frame"
+            )
+        for frame in placeholders:
+            if frame["bodyReferenceDisposition"] != "peer-profile-no-body-handles":
+                if source_before == COVER_AC1027_SHA256:
+                    raise SystemExit(
+                        "hash-bound Cover type-80 frame lacks its peer profile"
+                    )
+                continue
+            membership = frame["dictionaryMembership"]
+            if (
+                frame["handle"] != 15
+                or frame["typedBodyReport"] != "ACDBPLACEHOLDER"
+                or frame["bodyReferenceDisposition"]
+                != "peer-profile-no-body-handles"
+                or frame["bodyReferenceRule"]
+                != "LIBREDWG-dwg2.spec-PLACEHOLDER"
+                or membership is None
+                or membership["objectType"] != "ACDBPLACEHOLDER"
+                or membership["dictionaryHandle"] != frame["ownerHandle"]
+                or not any(
+                    edge["sourceFrameHandle"] == frame["handle"]
+                    and edge["dictionaryHandle"] == frame["ownerHandle"]
+                    and edge["targetHandle"] == frame["handle"]
+                    for edge in dictionary_membership_edges
+                )
+                or not any(
+                    item["ownerHandle"] == frame["ownerHandle"]
+                    and item["targetHandle"] == frame["handle"]
+                    and item["role"] == "default-entry"
+                    for item in typed_references
+                )
+            ):
+                raise SystemExit(
+                    "AC1027 type-80 frame lacks its source-matched "
+                    "PLACEHOLDER peer profile or exact dictionary roles"
+                )
 
     report = {
         "schema": "libdxfrw-ac1027-source-reference-audit-v1",
@@ -201,6 +419,7 @@ def main() -> int:
         ).hexdigest(),
         "exitCode": result.returncode,
         "sourceVersion": version,
+        "independentPeerEvidence": peer_evidence,
         "opaqueCallbacks": int(callbacks),
         "capturedOpaqueCallbacks": int(captured),
         "retainedOpaqueFrames": int(opaque_retained),
@@ -215,14 +434,20 @@ def main() -> int:
             frame["bodyReferenceDisposition"] == "not-exhaustively-decoded"
             for frame in frames
         ),
+        "framesWithPeerNoBodyHandleProfile": sum(
+            frame["bodyReferenceDisposition"] == "peer-profile-no-body-handles"
+            for frame in frames
+        ),
         "typedBodyReferences": typed_references,
         "dictionaryMembershipEdges": dictionary_membership_edges,
         "namedObjectDictionaryEntries": named_object_dictionary_entries,
         "capturedFrames": frames,
         "coverageLimit": (
             "This binds the diagnostic run to unchanged input bytes and verifies "
-            "the emitted identity inventory. Typed body rows are selected reports "
-            "only; not-exhaustively-decoded does not mean no references. Common "
+            "the emitted identity inventory. ODA profiles and source-matched "
+            "LibreDWG peer profiles are kept distinct. Typed body rows outside "
+            "those bounded profiles are selected reports only; "
+            "not-exhaustively-decoded does not mean no references. Common "
             "header values are not independent role proof, and no DXF output route "
             "or semantic support claim is qualified."
         ),

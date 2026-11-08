@@ -25,8 +25,24 @@
   },
   "coverageRows": {
     "capturedFrameCount": 88,
-    "dictionaryMembershipEdgeCount": 38,
+    "dictionaryMembershipEdgeCount": 40,
     "dictionaryMembershipEdges": [
+      {
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-PLACEHOLDER",
+        "dictionaryHandle": 14,
+        "dictionaryKey": "Normal",
+        "objectType": "ACDBPLACEHOLDER",
+        "sourceFrameHandle": 15,
+        "targetHandle": 15
+      },
+      {
+        "bodyReferenceRule": "ODA-20.4.73",
+        "dictionaryHandle": 23,
+        "dictionaryKey": "Standard",
+        "objectType": "MLINESTYLE",
+        "sourceFrameHandle": 24,
+        "targetHandle": 24
+      },
       {
         "bodyReferenceRule": "ODA-20.4.92",
         "dictionaryHandle": 71,
@@ -359,13 +375,18 @@
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-PLACEHOLDER",
         "captureKind": "opaque",
         "className": null,
         "commonLinkEvidence": 1,
         "customClass": false,
-        "dictionaryMembership": null,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "LIBREDWG-dwg2.spec-PLACEHOLDER",
+          "dictionaryHandle": 14,
+          "dictionaryKey": "Normal",
+          "objectType": "ACDBPLACEHOLDER"
+        },
         "encodedType": 80,
         "extensionDictionaryHandle": 0,
         "handle": 15,
@@ -379,17 +400,22 @@
         "recordName": null,
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 2834,
-        "typedBodyReport": null
+        "typedBodyReport": "ACDBPLACEHOLDER"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "spec-profile-no-body-handles",
+        "bodyReferenceRule": "ODA-20.4.73",
         "captureKind": "opaque",
         "className": null,
         "commonLinkEvidence": 1,
         "customClass": false,
-        "dictionaryMembership": null,
+        "dictionaryMembership": {
+          "bodyReferenceRule": "ODA-20.4.73",
+          "dictionaryHandle": 23,
+          "dictionaryKey": "Standard",
+          "objectType": "MLINESTYLE"
+        },
         "encodedType": 73,
         "extensionDictionaryHandle": 0,
         "handle": 24,
@@ -403,7 +429,7 @@
         "recordName": null,
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 2849,
-        "typedBodyReport": null
+        "typedBodyReport": "MLINESTYLE"
       },
       {
         "blockOwnerHandle": 0,
@@ -463,8 +489,8 @@
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -483,12 +509,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 3366,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -507,12 +533,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 3586,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -531,12 +557,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 3825,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -555,12 +581,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 4051,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -579,12 +605,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 4296,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -603,12 +629,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 4529,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -627,12 +653,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 4758,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -651,12 +677,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 4991,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -675,12 +701,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 5213,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -699,12 +725,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 5443,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -723,12 +749,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 5684,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -747,12 +773,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 5911,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -771,12 +797,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 6148,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -795,12 +821,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 6375,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -819,12 +845,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 6610,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -843,12 +869,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 6845,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -867,12 +893,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 7081,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -891,12 +917,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 7257,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -915,12 +941,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 7437,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -939,12 +965,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 7619,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -963,12 +989,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 7869,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -987,12 +1013,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 8105,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -1011,12 +1037,12 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 8329,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
-        "bodyReferenceDisposition": "not-exhaustively-decoded",
-        "bodyReferenceRule": null,
+        "bodyReferenceDisposition": "peer-profile-no-body-handles",
+        "bodyReferenceRule": "LIBREDWG-dwg2.spec-VISUALSTYLE",
         "captureKind": "opaque",
         "className": "AcDbVisualStyle",
         "commonLinkEvidence": 1,
@@ -1035,7 +1061,7 @@
         "recordName": "VISUALSTYLE",
         "reportedTypedBodyReferenceCount": 0,
         "sourceOffset": 8578,
-        "typedBodyReport": null
+        "typedBodyReport": "VISUALSTYLE"
       },
       {
         "blockOwnerHandle": 0,
@@ -3396,49 +3422,467 @@
         "role": "layer",
         "targetHandle": 16
       }
-    ]
+    ],
+    "normativeProfiles": {
+      "MLINESTYLE": {
+        "sourceVersion": "AC1027",
+        "encodedType": 73,
+        "sourceFrameHandle": 24,
+        "dictionaryHandle": 23,
+        "dictionaryKey": "Standard",
+        "bodyHandleFields": 0,
+        "authority": "ODA Open Design Specification v5.4.1 §20.4.73, pp. 192–193: before R2018 the per-element linetype is an inline BS index; R2018+ stores an H handle.",
+        "implementationCrossCheck": "DRW_MLineStyle::parseDwg reads inline linetype indices for versions before AC1032 and reads per-element H fields from AC1032 onward.",
+        "scopeLimit": "This establishes only the AC1027 body-handle profile and dictionary membership. It does not qualify selected DXF output or broader producer support."
+      }
+    },
+    "peerProfiles": {
+      "ACDBPLACEHOLDER": {
+        "sourceVersion": "AC1027",
+        "encodedType": 80,
+        "sourceFrameHandle": 15,
+        "objectSize": 10,
+        "ownerHandle": 14,
+        "reactorHandles": [
+          14
+        ],
+        "dictionaryOwner": 14,
+        "dictionaryKey": "Normal",
+        "defaultEntryHandle": 15,
+        "bodyHandleFields": 0,
+        "basis": "LibreDWG dwg2.spec PLACEHOLDER body declares no own data members before START_OBJECT_HANDLE_STREAM; same-input minJSON reports type 80/ACDBPLACEHOLDER and matching common links.",
+        "scopeLimit": "Peer-supported AC1027 profile only; no normative ODA object-body subsection or native/output meaning is claimed."
+      },
+      "VISUALSTYLE": {
+        "sourceVersion": "AC1027",
+        "encodedType": 501,
+        "frameCount": 24,
+        "frameHandles": [
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66
+        ],
+        "bodyHandleFields": 0,
+        "basis": "LibreDWG dwg2.spec VISUALSTYLE body has scalar/text/color properties before START_OBJECT_HANDLE_STREAM and no H-field primitives; same-input minJSON matches all 24 identities, frame sizes and common links.",
+        "scopeLimit": "Peer-supported AC1027 body-reference profile only; this does not qualify visual-style field semantics, DXF disposition or native rendering."
+      }
+    }
   },
-  "date": "2026-11-07",
+  "date": "2026-11-08",
   "execution": {
     "command": [
       "/private/tmp/libdxfrw-legacy-common-build/tests/libdxfrw_dwg2dxf_adapter_tests",
       "--opaque-dwg-source-inventory",
       "/Users/dli/doc/dwg/Cover.dwg"
     ],
-    "executable": "private/tmp/libdxfrw-legacy-common-build/tests/libdxfrw_dwg2dxf_adapter_tests",
-    "executableSha256": "2ba0d5964f7264c482939b387495ed389017c03dd419f0fdaa959f6c8df52e57",
+    "executable": "/private/tmp/libdxfrw-legacy-common-build/tests/libdxfrw_dwg2dxf_adapter_tests",
+    "executableSha256": "43af3cee711d5472915362b0f0b9b5a129e1b995abf230c46bee9f562499c4c9",
     "exitCode": 0,
-    "outputBinding": "Input was hashed immediately before and after this invocation; the test utility itself reports sourceHashBoundByUtility=0.",
-    "outputPath": "/private/tmp/ac1027-cover-reference-audit-v10.json",
-    "outputSha256": "9d0dd9153110da71eab6532afd884ef3e43da56722010653a644ce6e93322f9e",
+    "outputBinding": "The bounded runner hashed Cover.dwg immediately before and after this diagnostic. The peer minJSON was separately generated from the same input SHA-256 and its class/frame identities, sizes and common links were compared.",
+    "outputPath": "/private/tmp/ac1027-cover-reference-audit-v20.json",
+    "outputSha256": "927f526092f46cd11ecd509a0dea77554e517cf08b884a70f3b7d8a4acc15385",
     "repeatableAuditRunner": {
-      "capturedFrameIdentities": 88,
-      "diagnosticOutputSha256": "f260e4fae8d3d6e58f4433410401761ae8cac5e1778c4a55ec10f3769e9050b3",
-      "dictionaryMembershipEdges": 38,
-      "framesWithNormativeHandleReferenceProfile": 15,
-      "framesWithNormativeNoBodyHandleProfile": 39,
-      "framesWithSelectedTypedBodyReport": 4,
-      "framesWithoutExhaustiveBodyReferenceDecode": 30,
-      "namedObjectDictionaryEntries": 14,
       "path": "tools/research/audit_ac1027_source_references.py",
+      "sha256": "8289dbe31cb0e4085c4b05c6bd50321814aaf18cd148d94a8882ba8ea0e7558b",
+      "diagnosticOutputSha256": "78d9d76c61d4da7b19bb1314096941ed9ab201c93ff5d313efd51662d428c3cc",
+      "capturedFrameIdentities": 88,
+      "dictionaryMembershipEdges": 40,
+      "framesWithNormativeHandleReferenceProfile": 15,
+      "framesWithNormativeNoBodyHandleProfile": 40,
+      "framesWithPeerNoBodyHandleProfile": 25,
+      "framesWithSelectedTypedBodyReport": 4,
+      "framesWithoutExhaustiveBodyReferenceDecode": 4,
+      "namedObjectDictionaryEntries": 14,
       "selectedTypedBodyReferenceRows": 129,
-      "sha256": "7b4e3d59281231002e40f1b16c253f2e0e1e87dbae10be39525f52dec03db0cc",
+      "sourceHashBeforeAfterCheck": true,
+      "sourceHashBoundInsideDiagnostic": false,
       "sourceCodeHashes": {
         "src/drw_objects.cpp": "499467feb7f1415327d4abb949abbd537cc47ae5c2a23c4385e3985ed938b881",
         "src/intern/dwgreader.cpp": "36ebc06b6cb6031689a1b06fdf074c8b1fae6c9d518dfc53b58eb4c9a9668327",
-        "tests/dwg2dxf_adapter_tests.cpp": "cdf6b4cb13011eae7d564572539d8b3db7e455e4a14c2ac27d17ede2be06692a"
-      },
-      "sourceHashBeforeAfterCheck": true,
-      "sourceHashBoundInsideDiagnostic": false
+        "tests/dwg2dxf_adapter_tests.cpp": "b1f7fd192e1ca9f3d414cd66ef4f87e98d620a90009709cb7661561a9110d0ed",
+        "tools/research/audit_ac1027_source_references.py": "8289dbe31cb0e4085c4b05c6bd50321814aaf18cd148d94a8882ba8ea0e7558b"
+      }
     },
-    "repositoryHead": "574e063e21d71c2a887acbf23a39986da838feb0"
+    "repositoryHead": "07c4780c7cc8123e4ee95e87d044ceac2a896aeb",
+    "workingTreeCodeHashes": {
+      "src/drw_objects.cpp": "499467feb7f1415327d4abb949abbd537cc47ae5c2a23c4385e3985ed938b881",
+      "src/intern/dwgreader.cpp": "36ebc06b6cb6031689a1b06fdf074c8b1fae6c9d518dfc53b58eb4c9a9668327",
+      "tests/dwg2dxf_adapter_tests.cpp": "b1f7fd192e1ca9f3d414cd66ef4f87e98d620a90009709cb7661561a9110d0ed",
+      "tools/research/audit_ac1027_source_references.py": "8289dbe31cb0e4085c4b05c6bd50321814aaf18cd148d94a8882ba8ea0e7558b"
+    },
+    "independentPeerReader": {
+      "version": "LibreDWG 0.13.3.553_6d6a_dirty",
+      "repositoryCommit": "6d6a33987a1a97095b069c799c3d8a793320f812",
+      "executable": "/Users/dli/dev/libredwg/programs/dwgread",
+      "executableSha256": "ffb9e557674a3a10a6b242c645873e83771b9c8744cbd8b89a11cda22d7a0083",
+      "command": [
+        "/Users/dli/dev/libredwg/programs/dwgread",
+        "-O",
+        "minJSON",
+        "-o",
+        "/private/tmp/ac1027-cover-libredwg-v1.json",
+        "/Users/dli/doc/dwg/Cover.dwg"
+      ],
+      "outputPath": "/private/tmp/ac1027-cover-libredwg-v1.json",
+      "outputSha256": "8045f3c0ddf61811daefd21549a70001a6dfb7cd0645e095912f721ec5c7da64",
+      "schemaPath": "/Users/dli/dev/libredwg/src/dwg2.spec",
+      "schemaSha256": "2bb3602b2867277868ebb488ea236b07d7cdf605128987f767114d68dd501499",
+      "sourceSha256": "3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42",
+      "matchedFrameCount": 26,
+      "matchedFrames": [
+        {
+          "dxfName": "ACDBPLACEHOLDER",
+          "encodedType": 80,
+          "handle": 15,
+          "matchesLibdxfrwFrame": true,
+          "object": "PLACEHOLDER",
+          "ownerHandle": 14,
+          "reactorHandles": [
+            14
+          ],
+          "size": 10
+        },
+        {
+          "dxfName": null,
+          "encodedType": 73,
+          "handle": 24,
+          "matchesLibdxfrwFrame": true,
+          "object": "MLINESTYLE",
+          "ownerHandle": 23,
+          "reactorHandles": [
+            23
+          ],
+          "size": 84
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 43,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 215
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 44,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 234
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 45,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 221
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 46,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 240
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 47,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 228
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 48,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 224
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 49,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 228
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 50,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 217
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 51,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 225
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 52,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 236
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 53,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 222
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 54,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 232
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 55,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 222
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 56,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 230
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 57,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 230
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 58,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 231
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 59,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 171
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 60,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 175
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 61,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 177
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 62,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 245
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 63,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 231
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 64,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 219
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 65,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 244
+        },
+        {
+          "dxfName": null,
+          "encodedType": 501,
+          "handle": 66,
+          "matchesLibdxfrwFrame": true,
+          "object": "VISUALSTYLE",
+          "ownerHandle": 42,
+          "reactorHandles": [
+            42
+          ],
+          "size": 221
+        }
+      ],
+      "objectCountsByEncodedType": {
+        "501": 24,
+        "73": 1,
+        "80": 1
+      },
+      "schemaBlockSha256": {
+        "PLACEHOLDER": "1aeadbb818abe467c93efcde35aa592f10bdfaa2392c89519ac9d145a64881aa",
+        "VISUALSTYLE": "fa0333f85428bdc2cda792a37adf999854c86edc690fa42a21a0d3a89c2029be"
+      },
+      "bodyHandleFieldsBeforeCommonStream": false,
+      "limits": "Peer schema and same-input minJSON corroborate class identities, frame sizes and common links. They do not establish native semantics or output eligibility; ODA remains authoritative where it defines a layout."
+    }
   },
   "limitations": {
     "aggregateAc1027GuardCleared": false,
     "allEntityAndTableReferencesBound": false,
     "allOwnerRolesIndependentlyProven": false,
-    "bodyReferenceCoverage": "The repeatable hash-binding audit captures 88 retained object identities and 129 selected typed body-reference rows. Normative no-body-handle checks cover 33 SCALE frames (ODA v5.4.1 \u00a720.4.92), five DICTIONARYVAR frames (\u00a720.4.74), and one RASTERVARIABLES frame (\u00a720.4.91). Normative handle-list checks cover 13 DICTIONARY frames (\u00a720.4.44) and two LAYOUT frames (\u00a720.4.84), including null fields and ordered dictionary entries. Four frames have selected typed body reports only; 30 remain not exhaustively decoded. Unknown does not mean no references. The inventory does not independently resolve every target type/role or qualify its DXF output route. The LAYOUT report does not resolve the separate ODA RL versus observed BL viewport-count discrepancy.",
-    "decision": "Preserve the global AC1027 strict-source guard. Bounded normative body profiles now cover 54/88 retained object bodies (39 with no body handles; 15 with enumerated handle fields) and record rooted dictionary memberships. Thirty bodies remain not exhaustively decoded and four typed reports are partial. Continue with one exact source-bound class profile; no guard narrowing or output-support promotion follows from this inventory.",
+    "bodyReferenceCoverage": "The repeatable hash-binding audit captures 88 retained object identities and 129 selected typed body-reference rows. Normative ODA body profiles cover 40 no-body-handle records (33 SCALE, five DICTIONARYVAR, one RASTERVARIABLES, one pre-R2018 MLINESTYLE) and 15 handle-bearing records (13 DICTIONARY, two LAYOUT). A separately labeled source-matched LibreDWG profile covers one ACDBPLACEHOLDER and 24 VISUALSTYLE bodies, with all 26 MLINESTYLE/PLACEHOLDER/VISUALSTYLE identities, frame sizes and common links matched against minJSON from the same Cover source. Four frames have selected typed reports only; four remain not exhaustively decoded (three MATERIAL and one SUN). Unknown does not mean no references. Peer schemas do not supersede ODA where it defines layout. The inventory does not independently resolve every target type/role or qualify DXF output. The LAYOUT report does not resolve the separate ODA RL versus observed BL viewport-count discrepancy.",
+    "decision": "Preserve the global AC1027 strict-source guard. Bounded body-reference classification covers 80/88 retained frames: 40 normative no-body-handle, 15 normative handle-reference, and 25 source-matched peer no-body-handle profiles; 40 dictionary-membership edges are recorded. Four bodies remain unknown and four typed reports are partial. No guard narrowing or output-support promotion follows from this inventory.",
     "independentProducerQualification": false,
     "omittedFrameDependenciesClosed": false,
     "selectedDxfDispositionComplete": false,
@@ -3492,14 +3936,17 @@
       "82": 2
     },
     "selectedTypedBodyReferenceClasses": [
+      "3DSOLID layer-name-to-LAYER lookup",
+      "ACDBPLACEHOLDER (AC1027, source-matched LibreDWG no-own-data profile)",
       "DICTIONARYWDFLT membership/default-entry",
-      "LAYOUT block-header handle",
-      "TABLESTYLE text-style and border-linetype handles",
-      "MLEADERSTYLE text-style and linetype handles",
-      "LAYER plot-style/material/linetype handles",
       "DIMSTYLE text-style and block/linetype handles",
-      "VPORT visual-style/sun/UCS/xref handles",
-      "3DSOLID layer-name-to-LAYER lookup"
+      "LAYER plot-style/material/linetype handles",
+      "LAYOUT block-header handle",
+      "MLEADERSTYLE text-style and linetype handles",
+      "MLINESTYLE (pre-R2018, ODA §20.4.73 no body handles)",
+      "TABLESTYLE text-style and border-linetype handles",
+      "VISUALSTYLE (24 AC1027 records, source-matched LibreDWG no-body-handle profile)",
+      "VPORT visual-style/sun/UCS/xref handles"
     ],
     "standardObjectType42Count": 13
   },
@@ -3512,23 +3959,25 @@
     "version": "AC1027"
   },
   "supportClaimEffect": "none",
-  "title": "AC1027 Cover source-reference guard audit refresh",
+  "title": "AC1027 Cover source-reference guard audit with MLINESTYLE and peer profiles",
   "validation": {
     "assertedCounts": {
       "bodyDispositionCounts": {
-        "not-exhaustively-decoded": 30,
+        "not-exhaustively-decoded": 4,
         "selected-typed-report-only": 4,
         "spec-profile-handle-references": 15,
-        "spec-profile-no-body-handles": 39
+        "spec-profile-no-body-handles": 40,
+        "peer-profile-no-body-handles": 25
       },
-      "dictionaryMembershipEdges": 38,
+      "dictionaryMembershipEdges": 40,
       "namedObjectDictionaryEntries": 14,
+      "peerMatchedFrames": 26,
       "retainedObjectFrames": 88,
       "selectedTypedBodyReferenceRows": 129
     },
     "build": "passed with configured -Werror flags",
     "buildCommand": "cmake --build /private/tmp/libdxfrw-legacy-common-build --target libdxfrw_dwg2dxf_adapter_tests -j2",
-    "diagnostic": "passed; verified 88 unique retained object identities and unchanged input SHA-256 before/after",
+    "diagnostic": "passed; verified 88 unique retained object identities and unchanged Cover SHA-256; ODA MLINESTYLE profile plus source-matched LibreDWG PLACEHOLDER/VISUALSTYLE schema and minJSON identities/common links asserted",
     "diagnosticCommand": [
       "/private/tmp/libdxfrw-legacy-common-build/tests/libdxfrw_dwg2dxf_adapter_tests",
       "--opaque-dwg-source-inventory",
