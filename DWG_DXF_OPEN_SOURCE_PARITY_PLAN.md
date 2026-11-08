@@ -151,7 +151,11 @@ committed. The user said they were unlocking the Mac, but the latest desktop
 inventory still reports the Mac locked, so ODA/FreeCAD qualification remains
 pending. Verify a fresh desktop inventory before retrying the native workflow;
 do not treat the prior PasteBoard/XPC abort as format evidence. Continue local
-implementation meanwhile. A separate locally authored full-file dimension
+implementation meanwhile. After the user's latest message that the session
+would be unlocked, a fresh desktop inventory again found the Mac locked and
+no native app surface available; this is an access blocker only, not DWG/DXF
+evidence. Retry ODA/FreeCAD qualification only after a later inventory exposes
+an unlocked session. A separate locally authored full-file dimension
 graph was also refused by strict adapter preflight because it lacks the
 source-bound AC1024 group-owned dimension profile. Its temporary prototype was
 removed; neither output policy nor source gates were changed.
