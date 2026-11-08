@@ -7827,7 +7827,7 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
             && (cellOverrideFlags & ~ac1018CellOverrideFlags) == 0u)
         || (version == DRW::AC1021 && cellOverrideFlags == 0x00000004u);
     constexpr std::uint32_t generatedTableOverrideFlags =
-        0x0070003Fu;
+        0x0071C03Fu;
     if (!knownCellOverrideProfile
         || (tableOverrideFlags & ~generatedTableOverrideFlags) != 0u)
         return false;
@@ -7949,6 +7949,12 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
                 body.putBitLong(static_cast<std::int32_t>(0xC0u << 24u));
                 body.putRawChar8(0);
             }
+            if ((tableOverrideFlags & 0x00004000u) != 0u)
+                body.putBitShort(2); // title row: top center
+            if ((tableOverrideFlags & 0x00008000u) != 0u)
+                body.putBitShort(5); // header row: middle center
+            if ((tableOverrideFlags & 0x00010000u) != 0u)
+                body.putBitShort(8); // data row: bottom center
             if ((tableOverrideFlags & 0x00100000u) != 0u)
                 body.putBitDouble(3.5); // title row height
             if ((tableOverrideFlags & 0x00200000u) != 0u)
@@ -8294,7 +8300,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     R2007TableFrame tableRowHeightOverridesFrame;
     const bool tableRowHeightOverridesBuilt = makeR2007TableFrame(
         1, tableRowHeightOverridesFrame, TablePlacement{}, 0u,
-        0x00700000u);
+        0x0071C000u);
     t.expect(tableRowHeightOverridesBuilt,
              "AC1021 TABLE row-height-override vector builds from scratch");
     if (!tableRowHeightOverridesBuilt)
@@ -8305,13 +8311,15 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     const bool tableRowHeightOverridesRead = table.parseDwg(
         DRW::AC1021, &tableRowHeightOverridesInput);
     t.expect(tableRowHeightOverridesRead && tableRowHeightOverridesInput.isGood()
-                 && table.m_tableOverrideFlags == 0x00700000u
+                 && table.m_tableOverrideFlags == 0x0071C000u
                  && table.m_tableRowHeightOverrides
                      == std::array<double, 3>{{3.5, 4.5, 5.5}}
+                 && table.m_tableRowAlignmentOverrides
+                     == std::array<int, 3>{{2, 5, 8}}
                  && !table.m_semanticContentComplete
                  && cursorBit(tableRowHeightOverridesInput)
                      == tableRowHeightOverridesFrame.tableDataEndBit,
-             "AC1021 TABLE retains all ODA row-height override values and keeps output semantics gated");
+             "AC1021 TABLE retains all ODA row-height and row-alignment overrides while keeping output semantics gated");
     if (tableRowHeightOverridesRead) {
         const std::int32_t sentinel = tableRowHeightOverridesInput.getBitLong();
         t.expect(tableRowHeightOverridesInput.isGood()

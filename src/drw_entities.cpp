@@ -3519,15 +3519,30 @@ bool skipR2007TableOverrides(DRW::Version version, dwgBuffer *buf,
         if ((flags & 0x002000)
             && !readTableCmColor(version, buf, strBuf, bounds))
             return false;
-        if (flags & 0x004000)
-            if (!skipTableBitShort(*buf, bounds.bodyEndBit))
+        if (flags & 0x004000) {
+            std::uint16_t alignment = 0;
+            if (!readBoundedBitShort(*buf, bounds.bodyEndBit, alignment))
                 return false;
-        if (flags & 0x008000)
-            if (!skipTableBitShort(*buf, bounds.bodyEndBit))
+            table.m_tableRowAlignmentOverrides[0] = alignment;
+            if (alignment < 1u || alignment > 9u)
+                semanticComplete = false;
+        }
+        if (flags & 0x008000) {
+            std::uint16_t alignment = 0;
+            if (!readBoundedBitShort(*buf, bounds.bodyEndBit, alignment))
                 return false;
-        if (flags & 0x010000)
-            if (!skipTableBitShort(*buf, bounds.bodyEndBit))
+            table.m_tableRowAlignmentOverrides[1] = alignment;
+            if (alignment < 1u || alignment > 9u)
+                semanticComplete = false;
+        }
+        if (flags & 0x010000) {
+            std::uint16_t alignment = 0;
+            if (!readBoundedBitShort(*buf, bounds.bodyEndBit, alignment))
                 return false;
+            table.m_tableRowAlignmentOverrides[2] = alignment;
+            if (alignment < 1u || alignment > 9u)
+                semanticComplete = false;
+        }
         if (flags & 0x020000)
             if (readTableHandle(hdlBuf, bounds.handleEndBit,
                                 "style-text-style", buf, strBuf) == 0
@@ -13171,6 +13186,7 @@ void DRW_Table::resetDwgState() {
     m_horizontalCellMargin = 0.0;
     m_verticalCellMargin = 0.0;
     m_tableRowHeightOverrides = {{0.0, 0.0, 0.0}};
+    m_tableRowAlignmentOverrides = {{0, 0, 0}};
     m_titleSuppressed = false;
     m_headerSuppressed = false;
     m_tableStyleHandle = 0;
