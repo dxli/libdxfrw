@@ -1695,6 +1695,11 @@ if(LIBDXFRW_BUILD_TESTS)
     target_link_libraries(libdxfrw_dwg_object_vectors_tests PRIVATE dxfrw)
     add_test(NAME libdxfrw_dwg_object_vectors
         COMMAND libdxfrw_dwg_object_vectors_tests)
+    add_test(NAME libdxfrw_dwg_table_cell_overrides
+        COMMAND libdxfrw_dwg_object_vectors_tests --table-cell-overrides)
+    set_tests_properties(libdxfrw_dwg_table_cell_overrides PROPERTIES
+        LABELS "fast;dwg;object-vectors;table;generated;transaction"
+        TIMEOUT 15)
     add_executable(libdxfrw_table_dwg_codec_allocation_tests
         tests/table_dwg_codec_allocation_tests.cpp)
     target_compile_features(libdxfrw_table_dwg_codec_allocation_tests

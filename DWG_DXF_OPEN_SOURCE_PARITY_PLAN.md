@@ -2677,18 +2677,20 @@ writer/decoder control, not an independently implemented DWG reader or physical
 interoperability witness. A second generated check stages the TABLE class and a
 pending instance, then applies the writer's existing compound checkpoint
 rollback and verifies the class definition, handle-to-class link and
-pending/emitted count state are gone. This reuses proven transaction machinery;
-it does not yet exercise a TABLE entity frame or linked `*T` graph failure
-through `dwgRW`. A further generated writer control now registers a placeholder
-`*T` BLOCK_RECORD, stages a TABLE class instance, commits an actual AC1018
-entity frame, verifies the receipt's class ordinal and committed-count ledger,
-then rolls back the outer writer checkpoint and verifies the frame and class
-ledger disappear. Its `*T` block is intentionally empty, so this proves the
-entity-frame/class transaction only, not TABLE geometry or graph closure. The
-registration helper is still disconnected from `writeTable`; next bind class
-staging and the actual frame to the `dwgRW` transaction, then replace the empty
-block control with a semantically complete `*T` graph and prove rollback for a
-late graph-stage failure.
+pending/emitted count state are gone. A further generated `dwgRW` transaction
+control now registers a placeholder `*T` BLOCK_RECORD, stages and writes an
+actual AC1018 TABLE entity frame, adds block-owned geometry, injects a late
+geometry failure, and rolls back the outer transaction. It verifies the frame,
+class definition/instance ledger, writer counters and caller state are
+restored; the same adapter then retries and commits. This closes the
+class/frame and late-failure transaction proof, but its hand-authored geometry
+is not a semantically complete TABLE `*T` graph. A focused CTest is registered
+as `libdxfrw_dwg_table_cell_overrides`; see the [transaction
+receipt](docs/research/p5-table-dwgrw-class-frame-transaction-2026-11-08.json).
+The registration helper remains disconnected from public `writeTable`. Next
+work must establish a complete physical AC1018 TABLE body profile and then
+implement/read back the semantic `*T` geometry graph without weakening the
+public refusal.
 
 **Independent writer caution:** ACadSharp merged TABLE DWG write support in
 PR #1040, but a later ACadSharp 3.8.0 report reproduced a TABLE-containing
@@ -2734,15 +2736,12 @@ Speed-oriented implementation sequence:
    retained raw subrecords, or unexplained geometry/cache state. Match every
    gate to the actual public model fields and reject anything outside that
    profile before emitting bytes.
-2. Bind CLASS registration and instance-count staging to the AC1018 TABLE
-   frame transaction. Capture writer-class metadata/count checkpoints and
-   prove a failed entity or `*T` graph stage restores them; a committed frame
-   must be the only point that increments the emitted-instance ledger. A
-   low-level generated entity-frame/outer-checkpoint control now passes with
-   an empty placeholder `*T` block. Next prove this through the `dwgRW` TABLE
-   transaction and an actual graph-stage failure after geometry frames have
-   been written. Keep the route disconnected from public output until this
-   passes.
+2. **Complete:** bind CLASS registration and instance-count staging to the
+   AC1018 TABLE frame transaction. The generated `dwgRW` control proves a
+   committed frame updates the instance ledger, a late block-geometry failure
+   followed by outer rollback removes frame/class/count/caller mutations, and
+   a same-adapter retry commits successfully. This is transaction evidence;
+   it does not qualify the geometry or authorize public `writeTable` output.
 3. After the remaining focused refusal/atomicity controls and empirical
    class-map resolution, compare every encoded field against an independently bounded
    physical AC1018 plain-text TABLE body. Keep this separate from the generated
