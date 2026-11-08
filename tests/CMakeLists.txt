@@ -3859,6 +3859,18 @@ set_tests_properties(acis_sab21200_sat_v1_token_controls PROPERTIES
     TIMEOUT 30
 )
 
+add_executable(libdxfrw_acis_sat_allocation_tests
+    acis_sat_allocation_tests.cpp)
+target_compile_features(libdxfrw_acis_sat_allocation_tests PRIVATE cxx_std_17)
+target_include_directories(libdxfrw_acis_sat_allocation_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_acis_sat_allocation_tests PRIVATE dxfrw)
+add_test(NAME acis_sat_allocation_rollback_retry
+    COMMAND libdxfrw_acis_sat_allocation_tests)
+set_tests_properties(acis_sat_allocation_rollback_retry PROPERTIES
+    LABELS "fast;dwg;dxf;3d;acis;allocation;transaction;generated"
+    TIMEOUT 30)
+
 # Preserve the PFACE record boundary and following entity through direct
 # ASCII/Binary read and canonical write/readback without running the full suite.
 add_test(

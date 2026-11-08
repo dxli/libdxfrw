@@ -2335,7 +2335,7 @@ bool drw_parseSab(const std::uint8_t* data, std::size_t length,
     return true;
 }
 
-bool drw_convertSabToSatV1(const std::uint8_t* data, std::size_t length,
+static bool convertSabToSatV1Impl(const std::uint8_t* data, std::size_t length,
                           DRW::Version targetVersion,
                           std::vector<std::uint8_t>& out) {
     if (data == nullptr || targetVersion == DRW::UNKNOWNV)
@@ -2591,6 +2591,18 @@ bool drw_convertSabToSatV1(const std::uint8_t* data, std::size_t length,
     std::vector<std::uint8_t> converted(text.begin(), text.end());
     out.swap(converted);
     return true;
+}
+
+bool drw_convertSabToSatV1(const std::uint8_t* data, std::size_t length,
+                          DRW::Version targetVersion,
+                          std::vector<std::uint8_t>& out) {
+    try {
+        return convertSabToSatV1Impl(data, length, targetVersion, out);
+    } catch (const std::bad_alloc&) {
+        return false;
+    } catch (...) {
+        return false;
+    }
 }
 
 // ── Layer 2 entry: drw_buildAcisModel ──────────────────────────────────────

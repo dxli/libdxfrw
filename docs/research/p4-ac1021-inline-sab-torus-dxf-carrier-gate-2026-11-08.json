@@ -195,7 +195,8 @@
     },
     "nonFiniteSatScalarRollback": "PASS in generated fast control: nonfinite SAB resTol is parser-visible, SAT conversion refuses, and an existing output buffer is preserved.",
     "nonFiniteSatVectorRollback": "PASS in generated fast control: NaN in the parsed torus location vector is refused, preserving the existing SAT output buffer.",
-    "unknownTorusBooleanRollback": "PASS in generated fast control: an extra parser-valid torus-surface Boolean is refused without replacing the existing SAT output buffer."
+    "unknownTorusBooleanRollback": "PASS in generated fast control: an extra parser-valid torus-surface Boolean is refused without replacing the existing SAT output buffer.",
+    "satAllocationSweep": "PASS: generated version-21200 SAB control injects failure at all 11 observed SAT text-assembly allocation points; conversion returns false, preserves the caller output, and same-buffer retry matches baseline."
   },
   "remaining": [
     "Run the exact emitted SAT through a usable native FreeCAD + pinned InventorLoader reconstruction; capture valid B-rep topology, placement, bounds, area, volume and centroid. Current parser-only check uses stubs and does not construct geometry.",
