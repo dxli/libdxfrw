@@ -23,8 +23,10 @@ vertical margin). The direct body writer emits the selected values in the
 documented order; generated parsing checks exact values, body cursor, and a
 following sentinel. Unsupported bits, mismatched flag/value state, invalid
 flow values, and invalid or unflagged margins remain atomic refusals. The
-focused `libdxfrw_dwg_table_cell_overrides` CTest passes. This is codec
-self-consistency only: no producer-backed physical witness, semantic graph
+focused `libdxfrw_dwg_table_cell_overrides` CTest also round-trips all 32
+subsets of the five admitted mask bits, checking typed values, exact body
+cursor, and a per-mask sentinel. This is codec self-consistency only: no
+producer-backed physical witness, semantic graph
 closure, public `dwgRW::writeTable` enablement, or support-claim promotion.
 See [the scalar override receipt](docs/research/p5-ac1018-table-scalar-override-dwg-writer-2026-11-08.json).
 

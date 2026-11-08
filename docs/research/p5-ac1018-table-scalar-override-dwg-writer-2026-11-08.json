@@ -53,6 +53,7 @@
       "typed parse readback matches all selected values",
       "parser cursor equals the encoded body boundary",
       "following body sentinel remains readable",
+      "all 32 subsets of mask 0x1f round-trip with selected and default values, exact cursor, and mask-specific sentinel",
       "unsupported mask, unflagged value residue, invalid flow, negative margin, and unflagged margin residue fail before output changes"
     ]
   },

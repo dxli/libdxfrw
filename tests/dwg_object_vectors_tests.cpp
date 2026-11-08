@@ -8695,6 +8695,64 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  "AC1018 TABLE scalar overrides preserve the following body sentinel");
     }
 
+    for (std::uint32_t mask = 0u; mask <= 0x1Fu; ++mask) {
+        TableDwgCodecProbe subsetTable = makeEncodableAc1018Table();
+        subsetTable.m_tableOverrideFlags = mask;
+        subsetTable.m_titleSuppressed = (mask & 0x01u) != 0u;
+        subsetTable.m_headerSuppressed = (mask & 0x02u) != 0u;
+        subsetTable.m_flowDirection = (mask & 0x04u) != 0u ? 1 : 0;
+        subsetTable.m_horizontalCellMargin =
+            (mask & 0x08u) != 0u ? 0.75 : 0.0;
+        subsetTable.m_verticalCellMargin =
+            (mask & 0x10u) != 0u ? 1.5 : 0.0;
+        dwgBufferW subsetBody;
+        dwgBufferW subsetHandles;
+        dwgBufferW subsetTypePrefix;
+        subsetTypePrefix.putObjType(DRW::AC1018, 562u);
+        const std::uint64_t subsetObjectSizeBit =
+            subsetTypePrefix.bitCount();
+        const bool subsetEncoded = subsetTable.encodeAsTableClass(
+            DRW::AC1018, subsetBody, subsetHandles);
+        const std::uint64_t subsetBodyEndBit = subsetBody.bitCount();
+        constexpr std::int32_t subsetSentinel = 0x51CA0000;
+        subsetBody.putBitLong(subsetSentinel
+                              | static_cast<std::int32_t>(mask));
+        subsetBody.patchRawLong32AtBit(
+            subsetObjectSizeBit,
+            static_cast<std::uint32_t>(subsetBody.bitCount()));
+        appendBits(subsetBody, subsetHandles);
+        dwgBuffer subsetInput(subsetBody.data().data(),
+                              subsetBody.data().size());
+        TableDwgCodecProbe subsetReadback;
+        const bool subsetRead = subsetEncoded && subsetReadback.parseDwg(
+            DRW::AC1018, &subsetInput);
+        const bool subsetMatches = subsetRead && subsetInput.isGood()
+            && subsetReadback.m_semanticContentComplete
+            && subsetReadback.m_tableOverrideFlags == mask
+            && subsetReadback.m_titleSuppressed
+                == ((mask & 0x01u) != 0u)
+            && subsetReadback.m_headerSuppressed
+                == ((mask & 0x02u) != 0u)
+            && subsetReadback.m_flowDirection
+                == ((mask & 0x04u) != 0u ? 1 : 0)
+            && subsetReadback.m_horizontalCellMargin
+                == ((mask & 0x08u) != 0u ? 0.75 : 0.0)
+            && subsetReadback.m_verticalCellMargin
+                == ((mask & 0x10u) != 0u ? 1.5 : 0.0)
+            && cursorBit(subsetInput) == subsetBodyEndBit;
+        t.expect(subsetMatches,
+                 "AC1018 TABLE scalar override mask subset round-trips at mask "
+                     + std::to_string(mask));
+        if (subsetMatches) {
+            const std::int32_t sentinel = subsetInput.getBitLong();
+            t.expect(subsetInput.isGood()
+                         && sentinel == (subsetSentinel
+                             | static_cast<std::int32_t>(mask)),
+                     "AC1018 TABLE scalar override subset preserves body sentinel at mask "
+                         + std::to_string(mask));
+        }
+    }
+
     DRW_Header tableFrameHeader;
     TableClassSerializationProbe tableFrameWriter(nullptr, &tableFrameHeader);
     const dwgWriter::CompoundWriteCheckpoint tableFrameCheckpoint =
