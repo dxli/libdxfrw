@@ -50,8 +50,10 @@ state. The focused
 passes. The slices were committed as `47d345d6`, `a7f65822`, `55817307`,
 `f878f544`, `1da90fcf`, and `4927c53e`; no downloaded or new DWG/DXF fixture
 was added. These changes do not enable `dwgRW::writeTable`: the physical AC1018
-TABLE candidates still stop at undocumented override flags, no TABLE instance
-or serialized CLASS section has end-to-end readback, and the anonymous `*T`
+TABLE candidates still stop at undocumented **cell-level** override flags
+(`0x40000`/`0x40020`); these differ from the separately modeled table-level
+scalar mask `0x1f` documented in the current resume checkpoint. No TABLE
+instance or serialized CLASS section has end-to-end readback, and the anonymous `*T`
 block graph/compound transaction is not implemented. The Mac still appears
 locked. ODA's `--version` diagnostic aborted during Pasteboard/XPC startup and
 produced no version or drawing evidence. Do not repeat the unchanged conversion
