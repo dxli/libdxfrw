@@ -12410,6 +12410,15 @@ bool dxfRW::writeTableStyle(
     const auto validR24StyleOverrides = [](std::uint32_t value) {
         return (value & ~std::uint32_t{0x7FFFFu}) == 0u;
     };
+    const auto validR24LineWeight = [](int value) {
+        static constexpr std::array<int, 27> lineWeights{{
+            -3, -2, -1, 0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40,
+            50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200,
+            211
+        }};
+        return std::find(lineWeights.begin(), lineWeights.end(), value)
+            != lineWeights.end();
+    };
     const auto validR24Color = [&scalarColorIsDxfRepresentable](
             int value, const DRW_TableStyleCmcColor& cmc) {
         return scalarColorIsDxfRepresentable(value, cmc)
@@ -12548,7 +12557,7 @@ bool dxfRW::writeTableStyle(
                     || (border.m_borderType != 1
                         && border.m_borderType != 2)
                     || !validR24Color(border.m_color, border.m_colorCmc)
-                    || border.m_lineWeight != -2
+                    || !validR24LineWeight(border.m_lineWeight)
                     || !r24BorderLineTypeSupported(border)
                     || (border.m_visible != 0 && border.m_visible != 1)
                     || !std::isfinite(border.m_doubleLineSpacing)

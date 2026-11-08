@@ -37213,7 +37213,8 @@ void populateR24DwgTableStyleGraph(dx_data& data,
                                   bool variedPropertyFlags = false,
                                   bool variedBorderOverrides = false,
                                   bool variedIndexedColors = false,
-                                  bool variedBorderDetails = false) {
+                                  bool variedBorderDetails = false,
+                                  bool variedBorderLineWeights = false) {
     data.sourceFormat = dx_source_format::DWG;
     data.sourceVersion = DRW::AC1024;
     data.hasNamedObjectDictionary = true;
@@ -37372,6 +37373,15 @@ void populateR24DwgTableStyleGraph(dx_data& data,
         style.m_cellStyles[0].m_borders[0].m_propertyOverrideFlags |= 1;
         style.m_cellStyles[0].m_borders[1].m_propertyOverrideFlags |= 0x10;
     }
+    if (variedBorderLineWeights) {
+        static constexpr int lineWeights[] = {-3, -2, -1, 0, 5, 211};
+        for (std::size_t index = 0; index < 6u; ++index) {
+            style.m_cellStyles[0].m_borders[index].m_lineWeight =
+                lineWeights[index];
+            style.m_cellStyles[0].m_borders[index]
+                .m_propertyOverrideFlags |= 0x2;
+        }
+    }
     if (extendedFormatProfile) {
         for (DRW_TableStyleCellStyle& cellStyle : style.m_cellStyles) {
             cellStyle.m_contentFormat.m_valueFormatString = "0.00";
@@ -37431,7 +37441,8 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
                                       bool variedPropertyFlags = false,
                                       bool variedBorderOverrides = false,
                                       bool variedIndexedColors = false,
-                                      bool variedBorderDetails = false) {
+                                      bool variedBorderDetails = false,
+                                      bool variedBorderLineWeights = false) {
     const std::string profileSuffix = inheritedCustomMargins
         ? "-inherited-margins" : "-explicit-margins";
     const std::filesystem::path output =
@@ -37451,7 +37462,8 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
         valueDataType, valueUnitType, extendedFormatProfile, variedMargins,
         variedTextHeights, variedMergeFlags, variedContentLayouts,
         variedAlignments, variedPropertyFlags, variedBorderOverrides,
-        variedIndexedColors, variedBorderDetails);
+        variedIndexedColors, variedBorderDetails,
+        variedBorderLineWeights);
     constexpr std::uint32_t kBorderLineTypeHandle = 0x570u;
     if (lineTypeProfile) {
         DRW_LType lineType;
@@ -37712,6 +37724,15 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
             return fail("R24 TABLESTYLE accepted negative double-line spacing or replaced the destination");
         border.m_doubleLineSpacing = 0.09;
     }
+    if (variedBorderLineWeights) {
+        DRW_TableStyleBorder& border = firstCustomStyle.m_borders.front();
+        border.m_lineWeight = 1;
+        if (writer.fileExport(output.string(), DRW::AC1024, binary,
+                              &data, false)
+            || !destinationIsSentinel())
+            return fail("R24 TABLESTYLE accepted an undefined lineweight or replaced the destination");
+        border.m_lineWeight = -3;
+    }
     if (!writer.fileExport(output.string(), DRW::AC1024, binary,
                            &data, false)) {
         std::error_code ignored;
@@ -37904,6 +37925,7 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
                 data.tableStyles.front().m_cellStyles[index]
                     .m_borders[borderIndex];
             if (typedBorder.m_borderType != sourceBorder.m_borderType
+                || typedBorder.m_lineWeight != sourceBorder.m_lineWeight
                 || typedBorder.m_visible != sourceBorder.m_visible
                 || typedBorder.m_doubleLineSpacing
                     != sourceBorder.m_doubleLineSpacing)
@@ -38180,6 +38202,10 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
     if (variedBorderDetails) {
         expectedBorderOverrideFlags[0] |= 1;
         expectedBorderOverrideFlags[1] |= 0x10;
+    }
+    if (variedBorderLineWeights) {
+        for (int index = 0; index < 6; ++index)
+            expectedBorderOverrideFlags[static_cast<std::size_t>(index)] |= 2;
     }
     std::vector<double> expectedGroup40;
     std::vector<int> expectedMarginFlags;
@@ -87630,6 +87656,14 @@ int main(int argc, char** argv) {
                     true, nonce, false, 8, false, 512, 0,
                     false, false, false, false, false, false, false, false,
                     false, true)
+                && typedDwgR24TableStyleDxfRoundTrip(
+                    false, nonce, false, 8, false, 512, 0,
+                    false, false, false, false, false, false, false, false,
+                    false, false, true)
+                && typedDwgR24TableStyleDxfRoundTrip(
+                    true, nonce, false, 8, false, 512, 0,
+                    false, false, false, false, false, false, false, false,
+                    false, false, true)
             ? 0 : 1;
     }
     if (argc == 2 && std::string(argv[1]) == "--raster-dwg-source-profile-eed")
