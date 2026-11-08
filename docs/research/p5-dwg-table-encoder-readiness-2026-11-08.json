@@ -358,5 +358,58 @@
       "no physical source-profile, independent reader, producer, or native TABLE validation"
     ],
     "disposition": "Generated facade transaction and same-facade retry proof only. It prepares transaction plumbing for a future compound writer; no public output or interoperability claim."
+  },
+  "ac1018_physical_table_graph_peer_screen": {
+    "source": {
+      "path": "/Users/dli/doc/dwg6/example_2004.dwg",
+      "sha256": "e72d5e86d5d36d64b08822fb25a46079f592fd895a6157b1b8d9b07775e06108",
+      "provenance": "pre-existing local AutoCAD 2004 DWG; not added to the repository"
+    },
+    "independent_reader": {
+      "project": "LibreDWG",
+      "version": "0.14",
+      "command": "dwgread -O minJSON /Users/dli/doc/dwg6/example_2004.dwg -o /private/tmp/libdxfrw-table-example2004-minjson.json",
+      "outputSha256": "e72e8c76df3aa4bd7b04f53d88199b2a54ac3410b11fef241eb6bd603bddd129",
+      "readerLogSha256": "3e64f7c6692575249a3bfb8a48f08c4b619bcbebec9699c379056f02f593efcf"
+    },
+    "table_class": {
+      "tableHandle": "0x4F2",
+      "classOrdinal": 528,
+      "classIdentity": "ObjectDBX Classes / AcDbTable / ACAD_TABLE",
+      "proxyCapabilities": 1025,
+      "dwgClassVersion": 25,
+      "maintenanceVersion": 20,
+      "ordinalScope": "empirical for this source only; do not hardcode"
+    },
+    "graph": {
+      "tableBlockReference": {
+        "code": 5,
+        "handle": "0x4F3"
+      },
+      "blockRecord": {
+        "handle": "0x4F3",
+        "name": "*T",
+        "blockBeginHandle": "0x514",
+        "endBlockHandle": "0x515",
+        "ownedHandleCount": 39,
+        "resolvedEntityTypes": {
+          "LINE": 32,
+          "MTEXT": 7
+        },
+        "childrenWithOwnerReferenceToBlockRecord": 39
+      }
+    },
+    "body_limit": {
+      "libdxfrw": "Typed body parsing stops at unknown AC1018 cell override flags 0x40000; the retained TABLE value is semantically incomplete.",
+      "LibreDWG": "Retains 12,284 unknown TABLE bits, exposes empty col_widths and row_heights, and cannot map the cached block entities back to typed cell contents.",
+      "disposition": "Graph/reference shape evidence only. It does not provide source-matched cell semantics, a source-to-output field comparison, a one-cell candidate profile, or TABLE rendering qualification."
+    },
+    "secondary_dxf_export": {
+      "command": "dwgread -O DXF /Users/dli/doc/dwg6/example_2004.dwg -o /private/tmp/libdxfrw-table-example2004.dxf",
+      "outputSha256": "b3bdb1a8d809e4ff1a1700e67c08f8724d299bba3cdcff290beb2e517163402b",
+      "disposition": "Not used as a semantic oracle: the emitted entity is represented as INSERT with an AcDbTable subclass and a renamed *T14 block; the output does not establish the source TABLE cell-to-cache relation."
+    },
+    "native_session": "A fresh desktop inventory reports the Mac locked. Do not retry ODA/FreeCAD GUI qualification until an unlocked app surface is observed.",
+    "overall_disposition": "Independent peer evidence narrows the AC1018 TABLE graph shape to a physical example but cannot unlock compound output. Keep dwgRW::writeTable refused and do not promote support claims."
   }
 }

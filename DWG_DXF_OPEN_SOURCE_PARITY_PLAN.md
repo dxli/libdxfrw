@@ -147,8 +147,8 @@ rooted dimension graph.
 dimension body under the geometry dependency was rejected by the existing
 profile validator because geometry dependencies require a null body handle.
 The invalid prototype was removed; no production change or evidence was
-committed. The user has since said they are unlocking the Mac; this is not yet
-an observed unlocked desktop state, so ODA/FreeCAD qualification remains
+committed. The user said they were unlocking the Mac, but the latest desktop
+inventory still reports the Mac locked, so ODA/FreeCAD qualification remains
 pending. Verify a fresh desktop inventory before retrying the native workflow;
 do not treat the prior PasteBoard/XPC abort as format evidence. Continue local
 implementation meanwhile. A separate locally authored full-file dimension
@@ -401,16 +401,28 @@ created locally from scratch for the specific control.
   `AcDbTable` class identity/count bookkeeping, then rolls the frame and class
   ledger back through an outer compound checkpoint. The placeholder `*T`
   block is empty; this proves only frame/class transaction mechanics. The
-  current focused control also routes class registration and frame emission
-  through an explicit `dwgRW` transaction: caller class state, frame bytes,
-  handle/class ledgers and success count roll back after a failure injected
-  following an earlier `*T` owned geometry frame; one retry then commits on the
-  same facade. The generated LINEs are transaction probes only, not TABLE
-  rendering evidence. Next build the smallest semantically complete
+  commit `c0cb07f3` extends the focused control to route class registration
+  and frame emission through an explicit `dwgRW` transaction: caller class
+  state, frame bytes, handle/class ledgers and success count roll back after a
+  failure injected following an earlier `*T` owned geometry frame; one retry
+  then commits on the same facade. The generated LINEs are transaction probes
+  only, not TABLE rendering evidence. Next build the smallest semantically complete
   `*T` geometry/reference graph from a bounded, source-supported profile. Keep
   `dwgRW::writeTable` fail-closed until that graph and its
   physical-source, independent-reader/native qualification gates pass. See the
   [TABLE readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
+- **AC1018 TABLE source graph screen:** the local AutoCAD 2004 sample is
+  independently decoded by LibreDWG 0.14: TABLE handle `0x4F2` points to
+  BLOCK_RECORD `0x4F3` named `*T`, whose ordered owned-handle list resolves to
+  39 entities (32 LINE, 7 MTEXT); each decoded child points back to `0x4F3`.
+  This establishes one physical graph shape only. Both libdxfrw and LibreDWG
+  retain/stop at unknown TABLE body data (libdxfrw flags `0x40000`; LibreDWG
+  retains 12,284 unknown bits and no decoded row/column widths), so these
+  entities cannot be matched to typed cell semantics or used to derive the
+  generated one-cell profile. The next graph implementation needs a complete
+  bounded source/producer profile; keep public TABLE output refused meanwhile.
+  The full source/output fingerprints and limits are in the [TABLE readiness
+  receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 - **Previous local slice:** AC1027/AC1032 PERSUBENTMGR typed failures now
   publish raw-only after independent common-shell and handle-stream validation.
   The hash-matched AC1027 physical source publishes handle `0x2E0` and reduces
