@@ -1,0 +1,47 @@
+{
+  "date": "2026-11-08",
+  "topic": "DWG ACAD_TABLE encoder readiness",
+  "scope": "Source and specification audit only; no production support claim",
+  "repository": {
+    "entity_encoder": "src/drw_entities.cpp: DRW_Table::encodeDwg currently returns false without mutation",
+    "adapter_writer": "src/libdwgr.cpp: dwgRW::writeTable intentionally refuses and marks the complete DWG save failed",
+    "reader": "src/drw_entities.cpp: DRW_Table::parseDwg has separate pre-AC1024 and AC1024+ branches",
+    "related_object_writer": "src/libdwgr.cpp: writeTableContent is currently restricted to AC1021"
+  },
+  "authority": {
+    "document": "Open Design Specification for .dwg files, v5.4.1",
+    "url": "https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf",
+    "section": "20.4.96, pp. 229-232",
+    "observations": [
+      "The table entity has versioned formats and relies on an anonymous *T block for geometric results.",
+      "Section 20.4.96.1 describes the legacy body through R21, while explicitly leaving the AutoCAD 2008 cell changes incomplete.",
+      "R24 uses AcDbTableContent; the specification leaves its round-trip connection to TABLECONTENT and TABLEGEOMETRY undocumented."
+    ]
+  },
+  "decision": "Keep DWG TABLE output refused until an exact version profile, complete entity/block/object graph, and transaction are implemented. Do not infer R24 layout from the partial reader or generalize one codec across versions.",
+  "first_candidate": {
+    "version": "AC1018",
+    "profile": "one row, one column, one plain text value-content cell",
+    "excluded": [
+      "attributes and attribute definitions",
+      "block-valued cells",
+      "overrides, merges, fields and data links",
+      "nondefault style/color, cache, geometry, or retained raw subrecords",
+      "any unmodeled or incomplete semantic data"
+    ],
+    "required_before_adapter_admission": [
+      "direct AC1018 body/string/handle codec exact-span vector with typed parser readback and following-frame sentinel",
+      "preflight for the source model's complete writable profile and source-state preservation on refusal",
+      "complete *T BLOCK/BLOCK_RECORD ownership and TABLE style-reference disposition",
+      "compound writer atomic rollback, destination preservation, same-adapter corrected retry, and fresh readback",
+      "no unsupported cell/override field silently omitted"
+    ]
+  },
+  "validation_policy": "Focused generated controls and existing-source use only; no new downloaded DWG/DXF fixture is to be committed.",
+  "status": "OPEN_IMPLEMENTATION",
+  "blockers": [
+    "No production encoder exists.",
+    "No complete AC1018 source-to-writer profile is currently recorded in this plan.",
+    "R24+ TABLECONTENT/TABLEGEOMETRY relationship is outside the available ODA v5.4.1 layout and must remain refused."
+  ]
+}

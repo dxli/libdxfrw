@@ -2406,6 +2406,51 @@ Strict output still fails, and no support claim is promoted.
 
 **TABLE:**
 
+**DWG `ACAD_TABLE` writer gap — implementation packet added 2026-11-08:**
+`DRW_Table::encodeDwg` currently returns `false`, and `dwgRW::writeTable`
+refuses the entity so it cannot fall through to INSERT-shaped bytes. This is a
+real DWG write-coverage gap; do not remove the refusal until the entity body,
+anonymous `*T` block relationship, cell payloads, owned ATTRIB chain, and
+version-specific handles are committed transactionally together. ODA v5.4.1
+§20.4.96.1 documents the pre-R24 body, but marks the AutoCAD 2008 cell changes
+as TODO; §20.4.96.2 says R24 moves data into TABLECONTENT and the specification
+does not document the round-trip connection. The local authoritative PDF is
+not installed; references here use the official [ODA v5.4.1
+PDF](https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf),
+§20.4.96 (pp. 229–232). Do not attempt one cross-version encoder or infer the
+missing R24 graph from the current parser.
+The inspected code paths, exact authority section, candidate exclusions, and
+compound-output acceptance gates are recorded in the
+[encoder-readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
+
+Speed-oriented implementation sequence:
+
+1. Start with one explicit **AC1018 plain-text-cell** generated profile, because
+   its string is inline and it avoids both the R2007+ detached string stream and
+   the undocumented R24 TABLECONTENT relationship. Require one row/column,
+   one value-content item of type 1, default indexed colors/style, no cell or
+   table overrides, merges, data links, fields, block content, attributes,
+   retained raw subrecords, or unexplained geometry/cache state. Match every
+   gate to the actual public model fields and reject anything outside that
+   profile before emitting bytes.
+2. Implement a private, version-scoped TABLE body encoder that mirrors the
+   already bounded AC1018 `DRW_Table::parseDwg` order across entity, string,
+   and handle streams. First use direct codec controls for exact field spans,
+   typed readback, following-entity sentinel, truncation refusal, source-state
+   preservation, and corrected same-object retry. Keep `writeTable` fail-closed
+   during this step; an entity-only vector is not a complete DWG output route.
+3. Add the AC1018 compound writer only after the body vector passes: preflight
+   and stage the exact `*T` BLOCK/BLOCK_RECORD and TABLE ownership/reference
+   graph, then publish entity plus linked records atomically. Verify with a
+   locally authored from-scratch DWG control and fresh libdxfrw readback; use
+   an already available independent writer/reader only if its provenance and
+   exact profile are recorded. Do not commit downloaded DWG/DXF fixtures.
+4. Keep AC1021+ and AC1024+ refused until their source-bound stream/handle
+   profiles and the R24 TABLECONTENT/TABLEGEOMETRY graph are established. Add
+   one version at a time with separate body, dependency, rollback/retry, and
+   readback evidence. Native table rendering and broad support claims remain
+   separate gates.
+
 1. **Nested FIELD graphs:** qualify physical producer/version profiles and
    source gaps; do not infer native FIELD evaluation from generated values.
    The R2007+ unit-12 DWG value string now follows the ODA field order, while
