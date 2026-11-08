@@ -8067,6 +8067,29 @@ std::uint64_t cursorBit(const dwgBuffer& buffer) {
 }
 
 void testR2007TableCellTypeReaderVectors(TestContext& t) {
+    struct TableClassSerializationProbe final : dwgWriter18 {
+        using dwgWriter18::dwgWriter18;
+
+        bool serializeClassDefinition(std::uint16_t classNumber,
+                                      dwgBufferW& output) {
+            bool found = false;
+            return emitDwgClassDefinitions(
+                       [this, classNumber, &output, &found](
+                           const DwgClassDefinition& definition) {
+                           if (definition.m_classNum != classNumber)
+                               return true;
+                           found = writeDwgClassDefinition(
+                               definition, &output, nullptr);
+                           return found;
+                       })
+                && found;
+        }
+
+        void markClassInstanceFrameCommitted(std::uint32_t handle) {
+            markDwgClassInstanceEmitted(handle);
+        }
+    };
+
     DRW_Header tableClassHeader;
     dwgWriter18 tableClassWriter(nullptr, &tableClassHeader);
     DRW_Table registeredTable;
@@ -8093,6 +8116,75 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     t.expect(!wrongVersionTableClassWriter.registerTableEntityClass(
                  &wrongVersionTableClass),
              "TABLE class registration refuses unqualified writer versions");
+
+    DRW_Header serializedTableClassHeader;
+    TableClassSerializationProbe serializedTableClassWriter(
+        nullptr, &serializedTableClassHeader);
+    DRW_Table serializedTable;
+    constexpr std::uint32_t serializedTableHandle = 0xFA17u;
+    const bool serializedClassRegistered =
+        serializedTableClassWriter.registerTableEntityClass(&serializedTable);
+    const bool serializedInstanceRegistered = serializedClassRegistered
+        && serializedTableClassWriter.registerDwgEntityClassInstance(
+            serializedTable.getDwgClassNum(), serializedTableHandle);
+    const bool pendingInstanceRejected =
+        !serializedTableClassWriter.validateDwgClassInstanceCounts();
+    serializedTableClassWriter.markClassInstanceFrameCommitted(
+        serializedTableHandle);
+    const bool emittedInstanceCountsValid =
+        serializedTableClassWriter.validateDwgClassInstanceCounts();
+    const bool serializedManifestPrepared =
+        emittedInstanceCountsValid
+        && serializedTableClassWriter.prepareDwgClassManifest();
+    dwgBufferW serializedTableClassEntry;
+    const bool tableClassEntrySerialized = serializedManifestPrepared
+        && serializedTableClassWriter.serializeClassDefinition(
+            serializedTable.getDwgClassNum(), serializedTableClassEntry);
+    const auto& serializedTableClassBytes = serializedTableClassEntry.data();
+    dwgBuffer decodedTableClassEntry(
+        const_cast<std::uint8_t*>(serializedTableClassBytes.data()),
+        serializedTableClassBytes.size());
+    const std::uint16_t decodedTableClassNumber =
+        decodedTableClassEntry.getBitShort();
+    const std::uint16_t decodedTableProxyFlag =
+        decodedTableClassEntry.getBitShort();
+    const std::string decodedTableApplication =
+        decodedTableClassEntry.getVariableText(DRW::AC1018);
+    const std::string decodedTableClassName =
+        decodedTableClassEntry.getVariableText(DRW::AC1018);
+    const std::string decodedTableRecordName =
+        decodedTableClassEntry.getVariableText(DRW::AC1018);
+    const bool decodedTableWasProxy = decodedTableClassEntry.getBit() != 0u;
+    const std::uint16_t decodedTableEntityFlag =
+        decodedTableClassEntry.getBitShort();
+    const std::int32_t decodedTableInstanceCount =
+        decodedTableClassEntry.getBitLong();
+    const std::int32_t decodedTableDwgVersion =
+        decodedTableClassEntry.getBitLong();
+    const std::int32_t decodedTableMaintenanceVersion =
+        decodedTableClassEntry.getBitLong();
+    const std::int32_t decodedTableUnknown1 = decodedTableClassEntry.getBitLong();
+    const std::int32_t decodedTableUnknown2 = decodedTableClassEntry.getBitLong();
+    t.expect(serializedClassRegistered && serializedInstanceRegistered
+                 && pendingInstanceRejected && emittedInstanceCountsValid
+                 && tableClassEntrySerialized
+                 && decodedTableClassEntry.isGood()
+                 && decodedTableClassNumber
+                     == serializedTable.getDwgClassNum()
+                 && decodedTableProxyFlag == 0x401u
+                 && decodedTableApplication == "ObjectDBX Classes"
+                 && decodedTableClassName == "AcDbTable"
+                 && decodedTableRecordName == "ACAD_TABLE"
+                 && !decodedTableWasProxy
+                 && decodedTableEntityFlag == 0x1F2u
+                 && decodedTableInstanceCount == 1
+                 && decodedTableDwgVersion == 25
+                 && decodedTableMaintenanceVersion == 20
+                 && decodedTableUnknown1 == 0
+                 && decodedTableUnknown2 == 0
+                 && cursorBit(decodedTableClassEntry)
+                     == serializedTableClassEntry.bitCount(),
+             "AC1018 TABLE CLASS serialization preserves identity and committed instance count");
 
     R2007TableFrame unknownFrame;
     const bool unknownBuilt = makeR2007TableFrame(16, unknownFrame);

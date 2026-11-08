@@ -2504,12 +2504,16 @@ maps `TABLE` to `ACAD_TABLE` but classifies its implementation as
 general output claim ([LibreDWG objects.in](https://github.com/LibreDWG/libredwg/blob/master/src/objects.in#L1210-L1213)).
 The writer now has an AC1018-only registration helper that allocates a
 writer-local ordinal and resolves repeats by class identity; generated controls
-confirm identity reuse and refusal on AC1027. The next implementation slice is
-to serialize the registered CLASS record and TABLE instance count through the
-existing DWG writer path, then read those exact emitted fields back with an
-independent bounded control. Keep the registration helper disconnected from
-`writeTable` until that proof passes. It does not currently publish a class
-instance or enable output.
+confirm identity reuse and refusal on AC1027. A generated AC1018 control now
+registers one handle-bearing instance, confirms the declared count is invalid
+until its frame-commit marker, serializes the registered CLASS entry, and
+independently decodes its class number, full identity, entity flag, version
+fields and instance count. The focused `--table-cell-overrides` selector
+passes. This proves entry-encoder and ledger consistency for the generated
+identity, not that a TABLE entity frame or full CLASSES section is independently
+readable. The registration helper is still disconnected from `writeTable`;
+compound staging must bind a real TABLE frame and roll back class metadata and
+counts if entity or `*T` graph staging fails.
 
 Speed-oriented implementation sequence:
 
@@ -2542,12 +2546,13 @@ Speed-oriented implementation sequence:
    retained raw subrecords, or unexplained geometry/cache state. Match every
    gate to the actual public model fields and reject anything outside that
    profile before emitting bytes.
-2. Serialize the identity-registered AC1018 CLASS definition and increment
-   its instance count only when the matching TABLE entity is staged. Add a
-   generated output check that decodes the emitted CLASS section and verifies
-   identity, class ordinal, and instance count; ensure failed entity staging
-   leaves class metadata and counts unchanged. Keep the class helper separate
-   from public output until this passes.
+2. Bind CLASS registration and instance-count staging to the AC1018 TABLE
+   frame transaction. Capture writer-class metadata/count checkpoints and
+   prove a failed entity or `*T` graph stage restores them; a committed frame
+   must be the only point that increments the emitted-instance ledger. Extend
+   the control to the full serialized CLASSES section and decode it through an
+   independent bounded reader. Keep the route disconnected from public output
+   until this passes.
 3. After the remaining focused refusal/atomicity controls and empirical
    class-map resolution, compare every encoded field against an independently bounded
    physical AC1018 plain-text TABLE body. Keep this separate from the generated

@@ -163,9 +163,11 @@
       "AC1018 class registration assigns a writer-local class ordinal and associates the TABLE entity with it.",
       "A second AcDbTable/ACAD_TABLE registration resolves to the same writer-local ordinal by identity.",
       "The helper refuses an AC1027 writer.",
-      "The generated number is checked against the registered identity and manifest definition rather than either observed source ordinal."
+      "Registering a handle-bearing TABLE class instance declares count 1, but validation rejects it until the object-frame commit marker records emission.",
+      "The real CLASS-entry serializer output is independently decoded and matches class ordinal, proxy flags, application/class/record identity, entity marker, instance count 1, DWG version 25 and maintenance version 20.",
+      "The decoded cursor lands exactly at the emitted CLASS-entry bit end."
     ],
-    "disposition": "Registration-helper control only. The helper is not connected to dwgRW::writeTable; emitted CLASS definition decoding, entity instance count publication, and rollback on failed entity staging remain unproven."
+    "disposition": "Generated CLASS-entry serializer and instance-ledger proof only. It does not decode a complete serialized CLASSES section or a TABLE entity frame, and does not exercise rollback after entity/*T graph staging failure. The helper remains disconnected from dwgRW::writeTable; no production output claim."
   },
   "first_candidate": {
     "version": "AC1018",
@@ -179,7 +181,8 @@
     ],
     "required_before_adapter_admission": [
       "audit remaining unchecked public-model guard branches; expanded refusal cases, representative body/handle truncation, corrected retry, and atomic append now pass",
-      "serialize and independently decode the identity-registered AC1018 CLASS definition and matching TABLE instance count; prove failed staging leaves class metadata/counts unchanged",
+      "bind TABLE class registration and emitted-instance accounting to the real compound entity transaction; prove entity and *T graph failure restore metadata/count ledgers and committed frames increment counts exactly once",
+      "serialize and independently decode the complete AC1018 CLASSES section containing the TABLE identity and matching instance count",
       "physical AC1018 plain-text source-to-output field comparison, or an explicit no-eligible-source disposition",
       "complete *T BLOCK/BLOCK_RECORD ownership and TABLE style-reference disposition",
       "compound writer atomic rollback, destination preservation, same-adapter corrected retry, and fresh readback",
@@ -221,5 +224,18 @@
       "null body refusal leaves handle output untouched"
     ],
     "disposition": "Focused guard coverage only; remaining guard branches and injected post-emission failures still require audit. No physical or production support claim."
+  },
+  "generated_ac1018_class_identity_serialization_control": {
+    "generatedFromScratch": true,
+    "version": "AC1018",
+    "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
+    "result": "PASS",
+    "assertions": [
+      "class registration uses the identity-selected writer-local ordinal",
+      "declared count fails ledger validation until frame emission is marked committed",
+      "actual CLASS-entry encoder output independently decodes to matching TABLE identity, entity role, one instance and class version fields",
+      "decoded CLASS-entry cursor equals the exact encoded bit end"
+    ],
+    "disposition": "Encoder/ledger consistency only. Full CLASSES section decoding, real TABLE frame commit, and transaction rollback after entity/*T graph failure remain open."
   }
 }
