@@ -152,12 +152,13 @@ instead of repeating successful scans or controls.
    The next P4 prerequisite is an independently produced source with a
    populated rooted graph and complete owner/target evidence; the exact screen
    is recorded in the [local candidate receipt](docs/research/p4-local-dwg-group-image-screen-2026-11-07.json).
-   Keep the unrelated `SORTENTSTABLE` null-target graph refused. While that
-   external sample is unavailable, continue the next independent ready item:
-   P6 IMAGEDEF cross-version source retention. Its parent code `0xC` and
-   dictionary group-350 edge now match in AutoCAD AC1021/24/27/32 DWG/DXF
-   pairs; preserve strict refusal because ODA §20.4.81 still calls the parent
-   a hard owner. See the [cross-version role receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json).
+   Keep the unrelated `SORTENTSTABLE` null-target graph refused. The P6
+   IMAGEDEF cross-version source capture is complete: its parent code `0xC`
+   and dictionary group-350 edge match in AutoCAD AC1021/24/27/32 DWG/DXF
+   pairs. Do not repeat that capture. Keep output refused because ODA §20.4.81
+   still calls the parent a hard owner; the next change requires independent
+   owner-semantics or native rewrite evidence. See the [cross-version role
+   receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json).
    For any selected subgraph, freeze source
    identity and expected record/handle roles; implement only the missing
    serializer or planner binding; add ASCII/Binary output, fresh typed
