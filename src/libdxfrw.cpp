@@ -12499,8 +12499,10 @@ bool dxfRW::writeTableStyle(
                 || format.m_propertyFlags != 0u
                 || !validValueDataType(format.m_valueDataType)
                 || !validR24ValueUnitType(format.m_valueUnitType)
-                || !format.m_valueFormatString.empty()
-                || format.m_rotation != 0.0 || format.m_blockScale != 1.0
+                || format.m_valueFormatString.size() > 1024u * 1024u
+                || !isSafeDxfRecordText(format.m_valueFormatString)
+                || !std::isfinite(format.m_rotation)
+                || !std::isfinite(format.m_blockScale)
                 || format.m_cellAlignment != expectedAlignment
                 || !byBlockColor(format.m_contentColor,
                                  format.m_contentColorCmc)

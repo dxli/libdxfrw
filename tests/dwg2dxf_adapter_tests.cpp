@@ -37203,7 +37203,8 @@ void populateR24DwgTableStyleGraph(dx_data& data,
                                   bool inheritedCustomMargins = false,
                                   std::int32_t prefixValue1 = 8,
                                   int valueDataType = 512,
-                                  int valueUnitType = 0) {
+                                  int valueUnitType = 0,
+                                  bool extendedFormatProfile = false) {
     data.sourceFormat = dx_source_format::DWG;
     data.sourceVersion = DRW::AC1024;
     data.hasNamedObjectDictionary = true;
@@ -37291,6 +37292,13 @@ void populateR24DwgTableStyleGraph(dx_data& data,
         2, 1, "_HEADER", 5, 0.18, 0, textStyle.handle));
     style.m_cellStyles.push_back(makeStyle(
         3, 2, "_DATA", 2, 0.18, 0, textStyle.handle));
+    if (extendedFormatProfile) {
+        for (DRW_TableStyleCellStyle& cellStyle : style.m_cellStyles) {
+            cellStyle.m_contentFormat.m_valueFormatString = "0.00";
+            cellStyle.m_contentFormat.m_rotation = 0.5;
+            cellStyle.m_contentFormat.m_blockScale = 1.25;
+        }
+    }
     if (inheritedCustomMargins) {
         for (DRW_TableStyleCellStyle& cellStyle : style.m_cellStyles) {
             cellStyle.m_marginOverrideFlags = 0;
@@ -37310,7 +37318,8 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
                                       std::int32_t prefixValue1 = 8,
                                       bool lineTypeProfile = false,
                                       int valueDataType = 512,
-                                      int valueUnitType = 0) {
+                                      int valueUnitType = 0,
+                                      bool extendedFormatProfile = false) {
     const std::string profileSuffix = inheritedCustomMargins
         ? "-inherited-margins" : "-explicit-margins";
     const std::filesystem::path output =
@@ -37327,7 +37336,7 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
     dx_data data;
     populateR24DwgTableStyleGraph(
         data, inheritedCustomMargins, prefixValue1,
-        valueDataType, valueUnitType);
+        valueDataType, valueUnitType, extendedFormatProfile);
     constexpr std::uint32_t kBorderLineTypeHandle = 0x570u;
     if (lineTypeProfile) {
         DRW_LType lineType;
@@ -37413,6 +37422,34 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
         || !destinationIsSentinel())
         return fail("R24 TABLESTYLE accepted an undocumented value unit type or replaced the destination");
     firstContentFormat.m_valueUnitType = valueUnitType;
+    if (extendedFormatProfile) {
+        firstContentFormat.m_valueFormatString = "invalid\nformat";
+        if (writer.fileExport(output.string(), DRW::AC1024, binary,
+                              &data, false)
+            || !destinationIsSentinel())
+            return fail("R24 TABLESTYLE accepted unsafe format text or replaced the destination");
+        firstContentFormat.m_valueFormatString.assign(
+            1024u * 1024u + 1u, 'x');
+        if (writer.fileExport(output.string(), DRW::AC1024, binary,
+                              &data, false)
+            || !destinationIsSentinel())
+            return fail("R24 TABLESTYLE accepted an over-bound format string or replaced the destination");
+        firstContentFormat.m_valueFormatString = "0.00";
+        firstContentFormat.m_rotation =
+            std::numeric_limits<double>::infinity();
+        if (writer.fileExport(output.string(), DRW::AC1024, binary,
+                              &data, false)
+            || !destinationIsSentinel())
+            return fail("R24 TABLESTYLE accepted a non-finite format rotation or replaced the destination");
+        firstContentFormat.m_rotation = 0.5;
+        firstContentFormat.m_blockScale =
+            std::numeric_limits<double>::quiet_NaN();
+        if (writer.fileExport(output.string(), DRW::AC1024, binary,
+                              &data, false)
+            || !destinationIsSentinel())
+            return fail("R24 TABLESTYLE accepted a non-finite block scale or replaced the destination");
+        firstContentFormat.m_blockScale = 1.25;
+    }
     DRW_TableStyleCellStyle& firstCustomStyle =
         data.tableStyles.front().m_cellStyles.front();
     if (inheritedCustomMargins) {
@@ -37512,6 +37549,12 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
         || titleStyle.m_contentFormat.m_cellAlignment != 5
         || titleStyle.m_contentFormat.m_valueDataType != valueDataType
         || titleStyle.m_contentFormat.m_valueUnitType != valueUnitType
+        || titleStyle.m_contentFormat.m_valueFormatString
+            != (extendedFormatProfile ? "0.00" : "")
+        || titleStyle.m_contentFormat.m_rotation
+            != (extendedFormatProfile ? 0.5 : 0.0)
+        || titleStyle.m_contentFormat.m_blockScale
+            != (extendedFormatProfile ? 1.25 : 1.0)
         || titleStyle.m_contentFormat.m_textHeight != 0.25
         || titleStyle.m_marginOverrideFlags
             != (inheritedCustomMargins ? 0 : 1)
@@ -37566,6 +37609,26 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
         }
         return values;
     };
+    std::vector<std::tuple<std::string, double, double>> contentFormatScalars;
+    for (std::size_t index = 0; index + 7u < raw.groups.size(); ++index) {
+        const DRW_Variant& marker = raw.groups[index];
+        if (marker.code() != 1 || marker.type() != DRW_Variant::STRING
+            || marker.c_str() == nullptr
+            || std::string(marker.c_str()) != "CONTENTFORMAT_BEGIN")
+            continue;
+        const DRW_Variant& formatString = raw.groups[index + 5u];
+        const DRW_Variant& rotation = raw.groups[index + 6u];
+        const DRW_Variant& blockScale = raw.groups[index + 7u];
+        if (formatString.code() != 300
+            || formatString.type() != DRW_Variant::STRING
+            || formatString.c_str() == nullptr || rotation.code() != 40
+            || rotation.type() != DRW_Variant::DOUBLE
+            || blockScale.code() != 140
+            || blockScale.type() != DRW_Variant::DOUBLE)
+            return fail("R24 TABLESTYLE content-format scalar field order is malformed");
+        contentFormatScalars.emplace_back(
+            formatString.c_str(), rotation.d_val(), blockScale.d_val());
+    }
     std::vector<std::tuple<int, int, std::string>> identities;
     for (std::size_t index = 0; index + 4u < raw.groups.size(); ++index) {
         const DRW_Variant& marker = raw.groups[index];
@@ -37599,13 +37662,23 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
     expectedGroup40.insert(expectedGroup40.end(),
         {0.06, 0.06, 0.06, 0.06, 0.18, 0.18});
     for (int index = 0; index < 3; ++index) {
-        expectedGroup40.push_back(0.0);
+        expectedGroup40.push_back(extendedFormatProfile ? 0.5 : 0.0);
         if (!inheritedCustomMargins) {
             expectedGroup40.insert(expectedGroup40.end(),
                 {0.06, 0.06, 0.06, 0.06, 0.18, 0.18});
         }
         expectedGroup40.insert(expectedGroup40.end(), 6u, 0.045);
     }
+    std::vector<double> expectedGroup140{1.0};
+    expectedGroup140.insert(expectedGroup140.end(), 3u,
+        extendedFormatProfile ? 1.25 : 1.0);
+    std::vector<std::tuple<std::string, double, double>>
+        expectedContentFormatScalars{{"", 0.0, 1.0}};
+    for (int index = 0; index < 3; ++index)
+        expectedContentFormatScalars.emplace_back(
+            extendedFormatProfile ? "0.00" : "",
+            extendedFormatProfile ? 0.5 : 0.0,
+            extendedFormatProfile ? 1.25 : 1.0);
     const std::vector<int> margins = integerValues(171);
     if (identities != expectedIdentities
         || countString(1, "TABLEFORMAT_BEGIN") != 4u
@@ -37620,6 +37693,8 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
             ? std::vector<int>({1, 0, 0, 0})
             : std::vector<int>({1, 1, 1, 1}))
         || doubleValues(40) != expectedGroup40
+        || doubleValues(140) != expectedGroup140
+        || contentFormatScalars != expectedContentFormatScalars
         || doubleValues(144)
             != std::vector<double>({0.18, 0.25, 0.18, 0.18})
         || std::count(colors.begin(), colors.end(), 257) != 4
@@ -86949,6 +87024,10 @@ int main(int argc, char** argv) {
                 && typedDwgR24TableStyleDxfRoundTrip(
                     true, nonce, false, 8, true)
                 && valueDomainRoundTrips()
+                && typedDwgR24TableStyleDxfRoundTrip(
+                    false, nonce, false, 8, false, 512, 0, true)
+                && typedDwgR24TableStyleDxfRoundTrip(
+                    true, nonce, false, 8, false, 512, 0, true)
             ? 0 : 1;
     }
     if (argc == 2 && std::string(argv[1]) == "--raster-dwg-source-profile-eed")
