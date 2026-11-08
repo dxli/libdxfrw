@@ -223,18 +223,21 @@ codecs, tests, and controls have been removed from the queue; their commits and
 receipts remain in Git and `docs/research/`. Resume from the linked blocker
 instead of repeating successful scans or controls. The generated R24 TABLESTYLE
 border LTYPE, value-domain, scalar format, margin, text-height, merge-flag,
-content-layout, alignment, property-flag, border-override, indexed-color and
-border-detail slices are complete in commits `12698d59`, `93c02f0d`,
+content-layout, alignment, property-flag, border-override, indexed-color,
+border-detail and border-lineweight slices are complete in commits
+`12698d59`, `93c02f0d`,
 `9678d0c2`, `513a8adf`, `37d876cf`, `bff89295`, `e19a6170`, `9b064748`,
-`7781bcfc`, `9d9de967`, `c4bb35ee`, `4432792f`, and `55ce3c7c`. The latest
+`7781bcfc`, `9d9de967`, `c4bb35ee`, `4432792f`, `55ce3c7c`, and `6463f3b7`. The latest
 bounded additions follow ODA §20.4.101.3–.4: group 93 admits content-layout
 values 1/2/4; group 94 admits cell alignments 1–9; group 90/91 admit
 documented property-override masks and AutoScale only when its override is
 selected; and border group 90 admits its six defined property bits. Indexed
 group-62 colors are supported where their scalar color methods are
 representable; truecolor/book-color CMC records remain refused. Border types
-1/2, invisibility 0/1, and finite nonnegative double-line spacing are also
-admitted; the prior ByBlock lineweight profile remains unchanged.
+1/2, invisibility 0/1, finite nonnegative double-line spacing, and the
+existing 27-value lineweight domain are also admitted. Generated controls
+verify group-92 ordering and typed values; see the
+[lineweight receipt](docs/research/p6-r24-tablestyle-border-lineweights-2026-11-08.json).
 Generated ASCII/Binary controls verify exact field positions, raw and typed
 readback, invalid-value/flag refusal, destination preservation and corrected
 same-adapter retries. Each focused build and
@@ -244,7 +247,8 @@ same-adapter retries. Each focused build and
 [property-flag](docs/research/p6-r24-tablestyle-property-flags-2026-11-08.json),
 the [border-override](docs/research/p6-r24-tablestyle-border-override-flags-2026-11-08.json),
 the [indexed-color](docs/research/p6-r24-tablestyle-indexed-colors-2026-11-08.json),
-and [border-detail](docs/research/p6-r24-tablestyle-border-details-2026-11-08.json)
+[border-detail](docs/research/p6-r24-tablestyle-border-details-2026-11-08.json),
+and [lineweight](docs/research/p6-r24-tablestyle-border-lineweights-2026-11-08.json)
 receipts. These generated controls add no native rendering or
 physical-producer qualification. The saved P4 inventory decision has no new
 ready physical graph. Continue with the remaining source-backed P4/P6 queue;
