@@ -150,5 +150,17 @@
     "disposition": "Not output-ready. Although source identities, ordered members, typed baselines and payload matches are established, the selected projection admission gate rejected the DICTIONARY and GROUP frames because common-link evidence is Unknown; the DICTIONARY also carries UnknownCodePage text issue mask 0x8. No selected serialization/readback was attempted. Do not clear the marker, relax standardSourceEligible, or infer support from the imported typed values.",
     "testBinarySha256": "7163ab0f11d3ba45924654bc2dcae7d8c226b1c1bf1d5c5758d29a729c67d9d9",
     "supportClaimEffect": "none"
+  },
+  "eedCodepageZeroDiagnostic": {
+    "date": "2026-11-07",
+    "sourcePath": "/Users/dli/dev/dwgTs/tests/fixtures/committed/libredwg/example_r13.dwg",
+    "sourceSha256": "53558a8ae4bf666f906c9c2e4d3c3ee7ef61690e3b0f4d4a858e4e1bf555fc89",
+    "method": "A temporary diagnostic around decodeEedString logged unrecognized per-value codepages while importing the source. The instrumentation was removed after the trace; no source or test change remains.",
+    "tracePath": "/tmp/libdxfrw-r13-group-eed-trace.log",
+    "observedZeroCodepageEedValues": 297,
+    "observation": "The trace contains EED strings with per-value codepage 0 and varying byte counts across the drawing. It does not yet bind the DICTIONARY handle 0xD issue to a particular EED value or prove the meaning of codepage 0.",
+    "authorityReview": "ODA v5.4.1 chapter 28 describes the per-value codepage field and framing, but the reviewed text does not define codepage 0 as inheriting the file codepage. LibreDWG's file-header codepage-0 fallback is not evidence for EED per-value semantics.",
+    "disposition": "Keep the DICTIONARY text issue and both common-link eligibility gates closed. Do not map codepage 0 to the file codepage or clear UnknownCodePage absent field-bound source bytes plus normative or independent producer evidence.",
+    "supportClaimEffect": "none"
   }
 }
