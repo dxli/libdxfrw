@@ -176,6 +176,11 @@ created locally from scratch for the specific control.
   RGB base. Generated ASCII/Binary controls verify atomic refusal for both
   malformed combinations and corrected retry on the same adapter; the receipt
   above records this follow-up too.
+  Commit `d12fdb5c` applies the same fail-closed CMC rule to the CELLSTYLEMAP
+  writer and catches color-name allocation failure at the record boundary.
+  Its generated ASCII/Binary control confirms truecolor/book readback, atomic
+  refusal of method-mismatched and book-only CMC values, destination
+  preservation and same-adapter retry ([CELLSTYLEMAP receipt](docs/research/p6-cellstylemap-cmc-loss-guard-2026-11-08.json)).
   Commit `e19a6170` admits per-style R24 TABLESTYLE
   merge flags within ODA's `0x18000` mask. Generated ASCII/Binary controls
   verify raw group-92 order and typed readback; an undocumented bit refuses
@@ -236,18 +241,19 @@ receipts remain in Git and `docs/research/`. Resume from the linked blocker
 instead of repeating successful scans or controls. The generated R24 TABLESTYLE
 border LTYPE, value-domain, scalar format, margin, text-height, merge-flag,
 content-layout, alignment, property-flag, border-override, indexed-color,
-border-detail, border-lineweight and bounded CMC truecolor/book-color slices
-are complete in commits
+border-detail, border-lineweight and bounded TABLESTYLE/CELLSTYLEMAP CMC
+truecolor/book-color codec slices are complete in commits
 `12698d59`, `93c02f0d`,
 `9678d0c2`, `513a8adf`, `37d876cf`, `bff89295`, `e19a6170`, `9b064748`,
 `7781bcfc`, `9d9de967`, `c4bb35ee`, `4432792f`, `55ce3c7c`, `6463f3b7`, and
-`05720365`, and `360e8470`. The latest
+`05720365`, `360e8470`, and `d12fdb5c`. The latest
 bounded additions follow ODA §20.4.101.3–.4: group 93 admits content-layout
 values 1/2/4; group 94 admits cell alignments 1–9; group 90/91 admit
 documented property-override masks and AutoScale only when its override is
 selected; and border group 90 admits its six defined property bits. Indexed
-group-62 colors and the bounded truecolor/book-color CMC profile (groups
-62/420/430) are supported by the generated codec path. Border types
+group-62 colors and the bounded truecolor/book-color CMC profiles (groups
+62/420/430) are supported in both R24 TABLESTYLE and CELLSTYLEMAP generated
+codec paths; method-mismatched and book-only states refuse atomically. Border types
 1/2, invisibility 0/1, finite nonnegative double-line spacing, and the
 existing 27-value lineweight domain are also admitted. Generated controls
 verify group-92 ordering and typed values; see the
@@ -2080,10 +2086,14 @@ Strict output still fails, and no support claim is promoted.
    TABLEGEOMETRY source spans or graph closure. Do not broaden the type parser
    from this candidate; reopen only with a complete, source-bound TABLE graph.
    See the [candidate screen receipt](docs/research/p5-ac1021-metric-tablegeometry-candidate-screen-2026-11-06.json).
-4. Use the existing `p5-ac1027-*` receipts as the exclusion inventory. Implement
-   only distinct uncovered source- or consumer-backed CONTENTFORMAT and
-   CELLSTYLEMAP combinations, extended CMC/name-color or linetype profiles, and
-   source-backed precedence for overlapping TABLECONTENT edge declarations.
+4. Use the existing `p5-ac1027-*` receipts as the exclusion inventory. The
+   generated R24 TABLESTYLE and CELLSTYLEMAP group-62/420/430 CMC profile is
+   implemented with method/base consistency and refusal/retry controls; see
+   [TABLESTYLE CMC](docs/research/p6-r24-tablestyle-cmc-truecolor-book-2026-11-08.json)
+   and [CELLSTYLEMAP CMC](docs/research/p6-cellstylemap-cmc-loss-guard-2026-11-08.json).
+   Continue only with distinct uncovered source- or consumer-backed
+   CONTENTFORMAT/CELLSTYLEMAP/linetype combinations and source-backed
+   precedence for overlapping TABLECONTENT edge declarations.
    Keep unsupported combinations refused until schema, version gates, wire order
    and readback behavior are established.
 5. The AC1018 text-cell reader maps the ODA §20.4.96.1 text-height and four
