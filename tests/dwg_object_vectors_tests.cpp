@@ -8753,6 +8753,46 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         }
     }
 
+    TableDwgCodecProbe textHeightTable = makeEncodableAc1018Table();
+    DRW_TableCell& textHeightCell =
+        textHeightTable.m_content.m_rows.front().m_cells.front();
+    textHeightCell.m_overrideFlags = 0x00000020u;
+    textHeightCell.m_textHeight = 2.75;
+    dwgBufferW textHeightBody;
+    dwgBufferW textHeightHandles;
+    dwgBufferW textHeightTypePrefix;
+    textHeightTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t textHeightObjectSizeBit =
+        textHeightTypePrefix.bitCount();
+    const bool textHeightEncoded = textHeightTable.encodeAsTableClass(
+        DRW::AC1018, textHeightBody, textHeightHandles);
+    const std::uint64_t textHeightBodyEndBit = textHeightBody.bitCount();
+    constexpr std::int32_t textHeightSentinel = 0x51CA2020;
+    textHeightBody.putBitLong(textHeightSentinel);
+    textHeightBody.patchRawLong32AtBit(
+        textHeightObjectSizeBit,
+        static_cast<std::uint32_t>(textHeightBody.bitCount()));
+    appendBits(textHeightBody, textHeightHandles);
+    dwgBuffer textHeightInput(textHeightBody.data().data(),
+                              textHeightBody.data().size());
+    TableDwgCodecProbe textHeightReadback;
+    const bool textHeightRead = textHeightEncoded
+        && textHeightReadback.parseDwg(DRW::AC1018, &textHeightInput);
+    const bool textHeightMatches = textHeightRead && textHeightInput.isGood()
+        && textHeightReadback.m_semanticContentComplete
+        && textHeightReadback.m_content.m_rows.front().m_cells.front()
+            .m_overrideFlags == 0x20u
+        && textHeightReadback.m_content.m_rows.front().m_cells.front()
+            .m_textHeight == 2.75
+        && cursorBit(textHeightInput) == textHeightBodyEndBit;
+    t.expect(textHeightMatches,
+             "AC1018 TABLE text-height cell override follows ODA field order and reads back exactly");
+    if (textHeightMatches) {
+        const std::int32_t sentinel = textHeightInput.getBitLong();
+        t.expect(textHeightInput.isGood() && sentinel == textHeightSentinel,
+                 "AC1018 TABLE text-height cell override preserves following body sentinel");
+    }
+
     DRW_Header tableFrameHeader;
     TableClassSerializationProbe tableFrameWriter(nullptr, &tableFrameHeader);
     const dwgWriter::CompoundWriteCheckpoint tableFrameCheckpoint =
@@ -9064,6 +9104,26 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
             table.m_content.m_rows.front().m_cells.front().m_overrideFlags = 1u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects an unsupported cell override bit without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_cells.front().m_overrideFlags = 0x40u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects nonpositive selected cell text height without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            auto& cell = table.m_content.m_rows.front().m_cells.front();
+            cell.m_overrideFlags = 0x20u;
+            cell.m_textHeight = 0.0;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects unflagged cell text-height residue without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_cells.front().m_textHeight = 2.75;
         });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects a missing BLOCK_RECORD handle without writing",

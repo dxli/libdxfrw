@@ -13882,6 +13882,13 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
     const DRW_TableColumn& column = m_content.m_columns.front();
     const DRW_TableRow& row = m_content.m_rows.front();
     const DRW_TableCell& cell = row.m_cells.front();
+    const bool hasCellTextHeightOverride =
+        (cell.m_overrideFlags & 0x00000020u) != 0u;
+    const bool validCellTextHeightOverride =
+        (cell.m_overrideFlags & ~0x00000020u) == 0u
+        && (hasCellTextHeightOverride
+            ? (std::isfinite(cell.m_textHeight) && cell.m_textHeight > 0.0)
+            : cell.m_textHeight == 0.0);
     if (!column.m_name.empty()
         || !std::isfinite(column.m_width) || column.m_width <= 0.0
         || !std::isfinite(row.m_height) || row.m_height <= 0.0
@@ -13908,8 +13915,8 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || cell.m_textColorRgb != -1 || cell.m_textColorMethod != 0u
         || cell.m_fillColorRgb != -1 || cell.m_fillColorMethod != 0u
         || cell.m_backgroundEnabled || cell.m_textAlignment != 0
-        || cell.m_overrideFlags != 0u || cell.m_virtualEdgeFlags != 0u
-        || cell.m_textHeight != 0.0 || cell.m_contents.size() != 1u
+        || !validCellTextHeightOverride || cell.m_virtualEdgeFlags != 0u
+        || cell.m_contents.size() != 1u
         || cell.m_contents.front().m_type != 1
         || cell.m_contents.front().m_handle != 0u
         || cell.m_contents.front().m_value.m_formatFlags != 0
@@ -13998,7 +14005,14 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         stagedBody.putBitLong(1);
         stagedBody.putBitDouble(cell.m_rotation);
         stagedBody.putVariableText(version, cell.m_contents.front().m_text);
-        stagedBody.putBit(false); // no cell overrides
+        stagedBody.putBit(hasCellTextHeightOverride);
+        if (hasCellTextHeightOverride) {
+            stagedBody.putBitLong(
+                static_cast<std::int32_t>(cell.m_overrideFlags));
+            stagedBody.putRawChar8(
+                static_cast<std::uint8_t>(cell.m_virtualEdgeFlags));
+            stagedBody.putBitDouble(cell.m_textHeight);
+        }
         stagedBody.putBit(m_tableOverrideFlags != 0u);
         if (m_tableOverrideFlags != 0u) {
             stagedBody.putBitLong(
