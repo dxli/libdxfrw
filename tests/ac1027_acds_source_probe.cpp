@@ -158,5 +158,39 @@ int main(int argc, char** argv) {
     };
     if (!emit(drawing.mBlock, "MODEL")) return 1;
     for (const auto* block : drawing.blocks) if (!emit(block, "BLOCK")) return 1;
+    for (const DRW_ProxyObject& proxy : drawing.proxyObjects) {
+        if (proxy.m_objectIdRefs.size() > 10000u) return 1;
+        std::cout << "PROXY " << std::hex << proxy.handle << ' '
+                  << proxy.parentHandle << std::dec << ' '
+                  << proxy.m_proxyClassId << ' ' << proxy.m_proxySubclass << ' '
+                  << proxy.m_objectIdRefs.size() << '\n';
+        for (const DRW_ProxyObjectIdRef& reference : proxy.m_objectIdRefs) {
+            std::cout << "PROXY_REF " << std::hex << proxy.handle << std::dec
+                      << ' ' << reference.m_dxfCode << ' '
+                      << static_cast<unsigned>(reference.m_handleCode) << ' '
+                      << std::hex << reference.m_handle << ' '
+                      << reference.m_rawHandle << std::dec << '\n';
+        }
+    }
+    for (const DRW_AcShHistoryObject& history : drawing.acshHistoryObjects) {
+        std::cout << "ACSH " << std::hex << history.handle << ' '
+                  << history.parentHandle << ' ' << history.m_ownerHandle
+                  << std::dec << ' ' << history.m_recordName << ' '
+                  << history.m_historyNodeId << ' '
+                  << history.m_evalExprPrefix.m_complete << ' '
+                  << history.m_historyNodePrefix.m_complete << '\n';
+    }
+    for (const DRW_EvaluationGraph& graph : drawing.evaluationGraphs) {
+        if (graph.m_nodes.size() > 10000u) return 1;
+        std::cout << "EVALGRAPH " << std::hex << graph.handle << ' '
+                  << graph.parentHandle << std::dec << ' '
+                  << graph.m_nodes.size() << '\n';
+        for (const DRW_EvaluationGraphNode& node : graph.m_nodes) {
+            std::cout << "EVALNODE " << std::hex << graph.handle << std::dec
+                      << ' ' << node.m_index << ' ' << node.m_flags << ' '
+                      << node.m_nextNodeIndex << ' ' << std::hex
+                      << node.m_expressionHandle << std::dec << '\n';
+        }
+    }
     return std::cout.good() ? 0 : 1;
 }

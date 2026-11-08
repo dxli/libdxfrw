@@ -6,10 +6,10 @@
   "specification": {
     "authority": "Open Design Specification for .dwg files v5.4.1",
     "references": [
-      "§2.13, pp. 15-16: DWG handle role codes",
-      "§20.4.41, pp. 144-146: 3DSOLID/REGION ACIS body and R2007+ History ID H field"
+      "\u00a72.13, pp. 15-16: DWG handle role codes",
+      "\u00a720.4.41, pp. 144-146: 3DSOLID/REGION ACIS body and R2007+ History ID H field"
     ],
-    "limit": "§20.4.41 names the History ID H field but does not specify the complete proprietary ACIS history graph or establish its DXF owner-code mapping."
+    "limit": "\u00a720.4.41 names the History ID H field but does not specify the complete proprietary ACIS history graph or establish its DXF owner-code mapping."
   },
   "implementation": {
     "files": [
@@ -28,7 +28,7 @@
     "version": "AC1027",
     "provenanceLimit": "Existing local source; producer is not independently authenticated and no drawing fixture is committed.",
     "traceExecutable": "/private/tmp/libdxfrw-legacy-common-build/libdxfrw_ac1027_acds_source_probe",
-    "traceExecutableSha256": "31c6a08345695f72570d65fc4f48ca74299ffa6e2251be1c2f5e7a80cd08dc8c",
+    "traceExecutableSha256": "268764cfa8906bf11207af95c4bb82ba355672245eec95bf902611879068b077",
     "probeOutput": "/private/tmp/cover-acds-probe-updated.txt",
     "probeOutputSha256": "1460c2e41895f0935bfaa6dc9af550af698c5ba212f117ebff10ce6c6032f757",
     "frame": {
@@ -68,8 +68,8 @@
     "source": "realDragonium/dwg-verifier fixtures/libredwg/example_2013.dwg",
     "sourceSha256": "ce80953e4881899cde8c42b97919feb2697259554ca54dc4005b19068a12c18f",
     "provenanceLimit": "Original authoring application and production history are not established.",
-    "probeExecutableSha256": "31c6a08345695f72570d65fc4f48ca74299ffa6e2251be1c2f5e7a80cd08dc8c",
-    "probeOutputSha256": "817caea1a51a97315cb36f1b77719115ed78890e8d6078441ebd1f9692457fd5",
+    "probeExecutableSha256": "268764cfa8906bf11207af95c4bb82ba355672245eec95bf902611879068b077",
+    "probeOutputSha256": "bd71ce73a50eb91e300e5c2c5254e25664109afc4e00016a2060c6e61ae6643f",
     "entity": "3DSOLID 0x2e1",
     "historyField": {
       "rawHandleCode": 3,
@@ -82,7 +82,26 @@
     },
     "dataStorageRecordHandle": "0x2e1",
     "readerOutcome": "478/481 frames published; three unrelated object parse failures; strict output remains refused.",
-    "priorIndependentOdaResult": "The existing p7-ac1027-physical-modeler-acds-sab-oda-byte-join-2026-11-03.json records ODA File Converter 27.1 DXF group 350 with value 0x2e4 and byte-identical SAB payload. This corroborates projected identity/value only, not equivalence of DWG and DXF ownership roles."
+    "priorIndependentOdaResult": "The existing p7-ac1027-physical-modeler-acds-sab-oda-byte-join-2026-11-03.json records ODA File Converter 27.1 DXF group 350 with value 0x2e4 and byte-identical SAB payload. This corroborates projected identity/value only, not equivalence of DWG and DXF ownership roles.",
+    "targetGraph": {
+      "localProbeExecutableSha256": "268764cfa8906bf11207af95c4bb82ba355672245eec95bf902611879068b077",
+      "localProbeRows": [
+        "ACSH 2e4 2e1 2e3 ACSH_HISTORY_CLASS 1 0 0",
+        "ACSH 2e2 2e3 0 ACSH_SWEEP_CLASS 0 1 1",
+        "EVALGRAPH 2e3 2e4 1",
+        "EVALNODE 2e3 0 32 1 2e2"
+      ],
+      "libreDwgVersion": "0.14",
+      "libreDwgExecutable": "/opt/homebrew/bin/dwgread",
+      "libreDwgExecutableSha256": "536eef295f1dfdc2e63b4f1cd2961905f98c55bbd1fe017ef3574c0f1345f1ff",
+      "libreDwgMinJsonSha256": "6ac16cac09169ff4a2b5a1949c20f8537a7b7b4d447ed2345d78ba528a0abe0d",
+      "matchingPeerRows": [
+        "0x2e4 ACSH_HISTORY_CLASS common owner 0x2e1; body owner/evaluation graph 0x2e3",
+        "0x2e3 EVALUATION_GRAPH common owner 0x2e4; one node id 0 flags 32 next 1 references 0x2e2",
+        "0x2e2 ACSH_SWEEP_CLASS common owner 0x2e3"
+      ],
+      "scopeLimit": "Exact selected identity and owner/reference edges match the independent minJSON projection. Local AcDbShHistory EvalExpr and HistoryNode prefixes remain incomplete; peer decoding is corroboration, not normative class-body semantics."
+    }
   },
   "validation": {
     "build": "cmake --build /private/tmp/libdxfrw-legacy-common-build --target libdxfrw_ac1027_acds_source_probe -j4",
@@ -98,14 +117,27 @@
       "corrected non-null H succeeds after the partial-bound refusal",
       "zero-bit remaining tail is reported as bounded absence, distinct from truncation"
     ],
-    "profileComparatorTest": "ctest --test-dir /private/tmp/libdxfrw-legacy-common-build -R '^libdxfrw_ac1027_acds_source_compare_self_test$' --output-on-failure passed 1/1 in 0.08 seconds; it rejects wrong role and malformed span and accepts corrected retry.",
-    "scopeLimit": "The generated C++ controls exercise the exact production bounded-H helper used by DRW_ModelerGeometry::parseDwg, while the two source probes exercise complete modeler entity parsing. No full test suite was run."
+    "profileComparatorTest": "ctest --test-dir /private/tmp/libdxfrw-legacy-common-build -R ^libdxfrw_ac1027_acds_source_compare_self_test$ --output-on-failure passed 1/1 in 0.05 seconds; generated self-test asserts the selected history graph identities/edges, refuses graph mutation, and accepts corrected retry.",
+    "scopeLimit": "The generated C++ controls exercise the exact production bounded-H helper used by DRW_ModelerGeometry::parseDwg, while the two source probes exercise complete modeler entity parsing. No full test suite was run.",
+    "sourceOutputs": {
+      "coverProbeOutputSha256": "1460c2e41895f0935bfaa6dc9af550af698c5ba212f117ebff10ce6c6032f757",
+      "publicAc1027ProbeOutputSha256": "bd71ce73a50eb91e300e5c2c5254e25664109afc4e00016a2060c6e61ae6643f",
+      "libreDwgMinJsonSha256": "6ac16cac09169ff4a2b5a1949c20f8537a7b7b4d447ed2345d78ba528a0abe0d",
+      "probeExecutableSha256": "268764cfa8906bf11207af95c4bb82ba355672245eec95bf902611879068b077"
+    }
   },
   "remaining": [
-    "Establish a producer-independent normative or native explanation for the code-3 DWG owner role and the ODA DXF group-350 projection.",
-    "Resolve and validate the non-null history target 0x2e4, including its frame identity, owner role and recursive dependencies.",
-    "Add parser-bound generated truncation/reset/retry controls for the R2007+ History ID handle stream.",
+    "Keep the selected AC1027 source profile output-ineligible: its typed AcDbShHistory body is incomplete and no lossless DWG-body-to-DXF representation is available in current routes.",
+    "Resolve the DWG hard-owner code 3 to DXF group-350 soft-owner projection only through an authoritative rule or independent producer evidence that establishes role and remapping semantics; the observed converter output alone is insufficient.",
+    "Advance to another locally implementable P4/P6 source-backed gap; do not repeat graph discovery, parser-helper controls, or unchanged converter launches.",
     "Keep strict whole-source conversion refused until source graph closure and the complete 3D output route pass their separate gates."
   ],
-  "fixturesAdded": 0
+  "fixturesAdded": 0,
+  "outputRouteAudit": {
+    "readerCapture": "For successfully typed ACSH_* DWG objects, makeRawObject stores tmpByteStr (the complete decompressed object body from DwgObjectFrame::body) with source class/common-link metadata; dx_iface retains bounded AcSH/evaluation-graph frames in acdsHistoryDwgFrames.",
+    "ac1027WriterRoute": "The AC1027+ DataStorage route selects collectAcdsTypedBoxHistoryObjects when typed history/evaluation objects exist. That collector requires complete class-specific prefixes; the observed AcDbShHistory prefixes are incomplete, so it fails closed. The AC1024 opaque-proxy collector is explicitly AC1024-only.",
+    "rawDxfRoute": "rawAcdsHistoryObjects is populated by the DXF AcShHistory import path, where original DXF group sequences exist. It does not convert a DWG-encoded object body into equivalent DXF fields.",
+    "entityAssociation": "The 3DSOLID DXF writer remaps/resolves the history target and emits group 350. Source H code 3 is identified by ODA as hard ownership, while Autodesk DXF docs call group 350 soft-owner; converter output corroborates the value only.",
+    "disposition": "No lossless AC1027 DWG-to-DXF route is established for the selected incomplete history record. Do not serialize its retained DWG body as a DXF proxy or synthesize missing fields. Keep the selected source profile output-ineligible and strict output refused."
+  }
 }

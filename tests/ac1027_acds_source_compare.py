@@ -12,6 +12,10 @@ MAX_BYTES = 20 * 1024 * 1024
 EXPECTED = {0x176: ('REGION', 1709, 0), 0x2E1: ('3DSOLID', 8798, 0x2E4),
             0x37D: ('REGION', 2196, 0)}
 EXPECTED_HISTORY_FIELD = (3, 3, 2, 0x2E4, 446, 24)
+EXPECTED_HISTORY_OBJECT = (0x2E1, 0x2E3, 'ACSH_HISTORY_CLASS', 1, 0, 0)
+EXPECTED_SWEEP_OBJECT = (0x2E3, 0, 'ACSH_SWEEP_CLASS', 0, 1, 1)
+EXPECTED_EVALUATION_GRAPH = (0x2E4, 1)
+EXPECTED_EVALUATION_NODE = (32, 1, 0x2E2)
 
 
 def require(ok, why):
@@ -99,6 +103,13 @@ def history_field(row):
     return identity, (raw_code, code, size, reference, start, bits)
 
 
+def history_graph_matches(acsh, graphs, nodes):
+    return (acsh.get(0x2E4) == EXPECTED_HISTORY_OBJECT
+            and acsh.get(0x2E2) == EXPECTED_SWEEP_OBJECT
+            and graphs.get(0x2E3) == EXPECTED_EVALUATION_GRAPH
+            and nodes.get((0x2E3, 0)) == EXPECTED_EVALUATION_NODE)
+
+
 def dxf_records(data):
     lines = data.decode('utf-8', errors='strict').splitlines()
     require(len(lines) % 2 == 0, 'odd DXF group stream')
@@ -164,6 +175,7 @@ def compare(source, oda, probe):
     require(len(run.stdout) <= MAX_BYTES, 'probe output exceeds bound')
     section, schema, indexes, records, entities, model_owners = None, [], [], {}, {}, []
     history_fields = {}
+    acsh_objects, evaluation_graphs, evaluation_nodes = {}, {}, {}
     for line in run.stdout.decode('ascii', errors='strict').splitlines():
         row = line.split()
         if not row: continue
@@ -186,6 +198,28 @@ def compare(source, oda, probe):
             identity, field = history_field(row)
             require(identity not in history_fields, 'duplicate source history field')
             history_fields[identity] = field
+        elif row[0] == 'ACSH':
+            require(len(row) == 8, 'invalid AcSh object row')
+            identity = int(row[1], 16)
+            require(identity not in acsh_objects, 'duplicate AcSh object')
+            acsh_objects[identity] = (
+                int(row[2], 16), int(row[3], 16), row[4],
+                int(row[5]), int(row[6]), int(row[7]))
+        elif row[0] == 'EVALGRAPH':
+            require(len(row) == 4, 'invalid evaluation-graph row')
+            identity = int(row[1], 16)
+            require(identity not in evaluation_graphs,
+                    'duplicate evaluation graph')
+            evaluation_graphs[identity] = (int(row[2], 16), int(row[3]))
+        elif row[0] == 'EVALNODE':
+            require(len(row) == 6, 'invalid evaluation-graph node row')
+            graph = int(row[1], 16)
+            index = int(row[2])
+            key = (graph, index)
+            require(key not in evaluation_nodes,
+                    'duplicate evaluation-graph node')
+            evaluation_nodes[key] = (
+                int(row[3]), int(row[4]), int(row[5], 16))
         elif row[0] == 'ENTITY':
             require(len(row) == 13 and row[1] == 'MODEL', 'entity scope/profile mismatch')
             identity = int(row[3], 16)
@@ -203,6 +237,9 @@ def compare(source, oda, probe):
     require(model_owners == [0x1F] and set(entities) == set(EXPECTED),
             'model-space block record or entity census mismatch')
     require(set(history_fields) == set(EXPECTED), 'history-field census mismatch')
+    require(history_graph_matches(acsh_objects, evaluation_graphs,
+                                  evaluation_nodes),
+            'History ID owner/dependency graph mismatch')
     dxf_entities, dxf_acds = dxf_projection(oda)
     require(set(dxf_entities) == set(EXPECTED) and set(records) == set(dxf_acds),
             'ODA source census mismatch')
@@ -273,7 +310,19 @@ def main():
             _, retry = history_field(good_history)
             require(retry == EXPECTED_HISTORY_FIELD,
                     f'corrected history {label} retry failed')
-        print('PASS: generated entity prefix and history role/span refusal/retry checks')
+        acsh = {0x2E4: EXPECTED_HISTORY_OBJECT,
+                0x2E2: EXPECTED_SWEEP_OBJECT}
+        graphs = {0x2E3: EXPECTED_EVALUATION_GRAPH}
+        nodes = {(0x2E3, 0): EXPECTED_EVALUATION_NODE}
+        require(history_graph_matches(acsh, graphs, nodes),
+                'generated History ID graph did not close')
+        bad_nodes = dict(nodes)
+        bad_nodes[(0x2E3, 0)] = (32, 1, 0x2E4)
+        require(not history_graph_matches(acsh, graphs, bad_nodes),
+                'mutated evaluation-graph dependency was accepted')
+        require(history_graph_matches(acsh, graphs, nodes),
+                'corrected History ID graph retry failed')
+        print('PASS: generated entity, history field and dependency graph controls')
         return 0
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
