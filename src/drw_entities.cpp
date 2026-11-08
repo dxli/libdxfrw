@@ -13787,57 +13787,78 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || !std::isfinite(m_horizontalDirection.z))
         return false;
 
-    if (!encodeDwgCommon(version, buf))
+    dwgBufferW stagedBody;
+    dwgBufferW stagedHandles;
+    dwgBufferW *handles = &stagedBody;
+    if (handleBuf != nullptr && handleBuf != buf)
+        handles = &stagedHandles;
+
+    try {
+        stagedBody = *buf;
+        if (handleBuf != nullptr && handleBuf != buf)
+            stagedHandles = *handleBuf;
+
+        if (!encodeDwgCommon(version, &stagedBody))
+            return false;
+        stagedBody.put3BitDouble(basePoint);
+        if (sameStoredDouble(xscale, 1.0) && sameStoredDouble(yscale, 1.0)
+            && sameStoredDouble(zscale, 1.0)) {
+            stagedBody.put2Bits(3);
+        } else if (sameStoredDouble(xscale, yscale)
+                   && sameStoredDouble(yscale, zscale)) {
+            stagedBody.put2Bits(2);
+            stagedBody.putRawDouble(xscale);
+        } else if (sameStoredDouble(xscale, 1.0)) {
+            stagedBody.put2Bits(1);
+            stagedBody.putDefaultDouble(1.0, yscale);
+            stagedBody.putDefaultDouble(1.0, zscale);
+        } else {
+            stagedBody.put2Bits(0);
+            stagedBody.putRawDouble(xscale);
+            stagedBody.putDefaultDouble(xscale, yscale);
+            stagedBody.putDefaultDouble(xscale, zscale);
+        }
+        stagedBody.putBitDouble(angle);
+        stagedBody.putExtrusion(extPoint, false);
+        stagedBody.putBit(false); // this bounded profile excludes owned ATTRIBs
+
+        stagedBody.putBitShort(static_cast<std::uint16_t>(m_valueFlag));
+        stagedBody.put3BitDouble(m_horizontalDirection);
+        stagedBody.putBitLong(1); // one column
+        stagedBody.putBitLong(1); // one row
+        stagedBody.putBitDouble(column.m_width);
+        stagedBody.putBitDouble(row.m_height);
+        stagedBody.putBitShort(static_cast<std::uint16_t>(cell.m_type));
+        stagedBody.putRawChar8(static_cast<std::uint8_t>(cell.m_edgeFlags));
+        stagedBody.putBit(false); // not merged
+        stagedBody.putBit(false); // no auto-fit
+        stagedBody.putBitLong(1);
+        stagedBody.putBitLong(1);
+        stagedBody.putBitDouble(cell.m_rotation);
+        stagedBody.putVariableText(version, cell.m_contents.front().m_text);
+        stagedBody.putBit(false); // no cell overrides
+        stagedBody.putBit(false); // no table overrides
+        stagedBody.putBit(false); // no border color overrides
+        stagedBody.putBit(false); // no border lineweight overrides
+        stagedBody.putBit(false); // no border visibility overrides
+
+        dwgBufferW *const entityHandles = handleBuf == nullptr
+            ? nullptr : handles;
+        if (!encodeDwgEntHandle(version, &stagedBody, entityHandles))
+            return false;
+        putHardPointerHandle(handles, blockRecH.ref);
+        putHardPointerHandle(handles, m_tableStyleHandle);
+        putDwgReference(handles, 0, 0u); // no text-style/value handle
+        if (!stagedBody.isGood() || !handles->isGood())
+            return false;
+    } catch (...) {
         return false;
-    buf->put3BitDouble(basePoint);
-    if (sameStoredDouble(xscale, 1.0) && sameStoredDouble(yscale, 1.0)
-        && sameStoredDouble(zscale, 1.0)) {
-        buf->put2Bits(3);
-    } else if (sameStoredDouble(xscale, yscale)
-               && sameStoredDouble(yscale, zscale)) {
-        buf->put2Bits(2);
-        buf->putRawDouble(xscale);
-    } else if (sameStoredDouble(xscale, 1.0)) {
-        buf->put2Bits(1);
-        buf->putDefaultDouble(1.0, yscale);
-        buf->putDefaultDouble(1.0, zscale);
-    } else {
-        buf->put2Bits(0);
-        buf->putRawDouble(xscale);
-        buf->putDefaultDouble(xscale, yscale);
-        buf->putDefaultDouble(xscale, zscale);
     }
-    buf->putBitDouble(angle);
-    buf->putExtrusion(extPoint, false);
-    buf->putBit(false); // this bounded profile excludes owned ATTRIBs
 
-    buf->putBitShort(static_cast<std::uint16_t>(m_valueFlag));
-    buf->put3BitDouble(m_horizontalDirection);
-    buf->putBitLong(1); // one column
-    buf->putBitLong(1); // one row
-    buf->putBitDouble(column.m_width);
-    buf->putBitDouble(row.m_height);
-    buf->putBitShort(static_cast<std::uint16_t>(cell.m_type));
-    buf->putRawChar8(static_cast<std::uint8_t>(cell.m_edgeFlags));
-    buf->putBit(false); // not merged
-    buf->putBit(false); // no auto-fit
-    buf->putBitLong(1);
-    buf->putBitLong(1);
-    buf->putBitDouble(cell.m_rotation);
-    buf->putVariableText(version, cell.m_contents.front().m_text);
-    buf->putBit(false); // no cell overrides
-    buf->putBit(false); // no table overrides
-    buf->putBit(false); // no border color overrides
-    buf->putBit(false); // no border lineweight overrides
-    buf->putBit(false); // no border visibility overrides
-
-    dwgBufferW *const handles = handleBuf != nullptr ? handleBuf : buf;
-    if (!encodeDwgEntHandle(version, buf, handleBuf))
-        return false;
-    putHardPointerHandle(handles, blockRecH.ref);
-    putHardPointerHandle(handles, m_tableStyleHandle);
-    putDwgReference(handles, 0, 0u); // no text-style/value handle
-    return buf->isGood() && handles->isGood();
+    buf->swap(stagedBody);
+    if (handleBuf != nullptr && handleBuf != buf)
+        handleBuf->swap(stagedHandles);
+    return true;
 }
 
 bool DRW_Table::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){

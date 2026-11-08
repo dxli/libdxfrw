@@ -112,7 +112,7 @@
       "The encoded entity body parses through DRW_Table::parseDwg with matching insertion point, column width, row height, plain-text cell value, BLOCK_RECORD handle and TABLESTYLE handle.",
       "The parser cursor lands at the exact encoded body end and reads a following sentinel without consuming handle-stream bytes as body data."
     ],
-    "disposition": "Generated encoder/parser consistency only. The separate refusal control covers representative preflight cases and parser truncation, not every guard. Production class registration, physical AC1018 source-to-output comparison, *T compound graph, adapter transaction, independent readback, and native TABLE behavior remain unqualified. Keep dwgRW::writeTable refused."
+    "disposition": "Generated encoder/parser consistency only. The direct codec stages body/handle buffers and publishes only on successful completion; a separate append control preserves seeded prefixes. The refusal control covers representative preflight cases and parser truncation, not every guard, and no injected mid-emission failure has exercised rollback. Production route class-instance registration, physical AC1018 source-to-output comparison, *T compound graph, adapter transaction, independent readback, and native TABLE behavior remain unqualified. Keep dwgRW::writeTable refused."
   },
   "generated_ac1018_preflight_refusal_control": {
     "generatedFromScratch": true,
@@ -140,6 +140,7 @@
     "assertions": [
       "Each rejected model leaves pre-seeded entity-body and handle buffers at their original bit counts.",
       "The same DRW_Table instance succeeds after a table-override preflight refusal is corrected.",
+      "A successful direct encode appends to pre-seeded body and handle buffers without replacing their existing byte prefixes.",
       "The parser refuses a generated frame whose declared body ends one bit before the encoded body end.",
       "The parser refuses a generated frame with its trailing handle stream omitted."
     ],
@@ -186,7 +187,7 @@
     "The AC1018 unknown-override control now captures only the known prefix; the physical payload span and meaning of 0x40000/0x40020 remain unresolved and must not be skipped or emitted.",
     "The generated AC1018 encoder control uses synthetic class number 562 solely to exercise the body codec; production class resolution and physical interoperability remain open.",
     "The identity-based TABLE class registration helper is AC1018-only and not connected to output; verify emitted CLASS metadata and class-instance accounting before integration.",
-    "The direct entity codec has no transaction guarantee if a low-level failure occurs after emission starts; keep it out of the production route until the compound writer stages and atomically publishes the complete frame.",
+    "The direct entity codec stages both streams and swaps them only after successful encoding, but no deterministic injected mid-emission failure exercises rollback; the production compound writer still needs graph-level staging and atomic publication.",
     "The generated refusal matrix now covers the main excluded-field families but is not exhaustive at every guard branch; keep the direct entity encoder non-production until the remaining branches and compound transaction gates are satisfied.",
     "The available AC1021 table source is semantically incomplete at cell CadValue type 48 and cannot validate a complete output route.",
     "R24+ TABLECONTENT/TABLEGEOMETRY relationship is outside the available ODA v5.4.1 layout and must remain refused."

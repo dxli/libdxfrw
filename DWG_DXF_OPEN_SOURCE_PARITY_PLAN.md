@@ -2459,10 +2459,14 @@ declared span is one bit short and a frame missing its trailing handle stream.
 The focused `--table-cell-overrides` selector passes. This is encoder/parser
 self-consistency evidence only: the generated refusal matrix now covers the
 main excluded-field families but is not yet exhaustive at every guard branch.
-Post-write buffer failure atomicity, production route registration/instance
-publication, physical source-to-output proof, and compound-writer transaction
-have not been demonstrated. `writeTable` remains fail-closed. Trace hashes,
-source hashes, and dispositions are in the
+The direct encoder now builds both streams in private copies, catches emission
+exceptions, and swaps the staged buffers into the caller only when both are
+good. A generated successful append preserves pre-existing body and handle
+prefixes. No injected post-emission primitive/allocation failure has exercised
+that rollback path yet. Production route instance publication, physical
+source-to-output proof, and compound-writer transaction remain open;
+`writeTable` remains fail-closed. Trace hashes, source hashes, and dispositions
+are in the
 [encoder-readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 
 The two AC1018 CLASS records agree on the identity fields despite their
@@ -2488,11 +2492,12 @@ Speed-oriented implementation sequence:
    subrecords, links/attributes, cell kinds/value state, cache/geometry and
    invalid numeric values. They check pre-seeded output buffers and corrected
    same-object retry. Parser controls now refuse a declared body shortened by
-   one bit and a frame without trailing handles. Audit the remaining unchecked
-   guard branches. The direct codec has no transactional guarantee for a
-   low-level failure after emission starts; keep it off the production route
-   until its caller stages and atomically publishes the complete compound
-   frame. The existing AC1018 traces disagree on class number (528 versus
+   one bit and a frame without trailing handles. The direct codec stages both
+   streams and publishes only on success; a successful append preserves seeded
+   prefixes. No injected mid-emission failure has tested this rollback path.
+   Audit remaining unchecked guard branches. The production compound writer
+   still needs its own graph-level staging and atomic publication. The
+   existing AC1018 traces disagree on class number (528 versus
    523), while their CLASS identity metadata agrees. An AC1018-only writer
    registration helper now allocates a local ordinal and resolves duplicates
    by identity; its focused control passes. Keep it disconnected from

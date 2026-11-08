@@ -8629,6 +8629,19 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     t.expect(retryInitiallyRefused && retryAfterCorrection,
              "same AC1018 TABLE encoder accepts a corrected model after preflight refusal");
 
+    TableDwgCodecProbe appendAc1018Table = makeEncodableAc1018Table();
+    dwgBufferW appendTableBody;
+    dwgBufferW appendTableHandles;
+    appendTableBody.putRawChar8(0xA5u);
+    appendTableHandles.putRawChar8(0x5Au);
+    const bool appendedTable = appendAc1018Table.encodeAsTableClass(
+        DRW::AC1018, appendTableBody, appendTableHandles);
+    t.expect(appendedTable && appendTableBody.data().front() == 0xA5u
+                 && appendTableHandles.data().front() == 0x5Au
+                 && appendTableBody.bitCount() > 8u
+                 && appendTableHandles.bitCount() > 8u,
+             "AC1018 TABLE encoder publishes staged output while preserving prior buffer prefixes");
+
     const auto encodeAc1018TableFrame = [&](bool cutBodyBoundary,
                                              bool omitHandleStream) {
         TableDwgCodecProbe table = makeEncodableAc1018Table();
