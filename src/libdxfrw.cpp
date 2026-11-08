@@ -12454,6 +12454,12 @@ bool dxfRW::writeTableStyle(
             return !key.empty() && emitted != textStyleMap.end()
                 && emitted->second != 0u && emitted->second == resolved;
         };
+        const auto r24BorderLineTypeSupported = [this](
+                const DRW_TableStyleBorder& border) {
+            return border.m_lineTypeHandle == 0u
+                || dxfWriteSourceLinetypeTargetHandle(
+                    border.m_lineTypeHandle) != 0u;
+        };
         const auto validR24Style = [&](
                 const DRW_TableStyleCellStyle& style,
                 int expectedId, int expectedClass,
@@ -12512,7 +12518,7 @@ bool dxfRW::writeTableStyle(
                     || border.m_borderType != 1
                     || !byBlockColor(border.m_color, border.m_colorCmc)
                     || border.m_lineWeight != -2
-                    || border.m_lineTypeHandle != 0u
+                    || !r24BorderLineTypeSupported(border)
                     || border.m_visible != 0
                     || border.m_doubleLineSpacing != 0.045)
                     return false;
@@ -12692,6 +12698,13 @@ bool dxfRW::writeTableStyle(
             ok = ok && writer->writeInt32(94,
                 static_cast<std::int32_t>(style.m_borders.size()));
             for (const DRW_TableStyleBorder& border : style.m_borders) {
+                const std::uint32_t lineTypeHandle =
+                    border.m_lineTypeHandle == 0u ? 0u
+                    : dxfWriteSourceLinetypeTargetHandle(
+                        border.m_lineTypeHandle);
+                if (border.m_lineTypeHandle != 0u
+                    && lineTypeHandle == 0u)
+                    return failDxfWrite();
                 ok = ok && writer->writeInt32(95, border.m_edgeFlags)
                     && writer->writeString(302, "GRIDFORMAT")
                     && writer->writeString(1, "GRIDFORMAT_BEGIN")
@@ -12700,7 +12713,7 @@ bool dxfRW::writeTableStyle(
                     && writer->writeInt32(91, border.m_borderType)
                     && writeColor(border.m_color, border.m_colorCmc)
                     && writer->writeInt32(92, border.m_lineWeight)
-                    && writer->writeString(340, "0")
+                    && writer->writeString(340, toHexStr(lineTypeHandle))
                     && writer->writeInt32(93, border.m_visible)
                     && writer->writeDouble(40,
                         border.m_doubleLineSpacing)

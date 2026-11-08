@@ -37303,7 +37303,8 @@ void populateR24DwgTableStyleGraph(dx_data& data,
 
 bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
                                       bool inheritedCustomMargins = false,
-                                      std::int32_t prefixValue1 = 8) {
+                                      std::int32_t prefixValue1 = 8,
+                                      bool lineTypeProfile = false) {
     const std::string profileSuffix = inheritedCustomMargins
         ? "-inherited-margins" : "-explicit-margins";
     const std::filesystem::path output =
@@ -37320,6 +37321,15 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
     dx_data data;
     populateR24DwgTableStyleGraph(
         data, inheritedCustomMargins, prefixValue1);
+    constexpr std::uint32_t kBorderLineTypeHandle = 0x570u;
+    if (lineTypeProfile) {
+        DRW_LType lineType;
+        lineType.handle = kBorderLineTypeHandle;
+        lineType.name = "TABLE_BORDER_LTYPE";
+        data.lineTypes.push_back(lineType);
+        data.tableStyles.front().m_cellStyles.front()
+            .m_borders.front().m_lineTypeHandle = kBorderLineTypeHandle;
+    }
     dx_iface writer;
     writer.cData = &data;
     writer.currentBlock = data.mBlock;
@@ -37367,6 +37377,16 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
 
     data.tableStyles.front().m_cellStyles.front()
         .m_contentFormat.m_textStyleHandle = 0x560u;
+    if (lineTypeProfile) {
+        auto& borderLineType = data.tableStyles.front().m_cellStyles.front()
+            .m_borders.front().m_lineTypeHandle;
+        borderLineType = 0x571u;
+        if (writer.fileExport(output.string(), DRW::AC1024, binary,
+                              &data, false)
+            || !destinationIsSentinel())
+            return fail("R24 TABLESTYLE accepted an unresolved border linetype or replaced the destination");
+        borderLineType = kBorderLineTypeHandle;
+    }
     DRW_TableStyleCellStyle& firstCustomStyle =
         data.tableStyles.front().m_cellStyles.front();
     if (inheritedCustomMargins) {
@@ -37419,6 +37439,14 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
     dx_data readback;
     dx_iface reader;
     const bool imported = reader.fileImport(output.string(), &readback, false);
+    std::uint32_t emittedBorderLineType = 0u;
+    std::size_t emittedBorderLineTypeCount = 0u;
+    for (const DRW_LType& lineType : readback.lineTypes) {
+        if (lineType.name == "TABLE_BORDER_LTYPE") {
+            emittedBorderLineType = lineType.handle;
+            ++emittedBorderLineTypeCount;
+        }
+    }
     std::error_code ignored;
     std::filesystem::remove(output, ignored);
     if (!imported || readback.tables.size() != 1u
@@ -37427,7 +37455,8 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
             != readback.rawTableStyles.front().handle
         || readback.tableStyles.size() != 1u
         || readback.tableStyles.front().handle
-            != readback.rawTableStyles.front().handle) {
+            != readback.rawTableStyles.front().handle
+        || emittedBorderLineTypeCount != (lineTypeProfile ? 1u : 0u)) {
         return fail("R24 TABLESTYLE output failed fresh typed/raw readback: imported="
             + std::to_string(imported) + " tables="
             + std::to_string(readback.tables.size()) + " typed="
@@ -37466,6 +37495,8 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
         || titleStyle.m_borders[0].m_edgeFlags != 1
         || titleStyle.m_borders[0].m_borderType != 1
         || titleStyle.m_borders[0].m_lineWeight != -2
+        || titleStyle.m_borders[0].m_lineTypeHandle
+            != (lineTypeProfile ? emittedBorderLineType : 0u)
         || titleStyle.m_borders[0].m_doubleLineSpacing != 0.045)
         return fail("R24 TABLESTYLE nested cell styles were not projected into typed state");
 
@@ -37591,9 +37622,14 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
         if (value != 0u)
             contentFontHandles.push_back(static_cast<std::uint32_t>(value));
     }
+    std::vector<std::uint32_t> expectedNonNullHandleValues(
+        3u, emittedFontHandle);
+    if (lineTypeProfile)
+        expectedNonNullHandleValues.insert(
+            expectedNonNullHandleValues.begin() + 1,
+            emittedBorderLineType);
     if (emittedFontMatches != 1u || emittedFontHandle == 0u
-        || contentFontHandles
-            != std::vector<std::uint32_t>(3u, emittedFontHandle))
+        || contentFontHandles != expectedNonNullHandleValues)
         return fail("R24 TABLESTYLE text-style references lost emitted identity");
 
     if (std::filesystem::exists(malformedOutput))
@@ -86859,6 +86895,10 @@ int main(int argc, char** argv) {
                 && typedDwgR24TableStyleDxfRoundTrip(true, nonce, true)
                 && typedDwgR24TableStyleDxfRoundTrip(
                     true, nonce, false, 0)
+                && typedDwgR24TableStyleDxfRoundTrip(
+                    false, nonce, false, 8, true)
+                && typedDwgR24TableStyleDxfRoundTrip(
+                    true, nonce, false, 8, true)
             ? 0 : 1;
     }
     if (argc == 2 && std::string(argv[1]) == "--raster-dwg-source-profile-eed")
