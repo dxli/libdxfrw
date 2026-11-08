@@ -13714,6 +13714,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || !dataStoragePayloadMarkerSection.empty()
         || (m_ownerBlockRecordHandle != 0u
             && m_ownerBlockRecordHandle != blockRecH.ref)
+        || m_dxfUnsupportedData || m_dxfInCellValue || m_dxfMergeFieldsInvalid
         || (m_hasSemanticContent && !m_semanticContentComplete)
         || m_dataVersion != 0 || m_valueFlag != 0
         || m_tableOverrideFlags != 0u

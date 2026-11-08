@@ -2595,6 +2595,12 @@ encoding (the common writer serializes EED from `extData`, not arbitrary group
 102 application data); the bounded profile now refuses nonempty `appData` and
 the focused vector confirms atomic refusal. This is a loss-prevention guard,
 not proof that arbitrary group 102 data has a DWG semantic mapping.
+The retained-state audit found one more edge case: an unsupported group 97/98/4
+can mark DXF parsing incomplete before the TABLE grid exists, so the public
+`m_hasSemanticContent` flag is still false. The encoder now checks its private
+unsupported/open-value/invalid-merge parser state independently of that public
+flag. A generated `AcDbTable` subclass + group-97 control verifies pre-grid
+refusal with both output streams unchanged; no fixture was added.
 The common writer itself is unchanged; this protection applies only to the
 generated AC1018 TABLE codec.
 The direct encoder builds both streams in private copies, catches emission

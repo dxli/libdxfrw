@@ -431,11 +431,15 @@
       {
         "field": "DRW_Entity::appData",
         "reason": "The common DWG writer encodes EED from extData but has no serializer for arbitrary DXF group-102 application-data groups; the bounded TABLE codec refuses them rather than silently dropping them."
+      },
+      {
+        "field": "DRW_Table private DXF parser disposition",
+        "reason": "Unsupported group 97/98/4 metadata can set m_dxfUnsupportedData before a grid exists, when m_hasSemanticContent is false; incomplete/open-value/invalid-merge parser state must independently block encoding."
       }
     ],
-    "implementation": "src/drw_entities.cpp: DRW_Table::encodeDwg refuses all listed states during bounded preflight, including arbitrary DXF appData groups; src/intern/dwgwriter15.cpp leaves BYLAYER/BYBLOCK/CONTINUOUS implicit during name-to-handle resolution.",
+    "implementation": "src/drw_entities.cpp: DRW_Table::encodeDwg refuses all listed public and retained states during bounded preflight, including arbitrary DXF appData and pre-grid parser incompleteness; src/intern/dwgwriter15.cpp leaves BYLAYER/BYBLOCK/CONTINUOUS implicit during name-to-handle resolution.",
     "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
-    "assertion": "Generated refusal cases preserve pre-seeded body and handle buffers.",
+    "assertion": "Generated refusal cases preserve pre-seeded body and handle buffers, including unsupported pre-grid DXF metadata parsed after the AcDbTable subclass marker.",
     "disposition": "Closes only the enumerated omission and malformed-state paths for the direct generated AC1018 codec. Continue auditing remaining public fields and private retained DXF state; no output support claim."
   },
   "generated_ac1018_entity_frame_commit_rollback_control": {

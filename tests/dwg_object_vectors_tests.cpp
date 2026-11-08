@@ -7527,6 +7527,7 @@ dwgHandle handle(std::uint32_t reference) {
 
 class TableDwgCodecProbe final : public DRW_Table {
 public:
+    using DRW_Table::parseCode;
     using DRW_Table::parseDwg;
 
     void setDeclaredReactorCount(std::int32_t count) {
@@ -8887,6 +8888,40 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             table.m_hasSemanticContent = true;
             table.m_semanticContentComplete = false;
         });
+    {
+        TableDwgCodecProbe incompleteDxf = makeEncodableAc1018Table();
+        std::istringstream unsupportedFieldStream(
+            "100\nAcDbTable\n97\n1\n");
+        std::unique_ptr<dxfReader> unsupportedFieldReader =
+            std::make_unique<dxfReaderAscii>(&unsupportedFieldStream);
+        int unsupportedFieldCode = 0;
+        const bool readSubclass = unsupportedFieldReader->readRec(
+            &unsupportedFieldCode);
+        const bool parsedSubclass = readSubclass && unsupportedFieldCode == 100
+            && incompleteDxf.parseCode(unsupportedFieldCode,
+                                       unsupportedFieldReader);
+        const bool readUnsupportedField = parsedSubclass
+            && unsupportedFieldReader->readRec(&unsupportedFieldCode);
+        const bool parsedUnsupportedField = readUnsupportedField
+            && unsupportedFieldCode == 97
+            && incompleteDxf.parseCode(unsupportedFieldCode,
+                                       unsupportedFieldReader);
+        dwgBufferW body;
+        dwgBufferW handles;
+        body.putBit(true);
+        handles.putBit(false);
+        const std::uint64_t bodyBefore = body.bitCount();
+        const std::uint64_t handlesBefore = handles.bitCount();
+        const bool encodedIncompleteDxf = incompleteDxf.encodeAsTableClass(
+            DRW::AC1018, body, handles);
+        t.expect(parsedUnsupportedField && !incompleteDxf.m_hasSemanticContent
+                     && !incompleteDxf.m_semanticContentComplete,
+                 "AC1018 TABLE test creates unsupported pre-grid DXF metadata");
+        t.expect(!encodedIncompleteDxf
+                     && body.bitCount() == bodyBefore
+                     && handles.bitCount() == handlesBefore,
+                 "AC1018 TABLE encoder refuses unsupported pre-grid DXF metadata atomically");
+    }
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects a detached cell value handle without writing",
         DRW::AC1018,
