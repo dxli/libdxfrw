@@ -12490,8 +12490,8 @@ bool dxfRW::writeTableStyle(
                 const DRW_TableStyleCellStyle& style,
                 int expectedId, int expectedClass,
                 const char *expectedName, int expectedAlignment,
-                double expectedTextHeight, int expectedMergeFlags,
-                std::size_t expectedBorderCount, bool hasTextStyle) {
+                int expectedMergeFlags, std::size_t expectedBorderCount,
+                bool hasTextStyle) {
             const DRW_TableStyleContentFormat& format =
                 style.m_contentFormat;
             if (style.m_type != 5 || !style.m_hasData
@@ -12515,7 +12515,8 @@ bool dxfRW::writeTableStyle(
                 || !r24TextStyleHandleSupported(
                     format.m_textStyleHandle)
                 || ((format.m_textStyleHandle != 0u) != hasTextStyle)
-                || format.m_textHeight != expectedTextHeight
+                || !std::isfinite(format.m_textHeight)
+                || format.m_textHeight < 0.0
                 || !validR24Margins(style)
                 || style.m_id != expectedId
                 || style.m_styleClass != expectedClass
@@ -12568,21 +12569,20 @@ bool dxfRW::writeTableStyle(
             || ent->m_tableCellStyle.m_styleClass != 2
             || ent->m_tableCellStyle.m_name != "Table"
             || !validR24Style(ent->m_tableCellStyle, 4, 2, "Table", 1,
-                              0.18, 0, 0u, false)
+                              0, 0u, false)
             || !ent->m_tableCellStyle.m_borders.empty())
             return failR24("R24 TABLESTYLE default Table cell style is outside the witnessed profile");
         constexpr int kIds[] = {1, 2, 3};
         constexpr int kClasses[] = {1, 1, 2};
         constexpr int kAlignments[] = {5, 5, 2};
-        constexpr double kTextHeights[] = {0.25, 0.18, 0.18};
         constexpr int kMergeFlags[] = {0x8000, 0, 0};
         constexpr const char *kNames[] = {"_TITLE", "_HEADER", "_DATA"};
         for (std::size_t index = 0; index < ent->m_cellStyles.size();
              ++index) {
             if (!validR24Style(ent->m_cellStyles[index], kIds[index],
                                kClasses[index], kNames[index],
-                               kAlignments[index], kTextHeights[index],
-                               kMergeFlags[index], 6u, true))
+                               kAlignments[index], kMergeFlags[index],
+                               6u, true))
                 return failR24("R24 TABLESTYLE cell style is outside the witnessed title/header/data profile");
         }
         for (const DRW_DwgSubrecordRange& range : ent->m_subrecordRanges) {
