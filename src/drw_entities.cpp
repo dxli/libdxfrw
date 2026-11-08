@@ -13663,10 +13663,12 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         }
         return true;
     };
-    const bool builtInLinetype = lineType.empty()
-        || equalsAsciiNoCase(lineType, "BYLAYER")
-        || equalsAsciiNoCase(lineType, "BYBLOCK")
-        || equalsAsciiNoCase(lineType, "CONTINUOUS");
+    const bool linetypeByLayer = lineType.empty()
+        || equalsAsciiNoCase(lineType, "BYLAYER");
+    const bool linetypeByBlock = equalsAsciiNoCase(lineType, "BYBLOCK");
+    const bool linetypeContinuous = equalsAsciiNoCase(lineType, "CONTINUOUS");
+    const bool builtInLinetype = linetypeByLayer || linetypeByBlock
+        || linetypeContinuous;
     const int lineWeightCode = static_cast<int>(lWeight);
     const bool validLineWeight = lineWeightCode >= 0
         && (lineWeightCode <= 27
@@ -13678,6 +13680,10 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || (space != DRW::ModelSpace && space != DRW::PaperSpace)
         || (dwgLinetypeHandle() == 0u
             && (ltFlags == 3u || !builtInLinetype))
+        || (dwgLinetypeHandle() != 0u && builtInLinetype)
+        || (dwgLinetypeHandle() != 0u && ltFlags != 0u && ltFlags != 3u)
+        || (ltFlags == 1u && !linetypeByBlock)
+        || (ltFlags == 2u && !linetypeContinuous)
         || plotStyle < DRW::DefaultPlotStyle
         || !std::isfinite(ltypeScale) || !validLineWeight
         || hasAcDbColorH != (acDbColorHandle != 0u)

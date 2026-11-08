@@ -7537,6 +7537,8 @@ public:
         ltFlags = flags;
     }
 
+    std::uint8_t rawLinetypeFlags() const { return ltFlags; }
+
     void setRawAcDbColorHandleState(bool present, std::uint32_t handle) {
         setDwgAcDbColorHandle(present, handle);
     }
@@ -8633,6 +8635,10 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     TableDwgCodecProbe tableFrame = makeEncodableAc1018Table();
     tableFrame.name = tableFrameBlockName;
     tableFrame.blockRecH = handle(tableFrameBlockRecord);
+    t.expect(tableFrame.lineType == "BYLAYER"
+                 && tableFrame.rawLinetypeFlags() == 0u
+                 && tableFrame.dwgLinetypeHandle() == 0u,
+             "AC1018 TABLE frame starts with coherent default linetype state");
     const bool tableFrameClassRegistered = tableFrameBlockRecord != 0u
         && tableFrameWriter.registerTableEntityClass(&tableFrame);
     const bool tableFrameInstanceRegistered = tableFrameClassRegistered
@@ -8640,6 +8646,14 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             tableFrame.getDwgClassNum(), tableFrame.handle);
     const bool tableFrameEncoded = tableFrameInstanceRegistered
         && tableFrameWriter.encodeEntity(&tableFrame);
+    t.expect(tableFrameInstanceRegistered,
+             "AC1018 TABLE frame test registers its class instance");
+    t.expect(tableFrameEncoded,
+             "AC1018 TABLE frame test encodes the generated entity");
+    t.expect(tableFrameEncoded && tableFrame.lineType == "BYLAYER"
+                 && tableFrame.rawLinetypeFlags() == 0u
+                 && tableFrame.dwgLinetypeHandle() == 0u,
+             "AC1018 TABLE writer preserves BYLAYER as an implicit common-header state");
     DRW::DwgObjectFrameReceipt tableFrameReceipt;
     const bool tableFrameReceiptCaptured = tableFrameEncoded
         && tableFrameWriter.getLastDwgObjectFrame(tableFrameReceipt);
@@ -8905,6 +8919,20 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         "AC1018 TABLE encoder rejects explicit linetype flag without a handle",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) { table.setRawLinetypeFlags(3u); });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects BYLAYER with a conflicting linetype handle",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.setDwgLinetypeHandle(0xA901u);
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects BYBLOCK flag with BYLAYER name",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.setRawLinetypeFlags(1u); });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects CONTINUOUS flag with BYLAYER name",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.setRawLinetypeFlags(2u); });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects out-of-range linetype flags",
         DRW::AC1018,

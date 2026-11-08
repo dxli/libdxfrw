@@ -2584,8 +2584,13 @@ codes outside the DWG domain, negative plot-style sentinels, and inconsistent
 AcDbColor-presence/handle pairs. The preflight also rejects out-of-domain ACI/
 RGB values and color names or inline RGB data that the selected AcDbColor
 encoding would otherwise discard, plus invalid linetype-flag and entity-space
-enum values that the common writer would normalize. The latest public-model
-audit also found DXF `appData` groups have no corresponding AC1018 TABLE body
+enum values that the common writer would normalize. The frame-path audit then
+found the writer resolving the special names BYLAYER/BYBLOCK/CONTINUOUS to
+ordinary LTYPE handles before encoding. `dwgWriter15` now keeps those states
+implicit, and the TABLE preflight rejects contradictory caller-supplied
+linetype handles or mismatched raw flag/name pairs; the focused frame test
+checks the BYLAYER state survives class registration and encoding. The latest
+public-model audit also found DXF `appData` groups have no corresponding AC1018 TABLE body
 encoding (the common writer serializes EED from `extData`, not arbitrary group
 102 application data); the bounded profile now refuses nonempty `appData` and
 the focused vector confirms atomic refusal. This is a loss-prevention guard,

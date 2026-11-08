@@ -7294,8 +7294,14 @@ bool dwgWriter15::encodeEntity(DRW_Entity *ent) {
             ? it->second
             : DRW::DwgLayer0Handle;  // fallback: layer "0"
     }
-    // Resolve linetype name → handle when caller specified a non-empty name.
-    if (ent->lTypeH.ref == 0 && !ent->lineType.empty()) {
+    // BYLAYER/BYBLOCK/CONTINUOUS are common-header flags, not named LTYPE
+    // references. Resolving them to table rows would turn the implicit state
+    // into an explicit handle (and can change the encoded linetype semantics).
+    const auto lineTypeName = toUpperCase(ent->lineType);
+    const bool specialLineType = lineTypeName.empty()
+        || lineTypeName == "BYLAYER" || lineTypeName == "BYBLOCK"
+        || lineTypeName == "CONTINUOUS";
+    if (ent->lTypeH.ref == 0 && !specialLineType) {
         auto ltUp = toUpperCase(ent->lineType);
         auto it = m_writingCtx.ltypeMap.find(ltUp);
         if (it != m_writingCtx.ltypeMap.end())
@@ -7304,7 +7310,7 @@ bool dwgWriter15::encodeEntity(DRW_Entity *ent) {
     // Drive ltFlags from resolved name/handle so encodeDwgCommon emits the
     // correct BB and encodeDwgEntHandle emits lTypeH when needed.
     if (ent->ltFlags == 0) {
-        const auto ltUp = toUpperCase(ent->lineType);
+        const auto& ltUp = lineTypeName;
         if (ent->lTypeH.ref != 0
             && ltUp != "BYLAYER" && ltUp != "BYBLOCK" && ltUp != "CONTINUOUS"
             && !ltUp.empty())

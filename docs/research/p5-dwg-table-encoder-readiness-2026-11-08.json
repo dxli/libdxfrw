@@ -390,7 +390,7 @@
       },
       {
         "field": "DRW_Entity::lineType/lTypeH.ref",
-        "reason": "A named linetype or explicit named-linetype flag without a target handle would emit a null handle and lose the selected linetype."
+        "reason": "A named linetype or explicit named-linetype flag without a target handle would emit a null handle; special BYLAYER/BYBLOCK/CONTINUOUS names must stay implicit, and contradictory handle or raw-flag/name states are refused."
       },
       {
         "field": "DRW_Entity::plotStyle",
@@ -433,7 +433,7 @@
         "reason": "The common DWG writer encodes EED from extData but has no serializer for arbitrary DXF group-102 application-data groups; the bounded TABLE codec refuses them rather than silently dropping them."
       }
     ],
-    "implementation": "src/drw_entities.cpp: DRW_Table::encodeDwg refuses all listed states during bounded preflight, including arbitrary DXF appData groups.",
+    "implementation": "src/drw_entities.cpp: DRW_Table::encodeDwg refuses all listed states during bounded preflight, including arbitrary DXF appData groups; src/intern/dwgwriter15.cpp leaves BYLAYER/BYBLOCK/CONTINUOUS implicit during name-to-handle resolution.",
     "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
     "assertion": "Generated refusal cases preserve pre-seeded body and handle buffers.",
     "disposition": "Closes only the enumerated omission and malformed-state paths for the direct generated AC1018 codec. Continue auditing remaining public fields and private retained DXF state; no output support claim."
@@ -447,6 +447,7 @@
     "assertions": [
       "the actual AC1018 TABLE entity frame commits with its writer-local custom class ordinal",
       "the object-frame receipt binds the emitted TABLE handle to that class ordinal",
+      "the writer leaves BYLAYER implicit and does not synthesize a named LTYPE handle during resolution",
       "the class instance count validates only after the frame commit point",
       "an outer CompoundWriteCheckpoint rollback removes the TABLE frame, class definition, handle association and count ledger state"
     ],
