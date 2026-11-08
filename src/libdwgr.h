@@ -961,6 +961,7 @@ private:
         const std::function<bool()>& write);
     [[nodiscard]] bool encodeEntityForWrite(
         DRW_Entity *ent, DRW_Entity *mutationTarget = nullptr);
+    [[nodiscard]] bool registerTableEntityClassForWrite(DRW_Table *table);
     struct DwgEntityWriteState;
     struct DwgTableWriteState;
     [[nodiscard]] DwgEntityWriteState captureEntityWriteState(

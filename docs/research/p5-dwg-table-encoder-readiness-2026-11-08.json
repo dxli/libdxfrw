@@ -203,7 +203,7 @@
     "The only newly captured AC1021 TABLE ordinal is 506 and the two AC1018 ordinals differ (528/523); no numeric ordinal is a cross-file mapping. Production must use CLASS identity and serialized manifest evidence.",
     "The AC1018 unknown-override control now captures only the known prefix; the physical payload span and meaning of 0x40000/0x40020 remain unresolved and must not be skipped or emitted.",
     "The generated AC1018 encoder control uses synthetic class number 562 solely to exercise the body codec; production class resolution and physical interoperability remain open.",
-    "The identity-based TABLE class registration helper is AC1018-only and not connected to dwgRW output. Generated CLASS metadata, committed instance accounting, actual entity-frame commit, and outer-checkpoint rollback now pass at the low-level writer; caller-state integration and late *T graph failure rollback are still unproven.",
+    "The identity-based TABLE class registration helper is AC1018-only and not connected to public writeTable output. Generated CLASS metadata, committed instance accounting, actual entity-frame commit, and rollback now pass through a focused dwgRW transaction control. A true late *T graph-stage failure path is not implemented or injected yet.",
     "The direct entity codec stages both streams and swaps them only after successful encoding, but no deterministic injected mid-emission failure exercises rollback; the production compound writer still needs graph-level staging and atomic publication.",
     "The generated refusal matrix now covers the main excluded-field families but is not exhaustive at every guard branch; keep the direct entity encoder non-production until the remaining branches and compound transaction gates are satisfied.",
     "The available AC1021 table source is semantically incomplete at cell CadValue type 48 and cannot validate a complete output route.",
@@ -336,5 +336,25 @@
       "no source profile, physical producer comparison or independent reader validation"
     ],
     "disposition": "Low-level frame/class transaction control only. Do not enable public TABLE output or claim compound graph support."
+  },
+  "generated_ac1018_facade_frame_rollback_retry_control": {
+    "generatedFromScratch": true,
+    "version": "AC1018",
+    "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
+    "result": "PASS",
+    "scope": "dwgRW explicit transaction, test-accessible entity frame encoder, and identity-based class registration",
+    "assertions": [
+      "class registration captures the caller TABLE state before assigning the writer-local class ordinal and records it for caller-state rollback",
+      "the facade writes an actual AC1018 TABLE frame with a matching object-frame receipt and registered class-instance handle",
+      "explicit rollback restores the output buffer/object map, class definition, handle-to-class mapping, successful-write count, and caller TABLE class/body metadata",
+      "a second generated TABLE frame is committed on the same facade and the class instance ledger validates"
+    ],
+    "limitations": [
+      "rollback is requested explicitly after frame staging to model a later graph-stage failure; no production *T graph-writing failure branch exists or is injected",
+      "the placeholder *T BLOCK_RECORD has no geometry and no TABLE/BLOCK_RECORD/TABLESTYLE graph closure is established",
+      "the control does not call public dwgRW::writeTable, which remains fail-closed",
+      "no physical source-profile, independent reader, producer, or native TABLE validation"
+    ],
+    "disposition": "Generated facade transaction and same-facade retry proof only. It prepares transaction plumbing for a future compound writer; no public output or interoperability claim."
   }
 }

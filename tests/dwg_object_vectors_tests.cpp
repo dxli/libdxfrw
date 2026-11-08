@@ -19,6 +19,7 @@
 #include "intern/dxfreader.h"
 #define private public
 #include "libdxfrw.h"
+#include "libdwgr.h"
 #undef private
 #include "intern/dxfwriter.h"
 #include "intern/dwgreader.h"
@@ -7528,6 +7529,9 @@ class TableDwgCodecProbe final : public DRW_Table {
 public:
     using DRW_Table::parseDwg;
 
+    std::int16_t encodedObjectType() const { return oType; }
+    std::uint32_t encodedObjectSize() const { return objSize; }
+
     bool encodeAsTableClass(DRW::Version version, dwgBufferW& body,
                             dwgBufferW& handles,
                             std::uint16_t classNumber = 562u) {
@@ -8069,6 +8073,12 @@ std::uint64_t cursorBit(const dwgBuffer& buffer) {
 void testR2007TableCellTypeReaderVectors(TestContext& t) {
     struct TableClassSerializationProbe final : dwgWriter18 {
         using dwgWriter18::dwgWriter18;
+
+        std::size_t encodedBufferSize() const { return m_buf.size(); }
+        std::size_t encodedObjectMapSize() const { return m_objectMap.size(); }
+        bool emittedHandle(std::uint32_t value) const {
+            return hasEmittedDwgObjectHandle(value);
+        }
 
         bool serializeClassDefinition(std::uint16_t classNumber,
                                       dwgBufferW& output) {
@@ -8646,6 +8656,95 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         && tableFrameWriter.validateDwgClassInstanceCounts();
     t.expect(tableFrameTransactionRolledBack,
              "AC1018 TABLE entity frame commit publishes its registered CLASS instance and outer rollback removes the frame and ledgers");
+
+    DRW_Header tableFacadeHeader;
+    dwgRW tableFacade(nullptr);
+    tableFacade.writer = std::make_unique<TableClassSerializationProbe>(
+        nullptr, &tableFacadeHeader);
+    tableFacade.version = DRW::AC1018;
+    auto* tableFacadeWriter = dynamic_cast<TableClassSerializationProbe*>(
+        tableFacade.writer.get());
+    const std::size_t tableFacadeInitialBytes =
+        tableFacadeWriter == nullptr ? 0u : tableFacadeWriter->encodedBufferSize();
+    const std::size_t tableFacadeInitialObjects =
+        tableFacadeWriter == nullptr ? 0u : tableFacadeWriter->encodedObjectMapSize();
+    const std::size_t tableFacadeInitialSuccesses =
+        tableFacade.m_successfulEntityWrites;
+    const auto tableFacadeAttempt = [&](bool rollback) {
+        if (tableFacadeWriter == nullptr)
+            return false;
+        const std::uint64_t transaction =
+            tableFacade.beginDwgWriteTransaction(false, true, true);
+        if (transaction == 0u)
+            return false;
+
+        const std::string blockName = "*T_LIBDXFRW_FACADE_TEST";
+        const std::uint32_t blockRecord = tableFacadeWriter->defineBlock(
+            blockName, DRW_Coord{0.0, 0.0, 0.0});
+        TableDwgCodecProbe table = makeEncodableAc1018Table();
+        table.handle = 0xA810u;
+        table.name = blockName;
+        table.blockRecH = handle(blockRecord);
+        const std::int16_t originalObjectType = table.encodedObjectType();
+        const std::uint32_t originalObjectSize = table.encodedObjectSize();
+        const bool classReady = blockRecord != 0u
+            && tableFacade.registerTableEntityClassForWrite(&table)
+            && tableFacadeWriter->registerDwgEntityClassInstance(
+                table.getDwgClassNum(), table.handle);
+        const std::uint16_t classNumber = table.getDwgClassNum();
+        const bool frameWritten = classReady
+            && tableFacade.encodeEntityForWrite(&table);
+        DRW::DwgObjectFrameReceipt receipt;
+        const bool receiptMatches = frameWritten
+            && tableFacade.getLastDwgObjectFrame(receipt)
+            && receipt.valid && receipt.objectHandle == table.handle
+            && receipt.classNumber == classNumber;
+        if (!receiptMatches) {
+            (void)tableFacade.rollbackDwgWriteTransaction(transaction);
+            return false;
+        }
+
+        if (rollback) {
+            const bool rolledBack = tableFacade.rollbackDwgWriteTransaction(
+                transaction);
+            std::uint16_t ignoredClass = 0u;
+            const bool bytesRolledBack = tableFacadeWriter->encodedBufferSize()
+                == tableFacadeInitialBytes;
+            const bool objectsRolledBack =
+                tableFacadeWriter->encodedObjectMapSize()
+                    == tableFacadeInitialObjects;
+            const bool classRolledBack =
+                !tableFacadeWriter->hasDwgClassDefinition(classNumber);
+            const bool handleRolledBack =
+                !tableFacadeWriter->getDwgClassInstanceClass(
+                    table.handle, ignoredClass);
+            const bool writesRolledBack =
+                tableFacade.m_successfulEntityWrites
+                    == tableFacadeInitialSuccesses;
+            const bool callerRestored =
+                table.encodedObjectType() == originalObjectType
+                && table.encodedObjectSize() == originalObjectSize
+                && table.eType == DRW::TABLE && table.handle == 0xA810u;
+            const bool passed = rolledBack
+                && bytesRolledBack && objectsRolledBack && classRolledBack
+                && handleRolledBack && writesRolledBack && callerRestored;
+            return passed;
+        }
+
+        const bool classLedgerValid =
+            tableFacadeWriter->validateDwgClassInstanceCounts();
+        const bool committed = tableFacade.commitDwgWriteTransaction(
+            transaction);
+        const bool passed = classLedgerValid && committed
+            && tableFacadeWriter->emittedHandle(table.handle)
+            && tableFacade.m_successfulEntityWrites
+                == tableFacadeInitialSuccesses + 1u;
+        return passed;
+    };
+    const bool facadeRollbackAndRetry = tableFacadeAttempt(true)
+        && tableFacadeAttempt(false);
+    t.expect(facadeRollbackAndRetry,
+             "AC1018 TABLE facade transaction rolls back staged frame/class/caller state and retries to one committed frame");
 
     const auto expectAtomicPreflightRefusal =
         [&](const char* message, DRW::Version version, auto mutate) {

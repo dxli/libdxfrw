@@ -2677,6 +2677,34 @@ bool dwgRW::writeInsert(DRW_Insert *ent) {
     return recordWriteResult(WriteSkipKind::Entity, true);
 }
 
+bool dwgRW::registerTableEntityClassForWrite(DRW_Table *table) {
+    auto* native = dynamic_cast<dwgWriter15*>(writer.get());
+    if (table == nullptr || native == nullptr || m_dwgWriteTransactions.empty()
+        || !m_dwgWriteTransactions.back()->trackCallerMutations)
+        return false;
+
+    const auto checkpoint = writer->checkpointCompoundWrite();
+    std::vector<DwgEntityWriteState> mutations;
+    mutations.push_back(captureEntityWriteState(table));
+    try {
+        if (!native->registerTableEntityClass(table)) {
+            writer->rollbackCompoundWrite(checkpoint);
+            restoreEntityWriteStates(mutations);
+            return false;
+        }
+        rememberCallerMutations(mutations);
+        return true;
+    } catch (...) {
+        try {
+            writer->rollbackCompoundWrite(checkpoint);
+        } catch (...) {
+            writer->markObjectWriteFailure();
+        }
+        restoreEntityWriteStates(mutations);
+        throw;
+    }
+}
+
 bool dwgRW::writeTable(DRW_Table *ent) {
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::Entity, false);

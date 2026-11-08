@@ -400,14 +400,17 @@ created locally from scratch for the specific control.
   low-level control that emits a real TABLE entity frame with writer-local
   `AcDbTable` class identity/count bookkeeping, then rolls the frame and class
   ledger back through an outer compound checkpoint. The placeholder `*T`
-  block is empty; this proves only frame/class transaction mechanics. Next
-  smallest slice: drive class registration and frame emission through a
-  test-accessible `dwgRW` transaction, inject failure after frame staging but
-  before graph publication, and verify destination/model/writer rollback plus
-  same-facade retry. Then build the smallest semantically complete `*T`
-  geometry and reference graph. Keep `dwgRW::writeTable` fail-closed until the
-  transaction, graph, physical-source profile, and independent-reader/native
-  qualification gates pass. See the [TABLE readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
+  block is empty; this proves only frame/class transaction mechanics. The
+  current focused control also routes class registration and frame emission
+  through an explicit `dwgRW` transaction: caller class state, frame bytes,
+  handle/class ledgers and success count roll back, then one retry commits on
+  the same facade. The rollback is an explicit simulation after frame staging,
+  not an injected failure from a real graph-writing branch. Next build the
+  smallest semantically complete `*T` geometry/reference graph and move the
+  rollback assertion to a failure injected after those graph frames are
+  staged. Keep `dwgRW::writeTable` fail-closed until that graph and its
+  physical-source, independent-reader/native qualification gates pass. See the
+  [TABLE readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 - **Previous local slice:** AC1027/AC1032 PERSUBENTMGR typed failures now
   publish raw-only after independent common-shell and handle-stream validation.
   The hash-matched AC1027 physical source publishes handle `0x2E0` and reduces
