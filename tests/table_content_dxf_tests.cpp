@@ -1002,7 +1002,7 @@ bool tableRowAlignmentOverrideParseTests(const std::filesystem::path& dir) {
             {63,"256"},{63,"0"},{63,"3"},
             {64,"256"},{64,"0"},{64,"7"},
             {283,"0"},{283,"1"},{283,"0"},
-            {274,"0"},{275,"-2"},{279,"32767"},
+            {274,"0"},{275,"-2"},{279,"211"},
             {285,"1"},{286,"0"},{288,"1"},
             {0,"ENDSEC"},{0,"EOF"}};
     };
@@ -1046,7 +1046,7 @@ bool tableRowAlignmentOverrideParseTests(const std::filesystem::path& dir) {
             || table.m_borderLineweightOverrideFlags != 131201u
             || table.m_tableBorderLineweights
                 != std::array<int, 18>{{0, 0, 0, 0, 0, 0, 0, 65534,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 32767}}
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 211}}
             || table.m_borderVisibilityOverrideFlags != 65794u
             || table.m_tableBorderVisibilities
                 != std::array<int, 18>{{0, 0, 0, 0, 0, 0, 0, 0,
@@ -1076,6 +1076,32 @@ bool tableRowAlignmentOverrideParseTests(const std::filesystem::path& dir) {
                 || incomplete.tables.front().m_semanticContentComplete)
                 return fail("missing selected border override was accepted as complete");
         }
+
+        Tags invalidLineweight = source();
+        const auto invalidWeight = std::find_if(
+            invalidLineweight.begin(), invalidLineweight.end(),
+            [](const Tag& tag) { return tag.code == 279; });
+        if (invalidWeight == invalidLineweight.end())
+            return fail("lineweight domain control field was not found");
+        invalidWeight->value = "26";
+        dx_data incompleteLineweight;
+        if (!import(invalidLineweight, binary, incompleteLineweight)
+            || incompleteLineweight.tables.size() != 1u
+            || incompleteLineweight.tables.front().m_semanticContentComplete)
+            return fail("out-of-enum TABLE lineweight was accepted as complete");
+
+        Tags invalidCellLineweight = source();
+        const auto cellText = std::find_if(
+            invalidCellLineweight.begin(), invalidCellLineweight.end(),
+            [](const Tag& tag) { return tag.code == 1 && tag.value == "cell"; });
+        if (cellText == invalidCellLineweight.end())
+            return fail("cell lineweight domain control anchor was not found");
+        invalidCellLineweight.insert(cellText, Tag{279, "26"});
+        dx_data incompleteCellLineweight;
+        if (!import(invalidCellLineweight, binary, incompleteCellLineweight)
+            || incompleteCellLineweight.tables.size() != 1u
+            || incompleteCellLineweight.tables.front().m_semanticContentComplete)
+            return fail("out-of-enum TABLE cell lineweight was accepted as complete");
 
         for (std::size_t missingIndex : {0u, 1u, 2u}) {
             Tags missing = source();

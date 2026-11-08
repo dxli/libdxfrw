@@ -733,6 +733,15 @@ bool isValidDxfLineWeight(DRW_LW_Conv::lineWidth value) {
     return false;
 }
 
+bool isValidTableLineWeight(int value) {
+    static constexpr std::array<int, 27> lineWeights{{
+        -3, -2, -1, 0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40,
+        50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211
+    }};
+    return std::find(lineWeights.begin(), lineWeights.end(), value)
+        != lineWeights.end();
+}
+
 // IMAGE and WIPEOUT emit the same DXF adjustment groups (281..283).
 // Their DXF percentage domain is narrower than the shared DWG RC carrier;
 // keep this admission check private to the DXF writers.
@@ -11819,7 +11828,7 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
                     ? (border.m_colorRgb < 0 || border.m_colorRgb > 32767)
                     : border.m_colorRgb != -1)
                 || (hasLineweight
-                    ? (border.m_lineWeight < 0 || border.m_lineWeight > 32767)
+                    ? !isValidTableLineWeight(border.m_lineWeight)
                     : border.m_lineWeight != 0)
                 || (hasVisibility
                     ? !border.m_hasDxfVisibility
@@ -12007,8 +12016,8 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
                 const DRW_TableBorder& border = cell.m_borders[borderIndex];
                 const bool selectedLegacyEdge =
                     selectedLegacyBorder && borderIndex < 4u;
-                if (border.m_colorMethod != 0u || border.m_lineWeight < 0
-                    || border.m_lineWeight > 32767
+                if (border.m_colorMethod != 0u
+                    || !isValidTableLineWeight(border.m_lineWeight)
                     || border.m_colorRgb < -1 || border.m_colorRgb > 32767
                     || (version < DRW::AC1021
                         && (border.m_colorRgb >= 0
@@ -12215,10 +12224,13 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
                 (ent->m_borderLineweightOverrideFlags & (1u << i)) != 0u;
             const bool visibilitySelected =
                 (ent->m_borderVisibilityOverrideFlags & (1u << i)) != 0u;
+            const int rawLineweight = ent->m_tableBorderLineweights[i];
+            const int signedLineweight = rawLineweight <= 32767
+                ? rawLineweight : rawLineweight - 65536;
             if (lineweightSelected != ent->m_hasTableBorderLineweightOverrides[i]
                 || (lineweightSelected
-                    && (ent->m_tableBorderLineweights[i] < 0
-                        || ent->m_tableBorderLineweights[i] > 65535))
+                    && (rawLineweight < 0 || rawLineweight > 65535
+                        || !isValidTableLineWeight(signedLineweight)))
                 || (!lineweightSelected && ent->m_tableBorderLineweights[i] != 0)
                 || visibilitySelected != ent->m_hasTableBorderVisibilityOverrides[i]
                 || (!visibilitySelected && ent->m_tableBorderVisibilities[i] != 0)

@@ -36679,7 +36679,7 @@ bool tableScalarOverrideOutput(bool binary) {
     table.m_content.m_rows[0].m_cells[0].m_backgroundEnabled = true;
     table.m_content.m_rows[0].m_cells[0].m_fillColorRgb = 3;
     table.m_content.m_rows[0].m_cells[0].m_textColorRgb = 4;
-    table.m_content.m_rows[0].m_cells[0].m_borders[0].m_lineWeight = 11;
+    table.m_content.m_rows[0].m_cells[0].m_borders[0].m_lineWeight = 13;
     table.m_content.m_rows[0].m_cells[0].m_borders[0].m_visible = false;
     table.m_content.m_rows[0].m_cells[0].m_borders[0].m_hasDxfVisibility = true;
     // Exercise selected default values as well as the implicit R2007 header
@@ -36692,7 +36692,7 @@ bool tableScalarOverrideOutput(bool binary) {
     table.m_borderLineweightOverrideFlags = 131201u;
     table.m_tableBorderLineweights[0] = 0;
     table.m_tableBorderLineweights[7] = 65534;
-    table.m_tableBorderLineweights[17] = 32767;
+    table.m_tableBorderLineweights[17] = 211;
     table.m_hasTableBorderLineweightOverrides[0] = true;
     table.m_hasTableBorderLineweightOverrides[7] = true;
     table.m_hasTableBorderLineweightOverrides[17] = true;
@@ -36749,7 +36749,7 @@ bool tableScalarOverrideOutput(bool binary) {
             && actual.m_borderLineweightOverrideFlags == 131201u
             && actual.m_tableBorderLineweights[0] == 0
             && actual.m_tableBorderLineweights[7] == 65534
-            && actual.m_tableBorderLineweights[17] == 32767
+            && actual.m_tableBorderLineweights[17] == 211
             && actual.m_borderVisibilityOverrideFlags == 65794u
             && actual.m_tableBorderVisibilities[1] == 0
             && actual.m_tableBorderVisibilities[8] == 1
@@ -36758,7 +36758,7 @@ bool tableScalarOverrideOutput(bool binary) {
             && actual.m_content.m_rows[0].m_cells[0].m_backgroundEnabled
             && actual.m_content.m_rows[0].m_cells[0].m_fillColorRgb == 3
             && actual.m_content.m_rows[0].m_cells[0].m_textColorRgb == 4
-            && actual.m_content.m_rows[0].m_cells[0].m_borders[0].m_lineWeight == 11
+            && actual.m_content.m_rows[0].m_cells[0].m_borders[0].m_lineWeight == 13
             && !actual.m_content.m_rows[0].m_cells[0].m_borders[0].m_visible;
     };
     const auto checkWire = [&]() {
@@ -36846,7 +36846,7 @@ bool tableScalarOverrideOutput(bool binary) {
             && textColors == std::vector<int>({4, 256, 0, 7})
             && fillEnabled == std::vector<int>({1, 0, 1, 0})
             && borderLineweights == std::vector<std::pair<int, int>>(
-                {{279, 11}, {274, 0}, {275, -2}, {279, 32767}})
+                {{279, 13}, {274, 0}, {275, -2}, {279, 211}})
             && borderVisibilities == std::vector<std::pair<int, int>>(
                 {{289, 0}, {285, 1}, {286, 0}, {288, 1}});
     };
@@ -37045,6 +37045,38 @@ bool tableScalarOverrideOutput(bool binary) {
     data.tables.front().m_borderVisibilityOverrideFlags = 0u;
     data.tables.front().m_tableBorderVisibilities.fill(0);
     data.tables.front().m_hasTableBorderVisibilityOverrides.fill(false);
+    data.tables.front().m_content.m_rows[0].m_cells[0]
+        .m_borders[0].m_lineWeight = 26;
+    if (exportCurrent())
+        return fail("out-of-enum TABLE cell lineweight was emitted");
+    {
+        std::ifstream stream(output, std::ios::binary);
+        const std::string contents((std::istreambuf_iterator<char>(stream)),
+                                   std::istreambuf_iterator<char>());
+        if (!stream.good() && !stream.eof())
+            return fail("invalid cell lineweight sentinel could not be read");
+        if (contents != sentinel)
+            return fail("invalid cell lineweight replaced the destination");
+    }
+    data.tables.front().m_content.m_rows[0].m_cells[0]
+        .m_borders[0].m_lineWeight = 13;
+    data.tables.front().m_borderLineweightOverrideFlags = 1u;
+    data.tables.front().m_tableBorderLineweights[0] = 26;
+    data.tables.front().m_hasTableBorderLineweightOverrides[0] = true;
+    if (exportCurrent())
+        return fail("out-of-enum TABLE border lineweight was emitted");
+    {
+        std::ifstream stream(output, std::ios::binary);
+        const std::string contents((std::istreambuf_iterator<char>(stream)),
+                                   std::istreambuf_iterator<char>());
+        if (!stream.good() && !stream.eof())
+            return fail("invalid border lineweight sentinel could not be read");
+        if (contents != sentinel)
+            return fail("invalid border lineweight replaced the destination");
+    }
+    data.tables.front().m_borderLineweightOverrideFlags = 0u;
+    data.tables.front().m_tableBorderLineweights.fill(0);
+    data.tables.front().m_hasTableBorderLineweightOverrides.fill(false);
     data.tables.front().m_borderVisibilityOverrideFlags = 2u;
     data.tables.front().m_tableBorderVisibilities[1] = 2;
     data.tables.front().m_hasTableBorderVisibilityOverrides[1] = true;
@@ -37066,7 +37098,7 @@ bool tableScalarOverrideOutput(bool binary) {
     data.tables.front().m_borderLineweightOverrideFlags = 131201u;
     data.tables.front().m_tableBorderLineweights[0] = 0;
     data.tables.front().m_tableBorderLineweights[7] = 65534;
-    data.tables.front().m_tableBorderLineweights[17] = 32767;
+    data.tables.front().m_tableBorderLineweights[17] = 211;
     data.tables.front().m_hasTableBorderLineweightOverrides[0] = true;
     data.tables.front().m_hasTableBorderLineweightOverrides[7] = true;
     data.tables.front().m_hasTableBorderLineweightOverrides[17] = true;

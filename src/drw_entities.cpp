@@ -97,6 +97,14 @@ bool isValidSubDMeshCreaseValue(double value) noexcept {
     return std::isfinite(value) && (value == -1.0 || value >= 0.0);
 }
 
+bool isValidTableLineWeight(int value) noexcept {
+    static constexpr std::array<int, 27> values{{
+        -3, -2, -1, 0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40,
+        50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211
+    }};
+    return std::find(values.begin(), values.end(), value) != values.end();
+}
+
 DRW_Coord extrusionUnitVector(DRW_Coord direction) {
     // The arbitrary-axis rule assumes a unit normal. Keep its original
     // direction in the public entity, but normalize the temporary basis for
@@ -12966,7 +12974,8 @@ bool DRW_Table::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         if (tableField && expected != 0u
             && m_dxfTableBorderLineweightReads[edge] < expected) {
             const int wireValue = reader->getInt32();
-            if (wireValue < -32768 || wireValue > 32767) {
+            if (wireValue < -32768 || wireValue > 32767
+                || !isValidTableLineWeight(wireValue)) {
                 markIncomplete();
                 break;
             }
@@ -12979,7 +12988,10 @@ bool DRW_Table::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
                        != std::end(codes)) {
             const auto found = std::find(std::begin(codes), std::end(codes), code);
             const std::size_t borderIndex = static_cast<std::size_t>(found - std::begin(codes));
-            currentCell()->m_borders[borderIndex].m_lineWeight = reader->getInt32();
+            const int value = reader->getInt32();
+            currentCell()->m_borders[borderIndex].m_lineWeight = value;
+            if (!isValidTableLineWeight(value))
+                markIncomplete();
         } else {
             reader->getInt32();
             markIncomplete();
