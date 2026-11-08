@@ -80,8 +80,75 @@
     "limits": "Generated codec mechanics only; it does not qualify any physical DWG producer, selected graph closure, or whole-source output."
   },
   "planImpact": {
-    "nextP4Action": "Use the LibreDWG example_r13 source only for source-bound GROUP/member role mapping, then determine whether an isolated selected GROUP route can omit unrelated frames while proving all seven LINE targets and owner/dictionary dependencies. Keep strict whole-source output refused. Do not copy this external fixture into the repository.",
+    "nextP4Action": "Before selected output, explain and resolve the AC1012 DICTIONARY UnknownCodePage text issue (0x8) and establish a spec-bounded legacy inline common-link evidence profile for the exact DICTIONARY/GROUP frames. The typed identities and GROUP membership match, but both source frames retain Unknown common-link evidence, so do not weaken source eligibility or attempt serialization. Only then retry the selected projection; preserve the 1 entity/19 object parse failures and the whole-source ModelDocViewStyle refusal.",
     "fixtureFilesAdded": 0,
     "externalEvidencePromoted": 0
+  },
+  "libdxfrwSourceProfileRecheck": {
+    "date": "2026-11-07",
+    "sourcePath": "/Users/dli/dev/dwgTs/tests/fixtures/committed/libredwg/example_r13.dwg",
+    "sourceSha256": "53558a8ae4bf666f906c9c2e4d3c3ee7ef61690e3b0f4d4a858e4e1bf555fc89",
+    "method": "Temporary local adapter-test instrumentation imported the witness through dx_iface, compared the GROUP, NOD, dictionary and model-space entity identities, then inspected the retained standard-object evidence. Instrumentation was removed; no fixture or test dependency was added.",
+    "adapterImport": {
+      "sourceVersion": "AC1012",
+      "entityParseFailures": 1,
+      "objectParseFailures": 19,
+      "sourceFrames": 5785,
+      "publishedFrames": 5765,
+      "groupHandle": "0x257",
+      "groupParent": "0xD",
+      "groupMemberHandlesInOrder": [
+        "0x256",
+        "0x255",
+        "0x254",
+        "0x253",
+        "0x252",
+        "0x251",
+        "0x250"
+      ],
+      "memberEntityTypes": [
+        "LINE",
+        "LINE",
+        "LINE",
+        "LINE",
+        "LINE",
+        "LINE",
+        "LINE"
+      ],
+      "nodHandle": "0xC",
+      "nodEntry": {
+        "name": "ACAD_GROUP",
+        "handle": "0xD"
+      },
+      "dictionaryEntry": {
+        "name": "*A1",
+        "handle": "0x257"
+      },
+      "groupMemberListComplete": true
+    },
+    "sourceEvidence": {
+      "dictionaryFrame": {
+        "handle": "0xD",
+        "objectType": 42,
+        "typedBaseline": true,
+        "payloadMatched": true,
+        "opaquePayload": false,
+        "commonLinkEvidence": "Unknown",
+        "textDecodeIssuesMask": "0x8"
+      },
+      "groupFrame": {
+        "handle": "0x257",
+        "objectType": 72,
+        "typedBaseline": true,
+        "payloadMatched": true,
+        "opaquePayload": false,
+        "commonLinkEvidence": "Unknown",
+        "textDecodeIssuesMask": "0x0"
+      }
+    },
+    "specCrossCheck": "ODA Open Design Specification v5.4.1 §20.4.72 specifies the R13–R14 GROUP object size and reactor count followed by the common parent/reactor/extension-dictionary references and the ordered group-member references. §§20.4.1–20.4.2 define the corresponding legacy entity common fields and handle roles. This supports inspecting the bounded in-frame parse; it does not by itself validate libdxfrw’s Unknown capture marker or resolve the dictionary text issue.",
+    "disposition": "Not output-ready. Although source identities, ordered members, typed baselines and payload matches are established, the selected projection admission gate rejected the DICTIONARY and GROUP frames because common-link evidence is Unknown; the DICTIONARY also carries UnknownCodePage text issue mask 0x8. No selected serialization/readback was attempted. Do not clear the marker, relax standardSourceEligible, or infer support from the imported typed values.",
+    "testBinarySha256": "7163ab0f11d3ba45924654bc2dcae7d8c226b1c1bf1d5c5758d29a729c67d9d9",
+    "supportClaimEffect": "none"
   }
 }

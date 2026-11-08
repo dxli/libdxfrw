@@ -162,7 +162,19 @@ instead of repeating successful scans or controls.
    worktree corpora found a hash-bound LibreDWG R13 example with one GROUP and
    seven LINE members, plus an R2007 Leader GROUP with five IMAGE members. The
    R13 source publishes 5,765/5,785 frames and strict output stops at the
-   exact-source-version ModelDocViewStyle gate; the Leader source publishes
+   exact-source-version ModelDocViewStyle gate. A fresh libdxfrw source-bound
+   adapter audit confirms NOD `0xC` → dictionary `0xD` → GROUP `0x257` and its
+   ordered LINE members `0x256` through `0x250`; the typed baselines and payload
+   comparisons match. This candidate is not yet eligible for selected output:
+   both standard frames retain `Unknown` common-link evidence, and the
+   DICTIONARY frame has `UnknownCodePage` text issue mask `0x8`. ODA v5.4.1
+   §§20.4.1–20.4.2 and §20.4.72 describe the R13–R14 bounded inline handles,
+   but do not authorize clearing either source gate. Resolve the dictionary
+   text issue and establish a narrow, frame-bounded legacy common-link evidence
+   profile first; retain the original 1 entity/19 object failures and
+   whole-source refusal. The exact recheck is in the [GROUP candidate
+   receipt](docs/research/p4-populated-group-candidate-census-2026-11-07.json).
+   Do not serialize this source until those gates pass. The Leader source publishes
    245/245 frames but whole-source output stops at standalone OBJECTCONTEXTDATA,
    and its IMAGE dependencies retain the unresolved owner-role conflict. An
    ACadSharp AC1021 sample has two six-LINE groups but contains the same image
@@ -176,7 +188,9 @@ instead of repeating successful scans or controls.
    The locally authored GROUP codec control now exercises six ordered unique
    member handles through ASCII/Binary output, typed readback, a second
    round-trip and corrected retry; this is generated transport evidence only.
-   Keep the unrelated `SORTENTSTABLE` null-target graph refused. The P6
+   Keep the unrelated `SORTENTSTABLE` null-target graph refused. The R13 GROUP
+   candidate remains blocked on its source-evidence gates; do not add a general
+   selected-output escape hatch or weaken whole-source refusal. The P6
    IMAGEDEF cross-version source capture is complete: its parent code `0xC`
    and dictionary group-350 edge match in AutoCAD AC1021/24/27/32 DWG/DXF
    pairs. Do not repeat that capture. Keep output refused because ODA §20.4.81
@@ -191,6 +205,51 @@ instead of repeating successful scans or controls.
    to the next eligible row. Whole-source/native claims remain closed unless
    their own gates pass. Start with the [same-version census](docs/research/p4-local-same-version-strict-output-census-2026-11-06.json)
    and [current source inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json).
+
+### P4-GROUP-01 — qualify the R13 source profile before projection
+
+**Status: BLOCKED on two local source-evidence gates; selected output was not attempted.**
+The external LibreDWG R13 witness remains read-only and uncommitted. Its exact
+source hash, independent provenance, libdxfrw import identities and ordered
+member list are in the [GROUP candidate receipt](docs/research/p4-populated-group-candidate-census-2026-11-07.json).
+The libdxfrw import confirms NOD `0xC` → DICTIONARY `0xD` → GROUP `0x257` →
+seven LINE handles `0x256` through `0x250`, with typed baselines and payload
+comparisons matched. It also retains 1 entity and 19 object parse failures.
+
+The selected projection is not source-eligible yet. The DICTIONARY and GROUP
+standard frames both retain `Unknown` common-link evidence. The DICTIONARY also
+has text issue mask `0x8` (`UnknownCodePage`), despite the file-level codepage
+field being recognized. ODA v5.4.1 §§20.4.1–20.4.2 and §20.4.72 specify
+R13–R14 inline object sizing, reactor counts, handle roles and the GROUP member
+list; they do not authorize upgrading libdxfrw's evidence flags or ignoring the
+text issue.
+
+Implementation sequence:
+
+1. Trace the DICTIONARY's `UnknownCodePage` issue to its exact decoded field or
+   dependency. Correct source-profile binding only if the existing file header
+   and field-specific ODA framing prove the mapping; otherwise retain the
+   refusal and document the unsupported text field.
+2. Design a narrowly scoped legacy common-link evidence state for DICTIONARY
+   and GROUP only after the R13–R14 body/handle spans, declared reactor count,
+   parent, reactor, extension-dictionary and ordered member references are
+   checked against the ODA layout and source bytes. Do not change the meaning
+   of `Unknown` for other object families or legacy frames.
+3. Add generated boundary controls for the new evidence classifier, including
+   truncation, count mismatch, handle-role mismatch and following-frame
+   recovery. Then rerun the physical source profile check; only when both
+   frames qualify may the selected ASCII/Binary projection, fresh readback,
+   refusal, destination preservation and same-adapter retry proceed.
+4. Keep the original import outcome unchanged and require the normal
+   whole-source route to remain refused at its existing completeness/version
+   gates. Do not commit the external witness or any derived DWG/DXF fixture.
+
+**Fast checks:** build the touched reader/adapter target and the narrow generated
+selector for any classifier change. Run the source-bound R13 profile check
+against the external witness only after the issue is understood. No full suite
+or ASan run is needed unless production bounds, ownership or lifetime code
+changes.
+
 2. **P5 / FIELD and TABLE residuals.** No eligible AC1021 FIELD graph currently
    supplies complete FIELDLIST membership plus a consumer-visible root; keep
    FIELD output refused and do not retry the screened samples. Resume only with
