@@ -1,9 +1,9 @@
 {
   "date": "2026-11-08",
   "topic": "DWG ACAD_TABLE encoder readiness",
-  "scope": "Source and specification audit only; no production support claim",
+  "scope": "Source/specification audit plus generated AC1018 body-codec milestone; no production support claim",
   "repository": {
-    "entity_encoder": "src/drw_entities.cpp: DRW_Table::encodeDwg currently returns false without mutation",
+    "entity_encoder": "src/drw_entities.cpp: DRW_Table::encodeDwg has a narrowly preflighted AC1018 generated plain-text-cell codec; production adapter remains disabled",
     "adapter_writer": "src/libdwgr.cpp: dwgRW::writeTable intentionally refuses and marks the complete DWG save failed",
     "reader": "src/drw_entities.cpp: DRW_Table::parseDwg has separate pre-AC1024 and AC1024+ branches",
     "related_object_writer": "src/libdwgr.cpp: writeTableContent is currently restricted to AC1021"
@@ -71,6 +71,21 @@
     ],
     "disposition": "Diagnostic and retry evidence only; unknown override payload boundaries/semantics and physical TABLE writer support remain unresolved."
   },
+  "generated_ac1018_plain_text_encoder_control": {
+    "generatedFromScratch": true,
+    "version": "AC1018",
+    "profile": "one row, one column, one inline plain-text value-content cell",
+    "classNumber": 562,
+    "classNumberDisposition": "test-only synthetic dispatch value; not a production class ordinal or version-wide mapping",
+    "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
+    "result": "PASS",
+    "assertions": [
+      "The direct entity codec admits this generated bounded profile; implementation guards also restrict version, stream use, required handles, and modeled fields, but separate refusal/atomicity controls are still open.",
+      "The encoded entity body parses through DRW_Table::parseDwg with matching insertion point, column width, row height, plain-text cell value, BLOCK_RECORD handle and TABLESTYLE handle.",
+      "The parser cursor lands at the exact encoded body end and reads a following sentinel without consuming handle-stream bytes as body data."
+    ],
+    "disposition": "Generated encoder/parser consistency only. No truncation matrix, refusal byte-preservation sweep, production class registration, physical AC1018 source-to-output comparison, *T compound graph, adapter transaction, independent readback, or native TABLE behavior is qualified. Keep dwgRW::writeTable refused."
+  },
   "first_candidate": {
     "version": "AC1018",
     "profile": "one row, one column, one plain text value-content cell",
@@ -82,8 +97,9 @@
       "any unmodeled or incomplete semantic data"
     ],
     "required_before_adapter_admission": [
-      "direct AC1018 body/string/handle codec exact-span vector with typed parser readback and following-frame sentinel",
-      "preflight for the source model's complete writable profile and source-state preservation on refusal",
+      "focused refusal/atomicity controls for each excluded retained field and truncated body/handle output, plus corrected same-object retry",
+      "physical AC1018 plain-text source-to-output field comparison, or an explicit no-eligible-source disposition",
+      "production class resolution from the validated CLASS map rather than synthetic or copied class ordinals",
       "complete *T BLOCK/BLOCK_RECORD ownership and TABLE style-reference disposition",
       "compound writer atomic rollback, destination preservation, same-adapter corrected retry, and fresh readback",
       "no unsupported cell/override field silently omitted"
@@ -92,11 +108,13 @@
   "validation_policy": "Focused generated controls and existing-source use only; no new downloaded DWG/DXF fixture is to be committed.",
   "status": "OPEN_IMPLEMENTATION",
   "blockers": [
-    "No production encoder exists.",
+    "A generated-profile direct body codec exists, but no production class registration, adapter output route, or complete compound writer exists.",
     "No complete AC1018 source-to-writer profile is currently recorded; the two screened AC1018 sources stop at undocumented 0x40000/0x40020 cell override flags.",
     "Observed AC1018 AcDbTable class numbers differ by source (528 and 523); determine the supported CLASS-map resolution policy and never treat either ordinal as a version constant.",
     "The only newly captured table class number is 506 in one AC1021 file; an AC1018 class number must be captured empirically before registering an AC1018 writer.",
     "The AC1018 unknown-override control now captures only the known prefix; the physical payload span and meaning of 0x40000/0x40020 remain unresolved and must not be skipped or emitted.",
+    "The generated AC1018 encoder control uses synthetic class number 562 solely to exercise the body codec; production class resolution and physical interoperability remain open.",
+    "Direct codec truncation and no-partial-byte refusal controls remain open; the generated positive readback does not establish encoder failure atomicity.",
     "The available AC1021 table source is semantically incomplete at cell CadValue type 48 and cannot validate a complete output route.",
     "R24+ TABLECONTENT/TABLEGEOMETRY relationship is outside the available ODA v5.4.1 layout and must remain refused."
   ]

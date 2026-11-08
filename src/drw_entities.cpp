@@ -13641,12 +13641,203 @@ void DRW_Table::resetDwgState() {
 bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
                           std::uint32_t bs, dwgBufferW *strBuf,
                           dwgBufferW *handleBuf) {
-    (void)version;
-    (void)buf;
     (void)bs;
-    (void)strBuf;
-    (void)handleBuf;
-    return false;
+    const auto zeroPoint = [](const DRW_Coord& point) {
+        return point.x == 0.0 && point.y == 0.0 && point.z == 0.0;
+    };
+    const auto defaultColor = [](const DRW_DwgCmColor& color) {
+        return color.method == 0u && color.flags == 0u && color.index == 0u
+            && color.rgb24 == -1 && !color.hasRgbColor
+            && color.colorName.empty() && color.bookName.empty()
+            && color.sourceVersion == DRW::UNKNOWNV;
+    };
+    if (version != DRW::AC1018 || buf == nullptr || strBuf != nullptr
+        || oType < 500 || handle == 0 || blockRecH.ref == 0
+        || m_tableStyleHandle == 0 || !attribHandles.empty()
+        || seqendH.ref != DRW::NoHandle || colcount != 1 || rowcount != 1
+        || colspace != 0.0 || rowspace != 0.0 || !extData.empty()
+        || !proxyGraphics.empty() || reactorHandles.size() != 0u
+        || (m_ownerBlockRecordHandle != 0u
+            && m_ownerBlockRecordHandle != blockRecH.ref)
+        || (m_hasSemanticContent && !m_semanticContentComplete)
+        || m_dataVersion != 0 || m_valueFlag != 0
+        || m_tableOverrideFlags != 0u
+        || m_borderColorOverrideFlags != 0u
+        || m_borderLineweightOverrideFlags != 0u
+        || m_borderVisibilityOverrideFlags != 0u || m_titleSuppressed
+        || m_headerSuppressed || m_flowDirection != 0
+        || m_horizontalCellMargin != 0.0 || m_verticalCellMargin != 0.0
+        || m_tableRowHeightOverrides != std::array<double, 3>{{0.0, 0.0, 0.0}}
+        || m_tableRowAlignmentOverrides != std::array<int, 3>{{0, 0, 0}}
+        || m_tableRowTextStyleHandles
+            != std::array<std::uint32_t, 3>{{0u, 0u, 0u}}
+        || std::any_of(m_tableRowTextStyleNames.cbegin(),
+                       m_tableRowTextStyleNames.cend(),
+                       [](const UTF8STRING& name) { return !name.empty(); })
+        || std::any_of(m_tableRowTextColors.cbegin(),
+                       m_tableRowTextColors.cend(),
+                       [&](const DRW_DwgCmColor& color) {
+                           return !defaultColor(color);
+                       })
+        || std::any_of(m_tableRowFillNone.cbegin(),
+                       m_tableRowFillNone.cend(),
+                       [](bool value) { return value; })
+        || std::any_of(m_tableRowFillColors.cbegin(),
+                       m_tableRowFillColors.cend(),
+                       [&](const DRW_DwgCmColor& color) {
+                           return !defaultColor(color);
+                       })
+        || std::any_of(m_tableBorderColors.cbegin(),
+                       m_tableBorderColors.cend(),
+                       [&](const DRW_DwgCmColor& color) {
+                           return !defaultColor(color);
+                       })
+        || std::any_of(m_tableBorderLineweights.cbegin(),
+                       m_tableBorderLineweights.cend(),
+                       [](int value) { return value != 0; })
+        || std::any_of(m_tableBorderVisibilities.cbegin(),
+                       m_tableBorderVisibilities.cend(),
+                       [](int value) { return value != 0; })
+        || std::any_of(m_hasTableBorderLineweightOverrides.cbegin(),
+                       m_hasTableBorderLineweightOverrides.cend(),
+                       [](bool value) { return value; })
+        || std::any_of(m_hasTableBorderVisibilityOverrides.cbegin(),
+                       m_hasTableBorderVisibilityOverrides.cend(),
+                       [](bool value) { return value; })
+        || m_content.m_columns.size() != 1u
+        || m_content.m_rows.size() != 1u
+        || !m_content.m_fieldHandles.empty()
+        || !m_content.m_mergedRanges.empty()
+        || !m_content.m_subrecordRanges.empty()
+        || !m_content.m_name.empty() || !m_content.m_description.empty()
+        || m_content.m_overrideStyleType != 4
+        || (m_content.m_tableStyleHandle != 0u
+            && m_content.m_tableStyleHandle != m_tableStyleHandle)
+        || m_content.m_columns.front().m_styleId != 0
+        || m_content.m_columns.front().m_overrideStyleType != 3
+        || m_content.m_rows.front().m_styleId != 0
+        || m_content.m_rows.front().m_overrideStyleType != 2
+        || m_content.m_rows.front().m_cells.size() != 1u)
+        return false;
+
+    const DRW_TableColumn& column = m_content.m_columns.front();
+    const DRW_TableRow& row = m_content.m_rows.front();
+    const DRW_TableCell& cell = row.m_cells.front();
+    if (!std::isfinite(column.m_width) || column.m_width <= 0.0
+        || !std::isfinite(row.m_height) || row.m_height <= 0.0
+        || cell.m_type != 1 || cell.m_edgeFlags != 0
+        || cell.m_isMerged || cell.m_autoFit
+        || cell.m_mergedWidth != 1 || cell.m_mergedHeight != 1
+        || !std::isfinite(cell.m_rotation) || cell.m_rotation != 0.0
+        || cell.m_valueHandle != 0u || cell.m_textStyleHandle != 0u
+        || cell.m_blockHandle != 0u || !cell.m_attributes.empty()
+        || cell.m_flags != 0 || cell.m_overrideStyleType != 1
+        || !cell.m_toolTip.empty() || !cell.m_textStyleName.empty()
+        || cell.m_hasLinkedData || cell.m_dataLinkHandle != 0u
+        || cell.m_linkedDataRowCount != 0
+        || cell.m_linkedDataColumnCount != 0
+        || cell.m_linkedDataUnknown != 0 || cell.m_blockScale != 1.0
+        || cell.m_width != 0.0 || cell.m_height != 0.0
+        || cell.m_geometryFlags != 0u || cell.m_geometryHandle != 0u
+        || cell.m_geometryRecordFlags != 0u
+        || !zeroPoint(cell.m_geometryTopLeft)
+        || !zeroPoint(cell.m_geometryCenter)
+        || cell.m_contentWidth != 0.0 || cell.m_contentHeight != 0.0
+        || cell.m_geometryWidth != 0.0 || cell.m_geometryHeight != 0.0
+        || cell.m_textColorRgb != -1 || cell.m_textColorMethod != 0u
+        || cell.m_fillColorRgb != -1 || cell.m_fillColorMethod != 0u
+        || cell.m_backgroundEnabled || cell.m_textAlignment != 0
+        || cell.m_overrideFlags != 0u || cell.m_virtualEdgeFlags != 0u
+        || cell.m_textHeight != 0.0 || cell.m_contents.size() != 1u
+        || cell.m_contents.front().m_type != 1
+        || cell.m_contents.front().m_handle != 0u
+        || cell.m_contents.front().m_value.m_formatFlags != 0
+        || (cell.m_contents.front().m_value.m_dataType != 0
+            && cell.m_contents.front().m_value.m_dataType != 4)
+        || cell.m_contents.front().m_value.m_dataSize != 0u
+        || cell.m_contents.front().m_value.m_unitType != 0
+        || !cell.m_contents.front().m_value.m_formatString.empty()
+        || !cell.m_contents.front().m_value.m_valueString.empty()
+        || cell.m_contents.front().m_value.m_handle != 0u
+        || !cell.m_contents.front().m_value.m_rawData.empty()
+        || (cell.m_contents.front().m_value.m_value.type()
+                == DRW_Variant::STRING
+            && cell.m_contents.front().m_value.m_value.c_str()
+                != cell.m_contents.front().m_text)
+        || (cell.m_contents.front().m_value.m_value.type()
+                != DRW_Variant::INVALID
+            && cell.m_contents.front().m_value.m_value.type()
+                != DRW_Variant::STRING)
+        || std::any_of(cell.m_borders.cbegin(), cell.m_borders.cend(),
+                       [](const DRW_TableBorder& border) {
+                           return border.m_lineWeight != 0
+                               || !border.m_visible
+                               || border.m_colorRgb != -1
+                               || border.m_colorMethod != 0u
+                               || border.m_hasDxfVisibility;
+                       })
+        || cell.m_contents.front().m_text.size() > kMaxTableStringBytes
+        || !std::isfinite(basePoint.x) || !std::isfinite(basePoint.y)
+        || !std::isfinite(basePoint.z) || !std::isfinite(xscale)
+        || !std::isfinite(yscale) || !std::isfinite(zscale)
+        || !std::isfinite(angle) || !std::isfinite(extPoint.x)
+        || !std::isfinite(extPoint.y) || !std::isfinite(extPoint.z)
+        || !std::isfinite(m_horizontalDirection.x)
+        || !std::isfinite(m_horizontalDirection.y)
+        || !std::isfinite(m_horizontalDirection.z))
+        return false;
+
+    if (!encodeDwgCommon(version, buf))
+        return false;
+    buf->put3BitDouble(basePoint);
+    if (sameStoredDouble(xscale, 1.0) && sameStoredDouble(yscale, 1.0)
+        && sameStoredDouble(zscale, 1.0)) {
+        buf->put2Bits(3);
+    } else if (sameStoredDouble(xscale, yscale)
+               && sameStoredDouble(yscale, zscale)) {
+        buf->put2Bits(2);
+        buf->putRawDouble(xscale);
+    } else if (sameStoredDouble(xscale, 1.0)) {
+        buf->put2Bits(1);
+        buf->putDefaultDouble(1.0, yscale);
+        buf->putDefaultDouble(1.0, zscale);
+    } else {
+        buf->put2Bits(0);
+        buf->putRawDouble(xscale);
+        buf->putDefaultDouble(xscale, yscale);
+        buf->putDefaultDouble(xscale, zscale);
+    }
+    buf->putBitDouble(angle);
+    buf->putExtrusion(extPoint, false);
+    buf->putBit(false); // this bounded profile excludes owned ATTRIBs
+
+    buf->putBitShort(static_cast<std::uint16_t>(m_valueFlag));
+    buf->put3BitDouble(m_horizontalDirection);
+    buf->putBitLong(1); // one column
+    buf->putBitLong(1); // one row
+    buf->putBitDouble(column.m_width);
+    buf->putBitDouble(row.m_height);
+    buf->putBitShort(static_cast<std::uint16_t>(cell.m_type));
+    buf->putRawChar8(static_cast<std::uint8_t>(cell.m_edgeFlags));
+    buf->putBit(false); // not merged
+    buf->putBit(false); // no auto-fit
+    buf->putBitLong(1);
+    buf->putBitLong(1);
+    buf->putBitDouble(cell.m_rotation);
+    buf->putVariableText(version, cell.m_contents.front().m_text);
+    buf->putBit(false); // no cell overrides
+    buf->putBit(false); // no table overrides
+    buf->putBit(false); // no border color overrides
+    buf->putBit(false); // no border lineweight overrides
+    buf->putBit(false); // no border visibility overrides
+
+    dwgBufferW *const handles = handleBuf != nullptr ? handleBuf : buf;
+    if (!encodeDwgEntHandle(version, buf, handleBuf))
+        return false;
+    putHardPointerHandle(handles, blockRecH.ref);
+    putHardPointerHandle(handles, m_tableStyleHandle);
+    putDwgReference(handles, 0, 0u); // no text-style/value handle
+    return buf->isGood() && handles->isGood();
 }
 
 bool DRW_Table::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){

@@ -2681,10 +2681,9 @@ bool dwgRW::writeTable(DRW_Table *ent) {
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::Entity, false);
 
-    // DRW_Table currently inherits DRW_Insert::encodeDwg, which would emit an
-    // INSERT/MINSERT frame and silently discard the TABLE-specific payload.
-    // Keep the whole DWG save transactional until a versioned TABLE encoder
-    // and its linked-object graph are implemented.
+    // The direct entity codec covers only a generated AC1018 plain-text cell.
+    // Production output also needs resolved class registration and the linked
+    // *T block graph staged with this entity in one transaction.
     markDwgWriteFailure();
     recordOperationDiagnostic(
         DRW::OperationPhase::Validation,

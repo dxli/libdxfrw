@@ -7528,6 +7528,13 @@ class TableDwgCodecProbe final : public DRW_Table {
 public:
     using DRW_Table::parseDwg;
 
+    bool encodeAsTableClass(DRW::Version version, dwgBufferW& body,
+                            dwgBufferW& handles,
+                            std::uint16_t classNumber = 562u) {
+        oType = static_cast<std::int16_t>(classNumber);
+        return encodeDwg(version, &body, 0u, nullptr, &handles);
+    }
+
     bool encodeCommonForVector(DRW::Version version, dwgBufferW& body,
                                dwgBufferW& handles,
                                std::uint16_t vectorType = 506) {
@@ -8152,6 +8159,87 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  && cursorBit(ac1018RetryInput)
                      == ac1018RetryFrame.tableDataEndBit,
              "same AC1018 TABLE parser retries a valid frame after unknown override refusal");
+
+    TableDwgCodecProbe encodedAc1018Table;
+    encodedAc1018Table.handle = 0xA500u;
+    encodedAc1018Table.setDwgLayerHandle(DRW::DwgLayer0Handle);
+    encodedAc1018Table.blockRecH = handle(0xA600u);
+    encodedAc1018Table.m_tableStyleHandle = 0xA700u;
+    encodedAc1018Table.basePoint = DRW_Coord{4.0, 5.0, 0.0};
+    encodedAc1018Table.extPoint = DRW_Coord{0.0, 0.0, 1.0};
+    encodedAc1018Table.m_horizontalDirection = DRW_Coord{1.0, 0.0, 0.0};
+    DRW_TableColumn encodedColumn;
+    encodedColumn.m_width = 8.0;
+    encodedAc1018Table.m_content.m_columns.push_back(encodedColumn);
+    DRW_TableRow encodedRow;
+    encodedRow.m_height = 3.0;
+    DRW_TableCell encodedCell;
+    encodedCell.m_type = 1;
+    encodedCell.m_mergedWidth = 1;
+    encodedCell.m_mergedHeight = 1;
+    DRW_TableCellContent encodedContent;
+    encodedContent.m_type = 1;
+    encodedContent.m_text = "encoded AC1018 plain text";
+    encodedCell.m_contents.push_back(encodedContent);
+    encodedRow.m_cells.push_back(encodedCell);
+    encodedAc1018Table.m_content.m_rows.push_back(encodedRow);
+
+    dwgBufferW encodedTableBody;
+    dwgBufferW encodedTableHandles;
+    dwgBufferW encodedTableTypePrefix;
+    encodedTableTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t encodedTableObjectSizeBit =
+        encodedTableTypePrefix.bitCount();
+    const bool encodedTableBuilt = encodedAc1018Table.encodeAsTableClass(
+        DRW::AC1018, encodedTableBody, encodedTableHandles);
+    t.expect(encodedTableBuilt,
+             "AC1018 plain-text TABLE profile encodes from scratch");
+    if (!encodedTableBuilt)
+        return;
+    const std::uint64_t encodedTableContentEndBit =
+        encodedTableBody.bitCount();
+    constexpr std::int32_t encodedTableSentinel = 0x71C0A18;
+    encodedTableBody.putBitLong(encodedTableSentinel);
+    encodedTableBody.patchRawLong32AtBit(encodedTableObjectSizeBit,
+                                         encodedTableBody.bitCount());
+    appendBits(encodedTableBody, encodedTableHandles);
+    dwgBuffer encodedTableInput(encodedTableBody.data().data(),
+                                encodedTableBody.data().size());
+    TableDwgCodecProbe encodedTableReadback;
+    const bool encodedTableRead = encodedTableReadback.parseDwg(
+        DRW::AC1018, &encodedTableInput);
+    t.expect(encodedTableRead,
+             "AC1018 plain-text TABLE encoder output parses");
+    t.expect(encodedTableInput.isGood(),
+             "AC1018 plain-text TABLE encoder output leaves a valid cursor");
+    const DRW_TableCell* encodedTableCell =
+        encodedTableReadback.m_content.m_rows.size() == 1u
+            && encodedTableReadback.m_content.m_rows.front().m_cells.size() == 1u
+        ? &encodedTableReadback.m_content.m_rows.front().m_cells.front()
+        : nullptr;
+    const bool encodedTableFieldsMatch = encodedTableRead
+        && encodedTableInput.isGood()
+        && encodedTableReadback.m_semanticContentComplete
+        && encodedTableReadback.blockRecH.ref == 0xA600u
+        && encodedTableReadback.m_tableStyleHandle == 0xA700u
+        && encodedTableReadback.basePoint.x == 4.0
+        && encodedTableReadback.basePoint.y == 5.0
+        && encodedTableReadback.m_content.m_columns.size() == 1u
+        && encodedTableReadback.m_content.m_columns.front().m_width == 8.0
+        && encodedTableReadback.m_content.m_rows.front().m_height == 3.0
+        && encodedTableCell != nullptr && encodedTableCell->m_type == 1
+        && encodedTableCell->m_contents.size() == 1u
+        && encodedTableCell->m_contents.front().m_text
+            == "encoded AC1018 plain text"
+        && cursorBit(encodedTableInput) == encodedTableContentEndBit;
+    t.expect(encodedTableFieldsMatch,
+             "AC1018 plain-text TABLE encoder readback matches the bounded model and handle roles");
+    if (encodedTableFieldsMatch) {
+        const std::int32_t sentinel = encodedTableInput.getBitLong();
+        t.expect(encodedTableInput.isGood()
+                     && sentinel == encodedTableSentinel,
+                 "AC1018 plain-text TABLE encoder preserves the following body sentinel");
+    }
 
     R2007TableFrame ac1018InvalidVisibilityFrame;
     const bool ac1018InvalidVisibilityBuilt = makeR2007TableFrame(

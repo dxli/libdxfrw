@@ -2407,8 +2407,9 @@ Strict output still fails, and no support claim is promoted.
 **TABLE:**
 
 **DWG `ACAD_TABLE` writer gap — implementation packet added 2026-11-08:**
-`DRW_Table::encodeDwg` currently returns `false`, and `dwgRW::writeTable`
-refuses the entity so it cannot fall through to INSERT-shaped bytes. This is a
+`DRW_Table::encodeDwg` now has a narrowly gated AC1018 one-row/one-column
+plain-text-cell body codec, while `dwgRW::writeTable` still refuses the entity
+so it cannot fall through to INSERT-shaped bytes. This is a
 real DWG write-coverage gap; do not remove the refusal until the entity body,
 anonymous `*T` block relationship, cell payloads, owned ATTRIB chain, and
 version-specific handles are committed transactionally together. ODA v5.4.1
@@ -2442,39 +2443,46 @@ has unrelated IMAGEDEF/reactor and other object parse failures. These are
 source-specific observations, not stable AC1018 class IDs. Do not hardcode
 either value or skip the unknown override payload. Keep `writeTable` refused
 until the parser can identify the exact physical body span and the output
-profile has independent source-to-output evidence. The speed-first next slice
-is now implemented: unknown override masks preserve the consumed flag word and
-virtual-edge byte as an exact, explicitly incomplete range; the generated
-`0x40020` case confirms bounded cursor position, incomplete semantics, and
-same-object recovery on a corrected retry. The route does not skip the
-unknown payload or authorize output. The focused
-`--table-cell-overrides` selector passes. Resume the bounded AC1018 writer
-profile only with a physical source whose cell fields and compound `*T` graph
-are fully modeled. Trace hashes, source hashes, and dispositions are in the
+profile has independent source-to-output evidence. The speed-first
+unknown-override slice preserves the consumed flag word and virtual-edge byte
+as an exact, explicitly incomplete range; generated `0x40020` control confirms
+bounded cursor position, incomplete semantics, and same-object recovery on a
+corrected retry. A second bounded milestone now encodes a generated AC1018
+plain-text cell directly, checks strict one-cell/default-field preconditions,
+and verifies typed parser readback, BLOCK_RECORD and TABLESTYLE handle roles,
+exact body cursor, and a following-body sentinel. The focused
+`--table-cell-overrides` selector passes. This is encoder/parser
+self-consistency evidence only: no production class registration, truncation
+matrix, physical source-to-output proof, or compound-writer transaction has
+been demonstrated. `writeTable` remains fail-closed. Trace hashes, source
+hashes, and dispositions are in the
 [encoder-readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 
 Speed-oriented implementation sequence:
 
-1. Start with one explicit **AC1018 plain-text-cell** generated profile, because
-   its string is inline and it avoids both the R2007+ detached string stream and
-   the undocumented R24 TABLECONTENT relationship. The existing AC1018 traces
-   confirm class/body dispatch but disagree on class number (528 versus 523),
-   so first determine the production class-resolution rule from each source's
-   CLASS map and keep the encoder keyed to validated class identity rather
-   than either observed ordinal. Do not infer class IDs from the DWG version.
+1. The direct **AC1018 plain-text-cell** codec is implemented for a generated
+   one-row/one-column profile; its inline string avoids both the R2007+
+   detached string stream and the undocumented R24 TABLECONTENT relationship.
+   Next, add focused negative preflight controls for every retained field that
+   is excluded from this profile and for truncated body/handle output, proving
+   refusal does not publish partial bytes and a corrected same-object retry
+   succeeds. The existing AC1018 traces disagree on class number (528 versus
+   523), so determine the production class-resolution rule from each source's
+   CLASS map and key registration to validated class identity rather than
+   either observed ordinal. Do not infer class IDs from the DWG version.
    Require one row/column,
    one value-content item of type 1, default indexed colors/style, no cell or
    table overrides, merges, data links, fields, block content, attributes,
    retained raw subrecords, or unexplained geometry/cache state. Match every
    gate to the actual public model fields and reject anything outside that
    profile before emitting bytes.
-2. Implement a private, version-scoped TABLE body encoder that mirrors the
-   already bounded AC1018 `DRW_Table::parseDwg` order across entity, string,
-   and handle streams. First use direct codec controls for exact field spans,
-   typed readback, following-entity sentinel, truncation refusal, source-state
-   preservation, and corrected same-object retry. Keep `writeTable` fail-closed
-   during this step; an entity-only vector is not a complete DWG output route.
-3. Add the AC1018 compound writer only after the body vector passes: preflight
+2. After the focused refusal/atomicity controls and empirical class-map
+   resolution, compare every encoded field against an independently bounded
+   physical AC1018 plain-text TABLE body. Keep this separate from the generated
+   parser/encoder self-consistency vector; if no complete source profile is
+   available, retain the codec as private experimental coverage and do not
+   claim physical interoperability.
+3. Add the AC1018 compound writer only after the body profile passes: preflight
    and stage the exact `*T` BLOCK/BLOCK_RECORD and TABLE ownership/reference
    graph, then publish entity plus linked records atomically. Verify with a
    locally authored from-scratch DWG control and fresh libdxfrw readback; use
