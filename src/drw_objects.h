@@ -7310,6 +7310,13 @@ struct DRW_AssociativePrefixStatus {
     BoundedCountOverflow
   };
 
+  static ParseStatus fromBoundedBody(bool decoded,
+                                     std::uint64_t cursorBit,
+                                     std::uint64_t bodyEndBit) noexcept {
+    return decoded && cursorBit == bodyEndBit
+        ? ParseStatus::Complete : ParseStatus::Partial;
+  }
+
   Kind m_kind = Kind::AcDbAssocAction;
   std::uint64_t m_startBit = 0;
   std::uint64_t m_bitSize = 0;

@@ -2105,6 +2105,10 @@ if(LIBDXFRW_BUILD_TESTS)
     target_link_libraries(libdxfrw_hardening_tests PRIVATE dxfrw)
     add_test(NAME libdxfrw_hardening
         COMMAND libdxfrw_hardening_tests)
+    add_test(NAME libdxfrw_acsh_action_body_exact_span
+        COMMAND libdxfrw_hardening_tests --acsh-action-body-exact-span)
+    set_tests_properties(libdxfrw_acsh_action_body_exact_span PROPERTIES
+        LABELS "fast;dwg;acds;parser;generated" TIMEOUT 10)
     add_test(NAME libdxfrw_dxf_operation_admission
         COMMAND libdxfrw_hardening_tests --dxf-operation-admission)
     set_tests_properties(libdxfrw_dxf_operation_admission PROPERTIES

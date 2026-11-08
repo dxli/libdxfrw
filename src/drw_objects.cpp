@@ -31989,7 +31989,9 @@ bool DRW_AcShHistoryObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
                 actionBodyStartBit,
                 blob1Size < 0 ?
                     DRW_AssociativePrefixStatus::ParseStatus::BoundedCountOverflow :
-                    prefixStatusFromGood(sweepTailOk && bodyFits()),
+                    DRW_AssociativePrefixStatus::fromBoundedBody(
+                        sweepTailOk && bodyFits(),
+                        currentObjectDwgBit(buf), boundedBodyEnd),
                 static_cast<std::uint16_t>(m_major), 0,
                 m_binaryBlob1.size() + m_binaryBlob2.size(), blob1Size);
         }

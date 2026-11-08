@@ -20305,6 +20305,22 @@ void testDwgModelerDataStorageLinking(TestContext& t) {
              "unadvertised DataStorage handle fields do not claim an out-of-line record");
 }
 
+void testAcshActionBodyExactSpan(TestContext& t) {
+    using Status = DRW_AssociativePrefixStatus::ParseStatus;
+    t.expect(DRW_AssociativePrefixStatus::fromBoundedBody(true, 128u, 128u)
+                 == Status::Complete,
+             "ACSH action body is complete at its exact bounded end");
+    t.expect(DRW_AssociativePrefixStatus::fromBoundedBody(true, 127u, 128u)
+                 == Status::Partial,
+             "ACSH action body with an unparsed bounded suffix remains partial");
+    t.expect(DRW_AssociativePrefixStatus::fromBoundedBody(true, 129u, 128u)
+                 == Status::Partial,
+             "ACSH action body cannot be complete after exceeding its bound");
+    t.expect(DRW_AssociativePrefixStatus::fromBoundedBody(false, 128u, 128u)
+                 == Status::Partial,
+             "ACSH action body decode failure remains partial at the bound");
+}
+
 void testDwgModelerHistoryHandleField(TestContext& t) {
     const auto read = [](const std::vector<std::uint8_t>& bytes,
                          std::uint64_t endBit, bool& present,
@@ -25911,6 +25927,14 @@ void testEmbeddedAttributeDefinitionTextRouting(TestContext& t) {
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 2
+        && std::string(argv[1]) == "--acsh-action-body-exact-span") {
+        TestContext focused;
+        testAcshActionBodyExactSpan(focused);
+        std::cout << "ACSH action-body exact-span disposition: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
     if (argc == 2
         && std::string(argv[1]) == "--dwg-modeler-history-handle-field") {
         TestContext focused;

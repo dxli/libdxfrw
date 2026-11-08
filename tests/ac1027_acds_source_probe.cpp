@@ -179,6 +179,13 @@ int main(int argc, char** argv) {
                   << history.m_historyNodeId << ' '
                   << history.m_evalExprPrefix.m_complete << ' '
                   << history.m_historyNodePrefix.m_complete << '\n';
+        for (const DRW_AssociativePrefixStatus& status :
+             history.m_prefixStatuses) {
+            std::cout << "ACSH_PREFIX " << std::hex << history.handle
+                      << std::dec << ' ' << static_cast<unsigned>(status.m_kind)
+                      << ' ' << static_cast<unsigned>(status.m_status) << ' '
+                      << status.m_startBit << ' ' << status.m_bitSize << '\n';
+        }
     }
     for (const DRW_EvaluationGraph& graph : drawing.evaluationGraphs) {
         if (graph.m_nodes.size() > 10000u) return 1;
