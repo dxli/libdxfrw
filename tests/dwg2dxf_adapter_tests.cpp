@@ -56760,6 +56760,73 @@ bool physicalAc1021TrueTypeStrictOutputReadback(
         if (layerRefs != 4u || lineTypeRefs != 4u || group370 != 4u
             || outputReferences != expectedOutputReferences)
             return fail("truetype XRECORD reference or LayerStates value counts changed");
+
+        auto mutable370 = std::find_if(outputRecord->m_dataEntries.begin(),
+            outputRecord->m_dataEntries.end(), [](const DRW_Variant& value) {
+                return value.code() == 370;
+            });
+        if (mutable370 == outputRecord->m_dataEntries.end())
+            return fail("truetype DXF-origin LayerStates group 370 disappeared");
+        const DRW_Variant original370 = *mutable370;
+        mutable370->addInt(370, -2);
+        const auto resave = outputDirectory
+            / (binary ? "truetype-resave-binary.dxf"
+                      : "truetype-resave-ascii.dxf");
+        const std::string resaveSentinel = "preserve changed group 370\n";
+        { std::ofstream seed(resave, std::ios::binary | std::ios::trunc);
+          seed << resaveSentinel; }
+        dx_iface dxfWriter;
+        const auto resaveSource = [&]() {
+            return dxfWriter.fileExport(resave.string(), DRW::AC1021, binary,
+                &readback, false, false,
+                dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::RequireComplete);
+        };
+        if (resaveSource())
+            return fail("mutated DXF-origin LayerStates group 370 was accepted");
+        { std::ifstream input(resave, std::ios::binary);
+          const std::string retained{
+              std::istreambuf_iterator<char>(input), {}};
+          if (retained != resaveSentinel)
+              return fail("mutated DXF-origin group 370 replaced the resave destination"); }
+        *mutable370 = original370;
+        if (!resaveSource())
+            return fail("corrected DXF-origin LayerStates group 370 did not retry: "
+                + dxfWriter.extensionGraphFailureDetail());
+        dx_iface resaveReader;
+        dx_data resaveReadback;
+        if (!resaveReader.fileImport(resave.string(), &resaveReadback, false)
+            || resaveReadback.sourceFormat != dx_source_format::DXF
+            || resaveReadback.sourceVersion != DRW::AC1021
+            || resaveReadback.xRecords.size() != readback.xRecords.size())
+            return fail("DXF-origin LayerStates retry did not freshly import");
+        const auto resavedRecord = std::find_if(resaveReadback.xRecords.begin(),
+            resaveReadback.xRecords.end(), [recordHandle](
+                    const DRW_XRecord& row) {
+                return row.handle == recordHandle;
+            });
+        if (resavedRecord == resaveReadback.xRecords.end()
+            || resavedRecord->parentHandle != outputRecord->parentHandle
+            || resavedRecord->m_dataEntries.size() != 27u)
+            return fail("DXF-origin LayerStates retry changed its owner or payload shape");
+        std::size_t resavedGroup330 = 0u, resavedGroup331 = 0u,
+                    resavedGroup370 = 0u;
+        for (const DRW_Variant& value : resavedRecord->m_dataEntries) {
+            if (value.code() == 330)
+                ++resavedGroup330;
+            else if (value.code() == 331)
+                ++resavedGroup331;
+            else if (value.code() == 370) {
+                if (value.type() != DRW_Variant::INTEGER || value.i_val() != -3)
+                    return fail("DXF-origin LayerStates retry changed group 370");
+                ++resavedGroup370;
+            }
+        }
+        if (resavedGroup330 != 4u || resavedGroup331 != 4u
+            || resavedGroup370 != 4u)
+            return fail("DXF-origin LayerStates retry lost typed reference/value groups");
     }
     std::cout << "Physical AC1021 truetype strict output/readback PASS "
               << "encodings=ASCII,Binary sourceFrames=173 published=173 "

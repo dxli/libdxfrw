@@ -21838,7 +21838,7 @@ void retainDxfXRecordCompatibilitySource(
         return;
     const auto& values = record.m_dataEntries.empty()
         ? record.m_values : record.m_dataEntries;
-    const bool hasCompatibilityCode = std::any_of(
+    const bool hasDwgCompatibilityCode = std::any_of(
         values.cbegin(), values.cend(), [](const DRW_Variant& value) {
             return isDxfXRecordDwgCompatibilityCode(value.code());
         }) || std::any_of(record.m_handleValues.cbegin(),
@@ -21846,6 +21846,27 @@ void retainDxfXRecordCompatibilitySource(
             [](const std::pair<int, std::uint32_t>& value) {
                 return isDxfXRecordDwgCompatibilityCode(value.first);
             });
+    std::size_t group330 = 0u, group331 = 0u, group370 = 0u;
+    bool layerStateValuesExact = values.size() == 27u;
+    for (const DRW_Variant& value : values) {
+        if (value.code() == 330)
+            ++group330;
+        else if (value.code() == 331)
+            ++group331;
+        else if (value.code() == 370) {
+            ++group370;
+            if (value.type() != DRW_Variant::INTEGER || value.i_val() != -3)
+                layerStateValuesExact = false;
+        }
+    }
+    layerStateValuesExact = layerStateValuesExact && group330 == 4u
+        && group331 == 4u && group370 == 4u
+        && std::none_of(record.m_handleValues.cbegin(),
+            record.m_handleValues.cend(), [](const auto& value) {
+                return isDxfXRecordLayerStateCompatibilityCode(value.first);
+            });
+    const bool hasCompatibilityCode = hasDwgCompatibilityCode
+        || layerStateValuesExact;
     if (!hasCompatibilityCode)
         return;
 
@@ -29982,6 +30003,154 @@ bool dx_iface::isDxfXRecordCompatibilityReplaySource(
             cData->sourceVersion, dwgObjType::XRECORD))
         return reject("current model differs from parse-time source");
     return true;
+}
+
+bool dx_iface::isDxfLayerStateCompatibilityReplaySource(
+        const DRW_XRecord& record) const noexcept {
+    if (cData == nullptr || dxfW == nullptr
+        || cData->sourceFormat != dx_source_format::DXF
+        || cData->sourceVersion != DRW::AC1021
+        || cData->sourceVersion != dxfW->getVersion()
+        || !cData->dxfReadOutcome.attempted
+        || !cData->dxfReadOutcome.operationSucceeded
+        || cData->dxfReadOutcome.sourceVersion != cData->sourceVersion
+        || cData->dxfXRecordCompatibilitySourceCaptureFailed)
+        return false;
+
+    const dx_dxfXRecordCompatibilitySource* selected = nullptr;
+    std::size_t sourceMatches = 0u;
+    for (const dx_dxfXRecordCompatibilitySource& source :
+         cData->dxfXRecordCompatibilitySources) {
+        if (source.generation != cData->importGeneration
+            || source.model.handle != record.handle)
+            continue;
+        selected = &source;
+        ++sourceMatches;
+    }
+    if (sourceMatches != 1u || selected == nullptr
+        || !standardDwgModelsEqual(selected->model, record,
+            cData->sourceVersion, dwgObjType::XRECORD))
+        return false;
+
+    const auto& values = record.m_dataEntries.empty()
+        ? record.m_values : record.m_dataEntries;
+    if (values.size() != 27u)
+        return false;
+    for (const auto& handleValue : record.m_handleValues)
+        if (isDxfXRecordDwgCompatibilityCode(handleValue.first)
+            || isDxfXRecordLayerStateCompatibilityCode(handleValue.first))
+            return false;
+    std::size_t group330Count = 0u, group331Count = 0u, group370Count = 0u;
+    const auto parseHandle = [](const DRW_Variant& value,
+                                std::uint32_t& handle) noexcept {
+        std::uint64_t parsedHandle = 0u;
+        if (value.type() == DRW_Variant::STRING) {
+            const char* text = value.c_str();
+            if (text == nullptr || *text == '\0')
+                return false;
+            const char* end = text + std::char_traits<char>::length(text);
+            const auto parsed = std::from_chars(text, end, parsedHandle, 16);
+            if (parsed.ec != std::errc{} || parsed.ptr != end)
+                return false;
+        } else if (value.type() == DRW_Variant::INTEGER64) {
+            const std::int64_t number = value.i64_val();
+            if (number < 0)
+                return false;
+            parsedHandle = static_cast<std::uint64_t>(number);
+        } else if (value.type() == DRW_Variant::INTEGER) {
+            const int number = value.i_val();
+            if (number < 0)
+                return false;
+            parsedHandle = static_cast<std::uint64_t>(number);
+        } else {
+            return false;
+        }
+        if (parsedHandle == 0u || parsedHandle == DRW::NoHandle
+            || parsedHandle > std::numeric_limits<std::uint32_t>::max())
+            return false;
+        handle = static_cast<std::uint32_t>(parsedHandle);
+        return true;
+    };
+    for (const DRW_Variant& value : values) {
+        if (isDxfXRecordDwgCompatibilityCode(value.code()))
+            return false;
+        if (value.code() == 330 || value.code() == 331) {
+            std::uint32_t target = 0u;
+            if (!parseHandle(value, target))
+                return false;
+            if (value.code() == 330) {
+                std::size_t matches = 0u;
+                for (const DRW_Layer& layer : cData->layers)
+                    if (layer.handle == target)
+                        ++matches;
+                if (matches != 1u)
+                    return false;
+                ++group330Count;
+            } else {
+                std::size_t matches = 0u;
+                for (const DRW_LType& lineType : cData->lineTypes)
+                    if (lineType.handle == target)
+                        ++matches;
+                if (matches != 1u)
+                    return false;
+                ++group331Count;
+            }
+        } else if (value.code() == 370) {
+            if (value.type() != DRW_Variant::INTEGER || value.i_val() != -3)
+                return false;
+            ++group370Count;
+        }
+    }
+    if (group330Count != 4u || group331Count != 4u || group370Count != 4u)
+        return false;
+
+    std::uint32_t controlHandle = 0u, extensionHandle = 0u;
+    if (!cData->getLayerTableControlExtensionDictionary(
+            controlHandle, extensionHandle)
+        || controlHandle == 0u || extensionHandle == 0u)
+        return false;
+    const auto uniqueDictionary = [this](std::uint32_t handle)
+            -> const DRW_Dictionary* {
+        const DRW_Dictionary* result = nullptr;
+        for (const DRW_Dictionary& dictionary : cData->dictionaries) {
+            if (dictionary.handle != handle)
+                continue;
+            if (result != nullptr)
+                return nullptr;
+            result = &dictionary;
+        }
+        return result;
+    };
+    const DRW_Dictionary* extension = uniqueDictionary(extensionHandle);
+    if (extension == nullptr || extension->parentHandle != controlHandle
+        || extension->m_entries.size() != 2u)
+        return false;
+    const DRW_Dictionary::Entry* statesEntry = nullptr;
+    const DRW_Dictionary::Entry* filtersEntry = nullptr;
+    for (const DRW_Dictionary::Entry& entry : extension->m_entries) {
+        if (entry.m_name == "ACAD_LAYERSTATES")
+            statesEntry = &entry;
+        else if (entry.m_name == "ACAD_LAYERFILTERS")
+            filtersEntry = &entry;
+        else
+            return false;
+    }
+    if (statesEntry == nullptr || filtersEntry == nullptr)
+        return false;
+    const DRW_Dictionary* states = uniqueDictionary(statesEntry->m_handle);
+    const DRW_Dictionary* filters = uniqueDictionary(filtersEntry->m_handle);
+    return states != nullptr && filters != nullptr
+        && states->parentHandle == extensionHandle
+        && states->reactorHandles.size() == 1u
+        && states->reactorHandles.front() == extensionHandle
+        && states->hardOwner == 0 && states->m_entries.size() == 1u
+        && states->m_entries.front().m_name == "ACAD_VIEWS_default"
+        && states->m_entries.front().m_handle == record.handle
+        && record.parentHandle == states->handle
+        && filters->parentHandle == extensionHandle
+        && filters->reactorHandles.size() == 1u
+        && filters->reactorHandles.front() == extensionHandle
+        && filters->hardOwner == 0 && filters->m_entries.empty();
 }
 
 bool dx_iface::prepareDxfMaterialSources(DRW::Version version,bool binary) {

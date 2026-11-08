@@ -124,9 +124,10 @@ struct dx_dxfReadOutcome {
     DRW::DxfCodePagePolicy requestedCodePagePolicy{DRW::DxfCodePagePolicy::Compatible};
 };
 
-// Immutable parse-time model for a DXF XRECORD carrying the explicit
-// AC1021+ 1070/1071 compatibility codes. This is an adapter replay witness,
-// not evidence that those codes are part of standard DXF XRECORD syntax.
+// Immutable parse-time model for a DXF XRECORD carrying compatibility-only
+// payload codes (AC1021+ 1070/1071 or the exact LayerStates 370 profile). This
+// is an adapter replay witness, not a claim that those codes are generally
+// valid in standard DXF XRECORD syntax.
 struct dx_dxfXRecordCompatibilitySource {
     std::uint64_t generation{0u};
     DRW_XRecord model;

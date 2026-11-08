@@ -2326,7 +2326,8 @@ public:
                             });
                     const bool isSelectedLayerStateCompatibilityRecord =
                         hasLayerStateCompatibilityCode
-                        && isDwgLayerStateCompatibilityRecord(record);
+                        && (isDwgLayerStateCompatibilityRecord(record)
+                            || isDxfLayerStateCompatibilityReplaySource(record));
                     const bool useDwgCompatibility = hasDwgCompatibilityCode
                         && !hasLayerStateCompatibilityCode
                         && ((cData->sourceFormat == dx_source_format::DWG
@@ -3590,6 +3591,8 @@ private:
     bool captureXrecordWriteSources() noexcept;
     bool hasUnchangedXrecordWriteSources() const noexcept;
     bool isDxfXRecordCompatibilityReplaySource(
+        const DRW_XRecord& record) const noexcept;
+    bool isDxfLayerStateCompatibilityReplaySource(
         const DRW_XRecord& record) const noexcept;
     struct RasterImageEdges {
         std::uint32_t source{0}, emitted{0}, owner{0}, definition{0}, reactor{0};
