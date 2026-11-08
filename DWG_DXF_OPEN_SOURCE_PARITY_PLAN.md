@@ -174,7 +174,8 @@ created locally from scratch for the specific control.
   output buffer after every injected failure. The generated raw SAB decoder
   control now sweeps 20 allocation points on a nonempty v21800 point→vertex
   graph, verifies cleared state at each failure and same-object retry, and
-  checks the resulting vertex and point-sized bounds. The pinned independent parser
+  checks the resulting vertex and point-sized bounds (commit `1eb10dcc`). The
+  pinned independent parser
   matches the physical source SAB
   fields exactly. Native B-rep and independent-kernel gates remain open; see
   the [P7 parser receipt](docs/research/p7-ac1021-inventorloader-sat-parser-crosscheck-2026-11-08.json).
