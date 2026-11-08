@@ -11,6 +11,20 @@ discriminating source change. The AC1027 suffix remains unclaimed and strict
 output remains refused. This external observation does not block the local P4
 implementation queue; see the [current residual receipt](docs/research/p4-ac1024-civil-assoc-current-one-unresolved-2026-11-07.json).
 
+**AC1021 writer qualification probe (2026-11-07):** the unlocked ODA 27.1 GUI
+also processed a locally generated minimal AC1021 DWG. LibreDWG 0.14 reads it,
+but ODA audit reports several earlier table/dictionary/block warnings and
+ultimately rejects layer record `0x12`; no DXF is produced. The generated
+layer-0 record has null plotstyle and material references, unlike the existing
+AC1021 `tablet.dwg` layer-0 record. This is only a correlation: the earlier
+warnings and final failure do not isolate a cause. The next fast research
+packet is a pair of scratch variants, adding one valid default-layer plotstyle
+graph and then one material graph independently, with ODA audit plus LibreDWG
+readback after each. If neither changes the first warning, trace that warning's
+record against ODA v5.4.1 before considering a writer change. Scratch files
+stay outside the repository; this result does not promote writer support. See
+the [probe receipt](docs/research/p6-ac1021-minimal-writer-oda-gui-rejection-2026-11-07.json).
+
 **Current P8 verification (2026-11-07):** the current `c33edaa4` libdxfrw
 revision was installed into `/private/tmp/libdxfrw-install-current`, then a
 fresh out-of-tree LibreCAD_3 configure selected its exported CONFIG package.
@@ -125,6 +139,12 @@ created locally from scratch for the specific control.
   without a discriminating input change; continue with controlled GUI variants
   only if they can isolate a specific header/body dependency, and keep strict
   output refused.
+- **AC1021 writer lane:** the ODA GUI route is now operational after unlock.
+  The minimal writer probe is rejected after multiple preceding warnings, so
+  layer-0 null plotstyle/material pointers are hypotheses only. Run the two
+  one-variable scratch graph variants recorded in the [probe receipt](docs/research/p6-ac1021-minimal-writer-oda-gui-rejection-2026-11-07.json)
+  to isolate the earliest warning; consult the ODA spec for the exact record
+  before changing code. Keep all generated fixtures in scratch storage.
 - **External gates:** P7 ACIS/ACDS meaning, P8 native platform/consumer
   qualification, and P9's six advisory rows remain open. Local parser or codec
   controls cannot promote those claims.
@@ -381,7 +401,7 @@ integration/release checkpoints.
 | --- | --- | --- | --- |
 | P4 | OPEN — source and graph closure | Continue with the next distinct physically evidenced OBJECTS subgraph; bind source identities, owner/target roles, recursive dependencies, and exact emitted records. Pool_Detail MLEADERSTYLE passes selected ASCII/Binary transport under the exact bounded AC1021 one-style/one-BYBLOCK projection; malformed LTYPE_CONTROL, BLOCK_CONTROL, and HEADER current-layer integrity observations remain excluded, and strict whole-source output remains refused. The AC1021 truetype whole source passes `RequireComplete` ASCII/Binary output and fresh whole-DXF import readback at 173/173 published frames; its group-330 LAYER/group-331 LTYPE references and exact LayerStates DXF-origin group-370 replay now pass under source snapshots and the complete dictionary path, with mutation refusal/retry. Other group-370 XRECORDs remain refused. Do not infer producer-wide support or generalize either source-specific gate. Resolve the tracked ENC dangling-reference profile only with eligible producer evidence. Keep unresolved null members, orphan owners, unsupported frames, and named-block SORTENTSTABLE profiles refused. Broaden beyond individual local sources only with independent producer and native output evidence. | Existing source census, exact frame/profile evidence, ODA role/layout rules, and focused ASCII/Binary output/readback controls. |
 | P5 | OPEN — dynamic-block semantics, rendering and TABLE profiles | Find a complete FIELD/FIELDLIST source graph with a visible root; qualify physical TABLEGEOMETRY spans and remaining CONTENTFORMAT/CELLSTYLEMAP combinations; resolve VIEWPORT override type/value and native activation/rendering; establish native dynamic constraint evaluation. | P4 closure where needed; source-bound spans/roles plus native semantic evidence. |
-| P6 | OPEN — version, schema and semantic residuals | Resolve only evidence-backed source gaps: AC1021/24/27/32 IMAGEDEF parent-role conflict (source capture now retained as unqualified; DXF output still refused); raw-only TABLECONTENT/PERSUBENTMGR/TextObjectContextData; unclaimed AC1027/AC1032 HEADER suffixes; remaining version boundaries, geometry/no-loss, HEADER/CLI, parser disposition and caller-state contracts. Preserve strict refusal for unsupported or unclaimed bytes. | ODA v5.4.1 plus AutoCAD DWG/DXF source pairs; focused fast controls. Owner-semantic promotion still needs independent native rewrite or normative resolution. Suffix work requires a materially changed converter route. See the [IMAGEDEF role receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json). |
+| P6 | OPEN — version, schema and semantic residuals | Resolve only evidence-backed source gaps: AC1021/24/27/32 IMAGEDEF parent-role conflict (source capture now retained as unqualified; DXF output still refused); raw-only TABLECONTENT/PERSUBENTMGR/TextObjectContextData; unclaimed AC1027/AC1032 HEADER suffixes; AC1021 minimal-writer ODA rejection; remaining version boundaries, geometry/no-loss, HEADER/CLI, parser disposition and caller-state contracts. For the writer rejection, compare scratch variants with one default-layer reference graph changed at a time and follow the earliest ODA warning before editing production code. Preserve strict refusal for unsupported or unclaimed bytes. | ODA v5.4.1 plus AutoCAD DWG/DXF source pairs; focused fast controls. Owner-semantic promotion still needs independent native rewrite or normative resolution. Suffix work requires a materially changed converter route. See the [IMAGEDEF role receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json) and [AC1021 writer probe receipt](docs/research/p6-ac1021-minimal-writer-oda-gui-rejection-2026-11-07.json). |
 | P7 | OPEN — ACIS/ACDS and independent 3D meaning | Complete entity/owner/key/AcDs/SAT-SAB association, versioned framing/index/suffix/prototype assembly and exact output binding; qualify transforms, units, topology, trims, periodicity and spline meaning with an independent kernel. | P4 graph/output bindings and independent semantic/kernel evidence. |
 | P8 | OPEN — consumers, platforms and release | Qualify LibreCAD and LibreCAD_3 callbacks/defaults; run native Linux/Windows FreeCAD open/insert checks; qualify intended 3D consumers, ABI, packaging and release behavior. | Stable candidate and native platform access with tool/version receipts. |
 | P9 | DEFERRED_EXTERNAL — six non-promoting items | Resolve J256, J260, J268, J284, J293 and J295 only through the successor registry and eligible independent evidence. J268 still needs original input identity/digest; J284 has 11 target-debt/integrity blockers; J295 needs native receipts for four RTEXT position/rotation claims. None can promote support claims alone. | `metadata/external-evidence-resolution-v1.json`; retain lineage and exclusions. |

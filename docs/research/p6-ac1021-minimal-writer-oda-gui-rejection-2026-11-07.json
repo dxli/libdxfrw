@@ -1,0 +1,58 @@
+{
+  "date": "2026-11-07",
+  "purpose": "Record an audit-enabled ODA GUI read attempt for a locally generated minimal AC1021 DWG writer output.",
+  "libdxfrw_head": "a392e82f",
+  "input": {
+    "path": "/private/tmp/oda-ac1021-writer-check/minimal-ac1021.dwg",
+    "sha256": "34478cc888e59dbbae8143055f91bb1e56383ff9a260bfabf856aeb8752d1858",
+    "size_bytes": 19328,
+    "version": "AC1021"
+  },
+  "generator": {
+    "source_path": "/private/tmp/min-ac1021-writer.cpp",
+    "source_sha256": "274fcc750e5bed60aafb2b8729134bcb4f7df72d67a9a4a6484c4405af48d273",
+    "binary_sha256": "139fbe260ccc41b7cac8a8af07229f08e68c638211c10eddd164e85eb9eb29a1",
+    "profile": "Minimal dx_iface writer with empty HEADER variables and no-op class/block callbacks; emits one LINE."
+  },
+  "independent_reader": {
+    "name": "ODA File Converter 27.1.0",
+    "route": "Native GUI, audit enabled, conversion requested to 2010 ASCII DXF",
+    "result": "No DXF produced; converter wrote an error report and rejected the DWG as needing recovery.",
+    "error_report_sha256": "5e76aab039edc909ee0bb76c557d3f7cf934f4119484388e3239c29f90a2eb9d",
+    "reported_first_object_warnings": [
+      "AcDbDictionary(C)",
+      "AcDbTextStyleTableRecord(13)",
+      "AcDbBlockTable(1)",
+      "AcDbLinetypeTable(5)",
+      "AcDbDictionary(D)",
+      "AcDbBlockBegin(1B)",
+      "AcDbBlockTableRecord(17)",
+      "AcDbBlockBegin(1D)",
+      "AcDbBlockTableRecord(18)"
+    ],
+    "terminal_error": "Object improperly read: <AcDbLayerTableRecord> (12); previous error: .dwg file needs recovery"
+  },
+  "independent_cross_check": {
+    "name": "LibreDWG 0.14 dwgread JSON",
+    "result": "Reads the generated file and emits JSON.",
+    "json_sha256": "db78dde087a257583feab69f593646a446dbc37997f86faf63bb6746c8da990e"
+  },
+  "bounded_observation": {
+    "generated_layer_0": {
+      "handle": "0x12",
+      "plotstyle": "null",
+      "material": "null",
+      "linetype": "0x11"
+    },
+    "existing_ac1021_tablet_layer_0": {
+      "handle": "0x10",
+      "plotstyle": "0x0F",
+      "material": "0x2C65",
+      "linetype": "0x16"
+    },
+    "limits": "This is a correlation, not a demonstrated cause. The ODA report has earlier object warnings and does not isolate the layer references. Do not infer that null plotstyle/material pointers caused rejection or change production serialization from this result alone."
+  },
+  "next_discriminating_action": "Build scratch AC1021 output variants that differ by one controlled default-layer reference graph at a time (valid plotstyle, then valid material graph), rerun the same ODA GUI audit route, and retain LibreDWG readback. Record exact deltas and stop hypothesis testing once the first warning moves or clears. If it does not discriminate, inspect the first ODA warning's owning record under ODA v5.4.1 before any production change.",
+  "fixture_policy": "Scratch DWG, DXF and JSON outputs remain outside the repository; no test fixture was added.",
+  "support_claim_effect": "None. ODA acceptance and DWG writer support remain unqualified."
+}
