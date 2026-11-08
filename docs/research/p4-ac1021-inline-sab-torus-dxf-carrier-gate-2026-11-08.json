@@ -2,7 +2,7 @@
   "schema": "libdxfrw-research-receipt-v1",
   "id": "p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08",
   "date": "2026-11-08",
-  "status": "INLINE_SAB_AC1024_SELECTED_ASCII_BINARY_READBACK_PASS_SEMANTIC_QUALIFICATION_OPEN",
+  "status": "INLINE_SAB_AC1024_SELECTED_ASCII_BINARY_READBACK_PASS_INDEPENDENT_SEMANTIC_QUALIFICATION_OPEN",
   "supportClaimEffect": "none",
   "scope": "Implement and qualify the source-bound AC1021 inline-SAB selected projection through AC1024 ASCII/Binary, exact SAT carrier and graph-role readback, failure rollback/retry, and retain strict full-source refusal.",
   "source": {
@@ -73,7 +73,7 @@
         "archiveRevision": "6d6a33987a1a97095b069c799c3d8a793320f812",
         "sourceArchive": "git archive HEAD from /Users/dli/dev/libredwg; extracted under /private/tmp/libredwg-inline-sab-probe",
         "scratchPatch": "src/out_dxf.c: _obj->num_blocks = i changed to _obj->num_blocks = i + 1, including the final short block",
-        "build": "./configure --disable-shared --disable-json; make -j4 -C src libredwg.la; make -j4 -C programs dwg2dxf \u2014 PASS",
+        "build": "./configure --disable-shared --disable-json; make -j4 -C src libredwg.la; make -j4 -C programs dwg2dxf — PASS",
         "command": "./programs/dwg2dxf -y -v5 --as r2010 -o <scratch output> <pinned source>",
         "outputPath": "/private/tmp/libdxfrw-atmos-peer-fixed.dxf",
         "outputSha256": "5b9473aaf8b185f20dff82db77a7ca37956b134dd36bb3e062ddd2dc08a7d141",
@@ -94,10 +94,10 @@
       "autodesk3dsolidDxf": "https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-19AB1C40-0BE0-4F32-BCAB-04B37044A0D3.htm",
       "autodeskBinaryGroupRange": "https://help.autodesk.com/cloudhelp/2027/ENU/OARX-RefGuide/files/OARX-RefGuide-DXF_Group_Codes.html",
       "odaSpecification": "https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf",
-      "odaSection": "\u00a720.4.41"
+      "odaSection": "§20.4.41"
     },
     "odaCommonHandleFlag": {
-      "source": "ODA Open Design Specification v5.4.1 \u00a714.5.2 and common object handle stream",
+      "source": "ODA Open Design Specification v5.4.1 §14.5.2 and common object handle stream",
       "finding": "For R2004+, XDic Missing Flag 1 means no XDictionary handle is stored. The source history record has flag 1 and no xDict handle; DXF output omits the extension edge.",
       "supportClaimEffect": "none"
     }
@@ -126,18 +126,32 @@
       "binary": "/Applications/ODAFileConverter.app/Contents/MacOS/ODAFileConverter",
       "result": "ABORTED_BEFORE_CONVERSION",
       "stderr": "PasteBoard errors (-4960) followed by invalid com.apple.hiservices-xpcservice connection",
-      "platformState": "Mac remained locked; Computer Use confirmed native app access unavailable",
+      "platformState": "The user unlocked the Mac before the retry; startup still aborted before input processing with PasteBoard/XPC errors.",
+      "supportClaimEffect": "none"
+    },
+    "independentReaderCandidate": {
+      "project": "InventorLoader",
+      "repository": "https://github.com/jmplonka/InventorLoader",
+      "observedDocumentation": "README states ACIS SAT/SAB and 3D-solid-in-DXF import are supported; native ACIS reconstruction and STEP conversion are separate strategies.",
+      "independence": "Its Acis.py parser is a separate implementation from libdxfrw; geometry construction and STEP conversion use FreeCAD Part/OpenCASCADE, so it is not an independent kernel oracle.",
+      "documentedLimitations": [
+        "blending surfaces unsupported",
+        "helix surfaces unsupported for lines",
+        "law-defined interpolated curves/surfaces without spline data omitted"
+      ],
+      "localAvailability": "Not installed in the current FreeCAD user Mod directory. FreeCAD 1.1.4 bundle is present with Python 3.11 and pythonocc-core 7.8.1.1; no FreeCADCmd executable was found. ODA File Converter is also installed but its post-unlock --help startup exits 134 before processing input.",
+      "nextQualification": "Pin and inspect the add-on revision; import the exact selected AC1024 SAT group-1 payload in FreeCAD using its native ACIS reader, capture resulting shape validity, solid/shell/face/edge counts, placed bounds, area, volume, and centroid, then compare against the existing reference routes. Keep same-OCCT agreement advisory and obtain an independent-kernel route separately.",
       "supportClaimEffect": "none"
     }
   },
   "validation": {
-    "build": "cmake --build build --target libdxfrw_dwg_local_roundtrip -j4 \u2014 PASS",
-    "sourceProjectionControl": "python3 tools/research/run_acsh_torus_source_probe.py <pinned DWG> <scratch directory> \u2014 PASS; streamed SHA-256 matched the pinned digest before the C++ probe; selected ASCII/Binary attempts refuse and preserve existing destinations; strict full-source export also refuses and preserves its destination.",
+    "build": "cmake --build build --target libdxfrw_dwg_local_roundtrip -j4 — PASS",
+    "sourceProjectionControl": "Initial pre-writer-gate probe: selected ASCII/Binary attempts refused and preserved existing destinations; strict full-source export also refused and preserved its destination. Superseded for the selected physical AC1021 inline-SAB profile by selectedPhysicalProjection and physicalSourceProbeCommand below; strict full-source refusal remains current.",
     "sourceHashMismatchGuard": "A scratch copy with one appended byte was refused before import with exit code 2 and the observed/expected SHA-256 values; scratch copy was not added to the repository.",
-    "selectedProjectionFirstObservedGate": "The selected projection includes the exact layer-0 extension DICTIONARY 0x1C1 closure and its XRECORD child. Extension-graph validation then stops at `EvaluationGraph owner is unresolved or not representable`. The typed ACDS collector is only entered when `dataStorageSections` is nonempty; this AC1021 source has none and has no same-profile raw DXF history receipts. The selected projection therefore remains refused before entity serialization and does not dynamically prove the inline-SAB writer gate.",
+    "selectedProjectionFirstObservedGate": "Historical initial diagnostic before the inline-SAB source-bound writer route was implemented: extension-graph validation stopped at an unresolved EvaluationGraph owner, so it did not exercise entity serialization. Superseded by the selectedPhysicalProjection PASS below.",
     "fullSourceFirstObservedGate": "DWG IMAGEDEF owner role is unqualified for output; this is the first observed full-source rejection, so this result does not prove the opaque-frame gate was reached.",
-    "focusedCtest": "ctest --test-dir build -R '^(dxf_acsh_torus_typed_roundtrip|dxf_acsh_cmc_loss_guard)$' --output-on-failure \u2014 2/2 PASS",
-    "diffCheck": "git diff --check \u2014 PASS",
+    "focusedCtest": "ctest --test-dir build -R '^(dxf_acsh_torus_typed_roundtrip|dxf_acsh_cmc_loss_guard)$' --output-on-failure — 2/2 PASS",
+    "diffCheck": "git diff --check — PASS",
     "fixturesAdded": 0,
     "fullSuites": "NOT RUN",
     "libreDwgVerboseEntityTrace": "PASS as a diagnostic: exact handle 0x452 is followed through SAB-to-SAT conversion; source-code inspection explains why the unmodified peer output drops the final block.",
@@ -151,19 +165,21 @@
       "platformState": "User reported unlocking the Mac immediately before this retry; the startup failure persisted.",
       "supportClaimEffect": "none"
     },
-    "fastFocusedControls": "cmake --build build --target libdxfrw_dwg_local_roundtrip -j4 \u2014 PASS; ctest --test-dir build -R \"^(acis_sab21200_sat_v1_token_controls|dxf_acsh_torus_typed_roundtrip|dxf_acsh_cmc_loss_guard)$\" --output-on-failure \u2014 3/3 PASS; git diff --check \u2014 PASS.",
+    "fastFocusedControls": "cmake --build build --target libdxfrw_dwg_local_roundtrip -j4 — PASS; ctest --test-dir build -R \"^(acis_sab21200_sat_v1_token_controls|dxf_acsh_torus_typed_roundtrip|dxf_acsh_cmc_loss_guard)$\" --output-on-failure — 3/3 PASS; git diff --check — PASS.",
     "physicalWriterReadback": "PASS for the selected AC1021 inline SAB v2 profile converted to AC1024 SAT v1. This does not qualify whole-drawing export, a native third-party reader, or ACIS geometry semantics.",
     "selectedPhysicalProjection": "PASS using the hash-pinned wrapper and the existing external LibreDWG DWG (no fixture added): selected AC1024 ASCII and Binary output/readback pass; exact SAT v1 group-1 payload and history/EvaluationGraph/torus references read back; same-adapter rollback/retry passes in each encoding.",
     "fullSourceStrictRefusal": "PASS: strict full-source export preserves its destination and remains refused at the unrelated DWG IMAGEDEF owner-role qualification gate; opaque-frame output gate remains unreached.",
-    "physicalSourceProbeCommand": "python3 tools/research/run_acsh_torus_source_probe.py <pinned DWG> /private/tmp/acsh-final-probe --probe build/libdxfrw_dwg_local_roundtrip \u2014 PASS after exact SHA-256 admission; selected AC1024 ASCII/Binary readback and failure/retry pass; strict full-source sentinel remains unchanged at IMAGEDEF owner-role gate."
+    "physicalSourceProbeCommand": "python3 tools/research/run_acsh_torus_source_probe.py <pinned DWG> /private/tmp/acsh-final-probe --probe build/libdxfrw_dwg_local_roundtrip — PASS after exact SHA-256 admission; selected AC1024 ASCII/Binary readback and failure/retry pass; strict full-source sentinel remains unchanged at IMAGEDEF owner-role gate.",
+    "freecadAcisReaderCandidateResearch": "Official InventorLoader README and source identify an independently implemented Acis.py SAT/SAB parser that can construct FreeCAD Part geometry. It is not installed locally. Its geometry/kernel route uses FreeCAD/OpenCASCADE and documented unsupported surfaces/law curves limit applicability. Candidate only; no payload was imported and support claim unchanged."
   },
   "remaining": [
-    "Obtain independent native ACIS/CAD semantic evidence for the exact 0x452 SAT v1 output and 0x452\u21920x453\u21920x454\u21920x455 history graph; local readback and LibreDWG differential equality do not establish geometry semantics.",
-    "Qualify broader native consumer and platform behavior after independent semantic evidence is available. Keep AC1024/1027/1032 source profiles and unrelated whole-source IMAGEDEF/opaque-frame refusal gates separate."
+    "Use a pinned independent ACIS parser/native FreeCAD reader on the exact emitted AC1024 SAT v1 payload; capture topology, validity, placement, bounds, area, volume and centroid, while treating shared-OCCT agreement as parser/semantic cross-check only.",
+    "Obtain a genuinely independent-kernel and source-native semantic check for the exact solid/history graph; InventorLoader/FreeCAD-OCCT and the existing OCCT-derived routes do not satisfy that gate.",
+    "Qualify broader native consumer and platform behavior after semantic evidence is available. Keep AC1024/1027/1032 source profiles and unrelated whole-source IMAGEDEF/opaque-frame refusal gates separate."
   ],
   "implementation": {
     "converter": "drw_convertSabToSatV1 parses only complete ACIS BinaryFile version-21200 SAB with an explicit terminal record and serializes the observed SAT v1 profile; output is committed only on success.",
-    "writerGate": "writeModelerGeometry admits only AC1021 E3DSOLID, modeler version 2, one exact marker-bounded SAB body range with zero bit offset, retained complete source frame, exact SAB parse/header, and no DataStorage dependency; emits SAT group-1 text only for AC1021/AC1024 targets.",
+    "writerGate": "writeModelerGeometry admits only AC1021 E3DSOLID, modeler version 2, one exact marker-bounded SAB body range with payload bit offset less than 8, retained complete source frame, exact SAB parse/header, and no DataStorage dependency; emits SAT group-1 text only for AC1021/AC1024 targets.",
     "differentialOutput": {
       "bytes": 909,
       "sha256": "5d82bceb0e931e4ac2c11a86fa5706e9621567990bdcaf200d607ed0a46ba7b0",
@@ -171,6 +187,6 @@
       "effect": "byte comparison only; not independent semantic evidence"
     },
     "sourceBoundClosure": "Unique selected AC1021 solid/history/EvaluationGraph/torus chain is validated independently of DataStorage; raw ACSH objects and the typed EvaluationGraph are written as selected records. The layer-0 extension DICTIONARY closure is retained.",
-    "readbackAndRetry": "Selected AC1024 ASCII and Binary outputs are reimported; SAT bytes, carrier group/version, and remapped solid\u2192history\u2192EvaluationGraph\u2192torus roles are checked. A changed span-confidence bit forces atomic refusal with sentinel preserved, then restoring the source evidence and retrying with the same adapter succeeds."
+    "readbackAndRetry": "Selected AC1024 ASCII and Binary outputs are reimported; SAT bytes, carrier group/version, and remapped solid→history→EvaluationGraph→torus roles are checked. A changed span-confidence bit forces atomic refusal with sentinel preserved, then restoring the source evidence and retrying with the same adapter succeeds."
   }
 }
