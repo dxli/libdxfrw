@@ -1,0 +1,63 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p8-librecad3-origin-master-clean-consumer-2026-11-08",
+  "date": "2026-11-08",
+  "title": "LibreCAD_3 clean origin/master compatibility probe",
+  "status": "CLEAN_CONSUMER_BUILD_PASSED_WITH_TWO_SCRATCH_FIXES",
+  "supportClaimEffect": "none",
+  "sources": {
+    "libdxfrwCommit": "045a389252bd465fb385d348960a05f331883ca1",
+    "libreCAD3OriginMaster": "5cf435f4a5a57d8dba1599c720917b902e74b25b",
+    "libreCAD3PinnedSubmodules": {
+      "lckernel/nano-signal-slot": "d4d199e5d3fdde59490ac891333af35990889558",
+      "lckernel/tinyspline": "bb3b02cdfaa039aa236a5240f2ba8bce66bea527",
+      "third_party/kaguya": "2f20d965aa30aaee0cb01d04aea93e508c43225d",
+      "third_party/libdxfrw": "replaced in scratch by libdxfrwCommit",
+      "third_party/pybind11": "97bf890db679505a14dfe547a5e77bb2bd05dc90",
+      "persistence/libopencad": "556c64aaba7388476c4b2b5a7861994e688ed2ac"
+    },
+    "sourceMode": "git archive of origin/master; no dirty LibreCAD_3 working-tree content was used"
+  },
+  "configuration": {
+    "command": "cmake -S <clean-origin-master> -B <scratch-build> -DCMAKE_BUILD_TYPE=Release -DWITH_PERSISTENCE=ON -DWITH_PYTHONSCRIPT=OFF -DWITH_QT_UI=OFF",
+    "result": "PASS",
+    "build": "cmake --build <scratch-build> --target persistence -j4",
+    "buildResult": "PASS; current libdxfrw compiled as a subdirectory and LibreCAD_3 persistence linked"
+  },
+  "validation": {
+    "runnerBuild": "cmake --build <scratch-build> --target lcunittest -j4",
+    "runnerBuildResult": "PASS",
+    "selector": "lcunittest --gtest_filter='DxfExportTest.*:DxfRoundTripTest.*'",
+    "initial": {
+      "result": "48/64 passed",
+      "finding": "LibreCAD_3 DXFimpl::writeHeader supplied $INSUNITS for R12/R14 targets in both preserved-header and default-header paths. libdxfrw correctly refuses the unsupported variable before AC1015, so the adapter made otherwise representable 2D drawings fail to save."
+    },
+    "scratchFixes": [
+      {
+        "location": "LibreCAD_3 persistence/libdxfrw/dxfimpl.cpp",
+        "change": "Emit $INSUNITS only when the selected export version is newer than AC1014, in both preserved and default header paths.",
+        "status": "SCRATCH_ONLY; not applied to a LibreCAD_3 checkout or committed"
+      },
+      {
+        "location": "LibreCAD_3 unittest/persistence/fixtures/raw_objects.dxf and raw_objects_low_handles.dxf",
+        "change": "Remove the non-null group-330 owner from the first OBJECTS DICTIONARY. The reader correctly refuses an owned first dictionary instead of misclassifying it as the root named-object dictionary.",
+        "sourceSha256Before": "fa5ae3e7594863b188de85655e9cf873ce07fcbc6f726ae7104b8a0c7a08373d",
+        "status": "SCRATCH_ONLY; fixtures in the LibreCAD_3 archive were modified in /private/tmp and not committed"
+      }
+    ],
+    "afterScratchFixes": {
+      "result": "PASS",
+      "tests": 64,
+      "failures": 0
+    }
+  },
+  "interpretation": "This exposes two LibreCAD_3 integration/test-fixture changes, not a libdxfrw parser or writer defect. Keep the unsupported-version $INSUNITS refusal and first-root-DICTIONARY validation. It is a macOS clean-consumer compile and focused export/readback result only.",
+  "limitations": [
+    "The consumer fixes exist only in /private/tmp/librecad3-origin-master-check/source; no LibreCAD_3 checkout was edited or committed.",
+    "The aggregate test suite was not run; only the 3 DxfExportTest and 61 DxfRoundTripTest cases were selected.",
+    "No native LibreCAD_3 application run or Linux/Windows FreeCAD/LibreCAD qualification was performed.",
+    "No DWG/DXF fixture was added to libdxfrw or any repository.",
+    "No support claim or external J disposition changed."
+  ],
+  "next": "Apply the version-aware $INSUNITS callback and root-dictionary fixture correction in a clean LibreCAD_3 branch with regression tests, then run native Linux/Windows and application qualification."
+}

@@ -364,6 +364,26 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-08)
 
+- **Clean LibreCAD_3 master compatibility probe:** a fresh archive of
+  `origin/master` (`5cf435f4a5a57d8dba1599c720917b902e74b25b`) was populated
+  with its pinned submodules, then its bundled libdxfrw submodule was replaced
+  only in `/private/tmp` by this repository's `045a3892` source. The clean
+  persistence target configured, built, and linked. The focused export and
+  round-trip cohort initially passed 48/64 tests: LibreCAD_3's `writeHeader`
+  unconditionally supplied `$INSUNITS` even for R12/R14, which the library
+  correctly refuses because those revisions cannot represent it. A
+  scratch-only, target-aware adapter change (emit `$INSUNITS` only after
+  AC1014) raised the cohort to 61/64. The remaining three tests shared a
+  malformed fixture: its first OBJECTS `DICTIONARY` had a non-null owner,
+  which violates the root-dictionary rule the reader enforces. Removing that
+  owner from the two scratch fixture copies brought the cohort to 64/64.
+  No LibreCAD_3 checkout, tracked fixture, or production source was changed.
+  Receipt: [clean master compatibility probe](docs/research/p8-librecad3-origin-master-clean-consumer-2026-11-08.json).
+  Next consumer implementation work is to apply the version-aware HEADER
+  callback and correct those fixtures in a clean LibreCAD_3 branch; preserve
+  libdxfrw's unsupported-version refusal and root-dictionary validation. This
+  is macOS integration evidence only; it does not satisfy native Linux/
+  Windows or application qualification.
 - **Desktop qualification recheck:** after the user indicated they were
   unlocking the Mac, the desktop inventory still reported the native session
   locked. The ODA File Converter launch therefore remains unexecuted against
@@ -1296,10 +1316,13 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    fresh typed readback pass. The Cover HEADER suffix is an independent blocker;
    these inventories do not qualify output or support claims.
 5. **P7/P8/P9 / qualification gates.** P7 needs independent ACIS/ACDS semantic
-   evidence. P8's current-head LibreCAD_3 CONFIG-package build, focused export
-   tests, and planar save/open/reopen probe are refreshed; next qualify on a
-   clean consumer revision, then native Linux/Windows FreeCAD and LibreCAD/LibreCAD_3
-   runs. Keep the dirty-checkout build as integration evidence only. P9 remains
+   evidence. P8 now has a clean `origin/master` compile and focused
+   64-test export/round-trip pass only after the scratch consumer's
+   version-aware `$INSUNITS` callback and malformed root-DICTIONARY fixtures
+   were corrected. Apply those changes in a clean LibreCAD_3 branch and retain
+   their regression tests; then qualify native Linux/Windows FreeCAD and
+   LibreCAD/LibreCAD_3 runs. Keep the dirty-checkout build as integration
+   evidence only. P9 remains
    `DEFERRED_EXTERNAL` for J256, J260, J268,
    J284, J293 and J295. These do not block independent local slices and cannot
    be promoted by generated controls, advisory reports, or transport-only
