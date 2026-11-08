@@ -97,6 +97,24 @@
     ],
     "scopeLimit": "Existing local corpus only; no producer-wide inference."
   },
+  "odaConverter": {
+    "application": "ODA File Converter 27.1.0 ARM64",
+    "route": "Native macOS GUI, audit enabled, scratch input copy; AC1024 DWG to 2010 ASCII DXF.",
+    "inputPath": "/private/tmp/civil-assoc-oda/in/civil_example-imperial.dwg",
+    "inputSha256": "45b419d0c7382eb271079b80c3237a52183f4fa09e7b495c3d7a65c6baa927dc",
+    "outputPath": "/private/tmp/civil-assoc-oda/out/civil_example-imperial.dxf",
+    "outputSha256": "874cd8eaf225e962727daa10becedaa85e5bf82c5b7b95bf8fcfa92a04c0a0dd",
+    "outputObject": {
+      "handle": "0xC55",
+      "type": "ACAD_PROXY_OBJECT",
+      "owner": "0x777",
+      "binaryChunkPresent": true,
+      "group330References": ["0x6CD", "0x9AA", "0x6CD", "0", "0"],
+      "result": "The independent converter does not emit a typed ACDBASSOCGEOMDEPENDENCY or expose the persistent-subentity class/tail fields for this record."
+    },
+    "supportClaimEffect": "none",
+    "limitation": "This successful converter route is an external conversion observation, not semantic interpretation of the 24 source bits, native constraint evaluation, or a basis for promoting DXF/DWG support."
+  },
   "validation": {
     "sourceAdapterProbe": "/private/tmp/civil_assoc_probe.cpp",
     "sourceAdapterProbeSha256": "4f31818832340559bf22adb6fd8a3ea52fb66e8ffcddef0121da3dc2374f46de",
@@ -105,7 +123,7 @@
     "probeLog": "/private/tmp/civil-assoc-probe.log",
     "probeLogSha256": "f07b5fe623924195a9513df9d3ebb4c1019af630373230b12246499390bf4d16",
     "normalBuildAfterTemporaryDiagnosticsRemoved": "cmake --build build-gcc --target dwg2dxf -j4 PASS",
-    "fixturePolicy": "No DWG/DXF fixtures created or committed. Temporary source instrumentation was removed and the target rebuilt from clean tracked source."
+    "fixturePolicy": "No DWG/DXF fixtures created or committed. Input/output files are scratch copies. Temporary source instrumentation was removed and the target rebuilt from clean tracked source."
   },
   "nextAction": "Keep 0xC55 raw and output-ineligible. Resume only with authoritative class layout or an independent producer trace that accounts for all 24 source bits. In parallel select another source-backed local implementation packet; do not rerun the 9-file screen or infer a field layout from the class name."
 }
