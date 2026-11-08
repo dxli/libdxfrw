@@ -2457,11 +2457,12 @@ pre-seeded body/handle buffers; the same object succeeds after its rejected
 override is corrected. Generated parse controls also refuse a body whose
 declared span is one bit short and a frame missing its trailing handle stream.
 The focused `--table-cell-overrides` selector passes. This is encoder/parser
-self-consistency evidence only: remaining modeled-field negative cases,
-post-write buffer failure atomicity, production class registration, physical
+self-consistency evidence only: the generated refusal matrix now covers the
+main excluded-field families but is not yet exhaustive at every guard branch.
+Post-write buffer failure atomicity, production class registration, physical
 source-to-output proof, and compound-writer transaction have not been
-demonstrated. `writeTable` remains fail-closed. Trace hashes, source hashes, and dispositions are in the
-hashes, and dispositions are in the
+demonstrated. `writeTable` remains fail-closed. Trace hashes, source hashes,
+and dispositions are in the
 [encoder-readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 
 Speed-oriented implementation sequence:
@@ -2470,11 +2471,13 @@ Speed-oriented implementation sequence:
    one-row/one-column profile; its inline string avoids both the R2007+
    detached string stream and the undocumented R24 TABLECONTENT relationship.
    Focused refusal controls now cover unsupported version, table/cell
-   overrides, extra columns, incomplete semantic content, and detached value
-   handles; they check pre-seeded output buffers and corrected same-object
-   retry. Parser controls now refuse a declared body shortened by one bit and
-   a frame without trailing handles. Finish the remaining retained-field
-   preflight matrix. The direct codec has no transactional guarantee for a
+   overrides, grid shape/spacing, owner/required handles, incomplete semantic
+   content, entity attachments, styles/colors, row options, retained
+   subrecords, links/attributes, cell kinds/value state, cache/geometry and
+   invalid numeric values. They check pre-seeded output buffers and corrected
+   same-object retry. Parser controls now refuse a declared body shortened by
+   one bit and a frame without trailing handles. Audit the remaining unchecked
+   guard branches. The direct codec has no transactional guarantee for a
    low-level failure after emission starts; keep it off the production route
    until its caller stages and atomically publishes the complete compound
    frame. The existing AC1018

@@ -8318,6 +8318,275 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         [](TableDwgCodecProbe& table) {
             table.m_content.m_rows.front().m_cells.front().m_overrideFlags = 1u;
         });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects a missing BLOCK_RECORD handle without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.blockRecH.ref = 0u; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects a missing TABLESTYLE handle without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.m_tableStyleHandle = 0u; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects invalid grid counts and spacing without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.colcount = 2;
+            table.rowcount = 2;
+            table.colspace = 1.0;
+            table.rowspace = 1.0;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects a mismatched owner record without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_ownerBlockRecordHandle = 0xA901u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects default-version and value flags without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_dataVersion = 1;
+            table.m_valueFlag = 1;
+            table.m_borderColorOverrideFlags = 1u;
+            table.m_borderLineweightOverrideFlags = 1u;
+            table.m_borderVisibilityOverrideFlags = 1u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects owned attributes without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.attribHandles.push_back(handle(0xA900u));
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects EED without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.extData.push_back(
+                std::make_shared<DRW_Variant>(1000, std::string("x")));
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects proxy graphics without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.proxyGraphics = "x"; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects reactors without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.reactorHandles.push_back(0xA900u);
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects extra rows without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.push_back(DRW_TableRow{});
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects merged ranges without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_mergedRanges.push_back(DRW_TableMergedRange{});
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects field dependencies without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_fieldHandles.push_back(0xA900u);
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects nondefault column style without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_columns.front().m_styleId = 1;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects nondefault row style without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_styleId = 1;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects row text-style names without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_tableRowTextStyleNames[1] = "Arial";
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects nondefault row colors without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_tableRowTextColors[1].method = 0xC3u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects row fill overrides without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_tableRowFillNone[1] = true;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects table border overrides without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_tableBorderLineweights[0] = 25;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects table layout overrides without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_titleSuppressed = true;
+            table.m_flowDirection = 1;
+            table.m_horizontalCellMargin = 0.25;
+            table.m_tableRowHeightOverrides[0] = 2.0;
+            table.m_tableRowAlignmentOverrides[1] = 2;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects table row style handles without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_tableRowTextStyleHandles[1] = 0xA900u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects table fill colors without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_tableRowFillColors[1].method = 0xC3u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects table border colors and visibility overrides without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_tableBorderColors[0].method = 0xC3u;
+            table.m_tableBorderVisibilities[0] = 1;
+            table.m_hasTableBorderVisibilityOverrides[0] = true;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects table-content metadata without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_name = "named content";
+            table.m_content.m_description = "description";
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects retained subrecords and mismatched style identity without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_subrecordRanges.push_back(
+                DRW_DwgSubrecordRange{});
+            table.m_content.m_tableStyleHandle = 0xA901u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects column and row override styles without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_columns.front().m_overrideStyleType = 1;
+            table.m_content.m_rows.front().m_overrideStyleType = 1;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects block-valued cells without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_cells.front().m_type = 2;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects linked cells without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_cells.front().m_hasLinkedData = true;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects linked-data metadata and cell attributes without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            DRW_TableCell& cell =
+                table.m_content.m_rows.front().m_cells.front();
+            cell.m_dataLinkHandle = 0xA900u;
+            cell.m_linkedDataRowCount = 1;
+            cell.m_linkedDataColumnCount = 1;
+            cell.m_linkedDataUnknown = 1;
+            cell.m_attributes.push_back(DRW_TableCellAttribute{});
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects nondefault cell flags and block state without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            DRW_TableCell& cell =
+                table.m_content.m_rows.front().m_cells.front();
+            cell.m_flags = 1;
+            cell.m_blockHandle = 0xA900u;
+            cell.m_blockScale = 2.0;
+            cell.m_virtualEdgeFlags = 1u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects nondefault cell borders without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_cells.front()
+                .m_borders[0].m_lineWeight = 25;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects cached geometry without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_cells.front().m_geometryFlags = 1u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects cell style and tooltip metadata without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            DRW_TableCell& cell =
+                table.m_content.m_rows.front().m_cells.front();
+            cell.m_textStyleName = "Arial";
+            cell.m_toolTip = "tooltip";
+            cell.m_textStyleHandle = 0xA900u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects cell display and format state without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            DRW_TableCell& cell =
+                table.m_content.m_rows.front().m_cells.front();
+            cell.m_textColorMethod = 0xC3u;
+            cell.m_backgroundEnabled = true;
+            cell.m_textHeight = 2.5;
+            cell.m_contents.front().m_value.m_formatFlags = 1;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects non-text value payloads without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_cells.front()
+                .m_contents.front().m_value.m_dataType = 1;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects invalid cell content kinds without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_cells.front()
+                .m_contents.front().m_type = 2;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects non-finite insertion and rotation values without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.basePoint.x = std::numeric_limits<double>::quiet_NaN();
+            table.angle = std::numeric_limits<double>::infinity();
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects multiple cell contents without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            DRW_TableCellContent extra;
+            extra.m_type = 1;
+            extra.m_text = "second";
+            table.m_content.m_rows.front().m_cells.front()
+                .m_contents.push_back(extra);
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects non-finite dimensions without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_columns.front().m_width =
+                std::numeric_limits<double>::infinity();
+        });
 
     TableDwgCodecProbe retryAc1018Table = makeEncodableAc1018Table();
     retryAc1018Table.m_tableOverrideFlags = 1u;

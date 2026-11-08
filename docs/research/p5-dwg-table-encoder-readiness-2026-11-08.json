@@ -80,11 +80,11 @@
     "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
     "result": "PASS",
     "assertions": [
-      "The direct entity codec admits this generated bounded profile; implementation guards also restrict version, stream use, required handles, and modeled fields, but separate refusal/atomicity controls are still open.",
+      "The direct entity codec admits this generated bounded profile; implementation guards restrict version, stream use, required handles, and modeled fields. A separate focused selector checks representative refusal atomicity cases.",
       "The encoded entity body parses through DRW_Table::parseDwg with matching insertion point, column width, row height, plain-text cell value, BLOCK_RECORD handle and TABLESTYLE handle.",
       "The parser cursor lands at the exact encoded body end and reads a following sentinel without consuming handle-stream bytes as body data."
     ],
-    "disposition": "Generated encoder/parser consistency only. No truncation matrix, refusal byte-preservation sweep, production class registration, physical AC1018 source-to-output comparison, *T compound graph, adapter transaction, independent readback, or native TABLE behavior is qualified. Keep dwgRW::writeTable refused."
+    "disposition": "Generated encoder/parser consistency only. The separate refusal control covers representative preflight cases and parser truncation, not every guard. Production class registration, physical AC1018 source-to-output comparison, *T compound graph, adapter transaction, independent readback, and native TABLE behavior remain unqualified. Keep dwgRW::writeTable refused."
   },
   "generated_ac1018_preflight_refusal_control": {
     "generatedFromScratch": true,
@@ -95,7 +95,17 @@
       "unsupported AC1021 version",
       "table-level override",
       "additional column",
+      "grid counts, spacing and owner mismatch",
+      "required object handles and owned attributes",
+      "EED, proxy graphics and reactors",
       "incomplete semantic content",
+      "extra row, merge, field dependency and retained subrecord",
+      "column/row styles and row text/fill/border options",
+      "table content metadata and style identity",
+      "block-valued or linked cells and cell attributes",
+      "cell border, style/tooltip, display, format and geometry state",
+      "non-text cell value payload and invalid cell content kind",
+      "non-finite grid/insertion/rotation values",
       "detached cell value handle",
       "cell override"
     ],
@@ -105,7 +115,7 @@
       "The parser refuses a generated frame whose declared body ends one bit before the encoded body end.",
       "The parser refuses a generated frame with its trailing handle stream omitted."
     ],
-    "disposition": "Representative preflight atomicity and parser truncation only. Other retained-field exclusions, post-write low-level failure atomicity, physical source-to-output comparison, and compound writer rollback remain open; this does not establish production output support."
+    "disposition": "Broad generated preflight coverage with representative parser truncation; the matrix is not yet exhaustive at every guard branch. Post-write low-level failure atomicity, physical source-to-output comparison, and compound writer rollback remain open; this does not establish production output support."
   },
   "first_candidate": {
     "version": "AC1018",
@@ -118,7 +128,7 @@
       "any unmodeled or incomplete semantic data"
     ],
     "required_before_adapter_admission": [
-      "remaining retained-field preflight controls and parser truncation at body/handle boundaries, plus corrected same-object retry",
+      "audit and cover remaining unchecked guard branches; representative body/handle parser truncation and corrected retry now pass",
       "physical AC1018 plain-text source-to-output field comparison, or an explicit no-eligible-source disposition",
       "production class resolution from the validated CLASS map rather than synthetic or copied class ordinals",
       "complete *T BLOCK/BLOCK_RECORD ownership and TABLE style-reference disposition",
@@ -136,7 +146,7 @@
     "The AC1018 unknown-override control now captures only the known prefix; the physical payload span and meaning of 0x40000/0x40020 remain unresolved and must not be skipped or emitted.",
     "The generated AC1018 encoder control uses synthetic class number 562 solely to exercise the body codec; production class resolution and physical interoperability remain open.",
     "The direct entity codec has no transaction guarantee if a low-level failure occurs after emission starts; keep it out of the production route until the compound writer stages and atomically publishes the complete frame.",
-    "The new generated refusal matrix is representative, not exhaustive; it covers unsupported version, table/cell overrides, extra columns, incomplete semantics and detached value handles only.",
+    "The generated refusal matrix now covers the main excluded-field families but is not exhaustive at every guard branch; keep the direct entity encoder non-production until the remaining branches and compound transaction gates are satisfied.",
     "The available AC1021 table source is semantically incomplete at cell CadValue type 48 and cannot validate a complete output route.",
     "R24+ TABLECONTENT/TABLEGEOMETRY relationship is outside the available ODA v5.4.1 layout and must remain refused."
   ]
