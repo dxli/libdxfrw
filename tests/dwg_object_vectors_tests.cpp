@@ -8836,6 +8836,56 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  "AC1018 TABLE cell alignment preserves following body sentinel");
     }
 
+    TableDwgCodecProbe cellAppearanceTable = makeEncodableAc1018Table();
+    DRW_TableCell& cellAppearanceCell =
+        cellAppearanceTable.m_content.m_rows.front().m_cells.front();
+    cellAppearanceCell.m_overrideFlags = 0x0000000Eu;
+    cellAppearanceCell.m_backgroundEnabled = true;
+    cellAppearanceCell.m_fillColorRgb = 256;
+    cellAppearanceCell.m_textColorRgb = 13;
+    dwgBufferW cellAppearanceBody;
+    dwgBufferW cellAppearanceHandles;
+    dwgBufferW cellAppearanceTypePrefix;
+    cellAppearanceTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t cellAppearanceObjectSizeBit =
+        cellAppearanceTypePrefix.bitCount();
+    const bool cellAppearanceEncoded = cellAppearanceTable.encodeAsTableClass(
+        DRW::AC1018, cellAppearanceBody, cellAppearanceHandles);
+    const std::uint64_t cellAppearanceBodyEndBit =
+        cellAppearanceBody.bitCount();
+    constexpr std::int32_t cellAppearanceSentinel = 0x51CA000E;
+    cellAppearanceBody.putBitLong(cellAppearanceSentinel);
+    cellAppearanceBody.patchRawLong32AtBit(
+        cellAppearanceObjectSizeBit,
+        static_cast<std::uint32_t>(cellAppearanceBody.bitCount()));
+    appendBits(cellAppearanceBody, cellAppearanceHandles);
+    dwgBuffer cellAppearanceInput(cellAppearanceBody.data().data(),
+                                  cellAppearanceBody.data().size());
+    TableDwgCodecProbe cellAppearanceReadback;
+    const bool cellAppearanceRead = cellAppearanceEncoded
+        && cellAppearanceReadback.parseDwg(DRW::AC1018,
+                                           &cellAppearanceInput);
+    const bool cellAppearanceMatches = cellAppearanceRead
+        && cellAppearanceInput.isGood()
+        && cellAppearanceReadback.m_semanticContentComplete
+        && cursorBit(cellAppearanceInput) == cellAppearanceBodyEndBit
+        && cellAppearanceReadback.m_content.m_rows.front().m_cells.front()
+            .m_overrideFlags == 0x0Eu
+        && cellAppearanceReadback.m_content.m_rows.front().m_cells.front()
+            .m_backgroundEnabled
+        && cellAppearanceReadback.m_content.m_rows.front().m_cells.front()
+            .m_fillColorRgb == 256
+        && cellAppearanceReadback.m_content.m_rows.front().m_cells.front()
+            .m_textColorRgb == 13;
+    t.expect(cellAppearanceMatches,
+             "AC1018 TABLE cell fill state and indexed background/content colors round-trip");
+    if (cellAppearanceMatches) {
+        const std::int32_t sentinel = cellAppearanceInput.getBitLong();
+        t.expect(cellAppearanceInput.isGood()
+                     && sentinel == cellAppearanceSentinel,
+                 "AC1018 TABLE cell appearance overrides preserve following body sentinel");
+    }
+
     TableDwgCodecProbe cellBorderTable = makeEncodableAc1018Table();
     DRW_TableCell& cellBorderCell =
         cellBorderTable.m_content.m_rows.front().m_cells.front();
@@ -9203,10 +9253,10 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             table.m_content.m_rows.front().m_cells.front().m_valueHandle = 0xA800u;
         });
     expectAtomicPreflightRefusal(
-        "AC1018 TABLE encoder rejects unsupported cell alignment-adjacent override bits without writing",
+        "AC1018 TABLE encoder rejects unsupported cell text-style override bit without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
-            table.m_content.m_rows.front().m_cells.front().m_overrideFlags = 2u;
+            table.m_content.m_rows.front().m_cells.front().m_overrideFlags = 0x10u;
         });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects out-of-domain selected cell alignment without writing",
@@ -9221,6 +9271,27 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
             table.m_content.m_rows.front().m_cells.front().m_textAlignment = 5;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects unflagged cell fill state without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_cells.front().m_backgroundEnabled = true;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects unflagged cell fill color without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_cells.front().m_fillColorRgb = 7;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects unsupported true-color cell override without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            auto& cell = table.m_content.m_rows.front().m_cells.front();
+            cell.m_overrideFlags = 0x04u;
+            cell.m_fillColorRgb = 7;
+            cell.m_fillColorMethod = 0xC2u;
         });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects an unsupported cell override bit without writing",
