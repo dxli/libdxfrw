@@ -186,10 +186,11 @@
     ],
     "required_before_adapter_admission": [
       "audit remaining unchecked public-model guard branches; expanded refusal cases, representative body/handle truncation, corrected retry, and atomic append now pass",
-      "bind TABLE class registration and emitted-instance accounting to the real compound entity transaction; prove entity and *T graph failure restore metadata/count ledgers and committed frames increment counts exactly once",
+      "bind TABLE class registration and frame emission to the real dwgRW compound transaction; prove caller-state and writer-state rollback after a late *T graph failure, with emitted class counts committed exactly once",
+      "produce a semantically complete anonymous *T BLOCK/BLOCK_RECORD geometry graph and close TABLE/BLOCK_RECORD/TABLESTYLE references",
       "physical AC1018 plain-text source-to-output field comparison, or an explicit no-eligible-source disposition",
-      "complete *T BLOCK/BLOCK_RECORD ownership and TABLE style-reference disposition",
-      "compound writer atomic rollback, destination preservation, same-adapter corrected retry, and fresh readback",
+      "serialize and independently qualify the complete AC1018 output using an independent reader/producer or native platform",
+      "same-adapter corrected retry and fresh readback after compound writer failure",
       "no unsupported cell/override field silently omitted"
     ]
   },
@@ -316,5 +317,24 @@
     "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
     "assertion": "Each generated refusal preserves pre-seeded body and handle buffers.",
     "disposition": "Closes only these four omission paths for the direct generated AC1018 codec. Continue auditing remaining public fields and private retained DXF data; no output support claim."
+  },
+  "generated_ac1018_entity_frame_commit_rollback_control": {
+    "generatedFromScratch": true,
+    "version": "AC1018",
+    "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
+    "result": "PASS",
+    "scope": "dwgWriter18 entity-frame path with registered TABLE custom class and a placeholder *T BLOCK_RECORD",
+    "assertions": [
+      "the actual AC1018 TABLE entity frame commits with its writer-local custom class ordinal",
+      "the object-frame receipt binds the emitted TABLE handle to that class ordinal",
+      "the class instance count validates only after the frame commit point",
+      "an outer CompoundWriteCheckpoint rollback removes the TABLE frame, class definition, handle association and count ledger state"
+    ],
+    "limitations": [
+      "the placeholder *T block has no generated table geometry",
+      "the test calls dwgWriter18 directly and does not exercise dwgRW::writeTable or its caller-state transaction",
+      "no source profile, physical producer comparison or independent reader validation"
+    ],
+    "disposition": "Low-level frame/class transaction control only. Do not enable public TABLE output or claim compound graph support."
   }
 }

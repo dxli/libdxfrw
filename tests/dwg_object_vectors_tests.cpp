@@ -8089,6 +8089,10 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             markDwgClassInstanceEmitted(handle);
         }
 
+        bool hasEmittedObjectHandle(std::uint32_t handle) const {
+            return hasEmittedDwgObjectHandle(handle);
+        }
+
         bool writeClassesSection(std::vector<std::uint8_t>& section) {
             section.clear();
             if (!writeDwgClasses())
@@ -8596,6 +8600,53 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         table.m_content.m_rows.push_back(row);
         return table;
     };
+
+    DRW_Header tableFrameHeader;
+    TableClassSerializationProbe tableFrameWriter(nullptr, &tableFrameHeader);
+    const dwgWriter::CompoundWriteCheckpoint tableFrameCheckpoint =
+        tableFrameWriter.checkpointCompoundWrite();
+    const std::string tableFrameBlockName = "*T_LIBDXFRW_TEST";
+    const std::uint32_t tableFrameBlockRecord = tableFrameWriter.defineBlock(
+        tableFrameBlockName, DRW_Coord{0.0, 0.0, 0.0});
+    TableDwgCodecProbe tableFrame = makeEncodableAc1018Table();
+    tableFrame.name = tableFrameBlockName;
+    tableFrame.blockRecH = handle(tableFrameBlockRecord);
+    const bool tableFrameClassRegistered = tableFrameBlockRecord != 0u
+        && tableFrameWriter.registerTableEntityClass(&tableFrame);
+    const bool tableFrameInstanceRegistered = tableFrameClassRegistered
+        && tableFrameWriter.registerDwgEntityClassInstance(
+            tableFrame.getDwgClassNum(), tableFrame.handle);
+    const bool tableFrameEncoded = tableFrameInstanceRegistered
+        && tableFrameWriter.encodeEntity(&tableFrame);
+    DRW::DwgObjectFrameReceipt tableFrameReceipt;
+    const bool tableFrameReceiptCaptured = tableFrameEncoded
+        && tableFrameWriter.getLastDwgObjectFrame(tableFrameReceipt);
+    std::uint16_t tableFrameClassForHandle = 0u;
+    const bool tableFrameClassLedgerValid =
+        tableFrameWriter.getDwgClassInstanceClass(
+            tableFrame.handle, tableFrameClassForHandle)
+        && tableFrameClassForHandle == tableFrame.getDwgClassNum()
+        && tableFrameWriter.validateDwgClassInstanceCounts();
+    const bool tableFrameCommitProven = tableFrameReceiptCaptured
+        && tableFrameReceipt.valid
+        && tableFrameReceipt.objectHandle == tableFrame.handle
+        && tableFrameReceipt.classNumber == tableFrame.getDwgClassNum()
+        && tableFrameReceipt.dataBitSize != 0u
+        && tableFrameClassLedgerValid
+        && tableFrameWriter.hasEmittedObjectHandle(tableFrame.handle);
+    tableFrameWriter.rollbackCompoundWrite(tableFrameCheckpoint);
+    std::uint16_t rolledBackTableFrameClass = 0u;
+    const bool tableFrameTransactionRolledBack =
+        tableFrameCommitProven
+        && !tableFrameWriter.hasDwgClassDefinition(
+            tableFrame.getDwgClassNum())
+        && !tableFrameWriter.hasEmittedObjectHandle(tableFrame.handle)
+        && !tableFrameWriter.getDwgClassInstanceClass(
+            tableFrame.handle, rolledBackTableFrameClass)
+        && tableFrameWriter.validateDwgClassInstanceCounts();
+    t.expect(tableFrameTransactionRolledBack,
+             "AC1018 TABLE entity frame commit publishes its registered CLASS instance and outer rollback removes the frame and ledgers");
+
     const auto expectAtomicPreflightRefusal =
         [&](const char* message, DRW::Version version, auto mutate) {
             TableDwgCodecProbe candidate = makeEncodableAc1018Table();
