@@ -162,48 +162,43 @@ generated controls should cover the ordinary edit/retry loop. Keep test DWG/DXF
 fixtures out of commits unless they already exist in LibreCAD/libdxfrw or were
 created locally from scratch for the specific control.
 
-### Current execution checkpoint (2026-11-07)
+### Current execution checkpoint (2026-11-08)
 
-- **Local implementation lane:** continue P4 source-qualified graph/output
-  work. The completed colorwh, plot-screening, lineweights, civil Edge, WCS
-  extrusion-guard, and POLYLINE/VERTEX role-closure slices are removed from
-  this execution queue; their receipts remain linked from the phase records.
-  Do not repeat their source scans or generated controls.
-- **ODA suffix lane:** the direct CLI route still aborts during Pasteboard/XPC
-  startup, and Launch Services still fails before converter startup. A materially
-  different ODA File Converter 27.1 GUI route has now produced two same-version
-  AC1027 Cover resaves from scratch copies. Both validated HEADER trailers end
-  at byte 844 and have 739-byte suffixes with different hashes; a bytewise
-  comparison finds no identical positions but matching low three bits at every
-  position. An independent LibreDWG 0.14 decode also reads 119 OBJECTS from
-  the first resave, but does not assign meaning to the suffix. The pattern does
-  not identify suffix meaning or boundaries, so the bytes remain unclaimed.
-  The independent AC1027 source-reference guard still blocks DXF output. Do not
-  retry the unchanged CLI/Launch Services routes or repeat the same GUI export
-  without a discriminating input change; continue with controlled GUI variants
-  only if they can isolate a specific header/body dependency, and keep strict
-  output refused.
-- **AC1021 writer lane:** the four-way scratch matrix is complete. Only the
-  combined default plotstyle+material graph passes ODA 27.1 audit for this
-  minimal profile; neither graph alone does. The material opt-in fast control
-  now verifies both layer-0 references resolve to their planned targets for
-  AC1021/24/27; both focused opt-in tests pass.
-  LibreCAD's current `RS_FilterDXFRW` writer calls `dwgRW::write` but does not
-  implement either new default-graph provider; it is still linked to its bundled
-  fork, so no present upstream migration result is implied. P8 must add and
-  qualify the adapter opt-ins with a defensible opaque-reference predicate.
-  Do not change global defaults based on this one generated profile. Do not
-  repeat the matrix. Keep all generated files in scratch storage.
-- **External gates:** P7 ACIS/ACDS meaning, P8 native platform/consumer
-  qualification, and P9's six advisory rows remain open. Local parser or codec
-  controls cannot promote those claims.
-- **P8 current-head package integration:** the fresh exported-CONFIG persistence
-  build passes and propagates C++17 from the libdxfrw target; three focused
-  `DxfExportTest.*` cases and the scratch planar LINE/CIRCLE/ARC save/open/
-  reopen probe pass against its linked dylib. The full `lcunittest`
-  target remains blocked by the LibreCAD_3 Kaguya/AppleClang `noexcept` compile
-  error. Next, qualify open/save/reopen on a clean consumer revision and then
-  native application/platform behavior. Do not rerun this unchanged export set.
+- **Latest local slice:** commit `6106bfd4` changes the ACSH action-body status
+  to `Complete` only when parsing consumes the exact bounded body span. The
+  pinned AC1027 Sweep action body therefore stays `Partial` (174 of 2,571
+  bits); no undocumented tail layout or Sweep output is inferred. The focused
+  `libdxfrw_acsh_action_body_exact_span` test passes. Do not reopen this guard
+  without contradictory source evidence. See the [exact-span receipt](docs/research/p4-ac1027-sweep-action-body-exact-span-2026-11-08.json).
+- **Next local step:** read the existing [same-version census](docs/research/p4-local-same-version-strict-output-census-2026-11-06.json)
+  and [source inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json),
+  then select the first OBJECTS profile with already-established frame
+  disposition, identity, owner roles, and recursive targets. If none qualifies,
+  record the specific gates from those saved inventories and choose the next
+  locally testable P4/P6 task. Do not restart a corpus-wide scan or speculate
+  about the remaining Sweep body.
+- **ODA suffix lane:** the user unlocked the Mac and the planned direct ODA
+  27.1 retry was made; it again aborted during Pasteboard/XPC initialization
+  before document processing, produced no output, and matched the prior source
+  and converter hashes. The unchanged CLI route is exhausted. The two successful
+  GUI resaves still have validated trailers at byte 844 and unexplained,
+  differing 739-byte suffixes; no byte meaning is established. Keep suffix
+  bytes unclaimed and strict output refused. Resume only after a concrete
+  launch-route change or a controlled source mutation that can isolate a field.
+  See the [post-unlock retry receipt](docs/research/p6-ac1027-oda-cli-after-user-unlock-2026-11-08.json)
+  and [GUI comparison receipt](docs/research/p6-ac1027-oda-gui-same-version-resave-2026-11-07.json).
+- **AC1021 writer lane:** the four-way scratch matrix is complete; only the
+  combined default plotstyle+material graph passes ODA audit for that generated
+  profile. Its focused controls verify layer-0 target references for AC1021/24/27.
+  Do not repeat the matrix or change global defaults from this bounded result.
+  LibreCAD still links its bundled fork and its adapter lacks the upstream
+  provider opt-ins; P8 must qualify migration without weakening unresolved
+  reference refusal. Keep generated files in scratch storage.
+- **External and consumer gates:** P7 independent ACIS/ACDS meaning, P8 clean
+  consumer/native Linux and Windows qualification, and P9's six
+  `DEFERRED_EXTERNAL` rows remain open. Local parser/codec evidence cannot
+  promote those claims. Existing selected LibreCAD_3 persistence checks do not
+  replace a clean consumer or native application qualification.
 
 ### Next work packets
 
