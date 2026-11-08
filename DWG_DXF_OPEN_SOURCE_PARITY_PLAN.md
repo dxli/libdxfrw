@@ -2607,6 +2607,11 @@ canonical hard pointer from the 32-bit `ref`. This generated-only codec now
 accepts caller-created handle references with no retained wire metadata and
 refuses each retained source-metadata field until its role/width mapping is
 qualified; four atomic refusal vectors cover those fields.
+The public `eType` tag can also be mutated independently of the dynamic
+`DRW_Table` type. Since the writer registers and serializes the custom TABLE
+class based on the dynamic type, the direct encoder now rejects a non-TABLE
+tag rather than creating inconsistent in-memory/output identity; the focused
+matrix verifies atomic refusal.
 The common writer itself is unchanged; this protection applies only to the
 generated AC1018 TABLE codec.
 The direct encoder builds both streams in private copies, catches emission

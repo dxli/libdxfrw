@@ -8845,6 +8845,10 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1021,
         [](TableDwgCodecProbe&) {});
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects a mutated public entity type without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.eType = DRW::INSERT; });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects table overrides without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
