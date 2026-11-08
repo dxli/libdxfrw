@@ -18,13 +18,14 @@
   },
   "control": {
     "file": "tests/dwg2dxf_adapter_tests.cpp",
-    "sha256": "95a29024d55979c760e2f6aa43185e0ace97e92ce974696f5259de85993a691d",
+    "sha256": "f92f80b5fbce2234d1ee39fc59e525827486d6e94787d13c3fe35e34fa1b762d",
     "selector": "--tablestyle-r24-typed-writer",
     "generated_from_scratch": true,
     "cases": [
       "Existing null-handle ASCII and Binary R24 TABLESTYLE profiles remain covered.",
       "ASCII and Binary output with one uniquely emitted TABLE_BORDER_LTYPE is freshly imported; the typed border group-340 handle equals the emitted LTYPE table record handle.",
       "An unresolved border handle is refused while preserving a pre-existing destination sentinel.",
+      "A TEXTSTYLE handle used as a border LTYPE is refused while preserving the destination sentinel.",
       "The corrected profile succeeds on the same adapter after the failure.",
       "The raw captured TABLESTYLE group-340 values are checked for well-formed handles and expected non-null references."
     ],
@@ -33,7 +34,7 @@
   "validation": {
     "build": "cmake --build build --target libdxfrw_dwg2dxf_adapter_tests -j2",
     "test": "ctest --test-dir build -R '^libdxfrw_tablestyle_r24_typed_writer$' --output-on-failure",
-    "result": "passed; 1/1 selected CTest, 0.34 seconds"
+    "result": "passed; 1/1 selected CTest, 0.76 seconds after wrong-kind target control was added"
   },
   "limits": [
     "This is generated DXF transport and typed readback evidence for the bounded R24 profile.",

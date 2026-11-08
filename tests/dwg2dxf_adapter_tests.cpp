@@ -37385,6 +37385,11 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
                               &data, false)
             || !destinationIsSentinel())
             return fail("R24 TABLESTYLE accepted an unresolved border linetype or replaced the destination");
+        borderLineType = 0x560u;
+        if (writer.fileExport(output.string(), DRW::AC1024, binary,
+                              &data, false)
+            || !destinationIsSentinel())
+            return fail("R24 TABLESTYLE accepted a text-style handle as a border linetype or replaced the destination");
         borderLineType = kBorderLineTypeHandle;
     }
     DRW_TableStyleCellStyle& firstCustomStyle =
