@@ -175,8 +175,11 @@ created locally from scratch for the specific control.
   control now sweeps 26 allocation points on a nonempty v21800 point→vertex
   graph with heap-backed header strings, verifies cleared geometry/header
   state at each failure and same-object retry, and checks the resulting vertex
-  and point-sized bounds (commit `1eb10dcc`). Header publication is a
-  nonthrowing move enforced by static assertion. The
+  and point-sized bounds (commit `1eb10dcc`). A heap-backed header copy fault
+  exposed partial caller-header publication; commit `304f6fc7` changes final
+  publication to a statically verified nonthrowing move. The expanded 26-point
+  projection/header sweep now leaves both outputs in their failure state and
+  retries successfully. The
   pinned independent parser
   matches the physical source SAB
   fields exactly. Native B-rep and independent-kernel gates remain open; see
