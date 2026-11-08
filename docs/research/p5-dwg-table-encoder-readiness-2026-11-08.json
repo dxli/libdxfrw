@@ -419,6 +419,14 @@
       {
         "field": "DRW_Entity::colorName",
         "reason": "The common encoder emits color/book names only as part of the AcDbColor reference form."
+      },
+      {
+        "field": "DRW_Entity::ltFlags",
+        "reason": "The common writer silently resets values above the defined two-bit linetype-flag range; the bounded TABLE codec refuses malformed raw flags."
+      },
+      {
+        "field": "DRW_Entity::space",
+        "reason": "The common writer maps every value other than PaperSpace to modelspace; reject values outside the two defined space states."
       }
     ],
     "implementation": "src/drw_entities.cpp: DRW_Table::encodeDwg refuses all listed states during bounded preflight.",

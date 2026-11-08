@@ -13674,6 +13674,8 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
     if (version != DRW::AC1018 || buf == nullptr || strBuf != nullptr
         || oType < 500 || handle == 0 || blockRecH.ref == 0
         || dwgLayerHandle() == 0u
+        || ltFlags > 3u
+        || (space != DRW::ModelSpace && space != DRW::PaperSpace)
         || (dwgLinetypeHandle() == 0u
             && (ltFlags == 3u || !builtInLinetype))
         || plotStyle < DRW::DefaultPlotStyle

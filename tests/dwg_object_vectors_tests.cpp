@@ -8906,6 +8906,16 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1018,
         [](TableDwgCodecProbe& table) { table.setRawLinetypeFlags(3u); });
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects out-of-range linetype flags",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.setRawLinetypeFlags(4u); });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects invalid entity space without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.space = static_cast<DRW::Space>(2);
+        });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects inconsistent AcDbColor presence without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {

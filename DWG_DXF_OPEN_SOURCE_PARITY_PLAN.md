@@ -2582,7 +2582,8 @@ Malformed common state is also refused: non-finite linetype scale, lineweight
 codes outside the DWG domain, negative plot-style sentinels, and inconsistent
 AcDbColor-presence/handle pairs. The preflight also rejects out-of-domain ACI/
 RGB values and color names or inline RGB data that the selected AcDbColor
-encoding would otherwise discard.
+encoding would otherwise discard, plus invalid linetype-flag and entity-space
+enum values that the common writer would normalize.
 The common writer itself is unchanged; this protection applies only to the
 generated AC1018 TABLE codec.
 The direct encoder builds both streams in private copies, catches emission
