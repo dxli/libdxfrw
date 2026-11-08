@@ -224,19 +224,18 @@ receipts remain in Git and `docs/research/`. Resume from the linked blocker
 instead of repeating successful scans or controls. The generated R24 TABLESTYLE
 border LTYPE, value-domain, scalar format, margin, text-height and merge-flag
 slices are complete in commits `12698d59`, `93c02f0d`, `9678d0c2`, `513a8adf`,
-`37d876cf`, `bff89295`, and `e19a6170`; the saved P4 inventory decision has no
-new ready physical graph. Continue with the following bounded R24 layout packet.
+`37d876cf`, `bff89295`, `e19a6170`, and `9b064748`. The R24 TABLESTYLE
+content-layout slice is complete: ODA §20.4.101.4 documents group 93 values
+Flow `1`, Stacked horizontal `2`, and Stacked vertical `4`; the AC1024 writer
+now admits these values per style and still refuses value `8` atomically.
+Generated ASCII/Binary controls verify the exact field position, typed
+readback, destination preservation and corrected same-adapter retry. The
+focused build and CTest passed (1/1); see the [content-layout receipt](docs/research/p6-r24-tablestyle-content-layout-2026-11-08.json).
+This adds no native rendering or physical-producer qualification. The saved P4
+inventory decision has no new ready physical graph. The next item is the
+existing physical-closure gate:
 
-1. **P6 / admit documented R24 TABLESTYLE content-layout values.** ODA
-   §20.4.101.4 defines BL group 93 as Flow `1`, Stacked horizontal `2`, or
-   Stacked vertical `4`. The writer currently accepts only `1`. Preserve style
-   identity and all other gates, but admit these three values per style.
-   Generated ASCII/Binary controls must verify the exact group-93 position
-   inside each TABLEFORMAT and typed readback; refuse value `8` with
-   destination preservation, then verify corrected same-adapter retry. Keep
-   native layout/rendering and physical producer qualification open.
-
-2. **P4 / resume physical OBJECTS closure only on a new ready witness.** The
+1. **P4 / resume physical OBJECTS closure only on a new ready witness.** The
    saved census and inventory have been reviewed: every current selected-output
    pass is already recorded, and no distinct physical graph has a closed
    source-to-output route. Keep the exact R13 GROUP, AC1021 TORUS/ACDS, and
