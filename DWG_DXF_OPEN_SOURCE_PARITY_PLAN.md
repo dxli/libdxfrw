@@ -166,8 +166,9 @@ created locally from scratch for the specific control.
 
 - **Latest ACIS writer hardening:** commit `e3111a82` preserves binary64
   precision in SAT v1 output using `max_digits10`. Follow-up commit
-  `a3d58f7f` adds a fast control confirming nonfinite SAB header scalars fail
-  before replacing an existing SAT buffer. The pinned independent parser matches the physical source SAB
+  `a3d58f7f` adds nonfinite header-scalar refusal; the current generated
+  controls also exercise a nonfinite torus vector component. Both failure paths
+  preserve the preexisting SAT output buffer. The pinned independent parser matches the physical source SAB
   fields exactly. Native B-rep and independent-kernel gates remain open; see
   the [P7 parser receipt](docs/research/p7-ac1021-inventorloader-sat-parser-crosscheck-2026-11-08.json).
 - **Latest local slice:** the AC1027 `AcDbAssocOsnapPointRefActionParam`
@@ -794,7 +795,7 @@ U-start output. The current physical SAT text is 1,057 bytes (SHA-256
 `4917d971df23651987e01f18cf8635d19dab7ec2c306c910734ba0093641da08`). The
 pinned independent InventorLoader parser reads 14 records; its typed torus
 center, axis, radii, and U origin exactly equal the source SAB-decoded
-binary64 values, and its sense/full ranges decode. This isolated harness stubs
+binary64 values, and its sense/full ranges decode. Generated failure controls also prove NaN in the SAB header tolerance or torus location vector is refused without replacing the prior SAT output buffer. This isolated harness stubs
 FreeCAD/Part and does not construct a B-rep or prove native application
 acceptance. The initial byte match with the corrected LibreDWG peer is not a
 valid target: that output failed typed parsing. The `writeModelerGeometry`
@@ -802,7 +803,7 @@ route admits only the source-bound AC1021 E3DSOLID profile and emits only for
 AC1021/AC1024 targets. The exact source-bound
 `0x452 → 0x453 → 0x454 → 0x455` selected graph passes AC1024 ASCII/Binary
 readback, rollback/retry, and strict full-source refusal at the unrelated
-IMAGEDEF owner role. Focused token/TORUS/CMC controls pass 3/3, including nonfinite-header-scalar refusal with the existing output buffer preserved; the hash-pinned physical probe passes; no fixture was added. This is selected carrier, graph
+IMAGEDEF owner role. Focused token/TORUS/CMC controls pass 3/3, including nonfinite header-scalar and torus-vector refusal with the existing output buffer preserved; the hash-pinned physical probe passes; no fixture was added. This is selected carrier, graph
 transport, and independent parser-field evidence, not B-rep semantics, native
 application acceptance, or whole-document support. Keep support claims
 unchanged. See the [parser field cross-check receipt](docs/research/p7-ac1021-inventorloader-sat-parser-crosscheck-2026-11-08.json).

@@ -18475,7 +18475,8 @@ bool runAcisSab21200SatV1Controls() {
         return false;
 
     const auto makeTorusSat = [&torusHeader](bool reverseV, bool finiteUStart,
-                                             std::string& output) {
+                                             std::string& output,
+                                             std::vector<std::uint8_t>& source) {
         std::vector<std::uint8_t> torus = torusHeader;
         const auto putU32 = [&torus](std::uint32_t value) {
             for (unsigned shift = 0; shift < 32u; shift += 8u)
@@ -18528,6 +18529,7 @@ bool runAcisSab21200SatV1Controls() {
                                    0x0Eu,0x02u,'o','f',
                                    0x0Eu,0x04u,'A','C','I','S',
                                    0x0Du,0x04u,'d','a','t','a'});
+        source = torus;
         std::vector<std::uint8_t> converted;
         if (!drw_convertSabToSatV1(torus.data(), torus.size(),
                                    DRW::AC1024, converted))
@@ -18538,9 +18540,12 @@ bool runAcisSab21200SatV1Controls() {
     std::string fullTorusSat;
     std::string finiteTorusSat;
     std::string reverseTorusSat;
-    if (!makeTorusSat(false, false, fullTorusSat)
-        || !makeTorusSat(false, true, finiteTorusSat)
-        || !makeTorusSat(true, false, reverseTorusSat))
+    std::vector<std::uint8_t> fullTorusSource;
+    std::vector<std::uint8_t> finiteTorusSource;
+    std::vector<std::uint8_t> reverseTorusSource;
+    if (!makeTorusSat(false, false, fullTorusSat, fullTorusSource)
+        || !makeTorusSat(false, true, finiteTorusSat, finiteTorusSource)
+        || !makeTorusSat(true, false, reverseTorusSat, reverseTorusSource))
         return false;
     const std::string torusRecordPrefix =
         "torus-surface $-1 $-1 $-1 1.2345678901234567 "
@@ -18555,6 +18560,36 @@ bool runAcisSab21200SatV1Controls() {
                "-2.3456789012345669 3.4567890123456779 0 0 1 "
                "19.123456789012344 2.7899834596164137 1 0 0 reverse_v I I I I #\n")
             == std::string::npos)
+        return false;
+
+    const auto locationVectorTag = std::find(fullTorusSource.begin(),
+                                              fullTorusSource.end(), 19u);
+    if (locationVectorTag == fullTorusSource.end()) return false;
+    const std::size_t firstVectorValue = static_cast<std::size_t>(
+        locationVectorTag - fullTorusSource.begin()) + 1u;
+    const std::uint64_t quietNanVectorBits = 0x7ff8000000000000ULL;
+    std::vector<std::uint8_t> nonFiniteVectorSource = fullTorusSource;
+    for (unsigned byte = 0u; byte < sizeof(quietNanVectorBits); ++byte)
+        nonFiniteVectorSource[firstVectorValue + byte] =
+            static_cast<std::uint8_t>(quietNanVectorBits >> (byte * 8u));
+    DRW_SabData nonFiniteVectorParsed;
+    if (!drw_parseSab(nonFiniteVectorSource.data(),
+                      nonFiniteVectorSource.size(), nonFiniteVectorParsed))
+        return false;
+    const auto parsedLocation = std::find_if(
+        nonFiniteVectorParsed.records.front().tokens.begin(),
+        nonFiniteVectorParsed.records.front().tokens.end(),
+        [](const DRW_SabToken& token) {
+            return token.tag == DRW_SabTag::LocationVec;
+        });
+    if (parsedLocation == nonFiniteVectorParsed.records.front().tokens.end()
+        || !std::isnan(parsedLocation->vec.x))
+        return false;
+    std::vector<std::uint8_t> preservedVectorSat{0x3Cu, 0xC3u};
+    if (drw_convertSabToSatV1(nonFiniteVectorSource.data(),
+                              nonFiniteVectorSource.size(), DRW::AC1024,
+                              preservedVectorSat)
+        || preservedVectorSat != std::vector<std::uint8_t>({0x3Cu, 0xC3u}))
         return false;
 
     std::vector<std::uint8_t> preserved{0xA5u, 0x5Au};

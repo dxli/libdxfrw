@@ -193,7 +193,8 @@
       "desktopInventory": "Computer Use still reported Mac locked after the user said they were unlocking it.",
       "supportClaimEffect": "none"
     },
-    "nonFiniteSatScalarRollback": "PASS in generated fast control: nonfinite SAB resTol is parser-visible, SAT conversion refuses, and an existing output buffer is preserved."
+    "nonFiniteSatScalarRollback": "PASS in generated fast control: nonfinite SAB resTol is parser-visible, SAT conversion refuses, and an existing output buffer is preserved.",
+    "nonFiniteSatVectorRollback": "PASS in generated fast control: NaN in the parsed torus location vector is refused, preserving the existing SAT output buffer."
   },
   "remaining": [
     "Run the exact emitted SAT through a usable native FreeCAD + pinned InventorLoader reconstruction; capture valid B-rep topology, placement, bounds, area, volume and centroid. Current parser-only check uses stubs and does not construct geometry.",
