@@ -468,8 +468,9 @@ proof supports narrowing them.
    text-style slots, and 24 border-linetype slots (29 total); the same-source
    LibreDWG minJSON confirms the common identity and hard-owner token. There are
    43 dictionary-membership edges, one selected typed report (3DSOLID), and no body
-   with an unknown reference disposition. 3DSOLID remains a partial selected report; TABLESTYLE and MLEADERSTYLE body references are classified, but
-   that does not qualify whole-object output or native semantics. Cover MLINESTYLE frame `0x18`
+   with an unknown reference disposition. 3DSOLID remains partial; the TABLESTYLE
+   and MLEADERSTYLE body-reference profiles are complete. None of these profiles
+   qualifies whole-object output or native semantics. Cover MLINESTYLE frame `0x18`
    (type 73) belongs to the `ACAD_MLINESTYLE` dictionary at `0x17` under key
    `Standard`; ODA §20.4.73 specifies inline linetype indices before R2018,
    with linetype handles only from R2018 onward. These classifications do not
@@ -513,7 +514,7 @@ proof supports narrowing them.
    **Completed body-reference profiles:** Type 73 MLINESTYLE is classified for
    pre-R2018 under ODA §20.4.73. Type 80 ACDBPLACEHOLDER, the 24 type-501
    VISUALSTYLE frames, and the type-506 SUN frame have source-matched LibreDWG peer profiles from
-   `dwg2.spec`. The same Cover DWG minJSON run matches all 30 peer records to
+   `dwg2.spec`. The same Cover DWG minJSON run matches all 32 peer-profiled records to
    libdxfrw's captured identities, frame sizes, owner handles, and reactors.
    Type 73 belongs to the rooted `ACAD_MLINESTYLE` dictionary and has no body
    H fields; type 80 is dictionary member `Normal` and the default target of
@@ -549,8 +550,9 @@ proof supports narrowing them.
    flags. The versioned default builder now emits the observed AC1027 profile;
    AC1021/AC1024 exact profiles remain unchanged. This does not enable AC1027
    output: `DRW_Material::encodeDwg` continues to refuse retained modern raw
-   tails because body/string replay is not yet complete. The SUN, DICTIONARYWDFLT, TABLESTYLE, and MLEADERSTYLE body-reference profiles are complete.
-   Only 3DSOLID remains partial; AC1027 MATERIAL output and the
+   tails because body/string replay is not yet complete. The SUN,
+   DICTIONARYWDFLT, TABLESTYLE, and MLEADERSTYLE body-reference profiles are
+   complete. Only 3DSOLID remains partial; AC1027 MATERIAL output and the
    global strict guard remain open. Do not rescan the corpus.
 
    **Completed MATERIAL profile/retry slice (2026-11-08):** the AC1027 exact
@@ -559,9 +561,9 @@ proof supports narrowing them.
    assumptions that rejected the AC1027 516-bit field body and 118/134-bit
    detached strings. Focused tests now pass for AC1024 defaults, AC1027 opt-in
    graph emission, injected dictionary failure with buffer/checkpoint rollback
-   and same-adapter retry, and retained-modern-tail replay refusal. The two
-   partial AC1027 reports (MLEADERSTYLE and 3DSOLID), MATERIAL output,
-   and aggregate strict guard remain open; this slice does not promote support.
+   and same-adapter retry, and retained-modern-tail replay refusal. The one
+   partial AC1027 report (3DSOLID), MATERIAL output, and aggregate strict guard
+   remain open; this slice does not promote support.
    The refreshed source-reference audit independently passes with 88 retained
    identities, 40 normative no-body profiles, 18 normative handle profiles,
    29 peer no-body profiles, 43 dictionary edges, one selected typed report (3DSOLID),

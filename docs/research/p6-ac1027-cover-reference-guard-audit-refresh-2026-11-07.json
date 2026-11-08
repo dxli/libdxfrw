@@ -4054,7 +4054,7 @@
       "schemaPath": "/Users/dli/dev/libredwg/src/dwg2.spec",
       "schemaSha256": "2bb3602b2867277868ebb488ea236b07d7cdf605128987f767114d68dd501499",
       "sourceSha256": "3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42",
-      "matchedFrameCount": 31,
+      "matchedFrameCount": 32,
       "matchedFrames": [
         {
           "dxfName": "ACDBPLACEHOLDER",
@@ -4418,6 +4418,18 @@
         },
         {
           "dxfName": null,
+          "encodedType": 505,
+          "handle": 108,
+          "matchesLibdxfrwFrame": true,
+          "object": "MLEADERSTYLE",
+          "ownerHandle": 107,
+          "reactorHandles": [
+            107
+          ],
+          "size": 122
+        },
+        {
+          "dxfName": null,
           "encodedType": 506,
           "handle": 109,
           "matchesLibdxfrwFrame": true,
@@ -4436,6 +4448,7 @@
       },
       "schemaBlockSha256": {
         "MATERIAL": "d7d36f2b3e98d2d2aa75a4f947b548f0077c205ca99042b26c6cac2c9493622c",
+        "MLEADERSTYLE": "52dd33baeab0b0c6e685a487d2b708e887830e4818b3b34f5fa4836725274e1b",
         "PLACEHOLDER": "1aeadbb818abe467c93efcde35aa592f10bdfaa2392c89519ac9d145a64881aa",
         "SUN": "5f5c6f5f59ab466f369bc15617851f3b49fe9d709deedd9f41d21b9dea619880",
         "TABLESTYLE": "6601049813781ccc57884fe66b10bbd64a975f0fba67e02dbf3611a995bdbae8",
