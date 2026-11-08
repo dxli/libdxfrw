@@ -12404,6 +12404,9 @@ bool dxfRW::writeTableStyle(
     const auto validR24ContentLayout = [](std::uint32_t value) {
         return value == 1u || value == 2u || value == 4u;
     };
+    const auto validR24CellAlignment = [](int value) {
+        return value >= 1 && value <= 9;
+    };
     if (!preflightDxfWrite())
         return reject("TABLESTYLE writer is already in a failed state");
     if (ent == nullptr)
@@ -12492,8 +12495,8 @@ bool dxfRW::writeTableStyle(
         const auto validR24Style = [&](
                 const DRW_TableStyleCellStyle& style,
                 int expectedId, int expectedClass,
-                const char *expectedName, int expectedAlignment,
-                std::size_t expectedBorderCount, bool hasTextStyle) {
+                const char *expectedName, std::size_t expectedBorderCount,
+                bool hasTextStyle) {
             const DRW_TableStyleContentFormat& format =
                 style.m_contentFormat;
             if (style.m_type != 5 || !style.m_hasData
@@ -12510,7 +12513,7 @@ bool dxfRW::writeTableStyle(
                 || !isSafeDxfRecordText(format.m_valueFormatString)
                 || !std::isfinite(format.m_rotation)
                 || !std::isfinite(format.m_blockScale)
-                || format.m_cellAlignment != expectedAlignment
+                || !validR24CellAlignment(format.m_cellAlignment)
                 || !byBlockColor(format.m_contentColor,
                                  format.m_contentColorCmc)
                 || !r24TextStyleHandleSupported(
@@ -12569,19 +12572,18 @@ bool dxfRW::writeTableStyle(
             || ent->m_tableCellStyle.m_id != 4
             || ent->m_tableCellStyle.m_styleClass != 2
             || ent->m_tableCellStyle.m_name != "Table"
-            || !validR24Style(ent->m_tableCellStyle, 4, 2, "Table", 1,
+            || !validR24Style(ent->m_tableCellStyle, 4, 2, "Table",
                               0u, false)
             || !ent->m_tableCellStyle.m_borders.empty())
             return failR24("R24 TABLESTYLE default Table cell style is outside the witnessed profile");
         constexpr int kIds[] = {1, 2, 3};
         constexpr int kClasses[] = {1, 1, 2};
-        constexpr int kAlignments[] = {5, 5, 2};
         constexpr const char *kNames[] = {"_TITLE", "_HEADER", "_DATA"};
         for (std::size_t index = 0; index < ent->m_cellStyles.size();
              ++index) {
             if (!validR24Style(ent->m_cellStyles[index], kIds[index],
                                kClasses[index], kNames[index],
-                               kAlignments[index], 6u, true))
+                               6u, true))
                 return failR24("R24 TABLESTYLE cell style is outside the witnessed title/header/data profile");
         }
         for (const DRW_DwgSubrecordRange& range : ent->m_subrecordRanges) {
