@@ -383,6 +383,14 @@
       {
         "field": "DRW_Entity::hasDataStoragePayloadMarker/dataStoragePayloadMarkerOffset/dataStoragePayloadMarkerLength/dataStoragePayloadMarkerSection",
         "reason": "AC1027+ DataStorage payload-marker state is not representable in the AC1018 TABLE profile."
+      },
+      {
+        "field": "DRW_Entity::layerH.ref",
+        "reason": "The AC1018 TABLE frame emits the common layer handle unconditionally; a null handle is not a valid target for the generated bounded profile."
+      },
+      {
+        "field": "DRW_Entity::lineType/lTypeH.ref",
+        "reason": "A named linetype or explicit named-linetype flag without a target handle would emit a null handle and lose the selected linetype."
       }
     ],
     "implementation": "src/drw_entities.cpp: DRW_Table::encodeDwg refuses all listed states during bounded preflight.",

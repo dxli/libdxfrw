@@ -7533,6 +7533,10 @@ public:
         numReactors = count;
     }
 
+    void setRawLinetypeFlags(std::uint8_t flags) {
+        ltFlags = flags;
+    }
+
     std::int16_t encodedObjectType() const { return oType; }
     std::uint32_t encodedObjectSize() const { return objSize; }
 
@@ -8885,6 +8889,18 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         "AC1018 TABLE encoder rejects a missing TABLESTYLE handle without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) { table.m_tableStyleHandle = 0u; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects a null layer reference without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.setDwgLayerHandle(0u); });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects named linetype without a handle",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.lineType = "CENTER"; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects explicit linetype flag without a handle",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.setRawLinetypeFlags(3u); });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects a missing entity handle without writing",
         DRW::AC1018,

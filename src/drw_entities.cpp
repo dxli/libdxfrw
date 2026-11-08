@@ -13651,8 +13651,27 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
             && color.colorName.empty() && color.bookName.empty()
             && color.sourceVersion == DRW::UNKNOWNV;
     };
+    const auto equalsAsciiNoCase = [](const UTF8STRING& value,
+                                      const char* expected) {
+        const std::size_t length = std::strlen(expected);
+        if (value.size() != length)
+            return false;
+        for (std::size_t i = 0u; i < length; ++i) {
+            if (std::toupper(static_cast<unsigned char>(value[i]))
+                != expected[i])
+                return false;
+        }
+        return true;
+    };
+    const bool builtInLinetype = lineType.empty()
+        || equalsAsciiNoCase(lineType, "BYLAYER")
+        || equalsAsciiNoCase(lineType, "BYBLOCK")
+        || equalsAsciiNoCase(lineType, "CONTINUOUS");
     if (version != DRW::AC1018 || buf == nullptr || strBuf != nullptr
         || oType < 500 || handle == 0 || blockRecH.ref == 0
+        || dwgLayerHandle() == 0u
+        || (dwgLinetypeHandle() == 0u
+            && (ltFlags == 3u || !builtInLinetype))
         || m_tableStyleHandle == 0 || !attribHandles.empty()
         || !attlist.empty()
         || seqendH.code != 0u || seqendH.size != 0u

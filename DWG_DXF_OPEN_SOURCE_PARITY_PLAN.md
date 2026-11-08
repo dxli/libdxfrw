@@ -2570,8 +2570,11 @@ shadow, and R2010+ visual-style references that the AC1018 common writer omits;
 and the AC1027+ DataStorage flag, linkage, payload, indices, and marker fields.
 The direct TABLE preflight now refuses those states. Focused tests exercise the
 count mismatches, newer-version common fields, and each DataStorage state
-family while checking output-buffer preservation. The common writer itself is
-unchanged; this protection applies only to the generated AC1018 TABLE codec.
+family while checking output-buffer preservation. A reference audit also found
+that a null layer target, or a named linetype without its required handle,
+could be serialized as a null reference; these cases now fail preflight too.
+The common writer itself is unchanged; this protection applies only to the
+generated AC1018 TABLE codec.
 The direct encoder builds both streams in private copies, catches emission
 exceptions, and swaps the staged buffers into the caller only when both are
 good. A generated success append preserves pre-existing body and handle
