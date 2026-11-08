@@ -165,9 +165,9 @@ created locally from scratch for the specific control.
 ### Current execution checkpoint (2026-11-08)
 
 - **Latest ACIS writer hardening:** commit `e3111a82` preserves binary64
-  precision in SAT v1 output using `max_digits10`; the current fast extension
-  also confirms nonfinite SAB header scalars fail before replacing an existing
-  SAT buffer. The pinned independent parser matches the physical source SAB
+  precision in SAT v1 output using `max_digits10`. Follow-up commit
+  `a3d58f7f` adds a fast control confirming nonfinite SAB header scalars fail
+  before replacing an existing SAT buffer. The pinned independent parser matches the physical source SAB
   fields exactly. Native B-rep and independent-kernel gates remain open; see
   the [P7 parser receipt](docs/research/p7-ac1021-inventorloader-sat-parser-crosscheck-2026-11-08.json).
 - **Latest local slice:** the AC1027 `AcDbAssocOsnapPointRefActionParam`
