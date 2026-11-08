@@ -16964,10 +16964,10 @@ bool DRW_TableStyle::parseDxfR24NestedStyle(
         if (dxfColor == 257) {
             value = 256;
             cmc.m_method = dwgColor::BYLAYER;
-        } else if (dxfColor >= 0 && dxfColor <= 255) {
+        } else if (dxfColor >= 0 && dxfColor <= 256) {
             value = dxfColor;
             cmc.m_method = dxfColor == 0 ? dwgColor::BYBLOCK
-                : dwgColor::ACIS;
+                : dxfColor == 256 ? dwgColor::BYLAYER : dwgColor::ACIS;
         } else {
             return false;
         }
@@ -17018,6 +17018,65 @@ bool DRW_TableStyle::parseDxfR24NestedStyle(
     DRW_TableStyleCellStyle* style = currentStyle();
     if (style == nullptr)
         return fail();
+    if (code != 420 && code != 430) {
+        m_dxfColorTarget = DxfColorTarget::None;
+        m_dxfR24ColorFieldsPresent = 0u;
+    }
+    if (code == 420 || code == 430) {
+        DRW_TableStyleCmcColor* cmc = nullptr;
+        if (m_dxfColorTarget == DxfColorTarget::Background)
+            cmc = &style->m_backgroundColorCmc;
+        else if (m_dxfColorTarget == DxfColorTarget::Content)
+            cmc = &style->m_contentFormat.m_contentColorCmc;
+        else if (m_dxfColorTarget == DxfColorTarget::Border
+                 && m_dxfR24BorderIndex < style->m_borders.size())
+            cmc = &style->m_borders[m_dxfR24BorderIndex].m_colorCmc;
+        if (cmc == nullptr)
+            return fail();
+        if (code == 420) {
+            const int rgb = reader->getInt32();
+            if (rgb < 0 || rgb > 0xFFFFFF
+                || (m_dxfR24ColorFieldsPresent & 0x01u) != 0u
+                || cmc->m_rgb >= 0)
+                return fail();
+            cmc->m_rgb = rgb;
+            cmc->m_method = 0xC2u;
+            m_dxfR24ColorFieldsPresent |= 0x01u;
+            handled = true;
+            return true;
+        }
+        const std::string value = reader->takeString();
+        const std::size_t separator = value.find('$');
+        if (value.empty()
+            || (separator != std::string::npos
+                && (separator == 0u || separator + 1u >= value.size()
+                    || value.find('$', separator + 1u)
+                        != std::string::npos))
+            || (m_dxfR24ColorFieldsPresent & 0x02u) != 0u
+            || cmc->m_rgb < 0 || cmc->m_dxfNamePresent
+            || cmc->m_dxfBookNamePresent)
+            return fail();
+        const std::string bookName = separator == std::string::npos
+            ? std::string{} : value.substr(0u, separator);
+        const std::string name = separator == std::string::npos
+            ? value : value.substr(separator + 1u);
+        if (separator != std::string::npos
+            && !replaceDxfRetainedStringField(reader,
+                    cmc->m_dxfRetainedBookNameBytes,
+                    cmc->m_bookName, bookName))
+            return false;
+        if (!replaceDxfRetainedStringField(reader,
+                cmc->m_dxfRetainedNameBytes, cmc->m_name, name))
+            return false;
+        cmc->m_dxfBookNamePresent = separator != std::string::npos;
+        cmc->m_dxfNamePresent = true;
+        cmc->m_flags = static_cast<std::uint8_t>(0x01u
+            | (separator == std::string::npos ? 0u : 0x02u));
+        cmc->m_method = 0xC2u;
+        m_dxfR24ColorFieldsPresent |= 0x02u;
+        handled = true;
+        return true;
+    }
     const auto expectCode = [code](int expected) {
         return code == expected;
     };
@@ -17088,6 +17147,7 @@ bool DRW_TableStyle::parseDxfR24NestedStyle(
             next(); return true;
         }
         case 4:
+            m_dxfColorTarget = DxfColorTarget::Background;
             if (!readColor(62, style->m_backgroundColor,
                            style->m_backgroundColorCmc))
                 return fail();
@@ -17193,6 +17253,7 @@ bool DRW_TableStyle::parseDxfR24NestedStyle(
                 return fail();
             next(); return true;
         case 8:
+            m_dxfColorTarget = DxfColorTarget::Content;
             if (!readColor(62, format.m_contentColor,
                            format.m_contentColorCmc))
                 return fail();
@@ -17257,6 +17318,7 @@ bool DRW_TableStyle::parseDxfR24NestedStyle(
             if (!readInteger(91, border.m_borderType)) return fail();
             next(); return true;
         case 5:
+            m_dxfColorTarget = DxfColorTarget::Border;
             if (!readColor(62, border.m_color, border.m_colorCmc))
                 return fail();
             next(); return true;

@@ -12368,6 +12368,49 @@ bool dxfRW::writeTableStyle(
             "tablestyle-unsupported-profile", message);
         return failDxfWrite();
     };
+    const auto safeColorText = [](const std::string& value) {
+        return value.size() <= 1024u * 1024u
+            && isSafeDxfRecordText(value)
+            && value.find('$') == std::string::npos;
+    };
+    const auto validR24Color = [&safeColorText](
+            int value, const DRW_TableStyleCmcColor& cmc) {
+        const std::uint8_t nameFlags = static_cast<std::uint8_t>(
+            (cmc.m_name.empty() ? 0u : 0x01u)
+            | (cmc.m_bookName.empty() ? 0u : 0x02u));
+        const bool combinedNameFits = cmc.m_bookName.empty()
+            || (!cmc.m_name.empty()
+                && cmc.m_bookName.size() < 1024u * 1024u
+                && cmc.m_name.size() <= 1024u * 1024u
+                    - cmc.m_bookName.size() - 1u);
+        if (value < 0 || value > 256 || cmc.m_rgb < -1
+            || cmc.m_rgb > 0xFFFFFF || cmc.m_reservedIndex != 0u
+            || !safeColorText(cmc.m_name)
+            || !safeColorText(cmc.m_bookName) || !combinedNameFits
+            || (cmc.m_flags != 0u && cmc.m_flags != nameFlags))
+            return false;
+        switch (cmc.m_method) {
+        case 0:
+            return true;
+        case 0xC1:
+            return cmc.m_rgb < 0 && cmc.m_name.empty()
+                && cmc.m_bookName.empty() && value == 0;
+        case 0xC2:
+            return cmc.m_rgb >= 0;
+        case 0xC3:
+            return cmc.m_rgb < 0 && cmc.m_name.empty()
+                && cmc.m_bookName.empty() && value > 0 && value < 256;
+        default:
+            return false;
+        }
+    };
+    const auto validR24BackgroundColor = [&validR24Color](
+            int value, const DRW_TableStyleCmcColor& cmc) {
+        return validR24Color(value, cmc)
+            || (value == 256 && cmc.m_rgb < 0 && cmc.m_name.empty()
+                && cmc.m_bookName.empty() && cmc.m_method == 0xC8u
+                && cmc.m_flags == 0u && cmc.m_reservedIndex == 0u);
+    };
     const auto scalarColorIsDxfRepresentable = [](
             int color, const DRW_TableStyleCmcColor& cmc) {
         const std::uint8_t canonical = color == 0 ? 0xC1u
@@ -12419,13 +12462,6 @@ bool dxfRW::writeTableStyle(
         return std::find(lineWeights.begin(), lineWeights.end(), value)
             != lineWeights.end();
     };
-    const auto validR24Color = [&scalarColorIsDxfRepresentable](
-            int value, const DRW_TableStyleCmcColor& cmc) {
-        return scalarColorIsDxfRepresentable(value, cmc)
-            || (value == 0 && cmc.m_rgb == -1 && cmc.m_name.empty()
-                && cmc.m_bookName.empty() && cmc.m_method == 0xC1u
-                && cmc.m_flags == 0u && cmc.m_reservedIndex == 0u);
-    };
     const auto validR24ContentOverrides = [](
             const DRW_TableStyleContentFormat& format) {
         return (format.m_propertyOverrideFlags
@@ -12452,13 +12488,6 @@ bool dxfRW::writeTableStyle(
     if (ent->m_r24PrefixPresent) {
         const auto failR24 = [&reject](const char *message) {
             return reject(message);
-        };
-        const auto byNoneColor = [](
-                int value, const DRW_TableStyleCmcColor& color) {
-            return value == 256 && color.m_rgb == -1
-                && color.m_name.empty() && color.m_bookName.empty()
-                && color.m_method == 0xC8u && color.m_flags == 0u
-                && color.m_reservedIndex == 0u;
         };
         const auto r24TextStyleHandleSupported = [this, &textStyles](
                 std::uint32_t sourceHandle) {
@@ -12522,11 +12551,8 @@ bool dxfRW::writeTableStyle(
             if (style.m_type != 5 || !style.m_hasData
                 || !validR24StyleOverrides(style.m_propertyOverrideFlags)
                 || (style.m_mergeFlags & ~std::uint32_t{0x18000u}) != 0u
-                || !(byNoneColor(style.m_backgroundColor,
-                                 style.m_backgroundColorCmc)
-                    || scalarColorIsDxfRepresentable(
-                        style.m_backgroundColor,
-                        style.m_backgroundColorCmc))
+                || !validR24BackgroundColor(style.m_backgroundColor,
+                                            style.m_backgroundColorCmc)
                 || !validR24ContentLayout(style.m_contentLayout)
                 || !validR24ContentOverrides(format)
                 || !validValueDataType(format.m_valueDataType)
@@ -12633,8 +12659,26 @@ bool dxfRW::writeTableStyle(
         const auto writeColor = [this](
                 int color, const DRW_TableStyleCmcColor& cmc) {
             const int dxfColor = cmc.m_method == 0xC8u ? 257 : color;
-            return writer->writeInt16(62,
-                static_cast<std::int16_t>(dxfColor));
+            if (!writer->writeInt16(62,
+                    static_cast<std::int16_t>(dxfColor))
+                || (cmc.m_rgb >= 0
+                    && !writer->writeInt32(420, cmc.m_rgb)))
+                return false;
+            if (cmc.m_name.empty())
+                return cmc.m_bookName.empty();
+            std::string colorName;
+            try {
+                if (!cmc.m_bookName.empty()) {
+                    colorName.reserve(cmc.m_bookName.size() + 1u
+                        + cmc.m_name.size());
+                    colorName.append(cmc.m_bookName);
+                    colorName.push_back('$');
+                }
+                colorName.append(cmc.m_name);
+            } catch (...) {
+                return false;
+            }
+            return writer->writeUtf8String(430, colorName);
         };
         const auto writeContent = [this, &writeColor](
                 const DRW_TableStyleContentFormat& format) {

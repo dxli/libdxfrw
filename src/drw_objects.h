@@ -5917,6 +5917,7 @@ public:
     m_dxfR24StyleCount = 0u;
     m_dxfR24BorderCount = 0u;
     m_dxfR24BorderIndex = 0u;
+    m_dxfR24ColorFieldsPresent = 0u;
     DRW_TableEntry::reset();
   }
 
@@ -5976,7 +5977,9 @@ private:
     None,
     Text,
     Fill,
-    Border
+    Border,
+    Background,
+    Content
   };
   int m_dxfCurrentRowStyle{-1};
   int m_dxfCurrentBorder{-1};
@@ -5993,6 +5996,7 @@ private:
   std::size_t m_dxfR24StyleCount{0u};
   std::size_t m_dxfR24BorderCount{0u};
   std::size_t m_dxfR24BorderIndex{0u};
+  std::uint8_t m_dxfR24ColorFieldsPresent{0u};
   DRW::Version m_dxfR24SourceVersion{DRW::UNKNOWNV};
   std::size_t m_dxfRetainedTableStyleNameBytes{0u};
   UTF8STRING m_dxfOriginalName;
