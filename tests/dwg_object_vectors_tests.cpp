@@ -9178,6 +9178,14 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             table.m_content.m_columns.front().m_width =
                 std::numeric_limits<double>::infinity();
         });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects unencoded inherited thickness without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.thickness = 1.0; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects unencoded inherited X-axis angle without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.xAxisAngle = 0.25; });
 
     TableDwgCodecProbe invalidTableClassNumber = makeEncodableAc1018Table();
     dwgBufferW invalidClassBody;

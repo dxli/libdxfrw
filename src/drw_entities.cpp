@@ -13781,6 +13781,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
                                || border.m_hasDxfVisibility;
                        })
         || cell.m_contents.front().m_text.size() > kMaxTableStringBytes
+        || thickness != 0.0 || xAxisAngle != 0.0
         || !std::isfinite(basePoint.x) || !std::isfinite(basePoint.y)
         || !std::isfinite(basePoint.z) || !std::isfinite(xscale)
         || !std::isfinite(yscale) || !std::isfinite(zscale)
