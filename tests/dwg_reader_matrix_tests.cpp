@@ -14852,6 +14852,99 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
         }
     }
 
+    Options ac1027TableContent;
+    ac1027TableContent.version = DRW::AC1027;
+    ac1027TableContent.classNumber = 700u;
+    Options ac1027TableContentSentinel = ac1027TableContent;
+    ac1027TableContentSentinel.handle = 0xD64u;
+    Frame ac1027TableContentObject, ac1027TableContentSentinelObject;
+    std::vector<std::uint8_t> ac1027TableContentFrame;
+    std::vector<std::uint8_t> ac1027TableContentSentinelFrame;
+    const bool ac1027TableContentBuilt =
+        makeFrame(ac1027TableContent, ac1027TableContentObject)
+        && wrapFrame(ac1027TableContent, ac1027TableContentObject,
+                     ac1027TableContentFrame)
+        && makeFrame(ac1027TableContentSentinel,
+                     ac1027TableContentSentinelObject)
+        && wrapFrame(ac1027TableContentSentinel,
+                     ac1027TableContentSentinelObject,
+                     ac1027TableContentSentinelFrame);
+    t.expect(ac1027TableContentBuilt,
+             "AC1027 TABLECONTENT raw-only recovery control is generated in memory");
+    if (ac1027TableContentBuilt) {
+        const auto nextOffset = static_cast<std::uint32_t>(
+            ac1027TableContentFrame.size());
+        std::vector<std::uint8_t> bytes = ac1027TableContentFrame;
+        bytes.insert(bytes.end(), ac1027TableContentSentinelFrame.begin(),
+                     ac1027TableContentSentinelFrame.end());
+        PersistentManagerDispatchReader reader(
+            bytes, DRW::AC1027, 601u);
+        reader.addTableContentClass(ac1027TableContent.classNumber);
+        PersistentManagerDispatchSink sink;
+        const bool read = reader.readObjects(
+            bytes, ac1027TableContent.handle, nextOffset,
+            ac1027TableContentSentinel.handle, sink);
+        const auto rawFirst = std::find_if(
+            sink.raw.begin(), sink.raw.end(),
+            [&ac1027TableContent](const DRW_UnsupportedObject& object) {
+                return object.m_handle == ac1027TableContent.handle;
+            });
+        const auto rawSecond = std::find_if(
+            sink.raw.begin(), sink.raw.end(),
+            [&ac1027TableContentSentinel](
+                const DRW_UnsupportedObject& object) {
+                return object.m_handle == ac1027TableContentSentinel.handle;
+            });
+        const auto firstPublication = std::find_if(
+            sink.publications.begin(), sink.publications.end(),
+            [&ac1027TableContent](const DRW_DwgFramePublication& publication) {
+                return publication.m_handle == ac1027TableContent.handle;
+            });
+        const auto secondPublication = std::find_if(
+            sink.publications.begin(), sink.publications.end(),
+            [&ac1027TableContentSentinel](
+                const DRW_DwgFramePublication& publication) {
+                return publication.m_handle ==
+                    ac1027TableContentSentinel.handle;
+            });
+        const bool rawOnlyAc1027 = read && reader.objectFailures() == 0u
+            && sink.tableContent.empty() && sink.typed.empty()
+            && sink.raw.size() == 2u
+            && rawFirst != sink.raw.end()
+            && rawFirst->m_rawBytes == ac1027TableContentObject.payload
+            && rawFirst->m_version == DRW::AC1027
+            && rawFirst->m_objectType == ac1027TableContent.classNumber
+            && rawFirst->m_recordName == "TABLECONTENT"
+            && rawFirst->m_className == "AcDbTableContent"
+            && !rawFirst->m_typedPayloadValidated
+            && rawFirst->m_commonLinkEvidence
+                == DRW_DwgCommonLinkEvidence::Validated
+            && rawFirst->m_parentHandle == 0xCu
+            && rawFirst->m_reactorHandles
+                == std::vector<std::uint32_t>{0xCu}
+            && rawSecond != sink.raw.end()
+            && rawSecond->m_rawBytes == ac1027TableContentSentinelObject.payload
+            && !rawSecond->m_typedPayloadValidated
+            && firstPublication != sink.publications.end()
+            && firstPublication->m_carrier
+                == DRW_DwgFramePublication::Carrier::Raw
+            && secondPublication != sink.publications.end()
+            && secondPublication->m_carrier
+                == DRW_DwgFramePublication::Carrier::Raw
+            && sink.publications.size() == 2u;
+        t.expect(rawOnlyAc1027,
+                 "AC1027 disputed TABLECONTENT frames publish raw-only after shell validation and retain the following frame");
+        if (!rawOnlyAc1027) {
+            std::cerr << "AC1027 TABLECONTENT raw-only recovery: read="
+                      << read << " failures=" << reader.objectFailures()
+                      << " typed=" << sink.typed.size()
+                      << " tableContent=" << sink.tableContent.size()
+                      << " raw=" << sink.raw.size()
+                      << " publications=" << sink.publications.size();
+            std::cerr << '\n';
+        }
+    }
+
     GeneratedTableContentObject detachedValueObject;
     const bool detachedValueBuilt = makeGeneratedR24TableContentObject(
         0xE700u, false, detachedValueObject);

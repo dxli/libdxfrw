@@ -14133,11 +14133,11 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
             if (rn == "TABLECONTENT" ||
                 cit->second->className == "AcDbTableContent") {
               DRW_TableContentObject e;
-              const bool ac1032TableContent =
-                  version == DRW::AC1032
+              const bool tableContentRawOnlyProfile =
+                  (version == DRW::AC1027 || version == DRW::AC1032)
                   && rn == "TABLECONTENT"
                   && cit->second->className == "AcDbTableContent";
-              // Preserve a pristine cursor for the exact-version raw-only
+              // Preserve a pristine cursor for the versioned raw-only
               // fallback if this disputed body fails typed decoding.
               dwgBuffer tableContentShellProbe = buff.forkIndependent();
               ret = parseTableEntry(e);
@@ -14150,11 +14150,11 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                 intfa.addUnsupportedObject(
                     makeRawObject(oType, cit->second, false));
                 ret = true;
-              } else if (ac1032TableContent
+              } else if (tableContentRawOnlyProfile
                          && RawObjectShell().parseDwg(
                              version, &tableContentShellProbe, bs)
                          && tableContentShellProbe.isGood()) {
-                // The AC1032 TABLECONTENT body/string carrier is unresolved.
+                // The AC1027/AC1032 TABLECONTENT body layout is unresolved.
                 // Publish only the validated common shell and exact raw
                 // frame; do not expose a partial typed table or qualify DXF
                 // output from this fallback.

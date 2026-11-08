@@ -1,0 +1,39 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "id": "p6-ac1027-tablecontent-raw-only-shell-recovery-2026-11-08",
+  "date": "2026-11-08",
+  "status": "GENERATED_AC1027_RAW_ONLY_SHELL_RECOVERY",
+  "supportClaimEffect": "none",
+  "scope": "Recover bounded AC1027 TABLECONTENT frames as exact raw-only objects after typed parsing fails and the independent common shell/handle stream validates.",
+  "authority": {
+    "oda": "ODA v5.4.1 §§2 and 20.4.99 remain authoritative for object strings and TABLECONTENT fields. This change does not resolve the disputed AC1027 body/string layout.",
+    "implementationPolicy": "Preserve only the validated common shell and exact raw frame; publish no partial typed object and make no DXF output or semantic support claim."
+  },
+  "implementation": {
+    "file": "src/intern/dwgreader.cpp",
+    "profile": "Exact AC1027 or AC1032 version, record name TABLECONTENT, class name AcDbTableContent, typed parse failure, and successful independent RawObjectShell parse with bounded common handles.",
+    "behavior": "The failed typed parser cursor is discarded. The raw fallback reparses from a pristine frame cursor and publishes the exact frame only when the common shell and handle stream validate. Other versions/classes and invalid shells retain the prior failure behavior."
+  },
+  "generatedControl": {
+    "file": "tests/dwg_reader_matrix_tests.cpp",
+    "method": "Two locally authored AC1027 TABLECONTENT object frames are read in sequence. Assertions check zero object parse failures, no typed TABLECONTENT callback, exact raw payload bytes, class/version identity, validated owner/reactor links, raw carrier dispositions for both objects, and second-frame recovery.",
+    "fixtureFilesAdded": 0
+  },
+  "validation": {
+    "build": "PASS: cmake --build build --target libdxfrw_dwg_reader_matrix_tests dwg2dxf -j2",
+    "focusedTest": "PASS: ctest --test-dir build -R '^libdxfrw_persistent_manager_prefix_dispatch$' --output-on-failure (1/1; includes AC1027 and existing AC1032 TABLECONTENT raw-shell controls)",
+    "diffCheck": "PASS",
+    "fullSuites": "NOT RUN"
+  },
+  "physicalSource": {
+    "priorEvidence": "The existing AC1027 receipt for object 0xC94 recorded a typed parse failure and no typed/raw callback.",
+    "currentAvailability": "The previously referenced /private/tmp/dwg-example-2013.dwg is absent in the current workspace; its historical hash-bound evidence was not reused as a current physical recheck.",
+    "qualification": "No physical-source behavior is claimed by this slice. Recheck the exact source only if it becomes available; do not copy it into the repository."
+  },
+  "limits": [
+    "TABLECONTENT field spans, value semantics, target roles, and the conflict between candidate parses and ODA remain unresolved.",
+    "Raw-only retention does not authorize replay, selected output, strict whole-file conversion, or producer-wide support claims.",
+    "The existing strict output refusal policy is unchanged."
+  ],
+  "next": "Continue with a distinct locally implementable P4/P6 slice. Reopen the AC1027 physical witness only when its exact bytes are available for a hash-pinned read; keep its typed parser and output routes refused."
+}
