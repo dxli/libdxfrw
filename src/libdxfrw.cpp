@@ -12401,6 +12401,9 @@ bool dxfRW::writeTableStyle(
         return value == 0 || value == 1 || value == 2
             || value == 4 || value == 8;
     };
+    const auto validR24ContentLayout = [](std::uint32_t value) {
+        return value == 1u || value == 2u || value == 4u;
+    };
     if (!preflightDxfWrite())
         return reject("TABLESTYLE writer is already in a failed state");
     if (ent == nullptr)
@@ -12498,7 +12501,7 @@ bool dxfRW::writeTableStyle(
                 || (style.m_mergeFlags & ~std::uint32_t{0x18000u}) != 0u
                 || !byNoneColor(style.m_backgroundColor,
                                 style.m_backgroundColorCmc)
-                || style.m_contentLayout != 1u
+                || !validR24ContentLayout(style.m_contentLayout)
                 || format.m_propertyOverrideFlags != 0u
                 || format.m_propertyFlags != 0u
                 || !validValueDataType(format.m_valueDataType)
