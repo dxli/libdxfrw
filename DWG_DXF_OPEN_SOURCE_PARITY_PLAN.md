@@ -7,6 +7,28 @@ they would unlock the Mac, the desktop inventory still reported that the Mac
 was locked. No native app surface was available, so this created no new ODA,
 FreeCAD, or format evidence. Do not repeat the unchanged ODA CLI launch or
 claim the external qualification gate passed. Continue local implementation.
+
+**Latest TABLE implementation checkpoint (2026-11-08):** the AC1018
+generated plain-text cell path now has a staged body/handle encoder, typed
+parser readback/body sentinel, representative field-profile refusal matrix,
+body and handle truncation controls, and writer-local `AcDbTable`/`ACAD_TABLE`
+class identity registration. The direct encoder swaps staged streams into
+caller buffers only after both are good; generated controls verify successful
+append preserves existing prefixes and preflight refusal preserves buffer
+state. The focused
+`build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides` selector
+passes. The slices were committed as `47d345d6`, `a7f65822`, `55817307`,
+`f878f544`, `1da90fcf`, and `4927c53e`; no downloaded or new DWG/DXF fixture
+was added. These changes do not enable `dwgRW::writeTable`: the physical AC1018
+TABLE candidates still stop at undocumented override flags, no TABLE instance
+or serialized CLASS section has end-to-end readback, and the anonymous `*T`
+block graph/compound transaction is not implemented. The Mac still appears
+locked. ODA's `--version` diagnostic aborted during Pasteboard/XPC startup and
+produced no version or drawing evidence. Do not repeat the unchanged conversion
+launch; resume native qualification only after the desktop exposes an unlocked
+app surface. Next local gates are the remaining unchecked model guard branches
+and serialized CLASS identity/instance-count proof.
+
 The P6 audit added generated AC1027 NOD → named DICTIONARY → typed SCALE and
 NOD → named DICTIONARY → DATALINK graph allocation sweeps. SCALE passed 12
 ASCII/12 Binary offsets; DATALINK with two custom references passed 28
