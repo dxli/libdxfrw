@@ -164,11 +164,17 @@ late-mutation controls. A temporary scoped allocation/time probe measured the ph
 late-mutation refusal attempts. The probe was removed after measurement. A
 full allocation-offset sweep would require thousands of callback attempts, so
 keep exhaustive fault injection on the bounded standalone pair/value writers
-and add only targeted callback failure points for the physical graph path.
-Continue the P4 census with the first saved OBJECTS profile whose source
-identity, owner/dependency roles, and byte/frame disposition are all closed;
-preserve the physical dimension graph and destination-retry gates. See the
-[callback cost receipt](docs/research/p6-ac1024-mechanical-objects-callback-cost-2026-11-08.json).
+and add only targeted callback failure points for the physical graph path. A
+focused callback-level `std::bad_alloc` injection now runs after the complete
+physical OBJECTS callback in ASCII and Binary: output preserves its sentinel,
+the same adapter retries, and the final readback again closes all 17 pairs and
+399 nodes. The build and source-bound selector pass; see the updated
+[node dependency closure receipt](docs/research/p6-ac1024-mechanical-dimension-node-dependency-closure-2026-11-08.json).
+No additional physical OBJECTS profile is currently ready in the saved P4
+census. Keep this graph's mutation/retry gates; resume P4 only when a distinct
+source profile closes identity, ownership, dependencies, and byte/frame
+disposition. Continue with independent locally actionable P5/P6 work without
+repeating the census. See the [callback cost receipt](docs/research/p6-ac1024-mechanical-objects-callback-cost-2026-11-08.json).
 
 **Resume checkpoint (2026-11-07):** the Mac session was unlocked and the
 audit-enabled ODA 27.1 GUI route has completed the AC1024 civil residual

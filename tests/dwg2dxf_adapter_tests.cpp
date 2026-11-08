@@ -67301,6 +67301,7 @@ bool physicalAssociativeDimensionDependencyOutputReadback(
         }
         class LateDependencyMutation final : public dx_iface {
         public:
+            bool failAfterObjects{false};
             bool mutateAfterObjects{false};
             std::uint32_t targetBody{0u};
             bool mutateConstraintNodeAfterObjects{false};
@@ -67312,6 +67313,10 @@ bool physicalAssociativeDimensionDependencyOutputReadback(
                 dx_iface::writeObjects();
                 if (cData == nullptr)
                     return;
+                if (failAfterObjects) {
+                    failAfterObjects = false;
+                    throw std::bad_alloc();
+                }
                 if (mutateAfterObjects) {
                     for (DRW_AssociativeObject& object :
                          cData->dwgAssociativeObjects) {
@@ -67450,6 +67455,18 @@ bool physicalAssociativeDimensionDependencyOutputReadback(
         writer.mutateValueDependencyAfterObjects = false;
         if (!exportPartial())
             return fail("corrected physical value dependency could not retry on the same adapter");
+
+        {
+            std::ofstream existing(outputPath,
+                                   std::ios::binary | std::ios::trunc);
+            if (!existing || !(existing << sentinel))
+                return fail("could not seed physical callback allocation sentinel");
+        }
+        writer.failAfterObjects = true;
+        if (exportPartial() || !destinationEquals(sentinel))
+            return fail("physical OBJECTS callback bad_alloc did not roll back destination");
+        if (!exportPartial())
+            return fail("physical associative graph did not retry after callback bad_alloc");
 
         dx_iface outputReader;
         dx_data output;

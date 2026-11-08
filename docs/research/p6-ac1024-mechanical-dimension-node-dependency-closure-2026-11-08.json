@@ -16,7 +16,7 @@
   "implementation": {
     "file": "tests/dwg2dxf_adapter_tests.cpp",
     "test": "physicalAssociativeDimensionDependencyOutputReadback",
-    "testSourceSha256": "3612f5c4d6cee6e580b023e6161b6a160639147a2d7db754111a5cdb390a6dc8",
+    "testSourceSha256": "d41fc437da764476788465f96279b2d5d10870fe460922323ccb0d19fcbb953f",
     "summary": "For every source dimension dependency, require exactly one matching constraint node in the owning constraint group. Admit only Distance and RadiusDiameter node kinds, and require both dimension and value references to use hard-pointer roles. Resolve each value edge to a distinct typed, wire-complete ACDBASSOCVALUEDEPENDENCY listed exactly once among the owning group action handles, then resolve its dependency target to a distinct typed, wire-complete ACDBASSOCVARIABLE with a parsed value. Mutate one value dependency after the OBJECTS callback and require atomic refusal plus same-adapter corrected retry."
   },
   "validation": {
@@ -27,7 +27,7 @@
     "physicalGate": {
       "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --assocdependency-physical-output-readback /Users/dli/doc/dwg/mechanical_example-imperial.dwg",
       "result": "PASS for ASCII and Binary DXF",
-      "observed": "Both encodings reported 17 linked dependency/body pairs, all 399 constraint nodes, group and dimension roles, atomic refusal, same-adapter retry, and typed readback. All 17 dimension nodes resolve to distinct typed value dependencies and distinct typed associative variables. Fresh DXF readback preserves each value-dependency and variable represented field. Late mutation of a source value-dependency value after the OBJECTS callback is refused without replacing the destination sentinel; restoration and retry succeeds on the same adapter. The DXF assertion intentionally does not compare the DWG-only associativeVariableWireComplete span marker."
+      "observed": "Both encodings reported 17 linked dependency/body pairs, all 399 constraint nodes, group and dimension roles, atomic refusal, same-adapter retry, and typed readback. All 17 dimension nodes resolve to distinct typed value dependencies and distinct typed associative variables. Fresh DXF readback preserves each value-dependency and variable represented field. Late mutation of a source value-dependency value after the OBJECTS callback is refused without replacing the destination sentinel; restoration and retry succeeds on the same adapter. An injected std::bad_alloc immediately after the full OBJECTS callback preserves the prior destination in both encodings; the same adapter then retries successfully and the final fresh readback passes. The DXF assertion intentionally does not compare the DWG-only associativeVariableWireComplete span marker."
     },
     "coverage": [
       "Unique source constraint-node reference for each of 17 dimension dependencies",
@@ -37,7 +37,8 @@
       "Distinct typed and wire-complete associative-variable target for each value dependency",
       "ASCII and Binary readback of represented value-dependency and variable fields",
       "Late dimension-body, constraint-node, and value-dependency mutation refusal",
-      "Sentinel preservation and corrected same-adapter retry after each late mutation"
+      "Sentinel preservation and corrected same-adapter retry after each late mutation",
+      "Post-OBJECTS callback std::bad_alloc refusal with destination preservation and same-adapter retry in ASCII and Binary"
     ],
     "fullSuites": "NOT_RUN; focused physical gate only"
   },
@@ -47,5 +48,5 @@
     "No independent native CAD semantic or platform qualification is established.",
     "Do not promote general associative dimension, DWG, or DXF support claims from this witness."
   ],
-  "next": "Continue the P4 census with another saved OBJECTS profile whose source identity, owner/dependency roles, and byte/frame disposition are all closed; do not retry the ineligible AC1027 Sweep tail without authoritative or independently captured complete field boundaries."
+  "next": "Resume P4 only when a distinct saved OBJECTS profile closes source identity, owner/dependency roles, and byte/frame disposition. The current census has no additional ready physical graph; continue locally actionable P5/P6 items without repeating scans or the ineligible AC1027 Sweep tail."
 }
