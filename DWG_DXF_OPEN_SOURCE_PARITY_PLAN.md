@@ -36,7 +36,9 @@ the cell text-style hard pointer (`0x10`), text height (`0x20`), and the four
 physical edge color, lineweight, and visibility families (`0x0003ffc0`) for
 plain-text cells. It emits selected
 fields in ODA §20.4.96.1 order. Generated readback checks those fields,
-edge-mask mapping, exact body boundary, and following sentinels. The reader
+edge-mask mapping, exact body boundary, and following sentinels; a combined
+`0x3ffff` vector exercises all currently admitted bits and the interleaved
+hard-pointer slot together. The reader
 decodes alignment's raw 16-bit value and marks out-of-domain values
 semantically incomplete; the text-style pointer is role-checked as a hard
 pointer and emitted in the cell-override handle slot. Color admission is

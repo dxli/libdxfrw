@@ -19,6 +19,7 @@
     "checks": [
       "typed parse recovers the selected cell handle and retains the distinct TABLESTYLE handle",
       "parser cursor reaches exact body boundary and following sentinel is readable",
+      "a combined generated vector with every currently admitted cell override bit (0x3ffff) round-trips all field values, border edges, and the interleaved hard-pointer slot",
       "missing selected handle and unflagged handle residue fail atomically",
       "unsupported cell flag 0x40000 remains refused"
     ]

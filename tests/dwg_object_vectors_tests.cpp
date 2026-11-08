@@ -8991,6 +8991,89 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  "AC1018 TABLE cell border overrides preserve following body sentinel");
     }
 
+    TableDwgCodecProbe combinedCellOverridesTable =
+        makeEncodableAc1018Table();
+    DRW_TableCell& combinedCellOverrides =
+        combinedCellOverridesTable.m_content.m_rows.front().m_cells.front();
+    combinedCellOverrides.m_overrideFlags = 0x0003FFFFu;
+    combinedCellOverrides.m_edgeFlags = 0x0F;
+    combinedCellOverrides.m_textAlignment = 5;
+    combinedCellOverrides.m_backgroundEnabled = true;
+    combinedCellOverrides.m_fillColorRgb = 256;
+    combinedCellOverrides.m_textColorRgb = 13;
+    combinedCellOverrides.m_textStyleOverrideHandle = 0xA904u;
+    combinedCellOverrides.m_textHeight = 2.75;
+    for (std::size_t edge = 0u; edge < cellBorderColors.size(); ++edge) {
+        DRW_TableBorder& border = combinedCellOverrides.m_borders[edge];
+        border.m_colorRgb = cellBorderColors[edge];
+        border.m_lineWeight = cellBorderLineweights[edge];
+        border.m_visible = cellBorderVisibilities[edge];
+        border.m_hasDxfVisibility = true;
+    }
+    dwgBufferW combinedCellOverridesBody;
+    dwgBufferW combinedCellOverridesHandles;
+    dwgBufferW combinedCellOverridesTypePrefix;
+    combinedCellOverridesTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t combinedCellOverridesObjectSizeBit =
+        combinedCellOverridesTypePrefix.bitCount();
+    const bool combinedCellOverridesEncoded =
+        combinedCellOverridesTable.encodeAsTableClass(
+            DRW::AC1018, combinedCellOverridesBody,
+            combinedCellOverridesHandles);
+    const std::uint64_t combinedCellOverridesBodyEndBit =
+        combinedCellOverridesBody.bitCount();
+    constexpr std::int32_t combinedCellOverridesSentinel = 0x51CA3FFF;
+    combinedCellOverridesBody.putBitLong(combinedCellOverridesSentinel);
+    combinedCellOverridesBody.patchRawLong32AtBit(
+        combinedCellOverridesObjectSizeBit,
+        static_cast<std::uint32_t>(combinedCellOverridesBody.bitCount()));
+    appendBits(combinedCellOverridesBody, combinedCellOverridesHandles);
+    dwgBuffer combinedCellOverridesInput(
+        combinedCellOverridesBody.data().data(),
+        combinedCellOverridesBody.data().size());
+    TableDwgCodecProbe combinedCellOverridesReadback;
+    const bool combinedCellOverridesRead = combinedCellOverridesEncoded
+        && combinedCellOverridesReadback.parseDwg(
+            DRW::AC1018, &combinedCellOverridesInput);
+    const DRW_TableCell *combinedCellOverridesActual =
+        combinedCellOverridesRead
+            && combinedCellOverridesReadback.m_content.m_rows.size() == 1u
+            && combinedCellOverridesReadback.m_content.m_rows.front()
+                .m_cells.size() == 1u
+        ? &combinedCellOverridesReadback.m_content.m_rows.front().m_cells.front()
+        : nullptr;
+    bool combinedCellOverridesMatch = combinedCellOverridesActual != nullptr
+        && combinedCellOverridesInput.isGood()
+        && combinedCellOverridesReadback.m_semanticContentComplete
+        && combinedCellOverridesActual->m_overrideFlags == 0x0003FFFFu
+        && combinedCellOverridesActual->m_edgeFlags == 0x0F
+        && combinedCellOverridesActual->m_textAlignment == 5
+        && combinedCellOverridesActual->m_backgroundEnabled
+        && combinedCellOverridesActual->m_fillColorRgb == 256
+        && combinedCellOverridesActual->m_textColorRgb == 13
+        && combinedCellOverridesActual->m_textStyleOverrideHandle == 0xA904u
+        && combinedCellOverridesActual->m_textHeight == 2.75
+        && cursorBit(combinedCellOverridesInput)
+            == combinedCellOverridesBodyEndBit;
+    for (std::size_t edge = 0u;
+         edge < cellBorderColors.size() && combinedCellOverridesMatch; ++edge) {
+        const DRW_TableBorder& border =
+            combinedCellOverridesActual->m_borders[edge];
+        combinedCellOverridesMatch = border.m_colorRgb
+                == cellBorderColors[edge]
+            && border.m_lineWeight == cellBorderLineweights[edge]
+            && border.m_visible == cellBorderVisibilities[edge]
+            && border.m_hasDxfVisibility;
+    }
+    t.expect(combinedCellOverridesMatch,
+             "AC1018 TABLE all admitted cell override fields and hard-pointer slot round-trip together");
+    if (combinedCellOverridesMatch) {
+        const std::int32_t sentinel = combinedCellOverridesInput.getBitLong();
+        t.expect(combinedCellOverridesInput.isGood()
+                     && sentinel == combinedCellOverridesSentinel,
+                 "AC1018 TABLE combined cell overrides preserve following body sentinel");
+    }
+
     DRW_Header tableFrameHeader;
     TableClassSerializationProbe tableFrameWriter(nullptr, &tableFrameHeader);
     const dwgWriter::CompoundWriteCheckpoint tableFrameCheckpoint =
