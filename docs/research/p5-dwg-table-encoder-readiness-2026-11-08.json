@@ -282,7 +282,7 @@
       "reportedVersion": "ACadSharp 3.8.0, AC1032 round trip, AutoCAD 2020",
       "observations": [
         "A no-edit DWG read/write reportedly changes two TABLE entities to one and produces a file AutoCAD rejects with ErrorStatus=53.",
-        "The report identifies BLOCK/FIELD cell-content references emitted as null as a likely cause; this is the reporter\u2019s diagnosis, not independently verified here."
+        "The report identifies BLOCK/FIELD cell-content references emitted as null as a likely cause; this is the reporter’s diagnosis, not independently verified here."
       ]
     },
     "implementationImpact": [
@@ -311,12 +311,16 @@
       {
         "field": "DRW_Insert::seqEndEntity",
         "reason": "Retained SEQEND metadata is outside the one-frame candidate body."
+      },
+      {
+        "field": "DRW_Insert::attlist",
+        "reason": "The direct TABLE body profile excludes owned ATTRIB entities; the prior guard checked parsed attribHandles but omitted attached in-memory ATTRIB models."
       }
     ],
-    "implementation": "src/drw_entities.cpp: DRW_Table::encodeDwg refuses these states during bounded preflight.",
+    "implementation": "src/drw_entities.cpp: DRW_Table::encodeDwg refuses all listed states during bounded preflight.",
     "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
     "assertion": "Each generated refusal preserves pre-seeded body and handle buffers.",
-    "disposition": "Closes only these four omission paths for the direct generated AC1018 codec. Continue auditing remaining public fields and private retained DXF data; no output support claim."
+    "disposition": "Closes only these five omission paths for the direct generated AC1018 codec. Continue auditing remaining public fields and private retained DXF state; no output support claim."
   },
   "generated_ac1018_entity_frame_commit_rollback_control": {
     "generatedFromScratch": true,

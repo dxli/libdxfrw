@@ -13654,6 +13654,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
     if (version != DRW::AC1018 || buf == nullptr || strBuf != nullptr
         || oType < 500 || handle == 0 || blockRecH.ref == 0
         || m_tableStyleHandle == 0 || !attribHandles.empty()
+        || !attlist.empty()
         || seqendH.ref != DRW::NoHandle || seqEndEntity != nullptr
         || colcount != 1 || rowcount != 1
         || colspace != 0.0 || rowspace != 0.0 || !extData.empty()

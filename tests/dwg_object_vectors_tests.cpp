@@ -8917,6 +8917,12 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             table.attribHandles.push_back(handle(0xA900u));
         });
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects attached ATTRIB models without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.attlist.push_back(std::make_shared<DRW_Attrib>());
+        });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects EED without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
