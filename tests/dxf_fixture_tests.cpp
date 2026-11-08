@@ -8594,6 +8594,220 @@ void testPointCloudObjectsAllocationRetry(TestContext& t) {
                      ? "binary POINTCLOUD OBJECTS allocation sweep retries on the same adapter and reads the closed graph"
                      : "ASCII POINTCLOUD OBJECTS allocation sweep retries on the same adapter and reads the closed graph");
     }
+
+    const auto installClassicGraph = [](PointCloudObjectsWriter& adapter,
+                                        dx_data& data) {
+        data.sourceFormat = dx_source_format::Unknown;
+        data.sourceVersion = DRW::AC1027;
+        data.hasNamedObjectDictionary = true;
+        data.namedObjectDictionary.handle = 0xCu;
+        data.namedObjectDictionary.hardOwner = 1;
+        data.namedObjectDictionary.m_entries.push_back(
+            {"LOCAL_CLASSIC_POINTCLOUD_ROOT", 0xB600u,
+             Edge::SoftOwner});
+        DRW_Dictionary dictionary;
+        dictionary.handle = 0xB600u;
+        dictionary.parentHandle = 0xCu;
+        dictionary.hardOwner = 1;
+        dictionary.m_entries.push_back(
+            {"LOCAL_CLASSIC_POINTCLOUD_DEF", 0xB601u, Edge::HardOwner});
+        data.dictionaries.push_back(std::move(dictionary));
+
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        DRW_PointCloudDef definition;
+        definition.m_kind = DRW_PointCloudDef::Definition;
+        definition.handle = 0xB601u;
+        definition.parentHandle = 0xB600u;
+        definition.m_classVersion = 2;
+        definition.m_sourceFilename = "local-classic-cloud.rcs";
+        definition.m_pointCount = 21u;
+        definition.m_extentsMin = DRW_Coord{-2.0, -3.0, -4.0};
+        definition.m_extentsMax = DRW_Coord{5.0, 6.0, 7.0};
+        definition.reactorHandles.push_back(0xB603u);
+        definition.setDwgCommonObjectState(1, 0u, false);
+        adapter.addPointCloudDef(definition);
+
+        DRW_PointCloudDef reactor;
+        reactor.m_kind = DRW_PointCloudDef::Reactor;
+        reactor.handle = 0xB603u;
+        reactor.parentHandle = 0xB602u;
+        reactor.m_classVersion = 2;
+        adapter.addPointCloudDef(reactor);
+
+        DRW_PointCloud cloud;
+        cloud.handle = 0xB602u;
+        cloud.classVersion = 2u;
+        cloud.definitionHandle = 0xB601u;
+        cloud.reactorHandle = 0xB603u;
+        cloud.savedFilename = "local-classic-cloud.rcs";
+        cloud.sourceFileCount = 1;
+        cloud.sourceFiles = {"local-classic-cloud.rcs"};
+        cloud.pointCount = 21u;
+        adapter.addPointCloud(&cloud);
+        return !data.pointCloudObjectCaptureFailed
+            && !data.typedEntityCaptureFailed
+            && data.pointCloudDefinitions.size() == 2u
+            && data.mBlock != nullptr && data.mBlock->ent.size() == 1u;
+    };
+    const auto classicSourceGraphUnchanged = [](const dx_data& data) {
+        if (!data.hasNamedObjectDictionary
+            || data.namedObjectDictionary.handle != 0xCu
+            || data.namedObjectDictionary.m_entries.size() != 1u
+            || data.namedObjectDictionary.m_entries.front().m_name
+                != "LOCAL_CLASSIC_POINTCLOUD_ROOT"
+            || data.namedObjectDictionary.m_entries.front().m_handle != 0xB600u
+            || data.dictionaries.size() != 1u
+            || data.dictionaries.front().handle != 0xB600u
+            || data.dictionaries.front().parentHandle != 0xCu
+            || data.dictionaries.front().m_entries.size() != 1u
+            || data.dictionaries.front().m_entries.front().m_name
+                != "LOCAL_CLASSIC_POINTCLOUD_DEF"
+            || data.dictionaries.front().m_entries.front().m_handle != 0xB601u
+            || data.pointCloudDefinitions.size() != 2u
+            || data.mBlock == nullptr || data.mBlock->ent.size() != 1u)
+            return false;
+        const DRW_PointCloudDef* definition = nullptr;
+        const DRW_PointCloudDef* reactor = nullptr;
+        for (const DRW_PointCloudDef& object : data.pointCloudDefinitions) {
+            if (object.m_kind == DRW_PointCloudDef::Definition)
+                definition = &object;
+            else if (object.m_kind == DRW_PointCloudDef::Reactor)
+                reactor = &object;
+        }
+        const auto* cloud = dynamic_cast<const DRW_PointCloud*>(
+            data.mBlock->ent.front());
+        return definition != nullptr && reactor != nullptr && cloud != nullptr
+            && definition->handle == 0xB601u
+            && definition->parentHandle == 0xB600u
+            && definition->m_sourceFilename == "local-classic-cloud.rcs"
+            && definition->m_pointCount == 21u
+            && definition->reactorHandles == std::vector<std::uint32_t>{0xB603u}
+            && reactor->handle == 0xB603u
+            && reactor->parentHandle == 0xB602u
+            && cloud->handle == 0xB602u
+            && cloud->definitionHandle == definition->handle
+            && cloud->reactorHandle == reactor->handle
+            && cloud->savedFilename == "local-classic-cloud.rcs"
+            && cloud->pointCount == 21u;
+    };
+    const auto classicGraphReadbackMatches = [&]() {
+        dx_data decoded;
+        dx_iface reader;
+        const bool imported = reader.fileImport(outputFilename, &decoded, false);
+        if (!imported || decoded.mBlock == nullptr || decoded.mBlock->ent.size() != 1u
+            || decoded.pointCloudDefinitions.size() != 2u
+            || !decoded.hasNamedObjectDictionary) {
+            std::cerr << "classic pointcloud readback precondition: imported="
+                      << imported << " block=" << (decoded.mBlock != nullptr)
+                      << " entities=" << (decoded.mBlock ? decoded.mBlock->ent.size() : 0u)
+                      << " definitions=" << decoded.pointCloudDefinitions.size()
+                      << " NOD=" << decoded.hasNamedObjectDictionary << '\n';
+            return false;
+        }
+        const DRW_PointCloudDef* definition = nullptr;
+        const DRW_PointCloudDef* reactor = nullptr;
+        for (const DRW_PointCloudDef& object : decoded.pointCloudDefinitions) {
+            if (object.m_kind == DRW_PointCloudDef::Definition)
+                definition = &object;
+            else if (object.m_kind == DRW_PointCloudDef::Reactor)
+                reactor = &object;
+        }
+        const auto* cloud = dynamic_cast<const DRW_PointCloud*>(
+            decoded.mBlock->ent.front());
+        const std::size_t rootLinks = static_cast<std::size_t>(std::count_if(
+            decoded.namedObjectDictionary.m_entries.begin(),
+            decoded.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "LOCAL_CLASSIC_POINTCLOUD_ROOT"
+                    && entry.m_handle == 0xB600u;
+            }));
+        const std::size_t dictionaryLinks = static_cast<std::size_t>(
+            std::count_if(decoded.dictionaries.begin(), decoded.dictionaries.end(),
+                [](const DRW_Dictionary& value) {
+                    return value.handle == 0xB600u
+                        && value.parentHandle == 0xCu
+                        && value.m_entries.size() == 1u
+                        && value.m_entries.front().m_name
+                            == "LOCAL_CLASSIC_POINTCLOUD_DEF"
+                        && value.m_entries.front().m_handle == 0xB601u;
+                }));
+        const bool matches = definition != nullptr && reactor != nullptr && cloud != nullptr
+            && rootLinks == 1u && dictionaryLinks == 1u
+            && definition->handle == 0xB601u
+            && definition->parentHandle == 0xB600u
+            && definition->m_sourceFilename == "local-classic-cloud.rcs"
+            && definition->m_pointCount == 21u
+            && definition->reactorHandles == std::vector<std::uint32_t>{0xB603u}
+            && reactor->handle == 0xB603u
+            && reactor->parentHandle == cloud->handle
+            && cloud->handle != 0u
+            && cloud->definitionHandle == definition->handle
+            && cloud->reactorHandle == reactor->handle
+            && cloud->pointCount == 21u;
+        return matches;
+    };
+    for (const bool binary : {false, true}) {
+        long allocations = 0L;
+        constexpr long allocationProbe = 1000000L;
+        {
+            dx_data data;
+            PointCloudObjectsWriter adapter;
+            const bool installed = installClassicGraph(adapter, data);
+            adapter.armAllocationFailure = true;
+            adapter.allocationOffset = allocationProbe;
+            const bool written = installed && adapter.fileExport(
+                outputFilename, DRW::AC1027, binary, &data, false, true);
+            materialAllocationCountdown = -1;
+            if (written && adapter.objectsCallbackReached
+                && adapter.remainingAllocationCountdown > 0L
+                && adapter.remainingAllocationCountdown < allocationProbe)
+                allocations = allocationProbe - adapter.remainingAllocationCountdown;
+        }
+
+        bool everyOffsetRolledBack = allocations > 0L;
+        bool everyOffsetRetried = allocations > 0L;
+        long injectedFailures = 0L;
+        for (long offset = 0L; offset < allocations; ++offset) {
+            const std::string sentinel = "CLASSIC POINTCLOUD allocation sentinel\n";
+            {
+                std::ofstream seed(outputPath,
+                                   std::ios::binary | std::ios::trunc);
+                seed << sentinel;
+            }
+            dx_data data;
+            PointCloudObjectsWriter adapter;
+            const bool installed = installClassicGraph(adapter, data);
+            adapter.armAllocationFailure = true;
+            adapter.allocationOffset = offset;
+            const std::size_t failuresBefore = materialFailedAllocations;
+            const bool failed = installed && !adapter.fileExport(
+                outputFilename, DRW::AC1027, binary, &data, false, true);
+            materialAllocationCountdown = -1;
+            const bool rolledBack = failed && adapter.objectsCallbackReached
+                && materialFailedAllocations == failuresBefore + 1u
+                && outputBytes() == sentinel
+                && classicSourceGraphUnchanged(data);
+            everyOffsetRolledBack = everyOffsetRolledBack && rolledBack;
+            if (rolledBack)
+                ++injectedFailures;
+            adapter.armAllocationFailure = false;
+            adapter.objectsCallbackReached = false;
+            const bool retried = rolledBack && adapter.fileExport(
+                outputFilename, DRW::AC1027, binary, &data, false, true);
+            const bool readback = retried && adapter.objectsCallbackReached
+                && classicGraphReadbackMatches();
+            everyOffsetRetried = everyOffsetRetried && readback;
+        }
+        t.expect(everyOffsetRolledBack && injectedFailures == allocations,
+                 binary
+                     ? "binary classic POINTCLOUD OBJECTS allocation sweep rolls back every measured allocation"
+                     : "ASCII classic POINTCLOUD OBJECTS allocation sweep rolls back every measured allocation");
+        t.expect(everyOffsetRetried,
+                 binary
+                     ? "binary classic POINTCLOUD OBJECTS allocation sweep retries on the same adapter and reads the closed graph"
+                     : "ASCII classic POINTCLOUD OBJECTS allocation sweep retries on the same adapter and reads the closed graph");
+    }
 }
 
 bool viewRecordHasCode(const std::filesystem::path& path, bool binary,
