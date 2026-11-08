@@ -7587,6 +7587,16 @@ public:
 
 class CommonEntityHandleCodecProbe final : public DRW_Line {
 public:
+    bool encodeCommonData(DRW::Version version, dwgBufferW& output) {
+        return encodeDwgCommon(version, &output);
+    }
+
+    void addStaleCommonEedWriterRef(bool appIdReference) {
+        auto& refs = appIdReference ? dwgEedAppIdWriteRefs
+                                    : dwgEedLayerWriteRefs;
+        refs.push_back(PendingHandleRef{});
+    }
+
     bool parseCommonHandles(DRW::Version version, dwgBuffer& input,
                             std::uint64_t handleEndBit) {
         return parseDwgEntHandle(version, &input, false, handleEndBit);
@@ -9149,6 +9159,57 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         [](TableDwgCodecProbe& table) {
             table.addStaleLayerWriterRef();
         });
+    for (const bool appIdReference : {true, false}) {
+        std::vector<DRW_Entity::PendingHandleRef> appIdRefs;
+        std::vector<DRW_Entity::PendingHandleRef> layerRefs;
+        auto& staleRefs = appIdReference ? appIdRefs : layerRefs;
+        staleRefs.push_back(DRW_Entity::PendingHandleRef{});
+        dwgBufferW eedOutput;
+        eedOutput.putBit(true);
+        const std::uint64_t eedOutputBefore = eedOutput.bitCount();
+        const bool encodedEmptyEed = DRW_Entity::encodeDwgEed(
+            DRW::AC1018, {}, appIdRefs, layerRefs, 30u, eedOutput);
+        t.expect(!encodedEmptyEed
+                     && eedOutput.bitCount() == eedOutputBefore,
+                 appIdReference
+                     ? "Shared EED encoder rejects stale APPID refs with an empty payload atomically"
+                     : "Shared EED encoder rejects stale LAYER refs with an empty payload atomically");
+    }
+    for (const bool appIdReference : {true, false}) {
+        CommonEntityHandleCodecProbe common;
+        common.setCommonHandleState(0xA501u, DRW::DwgLayer0Handle,
+                                    0u, 0u, 0u, 0u);
+        auto& staleRefs = appIdReference
+            ? common.pendingAppIdResolutions
+            : common.pendingLayerRefResolutions;
+        staleRefs.push_back(DRW_Entity::PendingHandleRef{});
+        dwgBufferW commonOutput;
+        commonOutput.putBit(true);
+        const std::uint64_t commonOutputBefore = commonOutput.bitCount();
+        const bool encodedCommon = common.encodeCommonData(
+            DRW::AC1018, commonOutput);
+        t.expect(!encodedCommon
+                     && commonOutput.bitCount() == commonOutputBefore,
+                 appIdReference
+                     ? "Shared common-entity encoder rejects pending APPID refs before writing"
+                     : "Shared common-entity encoder rejects pending LAYER refs before writing");
+    }
+    for (const bool appIdReference : {true, false}) {
+        CommonEntityHandleCodecProbe common;
+        common.setCommonHandleState(0xA501u, DRW::DwgLayer0Handle,
+                                    0u, 0u, 0u, 0u);
+        common.addStaleCommonEedWriterRef(appIdReference);
+        dwgBufferW commonOutput;
+        commonOutput.putBit(true);
+        const std::uint64_t commonOutputBefore = commonOutput.bitCount();
+        const bool encodedCommon = common.encodeCommonData(
+            DRW::AC1018, commonOutput);
+        t.expect(!encodedCommon
+                     && commonOutput.bitCount() == commonOutputBefore,
+                 appIdReference
+                     ? "Shared common-entity encoder rejects stale APPID writer refs before writing"
+                     : "Shared common-entity encoder rejects stale LAYER writer refs before writing");
+    }
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects unencoded DXF application groups without writing",
         DRW::AC1018,

@@ -6198,6 +6198,8 @@ bool DRW_Entity::encodeDwgEed(
     const std::vector<PendingHandleRef>& layerRefs,
     std::uint16_t codePage, dwgBufferW& output) {
     if (extData.empty()) {
+        if (!appIdRefs.empty() || !layerRefs.empty())
+            return false;
         output.putBitShort(0);
         return output.isGood();
     }
@@ -6292,11 +6294,16 @@ bool DRW_Entity::encodeDwgEed(
 bool DRW_Entity::encodeDwgCommon(DRW::Version version, dwgBufferW *buf,
                                   dwgBufferW *strBuf) {
     (void)strBuf;  // ENC names are byte-oriented TV fields in the data stream
-    if (buf == nullptr || reactorHandles.size() > dwgSafety::MaxReactorCount ||
-        (version != DRW::AC1015 && version != DRW::AC1018 &&
-        version != DRW::AC1021 &&
-        version != DRW::AC1024 && version != DRW::AC1027 &&
-        version != DRW::AC1032)) return false;
+    if (buf == nullptr || reactorHandles.size() > dwgSafety::MaxReactorCount
+        || !pendingAppIdResolutions.empty()
+        || !pendingLayerRefResolutions.empty()
+        || (extData.empty()
+            && (!dwgEedAppIdWriteRefs.empty()
+                || !dwgEedLayerWriteRefs.empty()))
+        || (version != DRW::AC1015 && version != DRW::AC1018
+            && version != DRW::AC1021 && version != DRW::AC1024
+            && version != DRW::AC1027 && version != DRW::AC1032))
+        return false;
 
     // Object type: BS for AC1015/AC1018, OT for AC1024+.
     buf->putObjType(version, static_cast<std::uint16_t>(oType));

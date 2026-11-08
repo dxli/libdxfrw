@@ -2603,9 +2603,11 @@ flag. A generated `AcDbTable` subclass + group-97 control verifies pre-grid
 refusal with both output streams unchanged; no fixture was added.
 The EED encoder also returns immediately for an empty `extData` vector, so
 stale pending APPID/LAYER resolution entries could otherwise be ignored. The
-TABLE preflight now refuses both parser-side pending resolutions and writer-
-side EED resolution vectors when no EED payload is present; four focused cases
-verify atomic refusal.
+shared `encodeDwgEed` now refuses writer-side APPID/LAYER resolution vectors
+without payload, while `encodeDwgCommon` rejects parser-side pending refs and
+writer-side resolution residue with an empty payload before writing common
+fields. Generated controls verify both families preserve a preseeded
+destination; the TABLE preflight retains its narrower early guard as well.
 The inherited INSERT audit also found `blockRecH`'s parsed wire code, size,
 raw role, and 64-bit reference were ignored while the TABLE encoder rebuilt a
 canonical hard pointer from the 32-bit `ref`. This generated-only codec now
@@ -2617,8 +2619,8 @@ The public `eType` tag can also be mutated independently of the dynamic
 class based on the dynamic type, the direct encoder now rejects a non-TABLE
 tag rather than creating inconsistent in-memory/output identity; the focused
 matrix verifies atomic refusal.
-The common writer itself is unchanged; this protection applies only to the
-generated AC1018 TABLE codec.
+The common EED guards apply to all entity writers. The remaining model and
+parser-state checks apply only to the generated AC1018 TABLE codec.
 The direct encoder builds both streams in private copies, catches emission
 exceptions, and swaps the staged buffers into the caller only when both are
 good. A generated success append preserves pre-existing body and handle
