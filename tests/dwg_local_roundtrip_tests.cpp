@@ -18451,7 +18451,7 @@ bool runAcisSab21200SatV1Controls() {
     const std::string expected =
         "21200 0 1 0 \n"
         "1 P 1 A 1 D \n"
-        "1 0.1 0.01 \n"
+        "1 0.10000000000000001 0.01 \n"
         "body -1 4660 1.5 3 xyz ab cde $-7 I F { } #\n"
         "End-of-ACIS-data \n";
     if (sat != std::vector<std::uint8_t>(expected.begin(), expected.end()))
@@ -18492,10 +18492,11 @@ bool runAcisSab21200SatV1Controls() {
             torus.push_back(12u);
             putU32(std::numeric_limits<std::uint32_t>::max());
         }
-        putVector(19u, 1.0, 2.0, 3.0);
+        putVector(19u, 1.2345678901234567, -2.345678901234567,
+                  3.456789012345678);
         putVector(20u, 0.0, 0.0, 1.0);
-        putDouble(19.0);
-        putDouble(2.5);
+        putDouble(19.123456789012345);
+        putDouble(2.7899834596164137);
         putVector(20u, 1.0, 0.0, 0.0);
         torus.push_back(reverseV ? 10u : 11u);
         if (finiteUStart) {
@@ -18525,13 +18526,17 @@ bool runAcisSab21200SatV1Controls() {
         || !makeTorusSat(true, false, reverseTorusSat))
         return false;
     const std::string torusRecordPrefix =
-        "torus-surface $-1 $-1 $-1 1 2 3 0 0 1 19 2.5 1 0 0 forward_v ";
+        "torus-surface $-1 $-1 $-1 1.2345678901234567 "
+        "-2.3456789012345669 3.4567890123456779 0 0 1 "
+        "19.123456789012344 2.7899834596164137 1 0 0 forward_v ";
     if (fullTorusSat.find(torusRecordPrefix + "I I I I #\n")
             == std::string::npos
         || finiteTorusSat.find(torusRecordPrefix + "F 0.25 I I I #\n")
             == std::string::npos
         || reverseTorusSat.find(
-               "torus-surface $-1 $-1 $-1 1 2 3 0 0 1 19 2.5 1 0 0 reverse_v I I I I #\n")
+               "torus-surface $-1 $-1 $-1 1.2345678901234567 "
+               "-2.3456789012345669 3.4567890123456779 0 0 1 "
+               "19.123456789012344 2.7899834596164137 1 0 0 reverse_v I I I I #\n")
             == std::string::npos)
         return false;
 

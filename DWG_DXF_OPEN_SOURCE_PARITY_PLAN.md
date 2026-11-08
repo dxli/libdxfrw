@@ -762,8 +762,7 @@ layer-0 extension DICTIONARY closure (`0x1C1`, decimal handle 449). No physical
 source DataStorage record or ACDSDATA envelope is created. Strict full-source
 export still preserves its destination and stops first at the unrelated
 unqualified DWG IMAGEDEF owner role, so the opaque-frame gate remains open.
-After the user-reported unlock, ODA 27.1 still aborts during PasteBoard/XPC
-startup before reading an input; this produced no drawing-level evidence. A
+The user said they were unlocking the session, but the next desktop inventory still reported the Mac locked. ODA 27.1 again aborted during PasteBoard/XPC startup before reading input; this produced no drawing-level evidence. A
 fresh LibreDWG 0.14 peer conversion again emitted only group 70 and history
 handle `453` for output handle `452`. The later verbose LibreDWG trace shows
 that its SAB-to-SAT converter runs for handle `0x452`, but the source writer
@@ -784,29 +783,31 @@ receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.js
 
 **Implementation progress (2026-11-08):** the bounded AC1021 inline SAB v2
 converter parses the observed version-21200 token profile and emits SAT v1
-text. An initial 909-byte result byte-matched the corrected LibreDWG scratch
-peer, but the pinned independent InventorLoader parser could not decode the
-`torus-surface` ranges: all five SAB booleans had been rendered as `F`. The
-converter now preserves the `torus-surface` boolean ordinal: the first bit
-emits `forward_v`/`reverse_v`, and the four range bits emit `I` when false or
-`F` when true (with the following numeric value retained). Generated controls
-cover the full-range profile and a finite U-start value. The corrected
-physical SAT text is 917 bytes (SHA-256
-`c31590592694a817bd5c67a133f729f37cd010d6e23132029d5f342a96d448ed`). The
-same pinned independent parser now recovers the typed torus center, axis,
-major/minor radii, sense, and both full ranges. That probe uses isolated
-FreeCAD/Part stubs and does not construct a B-rep or prove native FreeCAD
-acceptance. The implementation no longer claims byte equality with the
-corrected LibreDWG peer; its prior matching output was the one the independent
-parser rejected. The `writeModelerGeometry` route still admits only the
-source-bound AC1021 E3DSOLID profile and emits only for AC1021/AC1024 targets.
-The exact source-bound `0x452 → 0x453 → 0x454 → 0x455` selected graph passes
-AC1024 ASCII/Binary readback, rollback/retry, and strict full-source refusal
-at the unrelated IMAGEDEF owner role. Focused token/TORUS/CMC controls pass
-3/3; the hash-pinned physical probe passes; no fixture was added. This is
-selected carrier, graph transport, and independent parser-field evidence,
-not B-rep semantics, native application acceptance, or whole-document
-support. Keep support claims unchanged.
+text. The first independent parser run exposed invalid torus range markers: all
+five SAB booleans had been rendered as `F`. The converter now preserves the
+`torus-surface` boolean ordinal: the first bit emits `forward_v`/`reverse_v`,
+and the four range bits emit `I` when false or `F` when true, with following
+numeric bounds retained. A second exact-value comparison found that the
+formatter still rounded binary64 numbers to six significant digits; it now
+uses `max_digits10` and the classic locale. Generated controls check nontrivial
+coordinate/radius lexemes, forward/reverse sense, full ranges, and finite
+U-start output. The current physical SAT text is 1,057 bytes (SHA-256
+`4917d971df23651987e01f18cf8635d19dab7ec2c306c910734ba0093641da08`). The
+pinned independent InventorLoader parser reads 14 records; its typed torus
+center, axis, radii, and U origin exactly equal the source SAB-decoded
+binary64 values, and its sense/full ranges decode. This isolated harness stubs
+FreeCAD/Part and does not construct a B-rep or prove native application
+acceptance. The initial byte match with the corrected LibreDWG peer is not a
+valid target: that output failed typed parsing. The `writeModelerGeometry`
+route admits only the source-bound AC1021 E3DSOLID profile and emits only for
+AC1021/AC1024 targets. The exact source-bound
+`0x452 → 0x453 → 0x454 → 0x455` selected graph passes AC1024 ASCII/Binary
+readback, rollback/retry, and strict full-source refusal at the unrelated
+IMAGEDEF owner role. Focused token/TORUS/CMC controls pass 3/3; the hash-pinned
+physical probe passes; no fixture was added. This is selected carrier, graph
+transport, and independent parser-field evidence, not B-rep semantics, native
+application acceptance, or whole-document support. Keep support claims
+unchanged. See the [parser field cross-check receipt](docs/research/p7-ac1021-inventorloader-sat-parser-crosscheck-2026-11-08.json).
 
 The local P6 AC1027
 source-reference inventory is complete, with
@@ -3093,8 +3094,8 @@ not qualify mesh geometry or native behavior ([receipt](docs/research/p6-dxf-pol
   See the [shell-loss receipt](docs/research/p7-dwg-modeler-shell-loss-guard-2026-11-03.json)
   and [UID span receipt](docs/research/p7-ac1027-modeler-revision-uid-physical-spans-2026-11-03.json).
 - **Completed bounded AC1021 inline-SAB selected projection:** the exact physical E3DSOLID source at handle `0x452` now writes its version-2 SAB as SAT v1 to AC1024 ASCII and Binary DXF. The selected 0x452→0x453→0x454→0x455 history/EvaluationGraph/torus graph is closed, output handles are remapped and read back, and atomic refusal plus same-adapter retry pass. This route is independent of ACDSDATA and does not qualify whole-source output, geometry semantics, native CAD acceptance, or other source revisions; full-source export still stops at the unrelated IMAGEDEF owner-role gate. No fixture was added. See the [selected carrier receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).
-- **Independent parser field check completed; native geometry step remains next.** InventorLoader is pinned to commit `e94bdf5e29052a0dc7ce6fdf755e956ae507caec`; its separate `Acis.py` parser reads the corrected 917-byte selected SAT output (SHA-256 `c31590592694a817bd5c67a133f729f37cd010d6e23132029d5f342a96d448ed`), parses 14 records and decodes the typed `torus-surface` center, axis, radii, sense and full U/V ranges. The run used a scratch harness with FreeCAD/Part stubs to exercise parsing and typed fields only; it did not build a shape. The first output exposed the `F`-range bug and failed typed torus decoding; the corrected token sequence succeeds. See the [parser field cross-check receipt](docs/research/p7-ac1021-inventorloader-sat-parser-crosscheck-2026-11-08.json). Next, run the exact payload through InventorLoader's native FreeCAD Part reconstruction and capture shape validity, solids/shells/faces/edges, placement, bounds, area, volume and centroid. The bundled `freecadcmd` is present but exits before running with `Incompatible processor. This Qt build requires ... neon`; Computer Use still reports the macOS session locked, so native import has not run. This shared-OCCT path can be an independent parser/geometry cross-check but cannot satisfy the independent-kernel gate. Check the add-on's documented unsupported blending surfaces, helix surfaces for lines, and law-defined curves/surfaces against the target payload, then obtain a genuinely independent-kernel and source-native semantic check.
-- The official ODA File Converter startup retry was repeated after the user unlocked the macOS session. It still aborted with PasteBoard/XPC errors before opening input, so this exact CLI route is currently unusable; do not count its failure as file-format evidence. The installed FreeCAD bundle provides Python 3.11/pythonocc-core and a lowercase `freecadcmd`, but that command aborts on the Qt NEON CPU-feature check; its user add-on directory has no ACIS reader installed. This inventory does not block the independent-parser probe above.
+- **Independent parser field check completed; native geometry step remains next.** InventorLoader is pinned to commit `e94bdf5e29052a0dc7ce6fdf755e956ae507caec`; its separate `Acis.py` parser reads the precision-preserving 1,057-byte selected SAT output (SHA-256 `4917d971df23651987e01f18cf8635d19dab7ec2c306c910734ba0093641da08`), parses 14 records and decodes the typed `torus-surface` center, axis, radii, sense and full U/V ranges. A direct comparison against the decoded source SAB values now matches every numeric field exactly after SAT text parsing. The run used a scratch harness with FreeCAD/Part stubs to exercise parsing and typed fields only; it did not build a shape. The first output exposed the `F`-range bug and failed typed torus decoding; the corrected token sequence succeeds. See the [parser field cross-check receipt](docs/research/p7-ac1021-inventorloader-sat-parser-crosscheck-2026-11-08.json). Next, run the exact payload through InventorLoader's native FreeCAD Part reconstruction and capture shape validity, solids/shells/faces/edges, placement, bounds, area, volume and centroid. The bundled `freecadcmd` is present but exits before running with `Incompatible processor. This Qt build requires ... neon`; native import has not run. The user indicated the session was being unlocked, but the subsequent desktop inventory still reported the Mac locked and ODA File Converter again aborted on PasteBoard/XPC startup before processing input. This shared-OCCT path can be an independent parser/geometry cross-check but cannot satisfy the independent-kernel gate. Check the add-on's documented unsupported blending surfaces, helix surfaces for lines, and law-defined curves/surfaces against the target payload, then obtain a genuinely independent-kernel and source-native semantic check.
+- The official ODA File Converter startup retry was repeated after the user said they were unlocking the macOS session; desktop inventory still reported the Mac locked. It still aborted with PasteBoard/XPC errors before opening input, so this exact CLI route is currently unusable; do not count its failure as file-format evidence. The installed FreeCAD bundle provides Python 3.11/pythonocc-core and a lowercase `freecadcmd`, but that command aborts on the Qt NEON CPU-feature check; its user add-on directory has no ACIS reader installed. This inventory does not block the independent-parser probe above.
 - Complete source placement, units/transforms, topology, trims, periodicity and
   spline geometry beyond locally verified analytic helpers. A local wireframe or
   repaired/count-only graph is not B-rep support evidence.

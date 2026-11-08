@@ -153,7 +153,7 @@
     "sourceHashMismatchGuard": "A scratch copy with one appended byte was refused before import with exit code 2 and the observed/expected SHA-256 values; scratch copy was not added to the repository.",
     "selectedProjectionFirstObservedGate": "Historical initial diagnostic before the inline-SAB source-bound writer route was implemented: extension-graph validation stopped at an unresolved EvaluationGraph owner, so it did not exercise entity serialization. Superseded by the selectedPhysicalProjection PASS below.",
     "fullSourceFirstObservedGate": "DWG IMAGEDEF owner role is unqualified for output; this is the first observed full-source rejection, so this result does not prove the opaque-frame gate was reached.",
-    "focusedCtest": "ctest --test-dir build -R '^(dxf_acsh_torus_typed_roundtrip|dxf_acsh_cmc_loss_guard)$' --output-on-failure — 2/2 PASS",
+    "focusedCtest": "cmake --build build --target libdxfrw_dwg_local_roundtrip -j4 — PASS; ctest --test-dir build -R \"^(acis_sab21200_sat_v1_token_controls|dxf_acsh_torus_typed_roundtrip|dxf_acsh_cmc_loss_guard)$\" --output-on-failure — 3/3 PASS.",
     "diffCheck": "git diff --check — PASS",
     "fixturesAdded": 0,
     "fullSuites": "NOT RUN",
@@ -179,50 +179,28 @@
       "revision": "e94bdf5e29052a0dc7ce6fdf755e956ae507caec",
       "parserSource": "Acis.py",
       "parserSourceSha256": "ec84f9528355f0df2e28bd94eecf7d9e4be89c5b9f7a77eef9b9cccbc21366bb",
-      "inputBytes": 917,
-      "inputSha256": "c31590592694a817bd5c67a133f729f37cd010d6e23132029d5f342a96d448ed",
-      "command": "python3 /private/tmp/acsh-semantic-probe/parse_inventorloader_sat.py /private/tmp/acsh-semantic-probe/torus-fixed.sat",
-      "method": "AcisReader.readText plus SurfaceTorus.set; FreeCAD, Part and utility imports replaced with scratch stubs; no shape/kernel operation invoked.",
-      "result": {
-        "readText": true,
-        "parsedRecords": 14,
-        "bodyRecords": 1,
-        "surface": "torus-surface",
-        "center": [
-          1383.62,
-          418.5,
-          1158.76
-        ],
-        "axis": [
-          -0.501424,
-          -1.6431677767887314e-16,
-          -0.865202
-        ],
-        "majorRadius": 19.0,
-        "minorRadius": 2.78998,
-        "uOrigin": [
-          -0.865202,
-          -3.89454e-17,
-          0.501424
-        ],
-        "sense": "forward_v",
-        "uRange": "I I",
-        "vRange": "I I"
-      },
-      "preFixObservation": "The initial 909-byte output used F for all five torus-surface booleans. InventorLoader read the 14 records but SurfaceTorus.set failed while parsing a range with ValueError: could not convert string to float: F.",
-      "postFixObservation": "After the first boolean was rendered as forward_v and the four range booleans as I/F, the typed torus fields decoded successfully.",
-      "geometryConstructed": false,
-      "supportClaimEffect": "none"
+      "inputBytes": 1057,
+      "inputSha256": "4917d971df23651987e01f18cf8635d19dab7ec2c306c910734ba0093641da08",
+      "result": "PASS: 14 records, one body, typed torus; all source SAB binary64 center/axis/radius/U-origin values exactly equal values parsed from SAT text. Full U/V ranges and forward_v sense decode.",
+      "method": "Pinned Acis.py run in scratch harness with FreeCAD/Part stubs; no geometry construction."
     },
-    "satTorusBooleanFix": "PASS: generated controls cover forward/reverse sense, full ranges, and a finite U-start value; hash-pinned AC1021 selected ASCII/Binary physical projection, rollback/retry and strict full-source refusal all pass after the converter change; focused CTest selector passes 3/3. No fixture added."
+    "satTorusBooleanFix": "PASS: generated controls cover forward/reverse sense, full ranges, and a finite U-start value; hash-pinned AC1021 selected ASCII/Binary physical projection, rollback/retry and strict full-source refusal all pass after the converter change; focused CTest selector passes 3/3. No fixture added.",
+    "odaRetryAfterUserUnlock": {
+      "command": "/Applications/ODAFileConverter.app/Contents/MacOS/ODAFileConverter --help",
+      "result": "ABORTED_BEFORE_INPUT_PROCESSING",
+      "exitCode": 134,
+      "stderr": "PasteBoard errors (-4960), then invalid com.apple.hiservices-xpcservice connection",
+      "desktopInventory": "Computer Use still reported Mac locked after the user said they were unlocking it.",
+      "supportClaimEffect": "none"
+    }
   },
   "remaining": [
     "Run the exact emitted SAT through a usable native FreeCAD + pinned InventorLoader reconstruction; capture valid B-rep topology, placement, bounds, area, volume and centroid. Current parser-only check uses stubs and does not construct geometry.",
-    "Obtain a genuinely independent-kernel and source-native semantic check for the exact solid/history graph; FreeCAD/OCCT and existing OCCT-derived routes do not satisfy that gate.",
+    "Obtain a genuinely independent-kernel and source-native semantic check for the exact solid/history graph.",
     "Qualify broader native consumer and platform behavior after semantic evidence is available. Keep AC1024/1027/1032 source profiles and unrelated whole-source IMAGEDEF/opaque-frame refusal gates separate."
   ],
   "implementation": {
-    "converter": "drw_convertSabToSatV1 parses only complete ACIS BinaryFile version-21200 SAB with an explicit terminal record and serializes the observed SAT v1 profile; for torus-surface it maps the first ordered SAB boolean to forward_v/reverse_v and the next four to I/F range markers. Unknown extra torus-surface booleans fail closed.",
+    "converter": "drw_convertSabToSatV1 parses only complete ACIS BinaryFile version-21200 SAB with an explicit terminal record and serializes the observed SAT v1 profile; for torus-surface it maps the first ordered SAB boolean to forward_v/reverse_v and the next four to I/F range markers. Unknown extra torus-surface booleans fail closed. Numeric SAT fields use max_digits10 and classic locale to preserve binary64 values in text.",
     "writerGate": "writeModelerGeometry admits only AC1021 E3DSOLID, modeler version 2, one exact marker-bounded SAB body range with payload bit offset less than 8, retained complete source frame, exact SAB parse/header, and no DataStorage dependency; emits SAT group-1 text only for AC1021/AC1024 targets.",
     "differentialOutput": {
       "bytes": 917,
@@ -236,6 +214,13 @@
       "bytes": 909,
       "sha256": "5d82bceb0e931e4ac2c11a86fa5706e9621567990bdcaf200d607ed0a46ba7b0",
       "interpretation": "Initial byte match with corrected LibreDWG peer was rejected by the independent typed SAT parser for the torus range fields; superseded by the record-specific mapping."
+    },
+    "precisionFix": {
+      "before": "std::setprecision(6) rounded physical SAB numeric values.",
+      "after": "std::setprecision(std::numeric_limits<double>::max_digits10) with classic locale.",
+      "physicalSatBytes": 1057,
+      "physicalSatSha256": "4917d971df23651987e01f18cf8635d19dab7ec2c306c910734ba0093641da08",
+      "exactFieldComparison": "PASS for source SAB-decoded and independent SAT-parsed center, axis, both radii, and U origin."
     }
   }
 }

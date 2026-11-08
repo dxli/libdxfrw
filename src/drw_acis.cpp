@@ -2391,7 +2391,8 @@ bool drw_convertSabToSatV1(const std::uint8_t* data, std::size_t length,
         if (!std::isfinite(value)) return false;
         std::ostringstream stream;
         stream.imbue(std::locale::classic());
-        stream << std::setprecision(6) << std::defaultfloat << value;
+        stream << std::setprecision(std::numeric_limits<double>::max_digits10)
+               << std::defaultfloat << value;
         if (!stream) return false;
         result = stream.str();
         return !result.empty();
