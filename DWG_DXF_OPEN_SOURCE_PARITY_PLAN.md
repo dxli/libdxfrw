@@ -15,11 +15,19 @@ destination and caller state, retries the same writer, and passes typed
 readback ([SCALE receipt](docs/research/p6-dxf-scale-objects-allocation-failure-retry-2026-11-08.json),
 [DATALINK receipt](docs/research/p6-dxf-datalink-objects-allocation-failure-retry-2026-11-08.json)).
 The slices are committed as `6e8db601` and `c22619fe`. These close only the
-selected typed writer profiles. Next, compare FIELD, FIELDLIST, and
-TABLECONTENT graph setup and allocation paths, then implement the smallest
-complete generated profile. Do not reopen swept families or promote support
-claims. Each slice must update its receipt and checkpoint, commit implementation
-with evidence, then report the commit and next ready slice.
+selected typed writer profiles. A local generated FIELD/FIELDLIST allocation
+prototype was rejected before commit: its DXF output reached the first FIELD
+record, but `fileImport` refused during raw-carrier capture at the FIELD code-5
+handle, before typed parsing or graph readback. The failure is not yet attributed
+to a production defect; preserve the existing strict FIELD/FIELDLIST support
+gate and do not use this synthetic graph to make claims. The post-unlock desktop
+check still reports the Mac locked, so no new ODA/FreeCAD peer evidence is
+available. Next, anchor the allocation slice to an already passing typed
+TABLECONTENT writer/readback profile, isolate its OBJECTS callback mutations,
+and only then sweep ASCII/Binary allocation points. Do not reopen swept
+families or promote support claims. Each slice must update its receipt and
+checkpoint, commit implementation with evidence, then report the commit and
+next ready slice.
 
 **Resume checkpoint (2026-11-07):** the Mac session was unlocked and the
 audit-enabled ODA 27.1 GUI route has completed the AC1024 civil residual
