@@ -171,6 +171,11 @@ created locally from scratch for the specific control.
   preservation and corrected same-adapter retry. This is codec consistency
   only: independent producer behavior, native color-book meaning and broader
   document closure remain unqualified. See the [CMC receipt](docs/research/p6-r24-tablestyle-cmc-truecolor-book-2026-11-08.json).
+  Follow-up commit `360e8470` closes the method-zero lossiness hole: RGB/book
+  extensions now require the C2 profile, and book/name output requires its
+  RGB base. Generated ASCII/Binary controls verify atomic refusal for both
+  malformed combinations and corrected retry on the same adapter; the receipt
+  above records this follow-up too.
   Commit `e19a6170` admits per-style R24 TABLESTYLE
   merge flags within ODA's `0x18000` mask. Generated ASCII/Binary controls
   verify raw group-92 order and typed readback; an undocumented bit refuses
@@ -236,7 +241,7 @@ are complete in commits
 `12698d59`, `93c02f0d`,
 `9678d0c2`, `513a8adf`, `37d876cf`, `bff89295`, `e19a6170`, `9b064748`,
 `7781bcfc`, `9d9de967`, `c4bb35ee`, `4432792f`, `55ce3c7c`, `6463f3b7`, and
-`05720365`. The latest
+`05720365`, and `360e8470`. The latest
 bounded additions follow ODA §20.4.101.3–.4: group 93 admits content-layout
 values 1/2/4; group 94 admits cell alignments 1–9; group 90/91 admit
 documented property-override masks and AutoScale only when its override is
