@@ -10,16 +10,16 @@ claim the external qualification gate passed. Continue local implementation.
 The P6 audit added generated AC1027 NOD → named DICTIONARY → typed SCALE and
 NOD → named DICTIONARY → DATALINK graph allocation sweeps. SCALE passed 12
 ASCII/12 Binary offsets; DATALINK with two custom references passed 28
-ASCII/25 Binary offsets. Each preserves destination and caller state, retries
-the same writer, and passes typed readback ([SCALE receipt](docs/research/p6-dxf-scale-objects-allocation-failure-retry-2026-11-08.json),
+ASCII/25 Binary offsets plus the focused ASan selector. Each preserves
+destination and caller state, retries the same writer, and passes typed
+readback ([SCALE receipt](docs/research/p6-dxf-scale-objects-allocation-failure-retry-2026-11-08.json),
 [DATALINK receipt](docs/research/p6-dxf-datalink-objects-allocation-failure-retry-2026-11-08.json)).
-SCALE is committed as `6e8db601`; the DATALINK implementation/evidence commit
-is being prepared. These close only the selected typed writer profiles. Next,
-compare FIELD, FIELDLIST, and TABLECONTENT graph setup and allocation paths,
-then implement the smallest complete generated profile. Do not reopen swept
-families or promote support claims. Each slice must update its receipt and
-checkpoint, commit implementation with evidence, then report the commit and
-next ready slice.
+The slices are committed as `6e8db601` and `c22619fe`. These close only the
+selected typed writer profiles. Next, compare FIELD, FIELDLIST, and
+TABLECONTENT graph setup and allocation paths, then implement the smallest
+complete generated profile. Do not reopen swept families or promote support
+claims. Each slice must update its receipt and checkpoint, commit implementation
+with evidence, then report the commit and next ready slice.
 
 **Resume checkpoint (2026-11-07):** the Mac session was unlocked and the
 audit-enabled ODA 27.1 GUI route has completed the AC1024 civil residual
