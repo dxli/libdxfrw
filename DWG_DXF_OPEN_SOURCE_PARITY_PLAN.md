@@ -808,10 +808,14 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    exact source spans and target roles are available; keep TABLEGEOMETRY,
    dynamic evaluation and native rendering claims gated. The generated
    pre-R24 TABLE scalar override profile for ODA §20.4.96.1 bits `0x01`–`0x10`
-   is implemented, and the three row-height and three row-alignment values now
-   have typed read retention. Keep both output routes refused until their DXF
-   mappings are proven; row color/fill and border values are retained but
-   still need a lossless output mapping and precedence proof.
+   is implemented; selected title/header suppression, flow direction, and
+   margins have bounded DXF output/readback. Row heights, alignments, text
+   styles, text colors, fill colors, and fill-enabled flags also have generated
+   DXF mappings with refusal/retry controls. Border lineweight and visibility
+   map through groups 274–279/284–289 with exact enum checks; general per-row
+   border CMC remains output-refused because the DXF schema cannot represent
+   four categories of distinct row values. These are generated codec mappings,
+   not producer ordering, native precedence, or rendering qualification.
    Physical-source coverage remains open: the available metric TABLE fails
    before these fields at
    unmodeled cell-value types 16/92. See the [scalar override receipt](docs/research/p5-ac1018-ac1021-table-scalar-overrides-2026-11-08.json).
