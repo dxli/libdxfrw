@@ -17786,11 +17786,17 @@ bool DRW_TableStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_
             DRW_DBG("TABLESTYLE R24 prefix incomplete\n");
             return fail();
         }
+        const std::uint64_t tableCellOwnerStartBit = currentObjectDwgBit(hBuf);
         dwgHandle unknownHandle;
-        if (!readDwgObjectHandleWithinFrame(version, *hBuf, false, unknownHandle)) {
+        if (!readDwgObjectHandleWithinFrame(version, *hBuf, false, unknownHandle)
+            || unknownHandle.code != DRW::DwgHardOwnership) {
             DRW_DBG("TABLESTYLE R24 owner handle incomplete\n");
             return fail();
         }
+        m_subrecordRanges.push_back(makeObjectSubrecordRange(
+            "table-style-handle-table-cell-style-owner",
+            tableCellOwnerStartBit, currentObjectDwgBit(hBuf), version, 1u,
+            true));
         DRW_TableStyleCellStyle parsedTableCellStyle;
         const std::uint64_t tableCellRecordStartBit =
             currentObjectDwgBit(bodyBuf);

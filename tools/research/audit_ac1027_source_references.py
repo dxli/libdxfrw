@@ -62,6 +62,15 @@ HANDLE_BODY_PROFILE = re.compile(
     r"(?: defaultEntryRole=hard-pointer)?$",
     re.MULTILINE,
 )
+TABLESTYLE_PROFILE = re.compile(
+    r"^ typedBodyProfile type=TABLESTYLE handle=(\d+) "
+    r"bodyHandleFields=(\d+) tableCellStyleOwnerRole=hard-owner "
+    r"tableCellStyleOwnerTarget=(\d+) nestedTextStyleFields=(\d+) "
+    r"nestedBorderLineTypeFields=(\d+) "
+    r"rule=(ODA-20\.4\.101\.2\+ODA-20\.4\.101\.3\+ODA-20\.4\.101\.4) "
+    r"complete=1$",
+    re.MULTILINE,
+)
 DICTIONARY_MEMBERSHIP = re.compile(
     r"^ typedBodyFrame type=(SCALE|DICTIONARYVAR|MLINESTYLE|ACDBPLACEHOLDER|MATERIAL) handle=(\d+) .*?"
     r"dictionaryOwner=(\d+) dictionaryKey=(.*?) "
@@ -106,7 +115,7 @@ def verify_peer_profiles(
         if not isinstance(obj, dict):
             continue
         handle = peer_handle(obj.get("handle"))
-        if handle is None or int(obj.get("type", -1)) not in (73, 80, 501, 502, 506):
+        if handle is None or int(obj.get("type", -1)) not in (73, 80, 501, 502, 504, 506):
             continue
         if handle in peer_by_handle:
             raise SystemExit("LibreDWG minJSON repeats a profiled object handle")
@@ -114,7 +123,7 @@ def verify_peer_profiles(
 
     names = {
         73: "MLINESTYLE", 80: "ACDBPLACEHOLDER",
-        501: "VISUALSTYLE", 502: "MATERIAL", 506: "SUN",
+        501: "VISUALSTYLE", 502: "MATERIAL", 504: "TABLESTYLE", 506: "SUN",
     }
     rows = []
     for frame in frames:
@@ -127,6 +136,7 @@ def verify_peer_profiles(
             80: "PLACEHOLDER",
             501: "VISUALSTYLE",
             502: "MATERIAL",
+            504: "TABLESTYLE",
             506: "SUN",
         }[object_type]
         expected_dxf = {
@@ -134,6 +144,7 @@ def verify_peer_profiles(
             80: "ACDBPLACEHOLDER",
             501: None,
             502: None,
+            504: None,
             506: None,
         }[object_type]
         reactors = obj.get("reactors", []) if obj else []
@@ -201,11 +212,29 @@ def verify_peer_profiles(
         material_block.encode()
     ).hexdigest()
 
+    tablestyle_start = schema_text.find("DWG_OBJECT (TABLESTYLE)")
+    tablestyle_end = schema_text.find("DWG_OBJECT_END", tablestyle_start)
+    if tablestyle_start < 0 or tablestyle_end < 0:
+        raise SystemExit("LibreDWG dwg2.spec lacks TABLESTYLE object block")
+    tablestyle_block = schema_text[tablestyle_start:tablestyle_end]
+    if (
+        "FIELD_HANDLE (cellstyle, DWG_HDL_HARDOWN, 0);" not in tablestyle_block
+        or "CellStyle_fields (sty.cellstyle);" not in tablestyle_block
+        or "START_OBJECT_HANDLE_STREAM;" not in tablestyle_block
+        or "FIELD_HANDLE (fmt.text_style, 3, 340);" not in schema_text
+        or "SUB_FIELD_HANDLE (sty.borders[rcount2],ltype, 3, 340);"
+           not in schema_text
+    ):
+        raise SystemExit("LibreDWG TABLESTYLE schema handle roles changed")
+    schema_blocks["TABLESTYLE"] = hashlib.sha256(
+        tablestyle_block.encode()
+    ).hexdigest()
+
     source_types = Counter(int(frame["encodedType"]) for frame in frames)
     peer_types = Counter(int(obj.get("type", -1)) for obj in peer_by_handle.values())
     if source_hash == COVER_AC1027_SHA256 and any(
         peer_types[object_type] != source_types[object_type]
-        for object_type in (73, 80, 501, 502, 506)
+        for object_type in (73, 80, 501, 502, 504, 506)
     ):
         raise SystemExit("LibreDWG minJSON profile frame counts differ from Cover source inventory")
     return {
@@ -289,6 +318,23 @@ def main() -> int:
         for record_type, handle, field_count, rule
         in HANDLE_BODY_PROFILE.findall(combined)
     }
+    table_style_profiles = {
+        int(handle): {
+            "fieldCount": int(field_count),
+            "ownerTarget": int(owner_target),
+            "textStyleFieldCount": int(text_style_fields),
+            "borderLineTypeFieldCount": int(line_type_fields),
+            "rule": rule,
+        }
+        for handle, field_count, owner_target, text_style_fields,
+            line_type_fields, rule in TABLESTYLE_PROFILE.findall(combined)
+    }
+    for handle, profile in table_style_profiles.items():
+        handle_body_profiles[handle] = {
+            "rule": profile["rule"],
+            "fieldCount": profile["fieldCount"],
+            "objectType": "TABLESTYLE",
+        }
     dictionary_memberships = {
         int(handle): {
             "objectType": record_type,
@@ -358,6 +404,41 @@ def main() -> int:
             frames,
         )
     if version == "AC1027":
+        table_styles = [frame for frame in frames if frame["encodedType"] == 504]
+        for frame in table_styles:
+            profile = table_style_profiles.get(int(frame["handle"]))
+            table_style_dictionary = next((
+                item for item in typed_references
+                if item["ownerHandle"] == frame["ownerHandle"]
+                and item["role"] == "dictionary.entry[Standard]"
+                and item["targetHandle"] == frame["handle"]
+            ), None)
+            nod_edge = any(
+                entry["key"] == "ACAD_TABLESTYLE"
+                and entry["targetHandle"] == frame["ownerHandle"]
+                for entry in named_object_dictionary_entries
+            )
+            if (
+                frame["recordName"] != "TABLESTYLE"
+                or frame["className"] != "AcDbTableStyle"
+                or frame["typedBodyReport"] != "TABLESTYLE"
+                or frame["bodyReferenceDisposition"]
+                != "spec-profile-handle-references"
+                or profile != {
+                    "fieldCount": 29,
+                    "ownerTarget": 0,
+                    "textStyleFieldCount": 4,
+                    "borderLineTypeFieldCount": 24,
+                    "rule": "ODA-20.4.101.2+ODA-20.4.101.3+ODA-20.4.101.4",
+                }
+                or frame["handle"] != 106 or frame["ownerHandle"] != 105
+                or frame["reactorHandles"] != [105]
+                or not nod_edge or table_style_dictionary is None
+            ):
+                raise SystemExit(
+                    "AC1027 TABLESTYLE lacks complete ODA handle-span, peer "
+                    "identity, or rooted dictionary-role evidence"
+                )
         fixed_mline_styles = [
             frame for frame in frames if frame["encodedType"] == 73
         ]

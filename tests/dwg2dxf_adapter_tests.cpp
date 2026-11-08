@@ -23315,7 +23315,10 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
                   return range.m_name.find(
                       "table-style-handle-border-line-type[") == 0u;
               }));
+      const std::size_t tableCellOwnerSpans =
+          spanCount("table-style-handle-table-cell-style-owner");
       if (style.handle != 106u
+          || style.m_unknownHandle != 0u
           || spanCount("table-style-body-table-cell-record") != 1u
           || spanCount("table-style-body-repeated-cell-record") != 3u
           || spanCount("table-style-body-table-cell-id") != 1u
@@ -23325,6 +23328,7 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
           || spanCount("table-style-body-cell-class") != 3u
           || spanCount("table-style-string-table-cell-name") != 1u
           || spanCount("table-style-string-cell-name") != 3u
+          || tableCellOwnerSpans != 1u
           || spanCount("table-style-handle-text-style") != 4u
           || borderHandleSpans != 24u
           || std::any_of(
@@ -23339,7 +23343,22 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
       std::cout << " typedBodySpanCheck owner=" << style.handle
                 << " bodyRecords=4 identityFields=16 textStyleHandles=4"
                    " borderLineTypeHandles=" << borderHandleSpans
+                << " tableCellStyleOwnerHandles=" << tableCellOwnerSpans
+                << " bodyHandleFields="
+                << tableCellOwnerSpans + 4u + borderHandleSpans
                 << " complete=1\n";
+      if (data.sourceVersion == DRW::AC1027) {
+        std::cout << " typedBodyProfile type=TABLESTYLE handle="
+                  << style.handle << " bodyHandleFields="
+                  << tableCellOwnerSpans + 4u + borderHandleSpans
+                  << " tableCellStyleOwnerRole=hard-owner"
+                  << " tableCellStyleOwnerTarget=" << style.m_unknownHandle
+                  << " nestedTextStyleFields=4"
+                  << " nestedBorderLineTypeFields=" << borderHandleSpans
+                  << " rule=ODA-20.4.101.2+ODA-20.4.101.3"
+                     "+ODA-20.4.101.4"
+                  << " complete=1\n";
+      }
       const DRW_UnsupportedObject* rawFrame =
           DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
               data, data.importGeneration, style.handle);
