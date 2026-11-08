@@ -7826,8 +7826,10 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
         || (version == DRW::AC1018 && cellOverrideFlags != 0u
             && (cellOverrideFlags & ~ac1018CellOverrideFlags) == 0u)
         || (version == DRW::AC1021 && cellOverrideFlags == 0x00000004u);
+    constexpr std::uint32_t generatedTableOverrideFlags =
+        0x0070003Fu;
     if (!knownCellOverrideProfile
-        || (tableOverrideFlags & ~0x0000003Fu) != 0u)
+        || (tableOverrideFlags & ~generatedTableOverrideFlags) != 0u)
         return false;
     TableDwgCodecProbe source;
     source.handle = 0xA500u;
@@ -7947,6 +7949,12 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
                 body.putBitLong(static_cast<std::int32_t>(0xC0u << 24u));
                 body.putRawChar8(0);
             }
+            if ((tableOverrideFlags & 0x00100000u) != 0u)
+                body.putBitDouble(3.5); // title row height
+            if ((tableOverrideFlags & 0x00200000u) != 0u)
+                body.putBitDouble(4.5); // header row height
+            if ((tableOverrideFlags & 0x00400000u) != 0u)
+                body.putBitDouble(5.5); // data row height
         }
         body.putBit(0);
         body.putBit(0);
@@ -8281,6 +8289,34 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         t.expect(tableScalarOverridesInput.isGood()
                      && sentinel == kTablePlacementTailSentinel,
                  "AC1021 TABLE scalar-override decoder leaves the following field aligned");
+    }
+
+    R2007TableFrame tableRowHeightOverridesFrame;
+    const bool tableRowHeightOverridesBuilt = makeR2007TableFrame(
+        1, tableRowHeightOverridesFrame, TablePlacement{}, 0u,
+        0x00700000u);
+    t.expect(tableRowHeightOverridesBuilt,
+             "AC1021 TABLE row-height-override vector builds from scratch");
+    if (!tableRowHeightOverridesBuilt)
+        return;
+    dwgBuffer tableRowHeightOverridesInput(
+        tableRowHeightOverridesFrame.bytes.data(),
+        tableRowHeightOverridesFrame.bytes.size());
+    const bool tableRowHeightOverridesRead = table.parseDwg(
+        DRW::AC1021, &tableRowHeightOverridesInput);
+    t.expect(tableRowHeightOverridesRead && tableRowHeightOverridesInput.isGood()
+                 && table.m_tableOverrideFlags == 0x00700000u
+                 && table.m_tableRowHeightOverrides
+                     == std::array<double, 3>{{3.5, 4.5, 5.5}}
+                 && !table.m_semanticContentComplete
+                 && cursorBit(tableRowHeightOverridesInput)
+                     == tableRowHeightOverridesFrame.tableDataEndBit,
+             "AC1021 TABLE retains all ODA row-height override values and keeps output semantics gated");
+    if (tableRowHeightOverridesRead) {
+        const std::int32_t sentinel = tableRowHeightOverridesInput.getBitLong();
+        t.expect(tableRowHeightOverridesInput.isGood()
+                     && sentinel == kTablePlacementTailSentinel,
+                 "AC1021 TABLE row-height overrides leave the following field aligned");
     }
 
     R2007TableFrame secondUnknownFrame;

@@ -2054,6 +2054,7 @@ public:
         m_flowDirection(o.m_flowDirection),
         m_horizontalCellMargin(o.m_horizontalCellMargin),
         m_verticalCellMargin(o.m_verticalCellMargin),
+        m_tableRowHeightOverrides(o.m_tableRowHeightOverrides),
         m_titleSuppressed(o.m_titleSuppressed),
         m_headerSuppressed(o.m_headerSuppressed),
         m_tableStyleHandle(o.m_tableStyleHandle), m_content(o.m_content) {
@@ -2076,6 +2077,7 @@ public:
             m_flowDirection = o.m_flowDirection;
             m_horizontalCellMargin = o.m_horizontalCellMargin;
             m_verticalCellMargin = o.m_verticalCellMargin;
+            m_tableRowHeightOverrides = o.m_tableRowHeightOverrides;
             m_titleSuppressed = o.m_titleSuppressed;
             m_headerSuppressed = o.m_headerSuppressed;
             m_tableStyleHandle = o.m_tableStyleHandle;
@@ -2116,6 +2118,10 @@ public:
     int m_flowDirection = 0;
     double m_horizontalCellMargin = 0.0;
     double m_verticalCellMargin = 0.0;
+    // ODA §20.4.96.1 table-level title/header/data row height overrides.
+    // Output remains refused until their relationship to row-level DXF heights
+    // has a lossless typed serializer profile.
+    std::array<double, 3> m_tableRowHeightOverrides{{0.0, 0.0, 0.0}};
     bool m_titleSuppressed = false;
     bool m_headerSuppressed = false;
     std::uint32_t m_tableStyleHandle = 0;

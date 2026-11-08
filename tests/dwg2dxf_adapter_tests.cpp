@@ -36741,6 +36741,35 @@ bool tableScalarOverrideOutput(bool binary) {
     data.tables.front().m_borderColorOverrideFlags = 0u;
     if (!exportCurrent() || !checkWire() || !checkReadback())
         return fail("TABLE scalar override same-adapter corrected retry failed");
+
+    {
+        std::ofstream stream(output, std::ios::binary | std::ios::trunc);
+        stream.write(sentinel.data(),
+                     static_cast<std::streamsize>(sentinel.size()));
+        if (!stream.good())
+            return fail("TABLE row-height override sentinel could not be written");
+    }
+    // Force the writer to exercise its own unsupported-mask guard, even though
+    // the DWG reader conservatively marks this not-yet-serialized profile
+    // semantically incomplete.
+    data.tables.front().m_tableOverrideFlags |= 0x00100000u;
+    data.tables.front().m_tableRowHeightOverrides[0] = 3.5;
+    data.tables.front().m_semanticContentComplete = true;
+    if (exportCurrent())
+        return fail("unmapped TABLE row-height override was emitted");
+    {
+        std::ifstream stream(output, std::ios::binary);
+        const std::string contents((std::istreambuf_iterator<char>(stream)),
+                                   std::istreambuf_iterator<char>());
+        if (!stream.good() && !stream.eof())
+            return fail("TABLE row-height override sentinel could not be read");
+        if (contents != sentinel)
+            return fail("unmapped TABLE row-height override replaced the destination");
+    }
+    data.tables.front().m_tableOverrideFlags = 0x0000001Fu;
+    data.tables.front().m_tableRowHeightOverrides = {{0.0, 0.0, 0.0}};
+    if (!exportCurrent() || !checkWire() || !checkReadback())
+        return fail("TABLE row-height refusal corrected retry failed");
     return true;
 }
 

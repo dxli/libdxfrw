@@ -3544,13 +3544,19 @@ bool skipR2007TableOverrides(DRW::Version version, dwgBuffer *buf,
                 && hdlBuf != nullptr && !hdlBuf->isGood())
                 return false;
         if (flags & 0x100000)
-            if (!skipTableBitDouble(*buf, bounds.bodyEndBit))
+            if (!readBoundedBitDouble(
+                    *buf, bounds.bodyEndBit,
+                    table.m_tableRowHeightOverrides[0]))
                 return false;
         if (flags & 0x200000)
-            if (!skipTableBitDouble(*buf, bounds.bodyEndBit))
+            if (!readBoundedBitDouble(
+                    *buf, bounds.bodyEndBit,
+                    table.m_tableRowHeightOverrides[1]))
                 return false;
         if (flags & 0x400000)
-            if (!skipTableBitDouble(*buf, bounds.bodyEndBit))
+            if (!readBoundedBitDouble(
+                    *buf, bounds.bodyEndBit,
+                    table.m_tableRowHeightOverrides[2]))
                 return false;
     }
 
@@ -13164,6 +13170,7 @@ void DRW_Table::resetDwgState() {
     m_flowDirection = 0;
     m_horizontalCellMargin = 0.0;
     m_verticalCellMargin = 0.0;
+    m_tableRowHeightOverrides = {{0.0, 0.0, 0.0}};
     m_titleSuppressed = false;
     m_headerSuppressed = false;
     m_tableStyleHandle = 0;

@@ -227,6 +227,12 @@ created locally from scratch for the specific control.
   not producer or whole-drawing qualification. The current local metric TABLE
   parser stops earlier at cell-value types 16/92, and the imperial census has
   no TABLECONTENT evidence. See the [scalar override receipt](docs/research/p5-ac1018-ac1021-table-scalar-overrides-2026-11-08.json).
+  The three row-height override fields (`0x100000`, `0x200000`, `0x400000`)
+  now retain their decoded finite values in the typed TABLE model. A generated
+  AC1021 vector checks field order, all three values, body boundary and a
+  following sentinel. ASCII/Binary output still refuses this profile atomically
+  and corrected retry succeeds; no row-height DXF mapping or native style
+  behavior is claimed. See the [row-height receipt](docs/research/p5-ac1021-table-row-height-overrides-2026-11-08.json).
 - **ODA suffix lane:** the user unlocked the Mac and the planned direct ODA
   27.1 retry was made; it again aborted during Pasteboard/XPC initialization
   before document processing, produced no output, and matched the prior source
@@ -681,10 +687,12 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    exact source spans and target roles are available; keep TABLEGEOMETRY,
    dynamic evaluation and native rendering claims gated. The generated
    pre-R24 TABLE scalar override profile for ODA §20.4.96.1 bits `0x01`–`0x10`
-   is implemented; retain strict refusal for remaining table color/fill/
-   alignment/style bits and all three border override masks until their values
-   have typed storage and complete serialization. Physical-source coverage
-   remains open: the available metric TABLE fails before these fields at
+   is implemented, and the three row-height values now have typed read
+   retention. Keep row-height output refused until its mapping is proven;
+   remaining table color/fill/alignment/style bits and all three border
+   override masks still need typed storage and complete serialization.
+   Physical-source coverage remains open: the available metric TABLE fails
+   before these fields at
    unmodeled cell-value types 16/92. See the [scalar override receipt](docs/research/p5-ac1018-ac1021-table-scalar-overrides-2026-11-08.json).
 4. **P6 / source-backed parser and no-loss gaps.** The
    raster wire observer now recognizes the witnessed IMAGEDEF code-`0xC`
