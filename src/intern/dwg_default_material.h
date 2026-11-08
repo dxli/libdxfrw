@@ -11,9 +11,12 @@ namespace drwDwgDefaultMaterial {
 
 enum class Kind { ByBlock, ByLayer, Global };
 
-// Exact nonprocedural default profile witnessed in ODA-produced AC1021, AC1024 and AC1027
-// drawings; no other version or material profile is admitted. On success the
-// two destination buffers are replaced with the body and detached strings.
+// Exact nonprocedural default profiles witnessed in ODA-produced AC1021,
+// AC1024, and AC1027 drawings; no other version or material profile is
+// admitted. AC1027's witnessed defaults use inherited diffuse color, a scene
+// refraction map (and therefore no detached filename), and channel flags 127.
+// On success the two destination buffers are replaced with the body and
+// detached strings.
 // The body deliberately excludes the common preamble and handle stream.
 inline bool build(DRW::Version version, Kind kind,
                   dwgBufferW& bodyOut, dwgBufferW& stringsOut) {
@@ -39,18 +42,21 @@ inline bool build(DRW::Version version, Kind kind,
 
     body.putRawChar8(0); // ambient color: inherited
     body.putBitDouble(1.0);
-    body.putRawChar8(1); // diffuse color: explicit
+    const bool r2013Profile = version == DRW::AC1027;
+    body.putRawChar8(r2013Profile ? 0u : 1u); // diffuse color method
     body.putBitDouble(1.0);
-    body.putBitLong(-1023410177);
-    const auto putDefaultMap = [&]() {
+    if (!r2013Profile)
+        body.putBitLong(-1023410177); // explicit default white
+    const auto putDefaultMap = [&](bool sceneSource = false) {
         body.putBitDouble(1.0);
         body.putRawChar8(1); // projection
         body.putRawChar8(1); // tiling
         body.putRawChar8(1); // autotransform
         for (unsigned i = 0; i < 16; ++i)
             body.putBitDouble(i % 5 == 0 ? 1.0 : 0.0);
-        body.putRawChar8(1); // file source
-        strings.putBitShort(0); // empty file name
+        body.putRawChar8(sceneSource ? 0u : 1u); // scene/file source
+        if (!sceneSource)
+            strings.putBitShort(0); // empty file name
     };
     putDefaultMap(); // diffuse
     body.putRawChar8(0); // specular color: inherited
@@ -62,12 +68,12 @@ inline bool build(DRW::Version version, Kind kind,
     putDefaultMap(); // opacity
     putDefaultMap(); // bump
     body.putBitDouble(1.0); // refraction index
-    putDefaultMap(); // refraction
+    putDefaultMap(r2013Profile); // refraction
     body.putBitDouble(0.0); // translucence
     body.putBitDouble(0.0); // self illumination
     body.putBitDouble(0.0); // reflectivity
     body.putBitLong(0); // illumination model
-    body.putBitLong(63); // channel flags
+    body.putBitLong(r2013Profile ? 127 : 63); // channel flags
     body.putBitLong(0); // nonprocedural mode
     if (!body.isGood() || !strings.isGood()) return false;
     bodyOut.swap(body);

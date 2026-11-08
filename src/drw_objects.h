@@ -4714,8 +4714,9 @@ public:
     return m_rawDataBitSize;
   }
   [[nodiscard]] bool hasDwgRawData() const noexcept { return m_rawDataValid; }
-  //! True when the selected AC1024 MATERIAL profile was decoded completely
-  //! into fields representable by the current DXF MATERIAL writer.
+  //! True when the selected versioned nonprocedural MATERIAL profile was
+  //! decoded completely into typed semantic fields. This does not imply that
+  //! a retained modern raw body/string tail can be written back.
   [[nodiscard]] bool hasCompleteDwgSemanticFields() const noexcept {
     return m_dwgSemanticFieldsParsed;
   }

@@ -22769,10 +22769,58 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
   }
   for (const DRW_DictionaryWithDefault &dictionary :
        data.dictionaryWithDefaults) {
+    const DRW_UnsupportedObject* rawFrame =
+        DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+            data, data.importGeneration, dictionary.handle);
+    const auto nodMatches = data.hasNamedObjectDictionary
+        ? static_cast<std::size_t>(std::count_if(
+            data.namedObjectDictionary.m_entries.begin(),
+            data.namedObjectDictionary.m_entries.end(),
+            [&dictionary](const DRW_Dictionary::Entry& entry) {
+              return entry.m_handle == dictionary.handle;
+            }))
+        : 0u;
+    const auto defaultMatches = static_cast<std::size_t>(std::count_if(
+        dictionary.m_entries.begin(), dictionary.m_entries.end(),
+        [&dictionary](const DRW_Dictionary::Entry& entry) {
+          return entry.m_handle == dictionary.m_defaultEntryHandle;
+        }));
+    if (rawFrame == nullptr || rawFrame->m_version != data.sourceVersion
+        || rawFrame->m_objectType != 500 || !rawFrame->m_isCustomClass
+        || rawFrame->m_recordName != "ACDBDICTIONARYWDFLT"
+        || rawFrame->m_className != "AcDbDictionaryWithDefault"
+        || rawFrame->m_isEntity
+        || !drwDwgCommonLinkEvidenceValidated(
+            rawFrame->m_commonLinkEvidence)
+        || rawFrame->m_handle != dictionary.handle
+        || rawFrame->m_parentHandle != dictionary.parentHandle
+        || rawFrame->m_reactorHandles != dictionary.reactorHandles
+        || rawFrame->m_xDictHandle != dictionary.xDictHandle
+        || !dictionary.hasCompleteDwgEntries()
+        || dictionary.m_defaultEntryHandle == 0u
+        || dictionary.m_defaultEntryHandle == DRW::NoHandle
+        || defaultMatches != 1u
+        || (data.sourceVersion == DRW::AC1027
+            && (!data.hasNamedObjectDictionary || nodMatches != 1u
+                || dictionary.parentHandle
+                    != data.namedObjectDictionary.handle
+                || dictionary.reactorHandles
+                    != std::vector<std::uint32_t>{
+                        data.namedObjectDictionary.handle}))) {
+      std::cerr << "AC1027 DICTIONARYWDFLT source/default role mismatch at handle "
+                << dictionary.handle << '\n';
+      return false;
+    }
     std::cout << " typedBodyFrame type=DICTIONARYWDFLT"
               << " handle=" << dictionary.handle
               << " default=" << dictionary.m_defaultEntryHandle
-              << " entries=" << dictionary.m_entries.size() << '\n';
+              << " entries=" << dictionary.m_entries.size()
+              << " owner=" << dictionary.parentHandle
+              << " reactors=" << dictionary.reactorHandles.size()
+              << " xdict=" << dictionary.xDictHandle
+              << " bodyHandleFields=" << dictionary.m_entries.size() + 1u
+              << " bodyReferenceRule=ODA-20.4.45"
+              << " defaultEntryRole=hard-pointer\n";
     for (const DRW_Dictionary::Entry &entry : dictionary.m_entries)
       std::cout << " typedBodyReference owner=" << dictionary.handle
                 << " role=dictionary-entry key=" << entry.m_name
@@ -23037,6 +23085,137 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
               << " xdict=" << style.xDictHandle
               << " bodyHandleFields=0"
                  " bodyReferenceRule=LIBREDWG-dwg2.spec-VISUALSTYLE\n";
+  }
+  if (!data.materials.empty() && data.sourceVersion == DRW::AC1027) {
+    if (!data.hasNamedObjectDictionary
+        || !data.namedObjectDictionary.hasCompleteDwgEntries()) {
+      std::cerr << "AC1027 MATERIAL source inventory lacks a complete NOD\n";
+      return false;
+    }
+    const DRW_Dictionary* materialDictionary = nullptr;
+    std::size_t rootMatches = 0u;
+    for (const DRW_Dictionary::Entry& entry :
+         data.namedObjectDictionary.m_entries) {
+      if (entry.m_name != "ACAD_MATERIAL")
+        continue;
+      ++rootMatches;
+      for (const DRW_Dictionary& dictionary : data.dictionaries) {
+        if (dictionary.handle != entry.m_handle)
+          continue;
+        if (materialDictionary != nullptr) {
+          std::cerr << "AC1027 MATERIAL owner dictionary is ambiguous\n";
+          return false;
+        }
+        materialDictionary = &dictionary;
+      }
+    }
+    if (rootMatches != 1u || materialDictionary == nullptr
+        || !materialDictionary->hasCompleteDwgEntries()
+        || materialDictionary->m_entries.size() != data.materials.size()
+        || materialDictionary->parentHandle
+            != data.namedObjectDictionary.handle
+        || materialDictionary->reactorHandles
+            != std::vector<std::uint32_t>{
+                data.namedObjectDictionary.handle}) {
+      std::cerr << "AC1027 MATERIAL source inventory has incomplete ACAD_MATERIAL owner closure\n";
+      return false;
+    }
+    std::set<std::uint32_t> materialHandles;
+    std::set<UTF8STRING> materialNames;
+    for (const DRW_Material& material : data.materials) {
+      const DRW_UnsupportedObject* rawFrame =
+          DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+              data, data.importGeneration, material.handle);
+      const DRW_Dictionary::Entry* membership = nullptr;
+      std::size_t membershipMatches = 0u;
+      for (const DRW_Dictionary::Entry& entry :
+           materialDictionary->m_entries) {
+        if (entry.m_handle == material.handle) {
+          membership = &entry;
+          ++membershipMatches;
+        }
+      }
+      if (rawFrame == nullptr || rawFrame->m_version != DRW::AC1027
+          || rawFrame->m_objectType != 502 || !rawFrame->m_isCustomClass
+          || rawFrame->m_recordName != "MATERIAL"
+          || rawFrame->m_className != "AcDbMaterial" || rawFrame->m_isEntity
+          || !drwDwgCommonLinkEvidenceValidated(
+              rawFrame->m_commonLinkEvidence)
+          || rawFrame->m_handle != material.handle
+          || rawFrame->m_parentHandle != material.parentHandle
+          || rawFrame->m_reactorHandles != material.reactorHandles
+          || rawFrame->m_xDictHandle != material.xDictHandle
+          || material.tType != DRW::MATERIAL
+          || !material.hasCompleteDwgSemanticFields()
+          || !material.hasDwgRawData()
+          || material.dwgRawDataVersion() != DRW::AC1027
+          || material.parentHandle != materialDictionary->handle
+          || material.reactorHandles
+              != std::vector<std::uint32_t>{materialDictionary->handle}
+          || material.xDictHandle != 0u || membershipMatches != 1u
+          || membership == nullptr || membership->m_name != material.m_name
+          || material.m_ambientColorMethod != 0u
+          || material.m_diffuseColorMethod != 0u
+          || material.m_refractionMapSource != 0u
+          || material.m_channelFlags != 127
+          || !materialHandles.insert(material.handle).second
+          || !materialNames.insert(material.m_name).second) {
+        std::cerr << "AC1027 MATERIAL typed/source/dictionary identity mismatch at handle "
+                  << material.handle << '\n';
+        return false;
+      }
+      std::cout << " typedBodyFrame type=MATERIAL handle=" << material.handle
+                << " owner=" << material.parentHandle
+                << " reactors=" << material.reactorHandles.size()
+                << " xdict=" << material.xDictHandle
+                << " semanticFieldsComplete="
+                << (material.hasCompleteDwgSemanticFields() ? 1 : 0)
+                << " rawTailValidated=1"
+                << " dictionaryOwner=" << materialDictionary->handle
+                << " dictionaryKey=" << membership->m_name
+                << " bodyHandleFields=0"
+                   " bodyReferenceRule=LIBREDWG-dwg2.spec-MATERIAL\n";
+      std::cout << " typedMaterialFields handle=" << material.handle
+                << " name=" << material.m_name
+                << " rawVersion=" << static_cast<unsigned>(
+                       material.dwgRawDataVersion())
+                << " ambient=" << static_cast<unsigned>(
+                       material.m_ambientColorMethod) << '/'
+                << material.m_ambientColorFactor << '/'
+                << material.m_ambientColorValue
+                << " diffuse=" << static_cast<unsigned>(
+                       material.m_diffuseColorMethod) << '/'
+                << material.m_diffuseColorFactor << '/'
+                << material.m_diffuseColorValue
+                << " refractionSource=" << static_cast<unsigned>(
+                       material.m_refractionMapSource)
+                << " channelFlags=" << material.m_channelFlags
+                << " mapModels=diffuse,specular,reflection,opacity,bump,refraction\n";
+    }
+  }
+  if (data.sourceVersion == DRW::AC1027) {
+    const DRW_UnsupportedObject* sunFrame =
+        DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+            data, data.importGeneration, 109u);
+    const auto sunOwners = static_cast<std::size_t>(std::count_if(
+        data.VPorts.begin(), data.VPorts.end(), [](const DRW_Vport& vport) {
+          return vport.handle == 41u && vport.m_sunHandle == 109u;
+        }));
+    if (sunFrame == nullptr || sunFrame->m_version != DRW::AC1027
+        || sunFrame->m_objectType != 506 || !sunFrame->m_isCustomClass
+        || sunFrame->m_recordName != "SUN"
+        || sunFrame->m_className != "AcDbSun" || sunFrame->m_isEntity
+        || !drwDwgCommonLinkEvidenceValidated(
+            sunFrame->m_commonLinkEvidence)
+        || sunFrame->m_handle != 109u || sunFrame->m_parentHandle != 41u
+        || !sunFrame->m_reactorHandles.empty()
+        || sunFrame->m_xDictHandle != 0u || sunOwners != 1u) {
+      std::cerr << "AC1027 SUN source identity or VPORT owner role mismatch\n";
+      return false;
+    }
+    std::cout << " typedBodyFrame type=SUN handle=109 owner=41 reactors=0"
+                 " xdict=0 bodyHandleFields=0"
+                 " bodyReferenceRule=LIBREDWG-dwg2.spec-SUN\n";
   }
   for (const DRW_TableStyle &style : data.tableStyles) {
     std::cout << " typedBodyFrame type=TABLESTYLE handle=" << style.handle

@@ -631,8 +631,7 @@ void dwgWriter24::finishObject() {
                 && reactors == 1 && owner.ref == m_defaultMaterialHandles[0]
                 && reactor.code == DRW::DwgSoftPointer
                 && reactor.ref == m_defaultMaterialHandles[0]
-                && m_objectBody.bitCount() == 590u + 8u * (own.size - 1u)
-                && m_objectStrings.bitCount() == (global ? 120u : 136u);
+                && m_objectStrings.bitCount() == expectedStrings.bitCount();
         }
         valid = valid && handles.isGood()
             && handles.getPosition() * 8u + handles.getBitPos() == m_objectHandles.bitCount();

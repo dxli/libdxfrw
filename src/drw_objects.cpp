@@ -16697,28 +16697,44 @@ bool DRW_Material::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
     }
 
     if (version == DRW::AC1027 && parsedSemanticFields) {
-        // Only the three source-witnessed defaults are decoded for R2013.
-        // The detached strings are part of the profile, not implied by the
-        // raw tail or the material's name alone.
-        drwDwgDefaultMaterial::Kind kind = drwDwgDefaultMaterial::Kind::Global;
+        // The source-matched LibreDWG profile for the three AC1027 defaults
+        // has inherited colors, six simple maps, scene-sourced refraction,
+        // channel flags 127, and no procedural material. Match decoded
+        // semantics rather than bytes from the AC1024 default encoder: the
+        // AC1027 wire defaults differ (notably diffuse color and refraction
+        // source), while the schema-defined fields remain independently
+        // decoded and bounded above.
+        const auto defaultColor = [](const ParsedColor& color) {
+            return color.method == 0u && color.factor == 1.0
+                && !color.hasValue;
+        };
+        const auto defaultMap = [](const ParsedMap& map,
+                                  std::uint8_t expectedSource) {
+            static constexpr std::array<double, 16> identity{{
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0, 0.0, 1.0}};
+            return map.blend == 1.0 && map.projection == 1u
+                && map.tiling == 1u && map.autoTransform == 1u
+                && map.transform == identity
+                && map.source == expectedSource && map.fileName.empty();
+        };
         const bool known = parsedName == "Global" || parsedName == "ByBlock"
             || parsedName == "ByLayer";
-        if (parsedName == "ByBlock") kind = drwDwgDefaultMaterial::Kind::ByBlock;
-        if (parsedName == "ByLayer") kind = drwDwgDefaultMaterial::Kind::ByLayer;
-        dwgBufferW expectedBody, expectedStrings;
-        std::vector<std::uint8_t> actualBody, actualStrings;
-        dwgBuffer bodyCopy = buf->forkIndependent();
-        dwgBuffer textCopy = sBuff.forkIndependent();
-        const auto bodyBegin = currentObjectDwgBit(buf);
-        parsedSemanticFields = known
-            && drwDwgDefaultMaterial::build(version, kind, expectedBody, expectedStrings)
-            && bodyBegin <= bodyEnd && stringStartBit <= stringEnd
-            && bodyEnd - bodyBegin == expectedBody.bitCount()
-            && stringEnd - stringStartBit == expectedStrings.bitCount()
-            && captureRawBits(&bodyCopy, bodyBegin, bodyEnd, actualBody)
-            && captureRawBits(&textCopy, stringStartBit, stringEnd, actualStrings)
-            && actualBody == expectedBody.data()
-            && actualStrings == expectedStrings.data();
+        parsedSemanticFields = known && parsedDescription.empty()
+            && defaultColor(ambientColor) && defaultColor(diffuseColor)
+            && defaultColor(specularColor)
+            && defaultMap(diffuseMap, 1u)
+            && defaultMap(specularMap, 1u)
+            && defaultMap(reflectionMap, 1u)
+            && defaultMap(opacityMap, 1u)
+            && defaultMap(bumpMap, 1u)
+            && defaultMap(refractionMap, 0u)
+            && specularGlossFactor == 0.5 && opacityPercent == 1.0
+            && refractionIndex == 1.0 && translucence == 0.0
+            && selfIllumination == 0.0 && reflectivity == 0.0
+            && illuminationModel == 0 && channelFlags == 127 && mode == 0;
     }
 
     if (!buf->isGood() || !sBuf->isGood()

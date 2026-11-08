@@ -152,12 +152,13 @@ finish_body:
     return true;
 }
 
-inline bool parse(const Frame& frame, CodecProbe& parsed) {
+inline bool parse(const Frame& frame, CodecProbe& parsed,
+                  DRW::Version version = DRW::AC1024) {
     DRW_TextCodec codec;
-    codec.setVersion(DRW::AC1024, false);
+    codec.setVersion(version, false);
     dwgBuffer input(const_cast<std::uint8_t*>(frame.bytes.data()),
                     frame.bytes.size(), &codec);
-    return parsed.parseDwg(DRW::AC1024, &input, frame.handleBits)
+    return parsed.parseDwg(version, &input, frame.handleBits)
         && input.isGood();
 }
 

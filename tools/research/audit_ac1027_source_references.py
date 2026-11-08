@@ -36,23 +36,37 @@ FRAME = re.compile(
 BODY_FRAME = re.compile(
     r"^ typedBodyFrame type=(\S+) handle=(\d+)(?: |$)", re.MULTILINE
 )
+MATERIAL_PROFILE = re.compile(
+    r"^ typedBodyFrame type=MATERIAL handle=(\d+) .*?"
+    r"semanticFieldsComplete=(\d+) rawTailValidated=(\d+) .*?"
+    r"dictionaryKey=(ByLayer|ByBlock|Global) bodyHandleFields=0 "
+    r"bodyReferenceRule=LIBREDWG-dwg2\.spec-MATERIAL$",
+    re.MULTILINE,
+)
+MATERIAL_FIELDS = re.compile(
+    r"^ typedMaterialFields handle=(\d+) name=(ByLayer|ByBlock|Global) "
+    r"rawVersion=17 ambient=0/1/0 diffuse=0/1/0 refractionSource=0 "
+    r"channelFlags=127 mapModels=diffuse,specular,reflection,opacity,bump,refraction$",
+    re.MULTILINE,
+)
 NO_BODY_HANDLE_PROFILE = re.compile(
-    r"^ typedBodyFrame type=(SCALE|DICTIONARYVAR|RASTERVARIABLES|MLINESTYLE|ACDBPLACEHOLDER|VISUALSTYLE) "
+    r"^ typedBodyFrame type=(SCALE|DICTIONARYVAR|RASTERVARIABLES|MLINESTYLE|ACDBPLACEHOLDER|VISUALSTYLE|MATERIAL|SUN) "
     r"handle=(\d+) .*?"
     r"bodyHandleFields=0 bodyReferenceRule="
-    r"(ODA-20\.4\.(?:92|74|91|73)|LIBREDWG-dwg2\.spec-(?:PLACEHOLDER|VISUALSTYLE))$",
+    r"(ODA-20\.4\.(?:92|74|91|73)|LIBREDWG-dwg2\.spec-(?:PLACEHOLDER|VISUALSTYLE|MATERIAL|SUN))$",
     re.MULTILINE,
 )
 HANDLE_BODY_PROFILE = re.compile(
-    r"^ typedBodyFrame type=(LAYOUT|DICTIONARY) handle=(\d+) .*?"
-    r"bodyHandleFields=(\d+) bodyReferenceRule=(ODA-20\.4\.(?:84|44))$",
+    r"^ typedBodyFrame type=(LAYOUT|DICTIONARY|DICTIONARYWDFLT) handle=(\d+) .*?"
+    r"bodyHandleFields=(\d+) bodyReferenceRule=(ODA-20\.4\.(?:84|44|45))"
+    r"(?: defaultEntryRole=hard-pointer)?$",
     re.MULTILINE,
 )
 DICTIONARY_MEMBERSHIP = re.compile(
-    r"^ typedBodyFrame type=(SCALE|DICTIONARYVAR|MLINESTYLE|ACDBPLACEHOLDER) handle=(\d+) .*?"
+    r"^ typedBodyFrame type=(SCALE|DICTIONARYVAR|MLINESTYLE|ACDBPLACEHOLDER|MATERIAL) handle=(\d+) .*?"
     r"dictionaryOwner=(\d+) dictionaryKey=(.*?) "
     r"bodyHandleFields=0 bodyReferenceRule="
-    r"(ODA-20\.4\.(?:92|74|73)|LIBREDWG-dwg2\.spec-PLACEHOLDER)$",
+    r"(ODA-20\.4\.(?:92|74|73)|LIBREDWG-dwg2\.spec-(?:PLACEHOLDER|MATERIAL))$",
     re.MULTILINE,
 )
 NOD_ENTRY = re.compile(r"^ NOD key=(.*?) target=(\d+)(?: |$)", re.MULTILINE)
@@ -92,13 +106,16 @@ def verify_peer_profiles(
         if not isinstance(obj, dict):
             continue
         handle = peer_handle(obj.get("handle"))
-        if handle is None or int(obj.get("type", -1)) not in (73, 80, 501):
+        if handle is None or int(obj.get("type", -1)) not in (73, 80, 501, 502, 506):
             continue
         if handle in peer_by_handle:
             raise SystemExit("LibreDWG minJSON repeats a profiled object handle")
         peer_by_handle[handle] = obj
 
-    names = {73: "MLINESTYLE", 80: "ACDBPLACEHOLDER", 501: "VISUALSTYLE"}
+    names = {
+        73: "MLINESTYLE", 80: "ACDBPLACEHOLDER",
+        501: "VISUALSTYLE", 502: "MATERIAL", 506: "SUN",
+    }
     rows = []
     for frame in frames:
         object_type = int(frame["encodedType"])
@@ -109,11 +126,15 @@ def verify_peer_profiles(
             73: "MLINESTYLE",
             80: "PLACEHOLDER",
             501: "VISUALSTYLE",
+            502: "MATERIAL",
+            506: "SUN",
         }[object_type]
         expected_dxf = {
             73: None,
             80: "ACDBPLACEHOLDER",
             501: None,
+            502: None,
+            506: None,
         }[object_type]
         reactors = obj.get("reactors", []) if obj else []
         peer_reactors = [
@@ -146,7 +167,7 @@ def verify_peer_profiles(
 
     schema_text = peer_schema_path.read_text(errors="replace")
     schema_blocks: dict[str, str] = {}
-    for name in ("PLACEHOLDER", "VISUALSTYLE"):
+    for name in ("PLACEHOLDER", "VISUALSTYLE", "SUN"):
         start = schema_text.find(f"DWG_OBJECT ({name})")
         end = schema_text.find("DWG_OBJECT_END", start)
         if start < 0 or end < 0:
@@ -163,18 +184,35 @@ def verify_peer_profiles(
             raise SystemExit("LibreDWG PLACEHOLDER schema no longer declares an empty body")
         schema_blocks[name] = hashlib.sha256(block.encode()).hexdigest()
 
+    material_macro_start = schema_text.find("#define MAT_COLOR")
+    material_start = schema_text.find("DWG_OBJECT (MATERIAL)", material_macro_start)
+    material_end = schema_text.find("DWG_OBJECT_END", material_start)
+    if min(material_macro_start, material_start, material_end) < 0:
+        raise SystemExit("LibreDWG dwg2.spec lacks MATERIAL body macros/object")
+    material_block = schema_text[material_macro_start:material_end]
+    material_body = material_block.split("START_OBJECT_HANDLE_STREAM", 1)[0]
+    if "START_OBJECT_HANDLE_STREAM" not in material_block or re.search(
+        r"\b(?:FIELD_H|HANDLE_VECTOR)\b", material_body
+    ):
+        raise SystemExit(
+            "LibreDWG MATERIAL color/map schema has body-handle fields before common handles"
+        )
+    schema_blocks["MATERIAL"] = hashlib.sha256(
+        material_block.encode()
+    ).hexdigest()
+
     source_types = Counter(int(frame["encodedType"]) for frame in frames)
     peer_types = Counter(int(obj.get("type", -1)) for obj in peer_by_handle.values())
     if source_hash == COVER_AC1027_SHA256 and any(
         peer_types[object_type] != source_types[object_type]
-        for object_type in (73, 80, 501)
+        for object_type in (73, 80, 501, 502, 506)
     ):
         raise SystemExit("LibreDWG minJSON profile frame counts differ from Cover source inventory")
     return {
         "createdBy": peer_json.get("created_by"),
         "objectCountsByEncodedType": {
             str(object_type): peer_types[object_type]
-            for object_type in (73, 80, 501)
+            for object_type in (73, 80, 501, 502, 506)
         },
         "matchedFrames": rows,
         "schemaPath": str(peer_schema_path),
@@ -295,7 +333,9 @@ def main() -> int:
         )
         frame["bodyReferenceRule"] = no_body_handle_profiles.get(frame["handle"])
         if frame["handle"] in handle_body_profiles:
-            frame["bodyReferenceRule"] = handle_body_profiles[frame["handle"]]
+            handle_profile = handle_body_profiles[frame["handle"]]
+            frame["bodyReferenceRule"] = handle_profile["rule"]
+            frame["bodyHandleFieldCount"] = handle_profile["fieldCount"]
         frame["dictionaryMembership"] = dictionary_memberships.get(frame["handle"])
         frame["ownerTargetsRetainedObjectFrame"] = (
             frame["ownerHandle"] in retained_handles
@@ -357,6 +397,140 @@ def main() -> int:
                 raise SystemExit(
                     "AC1027 VISUALSTYLE frame lacks its typed identity "
                     "or peer-supported no-body-handle profile"
+                )
+        materials = [
+            frame for frame in frames if frame["encodedType"] == 502
+        ]
+        material_profiles = {
+            int(handle): (int(semantic), int(raw_tail), key)
+            for handle, semantic, raw_tail, key in MATERIAL_PROFILE.findall(
+                combined
+            )
+        }
+        material_fields = {
+            int(handle): name
+            for handle, name in MATERIAL_FIELDS.findall(combined)
+        }
+        for frame in materials:
+            membership = frame["dictionaryMembership"]
+            if (
+                frame["className"] != "AcDbMaterial"
+                or frame["typedBodyReport"] != "MATERIAL"
+                or frame["bodyReferenceDisposition"]
+                != "peer-profile-no-body-handles"
+                or frame["bodyReferenceRule"] != "LIBREDWG-dwg2.spec-MATERIAL"
+                or membership is None
+                or membership["objectType"] != "MATERIAL"
+                or membership["dictionaryHandle"] != frame["ownerHandle"]
+                or material_profiles.get(int(frame["handle"]))
+                != (1, 1, membership["dictionaryKey"])
+                or material_fields.get(int(frame["handle"]))
+                != membership["dictionaryKey"]
+                or not any(
+                    edge["sourceFrameHandle"] == frame["handle"]
+                    and edge["dictionaryHandle"] == frame["ownerHandle"]
+                    and edge["targetHandle"] == frame["handle"]
+                    for edge in dictionary_membership_edges
+                )
+            ):
+                raise SystemExit(
+                    "AC1027 MATERIAL frame lacks its typed semantic profile, "
+                    "peer body profile, or exact ACAD_MATERIAL membership"
+                )
+        suns = [frame for frame in frames if frame["encodedType"] == 506]
+        sun_reports = {
+            int(handle): rule
+            for _object_type, handle, rule
+            in NO_BODY_HANDLE_PROFILE.findall(combined)
+            if rule == "LIBREDWG-dwg2.spec-SUN"
+        }
+        for frame in suns:
+            sun_owner_refs = [
+                edge for edge in typed_references
+                if edge["ownerHandle"] == frame["ownerHandle"]
+                and edge["role"] == "sun"
+                and edge["targetHandle"] == frame["handle"]
+            ]
+            if (
+                frame["className"] != "AcDbSun"
+                or frame["typedBodyReport"] != "SUN"
+                or frame["bodyReferenceDisposition"]
+                != "peer-profile-no-body-handles"
+                or frame["bodyReferenceRule"] != "LIBREDWG-dwg2.spec-SUN"
+                or sun_reports.get(int(frame["handle"]))
+                != "LIBREDWG-dwg2.spec-SUN"
+                or frame["reactorHandles"]
+                or frame["extensionDictionaryHandle"] != 0
+                or len(sun_owner_refs) != 1
+            ):
+                raise SystemExit(
+                    "AC1027 SUN lacks its source-matched no-body-handle profile "
+                    "or exact VPORT hard-owner reference"
+                )
+            if source_before == COVER_AC1027_SHA256 and (
+                frame["handle"] != 109 or frame["ownerHandle"] != 41
+                or sun_owner_refs[0]["ownerHandle"] != 41
+            ):
+                raise SystemExit(
+                    "hash-bound Cover SUN/VPORT owner identities changed"
+                )
+        default_dictionaries = [
+            frame for frame in frames if frame["encodedType"] == 500
+        ]
+        default_profiles = {
+            int(handle): int(fields)
+            for object_type, handle, fields, _rule
+            in HANDLE_BODY_PROFILE.findall(combined)
+            if object_type == "DICTIONARYWDFLT"
+        }
+        for frame in default_dictionaries:
+            dictionary_refs = [
+                edge for edge in typed_references
+                if edge["ownerHandle"] == frame["handle"]
+                and edge["role"].startswith("dictionary-entry key=")
+            ]
+            default_refs = [
+                edge for edge in typed_references
+                if edge["ownerHandle"] == frame["handle"]
+                and edge["role"] == "default-entry"
+            ]
+            if (
+                frame["recordName"] != "ACDBDICTIONARYWDFLT"
+                or frame["className"] != "AcDbDictionaryWithDefault"
+                or frame["typedBodyReport"] != "DICTIONARYWDFLT"
+                or frame["bodyReferenceDisposition"]
+                != "spec-profile-handle-references"
+                or frame["bodyReferenceRule"] != "ODA-20.4.45"
+                or default_profiles.get(int(frame["handle"]))
+                != len(dictionary_refs) + 1
+                or len(default_refs) != 1
+                or not any(
+                    edge["targetHandle"] == default_refs[0]["targetHandle"]
+                    for edge in dictionary_refs
+                )
+            ):
+                raise SystemExit(
+                    "AC1027 DICTIONARYWDFLT lacks ODA default-handle field "
+                    "or matching dictionary-entry role evidence: "
+                    f"handle={frame['handle']} name={frame['recordName']} "
+                    f"class={frame['className']} "
+                    f"report={frame['typedBodyReport']} "
+                    f"disposition={frame['bodyReferenceDisposition']} "
+                    f"rule={frame['bodyReferenceRule']} "
+                    f"profile={default_profiles.get(int(frame['handle']))} "
+                    f"dictRefs={len(dictionary_refs)} "
+                    f"defaultRefs={len(default_refs)}"
+                )
+            if source_before == COVER_AC1027_SHA256 and (
+                frame["handle"] != 14 or frame["ownerHandle"] != 12
+                or frame["reactorHandles"] != [12]
+                or default_refs[0]["targetHandle"] != 15
+                or [entry for entry in named_object_dictionary_entries
+                    if entry["targetHandle"] == 14]
+                    != [{"key": "ACAD_PLOTSTYLENAME", "targetHandle": 14}]
+            ):
+                raise SystemExit(
+                    "hash-bound Cover DICTIONARYWDFLT common/default roles changed"
                 )
         placeholders = [
             frame for frame in frames if frame["encodedType"] == 80

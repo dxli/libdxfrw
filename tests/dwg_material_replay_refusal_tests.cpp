@@ -137,8 +137,12 @@ bool wholeFileControls(const MaterialProbe& parsed) {
 
 int main() {
     MaterialProbe parsed;
-    if (!codecControls(parsed) || !wholeFileControls(parsed)) {
-        std::fprintf(stderr, "MATERIAL detached-string refusal or retry failed\n");
+    if (!codecControls(parsed)) {
+        std::fprintf(stderr, "MATERIAL codec refusal control failed\n");
+        return 1;
+    }
+    if (!wholeFileControls(parsed)) {
+        std::fprintf(stderr, "MATERIAL whole-file refusal/retry control failed\n");
         return 1;
     }
     std::puts("MATERIAL detached-string refusal and retry: PASS");

@@ -87,21 +87,21 @@ public:
         if(it==w.m_objectMap.end())return false;
         auto& bytes=w.m_buf.data();dwgBuffer buf(bytes.data(),bytes.size());DwgObjectFrame frame;
         if(!frame.readAt(buf,DRW::AC1027,it->second))return false;
-        const auto expected=727u+(handle>0xffu?8u:0u);
+        const auto expected=691u+(handle>0xffu?8u:0u);
         if(frame.objectDataBitSize()!=expected || r.dataBitSize!=frame.body().size()*8u) return false;
         DRW_TextCodec codec;codec.setVersion(DRW::AC1027,false);
         auto selectedBytes=frame.body();dwgBuffer original(selectedBytes.data(),selectedBytes.size(),&codec);MaterialSemanticProbe selected;
         if(!selected.parseDwg(DRW::AC1027,&original,frame.bodyBitSize())
             || !selected.hasCompleteDwgSemanticFields() || !selected.hasDwgRawData()
-            || selected.dwgRawDataBitSize()!=550u || selected.m_name!="Global")return false;
+            || selected.dwgRawDataBitSize()!=516u || selected.m_name!="Global")return false;
         // Change one character in the independently bounded detached name;
         // the frame remains parseable, but this is outside the exact default profile.
-        const auto bit=expected-17u-120u+10u+7u;
+        const auto bit=expected-17u-118u+10u+7u;
         selectedBytes.at(bit/8u)^=static_cast<std::uint8_t>(1u<<(7u-bit%8u));
         dwgBuffer changed(selectedBytes.data(),selectedBytes.size(),&codec);MaterialSemanticProbe unmatched;
         if(!unmatched.parseDwg(DRW::AC1027,&changed,frame.bodyBitSize())
             || unmatched.hasCompleteDwgSemanticFields() || !unmatched.hasDwgRawData()
-            || unmatched.dwgRawDataBitSize()!=550u || unmatched.m_name=="Global")return false;
+            || unmatched.dwgRawDataBitSize()!=516u || unmatched.m_name=="Global")return false;
         std::size_t count=0;
         for(const auto& o:r.occurrences)if(o.stream==DRW::DwgObjectHandleStream::Handles){
             if(o.serializedSegment!=DRW::DwgObjectSerializedSegment::Data || o.token.code!=DRW::DwgSoftPointer || o.token.reference!=dict || o.token.startBit<expected) return false;
@@ -417,6 +417,7 @@ struct Capture : LC3CompatCheck {
         }
     }
     void addMaterial(const DRW_Material& m) override {
+        const bool r2013Profile = rawVersion == DRW::AC1027;
         const auto close = [](double left, double right) {
             return std::abs(left - right) <= 1e-9;
         };
@@ -495,11 +496,16 @@ struct Capture : LC3CompatCheck {
             || m.reactorHandles!=std::vector<std::uint32_t>{dictionary}
             || !physicalFieldsMatch
             || (requireSemantic && (!m.hasCompleteDwgSemanticFields()
-                || (expectDefaultBody && m.m_diffuseColorValue!=0xc2ffffffu)
-                || m.m_channelFlags!=63))
+                || (expectDefaultBody
+                    && (m.m_diffuseColorMethod != (r2013Profile ? 0u : 1u)
+                        || m.m_hasDiffuseColorValue == r2013Profile
+                        || (!r2013Profile
+                            && m.m_diffuseColorValue != 0xc2ffffffu)))
+                || m.m_channelFlags != (r2013Profile ? 127 : 63)))
             || (!requireSemantic && m.hasCompleteDwgSemanticFields())
             || (requireRaw && (!m.hasDwgRawData() || m.dwgRawDataVersion()!=rawVersion
-                || m.dwgRawDataBitSize()!=550u))) valid=false;
+                || m.dwgRawDataBitSize() != (r2013Profile ? 516u : 550u))))
+            valid=false;
         materials.push_back({m.m_name,m.handle});
     }
     void addLayer(const DRW_Layer& layer) override {
@@ -573,7 +579,11 @@ int main(int argc,char**argv) {
         return 0;
     }
     const bool keep=argc==2 && std::string(argv[1])=="--keep";
-    if(argc>2 || (argc==2 && !keep) || !directControls() || !directAc1027Controls() || !ac1027AllocationSweep() || !ac1027LayerAllocationSweep()) return 1;
+    if(argc>2 || (argc==2 && !keep)) return 1;
+    if (!directControls()) { std::cerr << "default material direct controls failed\n"; return 1; }
+    if (!directAc1027Controls()) { std::cerr << "AC1027 material controls failed\n"; return 1; }
+    if (!ac1027AllocationSweep()) { std::cerr << "AC1027 material allocation sweep failed\n"; return 1; }
+    if (!ac1027LayerAllocationSweep()) { std::cerr << "AC1027 layer allocation sweep failed\n"; return 1; }
     const auto dir=std::filesystem::temp_directory_path() /
         ("libdxfrw-material-graph-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     if (!std::filesystem::create_directory(dir)) return 1;
