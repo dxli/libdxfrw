@@ -5765,6 +5765,26 @@ public:
         if (wroteOldPolyline_)
             recordWrittenPolyline(oldPolyline);
 
+        // WCS mesh POLYLINE bodies have no extrusion field. The DWG reader
+        // must publish DXF's default direction rather than a zero vector.
+        DRW_Polyline wcsMeshPolyline;
+        wcsMeshPolyline.flags = 16;
+        wcsMeshPolyline.vertexcount = 2;
+        wcsMeshPolyline.facecount = 2;
+        const std::array<DRW_Coord, 4> meshPoints {{
+            {65.0, 66.0, 67.0}, {68.0, 69.0, 70.0},
+            {71.0, 72.0, 73.0}, {74.0, 75.0, 76.0}}};
+        for (const DRW_Coord& point : meshPoints) {
+            DRW_Vertex vertex;
+            vertex.setDwgSubtype(DRW_Vertex::DwgSubtype::Mesh);
+            vertex.basePoint = point;
+            wcsMeshPolyline.addVertex(vertex);
+        }
+        wroteWcsMeshPolyline_ = writer_->writePolyline(&wcsMeshPolyline)
+            && wcsMeshPolyline.handle != 0;
+        if (wroteWcsMeshPolyline_)
+            recordWrittenPolyline(wcsMeshPolyline);
+
         DRW_Spline spline;
         spline.m_scenario = 1;
         spline.degree = 2;
@@ -6592,6 +6612,15 @@ public:
     void addPolyline(const DRW_Polyline& data) override {
         readOldPolylineSeen_ = true;
         readPolylineHandleChains_.push_back(polylineHandleChain(data));
+        if (data.flags == 16 && data.vertlist.size() == 4u) {
+            readWcsMeshPolylineSeen_ = !data.haveExtrusion
+                && data.extPoint.x == 0.0 && data.extPoint.y == 0.0
+                && data.extPoint.z == 1.0
+                && data.vertlist[0]->dwgSubtype()
+                    == DRW_Vertex::DwgSubtype::Mesh
+                && data.vertlist[0]->basePoint.x == 65.0
+                && data.vertlist[3]->basePoint.z == 76.0;
+        }
         if (data.vertlist.size() == kStagingGrowthProbeVertexCount &&
             data.vertlist.front() != nullptr && data.vertlist.back() != nullptr) {
             const DRW_Vertex& first = *data.vertlist.front();
@@ -8132,7 +8161,8 @@ public:
             && wrote3dLine_;
     }
     bool wroteAdvancedEntities() const {
-        return wroteOldPolyline_ && wroteSpline_ && wroteHelix_;
+        return wroteOldPolyline_ && wroteWcsMeshPolyline_
+            && wroteSpline_ && wroteHelix_;
     }
     bool wroteOldPolyline() const { return wroteOldPolyline_; }
     bool wroteStagingGrowthPolyline() const {
@@ -8485,7 +8515,8 @@ public:
             && read3dLineSeen_;
     }
     bool readAdvancedEntitiesSeen() const {
-        return readOldPolylineSeen_ && readSplineSeen_ && readHelixSeen_;
+        return readOldPolylineSeen_ && readWcsMeshPolylineSeen_
+            && readSplineSeen_ && readHelixSeen_;
     }
     bool readOldPolylineSeen() const { return readOldPolylineSeen_; }
     bool readStagingGrowthPolylineSeen() const {
@@ -8980,6 +9011,7 @@ private:
     bool wroteXline_ {false};
     bool wrote3dLine_ {false};
     bool wroteOldPolyline_ {false};
+    bool wroteWcsMeshPolyline_ {false};
     bool wroteStagingGrowthPolyline_ {false};
     std::vector<std::vector<std::uint32_t>> writtenPolylineHandleChains_;
     std::vector<std::vector<std::uint32_t>> expectedPolylineHandleChains_;
@@ -9245,6 +9277,7 @@ private:
     bool readXlineSeen_ {false};
     bool read3dLineSeen_ {false};
     bool readOldPolylineSeen_ {false};
+    bool readWcsMeshPolylineSeen_ {false};
     bool readStagingGrowthPolylineSeen_ {false};
     bool readSplineSeen_ {false};
     bool readSplineR2013Fields_ {false};
@@ -37091,6 +37124,7 @@ int main(int argc, char** argv) {
         DRW::AC1024, DRW::AC1027, DRW::AC1032};
     std::filesystem::path directory = std::filesystem::temp_directory_path();
     bool keepOutputs = false;
+    bool localDwgRoundTripOnly = false;
     if (argc == 2 && std::string(argv[1]) == "--acsh-cmc-loss-guard") {
         const bool unsupportedMethod = runDxfTypedAcdsBoxRoundTrip(
             false, directory, false, 1);
@@ -37707,9 +37741,13 @@ int main(int argc, char** argv) {
         directory = argv[2];
         std::filesystem::create_directories(directory);
         keepOutputs = true;
+    } else if (argc == 2
+        && std::string(argv[1]) == "--local-dwg-roundtrip-only") {
+        localDwgRoundTripOnly = true;
     } else if (argc != 1) {
         std::cerr << "usage: " << argv[0]
                   << " [--keep-dir DIRECTORY]"
+                     " [--local-dwg-roundtrip-only]"
                      " [--header-date-time-publication]"
                      " [--layout-plot-dpi-read-controls]"
                      " [--dwg-eed-size-boundaries]"
@@ -37833,11 +37871,12 @@ int main(int argc, char** argv) {
                failures);
         const auto& writtenPolylineChains =
             writeIface.writtenPolylineHandleChains();
-        expect(writtenPolylineChains.size() == 3u
+        expect(writtenPolylineChains.size() == 4u
                    && std::all_of(writtenPolylineChains.cbegin(),
                                   writtenPolylineChains.cend(),
                                   [](const auto& chain) {
                                       return (chain.size() == 4u
+                                              || chain.size() == 6u
                                               || chain.size()
                                                   == LocalDwgInterface::kStagingGrowthProbeVertexCount
                                                       + 2u)
@@ -37847,7 +37886,7 @@ int main(int argc, char** argv) {
                                                   return handle != 0u;
                                               });
                                   }),
-               ("scratch DWG records both generated POLYLINE handle chains"
+               ("scratch DWG records all generated POLYLINE handle chains"
                 + suffix).c_str(), failures);
         expect(writeIface.wroteSpline(),
                ("local DWG writer emitted SPLINE" + suffix).c_str(), failures);
@@ -38839,6 +38878,8 @@ int main(int argc, char** argv) {
         if (!keepOutputs)
             std::filesystem::remove(output, ec);
     }
+    if (localDwgRoundTripOnly)
+        return failures == 0 ? 0 : 1;
     {
         const std::uint64_t nonce = static_cast<std::uint64_t>(
             std::chrono::steady_clock::now().time_since_epoch().count());

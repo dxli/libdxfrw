@@ -18944,7 +18944,10 @@ bool DRW_Polyline::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
     int parsedCurveType = 0;
     double parsedThickness = 0.0;
     DRW_Coord parsedBasePoint;
-    DRW_Coord parsedExtrusion;
+    // Only the 2D POLYLINE wire body carries an extrusion vector. The 3D,
+    // mesh, and polyface bodies are WCS-based and omit it (ODA §§20.4.17,
+    // 20.4.33–34); retain the DXF default instead of publishing (0,0,0).
+    DRW_Coord parsedExtrusion{0.0, 0.0, 1.0};
     std::int32_t ooCount = 0;
     if (oType == 0x0F) { //pline 2D
         std::uint16_t value = 0;
