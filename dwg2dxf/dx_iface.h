@@ -3823,7 +3823,7 @@ private:
     static bool collectAc1024AcdsOpaqueProxyObjects(
         const dx_data& data, std::vector<DRW_RawDxfObject>& objects,
         std::vector<std::uint32_t>& materialHandles, bool debug);
-    static bool collectAcdsTypedBoxHistoryObjects(
+    static bool collectAcdsTypedPrimitiveHistoryObjects(
         const dx_data& data, std::vector<DRW_RawDxfObject>& objects,
         std::vector<DRW_EvaluationGraph>& graphs,
         std::vector<std::uint32_t>& materialHandles, bool debug);

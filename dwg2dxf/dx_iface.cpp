@@ -9118,13 +9118,13 @@ bool dx_iface::collectAcdsHistoryProxyObjects(
     return objects.size() - startingObjectCount == data.proxyObjects.size();
 }
 
-bool dx_iface::collectAcdsTypedBoxHistoryObjects(
+bool dx_iface::collectAcdsTypedPrimitiveHistoryObjects(
     const dx_data& data, std::vector<DRW_RawDxfObject>& objects,
     std::vector<DRW_EvaluationGraph>& graphs,
     std::vector<std::uint32_t>& materialHandles, bool debug) {
     const auto reject = [&](const char* reason, std::uint32_t handle = 0) {
         if (debug) {
-            std::cerr << "ACDS typed BOX closure rejected: handle="
+            std::cerr << "ACDS typed primitive closure rejected: handle="
                       << proxyHandleString(handle) << " reason=" << reason
                       << '\n';
         }
@@ -9160,9 +9160,13 @@ bool dx_iface::collectAcdsTypedBoxHistoryObjects(
         }
         return matches == 1u && classNumber >= 500u;
     };
+    const bool hasBoxClass = hasOnePublishedClass(
+        "ACSH_BOX_CLASS", "AcDbShBox");
+    const bool hasTorusClass = hasOnePublishedClass(
+        "ACSH_TORUS_CLASS", "AcDbShTorus");
     if (!hasOnePublishedClass("ACSH_HISTORY_CLASS", "AcDbShHistory")
         || !hasOnePublishedClass("ACAD_EVALUATION_GRAPH", "AcDbEvalGraph")
-        || !hasOnePublishedClass("ACSH_BOX_CLASS", "AcDbShBox")) {
+        || hasBoxClass == hasTorusClass) {
         return reject("required source custom-class metadata is not unique");
     }
 
@@ -9288,35 +9292,36 @@ bool dx_iface::collectAcdsTypedBoxHistoryObjects(
         addInt(output, 281, history.m_recordHistory ? 1 : 0);
         return true;
     };
-    const auto buildBoxObject = [&](const DRW_AcShHistoryObject& box,
-                                    DRW_RawDxfObject& output) {
-        output.name = "ACSH_BOX_CLASS";
-        output.handle = box.handle;
-        output.parentHandle = box.parentHandle;
-        addString(output, 5, proxyHandleString(box.handle));
-        addString(output, 330, proxyHandleString(box.parentHandle));
+    const auto buildPrimitiveObject = [&](const DRW_AcShHistoryObject& shape,
+                                          DRW_RawDxfObject& output) {
+        const bool isTorus = shape.m_recordName == "ACSH_TORUS_CLASS";
+        output.name = shape.m_recordName;
+        output.handle = shape.handle;
+        output.parentHandle = shape.parentHandle;
+        addString(output, 5, proxyHandleString(shape.handle));
+        addString(output, 330, proxyHandleString(shape.parentHandle));
         addString(output, 100, "AcDbEvalExpr");
-        addInt(output, 90, box.m_evalExprPrefix.m_id);
-        addInt(output, 98, box.m_evalExprPrefix.m_value98);
-        addInt(output, 99, box.m_evalExprPrefix.m_value99);
+        addInt(output, 90, shape.m_evalExprPrefix.m_id);
+        addInt(output, 98, shape.m_evalExprPrefix.m_value98);
+        addInt(output, 99, shape.m_evalExprPrefix.m_value99);
         addString(output, 100, "AcDbShHistoryNode");
-        addInt(output, 90, box.m_historyNodePrefix.m_major);
-        addInt(output, 91, box.m_historyNodePrefix.m_minor);
+        addInt(output, 90, shape.m_historyNodePrefix.m_major);
+        addInt(output, 91, shape.m_historyNodePrefix.m_minor);
         int code = 40;
-        for (double value : box.m_historyNodePrefix.m_transform)
+        for (double value : shape.m_historyNodePrefix.m_transform)
             output.groups.emplace_back(code++, value);
         addInt(output, 62, static_cast<std::int32_t>(
-            box.m_historyNodePrefix.m_colorIndex));
-        addInt(output, 92, box.m_historyNodePrefix.m_nodeValue);
-        addString(output, 347,
-                  proxyHandleString(box.m_historyNodePrefix.m_handle));
+            shape.m_historyNodePrefix.m_colorIndex));
+        addInt(output, 92, shape.m_historyNodePrefix.m_nodeValue);
+        addString(output, 347, proxyHandleString(
+            shape.m_historyNodePrefix.m_handle));
         addString(output, 100, "AcDbShPrimitive");
-        addString(output, 100, "AcDbShBox");
-        addInt(output, 90, box.m_major);
-        addInt(output, 91, box.m_minor);
-        for (std::size_t index = 0; index < box.m_shapeParams.size(); ++index)
+        addString(output, 100, isTorus ? "AcDbShTorus" : "AcDbShBox");
+        addInt(output, 90, shape.m_major);
+        addInt(output, 91, shape.m_minor);
+        for (std::size_t index = 0; index < shape.m_shapeParams.size(); ++index)
             output.groups.emplace_back(40 + static_cast<int>(index),
-                                       box.m_shapeParams[index]);
+                                       shape.m_shapeParams[index]);
         return true;
     };
 
@@ -9377,71 +9382,77 @@ bool dx_iface::collectAcdsTypedBoxHistoryObjects(
         if (boxIt == historyByHandle.end())
             return reject("graph expression handle is not typed",
                           node.m_expressionHandle);
-        const DRW_AcShHistoryObject& box = *boxIt->second;
-        if (box.m_recordName != "ACSH_BOX_CLASS"
-            || box.parentHandle != graph.handle
-            || !commonLinksAreEmpty(box)
-            || !hasCompletePrefixes(box, {
+        const DRW_AcShHistoryObject& shape = *boxIt->second;
+        const bool isBox = shape.m_recordName == "ACSH_BOX_CLASS";
+        const bool isTorus = shape.m_recordName == "ACSH_TORUS_CLASS";
+        if ((!isBox && !isTorus)
+            || (isBox && !hasBoxClass) || (isTorus && !hasTorusClass)
+            || shape.parentHandle != graph.handle
+            || !commonLinksAreEmpty(shape)
+            || !hasCompletePrefixes(shape, {
                 DRW_AssociativePrefixStatus::Kind::AcDbEvalExpr,
                 DRW_AssociativePrefixStatus::Kind::AcDbShHistoryNode,
                 DRW_AssociativePrefixStatus::Kind::AcShActionBody})
-            || !box.m_evalExprPrefix.m_complete
-            || box.m_evalExprPrefix.m_hasEvaluatedValue
-            || box.m_evalExprPrefix.m_valueCode > 0
-            || box.m_evalExprPrefix.m_id <= 0
-            || !box.m_historyNodePrefix.m_complete
-            || box.m_historyNodePrefix.m_major < 0
-            || box.m_historyNodePrefix.m_minor < 0
+            || !shape.m_evalExprPrefix.m_complete
+            || shape.m_evalExprPrefix.m_hasEvaluatedValue
+            || shape.m_evalExprPrefix.m_valueCode > 0
+            || shape.m_evalExprPrefix.m_id <= 0
+            || !shape.m_historyNodePrefix.m_complete
+            || shape.m_historyNodePrefix.m_major < 0
+            || shape.m_historyNodePrefix.m_minor < 0
             || static_cast<std::uint32_t>(
-                   box.m_historyNodePrefix.m_major) != history.m_major
+                   shape.m_historyNodePrefix.m_major) != history.m_major
             || static_cast<std::uint32_t>(
-                   box.m_historyNodePrefix.m_minor) != history.m_minor
-            || box.m_historyNodePrefix.m_nodeValue != 3
-            || box.m_historyNodePrefix.m_handle == 0
+                   shape.m_historyNodePrefix.m_minor) != history.m_minor
+            || shape.m_historyNodePrefix.m_nodeValue != (isBox ? 3 : 0)
+            || (isBox && shape.m_historyNodePrefix.m_handle == 0)
+            || (isTorus && shape.m_historyNodePrefix.m_handle != 0)
             || !historyNodeColorIsDxfRepresentable(
-                   box.m_historyNodePrefix)
-            || box.m_major != static_cast<std::uint32_t>(
-                   box.m_historyNodePrefix.m_major)
-            || box.m_minor != static_cast<std::uint32_t>(
-                   box.m_historyNodePrefix.m_minor)
-            || box.m_shapeParams.size() != 3u
-            || std::any_of(box.m_shapeParams.begin(), box.m_shapeParams.end(),
+                   shape.m_historyNodePrefix)
+            || shape.m_major != static_cast<std::uint32_t>(
+                   shape.m_historyNodePrefix.m_major)
+            || shape.m_minor != static_cast<std::uint32_t>(
+                   shape.m_historyNodePrefix.m_minor)
+            || shape.m_shapeParams.size() != (isBox ? 3u : 2u)
+            || std::any_of(shape.m_shapeParams.begin(), shape.m_shapeParams.end(),
                            [](double value) {
                                return !std::isfinite(value) || value <= 0.0;
                            })
-            || std::any_of(box.m_historyNodePrefix.m_transform.begin(),
-                           box.m_historyNodePrefix.m_transform.end(),
+            || std::any_of(shape.m_historyNodePrefix.m_transform.begin(),
+                           shape.m_historyNodePrefix.m_transform.end(),
                            [](double value) {
                                return !std::isfinite(value);
                            })) {
-            return reject("BOX class body or prefix is incomplete",
-                          box.handle);
+            return reject("primitive class body or prefix is incomplete",
+                          shape.handle);
         }
         std::size_t materialMatches = 0;
         for (const DRW_Material& material : data.materials) {
-            if (material.handle == box.m_historyNodePrefix.m_handle)
+            if (isBox && material.handle == shape.m_historyNodePrefix.m_handle)
                 ++materialMatches;
         }
-        if (materialMatches != 1u)
-            return reject("BOX material link is missing or ambiguous",
-                          box.handle);
+        if ((isBox && materialMatches != 1u)
+            || (isTorus && materialMatches != 0u))
+            return reject("primitive material link is missing or ambiguous",
+                          shape.handle);
 
         if (!usedHistoryHandles.insert(history.handle).second
             || !usedGraphHandles.insert(graph.handle).second
-            || !usedShapeHandles.insert(box.handle).second) {
+            || !usedShapeHandles.insert(shape.handle).second) {
             return reject("history closure is shared or ambiguous",
                           modeler->handle);
         }
         DRW_RawDxfObject historyOutput;
-        DRW_RawDxfObject boxOutput;
+        DRW_RawDxfObject shapeOutput;
         buildHistoryObject(history, historyOutput);
-        buildBoxObject(box, boxOutput);
+        buildPrimitiveObject(shape, shapeOutput);
         typedObjects.push_back(std::move(historyOutput));
-        typedObjects.push_back(std::move(boxOutput));
+        typedObjects.push_back(std::move(shapeOutput));
         typedGraphs.push_back(graph);
-        if (std::find(typedMaterials.begin(), typedMaterials.end(),
-                      box.m_historyNodePrefix.m_handle) == typedMaterials.end()) {
-            typedMaterials.push_back(box.m_historyNodePrefix.m_handle);
+        if (isBox && std::find(typedMaterials.begin(), typedMaterials.end(),
+                               shape.m_historyNodePrefix.m_handle)
+                == typedMaterials.end()) {
+            typedMaterials.push_back(shape.m_historyNodePrefix.m_handle);
         }
     }
 
@@ -9494,6 +9505,7 @@ bool acdsDxfHistoryClosure(const dx_data& data, DRW::Version version, bool secti
             || raw.m_version != version || !rows.emplace(raw.handle, &raw).second) return false;
         groups += raw.groups.size();
         if (raw.name != "ACSH_HISTORY_CLASS" && raw.name != "ACSH_BOX_CLASS"
+            && raw.name != "ACSH_TORUS_CLASS"
             && raw.name != "ACAD_EVALUATION_GRAPH") return false;
         histories += raw.name != "ACAD_EVALUATION_GRAPH";
         ++classes[raw.name];
@@ -9553,14 +9565,15 @@ bool acdsDxfHistoryClosure(const dx_data& data, DRW::Version version, bool secti
         return at < row.groups.size() && row.groups[at].code() == code
             && row.groups[at].type() == DRW_Variant::INTEGER && row.groups[at].i_val() == value;
     };
-    const auto handle = [](const Raw& row, std::size_t at, int code, std::uint32_t& value) {
+    const auto handle = [](const Raw& row, std::size_t at, int code,
+                           std::uint32_t& value, bool allowZero = false) {
         if (at >= row.groups.size() || row.groups[at].code() != code
             || row.groups[at].type() != DRW_Variant::STRING || !row.groups[at].content.s) return false;
         const auto& token = *row.groups[at].content.s;
         if (token.empty() || token.size() > 8u) return false;
         const auto parsed = std::from_chars(token.data(), token.data() + token.size(), value, 16);
         return parsed.ec == std::errc{} && parsed.ptr == token.data() + token.size()
-            && value != 0u && value != DRW::NoHandle;
+            && (allowZero || value != 0u) && value != DRW::NoHandle;
     };
     const auto identity = [&](const Raw& row) {
         std::uint32_t self = 0u, owner = 0u;
@@ -9605,12 +9618,19 @@ bool acdsDxfHistoryClosure(const dx_data& data, DRW::Version version, bool secti
         const auto box = rows.find(expression);
         if (box == rows.end()) return false;
         const auto& b = *box->second;
+        const bool isBox = b.name == "ACSH_BOX_CLASS";
+        const bool isTorus = b.name == "ACSH_TORUS_CLASS";
+        const std::size_t shapeValueCount = isBox ? 3u : isTorus ? 2u : 0u;
         std::uint32_t material = 0u;
-        if (b.name != "ACSH_BOX_CLASS" || b.groups.size() != 35u || !identity(b)
+        if ((!isBox && !isTorus)
+            || b.groups.size() != 32u + shapeValueCount || !identity(b)
             || b.parentHandle != g.handle || !text(b, 2u, 100, "AcDbEvalExpr")
             || !text(b, 6u, 100, "AcDbShHistoryNode") || !text(b, 28u, 100, "AcDbShPrimitive")
-            || !text(b, 29u, 100, "AcDbShBox") || !handle(b, 27u, 347, material)
-            || materials[material] != 1u || rows.count(material) != 0u || modelers.count(material) != 0u) return false;
+            || !text(b, 29u, 100, isBox ? "AcDbShBox" : "AcDbShTorus")
+            || !handle(b, 27u, 347, material, isTorus)
+            || (isBox && (materials[material] != 1u
+                || rows.count(material) != 0u || modelers.count(material) != 0u))
+            || (isTorus && material != 0u)) return false;
         for (auto at : {3u,4u,5u,7u,8u,25u,26u,30u,31u}) {
             const int code = at == 3u || at == 7u || at == 30u ? 90 : at == 4u ? 98
                 : at == 5u ? 99 : at == 8u || at == 31u ? 91 : at == 25u ? 62 : 92;
@@ -9619,7 +9639,7 @@ bool acdsDxfHistoryClosure(const dx_data& data, DRW::Version version, bool secti
         for (std::size_t at = 9u; at != 25u; ++at)
             if (b.groups[at].code() != 40 + static_cast<int>(at - 9u)
                 || b.groups[at].type() != DRW_Variant::DOUBLE || !std::isfinite(b.groups[at].d_val())) return false;
-        for (std::size_t at = 32u; at != 35u; ++at)
+        for (std::size_t at = 32u; at != 32u + shapeValueCount; ++at)
             if (b.groups[at].code() != 40 + static_cast<int>(at - 32u)
                 || b.groups[at].type() != DRW_Variant::DOUBLE || !std::isfinite(b.groups[at].d_val())
                 || b.groups[at].d_val() <= 0.0) return false;
@@ -83982,11 +84002,11 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 return false;
             }
         } else if (hasTypedAcdsObjects) {
-            if (!collectAcdsTypedBoxHistoryObjects(
+            if (!collectAcdsTypedPrimitiveHistoryObjects(
                     *cData, m_acdsTypedHistoryObjects,
                     m_acdsTypedEvaluationGraphs, referencedMaterials,
                     debug)) {
-                reportPreflightFailure("ACDS typed BOX history closure");
+                reportPreflightFailure("ACDS typed primitive history closure");
                 delete dxfW;
                 dxfW = nullptr;
                 return false;
@@ -84041,7 +84061,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             std::vector<DRW_Class> classes;
             static const char* supportedTypedClasses[] = {
                 "ACSH_HISTORY_CLASS", "ACAD_EVALUATION_GRAPH",
-                "ACSH_BOX_CLASS", "MATERIAL"};
+                "ACSH_BOX_CLASS", "ACSH_TORUS_CLASS", "MATERIAL"};
             for (const char* name : supportedTypedClasses) {
                 const auto count = classInstanceCounts.find(name);
                 if (count == classInstanceCounts.end())

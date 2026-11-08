@@ -16580,13 +16580,15 @@ bool runDxfAcShExtrusionProjectionCapture(
         && projection.m_point.z == 9.0;
 }
 
-bool runDxfTypedAcdsBoxRoundTrip(
+bool runDxfTypedAcdsPrimitiveRoundTrip(
     bool binary, const std::filesystem::path& directory, bool keepOutput,
     int cmcMutation = 0, bool historylessCompanion = false,
-    DRW::Version targetVersion = DRW::AC1027) {
+    DRW::Version targetVersion = DRW::AC1027, bool torus = false,
+    int torusMutation = 0) {
     if (targetVersion != DRW::AC1027 && targetVersion != DRW::AC1032) return false;
     const std::filesystem::path output = directory /
-        (std::string("libdxfrw-ac1027-typed-acds-box-")
+        (std::string("libdxfrw-ac1027-typed-acds-")
+         + (torus ? "torus-" : "box-")
          + (binary ? "binary" : "ascii")
          + (targetVersion == DRW::AC1032 ? "-AC1032" : "")
          + (historylessCompanion ? "-historyless-companion" : "")
@@ -16642,7 +16644,9 @@ bool runDxfTypedAcdsBoxRoundTrip(
         classes{{
             {521u, "ACSH_HISTORY_CLASS", "AcDbShHistory"},
             {520u, "ACAD_EVALUATION_GRAPH", "AcDbEvalGraph"},
-            {546u, "ACSH_BOX_CLASS", "AcDbShBox"}}};
+            {static_cast<std::uint16_t>(torus ? 519u : 546u),
+             torus ? "ACSH_TORUS_CLASS" : "ACSH_BOX_CLASS",
+             torus ? "AcDbShTorus" : "AcDbShBox"}}};
     for (const auto& cls : classes) {
         DRW_DwgClassCoverageEntry entry;
         entry.m_classNumber = std::get<0>(cls);
@@ -16689,7 +16693,8 @@ bool runDxfTypedAcdsBoxRoundTrip(
     graph.m_nodes.push_back(graphNode);
     source.evaluationGraphs.push_back(graph);
 
-    DRW_AcShHistoryObject box("ACSH_BOX_CLASS");
+    DRW_AcShHistoryObject box(torus ? "ACSH_TORUS_CLASS"
+                                    : "ACSH_BOX_CLASS");
     box.handle = boxHandle;
     box.parentHandle = graphHandle;
     box.m_evalExprPrefix.m_id = 1;
@@ -16701,9 +16706,16 @@ bool runDxfTypedAcdsBoxRoundTrip(
     box.m_historyNodePrefix.m_minor = 329;
     for (std::size_t index = 0; index < 4u; ++index)
         box.m_historyNodePrefix.m_transform[index * 5u] = 1.0;
-    box.m_historyNodePrefix.m_colorIndex = 256u;
-    box.m_historyNodePrefix.m_nodeValue = 3;
-    box.m_historyNodePrefix.m_handle = materialHandle;
+    box.m_historyNodePrefix.m_colorIndex = torusMutation == 2 ? 2u : 256u;
+    if (torusMutation == 2) {
+        box.m_historyNodePrefix.m_hasColorCmcMetadata = true;
+        box.m_historyNodePrefix.m_colorMethod = 0xC3u;
+        box.m_historyNodePrefix.m_colorIndexRaw = 0u;
+        box.m_historyNodePrefix.m_colorIndexIsReserved = true;
+    }
+    box.m_historyNodePrefix.m_nodeValue = torus ? 0 : 3;
+    box.m_historyNodePrefix.m_handle = torus
+        ? (torusMutation == 1 ? materialHandle : 0u) : materialHandle;
     box.m_historyNodePrefix.m_complete = true;
     if (cmcMutation != 0) {
         auto& color = box.m_historyNodePrefix;
@@ -16718,26 +16730,29 @@ bool runDxfTypedAcdsBoxRoundTrip(
                    DRW_AssociativePrefixStatus::Kind::AcDbShHistoryNode);
     box.m_major = 33u;
     box.m_minor = 329u;
-    box.m_shapeParams = {5.0, 5.0, 5.0};
+    box.m_shapeParams = torus ? std::vector<double>{19.0, 2.789983459616414}
+                              : std::vector<double>{5.0, 5.0, 5.0};
     completePrefix(box, DRW_AssociativePrefixStatus::Kind::AcShActionBody);
     source.acshHistoryObjects.push_back(box);
 
-    DRW_Dictionary materialDictionary;
-    materialDictionary.handle = 0x72u;
-    materialDictionary.parentHandle = 0xCu;
-    materialDictionary.cloning = 1;
-    materialDictionary.m_entries = {
-        {"ByLayer", materialHandle}, {"ByBlock", 0x97u},
-        {"Global", 0x98u}};
-    source.dictionaries.push_back(materialDictionary);
-    for (const auto& materialInfo : {
-             std::pair<std::uint32_t, const char*>{materialHandle, "ByLayer"},
-             {0x97u, "ByBlock"}, {0x98u, "Global"}}) {
-        DRW_Material material;
-        material.handle = materialInfo.first;
-        material.parentHandle = materialDictionary.handle;
-        material.m_name = materialInfo.second;
-        source.materials.push_back(std::move(material));
+    if (!torus) {
+        DRW_Dictionary materialDictionary;
+        materialDictionary.handle = 0x72u;
+        materialDictionary.parentHandle = 0xCu;
+        materialDictionary.cloning = 1;
+        materialDictionary.m_entries = {
+            {"ByLayer", materialHandle}, {"ByBlock", 0x97u},
+            {"Global", 0x98u}};
+        source.dictionaries.push_back(materialDictionary);
+        for (const auto& materialInfo : {
+                 std::pair<std::uint32_t, const char*>{materialHandle, "ByLayer"},
+                 {0x97u, "ByBlock"}, {0x98u, "Global"}}) {
+            DRW_Material material;
+            material.handle = materialInfo.first;
+            material.parentHandle = materialDictionary.handle;
+            material.m_name = materialInfo.second;
+            source.materials.push_back(std::move(material));
+        }
     }
 
     const auto verifyCompanion = [&](const dx_data& data) {
@@ -16806,6 +16821,22 @@ bool runDxfTypedAcdsBoxRoundTrip(
         if (!sentinel)
             return false;
     }
+    if (torusMutation == 1) {
+        constexpr const char* refusalSentinel =
+            "ACSH-TORUS-REFUSAL-SENTINEL";
+        { std::ofstream out(output, std::ios::binary | std::ios::trunc);
+          out << refusalSentinel; if (!out) return false; }
+        const bool invalidAccepted = exporter.fileExport(
+            output.string(), targetVersion, binary, &source, false);
+        std::ifstream retainedInput(output, std::ios::binary);
+        const std::string retained{
+            std::istreambuf_iterator<char>(retainedInput),
+            std::istreambuf_iterator<char>()};
+        retainedInput.close();
+        if (invalidAccepted || retained != refusalSentinel)
+            return false;
+        source.acshHistoryObjects.back().m_historyNodePrefix.m_handle = 0u;
+    }
     const bool exported = exporter.fileExport(
         output.string(), targetVersion, binary, &source, false);
     if (cmcMutation != 0) {
@@ -16870,7 +16901,7 @@ bool runDxfTypedAcdsBoxRoundTrip(
     const DRW_RawDxfObject* historyRaw =
         findRaw("ACSH_HISTORY_CLASS", historyHandle);
     const DRW_RawDxfObject* boxRaw =
-        findRaw("ACSH_BOX_CLASS", boxHandle);
+        findRaw(torus ? "ACSH_TORUS_CLASS" : "ACSH_BOX_CLASS", boxHandle);
     const DRW_EvaluationGraph* importedGraph = nullptr;
     for (const DRW_EvaluationGraph& value : imported.evaluationGraphs) {
         if (value.handle == graphHandle)
@@ -16878,7 +16909,9 @@ bool runDxfTypedAcdsBoxRoundTrip(
     }
     std::vector<std::pair<std::string, int>> expectedClasses{
         {"ACSH_HISTORY_CLASS", 1}, {"ACAD_EVALUATION_GRAPH", 1},
-        {"ACSH_BOX_CLASS", 1}, {"MATERIAL", 3}};
+        {torus ? "ACSH_TORUS_CLASS" : "ACSH_BOX_CLASS", 1}};
+    if (!torus)
+        expectedClasses.emplace_back("MATERIAL", 3);
     bool classesMatch = imported.dxfClasses.size() == expectedClasses.size();
     if (classesMatch) {
         for (std::size_t index = 0; index < expectedClasses.size(); ++index) {
@@ -16919,12 +16952,14 @@ bool runDxfTypedAcdsBoxRoundTrip(
                 && group.type() == DRW_Variant::STRING
                 && group.c_str() != nullptr) {
                 boxSubclasses.emplace_back(group.c_str());
-                inBoxShape = std::strcmp(group.c_str(), "AcDbShBox") == 0;
+                inBoxShape = std::strcmp(group.c_str(), "AcDbShBox") == 0
+                    || std::strcmp(group.c_str(), "AcDbShTorus") == 0;
             } else if (group.code() >= 40 && group.code() <= 55
                        && group.type() == DRW_Variant::DOUBLE
                        && !inBoxShape) {
                 boxTransform.push_back(group.d_val());
-            } else if (group.code() >= 40 && group.code() <= 42
+            } else if (group.code() >= 40
+                       && group.code() <= (torus ? 41 : 42)
                        && group.type() == DRW_Variant::DOUBLE
                        && inBoxShape) {
                 boxDimensions.push_back(group.d_val());
@@ -16932,7 +16967,8 @@ bool runDxfTypedAcdsBoxRoundTrip(
         }
     }
     const std::vector<std::string> expectedBoxSubclasses{
-        "AcDbEvalExpr", "AcDbShHistoryNode", "AcDbShPrimitive", "AcDbShBox"};
+        "AcDbEvalExpr", "AcDbShHistoryNode", "AcDbShPrimitive",
+        torus ? "AcDbShTorus" : "AcDbShBox"};
     const std::vector<double> expectedBoxTransform{
         1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
         0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0};
@@ -16943,17 +16979,21 @@ bool runDxfTypedAcdsBoxRoundTrip(
         && hasString(historyRaw, 330, expectedModelerHandle)
         && hasString(historyRaw, 360, "FC22")
         && hasInt(boxRaw, 90, 1) && hasInt(boxRaw, 91, 329)
-        && hasInt(boxRaw, 92, 3)
+        && hasInt(boxRaw, 92, torus ? 0 : 3)
+        && hasInt(boxRaw, 62, torusMutation == 2 ? 2 : 256)
         && hasString(boxRaw, 330, "FC22")
         && boxSubclasses == expectedBoxSubclasses
         && boxTransform == expectedBoxTransform
-        && boxDimensions == std::vector<double>({5.0, 5.0, 5.0})
+        && boxDimensions == (torus
+            ? std::vector<double>({19.0, 2.789983459616414})
+            : std::vector<double>({5.0, 5.0, 5.0}))
         && std::any_of(boxRaw->groups.begin(), boxRaw->groups.end(),
-                       [](const DRW_Variant& group) {
+                       [torus](const DRW_Variant& group) {
                            return group.code() == 347
                                && group.type() == DRW_Variant::STRING
                                && group.c_str() != nullptr
-                               && std::strcmp(group.c_str(), "96") == 0;
+                               && std::strcmp(group.c_str(),
+                                   torus ? "0" : "96") == 0;
                        })
         && importedGraph != nullptr && importedGraph->m_value96 == 1
         && importedGraph->m_value97 == 1
@@ -16966,7 +17006,7 @@ bool runDxfTypedAcdsBoxRoundTrip(
         && importedGraph->m_nodes.front().m_data2 == -1
         && importedGraph->m_nodes.front().m_data3 == -1
         && importedGraph->m_nodes.front().m_data4 == -1
-        && classesMatch && imported.materials.size() == 3u
+        && classesMatch && imported.materials.size() == (torus ? 0u : 3u)
         && imported.rawDxfSections.size() == 1u
         && imported.rawDxfSections.front().m_name == "ACDSDATA"
         && acdsPayloadMatches;
@@ -17004,7 +17044,8 @@ bool runDxfTypedAcdsBoxRoundTrip(
         if (!keepOutput) std::filesystem::remove(replayPath, ec);
     }
     if (!result) {
-        std::cerr << "Typed ACDS BOX round-trip ("
+        std::cerr << "Typed ACDS " << (torus ? "TORUS" : "BOX")
+                  << " round-trip ("
                   << (binary ? "binary" : "ASCII") << "): read=" << readOk
                   << " history=" << (historyRaw != nullptr)
                   << " box=" << (boxRaw != nullptr)
@@ -17112,7 +17153,7 @@ bool acdsHistoryDxfReplayFaults(const std::filesystem::path& keepDirectory = {},
     } } cleanup{directory, keepDirectory.empty()};
     unsigned refusals = 0u, retries = 0u, late = 0u;
     for (const auto version : {DRW::AC1027, DRW::AC1032}) for (bool binary : {false, true}) {
-        if (!runDxfTypedAcdsBoxRoundTrip(binary, directory, true, 0, true, version)) return false;
+        if (!runDxfTypedAcdsPrimitiveRoundTrip(binary, directory, true, 0, true, version)) return false;
         const auto input = directory / (std::string("libdxfrw-ac1027-typed-acds-box-")
             + (binary ? "binary" : "ascii") + (version == DRW::AC1032 ? "-AC1032" : "") + "-historyless-companion.dxf");
         dx_data source; dx_iface reader;
@@ -18177,6 +18218,65 @@ bool runAcshPrefixSampleQualification(const std::filesystem::path& path) {
         && extrusionClosureLinksMatch
         && box->m_shapeParams == std::vector<double>({5.0, 5.0, 5.0})
         && close(extrusion->m_direction.z, 4.380487155114503);
+}
+
+bool inspectAcshTorusSourceProfile(const std::filesystem::path& path) {
+    dx_data data;
+    dx_iface reader;
+    if (!reader.fileImport(path.string(), &data, false)
+        || data.sourceVersion != DRW::AC1021)
+        return false;
+    const DRW_ModelerGeometry* solid = nullptr;
+    for (const DRW_Entity* entity : data.mBlock->ent) {
+        if (entity != nullptr && entity->eType == DRW::E3DSOLID
+            && entity->handle == 0x452u) {
+            if (solid != nullptr)
+                return false;
+            solid = static_cast<const DRW_ModelerGeometry*>(entity);
+        }
+    }
+    const DRW_AcShHistoryObject* history = nullptr;
+    const DRW_AcShHistoryObject* torus = nullptr;
+    for (const DRW_AcShHistoryObject& object : data.acshHistoryObjects) {
+        if (object.handle == 0x453u
+            && object.m_recordName == "ACSH_HISTORY_CLASS")
+            history = &object;
+        if (object.handle == 0x455u
+            && object.m_recordName == "ACSH_TORUS_CLASS")
+            torus = &object;
+    }
+    const DRW_EvaluationGraph* graph = nullptr;
+    for (const DRW_EvaluationGraph& item : data.evaluationGraphs) {
+        if (item.handle == 0x454u)
+            graph = &item;
+    }
+    if (solid == nullptr || history == nullptr || graph == nullptr
+        || torus == nullptr || solid->m_historyHandle != history->handle
+        || history->parentHandle != solid->handle
+        || history->m_ownerHandle != graph->handle
+        || graph->parentHandle != history->handle
+        || graph->m_nodes.size() != 1u || !graph->m_edges.empty()
+        || graph->m_nodes.front().m_expressionHandle != torus->handle
+        || torus->parentHandle != graph->handle
+        || torus->m_shapeParams.size() != 2u
+        || std::abs(torus->m_shapeParams[0] - 19.0) > 1e-12
+        || std::abs(torus->m_shapeParams[1] - 2.789983459616414) > 1e-12
+        || torus->m_historyNodePrefix.m_colorMethod != 0xC3u
+        || torus->m_historyNodePrefix.m_colorIndex != 2u
+        || torus->m_historyNodePrefix.m_colorIndexRaw != 0u
+        || torus->m_historyNodePrefix.m_handle != 0u
+        || torus->m_historyNodePrefix.m_nodeValue != 0)
+        return false;
+    const auto& color = torus->m_historyNodePrefix;
+    std::cout << "AC1021 TORUS source handles 452->453->454->455; radii="
+              << torus->m_shapeParams[0] << ',' << torus->m_shapeParams[1]
+              << " CMC method=0x" << std::hex
+              << static_cast<unsigned>(color.m_colorMethod)
+              << " scalar=" << std::dec << color.m_colorIndex
+              << " raw-index=" << color.m_colorIndexRaw
+              << " reserved=" << color.m_colorIndexIsReserved
+              << " material=" << color.m_handle << '\n';
+    return true;
 }
 
 bool runDxfEvaluationGraphRoundTrip(
@@ -37126,11 +37226,11 @@ int main(int argc, char** argv) {
     bool keepOutputs = false;
     bool localDwgRoundTripOnly = false;
     if (argc == 2 && std::string(argv[1]) == "--acsh-cmc-loss-guard") {
-        const bool unsupportedMethod = runDxfTypedAcdsBoxRoundTrip(
+        const bool unsupportedMethod = runDxfTypedAcdsPrimitiveRoundTrip(
             false, directory, false, 1);
-        const bool unknownFlags = runDxfTypedAcdsBoxRoundTrip(
+        const bool unknownFlags = runDxfTypedAcdsPrimitiveRoundTrip(
             true, directory, false, 2);
-        const bool nonzeroReservedIndex = runDxfTypedAcdsBoxRoundTrip(
+        const bool nonzeroReservedIndex = runDxfTypedAcdsPrimitiveRoundTrip(
             false, directory, false, 3);
         const bool passed = unsupportedMethod && unknownFlags
             && nonzeroReservedIndex;
@@ -37572,8 +37672,27 @@ int main(int argc, char** argv) {
     } else if ((argc == 2 || argc == 3) && std::string(argv[1]) == "--acds-history-reexport-faults") {
         return acdsHistoryDxfReplayFaults(argc == 3 ? std::filesystem::path(argv[2]) : std::filesystem::path{}) ? 0 : 1;
     } else if (argc == 2 && std::string(argv[1]) == "--acds-typed-historyless-companion") {
-        return runDxfTypedAcdsBoxRoundTrip(false, directory, false, 0, true)
-            && runDxfTypedAcdsBoxRoundTrip(true, directory, false, 0, true) ? 0 : 1;
+        return runDxfTypedAcdsPrimitiveRoundTrip(false, directory, false, 0, true)
+            && runDxfTypedAcdsPrimitiveRoundTrip(true, directory, false, 0, true) ? 0 : 1;
+    } else if (argc == 2 && std::string(argv[1]) == "--acds-typed-torus") {
+        const bool ascii = runDxfTypedAcdsPrimitiveRoundTrip(
+            false, directory, false, 0, false, DRW::AC1027, true);
+        const bool binary = runDxfTypedAcdsPrimitiveRoundTrip(
+            true, directory, false, 0, false, DRW::AC1027, true);
+        const bool asciiRetry = runDxfTypedAcdsPrimitiveRoundTrip(
+            false, directory, false, 0, false, DRW::AC1027, true, 1);
+        const bool binaryRetry = runDxfTypedAcdsPrimitiveRoundTrip(
+            true, directory, false, 0, false, DRW::AC1027, true, 1);
+        const bool asciiCmc = runDxfTypedAcdsPrimitiveRoundTrip(
+            false, directory, false, 0, false, DRW::AC1027, true, 2);
+        const bool binaryCmc = runDxfTypedAcdsPrimitiveRoundTrip(
+            true, directory, false, 0, false, DRW::AC1027, true, 2);
+        std::cout << "Typed ACDS TORUS ASCII/Binary round-trip: "
+                  << (ascii && binary && asciiRetry && binaryRetry
+                          && asciiCmc && binaryCmc
+                          ? "PASS" : "FAIL") << '\n';
+        return ascii && binary && asciiRetry && binaryRetry
+            && asciiCmc && binaryCmc ? 0 : 1;
     } else if (argc == 4
         && (std::string(argv[1]) == "--native-historyless-solid-witness"
             || std::string(argv[1]) == "--native-historyless-solid-witness-faults")) {
@@ -37730,6 +37849,12 @@ int main(int argc, char** argv) {
         std::cout << "ACSH pinned-sample prefix qualification: "
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
+    } else if (argc == 3
+        && std::string(argv[1]) == "--inspect-acsh-torus-source") {
+        const bool passed = inspectAcshTorusSourceProfile(argv[2]);
+        std::cout << "ACSH pinned TORUS source profile: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
     } else if (argc == 4
         && std::string(argv[1]) == "--verify-dynamicblock-typed-pair") {
         const bool passed = runDynamicBlockTypedDxfPairQualification(
@@ -37762,6 +37887,7 @@ int main(int argc, char** argv) {
                      " [--native-historyless-solid[-inline][-faults] [EMPTY_DIRECTORY]]"
                      " [--native-historyless-solid-witness[-faults] SAB_FILE EMPTY_DIRECTORY]"
                      " [--acds-typed-historyless-companion]"
+                     " [--acds-typed-torus]"
                      " [--acds-history-reexport-faults [EMPTY_DIRECTORY]]"
                      " [--acds-raw-scalar-wire-controls]"
                      " [--material-raw-scalar-wire-controls] [--acds-strict-material-closure]"
@@ -37795,6 +37921,7 @@ int main(int argc, char** argv) {
                      " [--generate-hatch-pattern[-binary] DXF]"
                      " [--verify-hatch-pattern DXF]"
                      " [--verify-acsh-prefix-sample DWG]"
+                     " [--inspect-acsh-torus-source DWG]"
                      " [--generate-mpolygon-header[-binary] DXF]"
                      " [--verify-mpolygon-header DXF]"
                      " [--generate-mpolygon-metadata[-binary] DXF]"
@@ -39173,17 +39300,17 @@ int main(int argc, char** argv) {
     expect(runDxfAcShExtrusionProjectionCapture(directory, false, 4, 2),
            "local DXF ACSH extrusion projection rejects unknown alignment options",
            failures);
-    expect(runDxfTypedAcdsBoxRoundTrip(false, directory, keepOutputs),
+    expect(runDxfTypedAcdsPrimitiveRoundTrip(false, directory, keepOutputs),
            "local ASCII typed ACDS BOX closure round-trip", failures);
-    expect(runDxfTypedAcdsBoxRoundTrip(true, directory, keepOutputs),
+    expect(runDxfTypedAcdsPrimitiveRoundTrip(true, directory, keepOutputs),
            "local binary typed ACDS BOX closure round-trip", failures);
-    expect(runDxfTypedAcdsBoxRoundTrip(false, directory, false, 1),
+    expect(runDxfTypedAcdsPrimitiveRoundTrip(false, directory, false, 1),
            "local ASCII typed ACDS BOX refuses unsupported CMC method atomically",
            failures);
-    expect(runDxfTypedAcdsBoxRoundTrip(true, directory, false, 2),
+    expect(runDxfTypedAcdsPrimitiveRoundTrip(true, directory, false, 2),
            "local binary typed ACDS BOX refuses unknown CMC flags atomically",
            failures);
-    expect(runDxfTypedAcdsBoxRoundTrip(false, directory, false, 3),
+    expect(runDxfTypedAcdsPrimitiveRoundTrip(false, directory, false, 3),
            "local ASCII typed ACDS BOX refuses nonzero reserved CMC index atomically",
            failures);
     expect(runDxfEvaluationGraphRoundTrip(false, directory, keepOutputs),

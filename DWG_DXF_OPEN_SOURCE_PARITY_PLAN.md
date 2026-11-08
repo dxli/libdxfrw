@@ -15,6 +15,31 @@ first candidate fails any evidence gate, record that precise gate once and
 advance to the next inventory row; do not restart a corpus scan or weaken
 strict output. The implementation slice, focused control, plan/receipt update,
 commit, and concise progress report form one uninterrupted loop.
+
+**Resume checkpoint (2026-11-08):** the one planned ODA 27.1 CLI retry after
+the user reported unlocking the Mac again aborted in 0.288 seconds during
+Pasteboard/XPC initialization. It produced no stdout or output file; the source
+and converter hashes match the prior receipts. The direct CLI invocation is
+exhausted unless a concrete executable or launch-environment change occurs.
+Do not repeat it. See the [retry receipt](docs/research/p6-ac1027-oda-cli-after-user-unlock-2026-11-08.json).
+This result does not explain suffix contents: keep the suffix unclaimed and
+strict DXF output refused at the separate source-reference gate. Continue
+independent local implementation.
+
+**Latest implementation slice (2026-11-08):** the typed primitive DXF writer
+now admits a closed TORUS profile alongside the existing BOX profile. TORUS
+requires an exact one-node/no-edge graph, a null material reference, complete
+prefixes, two positive finite radii, and a spec-conforming CMC/index profile;
+the same-profile DXF re-import closure validates the 34-group TORUS body and
+null group-347 link. Generated ASCII/Binary readback, invalid-material refusal
+with destination preservation and same-adapter retry, ODA-shaped ACI CMC
+controls, and the existing BOX CMC loss guard pass. The current parser also
+qualifies the hash-bound public AC1021 path
+`0x452 → 0x453 → 0x454 → 0x455`, including radii, ACI 2, CMC raw index 0 and
+null material; LibreDWG 0.14 emits the matching TORUS DXF record. This is a
+selected graph/profile result only: the containing source's unrelated ACDS and
+opaque frames still block whole-source output, and independent ACIS/kernel
+meaning remains open. See the [TORUS receipt](docs/research/p4-ac1021-acsh-torus-typed-dxf-projection-2026-11-08.json).
 **ODA converter retry result (2026-11-07):** after the user unlocked the
 macOS session, ODA File Converter 27.1.0 completed an audit-enabled native GUI
 conversion of a scratch copy of the AC1024 civil source to 2010 ASCII DXF. Its
@@ -457,8 +482,14 @@ Saved-inventory candidate check (no corpus rescan):
 | ACadSharp AC1021 GROUP sample | Two 6-LINE groups | Producer provenance is unestablished; same drawing has the IMAGEDEF owner-role conflict |
 | AC1021 `children-room-decoration.dwg` | 112/112 standard objects and 74/74 opaque carriers have selected-output proof | Already-complete exact-source profile; not a distinct candidate |
 
-No distinct physical P4 OBJECTS subgraph in the saved inventory is currently
-eligible. The local P6 AC1027 source-reference inventory is complete, with
+No physical P4 OBJECTS subgraph currently passes the source-to-output gate.
+The AC1021 public TORUS graph is source-bound and its fields/links match the
+narrow writer profile, but only generated output/readback is qualified; the
+containing source has 387 opaque callbacks and other ACDS graphs. Next add a
+source-bound selected-route check for this exact graph in ASCII and Binary
+while retaining whole-source refusal; do not promote a parser/source match to
+whole-document output or semantic support. The local P6 AC1027
+source-reference inventory is complete, with
 3DSOLID the only partial body report; its selected history target graph is now
 identified but the typed body/output route is incomplete. Keep this profile
 refused and advance to the next locally implementable P4/P6 packet. Do not
@@ -2449,6 +2480,11 @@ lineage and candidate field sequence; the local ACadSharp source has no parser
 for either class. Keep the frames raw-only and do not port the candidate schema
 or change parser boundaries without new authoritative or provenance-qualified
 independent evidence ([source screen](docs/research/p6-ac1024-acsh-independent-layout-source-screen-2026-11-08.json)).
+This source screen is complete for the currently available local authorities
+and peers; do not repeat it unchanged. Resume only when an authoritative class
+layout or provenance-qualified independent body/span observation becomes
+available. Until then, keep these AC1024 frames raw-only and strict output
+refused, and advance to a different implementation-ready packet.
 
 | Boundary | Remaining decision or proof |
 | --- | --- |

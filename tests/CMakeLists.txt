@@ -3766,6 +3766,18 @@ set_tests_properties(dxf_acsh_cmc_loss_guard PROPERTIES
     TIMEOUT 30
 )
 
+# The selected primitive writer supports the exact one-node ACAD_EVALUATION_GRAPH
+# closure for a material-free TORUS, in addition to the existing BOX profile.
+add_test(
+    NAME dxf_acsh_torus_typed_roundtrip
+    COMMAND $<TARGET_FILE:libdxfrw_dwg_local_roundtrip>
+            --acds-typed-torus
+)
+set_tests_properties(dxf_acsh_torus_typed_roundtrip PROPERTIES
+    LABELS "fast;dxf;dwg;adapter;3d;acds;generated"
+    TIMEOUT 30
+)
+
 # Preserve the PFACE record boundary and following entity through direct
 # ASCII/Binary read and canonical write/readback without running the full suite.
 add_test(
