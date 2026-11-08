@@ -749,8 +749,17 @@ selection.
    LibreDWG 0.14 conversion reproduced that ten-pair record, while verbose
    conversion of the full drawing did not bind a SAB-to-SAT trace to this
    output entity. Treat this as a negative peer observation, not a positive
-   carrier witness. Resolve why the exact peer entity has no carrier and bind
-   the bytes to it before using this source to qualify a conversion. The
+   carrier witness. A fresh `dwg2dxf -v5 --as r2010` trace for the pinned
+   source binds handle `0x452` to `ACIS BinaryFile` SAB v2 and enters the
+   converter. LibreDWG `src/out_dxf.c` then stores the final short SAT chunk at
+   index `i` but assigns `_obj->num_blocks = i`; the DXF writer iterates only
+   to `num_blocks`, so it omits that final chunk (and group 1/3) when the
+   output fits one chunk. The reproduced entity still has only groups 70 and
+   350. This explains the negative peer output as a serializer defect; it is
+   not a positive carrier witness. The next peer control must correct the
+   chunk-count behavior in a scratch diagnostic or use another independent
+   producer, then bind the resulting SAT bytes to this exact handle before
+   using it to qualify a conversion. The
    installed ODA File Converter's direct CLI route still aborts before
    conversion with PasteBoard/XPC errors. On 2026-11-08 the user reported
    unlocking the Mac; a fresh `--help` startup attempt still exited 134 with
@@ -811,7 +820,11 @@ full-source export also preserves its destination but stops first at the
 unrelated unqualified DWG IMAGEDEF owner role, so the later opaque-frame gate
 was not reached. A fresh LibreDWG 0.14 peer conversion again emitted only
 group 70 and history handle `453` for output handle `452`; its verbose output
-did not explain the missing carrier. The post-unlock ODA startup retry still
+did not explain the missing carrier. The later verbose LibreDWG trace shows
+that its SAB-to-SAT converter runs for handle `0x452`, but the source writer
+sets the emitted chunk count to the last chunk index and consequently omits
+the final chunk; the exact output entity has only groups 70 and 350. This is a
+peer serializer defect, not a positive carrier witness. The post-unlock ODA startup retry still
 aborts before conversion during PasteBoard/XPC initialization. The existing generated TORUS/CMC
 controls pass (2/2); no fixture was added. These are refusal results, not
 successful physical-source output. See the

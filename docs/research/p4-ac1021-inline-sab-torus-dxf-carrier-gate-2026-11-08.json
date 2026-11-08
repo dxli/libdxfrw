@@ -44,6 +44,16 @@
       "file": "/Users/dli/dev/libredwg/src/out_dxf.c",
       "revision": "6d6a33987a1a97095b069c799c3d8a793320f812",
       "observedStrategy": "dxf_3dsolid converts a version-2 SAB through dwg_convert_SAB_to_SAT1 before writing SAT text groups",
+      "sourceTrace": {
+        "tracePath": "/private/tmp/libdxfrw-atmos-peer-unlock.log",
+        "traceSha256": "026204bfc61bfd32e898094aaa9a837d0fdda156343a9f62977c90cd76e18851",
+        "outputPath": "/private/tmp/libdxfrw-atmos-peer-unlock.dxf",
+        "outputSha256": "68010f15fbef96067ea7a30660a9693e22a7006bd48d0b110d3c35cc299a324e",
+        "command": "dwg2dxf -y -v5 --as r2010 -o <scratch output> <pinned source>",
+        "traceEvidence": "The exact source entity 0x452 has acis_empty=0, version=2, and a 1,059-byte SAB span; the trace enters dwg_convert_SAB_to_SAT1 and reports the SAB header/body records.",
+        "sourceCodeCause": "out_dxf.c stores the final short SAT text block at index i, then assigns _obj->num_blocks = i. dxf_3dsolid iterates only to num_blocks, omitting that final block. For the sub-4096-byte result i is zero, so the exact output entity omits all SAT group-1/3 payload.",
+        "evidenceLimit": "The trace and source-code path explain the missing peer carrier but do not establish an independently valid SAT carrier or geometry semantics."
+      },
       "sampleOutput": {
         "path": "/private/tmp/libdxfrw-atmos-peer/atmos.dxf",
         "sha256": "9a8c5e2cec80102088da1f78fbb5abaa345a179aa48b2fac7a35f130f095ee95",
@@ -76,7 +86,7 @@
         "pairCountIncludingType": 10,
         "groups": {"70": 1, "350": "453"},
         "acisPayloadGroups": [],
-        "interpretation": "The installed peer reproduced the missing-carrier observation, but its verbose SAB-to-SAT traces do not identify this output entity; this remains negative evidence only."
+        "interpretation": "The installed peer reproduced the missing carrier. A verbose trace now binds SAB conversion to this exact source entity and reveals the peer chunk-count defect; this remains negative evidence, not a carrier witness."
       }
     },
     "odaFileConverterRetry": {
@@ -97,6 +107,7 @@
     "diffCheck": "git diff --check — PASS",
     "fixturesAdded": 0,
     "fullSuites": "NOT RUN",
+    "libreDwgVerboseEntityTrace": "PASS as a diagnostic: exact handle 0x452 is followed through SAB-to-SAT conversion; source-code inspection explains why the current peer output drops the final block. Scratch DXF still has only groups 70 and 350; support claim unchanged.",
     "postUnlockOdaStartupRetry": {
       "binary": "/Applications/ODAFileConverter.app/Contents/MacOS/ODAFileConverter",
       "command": "--help",
