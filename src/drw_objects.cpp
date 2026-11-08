@@ -715,7 +715,8 @@ bool readObjectCommonHandles(dwgBuffer *buf, std::uint32_t baseHandle,
                              std::vector<std::uint32_t> *reactorHandles = nullptr,
                              std::uint32_t *xDictHandle = nullptr,
                              std::uint64_t handleEndBit =
-                                 std::numeric_limits<std::uint64_t>::max()) {
+                                 std::numeric_limits<std::uint64_t>::max(),
+                             bool validateLegacyDictionaryGroupRoles = false) {
     if (buf == nullptr || !buf->isGood()
         || !dwgSafety::validReactorCount(numReactors)) {
         if (buf != nullptr)
@@ -735,10 +736,23 @@ bool readObjectCommonHandles(dwgBuffer *buf, std::uint32_t baseHandle,
     if (!readBoundedObjectHandle(probe, baseHandle, true, parentH,
                                  handleEndBit))
         return false;
+    const auto hasRole = [](const dwgHandle& handle, std::uint8_t role) {
+        // Null handles are canonically encoded with code zero. Some producers
+        // retain the field's role code on a null value, so accept either form.
+        return handle.ref == 0
+            ? handle.code == 0 || handle.code == role
+            : handle.code == role;
+    };
+    if (validateLegacyDictionaryGroupRoles
+        && !hasRole(parentH, DRW::DwgSoftPointer))
+        return false;
     for (std::int32_t i = 0; i < numReactors; ++i) {
         dwgHandle reactor;
         if (!readBoundedObjectHandle(probe, baseHandle, false, reactor,
                                      handleEndBit))
+            return false;
+        if (validateLegacyDictionaryGroupRoles
+            && !hasRole(reactor, DRW::DwgSoftPointer))
             return false;
         parsedReactors.push_back(reactor.ref);
     }
@@ -747,6 +761,9 @@ bool readObjectCommonHandles(dwgBuffer *buf, std::uint32_t baseHandle,
         dwgHandle xDict;
         if (!readBoundedObjectHandle(probe, baseHandle, false, xDict,
                                      handleEndBit))
+            return false;
+        if (validateLegacyDictionaryGroupRoles
+            && !hasRole(xDict, DRW::DwgHardOwnership))
             return false;
         parsedXDictHandle = xDict.ref;
     }
@@ -3686,9 +3703,14 @@ bool DRW_TableEntry::readDwgObjectCommonHandles(
     std::uint64_t endBit = 0;
     if (!getDwgHandleEndBit(version, *buf, endBit))
         return false;
+    const bool validateLegacyDictionaryGroupRoles =
+        (version == DRW::AC1012 || version == DRW::AC1014)
+        && (oType == DRW_Dictionary::kDwgFixedType
+            || oType == DRW_Group::kDwgFixedType);
     return readObjectCommonHandles(buf, handle, numReactors, xDictFlag,
                                    parentHandle, reactorHandles, xDictHandle,
-                                   endBit);
+                                   endBit,
+                                   validateLegacyDictionaryGroupRoles);
 }
 
 bool DRW_TableEntry::getDwgHandleEndBit(
@@ -10135,6 +10157,12 @@ bool DRW_Dictionary::parseDwgImpl(DRW::Version version, dwgBuffer *buf,
 
     m_entries = std::move(entries);
     m_dwgEntriesComplete = true;
+    // R13/R14 DICTIONARY has an inline object-size boundary followed by the
+    // common links and a counted item-handle list. The list and every link
+    // have been decoded within this isolated object frame, with common-link
+    // roles checked by readDwgObjectCommonHandles.
+    commonLinkTailValidated = version == DRW::AC1012
+        || version == DRW::AC1014;
     DRW_DBG("dictionary entries: "); DRW_DBG(static_cast<int>(m_entries.size())); DRW_DBG("\n");
     return true;
     } catch (...) {
@@ -23596,7 +23624,9 @@ bool DRW_Group::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
         dwgHandle entityH;
         if (!readDwgObjectHandleWithinFrame(version, entityHandleBuffer, false, entityH))
             return fail();
-        if (entityH.ref == DRW::NoHandle)
+        if (entityH.ref == DRW::NoHandle
+            || ((version == DRW::AC1012 || version == DRW::AC1014)
+                && entityH.code != DRW::DwgHardPointer))
             return fail();
         entityHandles.push_back(entityH.ref);
     }
@@ -23608,6 +23638,11 @@ bool DRW_Group::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
     parentHandle = parsedParentHandle;
     reactorHandles = std::move(parsedReactors);
     xDictHandle = parsedXDictHandle;
+    // R13/R14 GROUP's ordered member list follows the common handle prefix in
+    // the object-size-bounded inline stream. Publish link evidence only after
+    // the full declared member list has passed its hard-pointer role checks.
+    commonLinkTailValidated = version == DRW::AC1012
+        || version == DRW::AC1014;
 
     DRW_DBG("GROUP description='"); DRW_DBG(m_description.c_str());
     DRW_DBG("' handles="); DRW_DBG(static_cast<int>(m_entityHandles.size())); DRW_DBG("\n");

@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectContextData, PERSUBENTMGR, and TABLECONTENT shell recovery now reaches 842/842 published frames with zero entity/object parse failures; the bounded AC1032 MentalRay recovery separately reaches 182/182 frames with zero entity/object parse failures, while strict output remains refused at unrelated HEADER integrity rows ([receipt](docs/research/p6-ac1032-acad-table-cells-reader-fix-2026-11-07.json)); generated AC1032 TABLECONTENT detached-TV controls publish complete typed values, while the alternative body-byte-count control stays raw-only and verifies rollback, retry, destination preservation and following-frame recovery; the PERSUBENTMGR/TABLECONTENT source bodies remain disputed and raw-only; AutoCAD SAVEAS AC1021/24/27/32 samples now establish the same IMAGEDEF code-0xC parent and group-350 dictionary membership, and the independent wire observer captures that cross-version pattern as explicitly unqualified while strict output remains refused ([receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json)); an unlocked Aqua session was observed, but the Launch Services attempt for ODA 27.1 failed with `kLSNoExecutableErr`; the installed 27.1 app passes native verification outside the sandbox; the downloaded official ODA 27.10 ARM64 bundle still fails local code-signature verification although the 27.10 DMG's internal checksums pass, so 27.10 was not executed and no signature was modified ([package receipt](docs/research/p6-oda-27-10-official-arm64-package-signature-2026-11-07.json)); repeated direct 27.1 attempts, including the latest post-unlock retry, aborted during Pasteboard/XPC initialization before document processing. A materially changed GUI route then produced two same-version AC1027 resaves from scratch copies; both validated trailers end at byte 844 and both 739-byte suffixes remain unclaimed. The hashes differ, with no equal byte positions but matching low three bits at every position ([receipt](docs/research/p6-ac1027-oda-gui-same-version-resave-2026-11-07.json)). The read publishes 119/119 frames with zero entity/object parse failures, while strict DXF output remains blocked by the separate AC1027 source-reference gate. Do not repeat the unchanged direct launch method; continue local work and suffix analysis without promoting support claims; the R13 GROUP trace now binds the DICTIONARY issue to EED app `ACAD`, value `TREAT_AS_HARD`, raw ASCII bytes and per-value codepage `0`; ODA v5.4.1 does not define zero as file-codepage inheritance, so the source remains blocked without a production decoder change; the post-unlock ODA 27.1 GUI conversion emitted the ordered GROUP/dictionary relations but omitted that EED value and a referenced SHAPE, clearing neither gate ([receipt](docs/research/p4-populated-group-candidate-census-2026-11-07.json)); current strict `blocks_and_tables` diagnostic reaches 3,586/3,586 frames, and LibreDWG 0.14 repeats the unqualified FIELD child flag values without resolving their semantics, so strict FIELD/FIELDLIST output remains refused; ODA §2's detached-string rule conflicts with ACadSharp-derived TABLE value byte-count parsing; a debug-only alternate body-string parse of both AC1032 TABLECONTENT objects reaches the exact body and detached-string boundaries; the 17-bit interval is the encoded string-size word plus presence bit, and the final handle bit is byte-alignment padding under ODA §20.1; the candidate still conflicts with the TABLECONTENT schema and remains semantically incomplete, so both objects stay raw/refused with no production parser interpretation change; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the focused named-resource import selector now passes after synthetic receipts stopped authorizing strict-complete DWG output, with destination-preserving refusals and no support-claim change; AC1024 mechanical physical selected-output routes now cover 17 associative dependency/body pairs, 399 constraint nodes, and 17 variables across two networks and 13 value-dependency children in ASCII/Binary; the DXF `AcDbAssocEdgePersSubentId` codec slice is complete, and ten AC1024 civil Edge bodies decode to source-matched vertex-index cycles and their bounded selected ASCII/Binary output/readback passes; whole-source conversion and native meaning remain open ([read receipt](docs/research/p4-ac1024-civil-assoc-edge-dwg-read-2026-11-07.json), [selected-route receipt](docs/research/p4-ac1024-civil-assoc-selected-route-readiness-2026-11-07.json)); the viewport DWG debug trace now prints `centerPY` for its Y coordinate (diagnostic only; [receipt](docs/research/p6-viewport-debug-center-y-log-fix-2026-11-07.json)); a LibreCAD_3 persistence probe using raw include/library paths fails because the consumer compiles as C++14 while current upstream libdxfrw requires C++17, and this configuration bypasses libdxfrw's PUBLIC compile-feature propagation ([receipt](docs/research/p8-librecad3-cxx-standard-consumer-compat-2026-11-07.json)); AC1021 tablet now passes strict same-version output and fresh DXF readback after the WCS mesh extrusion default fix; generated WCS mesh round-trip controls pass across all six DWG writer releases ([receipt](docs/research/p4-ac1021-tablet-wcs-mesh-default-2026-11-07.json)); broader source graph closure remains open). This file
+Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectContextData, PERSUBENTMGR, and TABLECONTENT shell recovery now reaches 842/842 published frames with zero entity/object parse failures; the bounded AC1032 MentalRay recovery separately reaches 182/182 frames with zero entity/object parse failures, while strict output remains refused at unrelated HEADER integrity rows ([receipt](docs/research/p6-ac1032-acad-table-cells-reader-fix-2026-11-07.json)); generated AC1032 TABLECONTENT detached-TV controls publish complete typed values, while the alternative body-byte-count control stays raw-only and verifies rollback, retry, destination preservation and following-frame recovery; the PERSUBENTMGR/TABLECONTENT source bodies remain disputed and raw-only; AutoCAD SAVEAS AC1021/24/27/32 samples now establish the same IMAGEDEF code-0xC parent and group-350 dictionary membership, and the independent wire observer captures that cross-version pattern as explicitly unqualified while strict output remains refused ([receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json)); an unlocked Aqua session was observed, but the Launch Services attempt for ODA 27.1 failed with `kLSNoExecutableErr`; the installed 27.1 app passes native verification outside the sandbox; the downloaded official ODA 27.10 ARM64 bundle still fails local code-signature verification although the 27.10 DMG's internal checksums pass, so 27.10 was not executed and no signature was modified ([package receipt](docs/research/p6-oda-27-10-official-arm64-package-signature-2026-11-07.json)); repeated direct 27.1 attempts, including the latest post-unlock retry, aborted during Pasteboard/XPC initialization before document processing. A materially changed GUI route then produced two same-version AC1027 resaves from scratch copies; both validated trailers end at byte 844 and both 739-byte suffixes remain unclaimed. The hashes differ, with no equal byte positions but matching low three bits at every position ([receipt](docs/research/p6-ac1027-oda-gui-same-version-resave-2026-11-07.json)). The read publishes 119/119 frames with zero entity/object parse failures, while strict DXF output remains blocked by the separate AC1027 source-reference gate. Do not repeat the unchanged direct launch method; continue local work and suffix analysis without promoting support claims; the R13 GROUP trace now binds the DICTIONARY issue to EED app `ACAD`, value `TREAT_AS_HARD`, raw ASCII bytes and per-value codepage `0`; ODA v5.4.1 does not define zero as file-codepage inheritance, so the source remains blocked without a production decoder change; the post-unlock ODA 27.1 GUI conversion emitted the ordered GROUP/dictionary relations but omitted that EED value and a referenced SHAPE; the AC1012/AC1014 DICTIONARY/GROUP common-link profile now passes bounded role/count controls and the source-bound R13 recheck, leaving EED codepage 0 as the sole GROUP source blocker ([receipt](docs/research/p4-populated-group-candidate-census-2026-11-07.json)); current strict `blocks_and_tables` diagnostic reaches 3,586/3,586 frames, and LibreDWG 0.14 repeats the unqualified FIELD child flag values without resolving their semantics, so strict FIELD/FIELDLIST output remains refused; ODA §2's detached-string rule conflicts with ACadSharp-derived TABLE value byte-count parsing; a debug-only alternate body-string parse of both AC1032 TABLECONTENT objects reaches the exact body and detached-string boundaries; the 17-bit interval is the encoded string-size word plus presence bit, and the final handle bit is byte-alignment padding under ODA §20.1; the candidate still conflicts with the TABLECONTENT schema and remains semantically incomplete, so both objects stay raw/refused with no production parser interpretation change; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the focused named-resource import selector now passes after synthetic receipts stopped authorizing strict-complete DWG output, with destination-preserving refusals and no support-claim change; AC1024 mechanical physical selected-output routes now cover 17 associative dependency/body pairs, 399 constraint nodes, and 17 variables across two networks and 13 value-dependency children in ASCII/Binary; the DXF `AcDbAssocEdgePersSubentId` codec slice is complete, and ten AC1024 civil Edge bodies decode to source-matched vertex-index cycles and their bounded selected ASCII/Binary output/readback passes; whole-source conversion and native meaning remain open ([read receipt](docs/research/p4-ac1024-civil-assoc-edge-dwg-read-2026-11-07.json), [selected-route receipt](docs/research/p4-ac1024-civil-assoc-selected-route-readiness-2026-11-07.json)); the viewport DWG debug trace now prints `centerPY` for its Y coordinate (diagnostic only; [receipt](docs/research/p6-viewport-debug-center-y-log-fix-2026-11-07.json)); a LibreCAD_3 persistence probe using raw include/library paths fails because the consumer compiles as C++14 while current upstream libdxfrw requires C++17, and this configuration bypasses libdxfrw's PUBLIC compile-feature propagation ([receipt](docs/research/p8-librecad3-cxx-standard-consumer-compat-2026-11-07.json)); AC1021 tablet now passes strict same-version output and fresh DXF readback after the WCS mesh extrusion default fix; generated WCS mesh round-trip controls pass across all six DWG writer releases ([receipt](docs/research/p4-ac1021-tablet-wcs-mesh-default-2026-11-07.json)); broader source graph closure remains open). This file
 
 **Resume checkpoint (2026-11-07):** the Mac session is unlocked and the
 audit-enabled ODA 27.1 GUI route has completed the AC1024 civil residual
@@ -224,26 +224,28 @@ instead of repeating successful scans or controls.
    exact-source-version ModelDocViewStyle gate. A fresh libdxfrw source-bound
    adapter audit confirms NOD `0xC` → dictionary `0xD` → GROUP `0x257` and its
    ordered LINE members `0x256` through `0x250`; the typed baselines and payload
-   comparisons match. This candidate is not yet eligible for selected output:
-   both standard frames retain `Unknown` common-link evidence, and the
-   DICTIONARY frame has `UnknownCodePage` text issue mask `0x8`. ODA v5.4.1
-   §§20.4.1–20.4.2 and §20.4.72 describe the R13–R14 bounded inline handles,
-   but do not authorize clearing either source gate. The exact dictionary EED value is now known (`ACAD` / `TREAT_AS_HARD`,
+   comparisons match. The R13–R14 DICTIONARY/GROUP common-link gate is now
+   source-qualified for these exact frames: bounded handles and roles pass
+   generated AC1012/AC1014 controls and the external R13 import. The
+   DICTIONARY still has `UnknownCodePage` text issue mask `0x8`, so selected
+   output remains ineligible. ODA v5.4.1 §§20.4.1–20.4.2, §20.4.44 and
+   §20.4.72 define the checked inline fields and roles. The exact dictionary EED value is now known (`ACAD` / `TREAT_AS_HARD`,
    codepage `0`); ODA v5.4.1 does not define its codepage semantics. Do not scan
    the whole EED stream again or change the decoder. Reopen this candidate only
    if an authoritative definition or independent producer behavior specifies
    codepage `0`; otherwise leave it ineligible and take another ready P4 item.
-   Its common-link `Unknown` markers remain a separate gate. Preserve the original
+   Do not reopen the now-qualified common-link profile. Preserve the original
    1 entity/19 object failures and whole-source refusal. The exact recheck is in the [GROUP candidate
    receipt](docs/research/p4-populated-group-candidate-census-2026-11-07.json).
-   Do not serialize this source until those gates pass. The Leader source publishes
+   Do not serialize this source until the remaining text gate and the normal
+   completeness/version gates pass. The Leader source publishes
    245/245 frames but whole-source output stops at standalone OBJECTCONTEXTDATA,
    and its IMAGE dependencies retain the unresolved owner-role conflict. An
    ACadSharp AC1021 sample has two six-LINE groups but contains the same image
    role blocker and its producer provenance is not established. These inputs
    remain external and uncommitted. The R13 member identities and their
    dictionary/owner relations are already bound; no selected output is eligible
-   while EED codepage zero and common-link evidence remain unresolved. Do not
+   while EED codepage zero remains unresolved. Do not
    repeat that import or member census. Keep whole-source output refused. The exact
    scan and current blockers are recorded in the [GROUP candidate receipt](docs/research/p4-populated-group-candidate-census-2026-11-07.json);
    the earlier 24-file screen remains recorded in the [local candidate receipt](docs/research/p4-local-dwg-group-image-screen-2026-11-07.json).
@@ -317,7 +319,7 @@ instead of repeating successful scans or controls.
 
 ### P4-GROUP-01 — qualify the R13 source profile before projection
 
-**Status: BLOCKED on two local source-evidence gates; selected output was not attempted.**
+**Status: BLOCKED on the DICTIONARY EED codepage-zero gate; selected output was not attempted.**
 The external LibreDWG R13 witness remains read-only and uncommitted. Its exact
 source hash, independent provenance, libdxfrw import identities and ordered
 member list are in the [GROUP candidate receipt](docs/research/p4-populated-group-candidate-census-2026-11-07.json).
@@ -325,13 +327,25 @@ The libdxfrw import confirms NOD `0xC` → DICTIONARY `0xD` → GROUP `0x257` �
 seven LINE handles `0x256` through `0x250`, with typed baselines and payload
 comparisons matched. It also retains 1 entity and 19 object parse failures.
 
-   The selected projection is not source-eligible yet. The DICTIONARY and GROUP
-standard frames both retain `Unknown` common-link evidence. The DICTIONARY also
-has text issue mask `0x8` (`UnknownCodePage`), despite the file-level codepage
-field being recognized. ODA v5.4.1 §§20.4.1–20.4.2 and §20.4.72 specify
-R13–R14 inline object sizing, reactor counts, handle roles and the GROUP member
-list; they do not authorize upgrading libdxfrw's evidence flags or ignoring the
-text issue.
+The selected projection remains ineligible. The DICTIONARY still has text issue
+mask `0x8` (`UnknownCodePage`), despite the recognized file-level codepage.
+ODA v5.4.1 §§20.4.1–20.4.2, §20.4.44 and §20.4.72 specify the R13–R14 inline
+object sizing, common parent/reactor/extension-dictionary roles, DICTIONARY
+item references, and GROUP member list.
+
+The common-link issue is now resolved narrowly for AC1012/AC1014 DICTIONARY and
+GROUP objects. Their parsers publish `hasDwgCommonLinkTail()` only after the
+typed body/count succeeds and each common handle has the expected soft-pointer
+or hard-ownership role; GROUP members must be hard pointers. The dispatcher
+copies those typed links into the frame publication only when its shared
+reactor-count and extension-dictionary header match. Other object families and
+legacy versions remain `Unknown`. Generated AC1012/AC1014 controls cover valid
+links, truncation, reactor-count mismatch, wrong common-parent/member roles,
+wrong reactor/extension-dictionary roles, and a following-handle sentinel; the
+focused CTest passes. A fresh import of
+the same external R13 witness qualifies DICTIONARY `0xD` (parent `0xC`, one
+reactor) and GROUP `0x257` (parent `0xD`, one reactor) with the same seven LINE
+members. See the [legacy common-link receipt](docs/research/p4-populated-group-candidate-census-2026-11-07.json).
 
 The trace now binds the DICTIONARY issue to one EED value: app handle `0x12`
 (`ACAD`), item code 0, codepage 0, and the 13 raw ASCII bytes for
@@ -339,18 +353,19 @@ The trace now binds the DICTIONARY issue to one EED value: app handle `0x12`
 deduplicated and are not a count of unique EED values. LibreDWG 0.14 independently
 decodes the same ASCII value but does not establish why codepage 0 is valid.
 ODA v5.4.1 chapter 28 specifies the codepage field without defining zero as
-inheritance from the file header. Keep the decoder and issue mask unchanged.
+inheritance from the file header. Keep the decoder and issue mask unchanged;
+this remains the sole source-evidence blocker for the bounded GROUP projection.
 
 The post-unlock ODA 27.1 GUI audit converted a scratch copy of this R13 source
 to 2010 ASCII DXF without an error report. Its output preserves GROUP `0x257`,
 the ordered seven LINE references, dictionary entry `*A1` → `0x257`, and the
 dictionary parent relation to `0xC`. It omits the source EED value
 `TREAT_AS_HARD` and the referenced SHAPE object, so this is partial independent
-projection evidence only: it does not explain EED codepage zero, validate the
-two `Unknown` common-link markers, or make the conversion lossless. The output
-was scratch-only; libdxfrw selected output remains unattempted. Do not repeat
-this unchanged conversion or promote a support claim. See the [ODA GUI
-conversion receipt](docs/research/p4-populated-group-candidate-census-2026-11-07.json).
+projection evidence only: it does not explain EED codepage zero and is not a
+lossless conversion. The output was scratch-only; libdxfrw selected output
+remains unattempted. Do not repeat this unchanged conversion or promote a
+support claim. See the [ODA GUI conversion
+receipt](docs/research/p4-populated-group-candidate-census-2026-11-07.json).
 
 Implementation sequence:
 
@@ -360,25 +375,35 @@ Implementation sequence:
    for codepage 0; otherwise leave this witness ineligible and move to another
    ready P4 implementation packet. Do not infer that zero means file codepage
    from the ASCII-only value, LibreDWG's decoded text, or ODA's partial DXF.
-2. Design a narrowly scoped legacy common-link evidence state for DICTIONARY
-   and GROUP only after the R13–R14 body/handle spans, declared reactor count,
-   parent, reactor, extension-dictionary and ordered member references are
-   checked against the ODA layout and source bytes. Do not change the meaning
-   of `Unknown` for other object families or legacy frames.
-3. Add generated boundary controls for the new evidence classifier, including
-   truncation, count mismatch, handle-role mismatch and following-frame
-   recovery. Then rerun the physical source profile check; only when both
-   frames qualify may the selected ASCII/Binary projection, fresh readback,
-   refusal, destination preservation and same-adapter retry proceed.
+2. **Complete:** the narrow legacy common-link classifier and generated
+   boundary controls are implemented. They are limited to AC1012/AC1014
+   DICTIONARY/GROUP typed routes; do not broaden them to other types or versions.
+3. **Complete:** the physical source profile recheck confirms both frames now
+   publish validated common links. The selected ASCII/Binary projection remains
+   unattempted because the EED codepage-zero issue is unresolved.
 4. Keep the original import outcome unchanged and require the normal
    whole-source route to remain refused at its existing completeness/version
    gates. Do not commit the external witness or any derived DWG/DXF fixture.
 
-**Fast checks:** build the touched reader/adapter target and the narrow generated
-selector for any classifier change. Run the source-bound R13 profile check
-against the external witness only after the issue is understood. No full suite
-or ASan run is needed unless production bounds, ownership or lifetime code
-changes.
+**Fast checks:** `libdxfrw_legacy_dictionary_group_links` passed (1/1); the
+reader and `dwg2dxf` targets build. The source-bound R13 profile recheck used
+the external witness read-only and retained its 5,785 source frames, 5,765
+published frames, and 1 entity/19 object parse failures. No full suite or ASan
+run is needed unless production bounds, ownership or lifetime code changes.
+
+Saved-inventory candidate check (no corpus rescan):
+
+| Candidate | Current evidence | Gate / disposition |
+| --- | --- | --- |
+| LibreDWG AC1012 `example_r13.dwg` | 5,765/5,785 frames publish; NOD → DICTIONARY → GROUP with 7 ordered LINE members; common links now validated | EED codepage `0` remains `UnknownCodePage`; no selected output |
+| LibreDWG AC1021 `Leader.dwg` | 245/245 frames publish; GROUP has 5 IMAGE members | IMAGEDEF owner-role conflict and standalone OBJECTCONTEXTDATA block output |
+| ACadSharp AC1021 GROUP sample | Two 6-LINE groups | Producer provenance is unestablished; same drawing has the IMAGEDEF owner-role conflict |
+| AC1021 `children-room-decoration.dwg` | 112/112 standard objects and 74/74 opaque carriers have selected-output proof | Already-complete exact-source profile; not a distinct candidate |
+
+No distinct physical P4 OBJECTS subgraph in the saved inventory is currently
+eligible. Move to the local P6 AC1027 source-reference guard audit already
+listed below; keep output gates closed until an exact retained-frame/dependency
+proof supports narrowing them.
 
 2. **P5 / FIELD and TABLE residuals.** No eligible AC1021 FIELD graph currently
    supplies complete FIELDLIST membership plus a consumer-visible root; keep

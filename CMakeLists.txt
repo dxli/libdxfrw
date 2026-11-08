@@ -1697,6 +1697,12 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_mesh_dwg_crease_count_guard PROPERTIES
         LABELS "fast;dwg;object-vectors;mesh;generated"
         TIMEOUT 15)
+    add_test(NAME libdxfrw_legacy_dictionary_group_links
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --legacy-dictionary-group-links)
+    set_tests_properties(libdxfrw_legacy_dictionary_group_links PROPERTIES
+        LABELS "fast;dwg;object-vectors;dictionary;group;generated;AC1012;AC1014"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_dictionary_item_wire_role
         COMMAND libdxfrw_dwg_object_vectors_tests
             --dictionary-item-wire-role)

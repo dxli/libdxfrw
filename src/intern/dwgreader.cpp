@@ -13323,6 +13323,45 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
       }
       return parsed;
     };
+    const DRW::Version sourceVersion = version;
+    const auto publishLegacyDictionaryGroupLinks =
+        [sourceVersion, &commonObject, &publication, &obj](
+            const DRW_TableEntry& entry) {
+          if (sourceVersion != DRW::AC1012
+              && sourceVersion != DRW::AC1014)
+            return true;
+          if (!entry.hasDwgCommonLinkTail() || entry.handle != obj.handle
+              || entry.reactorCount() != commonObject.reactorCount()
+              || entry.extensionDictionaryFlag()
+                  != commonObject.extensionDictionaryFlag())
+            return false;
+
+          // In R13/R14 the shared object prologue carries the reactor count,
+          // while DICTIONARY/GROUP parse the bounded inline common-handle
+          // sequence as part of their typed payload. Publish those captured
+          // values only after the class parser has validated its full counted
+          // entry/member list and the handle roles.
+          commonObject.parentHandle = entry.parentHandle;
+          commonObject.reactorHandles = entry.reactorHandles;
+          commonObject.xDictHandle = entry.xDictHandle;
+          commonObject.setDwgCommonLinkTailValidated(true);
+          publication.setCommonLinkEvidence(drwDwgCommonLinkEvidenceForLinks(
+              true, entry.parentHandle, entry.reactorHandles,
+              entry.reactorCount(), entry.xDictHandle));
+          publication.m_parentHandle = entry.parentHandle;
+          publication.m_reactorHandles = entry.reactorHandles;
+          publication.m_xDictHandle = entry.xDictHandle;
+          DRW_DBG("Legacy DICTIONARY/GROUP common links qualified for handle ");
+          DRW_DBGH(entry.handle);
+          DRW_DBG(" reactors=");
+          DRW_DBG(entry.reactorCount());
+          DRW_DBG(" parent=");
+          DRW_DBGH(entry.parentHandle);
+          DRW_DBG(" xdict=");
+          DRW_DBGH(entry.xDictHandle);
+          DRW_DBG("\n");
+          return true;
+        };
 
     if (fixedObjectShell) {
       RawObjectShell shell;
@@ -13342,6 +13381,8 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
       case dwgObjType::DICTIONARY: {
         DRW_Dictionary e;
         ret = parseTableEntry(e);
+        if (ret)
+          ret = publishLegacyDictionaryGroupLinks(e);
         if (ret) {
           if (e.hasCompleteDwgEntries()) {
             DRW_DwgDictionaryMembership receipt;
@@ -13383,6 +13424,8 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
       case dwgObjType::GROUP: {
         DRW_Group e;
         ret = parseTableEntry(e);
+        if (ret)
+          ret = publishLegacyDictionaryGroupLinks(e);
         if (ret) {
           if (!e.hasCompleteDwgEntityHandles()) {
             ret = failReceiptPreflight();

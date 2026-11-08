@@ -12451,6 +12451,295 @@ void expectBuffers(TestContext& t, bool encoded, const dwgBufferW& body,
                  "R2007+ object vector emits a string stream");
 }
 
+void appendBitRange(dwgBufferW& destination, const dwgBufferW& source,
+                    std::uint64_t begin, std::uint64_t end) {
+    for (std::uint64_t bit = begin; bit < end; ++bit) {
+        const std::uint8_t value = static_cast<std::uint8_t>(
+            (source.data()[static_cast<std::size_t>(bit / 8u)]
+             >> (7u - static_cast<unsigned>(bit & 7u))) & 1u);
+        destination.putBit(value);
+    }
+}
+
+void appendBitRange(dwgBufferW& destination,
+                    const std::vector<std::uint8_t>& source,
+                    std::uint64_t begin, std::uint64_t end) {
+    for (std::uint64_t bit = begin; bit < end; ++bit) {
+        const std::uint8_t value = static_cast<std::uint8_t>(
+            (source[static_cast<std::size_t>(bit / 8u)]
+             >> (7u - static_cast<unsigned>(bit & 7u))) & 1u);
+        destination.putBit(value);
+    }
+}
+
+void replaceFourBits(std::vector<std::uint8_t>& bytes,
+                     std::uint64_t bitOffset, std::uint8_t value) {
+    for (unsigned bit = 0; bit < 4u; ++bit) {
+        const std::uint64_t offset = bitOffset + bit;
+        const std::size_t byte = static_cast<std::size_t>(offset / 8u);
+        const unsigned shift = 7u - static_cast<unsigned>(offset & 7u);
+        const std::uint8_t mask = static_cast<std::uint8_t>(1u << shift);
+        if (((value >> (3u - bit)) & 1u) != 0u)
+            bytes[byte] |= mask;
+        else
+            bytes[byte] &= static_cast<std::uint8_t>(~mask);
+    }
+}
+
+void replaceBitField(std::vector<std::uint8_t>& bytes,
+                     std::uint64_t bitOffset, unsigned width,
+                     std::uint32_t value) {
+    for (unsigned bit = 0; bit < width; ++bit) {
+        const std::uint64_t offset = bitOffset + bit;
+        const std::size_t byte = static_cast<std::size_t>(offset / 8u);
+        const unsigned shift = 7u - static_cast<unsigned>(offset & 7u);
+        const std::uint8_t mask = static_cast<std::uint8_t>(1u << shift);
+        if (((value >> (width - 1u - bit)) & 1u) != 0u)
+            bytes[byte] |= mask;
+        else
+            bytes[byte] &= static_cast<std::uint8_t>(~mask);
+    }
+}
+
+struct LegacyObjectLinkFrame {
+    std::vector<std::uint8_t> bytes;
+    std::uint64_t commonOwnerBit{0};
+    std::uint64_t commonReactorBit{0};
+    std::uint64_t commonXDictBit{0};
+    std::uint64_t reactorCountBit{0};
+    std::uint64_t lastPayloadHandleBit{0};
+    std::uint64_t endBit{0};
+};
+
+template <typename Object>
+bool makeLegacyObjectLinkFrame(DRW::Version version, std::uint16_t type,
+                               Object& source,
+                               LegacyObjectLinkFrame& frame) {
+    if (version != DRW::AC1012 && version != DRW::AC1014)
+        return false;
+    dwgBufferW encoded;
+    if (!source.encodeDwg(version, &encoded, nullptr, nullptr)
+        || encoded.handleOccurrences().size() < 4u)
+        return false;
+    const std::uint64_t firstHandleBit =
+        encoded.handleOccurrences().front().startBit;
+    dwgBufferW prologue;
+    prologue.putObjType(version, type);
+    dwgHandle own;
+    own.ref = source.handle;
+    own.ref64 = source.handle;
+    prologue.putHandle(own);
+    prologue.putBitShort(0u); // no EED
+    prologue.putRawLong32(0u); // fixed-width object-size placeholder
+    prologue.putBitLong(source.reactorCount());
+    const std::uint64_t reactorCountBit =
+        prologue.bitCount() - 10u; // BL small-byte form used by this control.
+    const std::uint64_t commonOwnerBit =
+        prologue.bitCount() + firstHandleBit;
+    if (!prologue.isGood()
+        || commonOwnerBit > std::numeric_limits<std::uint32_t>::max())
+        return false;
+
+    dwgBufferW object;
+    object.putObjType(version, type);
+    object.putHandle(own);
+    object.putBitShort(0u); // no EED
+    object.putRawLong32(static_cast<std::uint32_t>(commonOwnerBit));
+    frame.reactorCountBit = object.bitCount();
+    object.putBitLong(source.reactorCount());
+    if (object.bitCount() - frame.reactorCountBit != 10u
+        || frame.reactorCountBit != reactorCountBit)
+        return false;
+    appendBitRange(object, encoded, 0u, firstHandleBit);
+    frame.commonOwnerBit = object.bitCount();
+    if (frame.commonOwnerBit != commonOwnerBit)
+        return false;
+    frame.commonReactorBit = frame.commonOwnerBit
+        + encoded.handleOccurrences()[1].startBit - firstHandleBit;
+    frame.commonXDictBit = frame.commonOwnerBit
+        + encoded.handleOccurrences()[2].startBit - firstHandleBit;
+    const std::uint64_t lastOccurrenceBit =
+        encoded.handleOccurrences().back().startBit;
+    frame.lastPayloadHandleBit = frame.commonOwnerBit
+        + lastOccurrenceBit - firstHandleBit;
+    appendBitRange(object, encoded, firstHandleBit, encoded.bitCount());
+    frame.endBit = object.bitCount();
+    object.alignToByte();
+    if (!object.isGood())
+        return false;
+    frame.bytes = object.data();
+    return true;
+}
+
+void testLegacyDictionaryGroupCommonLinkEvidence(TestContext& t) {
+    for (const DRW::Version version : {DRW::AC1012, DRW::AC1014}) {
+        DRW_TextCodec codec;
+        codec.setVersion(version, false);
+
+        GroupEncodeProbe group;
+        group.handle = 0xA650u;
+        group.parentHandle = 0xA64Fu;
+        group.reactorHandles = {0xA64Eu};
+        group.xDictHandle = 0xA64Du;
+        group.setDwgCommonObjectState(1, 0, false);
+        group.m_description = "LEGACY_GROUP";
+        group.m_entityHandles = {0xA500u};
+        LegacyObjectLinkFrame groupFrame;
+        const bool groupBuilt = makeLegacyObjectLinkFrame(
+            version, DRW_Group::kDwgFixedType, group, groupFrame);
+        t.expect(groupBuilt, "R13/R14 GROUP common-link control builds");
+        if (groupBuilt) {
+            dwgBuffer input(groupFrame.bytes.data(), groupFrame.bytes.size(),
+                            &codec);
+            GroupEncodeProbe parsed;
+            const bool read = parsed.parseDwg(version, &input);
+            t.expect(read && parsed.hasDwgCommonLinkTail()
+                         && parsed.hasCompleteDwgEntityHandles()
+                         && parsed.parentHandle == group.parentHandle
+                         && parsed.reactorHandles == group.reactorHandles
+                         && parsed.xDictHandle == group.xDictHandle
+                         && parsed.m_entityHandles == group.m_entityHandles,
+                     "R13/R14 GROUP proves bounded common links and ordered hard-pointer members");
+
+            dwgBufferW followed;
+            appendBitRange(followed, groupFrame.bytes, 0u,
+                           groupFrame.endBit);
+            dwgBufferW followingHandle;
+            dwgHandle sentinel;
+            sentinel.code = DRW::DwgSoftPointer;
+            sentinel.ref = 0xCAFEu;
+            sentinel.ref64 = sentinel.ref;
+            followingHandle.putHandle(sentinel);
+            appendBits(followed, followingHandle);
+            followed.alignToByte();
+            dwgBuffer followedInput(followed.data().data(),
+                                    followed.size(), &codec);
+            GroupEncodeProbe followedGroup;
+            const bool followedRead =
+                followedGroup.parseDwg(version, &followedInput);
+            const dwgHandle next = followedInput.getHandle();
+            t.expect(followedRead && followedGroup.hasDwgCommonLinkTail()
+                         && followedInput.isGood()
+                         && next.code == DRW::DwgSoftPointer
+                         && next.ref == 0xCAFEu,
+                     "R13/R14 GROUP leaves a following handle untouched");
+
+            auto wrongReactorCount = groupFrame.bytes;
+            // The BL count 1 is encoded as the two-bit 01 selector and one
+            // byte. Replace that payload with 2 without changing its width.
+            replaceBitField(wrongReactorCount,
+                            groupFrame.reactorCountBit, 10u, 0x102u);
+            dwgBuffer wrongCountInput(wrongReactorCount.data(),
+                                      wrongReactorCount.size(), &codec);
+            GroupEncodeProbe wrongCount;
+            t.expect(!wrongCount.parseDwg(version, &wrongCountInput)
+                         && !wrongCountInput.isGood()
+                         && !wrongCount.hasDwgCommonLinkTail()
+                         && !wrongCount.hasCompleteDwgEntityHandles(),
+                     "R13/R14 GROUP reactor-count mismatch withholds common-link evidence");
+
+            auto wrongOwnerRole = groupFrame.bytes;
+            replaceFourBits(wrongOwnerRole, groupFrame.commonOwnerBit,
+                            DRW::DwgHardPointer);
+            dwgBuffer wrongOwnerInput(wrongOwnerRole.data(),
+                                      wrongOwnerRole.size(), &codec);
+            GroupEncodeProbe wrongOwner;
+            t.expect(!wrongOwner.parseDwg(version, &wrongOwnerInput)
+                         && !wrongOwnerInput.isGood()
+                         && !wrongOwner.hasDwgCommonLinkTail()
+                         && !wrongOwner.hasCompleteDwgEntityHandles(),
+                     "R13/R14 GROUP rejects a common-parent handle-role mismatch");
+
+            auto wrongReactorRole = groupFrame.bytes;
+            replaceFourBits(wrongReactorRole,
+                            groupFrame.commonReactorBit,
+                            DRW::DwgHardPointer);
+            dwgBuffer wrongReactorInput(wrongReactorRole.data(),
+                                        wrongReactorRole.size(), &codec);
+            GroupEncodeProbe wrongReactor;
+            t.expect(!wrongReactor.parseDwg(version, &wrongReactorInput)
+                         && !wrongReactorInput.isGood()
+                         && !wrongReactor.hasDwgCommonLinkTail(),
+                     "R13/R14 GROUP rejects a reactor handle-role mismatch");
+
+            auto wrongXDictRole = groupFrame.bytes;
+            replaceFourBits(wrongXDictRole, groupFrame.commonXDictBit,
+                            DRW::DwgSoftPointer);
+            dwgBuffer wrongXDictInput(wrongXDictRole.data(),
+                                      wrongXDictRole.size(), &codec);
+            GroupEncodeProbe wrongXDict;
+            t.expect(!wrongXDict.parseDwg(version, &wrongXDictInput)
+                         && !wrongXDictInput.isGood()
+                         && !wrongXDict.hasDwgCommonLinkTail(),
+                     "R13/R14 GROUP rejects an extension-dictionary handle-role mismatch");
+
+            auto wrongMemberRole = groupFrame.bytes;
+            replaceFourBits(wrongMemberRole, groupFrame.lastPayloadHandleBit,
+                            DRW::DwgSoftPointer);
+            dwgBuffer wrongMemberInput(wrongMemberRole.data(),
+                                      wrongMemberRole.size(), &codec);
+            GroupEncodeProbe wrongMember;
+            t.expect(!wrongMember.parseDwg(version, &wrongMemberInput)
+                         && !wrongMemberInput.isGood()
+                         && !wrongMember.hasDwgCommonLinkTail()
+                         && !wrongMember.hasCompleteDwgEntityHandles(),
+                     "R13/R14 GROUP rejects a member handle-role mismatch");
+
+            auto truncated = groupFrame.bytes;
+            truncated.pop_back();
+            dwgBuffer truncatedInput(truncated.data(), truncated.size(),
+                                     &codec);
+            GroupEncodeProbe truncatedGroup;
+            t.expect(!truncatedGroup.parseDwg(version, &truncatedInput)
+                         && !truncatedInput.isGood()
+                         && !truncatedGroup.hasDwgCommonLinkTail(),
+                     "R13/R14 GROUP truncation withholds common-link evidence");
+        }
+
+        DictionaryEncodeProbe dictionary;
+        dictionary.handle = 0xB650u;
+        dictionary.parentHandle = 0xB64Fu;
+        dictionary.reactorHandles = {0xB64Eu};
+        dictionary.xDictHandle = 0xB64Du;
+        dictionary.setDwgCommonObjectState(1, 0, false);
+        dictionary.m_entries = {{"LEGACY_ENTRY", 0xB500u}};
+        LegacyObjectLinkFrame dictionaryFrame;
+        const bool dictionaryBuilt = makeLegacyObjectLinkFrame(
+            version, DRW_Dictionary::kDwgFixedType, dictionary,
+            dictionaryFrame);
+        t.expect(dictionaryBuilt,
+                 "R13/R14 DICTIONARY common-link control builds");
+        if (dictionaryBuilt) {
+            dwgBuffer input(dictionaryFrame.bytes.data(),
+                            dictionaryFrame.bytes.size(), &codec);
+            DictionaryEncodeProbe parsed;
+            const bool read = parsed.parseDwg(version, &input);
+            t.expect(read && parsed.hasDwgCommonLinkTail()
+                         && parsed.hasCompleteDwgEntries()
+                         && parsed.parentHandle == dictionary.parentHandle
+                         && parsed.reactorHandles == dictionary.reactorHandles
+                         && parsed.xDictHandle == dictionary.xDictHandle
+                         && parsed.m_entries.size() == 1u
+                         && parsed.m_entries.front().m_name == "LEGACY_ENTRY"
+                         && parsed.m_entries.front().m_handle == 0xB500u,
+                     "R13/R14 DICTIONARY proves bounded common links and soft-owner item");
+
+            auto wrongOwnerRole = dictionaryFrame.bytes;
+            replaceFourBits(wrongOwnerRole,
+                            dictionaryFrame.commonOwnerBit,
+                            DRW::DwgHardPointer);
+            dwgBuffer wrongOwnerInput(wrongOwnerRole.data(),
+                                      wrongOwnerRole.size(), &codec);
+            DictionaryEncodeProbe wrongOwner;
+            t.expect(!wrongOwner.parseDwg(version, &wrongOwnerInput)
+                         && !wrongOwnerInput.isGood()
+                         && !wrongOwner.hasDwgCommonLinkTail()
+                         && !wrongOwner.hasCompleteDwgEntries(),
+                     "R13/R14 DICTIONARY rejects a common-parent handle-role mismatch");
+        }
+    }
+}
+
 void testGroupVectors(TestContext& t) {
     // Literal complete frames, not the bool-valued encoder: noncanonical BS
     // flags must not collapse to true and then look like a faithful reparse.
@@ -20585,6 +20874,14 @@ void testScaleDwgPositiveUnitDomain(TestContext& t) {
 
 int main(int argc, char** argv) {
     if (argc == 2
+        && std::string(argv[1]) == "--legacy-dictionary-group-links") {
+        TestContext context;
+        testLegacyDictionaryGroupCommonLinkEvidence(context);
+        std::cout << "R13/R14 DICTIONARY and GROUP common-link evidence: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--mesh-dwg-crease-count-guard") {
         TestContext context;
         testMeshDwgCreaseCountGuard(context);
@@ -21317,6 +21614,7 @@ int main(int argc, char** argv) {
         return context.failures == 0 ? 0 : 1;
     }
     TestContext context;
+    testLegacyDictionaryGroupCommonLinkEvidence(context);
     testMeshDwgCreaseCountGuard(context);
     testScaleDwgPositiveUnitDomain(context);
     testGroupVectors(context);
