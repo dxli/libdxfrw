@@ -37201,7 +37201,9 @@ void populateTypedDwgTableStyleGraph(dx_data& data,
 
 void populateR24DwgTableStyleGraph(dx_data& data,
                                   bool inheritedCustomMargins = false,
-                                  std::int32_t prefixValue1 = 8) {
+                                  std::int32_t prefixValue1 = 8,
+                                  int valueDataType = 512,
+                                  int valueUnitType = 0) {
     data.sourceFormat = dx_source_format::DWG;
     data.sourceVersion = DRW::AC1024;
     data.hasNamedObjectDictionary = true;
@@ -37231,7 +37233,8 @@ void populateR24DwgTableStyleGraph(dx_data& data,
         color.m_method = 0xC1u;
         return color;
     };
-    const auto makeStyle = [&noneColor, &byBlockColor](
+    const auto makeStyle = [&noneColor, &byBlockColor,
+                            valueDataType, valueUnitType](
             int id, int styleClass, const char *name, int alignment,
             double textHeight, int mergeFlags, std::uint32_t textStyleHandle) {
         DRW_TableStyleCellStyle style;
@@ -37241,7 +37244,8 @@ void populateR24DwgTableStyleGraph(dx_data& data,
         style.m_backgroundColor = 256;
         style.m_backgroundColorCmc = noneColor();
         style.m_contentLayout = 1u;
-        style.m_contentFormat.m_valueDataType = 512;
+        style.m_contentFormat.m_valueDataType = valueDataType;
+        style.m_contentFormat.m_valueUnitType = valueUnitType;
         style.m_contentFormat.m_cellAlignment = alignment;
         style.m_contentFormat.m_contentColor = 0;
         style.m_contentFormat.m_contentColorCmc = byBlockColor();
@@ -37304,7 +37308,9 @@ void populateR24DwgTableStyleGraph(dx_data& data,
 bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
                                       bool inheritedCustomMargins = false,
                                       std::int32_t prefixValue1 = 8,
-                                      bool lineTypeProfile = false) {
+                                      bool lineTypeProfile = false,
+                                      int valueDataType = 512,
+                                      int valueUnitType = 0) {
     const std::string profileSuffix = inheritedCustomMargins
         ? "-inherited-margins" : "-explicit-margins";
     const std::filesystem::path output =
@@ -37320,7 +37326,8 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
     const std::string sentinel = "existing R24 TABLESTYLE destination\n";
     dx_data data;
     populateR24DwgTableStyleGraph(
-        data, inheritedCustomMargins, prefixValue1);
+        data, inheritedCustomMargins, prefixValue1,
+        valueDataType, valueUnitType);
     constexpr std::uint32_t kBorderLineTypeHandle = 0x570u;
     if (lineTypeProfile) {
         DRW_LType lineType;
@@ -37392,6 +37399,20 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
             return fail("R24 TABLESTYLE accepted a text-style handle as a border linetype or replaced the destination");
         borderLineType = kBorderLineTypeHandle;
     }
+    DRW_TableStyleContentFormat& firstContentFormat =
+        data.tableStyles.front().m_cellStyles.front().m_contentFormat;
+    firstContentFormat.m_valueDataType = 3;
+    if (writer.fileExport(output.string(), DRW::AC1024, binary,
+                          &data, false)
+        || !destinationIsSentinel())
+        return fail("R24 TABLESTYLE accepted an undocumented value data type or replaced the destination");
+    firstContentFormat.m_valueDataType = valueDataType;
+    firstContentFormat.m_valueUnitType = 0x10;
+    if (writer.fileExport(output.string(), DRW::AC1024, binary,
+                          &data, false)
+        || !destinationIsSentinel())
+        return fail("R24 TABLESTYLE accepted an undocumented value unit type or replaced the destination");
+    firstContentFormat.m_valueUnitType = valueUnitType;
     DRW_TableStyleCellStyle& firstCustomStyle =
         data.tableStyles.front().m_cellStyles.front();
     if (inheritedCustomMargins) {
@@ -37489,7 +37510,8 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
         || titleStyle.m_name != "_TITLE"
         || titleStyle.m_mergeFlags != 0x8000u
         || titleStyle.m_contentFormat.m_cellAlignment != 5
-        || titleStyle.m_contentFormat.m_valueDataType != 512
+        || titleStyle.m_contentFormat.m_valueDataType != valueDataType
+        || titleStyle.m_contentFormat.m_valueUnitType != valueUnitType
         || titleStyle.m_contentFormat.m_textHeight != 0.25
         || titleStyle.m_marginOverrideFlags
             != (inheritedCustomMargins ? 0 : 1)
@@ -86891,6 +86913,28 @@ int main(int argc, char** argv) {
         && std::string(argv[1]) == "--tablestyle-r24-typed-writer") {
         const auto nonce = static_cast<std::uint64_t>(
             std::chrono::steady_clock::now().time_since_epoch().count());
+        const auto valueDomainRoundTrips = [&]() {
+            constexpr std::array<int, 11> valueDataTypes{{
+                0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512}};
+            constexpr std::array<int, 4> valueUnitTypes{{1, 2, 4, 8}};
+            for (const int valueDataType : valueDataTypes) {
+                for (const bool binary : {false, true}) {
+                    if (!typedDwgR24TableStyleDxfRoundTrip(
+                            binary, nonce, false, 8, false,
+                            valueDataType, 0))
+                        return false;
+                }
+            }
+            for (const int valueUnitType : valueUnitTypes) {
+                for (const bool binary : {false, true}) {
+                    if (!typedDwgR24TableStyleDxfRoundTrip(
+                            binary, nonce, false, 8, false,
+                            512, valueUnitType))
+                        return false;
+                }
+            }
+            return true;
+        };
         return typedDwgR24TableStyleDxfRoundTrip(false, nonce)
                 && typedDwgR24TableStyleDxfRoundTrip(
                     false, nonce, true)
@@ -86904,6 +86948,7 @@ int main(int argc, char** argv) {
                     false, nonce, false, 8, true)
                 && typedDwgR24TableStyleDxfRoundTrip(
                     true, nonce, false, 8, true)
+                && valueDomainRoundTrips()
             ? 0 : 1;
     }
     if (argc == 2 && std::string(argv[1]) == "--raster-dwg-source-profile-eed")

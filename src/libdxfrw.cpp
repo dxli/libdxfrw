@@ -12397,6 +12397,10 @@ bool dxfRW::writeTableStyle(
             || value == 4 || value == 8 || value == 0x10
             || value == 0x20 || value == 0x10000;
     };
+    const auto validR24ValueUnitType = [](int value) {
+        return value == 0 || value == 1 || value == 2
+            || value == 4 || value == 8;
+    };
     if (!preflightDxfWrite())
         return reject("TABLESTYLE writer is already in a failed state");
     if (ent == nullptr)
@@ -12493,8 +12497,8 @@ bool dxfRW::writeTableStyle(
                 || style.m_contentLayout != 1u
                 || format.m_propertyOverrideFlags != 0u
                 || format.m_propertyFlags != 0u
-                || format.m_valueDataType != 512
-                || format.m_valueUnitType != 0
+                || !validValueDataType(format.m_valueDataType)
+                || !validR24ValueUnitType(format.m_valueUnitType)
                 || !format.m_valueFormatString.empty()
                 || format.m_rotation != 0.0 || format.m_blockScale != 1.0
                 || format.m_cellAlignment != expectedAlignment
