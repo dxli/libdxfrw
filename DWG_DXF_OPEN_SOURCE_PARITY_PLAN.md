@@ -166,9 +166,9 @@ created locally from scratch for the specific control.
 
 - **Latest ACIS writer hardening:** commit `e3111a82` preserves binary64
   precision in SAT v1 output using `max_digits10`. Follow-up commit
-  `a3d58f7f` adds nonfinite header-scalar refusal; the current generated
-  controls also exercise a nonfinite torus vector component. Both failure paths
-  preserve the preexisting SAT output buffer. The pinned independent parser matches the physical source SAB
+  `a3d58f7f` adds nonfinite header-scalar refusal, and `dce17422` adds a
+  nonfinite torus-vector control. Both failure paths preserve the preexisting
+  SAT output buffer. The pinned independent parser matches the physical source SAB
   fields exactly. Native B-rep and independent-kernel gates remain open; see
   the [P7 parser receipt](docs/research/p7-ac1021-inventorloader-sat-parser-crosscheck-2026-11-08.json).
 - **Latest local slice:** the AC1027 `AcDbAssocOsnapPointRefActionParam`
