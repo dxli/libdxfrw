@@ -8333,6 +8333,48 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     t.expect(retryInitiallyRefused && retryAfterCorrection,
              "same AC1018 TABLE encoder accepts a corrected model after preflight refusal");
 
+    const auto encodeAc1018TableFrame = [&](bool cutBodyBoundary,
+                                             bool omitHandleStream) {
+        TableDwgCodecProbe table = makeEncodableAc1018Table();
+        dwgBufferW body;
+        dwgBufferW handles;
+        dwgBufferW typePrefix;
+        typePrefix.putObjType(DRW::AC1018, 562u);
+        const std::uint64_t objectSizeBit = typePrefix.bitCount();
+        if (!table.encodeAsTableClass(DRW::AC1018, body, handles))
+            return std::vector<std::uint8_t>{};
+        const std::uint32_t fullBodyBitCount =
+            static_cast<std::uint32_t>(body.bitCount());
+        const std::uint32_t declaredBodyBitCount = cutBodyBoundary
+            ? fullBodyBitCount - 1u : fullBodyBitCount;
+        body.patchRawLong32AtBit(objectSizeBit, declaredBodyBitCount);
+        if (!omitHandleStream)
+            appendBits(body, handles);
+        return body.data();
+    };
+    std::vector<std::uint8_t> truncatedTableBody =
+        encodeAc1018TableFrame(true, false);
+    dwgBuffer truncatedTableBodyInput(truncatedTableBody.data(),
+                                      truncatedTableBody.size());
+    TableDwgCodecProbe truncatedTableBodyReadback;
+    const bool truncatedTableBodyAccepted =
+        truncatedTableBodyReadback.parseDwg(DRW::AC1018,
+                                             &truncatedTableBodyInput);
+    t.expect(!truncatedTableBodyAccepted && !truncatedTableBodyInput.isGood(),
+             "AC1018 TABLE parser refuses a declared body shortened by one bit");
+
+    std::vector<std::uint8_t> missingTableHandles =
+        encodeAc1018TableFrame(false, true);
+    dwgBuffer missingTableHandlesInput(missingTableHandles.data(),
+                                       missingTableHandles.size());
+    TableDwgCodecProbe missingTableHandlesReadback;
+    const bool missingTableHandlesAccepted =
+        missingTableHandlesReadback.parseDwg(DRW::AC1018,
+                                              &missingTableHandlesInput);
+    t.expect(!missingTableHandlesAccepted
+                 && !missingTableHandlesInput.isGood(),
+             "AC1018 TABLE parser refuses a truncated trailing handle stream");
+
     R2007TableFrame ac1018InvalidVisibilityFrame;
     const bool ac1018InvalidVisibilityBuilt = makeR2007TableFrame(
         1, ac1018InvalidVisibilityFrame, TablePlacement{}, 0x00004460u,

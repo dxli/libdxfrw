@@ -101,9 +101,11 @@
     ],
     "assertions": [
       "Each rejected model leaves pre-seeded entity-body and handle buffers at their original bit counts.",
-      "The same DRW_Table instance succeeds after a table-override preflight refusal is corrected."
+      "The same DRW_Table instance succeeds after a table-override preflight refusal is corrected.",
+      "The parser refuses a generated frame whose declared body ends one bit before the encoded body end.",
+      "The parser refuses a generated frame with its trailing handle stream omitted."
     ],
-    "disposition": "Representative preflight atomicity only. Other retained-field exclusions and parser truncation at body/handle boundaries remain untested; it does not establish compound writer rollback or production output support."
+    "disposition": "Representative preflight atomicity and parser truncation only. Other retained-field exclusions, post-write low-level failure atomicity, physical source-to-output comparison, and compound writer rollback remain open; this does not establish production output support."
   },
   "first_candidate": {
     "version": "AC1018",
@@ -133,7 +135,7 @@
     "The only newly captured table class number is 506 in one AC1021 file; an AC1018 class number must be captured empirically before registering an AC1018 writer.",
     "The AC1018 unknown-override control now captures only the known prefix; the physical payload span and meaning of 0x40000/0x40020 remain unresolved and must not be skipped or emitted.",
     "The generated AC1018 encoder control uses synthetic class number 562 solely to exercise the body codec; production class resolution and physical interoperability remain open.",
-    "Direct codec truncation and no-partial-byte refusal controls remain open; the generated positive readback does not establish encoder failure atomicity.",
+    "The direct entity codec has no transaction guarantee if a low-level failure occurs after emission starts; keep it out of the production route until the compound writer stages and atomically publishes the complete frame.",
     "The new generated refusal matrix is representative, not exhaustive; it covers unsupported version, table/cell overrides, extra columns, incomplete semantics and detached value handles only.",
     "The available AC1021 table source is semantically incomplete at cell CadValue type 48 and cannot validate a complete output route.",
     "R24+ TABLECONTENT/TABLEGEOMETRY relationship is outside the available ODA v5.4.1 layout and must remain refused."

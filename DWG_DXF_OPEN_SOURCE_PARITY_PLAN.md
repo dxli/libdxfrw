@@ -2454,11 +2454,13 @@ exact body cursor, and a following-body sentinel. Focused preflight controls
 also refuse unsupported version, TABLE/cell overrides, extra columns,
 incomplete semantic content, and detached value handles without changing
 pre-seeded body/handle buffers; the same object succeeds after its rejected
-override is corrected. The focused `--table-cell-overrides` selector passes.
-This is encoder/parser self-consistency evidence only: remaining modeled-field
-negative cases, truncated parser-body/handle controls, production class
-registration, physical source-to-output proof, and compound-writer transaction
-have not been demonstrated. `writeTable` remains fail-closed. Trace hashes, source
+override is corrected. Generated parse controls also refuse a body whose
+declared span is one bit short and a frame missing its trailing handle stream.
+The focused `--table-cell-overrides` selector passes. This is encoder/parser
+self-consistency evidence only: remaining modeled-field negative cases,
+post-write buffer failure atomicity, production class registration, physical
+source-to-output proof, and compound-writer transaction have not been
+demonstrated. `writeTable` remains fail-closed. Trace hashes, source hashes, and dispositions are in the
 hashes, and dispositions are in the
 [encoder-readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 
@@ -2470,8 +2472,12 @@ Speed-oriented implementation sequence:
    Focused refusal controls now cover unsupported version, table/cell
    overrides, extra columns, incomplete semantic content, and detached value
    handles; they check pre-seeded output buffers and corrected same-object
-   retry. Finish the remaining retained-field preflight matrix and add parser
-   truncation controls at body and handle boundaries. The existing AC1018
+   retry. Parser controls now refuse a declared body shortened by one bit and
+   a frame without trailing handles. Finish the remaining retained-field
+   preflight matrix. The direct codec has no transactional guarantee for a
+   low-level failure after emission starts; keep it off the production route
+   until its caller stages and atomically publishes the complete compound
+   frame. The existing AC1018
    traces disagree on class number (528 versus 523), so determine the
    production class-resolution rule from each source's CLASS map and key
    registration to validated class identity rather than
