@@ -8793,6 +8793,49 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  "AC1018 TABLE text-height cell override preserves following body sentinel");
     }
 
+    TableDwgCodecProbe cellAlignmentTable = makeEncodableAc1018Table();
+    DRW_TableCell& cellAlignmentCell =
+        cellAlignmentTable.m_content.m_rows.front().m_cells.front();
+    cellAlignmentCell.m_overrideFlags = 0x00000001u;
+    cellAlignmentCell.m_textAlignment = 5;
+    dwgBufferW cellAlignmentBody;
+    dwgBufferW cellAlignmentHandles;
+    dwgBufferW cellAlignmentTypePrefix;
+    cellAlignmentTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t cellAlignmentObjectSizeBit =
+        cellAlignmentTypePrefix.bitCount();
+    const bool cellAlignmentEncoded = cellAlignmentTable.encodeAsTableClass(
+        DRW::AC1018, cellAlignmentBody, cellAlignmentHandles);
+    const std::uint64_t cellAlignmentBodyEndBit =
+        cellAlignmentBody.bitCount();
+    constexpr std::int32_t cellAlignmentSentinel = 0x51CA0001;
+    cellAlignmentBody.putBitLong(cellAlignmentSentinel);
+    cellAlignmentBody.patchRawLong32AtBit(
+        cellAlignmentObjectSizeBit,
+        static_cast<std::uint32_t>(cellAlignmentBody.bitCount()));
+    appendBits(cellAlignmentBody, cellAlignmentHandles);
+    dwgBuffer cellAlignmentInput(cellAlignmentBody.data().data(),
+                                 cellAlignmentBody.data().size());
+    TableDwgCodecProbe cellAlignmentReadback;
+    const bool cellAlignmentRead = cellAlignmentEncoded
+        && cellAlignmentReadback.parseDwg(DRW::AC1018, &cellAlignmentInput);
+    const bool cellAlignmentMatches = cellAlignmentRead
+        && cellAlignmentInput.isGood()
+        && cellAlignmentReadback.m_semanticContentComplete
+        && cellAlignmentReadback.m_content.m_rows.front().m_cells.front()
+            .m_overrideFlags == 0x01u
+        && cellAlignmentReadback.m_content.m_rows.front().m_cells.front()
+            .m_textAlignment == 5
+        && cursorBit(cellAlignmentInput) == cellAlignmentBodyEndBit;
+    t.expect(cellAlignmentMatches,
+             "AC1018 TABLE cell alignment raw-short override round-trips exactly");
+    if (cellAlignmentMatches) {
+        const std::int32_t sentinel = cellAlignmentInput.getBitLong();
+        t.expect(cellAlignmentInput.isGood()
+                     && sentinel == cellAlignmentSentinel,
+                 "AC1018 TABLE cell alignment preserves following body sentinel");
+    }
+
     TableDwgCodecProbe cellBorderTable = makeEncodableAc1018Table();
     DRW_TableCell& cellBorderCell =
         cellBorderTable.m_content.m_rows.front().m_cells.front();
@@ -9160,10 +9203,24 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             table.m_content.m_rows.front().m_cells.front().m_valueHandle = 0xA800u;
         });
     expectAtomicPreflightRefusal(
-        "AC1018 TABLE encoder rejects a cell override without writing",
+        "AC1018 TABLE encoder rejects unsupported cell alignment-adjacent override bits without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
-            table.m_content.m_rows.front().m_cells.front().m_overrideFlags = 1u;
+            table.m_content.m_rows.front().m_cells.front().m_overrideFlags = 2u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects out-of-domain selected cell alignment without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            auto& cell = table.m_content.m_rows.front().m_cells.front();
+            cell.m_overrideFlags = 1u;
+            cell.m_textAlignment = 10;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects unflagged cell alignment residue without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_cells.front().m_textAlignment = 5;
         });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects an unsupported cell override bit without writing",

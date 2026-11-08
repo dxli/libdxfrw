@@ -17,7 +17,8 @@
     "color_domain": "indexed ByBlock 0, ACI 1-255, or ByLayer 256",
     "lineweight_domain": "supported nonnegative TABLE lineweight enum values",
     "visibility_domain": "explicit boolean encoded as BS 0 or 1",
-    "unsupported": ["other cell override bits", "virtual edge overrides", "non-indexed color side channels"]
+    "at_this_slice": "alignment bit 0x01 was added by the follow-up recorded in p5-ac1018-table-cell-alignment-override-dwg-codec-2026-11-08.json",
+    "unsupported": ["remaining cell override bits", "virtual edge overrides", "non-indexed color side channels"]
   },
   "generated_control": {
     "authenticity": "locally generated codec vector; no DWG/DXF fixture",

@@ -1061,11 +1061,6 @@ bool skipTableBitDouble(dwgBuffer& buffer, std::uint64_t endBit) {
     return readBoundedRawChar8(buffer, endBit, value);
 }
 
-bool skipTableRawShort16(dwgBuffer& buffer, std::uint64_t endBit) {
-    std::uint16_t value = 0;
-    return readBoundedRawShort16(buffer, endBit, value);
-}
-
 bool readBounded3BitDouble(dwgBuffer& buffer, std::uint64_t endBit,
                            DRW_Coord& value) {
     dwgBuffer probe = buffer.forkIndependent();
@@ -3280,8 +3275,10 @@ bool parseR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
     constexpr std::array<std::uint32_t, 4> borderVisibilityFlags = {{
         0x00004000u, 0x00008000u, 0x00010000u, 0x00020000u
     }};
+    constexpr std::uint32_t cellAlignmentFlag = 0x00000001u;
     constexpr std::uint32_t textHeightFlag = 0x00000020u;
-    std::uint32_t representableOverrideFlags = textHeightFlag;
+    std::uint32_t representableOverrideFlags =
+        cellAlignmentFlag | textHeightFlag;
     for (std::size_t edge = 0u; edge < borderColorFlags.size(); ++edge)
         representableOverrideFlags |= borderColorFlags[edge]
             | borderLineweightFlags[edge] | borderVisibilityFlags[edge];
@@ -3292,9 +3289,16 @@ bool parseR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
         && !legacyAc1018CellOverrideProfile)
         semanticComplete = false;
 
-    if (cell.m_overrideFlags & 0x00001
-        && !skipTableRawShort16(*buf, bounds.bodyEndBit))
-        return false;
+    if (cell.m_overrideFlags & cellAlignmentFlag) {
+        std::uint16_t alignment = 0;
+        if (!readBoundedRawShort16(*buf, bounds.bodyEndBit, alignment))
+            return false;
+        if (legacyAc1018CellOverrideProfile) {
+            cell.m_textAlignment = static_cast<int>(alignment);
+            if (alignment < 1u || alignment > 9u)
+                semanticComplete = false;
+        }
+    }
     if (cell.m_overrideFlags & 0x00002
         && !skipTableBit(*buf, bounds.bodyEndBit))
         return false;
@@ -13884,6 +13888,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
     const DRW_TableCell& cell = row.m_cells.front();
     const bool hasCellTextHeightOverride =
         (cell.m_overrideFlags & 0x00000020u) != 0u;
+    constexpr std::uint32_t cellAlignmentFlag = 0x00000001u;
     constexpr std::array<std::uint32_t, 4> cellBorderColorFlags = {{
         0x00000040u, 0x00000080u, 0x00000100u, 0x00000200u
     }};
@@ -13893,7 +13898,8 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
     constexpr std::array<std::uint32_t, 4> cellBorderVisibilityFlags = {{
         0x00004000u, 0x00008000u, 0x00010000u, 0x00020000u
     }};
-    std::uint32_t supportedCellOverrideMask = 0x00000020u;
+    std::uint32_t supportedCellOverrideMask =
+        cellAlignmentFlag | 0x00000020u;
     for (std::size_t edge = 0u; edge < cellBorderColorFlags.size(); ++edge)
         supportedCellOverrideMask |= cellBorderColorFlags[edge]
             | cellBorderLineweightFlags[edge]
@@ -13933,6 +13939,9 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
     }
     const bool validCellOverrides =
         (cell.m_overrideFlags & ~supportedCellOverrideMask) == 0u
+        && ((cell.m_overrideFlags & cellAlignmentFlag) != 0u
+            ? (cell.m_textAlignment >= 1 && cell.m_textAlignment <= 9)
+            : cell.m_textAlignment == 0)
         && (hasCellTextHeightOverride
             ? (std::isfinite(cell.m_textHeight) && cell.m_textHeight > 0.0)
             : cell.m_textHeight == 0.0)
@@ -13964,7 +13973,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || cell.m_geometryWidth != 0.0 || cell.m_geometryHeight != 0.0
         || cell.m_textColorRgb != -1 || cell.m_textColorMethod != 0u
         || cell.m_fillColorRgb != -1 || cell.m_fillColorMethod != 0u
-        || cell.m_backgroundEnabled || cell.m_textAlignment != 0
+        || cell.m_backgroundEnabled
         || !validCellOverrides || cell.m_virtualEdgeFlags != 0u
         || cell.m_contents.size() != 1u
         || cell.m_contents.front().m_type != 1
@@ -14053,6 +14062,9 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
                 static_cast<std::int32_t>(cell.m_overrideFlags));
             stagedBody.putRawChar8(
                 static_cast<std::uint8_t>(cell.m_virtualEdgeFlags));
+            if ((cell.m_overrideFlags & cellAlignmentFlag) != 0u)
+                stagedBody.putRawShort16(
+                    static_cast<std::uint16_t>(cell.m_textAlignment));
             if (hasCellTextHeightOverride)
                 stagedBody.putBitDouble(cell.m_textHeight);
             for (std::size_t edge = 0u;
