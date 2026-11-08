@@ -2,7 +2,7 @@
   "schema": "libdxfrw-research-receipt-v1",
   "id": "p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08",
   "date": "2026-11-08",
-  "status": "INLINE_SAB_AC1024_SELECTED_ASCII_BINARY_READBACK_PASS_INDEPENDENT_SEMANTIC_QUALIFICATION_OPEN",
+  "status": "INLINE_SAB_AC1024_SELECTED_ASCII_BINARY_READBACK_PASS_INDEPENDENT_PARSER_FIELDS_PASS_NATIVE_GEOMETRY_OPEN",
   "supportClaimEffect": "none",
   "scope": "Implement and qualify the source-bound AC1021 inline-SAB selected projection through AC1024 ASCII/Binary, exact SAT carrier and graph-role readback, failure rollback/retry, and retain strict full-source refusal.",
   "source": {
@@ -139,9 +139,12 @@
         "helix surfaces unsupported for lines",
         "law-defined interpolated curves/surfaces without spline data omitted"
       ],
-      "localAvailability": "Not installed in the current FreeCAD user Mod directory. FreeCAD 1.1.4 bundle is present with Python 3.11 and pythonocc-core 7.8.1.1; no FreeCADCmd executable was found. ODA File Converter is also installed but its post-unlock --help startup exits 134 before processing input.",
-      "nextQualification": "Pin and inspect the add-on revision; import the exact selected AC1024 SAT group-1 payload in FreeCAD using its native ACIS reader, capture resulting shape validity, solid/shell/face/edge counts, placed bounds, area, volume, and centroid, then compare against the existing reference routes. Keep same-OCCT agreement advisory and obtain an independent-kernel route separately.",
-      "supportClaimEffect": "none"
+      "localAvailability": "InventorLoader is not installed in the FreeCAD user Mod directory. FreeCAD 1.1.4 is present; its lowercase arm64 freecadcmd exists but exits immediately with “Incompatible processor. This Qt build requires ... neon”. Computer Use reports the macOS GUI session locked. ODA File Converter is installed but its post-unlock --help startup exits 134 before input processing.",
+      "nextQualification": "Run a native FreeCAD Part import when the app runtime is usable. The parser-only scratch run does not invoke geometry construction; then capture validity, topology, placement, bounds, area, volume and centroid. Obtain an independent-kernel route separately.",
+      "supportClaimEffect": "none",
+      "pinnedRevision": "e94bdf5e29052a0dc7ce6fdf755e956ae507caec",
+      "parserSourceSha256": "ec84f9528355f0df2e28bd94eecf7d9e4be89c5b9f7a77eef9b9cccbc21366bb",
+      "repositoryCommitDate": "2024-12-17T15:15:05Z"
     }
   },
   "validation": {
@@ -170,23 +173,69 @@
     "selectedPhysicalProjection": "PASS using the hash-pinned wrapper and the existing external LibreDWG DWG (no fixture added): selected AC1024 ASCII and Binary output/readback pass; exact SAT v1 group-1 payload and history/EvaluationGraph/torus references read back; same-adapter rollback/retry passes in each encoding.",
     "fullSourceStrictRefusal": "PASS: strict full-source export preserves its destination and remains refused at the unrelated DWG IMAGEDEF owner-role qualification gate; opaque-frame output gate remains unreached.",
     "physicalSourceProbeCommand": "python3 tools/research/run_acsh_torus_source_probe.py <pinned DWG> /private/tmp/acsh-final-probe --probe build/libdxfrw_dwg_local_roundtrip — PASS after exact SHA-256 admission; selected AC1024 ASCII/Binary readback and failure/retry pass; strict full-source sentinel remains unchanged at IMAGEDEF owner-role gate.",
-    "freecadAcisReaderCandidateResearch": "Official InventorLoader README and source identify an independently implemented Acis.py SAT/SAB parser that can construct FreeCAD Part geometry. It is not installed locally. Its geometry/kernel route uses FreeCAD/OpenCASCADE and documented unsupported surfaces/law curves limit applicability. Candidate only; no payload was imported and support claim unchanged."
+    "freecadAcisReaderCandidateResearch": "Pinned InventorLoader commit e94bdf5e29052a0dc7ce6fdf755e956ae507caec. Its Acis.py is an independent parser; the corrected physical SAT output was parsed in a scratch Python harness with FreeCAD/Part stubs. No B-rep was constructed.",
+    "independentParserFieldCrosscheck": {
+      "repository": "https://github.com/jmplonka/InventorLoader",
+      "revision": "e94bdf5e29052a0dc7ce6fdf755e956ae507caec",
+      "parserSource": "Acis.py",
+      "parserSourceSha256": "ec84f9528355f0df2e28bd94eecf7d9e4be89c5b9f7a77eef9b9cccbc21366bb",
+      "inputBytes": 917,
+      "inputSha256": "c31590592694a817bd5c67a133f729f37cd010d6e23132029d5f342a96d448ed",
+      "command": "python3 /private/tmp/acsh-semantic-probe/parse_inventorloader_sat.py /private/tmp/acsh-semantic-probe/torus-fixed.sat",
+      "method": "AcisReader.readText plus SurfaceTorus.set; FreeCAD, Part and utility imports replaced with scratch stubs; no shape/kernel operation invoked.",
+      "result": {
+        "readText": true,
+        "parsedRecords": 14,
+        "bodyRecords": 1,
+        "surface": "torus-surface",
+        "center": [
+          1383.62,
+          418.5,
+          1158.76
+        ],
+        "axis": [
+          -0.501424,
+          -1.6431677767887314e-16,
+          -0.865202
+        ],
+        "majorRadius": 19.0,
+        "minorRadius": 2.78998,
+        "uOrigin": [
+          -0.865202,
+          -3.89454e-17,
+          0.501424
+        ],
+        "sense": "forward_v",
+        "uRange": "I I",
+        "vRange": "I I"
+      },
+      "preFixObservation": "The initial 909-byte output used F for all five torus-surface booleans. InventorLoader read the 14 records but SurfaceTorus.set failed while parsing a range with ValueError: could not convert string to float: F.",
+      "postFixObservation": "After the first boolean was rendered as forward_v and the four range booleans as I/F, the typed torus fields decoded successfully.",
+      "geometryConstructed": false,
+      "supportClaimEffect": "none"
+    },
+    "satTorusBooleanFix": "PASS: generated controls cover forward/reverse sense, full ranges, and a finite U-start value; hash-pinned AC1021 selected ASCII/Binary physical projection, rollback/retry and strict full-source refusal all pass after the converter change; focused CTest selector passes 3/3. No fixture added."
   },
   "remaining": [
-    "Use a pinned independent ACIS parser/native FreeCAD reader on the exact emitted AC1024 SAT v1 payload; capture topology, validity, placement, bounds, area, volume and centroid, while treating shared-OCCT agreement as parser/semantic cross-check only.",
-    "Obtain a genuinely independent-kernel and source-native semantic check for the exact solid/history graph; InventorLoader/FreeCAD-OCCT and the existing OCCT-derived routes do not satisfy that gate.",
+    "Run the exact emitted SAT through a usable native FreeCAD + pinned InventorLoader reconstruction; capture valid B-rep topology, placement, bounds, area, volume and centroid. Current parser-only check uses stubs and does not construct geometry.",
+    "Obtain a genuinely independent-kernel and source-native semantic check for the exact solid/history graph; FreeCAD/OCCT and existing OCCT-derived routes do not satisfy that gate.",
     "Qualify broader native consumer and platform behavior after semantic evidence is available. Keep AC1024/1027/1032 source profiles and unrelated whole-source IMAGEDEF/opaque-frame refusal gates separate."
   ],
   "implementation": {
-    "converter": "drw_convertSabToSatV1 parses only complete ACIS BinaryFile version-21200 SAB with an explicit terminal record and serializes the observed SAT v1 profile; output is committed only on success.",
+    "converter": "drw_convertSabToSatV1 parses only complete ACIS BinaryFile version-21200 SAB with an explicit terminal record and serializes the observed SAT v1 profile; for torus-surface it maps the first ordered SAB boolean to forward_v/reverse_v and the next four to I/F range markers. Unknown extra torus-surface booleans fail closed.",
     "writerGate": "writeModelerGeometry admits only AC1021 E3DSOLID, modeler version 2, one exact marker-bounded SAB body range with payload bit offset less than 8, retained complete source frame, exact SAB parse/header, and no DataStorage dependency; emits SAT group-1 text only for AC1021/AC1024 targets.",
     "differentialOutput": {
-      "bytes": 909,
-      "sha256": "5d82bceb0e931e4ac2c11a86fa5706e9621567990bdcaf200d607ed0a46ba7b0",
-      "peer": "corrected LibreDWG scratch revision 6d6a33987a1a97095b069c799c3d8a793320f812",
-      "effect": "byte comparison only; not independent semantic evidence"
+      "bytes": 917,
+      "sha256": "c31590592694a817bd5c67a133f729f37cd010d6e23132029d5f342a96d448ed",
+      "peer": "No longer byte-identical to corrected LibreDWG scratch output.",
+      "effect": "Independent parser field decoding agrees for the typed torus record; no native shape or kernel semantics established."
     },
     "sourceBoundClosure": "Unique selected AC1021 solid/history/EvaluationGraph/torus chain is validated independently of DataStorage; raw ACSH objects and the typed EvaluationGraph are written as selected records. The layer-0 extension DICTIONARY closure is retained.",
-    "readbackAndRetry": "Selected AC1024 ASCII and Binary outputs are reimported; SAT bytes, carrier group/version, and remapped solid→history→EvaluationGraph→torus roles are checked. A changed span-confidence bit forces atomic refusal with sentinel preserved, then restoring the source evidence and retrying with the same adapter succeeds."
+    "readbackAndRetry": "Selected AC1024 ASCII and Binary outputs are reimported; SAT bytes, carrier group/version, and remapped solid→history→EvaluationGraph→torus roles are checked. A changed span-confidence bit forces atomic refusal with sentinel preserved, then restoring the source evidence and retrying with the same adapter succeeds.",
+    "initialPeerByteMatch": {
+      "bytes": 909,
+      "sha256": "5d82bceb0e931e4ac2c11a86fa5706e9621567990bdcaf200d607ed0a46ba7b0",
+      "interpretation": "Initial byte match with corrected LibreDWG peer was rejected by the independent typed SAT parser for the torus range fields; superseded by the record-specific mapping."
+    }
   }
 }

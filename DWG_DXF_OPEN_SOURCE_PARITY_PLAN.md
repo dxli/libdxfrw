@@ -733,10 +733,12 @@ the unrelated IMAGEDEF owner role. The corrected LibreDWG bytes are a
 differential target only; independent native/semantic validation remains open.
 See the [inline-SAB carrier gate receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).
 
-**Next:** seek independent ACIS/native CAD semantic evidence for this exact
-carrier and graph; then qualify broader native consumer/platform behavior.
-Do not promote support from the local reader/writer loop or the LibreDWG
-comparison. Keep full-source IMAGEDEF and opaque-frame output gates separate.
+**Next:** run the exact corrected SAT payload through the pinned InventorLoader
+inside native FreeCAD and capture B-rep validity and geometry measurements,
+then obtain independent-kernel and source-native evidence. Broader native
+consumer/platform qualification follows separately. Do not promote support
+from parser fields, the local reader/writer loop, or the LibreDWG comparison.
+Keep full-source IMAGEDEF and opaque-frame output gates separate.
 
 Use the pinned existing local source only as an opt-in/manual probe. During the
 edit loop, rebuild `libdxfrw_dwg_local_roundtrip` once and run the hash-pinned
@@ -780,25 +782,31 @@ carrier and graph transport for the selected profile, not independent CAD
 semantics or whole-document support. See the [inline-SAB carrier gate
 receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).
 
-**Implementation progress (2026-11-08):** a bounded AC1021 inline SAB v2
-converter now parses the observed version-21200 token profile and emits SAT v1
-text. Its output for the pinned `0x452` payload matches the corrected
-LibreDWG scratch peer byte for byte (909 bytes; SHA-256
-`5d82bceb0e931e4ac2c11a86fa5706e9621567990bdcaf200d607ed0a46ba7b0`).
-The `writeModelerGeometry` entity route admits only an AC1021 E3DSOLID whose
-single exact SAB body span, retained source frame, header/version, and absence
-of DataStorage all match this profile; it converts only for AC1021/AC1024
-targets. Generated token controls and existing TORUS/CMC tests pass (3/3),
-with no fixtures added. A source-bound inline-SAB/history closure now admits
-only the unique `0x452 → 0x453 → 0x454 → 0x455` profile without routing
-through ACDSDATA. Selected AC1024 ASCII and Binary export pass exact SAT
-carrier readback, typed EvaluationGraph and raw ACSH owner/expression
-readback, plus same-adapter failure/retry with destination preservation.
-Full-source strict refusal still passes at the unrelated IMAGEDEF owner role.
-The hash-pinned physical probe and focused token/TORUS/CMC controls pass; no
-fixtures were added. This is local carrier and graph transport evidence, not
-independent CAD semantics or whole-document support. Keep support claims
-unchanged and retain the independent semantic and broader consumer gates.
+**Implementation progress (2026-11-08):** the bounded AC1021 inline SAB v2
+converter parses the observed version-21200 token profile and emits SAT v1
+text. An initial 909-byte result byte-matched the corrected LibreDWG scratch
+peer, but the pinned independent InventorLoader parser could not decode the
+`torus-surface` ranges: all five SAB booleans had been rendered as `F`. The
+converter now preserves the `torus-surface` boolean ordinal: the first bit
+emits `forward_v`/`reverse_v`, and the four range bits emit `I` when false or
+`F` when true (with the following numeric value retained). Generated controls
+cover the full-range profile and a finite U-start value. The corrected
+physical SAT text is 917 bytes (SHA-256
+`c31590592694a817bd5c67a133f729f37cd010d6e23132029d5f342a96d448ed`). The
+same pinned independent parser now recovers the typed torus center, axis,
+major/minor radii, sense, and both full ranges. That probe uses isolated
+FreeCAD/Part stubs and does not construct a B-rep or prove native FreeCAD
+acceptance. The implementation no longer claims byte equality with the
+corrected LibreDWG peer; its prior matching output was the one the independent
+parser rejected. The `writeModelerGeometry` route still admits only the
+source-bound AC1021 E3DSOLID profile and emits only for AC1021/AC1024 targets.
+The exact source-bound `0x452 → 0x453 → 0x454 → 0x455` selected graph passes
+AC1024 ASCII/Binary readback, rollback/retry, and strict full-source refusal
+at the unrelated IMAGEDEF owner role. Focused token/TORUS/CMC controls pass
+3/3; the hash-pinned physical probe passes; no fixture was added. This is
+selected carrier, graph transport, and independent parser-field evidence,
+not B-rep semantics, native application acceptance, or whole-document
+support. Keep support claims unchanged.
 
 The local P6 AC1027
 source-reference inventory is complete, with
@@ -3085,8 +3093,8 @@ not qualify mesh geometry or native behavior ([receipt](docs/research/p6-dxf-pol
   See the [shell-loss receipt](docs/research/p7-dwg-modeler-shell-loss-guard-2026-11-03.json)
   and [UID span receipt](docs/research/p7-ac1027-modeler-revision-uid-physical-spans-2026-11-03.json).
 - **Completed bounded AC1021 inline-SAB selected projection:** the exact physical E3DSOLID source at handle `0x452` now writes its version-2 SAB as SAT v1 to AC1024 ASCII and Binary DXF. The selected 0x452→0x453→0x454→0x455 history/EvaluationGraph/torus graph is closed, output handles are remapped and read back, and atomic refusal plus same-adapter retry pass. This route is independent of ACDSDATA and does not qualify whole-source output, geometry semantics, native CAD acceptance, or other source revisions; full-source export still stops at the unrelated IMAGEDEF owner-role gate. No fixture was added. See the [selected carrier receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).
-- **Next implementation-ready semantic probe:** pin the `jmplonka/InventorLoader` revision, install it only in a scratch FreeCAD add-on directory, and import the exact SAT v1 payload emitted by the selected physical projection. Capture shape validity, solids/shells/faces/edges, placement, bounds, area, volume and centroid. The project documents an independent `Acis.py` SAT/SAB parser and native ACIS reconstruction in FreeCAD; its Part geometry uses FreeCAD/OpenCASCADE, so agreement is an independent-parser cross-check, not an independent-kernel result. Its documented unsupported blending surfaces, helix surfaces for lines, and some law-defined curves/surfaces require checking the target payload for those constructs. The add-on is not installed locally and no import has yet been run. Follow with a genuinely independent-kernel route and source-native semantic evidence.
-- The official ODA File Converter startup retry was repeated after the user unlocked the macOS session. It still aborted with PasteBoard/XPC errors before opening input, so this exact CLI route is currently unusable; do not count its failure as file-format evidence. The installed FreeCAD bundle provides Python 3.11/pythonocc-core but no `FreeCADCmd`, and its user add-on directory has no ACIS reader installed. This inventory does not block the independent-parser probe above.
+- **Independent parser field check completed; native geometry step remains next.** InventorLoader is pinned to commit `e94bdf5e29052a0dc7ce6fdf755e956ae507caec`; its separate `Acis.py` parser reads the corrected 917-byte selected SAT output (SHA-256 `c31590592694a817bd5c67a133f729f37cd010d6e23132029d5f342a96d448ed`), parses 14 records and decodes the typed `torus-surface` center, axis, radii, sense and full U/V ranges. The run used a scratch harness with FreeCAD/Part stubs to exercise parsing and typed fields only; it did not build a shape. The first output exposed the `F`-range bug and failed typed torus decoding; the corrected token sequence succeeds. See the [parser field cross-check receipt](docs/research/p7-ac1021-inventorloader-sat-parser-crosscheck-2026-11-08.json). Next, run the exact payload through InventorLoader's native FreeCAD Part reconstruction and capture shape validity, solids/shells/faces/edges, placement, bounds, area, volume and centroid. The bundled `freecadcmd` is present but exits before running with `Incompatible processor. This Qt build requires ... neon`; Computer Use still reports the macOS session locked, so native import has not run. This shared-OCCT path can be an independent parser/geometry cross-check but cannot satisfy the independent-kernel gate. Check the add-on's documented unsupported blending surfaces, helix surfaces for lines, and law-defined curves/surfaces against the target payload, then obtain a genuinely independent-kernel and source-native semantic check.
+- The official ODA File Converter startup retry was repeated after the user unlocked the macOS session. It still aborted with PasteBoard/XPC errors before opening input, so this exact CLI route is currently unusable; do not count its failure as file-format evidence. The installed FreeCAD bundle provides Python 3.11/pythonocc-core and a lowercase `freecadcmd`, but that command aborts on the Qt NEON CPU-feature check; its user add-on directory has no ACIS reader installed. This inventory does not block the independent-parser probe above.
 - Complete source placement, units/transforms, topology, trims, periodicity and
   spline geometry beyond locally verified analytic helpers. A local wireframe or
   repaired/count-only graph is not B-rep support evidence.

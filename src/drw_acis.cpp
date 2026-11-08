@@ -2438,12 +2438,22 @@ bool drw_convertSabToSatV1(const std::uint8_t* data, std::size_t length,
     const auto booleanWord = [](const std::string& record, bool value,
                                 unsigned& ordinal, std::string& word) {
         if (record != "face" && record != "varblendsplsur"
-            && record != "attrib_var_blend" && record != "bdy_geom")
+            && record != "attrib_var_blend" && record != "bdy_geom"
+            && record != "torus-surface")
             ordinal = 0u;
         if (record == "sphere" || record == "plane" || record == "stripc"
             || record == "torus")
             word = value ? "reverse_v" : "forward_v";
-        else if (record == "spline" || record == "edge"
+        else if (record == "torus-surface") {
+            // SAT stores the V sense first, then four interval range kinds.
+            if (ordinal == 0u)
+                word = value ? "reverse_v" : "forward_v";
+            else if (ordinal <= 4u)
+                word = value ? "F" : "I";
+            else
+                return false;
+            ++ordinal;
+        } else if (record == "spline" || record == "edge"
                  || record == "meshsurf" || record == "pcurve"
                  || record == "intcurve")
             word = value ? "reversed" : "forward";

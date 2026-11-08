@@ -1,0 +1,105 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "id": "p7-ac1021-inventorloader-sat-parser-crosscheck-2026-11-08",
+  "date": "2026-11-08",
+  "status": "INDEPENDENT_SAT_TEXT_PARSER_FIELDS_PASS_NATIVE_GEOMETRY_OPEN",
+  "supportClaimEffect": "none",
+  "scope": "Cross-check the exact AC1021 inline-SAB to AC1024 SAT v1 output with a separately implemented SAT text parser, diagnose torus range token meaning, and identify the remaining native-geometry gate.",
+  "source": {
+    "repository": "dwg-writer public committed LibreDWG fixture",
+    "inputPath": "/Users/dli/dev/dwg-writer/tests/fixtures/committed/libredwg/atmos_dc22s_2007.dwg",
+    "inputSha256": "0e3eccc70ea6b82120c77449bb1d1d27ee280a1ed1c0f2e88e31b1db503ca66f",
+    "version": "AC1021",
+    "selectedHandles": {
+      "solid": "0x452",
+      "history": "0x453",
+      "evaluationGraph": "0x454",
+      "torus": "0x455"
+    },
+    "inlineSabBytes": 1059,
+    "target": "AC1024 SAT v1"
+  },
+  "independentParser": {
+    "repository": "https://github.com/jmplonka/InventorLoader",
+    "revision": "e94bdf5e29052a0dc7ce6fdf755e956ae507caec",
+    "commitDate": "2024-12-17T15:15:05Z",
+    "parserFile": "Acis.py",
+    "parserFileSha256": "ec84f9528355f0df2e28bd94eecf7d9e4be89c5b9f7a77eef9b9cccbc21366bb",
+    "parserEntry": "AcisReader.readText, then SurfaceTorus.set on the parsed torus-surface record",
+    "harness": "/private/tmp/acsh-semantic-probe/parse_inventorloader_sat.py",
+    "harnessSha256": "b4689f2e19532e5ca1376bc71e55baa3b816cd0ae97af2c43aab8b977c11ef15",
+    "isolation": "The scratch harness stubs FreeCAD, Part and importer utility imports needed for module initialization. The parser and SurfaceTorus field decoder run from the pinned external Acis.py source. No Part shape construction or kernel operation is invoked.",
+    "limitations": [
+      "This is parser and field decoding evidence only, not a native FreeCAD import or B-rep validity check.",
+      "InventorLoader constructs geometry through FreeCAD Part/OpenCASCADE and therefore does not provide an independent kernel oracle.",
+      "The repository documents unsupported blending surfaces, helix surfaces for lines, and some law-defined curves/surfaces."
+    ]
+  },
+  "initialDefect": {
+    "outputBytes": 909,
+    "outputSha256": "5d82bceb0e931e4ac2c11a86fa5706e9621567990bdcaf200d607ed0a46ba7b0",
+    "initialTorusText": "torus-surface ... forward_v F F F F F #",
+    "observed": "InventorLoader read all 14 records and one body, but SurfaceTorus.set failed while decoding a range with ValueError: could not convert string to float: F.",
+    "cause": "The SAB-to-SAT converter emitted every false torus-surface boolean as F, including four range-kind bits. InventorLoader's independent RANGE table maps a finite F range to a following numeric bound; false range-kind bits map to I."
+  },
+  "implementation": {
+    "change": "The SAT converter now preserves torus-surface boolean ordinal. The first boolean emits forward_v/reverse_v. The next four emit I for false or F for true, leaving subsequent numeric bound tokens in order. Unknown additional booleans fail closed.",
+    "generatedControls": "The focused fast CTest covers forward/reverse sense, full-range I I I I, and a finite U-start F 0.25 I I I output. No DWG/DXF fixture was added.",
+    "correctedOutput": {
+      "bytes": 917,
+      "sha256": "c31590592694a817bd5c67a133f729f37cd010d6e23132029d5f342a96d448ed",
+      "torusText": "torus-surface ... forward_v I I I I #"
+    }
+  },
+  "correctedParserResult": {
+    "command": "python3 /private/tmp/acsh-semantic-probe/parse_inventorloader_sat.py /private/tmp/acsh-semantic-probe/torus-fixed.sat",
+    "readText": true,
+    "parsedRecords": 14,
+    "bodyRecords": 1,
+    "typedTorus": {
+      "recordIndex": 11,
+      "centerRoundedBySatV1": [
+        1383.62,
+        418.5,
+        1158.76
+      ],
+      "axisRoundedBySatV1": [
+        -0.501424,
+        -1.6431677767887314e-16,
+        -0.865202
+      ],
+      "majorRadius": 19.0,
+      "minorRadius": 2.78998,
+      "uOriginRoundedBySatV1": [
+        -0.865202,
+        -3.89454e-17,
+        0.501424
+      ],
+      "sense": "forward_v",
+      "uRange": "I I",
+      "vRange": "I I"
+    },
+    "geometryConstructed": false
+  },
+  "writerValidation": {
+    "build": "cmake --build build --target libdxfrw_dwg_local_roundtrip -j4 — PASS",
+    "focusedCtest": "ctest --test-dir build -R '^(acis_sab21200_sat_v1_token_controls|dxf_acsh_torus_typed_roundtrip|dxf_acsh_cmc_loss_guard)$' --output-on-failure — 3/3 PASS",
+    "physicalSourceProbe": "python3 tools/research/run_acsh_torus_source_probe.py <hash-pinned DWG> /private/tmp/acsh-sab-mapping-probe --probe build/libdxfrw_dwg_local_roundtrip — PASS; selected AC1024 ASCII/Binary carrier and graph-role readback, rollback/retry, and strict full-source refusal at the separate IMAGEDEF owner-role gate.",
+    "diffCheck": "git diff --check — PASS",
+    "fixturesAdded": 0,
+    "fullSuites": "NOT RUN"
+  },
+  "nativeRuntime": {
+    "freecad": "/Applications/FreeCAD.app/Contents/MacOS/FreeCAD",
+    "cli": "/Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd",
+    "cliResult": "ABORTED_BEFORE_MACRO_EXECUTION",
+    "stderr": "Incompatible processor. This Qt build requires the following features: neon",
+    "computerUse": "Native apps inventory reports the Mac is locked; no GUI FreeCAD import or geometry metrics were collected.",
+    "supportClaimEffect": "none"
+  },
+  "remaining": [
+    "Run the exact emitted SAT payload with pinned InventorLoader in a usable native FreeCAD runtime; collect shape validity, topology, placement, bounds, area, volume and centroid.",
+    "Obtain a genuinely independent-kernel and source-native check for the exact solid/history graph.",
+    "Keep the AC1024/1027/1032 profiles, whole-source IMAGEDEF/opaque-frame gates, and broader consumer/platform qualification separate."
+  ]
+}

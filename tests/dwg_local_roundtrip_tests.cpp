@@ -18416,6 +18416,7 @@ bool runAcisSab21200SatV1Controls() {
             sab.push_back(static_cast<std::uint8_t>(bits >> shift));
     };
     putDouble(1.0); putDouble(0.1); putDouble(0.01);
+    const std::vector<std::uint8_t> torusHeader = sab;
 
     putString(13u, "body");
     sab.push_back(2u); sab.push_back(0xFFu); // signed char -1
@@ -18454,6 +18455,84 @@ bool runAcisSab21200SatV1Controls() {
         "body -1 4660 1.5 3 xyz ab cde $-7 I F { } #\n"
         "End-of-ACIS-data \n";
     if (sat != std::vector<std::uint8_t>(expected.begin(), expected.end()))
+        return false;
+
+    const auto makeTorusSat = [&torusHeader](bool reverseV, bool finiteUStart,
+                                             std::string& output) {
+        std::vector<std::uint8_t> torus = torusHeader;
+        const auto putU32 = [&torus](std::uint32_t value) {
+            for (unsigned shift = 0; shift < 32u; shift += 8u)
+                torus.push_back(static_cast<std::uint8_t>(value >> shift));
+        };
+        const auto putDouble = [&torus](double value) {
+            torus.push_back(6u);
+            std::uint64_t bits = 0u;
+            std::memcpy(&bits, &value, sizeof(value));
+            for (unsigned shift = 0; shift < 64u; shift += 8u)
+                torus.push_back(static_cast<std::uint8_t>(bits >> shift));
+        };
+        const auto putVector = [&torus](std::uint8_t tag,
+                                        double x, double y, double z) {
+            torus.push_back(tag);
+            for (double value : {x, y, z}) {
+                std::uint64_t bits = 0u;
+                std::memcpy(&bits, &value, sizeof(value));
+                for (unsigned shift = 0; shift < 64u; shift += 8u)
+                    torus.push_back(static_cast<std::uint8_t>(bits >> shift));
+            }
+        };
+        const auto putText = [&torus](std::uint8_t tag,
+                                     const std::string& value) {
+            torus.push_back(tag);
+            torus.push_back(static_cast<std::uint8_t>(value.size()));
+            torus.insert(torus.end(), value.begin(), value.end());
+        };
+        putText(13u, "torus-surface");
+        for (unsigned reference = 0u; reference < 3u; ++reference) {
+            torus.push_back(12u);
+            putU32(std::numeric_limits<std::uint32_t>::max());
+        }
+        putVector(19u, 1.0, 2.0, 3.0);
+        putVector(20u, 0.0, 0.0, 1.0);
+        putDouble(19.0);
+        putDouble(2.5);
+        putVector(20u, 1.0, 0.0, 0.0);
+        torus.push_back(reverseV ? 10u : 11u);
+        if (finiteUStart) {
+            torus.push_back(10u); // finite U start
+            putDouble(0.25);
+        } else {
+            torus.push_back(11u); // indefinite U start
+        }
+        torus.insert(torus.end(), {11u, 11u, 11u});
+        torus.push_back(17u); // record terminator
+        torus.insert(torus.end(), {0x0Eu,0x03u,'E','n','d',
+                                   0x0Eu,0x02u,'o','f',
+                                   0x0Eu,0x04u,'A','C','I','S',
+                                   0x0Du,0x04u,'d','a','t','a'});
+        std::vector<std::uint8_t> converted;
+        if (!drw_convertSabToSatV1(torus.data(), torus.size(),
+                                   DRW::AC1024, converted))
+            return false;
+        output.assign(converted.begin(), converted.end());
+        return true;
+    };
+    std::string fullTorusSat;
+    std::string finiteTorusSat;
+    std::string reverseTorusSat;
+    if (!makeTorusSat(false, false, fullTorusSat)
+        || !makeTorusSat(false, true, finiteTorusSat)
+        || !makeTorusSat(true, false, reverseTorusSat))
+        return false;
+    const std::string torusRecordPrefix =
+        "torus-surface $-1 $-1 $-1 1 2 3 0 0 1 19 2.5 1 0 0 forward_v ";
+    if (fullTorusSat.find(torusRecordPrefix + "I I I I #\n")
+            == std::string::npos
+        || finiteTorusSat.find(torusRecordPrefix + "F 0.25 I I I #\n")
+            == std::string::npos
+        || reverseTorusSat.find(
+               "torus-surface $-1 $-1 $-1 1 2 3 0 0 1 19 2.5 1 0 0 reverse_v I I I I #\n")
+            == std::string::npos)
         return false;
 
     std::vector<std::uint8_t> preserved{0xA5u, 0x5Au};
