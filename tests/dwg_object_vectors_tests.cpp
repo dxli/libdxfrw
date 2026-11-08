@@ -8629,6 +8629,31 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             table.m_content.m_columns.push_back(DRW_TableColumn{});
         });
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects an unencoded column name without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_columns.front().m_name = "NamedColumn";
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects an unencoded cell style ID without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_cells.front().m_styleId = 2;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects a cell text-style override handle without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_cells.front()
+                .m_textStyleOverrideHandle = 0xA801u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects retained SEQEND metadata without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.seqEndEntity = std::make_shared<DRW_SeqEnd>();
+        });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects incomplete semantic content without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {

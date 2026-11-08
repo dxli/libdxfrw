@@ -13654,7 +13654,8 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
     if (version != DRW::AC1018 || buf == nullptr || strBuf != nullptr
         || oType < 500 || handle == 0 || blockRecH.ref == 0
         || m_tableStyleHandle == 0 || !attribHandles.empty()
-        || seqendH.ref != DRW::NoHandle || colcount != 1 || rowcount != 1
+        || seqendH.ref != DRW::NoHandle || seqEndEntity != nullptr
+        || colcount != 1 || rowcount != 1
         || colspace != 0.0 || rowspace != 0.0 || !extData.empty()
         || !proxyGraphics.empty() || reactorHandles.size() != 0u
         || (m_ownerBlockRecordHandle != 0u
@@ -13723,13 +13724,15 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
     const DRW_TableColumn& column = m_content.m_columns.front();
     const DRW_TableRow& row = m_content.m_rows.front();
     const DRW_TableCell& cell = row.m_cells.front();
-    if (!std::isfinite(column.m_width) || column.m_width <= 0.0
+    if (!column.m_name.empty()
+        || !std::isfinite(column.m_width) || column.m_width <= 0.0
         || !std::isfinite(row.m_height) || row.m_height <= 0.0
         || cell.m_type != 1 || cell.m_edgeFlags != 0
         || cell.m_isMerged || cell.m_autoFit
         || cell.m_mergedWidth != 1 || cell.m_mergedHeight != 1
         || !std::isfinite(cell.m_rotation) || cell.m_rotation != 0.0
         || cell.m_valueHandle != 0u || cell.m_textStyleHandle != 0u
+        || cell.m_textStyleOverrideHandle != 0u || cell.m_styleId != 0
         || cell.m_blockHandle != 0u || !cell.m_attributes.empty()
         || cell.m_flags != 0 || cell.m_overrideStyleType != 1
         || !cell.m_toolTip.empty() || !cell.m_textStyleName.empty()

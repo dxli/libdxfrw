@@ -2485,6 +2485,12 @@ override markers, unsupported content-override kinds, retained geometry
 coordinates, and typed value variants. This is encoder/parser
 self-consistency evidence only: covered refusal paths are still not a proof
 that every public-model field or every low-level emission failure is guarded.
+A subsequent model-to-encoder audit found four states the generated codec had
+silently ignored: column name, cell base style ID, cell text-style override
+handle, and retained SEQEND metadata. The direct AC1018 codec now rejects each
+before writing, and the focused matrix confirms buffer preservation. This
+closes those specific omission paths; continue auditing the public model and
+private retained DXF state before widening the profile.
 The direct encoder now builds both streams in private copies, catches emission
 exceptions, and swaps the staged buffers into the caller only when both are
 good. A generated successful append preserves pre-existing body and handle

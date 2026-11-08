@@ -143,7 +143,11 @@
       "lineweight override marker",
       "unsupported content-override kind",
       "retained cell geometry coordinates",
-      "retained typed value variant"
+      "retained typed value variant",
+      "nonempty column name omitted by current body mapping",
+      "nondefault cell base style ID omitted by current body mapping",
+      "cell text-style override handle omitted by current body mapping",
+      "retained SEQEND metadata omitted by current body mapping"
     ],
     "assertions": [
       "Each rejected model leaves pre-seeded entity-body and handle buffers at their original bit counts.",
@@ -151,9 +155,10 @@
       "A successful direct encode appends to pre-seeded body and handle buffers without replacing their existing byte prefixes.",
       "The parser refuses a generated frame whose declared body ends one bit before the encoded body end.",
       "The parser refuses a generated frame with its trailing handle stream omitted.",
-      "The expanded cases preserve pre-seeded output buffers on refusal; null-body refusal leaves the handle buffer empty."
+      "The expanded cases preserve pre-seeded output buffers on refusal; null-body refusal leaves the handle buffer empty.",
+      "Each newly discovered unencoded model state is refused before output-buffer mutation."
     ],
-    "disposition": "Expanded generated preflight coverage, representative parser truncation, atomic append, and corrected retry. The matrix is still not proven exhaustive for every public-model field or injected low-level emission failure. Physical source-to-output comparison and compound graph rollback remain open; this does not establish production output support."
+    "disposition": "Generated preflight coverage includes model fields found by the latest encoder audit, representative parser truncation, atomic append, and corrected retry. This is not proof that every public/private retained field or injected low-level emission failure is covered. Physical source-to-output and compound graph evidence remain open."
   },
   "generated_ac1018_class_identity_registration_control": {
     "generatedFromScratch": true,
@@ -285,5 +290,31 @@
       "Require table-count preservation, exact content-reference role closure, and an independent reader/producer or native platform check before promoting support."
     ],
     "disposition": "Risk evidence and gate refinement only; not a codec specification or physical AC1018 witness."
+  },
+  "latest_model_guard_audit": {
+    "date": "2026-11-08",
+    "result": "PASS",
+    "fields": [
+      {
+        "field": "DRW_TableColumn::m_name",
+        "reason": "The candidate body does not serialize this column metadata."
+      },
+      {
+        "field": "DRW_TableCell::m_styleId",
+        "reason": "The candidate body does not serialize the cell base style ID."
+      },
+      {
+        "field": "DRW_TableCell::m_textStyleOverrideHandle",
+        "reason": "The candidate body does not serialize this handle reference."
+      },
+      {
+        "field": "DRW_Insert::seqEndEntity",
+        "reason": "Retained SEQEND metadata is outside the one-frame candidate body."
+      }
+    ],
+    "implementation": "src/drw_entities.cpp: DRW_Table::encodeDwg refuses these states during bounded preflight.",
+    "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
+    "assertion": "Each generated refusal preserves pre-seeded body and handle buffers.",
+    "disposition": "Closes only these four omission paths for the direct generated AC1018 codec. Continue auditing remaining public fields and private retained DXF data; no output support claim."
   }
 }
