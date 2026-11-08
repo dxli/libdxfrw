@@ -30,6 +30,41 @@
     },
     "result": "GUI folder progress reported Done and produced one same-version output. This is the first successful retry through a materially changed GUI invocation route after repeated direct CLI Pasteboard/XPC aborts."
   },
+  "repeatGuiRun": {
+    "inputSha256": "3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42",
+    "settings": "Same ODA File Converter 27.1 GUI route, ACAD2013/AC1027 DWG, recursion disabled, audit disabled, fresh output directory.",
+    "output": {
+      "path": "/private/tmp/oda-cover-gui-repeat/out/Cover.dwg",
+      "sha256": "540fe029c5653e276e161991ab2b83249f348cbd874d01e675220089c822a717",
+      "bytes": 19274,
+      "version": "AC1027"
+    },
+    "header": {
+      "pageHeaderFileOffset": 16832,
+      "compressedDataOffset": 16864,
+      "compressedBytes": 1546,
+      "logicalSectionBytes": 1583,
+      "sectionSha256": "3b0c312ed63e65dcebb9ea0fa2234c407abc43e3007d0912b35815a4aca93194",
+      "declaredSize": 802,
+      "payloadEnd": 826,
+      "storedCrc16": 48993,
+      "trailerEnd": 844,
+      "unclaimedSuffixBytes": 739,
+      "suffixSha256": "f8325471d6b2920146e35d1b7a1c33a234402c3d2abb9cad05f7bafd31991125"
+    },
+    "suffixComparison": {
+      "firstGuiSuffixSha256": "438943893bbd6715f17a0f5a5e32d5b4519658a341e503805120c635270b70c0",
+      "lengthBytes": 739,
+      "identicalBytePositions": 0,
+      "xorBitCounts": {"bit0": 0, "bit1": 0, "bit2": 0, "bit3": 739, "bit4": 390, "bit5": 343, "bit6": 314, "bit7": 390},
+      "interpretation": "The low three bits match at every position while the upper bits differ. This is a two-output byte pattern only; it does not identify field boundaries, encoding, semantic meaning, or safe omission."
+    },
+    "reader": {
+      "log": "/private/tmp/oda-cover-gui-repeat/roundtrip.log",
+      "logSha256": "9fd532a8b4dafda514f8bd62d3648830c87d9fcb92047ca42a314aaa36382199",
+      "result": "119/119 observed frames published with zero entity/object parse failures and zero CRC/DataStorage failures; strict DXF output refused at the independent AC1027 source-reference gate."
+    }
+  },
   "headerExtraction": {
     "method": "Use tools/probe_modern_header_source.cpp and the current dwgCompressor to decompress the physical AcDb:Header data page; trim only to the logical section length reported by the current dwgReader27 envelope parser; validate the envelope with tools/audit_ac1027_header_suffix_compare.py.",
     "extractorSourceSha256": "de7c7af173f12902944c0fbae6c4355d7947857f0da4719edf0c5a85854d7d6d",
@@ -69,7 +104,7 @@
     "strictOutput": "Refused before output preparation because AC1027 DWG source references are not fully qualified. No DXF was published."
   },
   "decision": {
-    "finding": "The GUI route successfully reproduces the same-version resave and the 739-byte unclaimed HEADER suffix. The new suffix hash differs from prior captures; no suffix meaning, byte-role, padding, or semantic-preservation conclusion follows.",
+    "finding": "Two same-version GUI resaves independently reproduce the 739-byte unclaimed HEADER suffix and have different output/suffix hashes. Their suffixes have no identical byte positions, but the low three bits match at all positions. This pattern does not establish suffix meaning, byte roles, padding, or semantic preservation.",
     "remaining": "Keep the suffix unclaimed and strict output refused. The separate AC1027 source-reference guard also remains; this resave does not resolve or bypass it.",
     "fixturesAdded": 0,
     "supportClaimsPromoted": 0
