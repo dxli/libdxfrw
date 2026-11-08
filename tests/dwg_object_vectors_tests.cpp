@@ -8354,6 +8354,10 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1018,
         [](TableDwgCodecProbe& table) { table.m_tableStyleHandle = 0u; });
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects a missing entity handle without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.handle = 0u; });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects invalid grid counts and spacing without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
@@ -8486,6 +8490,12 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             table.m_hasTableBorderVisibilityOverrides[0] = true;
         });
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects lineweight override markers without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_hasTableBorderLineweightOverrides[0] = true;
+        });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects table-content metadata without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
@@ -8506,6 +8516,12 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         [](TableDwgCodecProbe& table) {
             table.m_content.m_columns.front().m_overrideStyleType = 1;
             table.m_content.m_rows.front().m_overrideStyleType = 1;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects unsupported content override kind without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_overrideStyleType = 3;
         });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects block-valued cells without writing",
@@ -8556,6 +8572,13 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             table.m_content.m_rows.front().m_cells.front().m_geometryFlags = 1u;
         });
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects retained cell geometry coordinates without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_cells.front()
+                .m_geometryCenter = DRW_Coord{1.0, 2.0, 0.0};
+        });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects cell style and tooltip metadata without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
@@ -8591,6 +8614,13 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                 .m_contents.front().m_type = 2;
         });
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects retained typed value variants without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_cells.front()
+                .m_contents.front().m_value.m_value = DRW_Variant(90, 7);
+        });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects non-finite insertion and rotation values without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
@@ -8615,6 +8645,19 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                 std::numeric_limits<double>::infinity();
         });
 
+    TableDwgCodecProbe invalidTableClassNumber = makeEncodableAc1018Table();
+    dwgBufferW invalidClassBody;
+    dwgBufferW invalidClassHandles;
+    invalidClassBody.putBit(true);
+    invalidClassHandles.putBit(false);
+    const bool invalidClassNumberAccepted =
+        invalidTableClassNumber.encodeAsTableClass(
+            DRW::AC1018, invalidClassBody, invalidClassHandles, 499u);
+    t.expect(!invalidClassNumberAccepted
+                 && invalidClassBody.bitCount() == 1u
+                 && invalidClassHandles.bitCount() == 1u,
+             "AC1018 TABLE encoder rejects a noncustom class number without writing");
+
     TableDwgCodecProbe retryAc1018Table = makeEncodableAc1018Table();
     retryAc1018Table.m_tableOverrideFlags = 1u;
     dwgBufferW retryRejectedBody;
@@ -8628,6 +8671,29 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1018, retryBody, retryHandles);
     t.expect(retryInitiallyRefused && retryAfterCorrection,
              "same AC1018 TABLE encoder accepts a corrected model after preflight refusal");
+
+    TableDwgCodecProbe stringStreamRefusal = makeEncodableAc1018Table();
+    dwgBufferW stringStreamBody;
+    dwgBufferW stringStreamHandles;
+    dwgBufferW unexpectedStrings;
+    stringStreamBody.putRawChar8(0xA5u);
+    stringStreamHandles.putRawChar8(0x5Au);
+    const bool stringStreamAccepted = stringStreamRefusal.encodeDwg(
+        DRW::AC1018, &stringStreamBody, 0u, &unexpectedStrings,
+        &stringStreamHandles);
+    t.expect(!stringStreamAccepted
+                 && stringStreamBody.bitCount() == 8u
+                 && stringStreamBody.data().front() == 0xA5u
+                 && stringStreamHandles.bitCount() == 8u
+                 && stringStreamHandles.data().front() == 0x5Au,
+             "AC1018 TABLE codec refuses detached string stream without mutating output buffers");
+
+    TableDwgCodecProbe nullBodyRefusal = makeEncodableAc1018Table();
+    dwgBufferW nullBodyHandles;
+    t.expect(!nullBodyRefusal.encodeDwg(DRW::AC1018, nullptr, 0u, nullptr,
+                                        &nullBodyHandles)
+                 && nullBodyHandles.bitCount() == 0u,
+             "AC1018 TABLE codec refuses a null body buffer without touching handles");
 
     TableDwgCodecProbe appendAc1018Table = makeEncodableAc1018Table();
     dwgBufferW appendTableBody;

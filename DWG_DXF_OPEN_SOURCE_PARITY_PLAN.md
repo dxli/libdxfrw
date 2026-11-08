@@ -2478,9 +2478,13 @@ incomplete semantic content, and detached value handles without changing
 pre-seeded body/handle buffers; the same object succeeds after its rejected
 override is corrected. Generated parse controls also refuse a body whose
 declared span is one bit short and a frame missing its trailing handle stream.
-The focused `--table-cell-overrides` selector passes. This is encoder/parser
-self-consistency evidence only: the generated refusal matrix now covers the
-main excluded-field families but is not yet exhaustive at every guard branch.
+The focused `--table-cell-overrides` selector passes. The latest guard-matrix
+slice adds atomic refusal checks for a missing entity handle, a noncustom
+class number, detached string-stream use, a null body buffer, lineweight
+override markers, unsupported content-override kinds, retained geometry
+coordinates, and typed value variants. This is encoder/parser
+self-consistency evidence only: covered refusal paths are still not a proof
+that every public-model field or every low-level emission failure is guarded.
 The direct encoder now builds both streams in private copies, catches emission
 exceptions, and swaps the staged buffers into the caller only when both are
 good. A generated successful append preserves pre-existing body and handle
@@ -2500,8 +2504,12 @@ maps `TABLE` to `ACAD_TABLE` but classifies its implementation as
 general output claim ([LibreDWG objects.in](https://github.com/LibreDWG/libredwg/blob/master/src/objects.in#L1210-L1213)).
 The writer now has an AC1018-only registration helper that allocates a
 writer-local ordinal and resolves repeats by class identity; generated controls
-confirm identity reuse and refusal on AC1027. It is deliberately not called by
-`writeTable`, does not publish a class instance, and does not enable output.
+confirm identity reuse and refusal on AC1027. The next implementation slice is
+to serialize the registered CLASS record and TABLE instance count through the
+existing DWG writer path, then read those exact emitted fields back with an
+independent bounded control. Keep the registration helper disconnected from
+`writeTable` until that proof passes. It does not currently publish a class
+instance or enable output.
 
 Speed-oriented implementation sequence:
 
@@ -2517,8 +2525,11 @@ Speed-oriented implementation sequence:
    one bit and a frame without trailing handles. The direct codec stages both
    streams and publishes only on success; a successful append preserves seeded
    prefixes. No injected mid-emission failure has tested this rollback path.
-   Audit remaining unchecked guard branches. The production compound writer
-   still needs its own graph-level staging and atomic publication. The
+   The latest fast slice extends refusal coverage to missing entity identity,
+   noncustom class ordinals, detached string stream/null body, lineweight and
+   content override markers, retained geometry coordinates, and typed value
+   variants. Continue auditing the remaining guard branches. The production
+   compound writer still needs its own graph-level staging and atomic publication. The
    existing AC1018 traces disagree on class number (528 versus
    523), while their CLASS identity metadata agrees. An AC1018-only writer
    registration helper now allocates a local ordinal and resolves duplicates
@@ -2531,19 +2542,25 @@ Speed-oriented implementation sequence:
    retained raw subrecords, or unexplained geometry/cache state. Match every
    gate to the actual public model fields and reject anything outside that
    profile before emitting bytes.
-2. After the remaining focused refusal/atomicity controls and empirical
+2. Serialize the identity-registered AC1018 CLASS definition and increment
+   its instance count only when the matching TABLE entity is staged. Add a
+   generated output check that decodes the emitted CLASS section and verifies
+   identity, class ordinal, and instance count; ensure failed entity staging
+   leaves class metadata and counts unchanged. Keep the class helper separate
+   from public output until this passes.
+3. After the remaining focused refusal/atomicity controls and empirical
    class-map resolution, compare every encoded field against an independently bounded
    physical AC1018 plain-text TABLE body. Keep this separate from the generated
    parser/encoder self-consistency vector; if no complete source profile is
    available, retain the codec as private experimental coverage and do not
    claim physical interoperability.
-3. Add the AC1018 compound writer only after the body profile passes: preflight
+4. Add the AC1018 compound writer only after the body profile passes: preflight
    and stage the exact `*T` BLOCK/BLOCK_RECORD and TABLE ownership/reference
    graph, then publish entity plus linked records atomically. Verify with a
    locally authored from-scratch DWG control and fresh libdxfrw readback; use
    an already available independent writer/reader only if its provenance and
    exact profile are recorded. Do not commit downloaded DWG/DXF fixtures.
-4. Keep AC1021+ and AC1024+ refused until their source-bound stream/handle
+5. Keep AC1021+ and AC1024+ refused until their source-bound stream/handle
    profiles and the R24 TABLECONTENT/TABLEGEOMETRY graph are established. Add
    one version at a time with separate body, dependency, rollback/retry, and
    readback evidence. Native table rendering and broad support claims remain
