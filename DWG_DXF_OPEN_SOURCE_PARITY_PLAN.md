@@ -28,9 +28,14 @@ the destination and caller model; same-writer retries passed typed grid/value
 readback. The receipt is [here](docs/research/p6-dxf-tablecontent-objects-allocation-failure-retry-2026-11-08.json).
 The output's `m_semanticContentComplete` remains false for this minimal profile,
 so this is transaction/typed-field evidence only and does not qualify strict
-output or TABLECONTENT semantics. Next, select the next uncovered typed OBJECTS
-writer with established readback, keeping FIELD/FIELDLIST gated. Do not reopen
-swept families or promote support claims. Each slice must update its receipt and
+output or TABLECONTENT semantics. A first TABLEGEOMETRY allocation-probe
+prototype was also rejected before commit because the generated minimal object
+was refused during warm-up; it did not reach allocation injection or readback.
+Do not infer a TABLEGEOMETRY writer defect from this incomplete setup. Next,
+select the next uncovered typed OBJECTS writer from an existing passing
+readback profile, and use its established owner/dependency setup instead of
+inventing another minimal graph. Keep FIELD/FIELDLIST gated. Do not reopen swept
+families or promote support claims. Each slice must update its receipt and
 checkpoint, commit implementation with evidence, then report the commit and
 next ready slice.
 
