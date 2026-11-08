@@ -9210,6 +9210,51 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                      ? "Shared common-entity encoder rejects stale APPID writer refs before writing"
                      : "Shared common-entity encoder rejects stale LAYER writer refs before writing");
     }
+    const auto checkCommonAppData = [&](
+            std::list<std::list<DRW_Variant>> appData,
+            std::vector<std::uint32_t> reactors, std::uint32_t xDictionary,
+            bool expected) {
+        CommonEntityHandleCodecProbe common;
+        common.setCommonHandleState(0xA501u, DRW::DwgLayer0Handle,
+                                    0u, 0u, 0u, 0u);
+        common.appData = std::move(appData);
+        common.reactorHandles = std::move(reactors);
+        common.xDictHandle = xDictionary;
+        dwgBufferW output;
+        output.putBit(true);
+        const std::uint64_t before = output.bitCount();
+        const bool encoded = common.encodeCommonData(DRW::AC1018, output);
+        return encoded == expected
+            && (expected ? output.bitCount() > before
+                         : output.bitCount() == before);
+    };
+    t.expect(checkCommonAppData(
+                 {{{102, std::string("ACAD_REACTORS")},
+                   {330, std::string("A501")},
+                   {102, std::string("}")}},
+                  {{102, std::string("ACAD_XDICTIONARY")},
+                   {360, std::string("A502")},
+                   {102, std::string("}")}}},
+                 {0xA501u}, 0xA502u, true),
+             "Shared common-entity encoder maps matching reactor and xdictionary appData");
+    t.expect(checkCommonAppData(
+                 {{{102, std::string("CUSTOM_APP")},
+                   {1, std::string("opaque metadata")},
+                   {102, std::string("}")}}},
+                 {}, 0u, false),
+             "Shared common-entity encoder refuses unmodeled appData before writing");
+    t.expect(checkCommonAppData(
+                 {{{102, std::string("ACAD_REACTORS")},
+                   {330, std::string("A503")},
+                   {102, std::string("}")}}},
+                 {0xA501u}, 0u, false),
+             "Shared common-entity encoder refuses reactor appData that disagrees with the modeled handles");
+    t.expect(checkCommonAppData(
+                 {{{102, std::string("ACAD_XDICTIONARY")},
+                   {330, std::string("A502")},
+                   {102, std::string("}")}}},
+                 {}, 0xA502u, false),
+             "Shared common-entity encoder refuses xdictionary appData with the wrong group-code role");
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects unencoded DXF application groups without writing",
         DRW::AC1018,

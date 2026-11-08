@@ -46,6 +46,75 @@
 
 namespace {
 thread_local const ScopedDwgLegacyEntityLinks* g_legacyEntityLinks = nullptr;
+
+bool readDwgRepresentableAppDataHandle(const DRW_Variant& value,
+                                       int expectedCode,
+                                       std::uint32_t& handle) {
+    if (value.code() != expectedCode || value.type() != DRW_Variant::STRING
+        || value.content.s == nullptr || value.content.s->empty())
+        return false;
+    const std::string& text = *value.content.s;
+    const auto parsed = std::from_chars(text.data(), text.data() + text.size(),
+                                        handle, 16);
+    return parsed.ec == std::errc{} && parsed.ptr == text.data() + text.size();
+}
+
+bool hasOnlyDwgRepresentableAppData(const DRW_Entity& entity) {
+    if (entity.appData.empty())
+        return true;
+
+    std::vector<std::uint32_t> parsedReactors;
+    bool sawXDictionary = false;
+    for (const auto& group : entity.appData) {
+        if (group.size() < 2u)
+            return false;
+        auto field = group.cbegin();
+        if (field->code() != 102 || field->type() != DRW_Variant::STRING
+            || field->content.s == nullptr)
+            return false;
+        const std::string& opener = *field->content.s;
+        ++field;
+
+        if (opener == "ACAD_REACTORS") {
+            bool closed = false;
+            for (; field != group.cend(); ++field) {
+                if (field->code() == 102
+                    && field->type() == DRW_Variant::STRING
+                    && field->content.s != nullptr
+                    && *field->content.s == "}") {
+                    closed = std::next(field) == group.cend();
+                    break;
+                }
+                std::uint32_t handle = 0u;
+                if (!readDwgRepresentableAppDataHandle(*field, 330, handle))
+                    return false;
+                if (handle != 0u)
+                    parsedReactors.push_back(handle);
+            }
+            if (!closed)
+                return false;
+        } else if (opener == "ACAD_XDICTIONARY") {
+            if (sawXDictionary)
+                return false;
+            sawXDictionary = true;
+            if (field == group.cend())
+                return false;
+            std::uint32_t handle = 0u;
+            if (!readDwgRepresentableAppDataHandle(*field, 360, handle))
+                return false;
+            ++field;
+            if (field == group.cend() || field->code() != 102
+                || field->type() != DRW_Variant::STRING
+                || field->content.s == nullptr || *field->content.s != "}"
+                || std::next(field) != group.cend()
+                || handle != entity.xDictHandle)
+                return false;
+        } else {
+            return false;
+        }
+    }
+    return parsedReactors == entity.reactorHandles;
+}
 }
 
 ScopedDwgLegacyEntityLinks::ScopedDwgLegacyEntityLinks(
@@ -6300,6 +6369,7 @@ bool DRW_Entity::encodeDwgCommon(DRW::Version version, dwgBufferW *buf,
         || (extData.empty()
             && (!dwgEedAppIdWriteRefs.empty()
                 || !dwgEedLayerWriteRefs.empty()))
+        || !hasOnlyDwgRepresentableAppData(*this)
         || (version != DRW::AC1015 && version != DRW::AC1018
             && version != DRW::AC1021 && version != DRW::AC1024
             && version != DRW::AC1027 && version != DRW::AC1032))

@@ -2590,11 +2590,16 @@ ordinary LTYPE handles before encoding. `dwgWriter15` now keeps those states
 implicit, and the TABLE preflight rejects contradictory caller-supplied
 linetype handles or mismatched raw flag/name pairs; the focused frame test
 checks the BYLAYER state survives class registration and encoding. The latest
-public-model audit also found DXF `appData` groups have no corresponding AC1018 TABLE body
-encoding (the common writer serializes EED from `extData`, not arbitrary group
-102 application data); the bounded profile now refuses nonempty `appData` and
-the focused vector confirms atomic refusal. This is a loss-prevention guard,
-not proof that arbitrary group 102 data has a DWG semantic mapping.
+public-model audit also found DXF `appData` groups have no general DWG serializer.
+The shared common encoder now admits only canonical `ACAD_REACTORS` and
+`ACAD_XDICTIONARY` wrappers whose handle values and group-code roles exactly
+match the separately encoded common references; arbitrary, malformed, or
+mutated groups fail before common output is written. Generated controls cover
+matching groups, opaque group refusal, handle mismatch, and wrong XDictionary
+group-code role. The narrower TABLE profile continues to refuse all nonempty
+`appData` because its selected model covers no common application groups.
+This preserves known common references without claiming a mapping for other
+group-102 application data.
 The retained-state audit found one more edge case: an unsupported group 97/98/4
 can mark DXF parsing incomplete before the TABLE grid exists, so the public
 `m_hasSemanticContent` flag is still false. The encoder now checks its private

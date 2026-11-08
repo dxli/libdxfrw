@@ -430,7 +430,7 @@
       },
       {
         "field": "DRW_Entity::appData",
-        "reason": "The common DWG writer encodes EED from extData but has no serializer for arbitrary DXF group-102 application-data groups; the bounded TABLE codec refuses them rather than silently dropping them."
+        "reason": "The common encoder admits only canonical ACAD_REACTORS/ACAD_XDICTIONARY wrappers matching the separately emitted common references; arbitrary, malformed, or mutated group-102 application data is refused before writing. The bounded TABLE profile rejects all appData because it has no application-group model."
       },
       {
         "field": "DRW_Entity EED resolution vectors",
@@ -449,9 +449,9 @@
         "reason": "DRW_Table's public entity tag can be mutated independently of its dynamic type; a non-TABLE tag conflicts with TABLE class registration and is refused."
       }
     ],
-    "implementation": "src/drw_entities.cpp: shared encodeDwgEed/encodeDwgCommon reject stale EED-resolution state, while DRW_Table::encodeDwg refuses its other listed public and retained states during bounded preflight, including arbitrary DXF appData, pre-grid parser incompleteness, retained BLOCK_RECORD wire metadata, and mutated entity type; src/intern/dwgwriter15.cpp leaves BYLAYER/BYBLOCK/CONTINUOUS implicit during name-to-handle resolution.",
+    "implementation": "src/drw_entities.cpp: shared encodeDwgCommon validates canonical appData wrappers against modeled reactor/xdictionary references and shared encodeDwgEed/encodeDwgCommon reject stale EED-resolution state; DRW_Table::encodeDwg refuses its other listed public and retained states during bounded preflight, including arbitrary DXF appData, pre-grid parser incompleteness, retained BLOCK_RECORD wire metadata, and mutated entity type; src/intern/dwgwriter15.cpp leaves BYLAYER/BYBLOCK/CONTINUOUS implicit during name-to-handle resolution.",
     "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
-    "assertion": "Generated refusal cases preserve pre-seeded body and handle buffers, including shared writer/helper refusals for stale EED-resolution vectors, unsupported pre-grid DXF metadata, and each retained BLOCK_RECORD wire metadata field.",
+    "assertion": "Generated controls verify canonical common appData acceptance only when handles/roles match, atomic refusal of unsupported or mutated groups, and preseeded-buffer preservation for stale EED-resolution vectors, pre-grid DXF metadata, and retained BLOCK_RECORD wire metadata.",
     "disposition": "Closes only the enumerated omission and malformed-state paths for the direct generated AC1018 codec. Continue auditing remaining public fields and private retained DXF state; no output support claim."
   },
   "generated_ac1018_entity_frame_commit_rollback_control": {
