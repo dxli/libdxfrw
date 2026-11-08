@@ -37761,19 +37761,42 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
             firstCustomStyle.m_contentFormat;
         const std::uint8_t savedMethod = format.m_contentColorCmc.m_method;
         format.m_contentColorCmc.m_method = 0u;
-        if (writer.fileExport(output.string(), DRW::AC1024, binary,
-                              &data, false)
-            || !destinationIsSentinel())
-            return fail("R24 TABLESTYLE accepted RGB metadata with a non-C2 CMC method or replaced the destination");
-        format.m_contentColorCmc.m_method = savedMethod;
+        if (!writer.fileExport(output.string(), DRW::AC1024, binary,
+                               &data, false))
+            return fail("R24 TABLESTYLE rejected method-zero RGB that DXF can normalize to C2");
+        dx_data normalizedColorReadback;
+        dx_iface normalizedColorReader;
+        if (!normalizedColorReader.fileImport(output.string(),
+                &normalizedColorReadback, false)
+            || normalizedColorReadback.tableStyles.size() != 1u
+            || normalizedColorReadback.tableStyles.front().m_cellStyles.empty())
+            return fail("R24 TABLESTYLE method-zero RGB normalization did not read back");
+        const DRW_TableStyleContentFormat& normalizedContent =
+            normalizedColorReadback.tableStyles.front().m_cellStyles.front()
+                .m_contentFormat;
+        if (normalizedContent.m_contentColorCmc.m_rgb
+                != format.m_contentColorCmc.m_rgb
+            || normalizedContent.m_contentColorCmc.m_name
+                != format.m_contentColorCmc.m_name
+            || normalizedContent.m_contentColorCmc.m_bookName
+                != format.m_contentColorCmc.m_bookName
+            || normalizedContent.m_contentColorCmc.m_method != 0xC2u)
+            return fail("R24 TABLESTYLE method-zero RGB did not normalize to typed C2 with the same color data");
 
         const int savedRgbForBook = format.m_contentColorCmc.m_rgb;
+        if (!destinationIsSentinel()) {
+            std::ofstream prior(output, std::ios::binary | std::ios::trunc);
+            if (!prior || !(prior << sentinel))
+                return fail("could not seed TABLESTYLE book-only refusal destination");
+        }
+        format.m_contentColorCmc.m_method = 0u;
         format.m_contentColorCmc.m_rgb = -1;
         if (writer.fileExport(output.string(), DRW::AC1024, binary,
                               &data, false)
             || !destinationIsSentinel())
             return fail("R24 TABLESTYLE accepted a color-book name without its truecolor base or replaced the destination");
         format.m_contentColorCmc.m_rgb = savedRgbForBook;
+        format.m_contentColorCmc.m_method = savedMethod;
 
         const int savedRgb = format.m_contentColorCmc.m_rgb;
         format.m_contentColorCmc.m_rgb = 0x1000000;
@@ -71487,7 +71510,9 @@ bool cellStyleMapDxfWriter() {
         custom.m_backgroundColorCmc.m_rgb = 0xDADADA;
         custom.m_backgroundColorCmc.m_name = "Cloud White";
         custom.m_backgroundColorCmc.m_bookName = "Generated Background";
-        custom.m_backgroundColorCmc.m_method = 0xC2u;
+        // DXF carries the RGB and book name, so the absent source method is
+        // normalized to C2 by the parser on readback.
+        custom.m_backgroundColorCmc.m_method = 0u;
         custom.m_backgroundColorCmc.m_flags = 0x03u;
         custom.m_contentLayout = 1u;
         DRW_TableStyleContentFormat& format = custom.m_contentFormat;
@@ -71631,19 +71656,15 @@ bool cellStyleMapDxfWriter() {
             writer.first.m_cellStyles.front().m_contentFormat;
         const std::uint8_t savedContentMethod =
             firstContent.m_contentColorCmc.m_method;
-        firstContent.m_contentColorCmc.m_method = 0u;
-        if (writer.fileExport(output.string(), DRW::AC1027, binary,
-                              &source, false)
-            || !refusalDestinationIsPreserved())
-            return fail("CELLSTYLEMAP accepted RGB metadata with a non-C2 method or replaced the destination");
-        firstContent.m_contentColorCmc.m_method = savedContentMethod;
         const int savedContentRgb = firstContent.m_contentColorCmc.m_rgb;
+        firstContent.m_contentColorCmc.m_method = 0u;
         firstContent.m_contentColorCmc.m_rgb = -1;
         if (writer.fileExport(output.string(), DRW::AC1027, binary,
                               &source, false)
             || !refusalDestinationIsPreserved())
-            return fail("CELLSTYLEMAP accepted a color-book name without its RGB base or replaced the destination");
+            return fail("CELLSTYLEMAP accepted a method-zero color-book name without an RGB base or replaced the destination");
         firstContent.m_contentColorCmc.m_rgb = savedContentRgb;
+        firstContent.m_contentColorCmc.m_method = savedContentMethod;
         if (!writer.fileExport(output.string(), DRW::AC1027, binary,
                                &source, false) || !writer.emitted)
             return fail(binary

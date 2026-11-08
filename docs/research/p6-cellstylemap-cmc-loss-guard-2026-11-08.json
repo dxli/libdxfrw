@@ -4,8 +4,8 @@
   "status": "bounded-generated-profile",
   "evidence": {
     "source": "DXF CELLSTYLEMAP serializer and parser group-62/420/430 path; generated local graph only.",
-    "change": "Method-zero CMC is restricted to scalar group-62 output. RGB, color-name, and color-book extensions require the C2 truecolor profile with a valid RGB base. Color-book string assembly catches allocation exceptions and fails the record transaction.",
-    "control": "The existing generated CELLSTYLEMAP ASCII/Binary graph already exercises background, content, and border RGB/book/name values and exact group order with fresh typed readback. It now additionally tests method-zero-with-RGB and C2-book-without-RGB refusal, preserving a destination sentinel and retrying the same adapter after correcting both states.",
+    "change": "DXF has no CMC method field. Method-zero CMC with RGB and optional color names/books is emitted through groups 420/430 and canonicalizes to method C2 on readback. A color-book/name value without an RGB base remains refused. Color-book string assembly catches allocation exceptions and fails the record transaction.",
+    "control": "The existing generated CELLSTYLEMAP ASCII/Binary graph exercises background, content, and border RGB/book/name values and exact group order with fresh typed readback; its background starts with method zero and proves normalization to C2. A method-zero content color-book value without RGB is refused, preserving a destination sentinel; corrected same-adapter retry succeeds.",
     "fixture_policy": "No DWG/DXF fixtures were added. The test graph and output are generated locally; output is removed after the test."
   },
   "validation": {
@@ -17,8 +17,8 @@
     "result": "passed; focused CTest 1/1"
   },
   "source_sha256": {
-    "src/libdxfrw.cpp": "8f98df129c75f8a0722acc304d838b62aa6e2f5a09b199e69b8fdaf0e09e31a8",
-    "tests/dwg2dxf_adapter_tests.cpp": "525a2d11a33b78870acc36e27fa009f6a3089cc9eb428d68dbed4d7f6b8b21bc"
+    "src/libdxfrw.cpp": "fd7498be4d71679c3f44e6ec3106243992e535e643211b10cbba1608b80d320a",
+    "tests/dwg2dxf_adapter_tests.cpp": "a48af733f5710dd9ff1cf844882fd485e896c6f2783809168f9e53a04d182530"
   },
   "qualification_limits": [
     "No independent producer or native CAD behavior is established.",

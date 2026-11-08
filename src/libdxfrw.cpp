@@ -12391,12 +12391,11 @@ bool dxfRW::writeTableStyle(
             return false;
         switch (cmc.m_method) {
         case 0:
-            // DXF groups 420/430 carry the C2 truecolor form.  Method zero
-            // can use only the scalar group-62 projection here; accepting
-            // extension fields would either normalize the method on readback
-            // or emit a book name without its required truecolor base.
-            return cmc.m_rgb < 0 && cmc.m_name.empty()
-                && cmc.m_bookName.empty();
+            // DXF has no CMC method byte. A present RGB value selects the
+            // canonical C2 form on readback; names still require that RGB
+            // base so the emitted 430 tag is parseable as a color-book color.
+            return cmc.m_rgb >= 0
+                || (cmc.m_name.empty() && cmc.m_bookName.empty());
         case 0xC1:
             return cmc.m_rgb < 0 && cmc.m_name.empty()
                 && cmc.m_bookName.empty() && value == 0;
@@ -13044,10 +13043,10 @@ bool dxfRW::writeCellStyleMap(DRW_CellStyleMap *ent) {
             return false;
         switch (cmc.m_method) {
         case 0:
-            // The DXF truecolor/color-book extension fields are only
-            // round-trippable through the C2 method profile below.
-            return cmc.m_rgb < 0 && cmc.m_name.empty()
-                && cmc.m_bookName.empty();
+            // DXF has no CMC method byte; RGB output normalizes to C2 on
+            // readback. Reject only name/book extensions with no RGB base.
+            return cmc.m_rgb >= 0
+                || (cmc.m_name.empty() && cmc.m_bookName.empty());
         case 0xC1:
             return cmc.m_rgb < 0 && cmc.m_name.empty()
                 && cmc.m_bookName.empty() && index == 0;
