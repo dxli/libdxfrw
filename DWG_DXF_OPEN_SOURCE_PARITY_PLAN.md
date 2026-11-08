@@ -147,14 +147,14 @@ rooted dimension graph.
 dimension body under the geometry dependency was rejected by the existing
 profile validator because geometry dependencies require a null body handle.
 The invalid prototype was removed; no production change or evidence was
-committed. The desktop inventory after the user's unlock message still reports
-the Mac locked, so no new ODA/FreeCAD qualification is available. Continue the
-local implementation; do not retry the unchanged ODA CLI launch or claim
-platform qualification until a native session is observable. A separate
-locally authored full-file dimension graph was also refused by strict adapter
-preflight because it lacks the source-bound AC1024 group-owned dimension
-profile. Its temporary prototype was removed; neither output policy nor source
-gates were changed.
+committed. The user has since said they are unlocking the Mac; this is not yet
+an observed unlocked desktop state, so ODA/FreeCAD qualification remains
+pending. Verify a fresh desktop inventory before retrying the native workflow;
+do not treat the prior PasteBoard/XPC abort as format evidence. Continue local
+implementation meanwhile. A separate locally authored full-file dimension
+graph was also refused by strict adapter preflight because it lacks the
+source-bound AC1024 group-owned dimension profile. Its temporary prototype was
+removed; neither output policy nor source gates were changed.
 
 **Next implementation gate:** continue rooted dimension-constraint transaction
 work from the hash-bound AC1024 mechanical source profile
@@ -396,6 +396,18 @@ created locally from scratch for the specific control.
   at the source-reference gate. The generated invalid-body/shell-valid control
   and prior recovery controls pass `libdxfrw_persistent_manager_prefix_dispatch`
   (1/1). See the [action-parameter receipt](docs/research/p6-ac1027-osnap-action-param-raw-only-shell-recovery-2026-11-08.json).
+- **AC1018 TABLE writer checkpoint:** commit `1a590aed` adds a generated
+  low-level control that emits a real TABLE entity frame with writer-local
+  `AcDbTable` class identity/count bookkeeping, then rolls the frame and class
+  ledger back through an outer compound checkpoint. The placeholder `*T`
+  block is empty; this proves only frame/class transaction mechanics. Next
+  smallest slice: drive class registration and frame emission through a
+  test-accessible `dwgRW` transaction, inject failure after frame staging but
+  before graph publication, and verify destination/model/writer rollback plus
+  same-facade retry. Then build the smallest semantically complete `*T`
+  geometry and reference graph. Keep `dwgRW::writeTable` fail-closed until the
+  transaction, graph, physical-source profile, and independent-reader/native
+  qualification gates pass. See the [TABLE readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 - **Previous local slice:** AC1027/AC1032 PERSUBENTMGR typed failures now
   publish raw-only after independent common-shell and handle-stream validation.
   The hash-matched AC1027 physical source publishes handle `0x2E0` and reduces
