@@ -2450,11 +2450,15 @@ bounded cursor position, incomplete semantics, and same-object recovery on a
 corrected retry. A second bounded milestone now encodes a generated AC1018
 plain-text cell directly, checks strict one-cell/default-field preconditions,
 and verifies typed parser readback, BLOCK_RECORD and TABLESTYLE handle roles,
-exact body cursor, and a following-body sentinel. The focused
-`--table-cell-overrides` selector passes. This is encoder/parser
-self-consistency evidence only: no production class registration, truncation
-matrix, physical source-to-output proof, or compound-writer transaction has
-been demonstrated. `writeTable` remains fail-closed. Trace hashes, source
+exact body cursor, and a following-body sentinel. Focused preflight controls
+also refuse unsupported version, TABLE/cell overrides, extra columns,
+incomplete semantic content, and detached value handles without changing
+pre-seeded body/handle buffers; the same object succeeds after its rejected
+override is corrected. The focused `--table-cell-overrides` selector passes.
+This is encoder/parser self-consistency evidence only: remaining modeled-field
+negative cases, truncated parser-body/handle controls, production class
+registration, physical source-to-output proof, and compound-writer transaction
+have not been demonstrated. `writeTable` remains fail-closed. Trace hashes, source
 hashes, and dispositions are in the
 [encoder-readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 
@@ -2463,12 +2467,14 @@ Speed-oriented implementation sequence:
 1. The direct **AC1018 plain-text-cell** codec is implemented for a generated
    one-row/one-column profile; its inline string avoids both the R2007+
    detached string stream and the undocumented R24 TABLECONTENT relationship.
-   Next, add focused negative preflight controls for every retained field that
-   is excluded from this profile and for truncated body/handle output, proving
-   refusal does not publish partial bytes and a corrected same-object retry
-   succeeds. The existing AC1018 traces disagree on class number (528 versus
-   523), so determine the production class-resolution rule from each source's
-   CLASS map and key registration to validated class identity rather than
+   Focused refusal controls now cover unsupported version, table/cell
+   overrides, extra columns, incomplete semantic content, and detached value
+   handles; they check pre-seeded output buffers and corrected same-object
+   retry. Finish the remaining retained-field preflight matrix and add parser
+   truncation controls at body and handle boundaries. The existing AC1018
+   traces disagree on class number (528 versus 523), so determine the
+   production class-resolution rule from each source's CLASS map and key
+   registration to validated class identity rather than
    either observed ordinal. Do not infer class IDs from the DWG version.
    Require one row/column,
    one value-content item of type 1, default indexed colors/style, no cell or

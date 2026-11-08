@@ -8241,6 +8241,98 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  "AC1018 plain-text TABLE encoder preserves the following body sentinel");
     }
 
+    const auto makeEncodableAc1018Table = []() {
+        TableDwgCodecProbe table;
+        table.handle = 0xA500u;
+        table.setDwgLayerHandle(DRW::DwgLayer0Handle);
+        table.blockRecH = handle(0xA600u);
+        table.m_tableStyleHandle = 0xA700u;
+        table.basePoint = DRW_Coord{4.0, 5.0, 0.0};
+        table.extPoint = DRW_Coord{0.0, 0.0, 1.0};
+        table.m_horizontalDirection = DRW_Coord{1.0, 0.0, 0.0};
+        DRW_TableColumn column;
+        column.m_width = 8.0;
+        table.m_content.m_columns.push_back(column);
+        DRW_TableRow row;
+        row.m_height = 3.0;
+        DRW_TableCell cell;
+        cell.m_type = 1;
+        cell.m_mergedWidth = 1;
+        cell.m_mergedHeight = 1;
+        DRW_TableCellContent content;
+        content.m_type = 1;
+        content.m_text = "retry AC1018 text";
+        cell.m_contents.push_back(content);
+        row.m_cells.push_back(cell);
+        table.m_content.m_rows.push_back(row);
+        return table;
+    };
+    const auto expectAtomicPreflightRefusal =
+        [&](const char* message, DRW::Version version, auto mutate) {
+            TableDwgCodecProbe candidate = makeEncodableAc1018Table();
+            mutate(candidate);
+            dwgBufferW body;
+            dwgBufferW handles;
+            body.putBit(true);
+            handles.putBit(false);
+            const std::uint64_t bodyBefore = body.bitCount();
+            const std::uint64_t handlesBefore = handles.bitCount();
+            const bool encoded = candidate.encodeAsTableClass(
+                version, body, handles);
+            t.expect(!encoded && body.bitCount() == bodyBefore
+                         && handles.bitCount() == handlesBefore,
+                     message);
+        };
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects unsupported version without writing",
+        DRW::AC1021,
+        [](TableDwgCodecProbe&) {});
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects table overrides without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_tableOverrideFlags = 1u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects an additional column without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_columns.push_back(DRW_TableColumn{});
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects incomplete semantic content without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_hasSemanticContent = true;
+            table.m_semanticContentComplete = false;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects a detached cell value handle without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_cells.front().m_valueHandle = 0xA800u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects a cell override without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.front().m_cells.front().m_overrideFlags = 1u;
+        });
+
+    TableDwgCodecProbe retryAc1018Table = makeEncodableAc1018Table();
+    retryAc1018Table.m_tableOverrideFlags = 1u;
+    dwgBufferW retryRejectedBody;
+    dwgBufferW retryRejectedHandles;
+    const bool retryInitiallyRefused = !retryAc1018Table.encodeAsTableClass(
+        DRW::AC1018, retryRejectedBody, retryRejectedHandles);
+    retryAc1018Table.m_tableOverrideFlags = 0u;
+    dwgBufferW retryBody;
+    dwgBufferW retryHandles;
+    const bool retryAfterCorrection = retryAc1018Table.encodeAsTableClass(
+        DRW::AC1018, retryBody, retryHandles);
+    t.expect(retryInitiallyRefused && retryAfterCorrection,
+             "same AC1018 TABLE encoder accepts a corrected model after preflight refusal");
+
     R2007TableFrame ac1018InvalidVisibilityFrame;
     const bool ac1018InvalidVisibilityBuilt = makeR2007TableFrame(
         1, ac1018InvalidVisibilityFrame, TablePlacement{}, 0x00004460u,
