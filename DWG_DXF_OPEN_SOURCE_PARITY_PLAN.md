@@ -35,13 +35,16 @@ Do not infer a TABLEGEOMETRY writer defect from this incomplete setup. A broad
 global-allocation sweep around the selected associative adapter export was also
 rejected: it terminated on an uncaught `std::bad_alloc` during adapter preflight,
 before a safe writer-callback boundary; the prototype was removed and no
-production files changed. The narrowed low-level AC1024 OBJECTS callback now
-sweeps a rooted empty ACDBASSOCNETWORK profile at 18 ASCII and 15 Binary
+production files changed. The narrowed low-level AC1024 OBJECTS callback now sweeps a rooted graph with
+one ACDBASSOCNETWORK and one linked ACDBASSOCVARIABLE at 26 ASCII and 24 Binary
 allocation offsets, with destination/caller rollback, same-writer retry and
-typed graph readback ([receipt](docs/research/p6-dxf-associative-network-objects-allocation-failure-retry-2026-11-08.json)).
-This does not cover action branches or broader associative support. Next, select
-the next associative OBJECTS writer from an established passing typed
-output/readback profile, with its exact graph prerequisites. Keep FIELD/FIELDLIST
+typed dictionary/network/variable readback ([receipt](docs/research/p6-dxf-associative-network-objects-allocation-failure-retry-2026-11-08.json)).
+The variable readback leaves `m_associativeVariableWireComplete` false for this
+local source profile, so typed-field roundtrip does not qualify its full wire
+profile or support. This does not cover network branches, dependencies, or
+broader associative support. Next, select the next associative OBJECTS writer
+from an established passing typed output/readback profile, with exact graph
+prerequisites. Keep FIELD/FIELDLIST
 gated. Do not reopen swept families or promote support claims. Each slice must
 update its receipt and checkpoint, commit implementation with evidence, then
 report the commit and next ready slice.
