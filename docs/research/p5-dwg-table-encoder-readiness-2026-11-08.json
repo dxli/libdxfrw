@@ -1,7 +1,7 @@
 {
   "date": "2026-11-08",
   "topic": "DWG ACAD_TABLE encoder readiness",
-  "scope": "Source/specification audit plus generated AC1018 body-codec milestone; no production support claim",
+  "scope": "Source/specification audit plus generated AC1018 body-codec and identity-registration milestones; no production support claim",
   "repository": {
     "entity_encoder": "src/drw_entities.cpp: DRW_Table::encodeDwg has a narrowly preflighted AC1018 generated plain-text-cell codec; production adapter remains disabled",
     "adapter_writer": "src/libdwgr.cpp: dwgRW::writeTable intentionally refuses and marks the complete DWG save failed",
@@ -57,6 +57,34 @@
       "disposition": "Not a complete TABLE writer witness; do not infer the unknown override payload or hardcode class number 523."
     }
   ],
+  "ac1018_class_identity": {
+    "sourceObservations": [
+      {
+        "path": "/Users/dli/doc/dwg6/example_2004.dwg",
+        "classNumber": 528
+      },
+      {
+        "path": "/Users/dli/doc/dwg6/sample_AC1018.dwg",
+        "classNumber": 523
+      }
+    ],
+    "sharedFields": {
+      "applicationName": "ObjectDBX Classes",
+      "className": "AcDbTable",
+      "recordName": "ACAD_TABLE",
+      "proxyCapabilities": 1025,
+      "entityClass": true,
+      "dwgClassVersion": 25,
+      "maintenanceVersion": 20
+    },
+    "independentOpenSourceCrossCheck": {
+      "project": "LibreDWG",
+      "url": "https://github.com/LibreDWG/libredwg/blob/master/src/objects.in#L1210-L1213",
+      "observation": "The TABLE type maps to ACAD_TABLE and is marked UNSTABLE in the current source tree. This corroborates the record identity and instability, not the AC1018 class trailer values or output interoperability."
+    },
+    "decision": "Resolve the production ordinal from writer-local registered CLASS identity; do not hardcode 523 or 528.",
+    "disposition": "Both local source records agree on the shared metadata while their ordinals differ. These parser observations do not independently validate emitted CLASS records."
+  },
   "unknown_override_prefix_control": {
     "generatedFromScratch": true,
     "version": "AC1018",
@@ -117,6 +145,18 @@
     ],
     "disposition": "Broad generated preflight coverage with representative parser truncation; the matrix is not yet exhaustive at every guard branch. Post-write low-level failure atomicity, physical source-to-output comparison, and compound writer rollback remain open; this does not establish production output support."
   },
+  "generated_ac1018_class_identity_registration_control": {
+    "generatedFromScratch": true,
+    "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
+    "result": "PASS",
+    "assertions": [
+      "AC1018 class registration assigns a writer-local class ordinal and associates the TABLE entity with it.",
+      "A second AcDbTable/ACAD_TABLE registration resolves to the same writer-local ordinal by identity.",
+      "The helper refuses an AC1027 writer.",
+      "The generated number is checked against the registered identity and manifest definition rather than either observed source ordinal."
+    ],
+    "disposition": "Registration-helper control only. The helper is not connected to dwgRW::writeTable, no entity instance is counted or serialized, and no emitted CLASS section is independently read back."
+  },
   "first_candidate": {
     "version": "AC1018",
     "profile": "one row, one column, one plain text value-content cell",
@@ -130,7 +170,7 @@
     "required_before_adapter_admission": [
       "audit and cover remaining unchecked guard branches; representative body/handle parser truncation and corrected retry now pass",
       "physical AC1018 plain-text source-to-output field comparison, or an explicit no-eligible-source disposition",
-      "production class resolution from the validated CLASS map rather than synthetic or copied class ordinals",
+      "serialized AC1018 CLASS definition and instance-count/readback proof for the identity-based registration",
       "complete *T BLOCK/BLOCK_RECORD ownership and TABLE style-reference disposition",
       "compound writer atomic rollback, destination preservation, same-adapter corrected retry, and fresh readback",
       "no unsupported cell/override field silently omitted"
@@ -139,12 +179,13 @@
   "validation_policy": "Focused generated controls and existing-source use only; no new downloaded DWG/DXF fixture is to be committed.",
   "status": "OPEN_IMPLEMENTATION",
   "blockers": [
-    "A generated-profile direct body codec exists, but no production class registration, adapter output route, or complete compound writer exists.",
+    "A generated-profile direct body codec and AC1018 identity-based class-registration helper exist, but neither is integrated into the adapter and no complete compound writer exists.",
     "No complete AC1018 source-to-writer profile is currently recorded; the two screened AC1018 sources stop at undocumented 0x40000/0x40020 cell override flags.",
     "Observed AC1018 AcDbTable class numbers differ by source (528 and 523); determine the supported CLASS-map resolution policy and never treat either ordinal as a version constant.",
-    "The only newly captured table class number is 506 in one AC1021 file; an AC1018 class number must be captured empirically before registering an AC1018 writer.",
+    "The only newly captured AC1021 TABLE ordinal is 506 and the two AC1018 ordinals differ (528/523); no numeric ordinal is a cross-file mapping. Production must use CLASS identity and serialized manifest evidence.",
     "The AC1018 unknown-override control now captures only the known prefix; the physical payload span and meaning of 0x40000/0x40020 remain unresolved and must not be skipped or emitted.",
     "The generated AC1018 encoder control uses synthetic class number 562 solely to exercise the body codec; production class resolution and physical interoperability remain open.",
+    "The identity-based TABLE class registration helper is AC1018-only and not connected to output; verify emitted CLASS metadata and class-instance accounting before integration.",
     "The direct entity codec has no transaction guarantee if a low-level failure occurs after emission starts; keep it out of the production route until the compound writer stages and atomically publishes the complete frame.",
     "The generated refusal matrix now covers the main excluded-field families but is not exhaustive at every guard branch; keep the direct entity encoder non-production until the remaining branches and compound transaction gates are satisfied.",
     "The available AC1021 table source is semantically incomplete at cell CadValue type 48 and cannot validate a complete output route.",

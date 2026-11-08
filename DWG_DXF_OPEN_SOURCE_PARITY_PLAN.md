@@ -2459,11 +2459,23 @@ declared span is one bit short and a frame missing its trailing handle stream.
 The focused `--table-cell-overrides` selector passes. This is encoder/parser
 self-consistency evidence only: the generated refusal matrix now covers the
 main excluded-field families but is not yet exhaustive at every guard branch.
-Post-write buffer failure atomicity, production class registration, physical
-source-to-output proof, and compound-writer transaction have not been
-demonstrated. `writeTable` remains fail-closed. Trace hashes, source hashes,
-and dispositions are in the
+Post-write buffer failure atomicity, production route registration/instance
+publication, physical source-to-output proof, and compound-writer transaction
+have not been demonstrated. `writeTable` remains fail-closed. Trace hashes,
+source hashes, and dispositions are in the
 [encoder-readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
+
+The two AC1018 CLASS records agree on the identity fields despite their
+different ordinals: app `ObjectDBX Classes`, class `AcDbTable`, record
+`ACAD_TABLE`, proxy capabilities 1025, DWG class version 25 and maintenance
+version 20; group 280 marks them as entity classes. LibreDWG independently
+maps `TABLE` to `ACAD_TABLE` but classifies its implementation as
+`UNSTABLE`, which reinforces a version/profile-specific gate rather than a
+general output claim ([LibreDWG objects.in](https://github.com/LibreDWG/libredwg/blob/master/src/objects.in#L1210-L1213)).
+The writer now has an AC1018-only registration helper that allocates a
+writer-local ordinal and resolves repeats by class identity; generated controls
+confirm identity reuse and refusal on AC1027. It is deliberately not called by
+`writeTable`, does not publish a class instance, and does not enable output.
 
 Speed-oriented implementation sequence:
 
@@ -2480,19 +2492,20 @@ Speed-oriented implementation sequence:
    guard branches. The direct codec has no transactional guarantee for a
    low-level failure after emission starts; keep it off the production route
    until its caller stages and atomically publishes the complete compound
-   frame. The existing AC1018
-   traces disagree on class number (528 versus 523), so determine the
-   production class-resolution rule from each source's CLASS map and key
-   registration to validated class identity rather than
-   either observed ordinal. Do not infer class IDs from the DWG version.
+   frame. The existing AC1018 traces disagree on class number (528 versus
+   523), while their CLASS identity metadata agrees. An AC1018-only writer
+   registration helper now allocates a local ordinal and resolves duplicates
+   by identity; its focused control passes. Keep it disconnected from
+   `writeTable` until remaining profile and graph gates pass. Do not infer
+   class IDs from the DWG version.
    Require one row/column,
    one value-content item of type 1, default indexed colors/style, no cell or
    table overrides, merges, data links, fields, block content, attributes,
    retained raw subrecords, or unexplained geometry/cache state. Match every
    gate to the actual public model fields and reject anything outside that
    profile before emitting bytes.
-2. After the focused refusal/atomicity controls and empirical class-map
-   resolution, compare every encoded field against an independently bounded
+2. After the remaining focused refusal/atomicity controls and empirical
+   class-map resolution, compare every encoded field against an independently bounded
    physical AC1018 plain-text TABLE body. Keep this separate from the generated
    parser/encoder self-consistency vector; if no complete source profile is
    available, retain the codec as private experimental coverage and do not

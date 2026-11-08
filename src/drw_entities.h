@@ -2040,6 +2040,14 @@ public:
     DRW_Table() {
         eType = DRW::TABLE;
     }
+    void setDwgClassNum(std::uint16_t value) {
+        if (value >= 500u && value <= 0x7FFFu)
+            oType = static_cast<std::int16_t>(value);
+    }
+    std::uint16_t getDwgClassNum() const {
+        return oType >= 500 && oType <= 0x7FFF
+            ? static_cast<std::uint16_t>(oType) : 0u;
+    }
     DRW_Table(const DRW_Table& o): DRW_Insert(o),
         m_valueFlag(o.m_valueFlag),
         m_horizontalDirection(o.m_horizontalDirection),

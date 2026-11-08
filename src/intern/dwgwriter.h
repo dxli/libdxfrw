@@ -1082,6 +1082,39 @@ public:
         return registerTypedObjectClassRow<dwgTypedClassRowIndex("TableStyle")>(handle);
     }
 
+    /// Register the AC1018 TABLE entity class by its CLASS identity.  The
+    /// ordinal varies between producers/files, so allocate a writer-local
+    /// number and let registerTypedEntityClass reuse an existing identical
+    /// identity or resolve collisions.  Keep this registration separate from
+    /// TABLE output admission: its body and *T graph still require the
+    /// compound writer transaction.
+    bool registerTableEntityClass(DRW_Table *table) {
+        if (table == nullptr || m_version != DRW::AC1018)
+            return false;
+
+        DwgClassDefinition definition;
+        definition.m_classNum = nextFreeCustomClassNum();
+        if (definition.m_classNum < 500u
+            || definition.m_classNum > 0x7FFFu)
+            return false;
+        definition.m_proxyFlag = 0x401; // observed CLASS group 90
+        definition.m_appName = "ObjectDBX Classes";
+        definition.m_className = "AcDbTable";
+        definition.m_recordName = "ACAD_TABLE";
+        definition.m_entityFlagRaw = 0x1F2;
+        definition.m_dwgVersion = 25;
+        definition.m_maintenanceVersion = 20;
+        if (!registerTypedEntityClass(definition))
+            return false;
+
+        const std::uint16_t classNum = typedDwgClassNum(
+            "AcDbTable", "ACAD_TABLE", 0);
+        if (classNum < 500u || classNum > 0x7FFFu)
+            return false;
+        table->setDwgClassNum(classNum);
+        return true;
+    }
+
     bool registerCellStyleMapObjectClass(std::uint32_t handle = 0) {
         DwgClassDefinition definition;
         // CELLSTYLEMAP is an R2007+ custom class. Its DWG class ordinal is

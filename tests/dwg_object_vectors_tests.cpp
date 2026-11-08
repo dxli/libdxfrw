@@ -8067,6 +8067,33 @@ std::uint64_t cursorBit(const dwgBuffer& buffer) {
 }
 
 void testR2007TableCellTypeReaderVectors(TestContext& t) {
+    DRW_Header tableClassHeader;
+    dwgWriter18 tableClassWriter(nullptr, &tableClassHeader);
+    DRW_Table registeredTable;
+    DRW_Table repeatedRegisteredTable;
+    const bool firstTableClassRegistration =
+        tableClassWriter.registerTableEntityClass(&registeredTable);
+    const std::uint16_t firstTableClassNum =
+        registeredTable.getDwgClassNum();
+    const bool repeatedTableClassRegistration =
+        tableClassWriter.registerTableEntityClass(&repeatedRegisteredTable);
+    t.expect(firstTableClassRegistration && repeatedTableClassRegistration
+                 && firstTableClassNum >= 500u
+                 && repeatedRegisteredTable.getDwgClassNum()
+                     == firstTableClassNum
+                 && tableClassWriter.typedDwgClassNum(
+                        "AcDbTable", "ACAD_TABLE", 0u)
+                     == firstTableClassNum
+                 && tableClassWriter.hasDwgClassDefinition(firstTableClassNum),
+             "AC1018 TABLE class registration resolves writer-local number by CLASS identity");
+    DRW_Header wrongVersionTableClassHeader;
+    dwgWriter27 wrongVersionTableClassWriter(
+        nullptr, &wrongVersionTableClassHeader);
+    DRW_Table wrongVersionTableClass;
+    t.expect(!wrongVersionTableClassWriter.registerTableEntityClass(
+                 &wrongVersionTableClass),
+             "TABLE class registration refuses unqualified writer versions");
+
     R2007TableFrame unknownFrame;
     const bool unknownBuilt = makeR2007TableFrame(16, unknownFrame);
     t.expect(unknownBuilt, "AC1021 TABLE unknown-cell vector builds from scratch");
