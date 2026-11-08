@@ -12545,12 +12545,14 @@ bool dxfRW::writeTableStyle(
                 const DRW_TableStyleBorder& border = style.m_borders[index];
                 if (border.m_edgeFlags != (1 << index)
                     || (border.m_propertyOverrideFlags & ~0x3F) != 0
-                    || border.m_borderType != 1
+                    || (border.m_borderType != 1
+                        && border.m_borderType != 2)
                     || !validR24Color(border.m_color, border.m_colorCmc)
                     || border.m_lineWeight != -2
                     || !r24BorderLineTypeSupported(border)
-                    || border.m_visible != 0
-                    || border.m_doubleLineSpacing != 0.045)
+                    || (border.m_visible != 0 && border.m_visible != 1)
+                    || !std::isfinite(border.m_doubleLineSpacing)
+                    || border.m_doubleLineSpacing < 0.0)
                     return false;
             }
             return true;
