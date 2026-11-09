@@ -34,6 +34,22 @@
     "legacyErrorZero": 9,
     "classesCrcMismatch": 0
   },
+  "onlineSampleSearch": {
+    "searched": "2026-11-09",
+    "sources": [
+      {
+        "url": "https://www.autodesk.com/support/technical/article/caas/tsarticles/ts/6XGQklp3ZcBFqljLPjrnQ9.html",
+        "description": "Autodesk's public AutoCAD sample collection is labeled for AutoCAD 2010 and later.",
+        "producerProvenance": "The page does not identify the release that saved each individual DWG; it cannot establish an AutoCAD 2010 RTM witness."
+      },
+      {
+        "url": "https://github.com/nextgis/dwg_samples",
+        "description": "Public cross-version DWG sample repository includes AC1024 / 2010-named examples.",
+        "producerProvenance": "Repository states the samples were produced with trial AutoCAD 2016 M.49.0.0; these are AC1024 format samples but not AutoCAD 2010 RTM producer samples."
+      }
+    ],
+    "result": "Found public AC1024 candidates, but no online sample with verifiable AutoCAD 2010 RTM provenance or a known matching CLASSES failure. Existing corpus recheck remains the only reproduced evidence; the missing tenth source and reported RTM failure remain unresolved. External files were not added to the repository."
+  },
   "generatedIntegrationControl": {
     "selector": "build-gcc/libdxfrw_dwg_reader_matrix_tests --r2007-class-string-footer",
     "result": "PASS",

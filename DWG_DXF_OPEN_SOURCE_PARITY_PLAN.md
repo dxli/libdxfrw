@@ -314,6 +314,11 @@ from-scratch file, while all nine available AC1024 sources pass the current
 reader; the reported six-of-ten RTM failure remains unverified because only
 nine source paths are available. See the
 [AC1024 CLASSES receipt](docs/research/p6-ac1024-classes-repository-corpus-recheck-2026-11-09.json).
+The online search found Autodesk's sample collection labeled "AutoCAD 2010
+and later" and the NextGIS AC1024 corpus, whose README identifies AutoCAD 2016
+M.49.0.0 as the producer. Neither supplies a verifiable AutoCAD 2010 RTM
+sample/hash for the reported CLASSES failure. The failure stays unresolved;
+do not infer an RTM defect from these later or ambiguously sourced samples.
 The preceding P5 TABLE unknown-prefix profile remains recorded in
 [`p5-ac1024-table-unknown-prefix-default-gate-2026-11-09.json`](docs/research/p5-ac1024-table-unknown-prefix-default-gate-2026-11-09.json).
 
