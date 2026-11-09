@@ -11,6 +11,16 @@ physical read still has 3 entity and 6 object parse failures elsewhere and
 strict export remains refused by the unrelated IMAGEDEF/reactor capture gate.
 See the [cross-version PERSUBENTMGR receipt](docs/research/p6-persubentmgr-acadsharp-cross-version-dxf-wire-conflict-2026-11-09.json).
 
+**Resume checkpoint (2026-11-09, AC1018 TABLE encoder allocation rollback):**
+the direct generated TABLE body codec now has an allocation-fault sweep over 18
+failure points using a one-row/one-column plain-text cell with alignment and
+text-style overrides. Every failure preserves the exact seeded body and handle
+buffers; the same TABLE object succeeds after each failure. The focused
+`--table-cell-overrides` selector passes. This hardens only direct codec
+transaction behavior; `dwgRW::writeTable` remains refused pending the physical
+TABLE-to-`*T` geometry graph, caller transaction integration, and independent
+readback. See the [TABLE readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
+
 **Resume checkpoint (2026-11-09, AC1024 PERSUBENTMGR D63 partial profile):**
 the hash-bound AutoCAD SAVEAS sample `sample_AC1024.dwg` at handle `0xD63`
 now enters a source-matched partial-prefix path for values
@@ -3315,6 +3325,13 @@ not installed; references here use the official [ODA v5.4.1
 PDF](https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf),
 §20.4.96 (pp. 229–232). Do not attempt one cross-version encoder or infer the
 missing R24 graph from the current parser.
+The direct generated AC1018 body codec now also sweeps 18 allocation-failure
+positions for a one-row/one-column text cell with alignment and text-style
+handle overrides. Each failure preserves seeded body and handle buffers, and
+the same object retries successfully; the focused `--table-cell-overrides`
+selector passes. This is a direct-codec transaction prerequisite only. The
+production compound writer remains disabled until `*T` geometry generation,
+caller-state rollback, source graph roles, and independent readback are closed.
 The inspected code paths, exact authority section, candidate exclusions, and
 compound-output acceptance gates are recorded in the
 [encoder-readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).

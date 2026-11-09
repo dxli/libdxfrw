@@ -298,7 +298,7 @@
       "reportedVersion": "ACadSharp 3.8.0, AC1032 round trip, AutoCAD 2020",
       "observations": [
         "A no-edit DWG read/write reportedly changes two TABLE entities to one and produces a file AutoCAD rejects with ErrorStatus=53.",
-        "The report identifies BLOCK/FIELD cell-content references emitted as null as a likely cause; this is the reporter’s diagnosis, not independently verified here."
+        "The report identifies BLOCK/FIELD cell-content references emitted as null as a likely cause; this is the reporter\u2019s diagnosis, not independently verified here."
       ]
     },
     "implementationImpact": [
@@ -591,5 +591,27 @@
     ],
     "native_session": "A fresh desktop inventory reports the Mac locked. Do not retry ODA/FreeCAD GUI qualification until an unlocked app surface is observed.",
     "overall_disposition": "Independent peer evidence narrows the AC1018 TABLE graph shape to a physical example but cannot unlock compound output. Keep dwgRW::writeTable refused and do not promote support claims."
+  },
+  "generated_ac1018_allocation_failure_rollback_retry": {
+    "generatedFromScratch": true,
+    "version": "AC1018",
+    "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
+    "buildCommand": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests -j4",
+    "runCommand": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
+    "result": "PASS",
+    "injectedFailures": 18,
+    "profile": "bounded one-row/one-column plain-text TABLE with alignment and text-style handle overrides; seeded body and handle buffers",
+    "assertions": [
+      "Every injected std::bad_alloc is caught by the direct codec and returns failure.",
+      "Each failure preserves the exact pre-seeded entity-body and handle-buffer bytes.",
+      "After each failure, the same DRW_Table instance succeeds with fresh seeded buffers.",
+      "The sweep reaches a successful encode after all allocation sites exercised by this profile."
+    ],
+    "limits": [
+      "This verifies the direct DRW_Table::encodeDwg transaction only.",
+      "It does not exercise dwgRW::writeTable or the caller-state transaction.",
+      "It does not produce table cache geometry, prove the TABLE-to-*T graph, qualify a physical source, or validate with an independent reader.",
+      "Production TABLE output remains refused."
+    ]
   }
 }

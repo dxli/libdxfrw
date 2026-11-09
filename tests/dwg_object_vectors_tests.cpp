@@ -1,11 +1,14 @@
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <memory>
 #include <map>
+#include <new>
 #include <sstream>
 #include <string>
 #include <type_traits>
@@ -32,6 +35,43 @@
 #include "xrecord_test_helpers.h"
 #include "persistent_manager_test_helpers.h"
 #include "material_dwg_test_helpers.h"
+
+namespace {
+
+std::atomic<long> allocationFailureCountdown{-1};
+
+bool shouldFailAllocation() noexcept {
+    long remaining = allocationFailureCountdown.load();
+    while (remaining >= 0) {
+        if (allocationFailureCountdown.compare_exchange_weak(
+                remaining, remaining - 1))
+            return remaining == 0;
+    }
+    return false;
+}
+
+} // namespace
+
+void* operator new(std::size_t size) {
+    if (shouldFailAllocation())
+        throw std::bad_alloc();
+    if (void* memory = std::malloc(size == 0u ? 1u : size))
+        return memory;
+    throw std::bad_alloc();
+}
+
+void* operator new[](std::size_t size) {
+    if (shouldFailAllocation())
+        throw std::bad_alloc();
+    if (void* memory = std::malloc(size == 0u ? 1u : size))
+        return memory;
+    throw std::bad_alloc();
+}
+
+void operator delete(void* memory) noexcept { std::free(memory); }
+void operator delete[](void* memory) noexcept { std::free(memory); }
+void operator delete(void* memory, std::size_t) noexcept { std::free(memory); }
+void operator delete[](void* memory, std::size_t) noexcept { std::free(memory); }
 
 namespace {
 
@@ -9042,6 +9082,63 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         table.m_content.m_rows.push_back(row);
         return table;
     };
+
+    {
+        TableDwgCodecProbe table = makeEncodableAc1018Table();
+        DRW_TableCell& cell = table.m_content.m_rows.front().m_cells.front();
+        cell.m_overrideFlags = 0x00000011u;
+        cell.m_textAlignment = 5;
+        cell.m_textStyleOverrideHandle = 0xA903u;
+        unsigned injectedFailures = 0u;
+        bool reachedSuccess = false;
+        bool atomicRollback = true;
+        bool retryAfterEveryFailure = true;
+        for (long failAt = 0; failAt < 256; ++failAt) {
+            dwgBufferW body;
+            dwgBufferW handles;
+            body.putRawChar8(0xA5u);
+            handles.putRawChar8(0x5Au);
+            const std::vector<std::uint8_t> bodyBefore = body.data();
+            const std::vector<std::uint8_t> handlesBefore = handles.data();
+
+            allocationFailureCountdown = failAt;
+            bool encoded = false;
+            try {
+                encoded = table.encodeAsTableClass(
+                    DRW::AC1018, body, handles);
+            } catch (...) {
+                encoded = false;
+            }
+            const long countdownAfter = allocationFailureCountdown.exchange(-1);
+            if (countdownAfter >= 0) {
+                reachedSuccess = encoded;
+                atomicRollback = atomicRollback
+                    && body.data().size() > bodyBefore.size()
+                    && handles.data().size() > handlesBefore.size();
+                break;
+            }
+
+            ++injectedFailures;
+            atomicRollback = atomicRollback && !encoded
+                && body.data() == bodyBefore
+                && handles.data() == handlesBefore;
+            body = dwgBufferW();
+            handles = dwgBufferW();
+            body.putRawChar8(0xA5u);
+            handles.putRawChar8(0x5Au);
+            const bool retried = table.encodeAsTableClass(
+                DRW::AC1018, body, handles);
+            retryAfterEveryFailure = retryAfterEveryFailure && retried
+                && body.data().size() > 1u && handles.data().size() > 1u;
+        }
+        t.expect(injectedFailures > 0u && reachedSuccess && atomicRollback
+                     && retryAfterEveryFailure,
+                 "AC1018 TABLE direct encoder rolls back each injected allocation failure and retries with seeded buffers");
+        std::cout << "AC1018 TABLE encoder allocation failures injected="
+                  << injectedFailures << " rollback="
+                  << (atomicRollback ? "PASS" : "FAIL") << " retry="
+                  << (retryAfterEveryFailure ? "PASS" : "FAIL") << '\n';
+    }
 
     TableDwgCodecProbe multiRowAc1018Table = makeEncodableAc1018Table();
     multiRowAc1018Table.colcount = 2;
