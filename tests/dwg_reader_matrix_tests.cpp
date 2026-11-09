@@ -14687,6 +14687,137 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
         }
     }
 
+    for (const DRW::Version version : {DRW::AC1027, DRW::AC1032}) {
+        Options completeManager;
+        completeManager.version = version;
+        completeManager.classNumber = 601u;
+        completeManager.classVersion = 2;
+        completeManager.unknown0 = 0;
+        completeManager.unknown2 = 2;
+        completeManager.associationStepCount = 2;
+        completeManager.associationSubentities = 2;
+        completeManager.stepCount = 2;
+        completeManager.steps = {11, 22};
+        completeManager.hasSubentityCount = true;
+        completeManager.subentityCount = 2;
+        completeManager.subentities = {33, 44};
+        Options completeSentinel = completeManager;
+        completeSentinel.handle = 0xD64u;
+        Frame completeManagerObject, completeSentinelObject;
+        std::vector<std::uint8_t> completeManagerFrame,
+            completeSentinelFrame;
+        const bool completeBuilt = makeFrame(completeManager,
+                                              completeManagerObject)
+            && wrapFrame(completeManager, completeManagerObject,
+                         completeManagerFrame)
+            && makeFrame(completeSentinel, completeSentinelObject)
+            && wrapFrame(completeSentinel, completeSentinelObject,
+                         completeSentinelFrame);
+        t.expect(completeBuilt,
+                 "complete AC1027/AC1032 PERSUBENTMGR vectors are generated in memory");
+        if (!completeBuilt)
+            continue;
+
+        const auto sentinelOffset = static_cast<std::uint32_t>(
+            completeManagerFrame.size());
+        std::vector<std::uint8_t> bytes = completeManagerFrame;
+        bytes.insert(bytes.end(), completeSentinelFrame.begin(),
+                     completeSentinelFrame.end());
+        PersistentManagerDispatchReader reader(
+            bytes, version, completeManager.classNumber);
+        PersistentManagerDispatchSink sink;
+        const bool read = reader.readObjects(
+            bytes, completeManager.handle, sentinelOffset,
+            completeSentinel.handle, sink);
+        const auto source = std::find_if(
+            sink.typed.begin(), sink.typed.end(),
+            [&completeManager](const DRW_AssociativeObject& object) {
+                return object.handle == completeManager.handle;
+            });
+        const auto rawSource = std::find_if(
+            sink.raw.begin(), sink.raw.end(),
+            [&completeManager](const DRW_UnsupportedObject& object) {
+                return object.m_handle == completeManager.handle;
+            });
+        const auto sourcePublication = std::find_if(
+            sink.publications.begin(), sink.publications.end(),
+            [&completeManager](
+                const DRW_DwgFramePublication& publication) {
+                return publication.m_handle == completeManager.handle;
+            });
+        const bool exactTypedBody = source != sink.typed.end()
+            && source->m_classVersion == 2u
+            && source->m_persistentUnknown0 == 0u
+            && source->m_persistentUnknown2 == 2u
+            && source->m_persistentAssocStepCount == 2u
+            && source->m_persistentAssocSubentityCount == 2u
+            && source->m_persistentSteps
+                == std::vector<std::uint32_t>{11u, 22u}
+            && source->m_persistentSubentityIds
+                == std::vector<std::uint32_t>{33u, 44u}
+            && source->m_prefixStatuses.size() == 1u
+            && source->m_prefixStatuses.front().m_status
+                == DRW_AssociativePrefixStatus::ParseStatus::Complete;
+        const bool completeDisposition = read
+            && reader.objectFailures() == 0u
+            && exactTypedBody
+            && rawSource != sink.raw.end()
+            && rawSource->m_rawBytes == completeManagerObject.payload
+            && !rawSource->m_typedPayloadValidated
+            && sourcePublication != sink.publications.end()
+            && sourcePublication->m_carrier
+                == DRW_DwgFramePublication::Carrier::TypedAndRaw
+            && sink.typed.size() == 2u && sink.raw.size() == 2u
+            && sink.publications.size() == 2u;
+        t.expect(completeDisposition,
+                 version == DRW::AC1027
+                     ? "AC1027 PERSUBENTMGR complete scalar vectors publish exact typed fields and following frame"
+                     : "AC1032 PERSUBENTMGR complete scalar vectors publish exact typed fields and following frame");
+        if (!completeDisposition) {
+            std::cerr << "Complete PERSUBENTMGR version="
+                      << static_cast<int>(version) << " read=" << read
+                      << " failures=" << reader.objectFailures()
+                      << " typed=" << sink.typed.size()
+                      << " raw=" << sink.raw.size()
+                      << " publications=" << sink.publications.size();
+            if (source != sink.typed.end())
+                std::cerr << " classVersion=" << source->m_classVersion
+                          << " unknown=" << source->m_persistentUnknown0
+                          << "/" << source->m_persistentUnknown2
+                          << " counts=" << source->m_persistentAssocStepCount
+                          << "/" << source->m_persistentAssocSubentityCount
+                          << " steps=" << source->m_persistentSteps.size()
+                          << " firstStep="
+                          << (source->m_persistentSteps.empty()
+                              ? 0u : source->m_persistentSteps.front())
+                          << " lastStep="
+                          << (source->m_persistentSteps.empty()
+                              ? 0u : source->m_persistentSteps.back())
+                          << " subentities="
+                          << source->m_persistentSubentityIds.size()
+                          << " firstSub="
+                          << (source->m_persistentSubentityIds.empty()
+                              ? 0u : source->m_persistentSubentityIds.front())
+                          << " lastSub="
+                          << (source->m_persistentSubentityIds.empty()
+                              ? 0u : source->m_persistentSubentityIds.back())
+                          << " statuses=" << source->m_prefixStatuses.size()
+                          << " prefixStatus="
+                          << static_cast<int>(source->m_prefixStatuses.empty()
+                              ? DRW_AssociativePrefixStatus::ParseStatus::Missing
+                              : source->m_prefixStatuses.front().m_status);
+            if (rawSource != sink.raw.end())
+                std::cerr << " rawValidated=" << rawSource->m_typedPayloadValidated
+                          << " rawBytesMatch="
+                          << (rawSource->m_rawBytes
+                              == completeManagerObject.payload);
+            if (sourcePublication != sink.publications.end())
+                std::cerr << " sourceCarrier="
+                          << static_cast<int>(sourcePublication->m_carrier);
+            std::cerr << '\n';
+        }
+    }
+
     Options ac1032Source;
     ac1032Source.version = DRW::AC1032;
     ac1032Source.classNumber = 601u;

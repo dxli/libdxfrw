@@ -1,6 +1,6 @@
 {
   "date": "2026-11-09",
-  "scope": "Generated AC1027 and AC1032 PERSUBENTMGR common-shell truncation and corrected-input recovery controls",
+  "scope": "Generated AC1027 and AC1032 PERSUBENTMGR complete-prefix, common-shell truncation, and corrected-input recovery controls",
   "evidence_class": "from-scratch generated regression; no external DWG/DXF fixture",
   "selector": "libdxfrw_dwg_reader_matrix_tests --persistent-manager-prefix-dispatch",
   "profiles": [
@@ -48,7 +48,41 @@
   },
   "limitations": [
     "Generated framing and class ordinal do not establish an external producer's class ordinal or full body schema.",
-    "This verifies raw-shell withholding and following-frame recovery only for the two selected generated version vectors.",
-    "No typed PERSUBENTMGR semantics, graph closure, DXF output, native compatibility, or support claim is established."
-  ]
+    "The complete field vectors and the truncated-shell controls cover only the two selected generated version vectors.",
+    "No physical PERSUBENTMGR semantic profile, graph closure, DXF output, native compatibility, or support claim is established."
+  ],
+  "complete_candidate_vectors": {
+    "versions": [
+      "AC1027",
+      "AC1032"
+    ],
+    "synthetic_class_ordinal": 601,
+    "fields": {
+      "class_version": 2,
+      "unknown_scalars": [
+        0,
+        2
+      ],
+      "associated_step_count": 2,
+      "associated_subentity_count": 2,
+      "steps": [
+        11,
+        22
+      ],
+      "subentity_ids": [
+        33,
+        44
+      ]
+    },
+    "result_per_version": {
+      "typed_callback": true,
+      "typed_fields_match_generated_values": true,
+      "class_body_prefix_status": "Complete",
+      "following_object_published": true,
+      "raw_bytes_match_generated_object": true,
+      "raw_carrier_typed_payload_validated": false,
+      "support_claim_or_output_admission": false
+    },
+    "interpretation": "The generated vectors exercise the existing candidate field sequence through its bounded body end. The raw carrier remains unvalidated; this does not establish a physical producer profile, DWG-to-DXF mapping, graph closure, or semantic support."
+  }
 }
