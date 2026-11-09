@@ -33,14 +33,42 @@
     "classes_crc_mismatch": false,
     "header_envelope": "The canonical size profile ends four bytes early (expected 830, observed 834); the CRC/sentinel-validated zero high-size-word-excluded compatibility profile is accepted with a warning. This warning is not the strict-output blocker.",
     "table_control_errors": [
-      {"kind": "TableControlNullMember", "control": "LTYPE_CONTROL", "handle": "0x5", "file_offset": 53, "expected_role": 2, "observed_role": 2},
-      {"kind": "TableControlNullMember", "control": "BLOCK_CONTROL", "handle": "0x1", "file_offset": 4, "expected_role": 2, "observed_role": 2}
+      {
+        "kind": "TableControlNullMember",
+        "control": "LTYPE_CONTROL",
+        "handle": "0x5",
+        "file_offset": 53,
+        "expected_role": 2,
+        "observed_role": 2
+      },
+      {
+        "kind": "TableControlNullMember",
+        "control": "BLOCK_CONTROL",
+        "handle": "0x1",
+        "file_offset": 4,
+        "expected_role": 2,
+        "observed_role": 2
+      }
     ],
     "published_frames": 181,
     "entity_parse_failures": 0,
     "object_parse_failures": 0,
     "strict_dxf_output": "Not produced; strict preflight refused the two null table-control members after the complete read. No output file exists. The CLI returned failure. This is unrelated to CLASSES parsing."
   },
-  "interpretation": "The online sample adds an independently sourced AC1024-format input and an ODA-generated DXF pair; it does not reproduce the reported CLASSES error. Its HEADER uses the already admitted four-byte compatibility profile with a warning, while strict output is correctly refused on null BLOCK_CONTROL/LTYPE_CONTROL members. Because the source was produced by AutoCAD 2016, it cannot resolve an AutoCAD 2010 RTM-specific failure. Keep the issue open pending one of the exact failing RTM files, the missing tenth input, or hashes plus a reproducible BAD_READ_CLASSES trace. Do not infer general AC1024 support from this result.",
-  "fixture_policy": "The DWG and ODA-generated DXF were used only under /private/tmp and are not added to the repository."
+  "interpretation": "The online sample adds an independently sourced AC1024-format input and an ODA-generated DXF pair; it does not reproduce the reported CLASSES error. Its HEADER uses the already admitted four-byte compatibility profile with a warning, while strict output is correctly refused on null BLOCK_CONTROL/LTYPE_CONTROL members. Because the source was produced by AutoCAD 2016, it cannot resolve an AutoCAD 2010 RTM-specific failure. Keep the issue open pending one of the exact failing RTM files, the missing tenth input, or hashes plus a reproducible BAD_READ_CLASSES trace. Do not infer general AC1024 support from this result. A public-source search rechecked Autodesk's sample listing and the nextgis corpus: Autodesk says its set applies to AutoCAD 2010 and later but does not identify the originating release per file, while nextgis explicitly identifies AutoCAD 2016 as producer. Neither establishes an RTM-origin witness.",
+  "fixture_policy": "The DWG and ODA-generated DXF were used only under /private/tmp and are not added to the repository.",
+  "online_search_recheck": {
+    "date": "2026-11-09",
+    "sources": [
+      {
+        "url": "https://www.autodesk.com/support/technical/article/caas/tsarticles/ts/6XGQklp3ZcBFqljLPjrnQ9.html",
+        "finding": "Autodesk lists sample DWGs and says the set applies to AutoCAD 2010 and later; the page does not identify which release first authored each file, so it is not by itself an AutoCAD 2010 RTM producer witness."
+      },
+      {
+        "url": "https://github.com/nextgis/dwg_samples",
+        "finding": "Public repository includes arc_2010.dwg and explicitly says its DWGs were produced with trial AutoCAD 2016 M.49.0.0; therefore it is AC1024-format evidence but not an AutoCAD 2010 RTM witness."
+      }
+    ],
+    "result": "No newly located public download establishes AutoCAD 2010 RTM provenance for the reported failing AC1024 CLASSES case. The existing nextgis arc_2010 sample remains the available public AC1024 online sample checked locally; keep the RTM-specific report unresolved."
+  }
 }

@@ -346,7 +346,7 @@ graph; exact source/bottle checks remain mandatory for each actual selected
 load. Focused provenance
 tests pass 41/41, including updated-table/replaced-dependency-table controls,
 malformed table rejection, and independent rejection of a source-built loaded
-dependency. This is local fixture evidence only: the revised code has not yet
+dependency; a fresh rerun on 2026-11-09 again passed all 41 tests. This is local fixture evidence only: the revised code has not yet
 passed hosted arm64 CI or been published to PR #456. Automatic review rejected
 the GitHub content upload because it would publish a large internal
 implementation plan; it explicitly disallowed retrying through another route.
@@ -2040,7 +2040,14 @@ The current reader publishes 181/181 frames with zero entity/object parse
 failures. Its validated HEADER compatibility profile has a four-byte
 canonical-size discrepancy (830 expected, 834 observed) and is warning-only;
 it is not the strict-output blocker. Strict libdxfrw output is correctly
-refused for null members in LTYPE_CONTROL `0x5` and BLOCK_CONTROL `0x1`. The
+refused for null members in LTYPE_CONTROL `0x5` and BLOCK_CONTROL `0x1`. A
+2026-11-09 public-source search found Autodesk's sample collection labeled
+for AutoCAD 2010 and later, but it gives no per-file originating release; the
+`nextgis/dwg_samples` corpus explicitly says AutoCAD 2016 M.49.0.0. Neither is
+an AutoCAD 2010 RTM provenance witness. Keep searching for the exact RTM file,
+the missing tenth input, or an independently hash-bound failing input; do not
+change the parser or promote support from version code alone. See the
+[online sample receipt](docs/research/p6-ac1024-online-sample-rtm-nonreproduction-2026-11-09.json). The
 DWG and paired DXF remain in `/private/tmp` and are not committed. Keep the RTM
 discrepancy open and preserve strict refusal; no parser change is justified by
 this source. See the
