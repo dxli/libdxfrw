@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-**Resume checkpoint (2026-11-09 08:32 UTC):** after the user's latest
+**Resume checkpoint (2026-11-09 08:57 UTC):** after the user's latest
 “I’ll unlock it now” reply, a fresh desktop inventory still reports the
 session locked and exposes no native app surface. Native qualification could
 not be resumed in this pass. Treat this as a desktop-access blocker only; it
@@ -27,15 +27,18 @@ or disqualify any drawing profile. Retry native qualification only after a new
 inventory reports an unlocked session; until then, proceed with local slices
 whose evidence does not depend on the desktop.
 
-**Latest implementation checkpoint (2026-11-09 07:51 UTC):** commits
-`387d1920`, `a1c5314c`, `327f0aa7`, and `8a948465` add the R2010/R2013+
-TABLE unknown-prefix fail-closed profile, soft-pointer role validation, and
-generated AC1024/AC1027/AC1032 controls. The focused TABLE test and default
-TABLE reference-role control pass; no fixture was added and no support claim
-is promoted. See the P5 entry and
+**Latest implementation checkpoint (2026-11-09, commit `72726dc7`):** the
+focused `libdxfrw_dwg_reader_matrix_tests --r2007-class-string-footer` selector
+now writes and reads a complete AC1024 DWG in memory whose CLASSES string
+stream exceeds the 15-bit size limit. It verifies the extended footer and exact
+recovery of all three long strings. All nine AC1024 DWGs currently in
+`/Users/dli/doc/dwg/` also report `operationSucceeded=true`, `legacyError=0`
+and no CLASSES CRC mismatch; the reported six-of-ten RTM failure remains
+unverified because only nine AC1024 source paths are available. No parser
+change, fixture, or support claim was added. See the
+[AC1024 CLASSES receipt](docs/research/p6-ac1024-classes-repository-corpus-recheck-2026-11-09.json).
+The preceding P5 TABLE unknown-prefix profile remains recorded in
 [`p5-ac1024-table-unknown-prefix-default-gate-2026-11-09.json`](docs/research/p5-ac1024-table-unknown-prefix-default-gate-2026-11-09.json).
-Continue with another independent local P4/P5/P6 item; native qualification
-remains gated on an unlocked desktop inventory.
 
 **P8 LibreCAD_3 CI follow-up (2026-11-09, live status checked 06:45 UTC):** the previous PR #456 head
 `321f2cad` passed build and required regressions on macOS arm64, then failed
