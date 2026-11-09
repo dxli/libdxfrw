@@ -316,9 +316,14 @@ nine source paths are available. See the
 [AC1024 CLASSES receipt](docs/research/p6-ac1024-classes-repository-corpus-recheck-2026-11-09.json).
 The online search found Autodesk's sample collection labeled "AutoCAD 2010
 and later" and the NextGIS AC1024 corpus, whose README identifies AutoCAD 2016
-M.49.0.0 as the producer. Neither supplies a verifiable AutoCAD 2010 RTM
-sample/hash for the reported CLASSES failure. The failure stays unresolved;
-do not infer an RTM defect from these later or ambiguously sourced samples.
+M.49.0.0 as the producer. A direct download of the contemporaneously listed
+Autodesk `visualization_-_aerial.dwg` is AC1024 and reaches `readDwgClasses END`,
+but its hash is byte-identical to the existing repository fixture, and the
+specific producing AutoCAD build is not independently established. Four other
+direct Autodesk collection downloads checked here are AC1021. None supplies a
+verified AutoCAD 2010 RTM witness for the reported CLASSES failure. The failure
+stays unresolved; do not infer an RTM defect from these later or ambiguously
+sourced samples. See the [AC1024 online sample receipt](docs/research/p6-ac1024-online-sample-rtm-nonreproduction-2026-11-09.json).
 The pinned NextGIS repository tree also exposes seven paired AC1024 DWG/DXF
 profiles (`arc`, `circle`, `ellipse`, `line`, `point2d`, `point3d`, and
 `polyline2d_line`). Only `arc_2010.dwg` has been downloaded and qualified in

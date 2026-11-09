@@ -55,7 +55,7 @@
     "object_parse_failures": 0,
     "strict_dxf_output": "Not produced; strict preflight refused the two null table-control members after the complete read. No output file exists. The CLI returned failure. This is unrelated to CLASSES parsing."
   },
-  "interpretation": "The online sample adds an independently sourced AC1024-format input and an ODA-generated DXF pair; it does not reproduce the reported CLASSES error. Its HEADER uses the already admitted four-byte compatibility profile with a warning, while strict output is correctly refused on null BLOCK_CONTROL/LTYPE_CONTROL members. Because the source was produced by AutoCAD 2016, it cannot resolve an AutoCAD 2010 RTM-specific failure. Keep the issue open pending one of the exact failing RTM files, the missing tenth input, or hashes plus a reproducible BAD_READ_CLASSES trace. Do not infer general AC1024 support from this result. A public-source search rechecked Autodesk's sample listing and the nextgis corpus: Autodesk says its set applies to AutoCAD 2010 and later but does not identify the originating release per file, while nextgis explicitly identifies AutoCAD 2016 as producer. Neither establishes an RTM-origin witness.",
+  "interpretation": "The online sample adds an independently sourced AC1024-format input and an ODA-generated DXF pair; it does not reproduce the reported CLASSES error. Its HEADER uses the already admitted four-byte compatibility profile with a warning, while strict output is correctly refused on null BLOCK_CONTROL/LTYPE_CONTROL members. Because the source was produced by AutoCAD 2016, it cannot resolve an AutoCAD 2010 RTM-specific failure. Keep the issue open pending one of the exact failing RTM files, the missing tenth input, or hashes plus a reproducible BAD_READ_CLASSES trace. Do not infer general AC1024 support from this result. A public-source search rechecked Autodesk's sample listing and the nextgis corpus: Autodesk says its set applies to AutoCAD 2010 and later but does not identify the originating release per file, while nextgis explicitly identifies AutoCAD 2016 as producer. Neither establishes an RTM-origin witness. A direct download of the contemporaneously listed Autodesk visualization_-_aerial.dwg was also checked: it is AC1024 and reaches the Classes END marker, but its SHA-256 is identical to the repository fixture. This authenticates the download origin without adding distinct bytes or proving an RTM producer build; four other Autodesk collection downloads checked in the same pass were AC1021.",
   "fixture_policy": "The DWG and ODA-generated DXF were used only under /private/tmp and are not added to the repository.",
   "online_search_recheck": {
     "date": "2026-11-09",
@@ -131,5 +131,39 @@
       "fixturePolicy": "All downloaded DWGs and generated outputs remain under /private/tmp; no fixture was added."
     },
     "result": "Expanded public AC1024 corpus evidence, but did not locate or reproduce the reported AutoCAD 2010 RTM CLASSES failure. The original failure still needs the exact RTM sample/hash or another independently verified RTM-produced source."
+  },
+  "autodesk2010DirectDownloadRecheck": {
+    "catalogSource": "https://blog.jtbworld.com/2009/06/where-are-sample-dwg-files-for-autocad.html",
+    "directFileUrl": "https://download.autodesk.com/us/samplefiles/acad/visualization_-_aerial.dwg",
+    "catalogClaim": "The contemporaneous June 2009 AutoCAD 2010 sample listing names this Autodesk-hosted file as an AutoCAD 2010 sample.",
+    "localCopy": {
+      "path": "/private/tmp/autodesk-2010-visualization-aerial-online.dwg",
+      "committed": false,
+      "sizeBytes": 473112,
+      "magic": "AC1024",
+      "sha256": "edf22e187337e37d2083b26d6d00ce30ed78d2fd31d6bf0e9869902325ad3ab1"
+    },
+    "existingCorpusComparison": {
+      "path": "tests/samples/AC1024/visualization_-_aerial.dwg",
+      "sha256": "edf22e187337e37d2083b26d6d00ce30ed78d2fd31d6bf0e9869902325ad3ab1",
+      "result": "Byte-identical to the existing repository fixture; no new unique sample coverage."
+    },
+    "readerCheck": {
+      "tool": "build-gcc/dwg2dxf/dwg2dxf",
+      "operation": "dwg2dxf <download> -y -d -v2010 <temporary-output>",
+      "trace": "dwgReader24::readDwgClasses END",
+      "operationSucceeded": true,
+      "sourceVersion": "AC1024",
+      "legacyError": 0,
+      "classesCrcMismatch": false,
+      "traceSha256": "ea1d16f5af9d9041d1a2bb93dafbbca6925412326c99861a5391e186e43a353e",
+      "fixturePolicy": "Input and output kept under /private/tmp; no DWG/DXF added to the repository."
+    },
+    "qualification": "Original Autodesk-hosted AutoCAD 2010 sample-list input, but the per-file producing executable/build is not independently established. It is not a verified AutoCAD 2010 RTM witness."
+  },
+  "additionalAutodeskUrlVersionSpotChecks": {
+    "purpose": "Check that filenames from the historical Autodesk sample collection do not imply AC1024 format.",
+    "result": "Four additional direct Autodesk downloads (lineweights.dwg, tablet.dwg, plot_screening_and_fill_patterns.dwg, blocks_and_tables_-_metric.dwg) have AC1021 headers; excluded from AC1024 evidence.",
+    "fixturePolicy": "All files remained under /private/tmp and were not committed."
   }
 }
