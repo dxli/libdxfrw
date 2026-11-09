@@ -10,8 +10,11 @@ group-90 values; LibreDWG independently reads the same prefix but overruns
 when it guesses the next count. The raw source remains unvalidated and strict
 output remains refused. The physical AC1024 sample now publishes 923/923
 frames with zero entity/object parse failures; export stops at standalone
-OBJECTCONTEXTDATA's unqualified replay path. The generated focused selector
-passes, including rollback/retry controls. See the
+OBJECTCONTEXTDATA's unqualified replay path. The matching AC1021 source profile
+also reaches its 151-bit body bound after the same eight values and publishes
+925/925 frames with zero entity/object parse failures; export stops at the
+separate IMAGEDEF owner-role gate. The generated focused selector passes,
+including rollback/retry controls. See the
 [cross-version conflict receipt](docs/research/p6-persubentmgr-acadsharp-cross-version-dxf-wire-conflict-2026-11-09.json).
 
 **Resume checkpoint (2026-11-09, PERSUBENTMGR legacy raw-validation fix):**

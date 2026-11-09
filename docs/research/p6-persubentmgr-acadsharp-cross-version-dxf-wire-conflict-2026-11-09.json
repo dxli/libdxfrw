@@ -94,16 +94,30 @@
     "regression": "Generated AC1018 PERSUBENTMGR controls verify Missing body status, unvalidated raw payload, raw frame publication, and following-object recovery. Generated AC1024 mode 7 exercises the D63 [3,4] partial prefix and following frame.",
     "command": "cmake --build build-gcc --target libdxfrw_dwg_reader_matrix_tests -j4 && build-gcc/libdxfrw_dwg_reader_matrix_tests --persistent-manager-prefix-dispatch",
     "result": "PASS",
-    "physical_readback": {
-      "input_sha256": "53ecc28e54ff0bbfb022989c47fd1cb16eb07a98825309b66cdf316d900fe4ce",
-      "command": "build-gcc/dwg2dxf/dwg2dxf sample_AC1024.dwg -y -d -v2010 /tmp/ac1024-libdxfrw-after-persubent.dxf",
-      "observed_body_bits": {"start": 47, "end": 111, "bound": 111, "values": [2, 0, 2, 4, 0, 2, 3, 4]},
-      "source_frames": 923,
-      "published_frames": 923,
-      "entity_parse_failures": 0,
-      "object_parse_failures": 0,
-      "strict_output": "refused because standalone DWG OBJECTCONTEXTDATA has no qualified replay path"
-    }
+    "physical_readbacks": [
+      {
+        "version": "AC1021",
+        "input_sha256": "70b5efec9a3c230a9892e810154a760fe72311b1e730fb582f22950135da770a",
+        "command": "build-gcc/dwg2dxf/dwg2dxf sample_AC1021.dwg -y -d -v2007 /tmp/ac1021-libdxfrw-persubent.dxf",
+        "observed_body_bits": {"start": 87, "end": 151, "bound": 151, "values": [2, 0, 2, 4, 0, 2, 3, 4]},
+        "source_frames": 925,
+        "published_frames": 925,
+        "entity_parse_failures": 0,
+        "object_parse_failures": 0,
+        "strict_output": "refused because DWG IMAGEDEF owner role is unqualified for output"
+      },
+      {
+        "version": "AC1024",
+        "input_sha256": "53ecc28e54ff0bbfb022989c47fd1cb16eb07a98825309b66cdf316d900fe4ce",
+        "command": "build-gcc/dwg2dxf/dwg2dxf sample_AC1024.dwg -y -d -v2010 /tmp/ac1024-libdxfrw-after-persubent.dxf",
+        "observed_body_bits": {"start": 47, "end": 111, "bound": 111, "values": [2, 0, 2, 4, 0, 2, 3, 4]},
+        "source_frames": 923,
+        "published_frames": 923,
+        "entity_parse_failures": 0,
+        "object_parse_failures": 0,
+        "strict_output": "refused because standalone DWG OBJECTCONTEXTDATA has no qualified replay path"
+      }
+    ]
   },
   "next": "Capture an independent bit-span trace for the D63 DWG object in AC1015/AC1021/AC1024 and identify exact class-body end, any trailing count bits, the object handle-stream start, and versioned padding. Reconcile those spans with paired DXF group-90 projections before broadening any typed-prefix path. Preserve the existing AC1021/AC1024 profile gates and generated truncation/retry tests."
 }
