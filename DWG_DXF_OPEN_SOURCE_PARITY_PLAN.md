@@ -908,10 +908,11 @@ behavior independently. Local macOS checks do not satisfy those platform gates.
   reaches install and rejects Homebrew's regenerated dependency table, while
   x86_64 has no CMake bottle under `--force-bottle` and its attempted source
   build does not qualify the job. The isolated local consumer checkout already
-  contains candidate commit `1a012ff6`, which validates dependency-table
-  schemas without confusing them with the actual Mach-O load graph; its 41
-  focused tests, full plan validation, and whitespace check pass. That commit
-  has no hosted rerun and is not the remote PR head. Keep both Mac gates open;
+  contains candidate commits `1a012ff6` and `8412c5e0`; the latter adds direct
+  staging-source capture and rejected-load rollback coverage. Its 42 focused
+  tests, full plan validation, 31 checker regressions, 12-gate worktree audit,
+  and whitespace check pass. The latest candidate commit has no hosted rerun
+  and is not the remote PR head. Keep both Mac gates open;
   keep the x86_64 provider decision explicit and do not accept source-build
   fallback. See the [hosted CI recheck receipt](docs/research/p8-librecad3-pr456-hosted-ci-recheck-2026-11-09.json).
 - **Desktop qualification recheck:** after the latest user reply that they
