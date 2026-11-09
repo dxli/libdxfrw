@@ -2536,6 +2536,10 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dxf_fixture_tests --text-ocs-extrusion)
     set_tests_properties(libdxfrw_dxf_text_ocs_extrusion PROPERTIES
         LABELS "fast;dxf;reader;generated;geometry" TIMEOUT 30)
+    add_test(NAME libdxfrw_dxf_write_attempt_failure
+        COMMAND libdxfrw_dxf_fixture_tests --dxf-write-attempt-failure)
+    set_tests_properties(libdxfrw_dxf_write_attempt_failure PROPERTIES
+        LABELS "fast;dxf;writer;rollback;retry" TIMEOUT 30)
     add_test(NAME libdxfrw_dxf_hatch_ocs_wcs_coordinate
         COMMAND libdxfrw_dxf_fixture_tests --hatch-ocs-wcs-coordinate)
     set_tests_properties(libdxfrw_dxf_hatch_ocs_wcs_coordinate PROPERTIES

@@ -65398,9 +65398,13 @@ void testDxfWriteAttemptFailure(TestContext& t) {
                 adapter.bad.m_backgroundColorName.clear();
                 t.expect(codec.write(&adapter, DRW::AC1027, binary),
                          "correcting only the rejected prefix permits same-model same-writer retry");
-                t.expect(adapter.poly.handle > 0xE200u
-                             && codec.remapEntityHandle(0xB100u) == adapter.poly.handle,
-                         "retry preserves caller reservations and successful handle/map behavior");
+                const std::uint32_t emittedPolylineHandle =
+                    codec.remapEntityHandle(0xB100u);
+                t.expect(adapter.poly.handle == 0xB100u
+                             && adapter.poly.vertlist[0]->handle == 0xB101u
+                             && adapter.poly.vertlist[1]->handle == 0xB102u
+                             && emittedPolylineHandle > 0xE200u,
+                         "retry preserves caller identities and exposes reserved emitted handles through the map");
                 rawSelfReference(binary);
                 std::vector<TableOwnerRecord> persistent;
                 t.expect(readTableOwnerRecords(output, binary, persistent), "retry persistent registrations frame correctly");
@@ -65410,7 +65414,7 @@ void testDxfWriteAttemptFailure(TestContext& t) {
                     section = section || (record.kind == "SECTION" && groupValue(record.groups, 2) == "ATTEMPT_SECTION");
                     dictionary = dictionary || (record.kind == "DICTIONARY" && groupValue(record.groups, 5) == "E300");
                     group = group || (record.kind == "GROUP" && groupValue(record.groups, 340)
-                        == codec.toHexStrHandle(adapter.poly.handle));
+                        == codec.toHexStrHandle(emittedPolylineHandle));
                     owner = owner || (record.kind == "POLYLINE" && groupValue(record.groups, 330)
                         == codec.toHexStrHandle(DRW::DxfModelSpaceBlockRecordHandle));
                 }
@@ -65425,12 +65429,8 @@ void testDxfWriteAttemptFailure(TestContext& t) {
                              "pre-session rejection discards previous results but preserves first cause and output");
                 };
                 expectEarlyRejection(DRW::UNKNOWNV, &adapter, "unsupported-version");
-                // Restore the pristine source identity before another complete
-                // export; successful writes intentionally mutate caller handles.
-                adapter.poly.handle = 0xB100u;
                 t.expect(codec.write(&adapter, DRW::AC1027, binary), "writer can recover after version rejection");
                 expectEarlyRejection(DRW::AC1027, nullptr, "invalid-argument");
-                adapter.poly.handle = 0xB100u;
                 t.expect(codec.write(&adapter, DRW::AC1027, binary), "writer can recover after null-interface rejection");
                 t.expect(!codec.reserveHandle((std::numeric_limits<std::uint32_t>::max)()),
                          "overflowing reservation supplies an early-admission negative");
@@ -65456,8 +65456,9 @@ void testDxfWriteAttemptFailure(TestContext& t) {
             rawSelfReference(binary);
             adapter.dxfW = nullptr;
         }
-        // A successful prefix remains a committed call; automatic whole-file
-        // restoration of borrowed records is deliberately not promised.
+        // A successful prefix call has its own record transaction. The writer
+        // preserves borrowed source identities, while the enclosing failed
+        // attempt discards its derived remap results.
         for (int mode = 0; mode != 5; ++mode) {
             dx_data data;
             populate(data);
@@ -65478,8 +65479,10 @@ void testDxfWriteAttemptFailure(TestContext& t) {
                      "later validation/exception/publication failure follows a successful prefix");
             t.expect(emptyResults(codec), "later failure clears all derived results after callback records expire");
             if (mode == 0)
-                t.expect(adapter.poly.handle != 0xB100u,
-                         "whole-file failure does not claim rollback of an earlier successful caller record");
+                t.expect(adapter.poly.handle == 0xB100u
+                             && adapter.poly.vertlist[0]->handle == 0xB101u
+                             && adapter.poly.vertlist[1]->handle == 0xB102u,
+                         "successful prefix preserves caller POLYLINE and VERTEX source identities");
             if (mode >= 2)
                 t.expect(codec.getLastDiagnostic().code == (mode == 2 ? "callback-exception"
                     : mode == 3 ? "commit-failure" : "unresolved-block-owner"),
@@ -68543,6 +68546,13 @@ int main(int argc, char** argv) {
         TestContext context;
         testLegacyTableCellBorderOverrides(context);
         std::cout << "AC1018 TABLE cell-border override profiles: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--dxf-write-attempt-failure") {
+        TestContext context;
+        testDxfWriteAttemptFailure(context);
+        std::cout << "DXF write attempt rollback/retry: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

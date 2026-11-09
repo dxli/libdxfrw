@@ -19,7 +19,12 @@ VERTEX source state through calibration, every injected failure, and retry;
 typed DXF readback checks the minted parent, vertex and owner identities.
 Entity-reference remapping, INSERT rollback, vertex XDATA and polyline role
 controls pass. Other entity types still require their owning controls. No
-fixture was added.
+fixture was added. The successful-write/whole-file-failure lifecycle also has
+an independently selectable fast CTest now: its ASCII/Binary retry profiles
+assert that source POLYLINE/VERTEX handles remain intact, emitted identities
+are obtained from the source-to-emitted map, and failed enclosing attempts
+discard derived maps. The old assertions that expected successful caller-handle
+mutation were corrected; the focused attempt-failure control passes.
 See the [allocation receipt](docs/research/p6-dxf-partial-viewing-index-objects-allocation-failure-retry-2026-11-09.json).
 
 The AC1024 online sample search also re-confirmed public candidates: Autodesk's
