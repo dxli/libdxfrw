@@ -27,15 +27,19 @@ or disqualify any drawing profile. Retry native qualification only after a new
 inventory reports an unlocked session; until then, proceed with local slices
 whose evidence does not depend on the desktop.
 
-**Latest implementation checkpoint (2026-11-09, commit `72726dc7`):** the
-focused `libdxfrw_dwg_reader_matrix_tests --r2007-class-string-footer` selector
-now writes and reads a complete AC1024 DWG in memory whose CLASSES string
-stream exceeds the 15-bit size limit. It verifies the extended footer and exact
-recovery of all three long strings. All nine AC1024 DWGs currently in
-`/Users/dli/doc/dwg/` also report `operationSucceeded=true`, `legacyError=0`
-and no CLASSES CRC mismatch; the reported six-of-ten RTM failure remains
-unverified because only nine AC1024 source paths are available. No parser
-change, fixture, or support claim was added. See the
+**Latest implementation checkpoint (2026-11-09, commit `3a922aa2`):** the
+AC1027 PERSUBENTMGR generated raw-only control now shortens its common handle
+span by one bit and verifies the malformed manager is withheld, the following
+object publishes, and restored input permits raw-only recovery. The focused
+`libdxfrw_dwg_reader_matrix_tests --persistent-manager-prefix-dispatch` selector
+passes; no fixture or parser behavior change was added and no support claim was
+promoted. See the
+[truncation/retry receipt](docs/research/p6-ac1027-persubentmgr-common-handle-truncation-retry-2026-11-09.json).
+The preceding AC1024 CLASSES generated readback and corpus check remains
+recorded: its focused selector reads three 2048-character strings from a
+from-scratch file, while all nine available AC1024 sources pass the current
+reader; the reported six-of-ten RTM failure remains unverified because only
+nine source paths are available. See the
 [AC1024 CLASSES receipt](docs/research/p6-ac1024-classes-repository-corpus-recheck-2026-11-09.json).
 The preceding P5 TABLE unknown-prefix profile remains recorded in
 [`p5-ac1024-table-unknown-prefix-default-gate-2026-11-09.json`](docs/research/p5-ac1024-table-unknown-prefix-default-gate-2026-11-09.json).
