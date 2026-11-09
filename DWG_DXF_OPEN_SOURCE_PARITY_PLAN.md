@@ -881,12 +881,19 @@ do not repeat this TABLESTYLE codec work.
    `(1,1,1)` does not match paired DXF reference-vector groups 11/21/31
    `(0,0,0)`; do not conflate them. This co-located LibreDWG pair is not
    authenticated AutoCAD/ODA output and cannot prove a producer-wide DWG
-   layout or embedded-entity semantics. Do not consume the suffix bit or
-   extra `0xCC` bytes as padding. Next resolve the vector, group-71 candidate,
-   framing and embedded entity profiles with independent evidence and bounded
-   transactional codecs. Keep Sweep output refused and support claims unchanged
+   layout or embedded-entity semantics. A peer cross-check further lowers
+   confidence: LibreDWG 0.14 marks this class `DEBUGGING`; its `dwg2.spec`
+   order conflicts with ACadRust, and its exact-input JSON/DXF outputs contain
+   2,568 unknown object bits and malformed values. The paired DWG and DXF
+   entered LibreDWG's corpus in one 2018 conversion/test commit without naming
+   an AutoCAD/ODA producer, so the DXF does not establish independent DWG
+   semantics. Do not consume the suffix bit or extra `0xCC` bytes as padding,
+   and do not reorder fields from this conflict. Next add a bounded
+   competing-order diagnostic and pursue a native or independently authored
+   producer witness. Keep Sweep output refused and support claims unchanged
    until graph dependencies, roles, output/readback and independent consumer
-   semantics close. See the [candidate-field differential receipt](docs/research/p4-ac1027-sweep-dxf-candidate-field-differential-2026-11-08.json).
+   semantics close. See the [candidate-field differential receipt](docs/research/p4-ac1027-sweep-dxf-candidate-field-differential-2026-11-08.json)
+   and [peer-conflict receipt](docs/research/p4-ac1027-sweep-libredwg-peer-conflict-2026-11-08.json).
    Autodesk's DXF reference explicitly classifies group 350
    as soft-owner, while ODA §2.13 classifies observed DWG H code 3 as hard
    ownership; ODA File Converter emits this same target value as group 350.
