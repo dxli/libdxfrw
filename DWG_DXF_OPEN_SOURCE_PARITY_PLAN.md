@@ -27,14 +27,15 @@ or disqualify any drawing profile. Retry native qualification only after a new
 inventory reports an unlocked session; until then, proceed with local slices
 whose evidence does not depend on the desktop.
 
-**Latest implementation checkpoint (2026-11-09, commit `85f2cc01`):** the
-generated AC1027 and AC1032 PERSUBENTMGR raw-only controls each shorten the
-common handle span by one bit and verify the malformed manager is withheld,
-the following object publishes, and restored input permits raw-only recovery. The focused
+**Latest implementation checkpoint (2026-11-09, commit `8a0ef446`):** the
+AC1027 and AC1032 PERSUBENTMGR generated controls now cover the complete
+candidate scalar/vector prefix and the one-bit-short common-handle failure.
+They verify exact values, bounded Complete prefix status, an unvalidated raw
+carrier, following-frame recovery and corrected-input recovery. The focused
 `libdxfrw_dwg_reader_matrix_tests --persistent-manager-prefix-dispatch` selector
-passes; no fixture or parser behavior change was added and no support claim was
-promoted. See the
-[truncation/retry receipt](docs/research/p6-persubentmgr-common-handle-truncation-retry-2026-11-09.json).
+passes; no fixture or production parser change was added and no support claim
+was promoted. See the
+[PERSUBENTMGR receipt](docs/research/p6-persubentmgr-common-handle-truncation-retry-2026-11-09.json).
 The preceding AC1024 CLASSES generated readback and corpus check remains
 recorded: its focused selector reads three 2048-character strings from a
 from-scratch file, while all nine available AC1024 sources pass the current
