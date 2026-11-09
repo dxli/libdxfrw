@@ -319,6 +319,11 @@ and later" and the NextGIS AC1024 corpus, whose README identifies AutoCAD 2016
 M.49.0.0 as the producer. Neither supplies a verifiable AutoCAD 2010 RTM
 sample/hash for the reported CLASSES failure. The failure stays unresolved;
 do not infer an RTM defect from these later or ambiguously sourced samples.
+The pinned NextGIS repository tree also exposes seven paired AC1024 DWG/DXF
+profiles (`arc`, `circle`, `ellipse`, `line`, `point2d`, `point3d`, and
+`polyline2d_line`). Only `arc_2010.dwg` has been downloaded and qualified in
+the local reader/ODA run; the rest are online candidate inputs, not yet tested.
+Exact tree/blob IDs and sizes are listed in the [online sample receipt](docs/research/p6-ac1024-online-sample-rtm-nonreproduction-2026-11-09.json).
 The preceding P5 TABLE unknown-prefix profile remains recorded in
 [`p5-ac1024-table-unknown-prefix-default-gate-2026-11-09.json`](docs/research/p5-ac1024-table-unknown-prefix-default-gate-2026-11-09.json).
 
