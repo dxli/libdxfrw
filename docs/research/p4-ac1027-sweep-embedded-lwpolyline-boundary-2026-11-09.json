@@ -16,7 +16,15 @@
         "capturedHex": "02408e1d7f27d2e7cbfc02f91c0d519a7fb2fcc6470287239edcbf9040b4a7039d4bec5c000000000000000000d4a7039f4bec5c000000000000000000d4a7039f4bec5c002000000000010400b4a7039d4bec5c00200000000001040c",
         "candidatePrefix": {
           "flags": 521,
+          "elevation": -8060.1816093232201,
+          "normal": [-0.89445797356369616, -0.44715202507461205, 0],
           "vertexCount": 4,
+          "verticesXY": [
+            [-11133.658002887872, 0],
+            [-11133.908002887876, 0],
+            [-11133.908002887876, 4.0000000000000018],
+            [-11133.658002887872, 4.0000000000000018]
+          ],
           "consumedBits": 740,
           "unresolvedSuffixBits": "1100"
         }
@@ -27,7 +35,13 @@
         "capturedHex": "01008000000000000d03f40d82bc683001ba85026117a7ada5f729030292fb37d39aa900931a5ca5eeb32d01839c5a5d0232c100931a5ca5eeb32d00",
         "candidatePrefix": {
           "flags": 516,
+          "constantWidth": 0.25,
           "vertexCount": 3,
+          "verticesXY": [
+            [2231.0000923480111, 13562.827511939031],
+            [3443.4781322074996, 14168.962206813572],
+            [4236.2523054423218, 14168.962206813572]
+          ],
           "consumedBits": 478,
           "unresolvedSuffixBits": "00"
         }
@@ -60,7 +74,9 @@
   },
   "method": {
     "candidateProfile": "ODA type/body boundary plus ACadRust embedded-LWPOLYLINE field order; raw XY doubles; no common entity prefix or handle stream.",
-    "measurement": "Temporary bounded parser experiment read the BS flags, optional elevation/extrusion, BL vertex count, and raw 2RD vertices. It required exact declared-bit consumption before publishing a typed record.",
+    "measurement": "The opt-in test-only source probe has a separate candidate-field decoder that shares dwgBuffer bit primitives with production code. It reads the BS flags, optional BD/3BD values, BL counts, raw 2RD vertices and optional arrays with declared-bit bounds. It reports parsed fields and exact suffix bits; it does not call or publish a DRW entity.",
+    "probeCommand": "cmake --build build-gcc --target libdxfrw_ac1027_acds_source_probe -j4 && build-gcc/libdxfrw_ac1027_acds_source_probe /private/tmp/example_2013.dwg",
+    "probeResult": "PASS: drawing read completed with 481/481 published source frames and zero entity/object parse failures; profile and path candidate outputs recorded above.",
     "productionChange": false,
     "fixtureAdded": false
   },

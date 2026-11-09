@@ -10545,22 +10545,30 @@ entity data. The independent [ACadRust embedded-entity reader](https://docs.rs/a
 routes that profile through `read_embedded_lwpolyline`, whose LWPOLYLINE reader
 uses raw XY doubles for embedded vertices (the normal entity path uses
 default-delta XY doubles). Applying that candidate field order to the pinned
-physical AC1027 Sweep payload reads profile flags `521` and four vertices, and
-path flags `516` and three vertices. It consumes 740/744 and 478/480 declared
-bits respectively, leaving nonzero 4-bit and 2-bit suffixes. Neither the ODA
+physical AC1027 Sweep payload reads profile flags `521`, elevation
+`-8060.1816093232201`, extrusion `(-0.89445797356369616,
+-0.44715202507461205, 0)`, and four XY vertices; path flags `516`, constant
+width `0.25`, and three XY vertices. A new opt-in candidate-field decoder in
+the physical source-probe target reports these values from bounded
+`dwgBuffer` primitives; it is separate from the production entity parser but
+shares its bit reader. Its build and hash-pinned sample probe pass with
+481/481 published frames and zero entity/object parse failures. It consumes
+740/744 and 478/480 declared bits
+respectively, leaving nonzero 4-bit and 2-bit suffixes. Neither the ODA
 description nor the peer reader's source establishes those suffix bits as
 padding or child-body extensions; the peer reader does not provide an exact
 consumption proof for this specimen. Therefore the candidate decode is not
 complete: retain the existing bounded raw payloads, do not publish typed
 profile/path values, and do not change strict-output or support status. The
-temporary decoder experiment was removed after it failed exact-span checks.
-No fixture or source change was retained. Next local step: determine whether
-the suffix is a defined embedded-record field using a primary or independently
-observable producer trace, or keep this child opaque and advance to another
-ready plan item. ODA File Converter retry remains gated on a fresh desktop
-inventory showing the Mac session accessible. The exact payload hashes, bytes,
-candidate field-order basis, prefix-consumption positions, and unknown suffix
-bits are recorded in the [research receipt](docs/research/p4-ac1027-sweep-embedded-lwpolyline-boundary-2026-11-09.json).
+earlier temporary production-parser experiment was removed after it failed
+exact-span checks; the current probe is diagnostic-only. No fixture was added.
+Next step: determine whether the suffix is a defined embedded-record field
+using a primary or independently observable producer trace, or keep this
+child opaque and advance to another ready plan item. ODA File Converter retry
+remains gated on a fresh desktop inventory showing the Mac session accessible.
+The exact payload hashes, bytes, candidate field-order basis, decoded
+coordinates, prefix-consumption positions, and unknown suffix bits are
+recorded in the [research receipt](docs/research/p4-ac1027-sweep-embedded-lwpolyline-boundary-2026-11-09.json).
 
 **Next external evidence action — S2.3.9.4.38 (research/probe, not a parser
 rewrite):**

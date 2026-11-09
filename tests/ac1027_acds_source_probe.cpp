@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <iomanip>
@@ -23,6 +24,134 @@ void hexBytes(const std::vector<std::uint8_t>& bytes) {
         std::cout << std::hex << std::setfill('0') << std::setw(2)
                   << static_cast<unsigned>(value);
     std::cout << std::dec;
+}
+
+// Separate candidate field-order diagnostic; it shares dwgBuffer bit
+// primitives with production code but does not call or publish a DRW entity.
+void diagnoseEmbeddedLwPolyline(const char* label, std::int32_t type,
+                                std::uint32_t declaredBits,
+                                const std::vector<std::uint8_t>& bytes) {
+    if (type != 0x4D || declaredBits == 0u)
+        return;
+    dwgBuffer probe(bytes.data(), bytes.size());
+    const std::uint64_t bound = declaredBits;
+    const auto bit = [&]() {
+        return probe.getPosition() * 8u + probe.getBitPos();
+    };
+    const auto readShort = [&](std::uint16_t& value) {
+        value = probe.getBitShort();
+        return probe.isGood() && bit() <= bound;
+    };
+    const auto readLong = [&](std::int32_t& value) {
+        value = probe.getBitLong();
+        return probe.isGood() && bit() <= bound;
+    };
+    const auto readDouble = [&](double& value) {
+        value = probe.getBitDouble();
+        return probe.isGood() && bit() <= bound && std::isfinite(value);
+    };
+    const auto readRawDouble = [&](double& value) {
+        value = probe.getRawDouble();
+        return probe.isGood() && bit() <= bound && std::isfinite(value);
+    };
+    const auto fail = [&](const char* stage) {
+        std::cout << "SWEEP_" << label << "_EMBEDDED_LWPOLYLINE candidate=0"
+                  << " bits=" << bit() << '/' << bound << " stop=" << stage
+                  << '\n';
+    };
+    if (declaredBits > static_cast<std::uint64_t>(bytes.size()) * 8u) {
+        fail("declared-bound");
+        return;
+    }
+
+    std::uint16_t rawFlags = 0;
+    if (!readShort(rawFlags)) return fail("flags");
+    double constantWidth = 0.0;
+    double elevation = 0.0;
+    double thickness = 0.0;
+    DRW_Coord normal(0.0, 0.0, 1.0);
+    if ((rawFlags & 4u) != 0u && !readDouble(constantWidth))
+        return fail("constant-width");
+    if ((rawFlags & 8u) != 0u && !readDouble(elevation))
+        return fail("elevation");
+    if ((rawFlags & 2u) != 0u && !readDouble(thickness))
+        return fail("thickness");
+    if ((rawFlags & 1u) != 0u) {
+        normal = probe.get3BitDouble();
+        if (!probe.isGood() || bit() > bound || !std::isfinite(normal.x)
+            || !std::isfinite(normal.y) || !std::isfinite(normal.z))
+            return fail("normal");
+    }
+
+    std::int32_t vertexCount = 0;
+    if (!readLong(vertexCount) || vertexCount < 0 || vertexCount > 10000)
+        return fail("vertex-count");
+    std::uint64_t rawPointBits =
+        static_cast<std::uint64_t>(vertexCount) * 128u;
+    if (bit() > bound || rawPointBits > bound - bit())
+        return fail("raw-point-bound");
+
+    std::int32_t bulgeCount = 0;
+    std::int32_t vertexIdCount = 0;
+    std::int32_t widthCount = 0;
+    if ((rawFlags & 16u) != 0u
+        && (!readLong(bulgeCount) || bulgeCount < 0
+            || bulgeCount > vertexCount))
+        return fail("bulge-count");
+    if ((rawFlags & 1024u) != 0u
+        && (!readLong(vertexIdCount) || vertexIdCount < 0
+            || vertexIdCount > vertexCount))
+        return fail("vertex-id-count");
+    if ((rawFlags & 32u) != 0u
+        && (!readLong(widthCount) || widthCount < 0
+            || widthCount > vertexCount))
+        return fail("width-count");
+
+    std::vector<DRW_Coord> points;
+    points.reserve(static_cast<std::size_t>(vertexCount));
+    for (std::int32_t i = 0; i < vertexCount; ++i) {
+        DRW_Coord point;
+        if (!readRawDouble(point.x) || !readRawDouble(point.y))
+            return fail("raw-point");
+        points.push_back(point);
+    }
+    for (std::int32_t i = 0; i < bulgeCount; ++i) {
+        double ignored = 0.0;
+        if (!readDouble(ignored)) return fail("bulge");
+    }
+    for (std::int32_t i = 0; i < vertexIdCount; ++i) {
+        std::int32_t ignored = 0;
+        if (!readLong(ignored)) return fail("vertex-id");
+    }
+    for (std::int32_t i = 0; i < widthCount; ++i) {
+        double ignored = 0.0;
+        if (!readDouble(ignored) || !readDouble(ignored))
+            return fail("width");
+    }
+
+    std::cout << std::setprecision(17) << "SWEEP_" << label
+              << "_EMBEDDED_LWPOLYLINE candidate=1 flags=" << rawFlags
+              << " constantWidth=" << constantWidth
+              << " elevation=" << elevation << " thickness=" << thickness
+              << " normal=" << normal.x << ',' << normal.y << ','
+              << normal.z << " vertices=" << points.size()
+              << " consumed=" << bit() << '/' << bound
+              << " suffixBits=" << bound - bit() << " suffix=";
+    dwgBuffer suffix = probe.forkIndependent();
+    if (suffix.setPosition(bit() >> 3u)) {
+        suffix.setBitPos(static_cast<std::uint8_t>(bit() & 7u));
+        const std::uint64_t shownBits = std::min<std::uint64_t>(
+            bound - bit(), 64u);
+        for (std::uint64_t i = 0; i < shownBits; ++i)
+            std::cout << static_cast<unsigned>(suffix.getBit());
+        if (shownBits < bound - bit()) std::cout << "...";
+    }
+    std::cout << " xy=";
+    for (std::size_t i = 0; i < points.size(); ++i) {
+        if (i != 0u) std::cout << ';';
+        std::cout << points[i].x << ',' << points[i].y;
+    }
+    std::cout << '\n';
 }
 
 void diagnoseLibreDwgSweepOrder(
@@ -407,6 +536,12 @@ int main(int argc, char** argv) {
                       << sweep.m_pathBitSize << ' ';
             hexBytes(sweep.m_pathBits);
             std::cout << '\n';
+            diagnoseEmbeddedLwPolyline("PROFILE", sweep.m_profileType,
+                                       sweep.m_profileBitSize,
+                                       sweep.m_profileBits);
+            diagnoseEmbeddedLwPolyline("PATH", sweep.m_pathType,
+                                       sweep.m_pathBitSize,
+                                       sweep.m_pathBits);
             diagnoseLibreDwgSweepOrder(sweep);
             diagnoseSweepOptionWidths(sweep);
         }
