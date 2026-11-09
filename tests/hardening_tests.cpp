@@ -55,6 +55,17 @@ public:
     }
 };
 
+class DRW_AcShHistoryTestAccess {
+public:
+    static bool parseSweepActionBody(
+        DRW::Version version, dwgBuffer& buffer, std::uint32_t bodyEndBit,
+        DRW_AcShHistoryObject::SweepActionBodyCapture& output,
+        std::uint64_t& parsedEndBit) {
+        return DRW_AcShHistoryObject::parseSweepActionBody(
+            version, &buffer, bodyEndBit, output, parsedEndBit);
+    }
+};
+
 namespace {
 
 struct TestContext {
@@ -20319,6 +20330,142 @@ void testAcshActionBodyExactSpan(TestContext& t) {
     t.expect(DRW_AssociativePrefixStatus::fromBoundedBody(false, 128u, 128u)
                  == Status::Partial,
              "ACSH action body decode failure remains partial at the bound");
+
+    const auto makeBody = [](bool suffix, std::int32_t profileBits,
+                             std::int32_t declaredProfileBits = 5,
+                             std::int32_t profileType = 77) {
+        dwgBufferW writer;
+        writer.putBitLong(33);
+        writer.putBitLong(29);
+        writer.put3BitDouble(DRW_Coord(0.0, 0.0, 1.0));
+        writer.putBitDouble(0.25);
+        writer.putBitDouble(1.5);
+        writer.putBitDouble(2.5);
+        writer.putBitDouble(0.75);
+        writer.putBitDouble(1.0);
+        writer.putBitDouble(-0.5);
+        writer.putBoolBit(true);
+        writer.putBitShort(2);
+        writer.putBitShort(3);
+        writer.putBoolBit(true);
+        writer.putBoolBit(false);
+        writer.putBoolBit(true);
+        writer.putBoolBit(true);
+        writer.put3BitDouble(DRW_Coord(1.0, 1.0, 1.0));
+        writer.putBoolBit(false);
+        for (unsigned i = 0; i < 16; ++i)
+            writer.putBitDouble(i == 0 || i == 5 || i == 10 || i == 15
+                                    ? 1.0 : 0.0);
+        for (unsigned i = 0; i < 16; ++i)
+            writer.putBitDouble(i == 0 || i == 5 || i == 10 || i == 15
+                                    ? 1.0 : 0.0);
+        writer.putBitLong(profileType);
+        if (profileType == 15 || profileType == 16) {
+            // The qualified codec uses a distinct modeler-wire-body form;
+            // this control checks that it remains bounded opaque data.
+            writer.putBoolBit(false);
+            writer.putBitShort(2);
+            writer.putRawChar8(0xA5u);
+        } else {
+            writer.putBitLong(declaredProfileBits);
+            for (std::int32_t i = 0; i < profileBits; ++i)
+                writer.putBoolBit((i % 2) == 0);
+            writer.putBitLong(0);
+            if (suffix)
+                writer.putBoolBit(false);
+        }
+        const std::uint32_t endBit = static_cast<std::uint32_t>(
+            writer.size() * 8u - (writer.bitPos() == 0u
+                ? 0u : 8u - writer.bitPos()));
+        return std::make_pair(writer.data(), endBit);
+    };
+    const auto validBody = makeBody(true, 5);
+    dwgBuffer validBuffer(validBody.first.data(), validBody.first.size());
+    DRW_AcShHistoryObject::SweepActionBodyCapture capture;
+    std::uint64_t parsedEnd = 0;
+    const bool validRead = DRW_AcShHistoryTestAccess::parseSweepActionBody(
+        DRW::AC1027, validBuffer, validBody.second, capture, parsedEnd);
+    t.expect(validRead && parsedEnd == validBody.second
+                 && validBuffer.getPosition() * 8u + validBuffer.getBitPos()
+                     == validBody.second
+                 && capture.m_operationMajor == 33
+                 && capture.m_operationMinor == 29
+                 && capture.m_direction.z == 1.0
+                 && capture.m_scalars[0] == 0.25
+                 && capture.m_scalars[4] == 1.0
+                 && capture.m_alignOption == 2
+                 && capture.m_miterOption == 3
+                 && capture.m_profileType == 77
+                 && capture.m_profileBitSize == 5u
+                 && capture.m_profileBits == std::vector<std::uint8_t>{0xA8u}
+                 && capture.m_pathType == 0
+                 && capture.m_opaqueTailBitSize == 1u
+                 && capture.m_opaqueTailBits == std::vector<std::uint8_t>{0x00u}
+                 && !capture.m_structuralFieldsComplete
+                 && !capture.m_exactBodyEnd,
+             "ACSH Sweep candidate fields parse transactionally and retain the opaque one-bit suffix");
+
+    const auto specialProfileBody = makeBody(false, 0, 0, 15);
+    dwgBuffer specialProfileBuffer(specialProfileBody.first.data(),
+                                   specialProfileBody.first.size());
+    DRW_AcShHistoryObject::SweepActionBodyCapture specialProfileCapture;
+    std::uint64_t specialProfileEnd = 0;
+    const bool specialProfileRead =
+        DRW_AcShHistoryTestAccess::parseSweepActionBody(
+            DRW::AC1027, specialProfileBuffer, specialProfileBody.second,
+            specialProfileCapture, specialProfileEnd);
+    t.expect(specialProfileRead
+                 && specialProfileEnd == specialProfileBody.second
+                 && specialProfileCapture.m_profileType == 15
+                 && specialProfileCapture.m_opaqueTailBitSize > 0u
+                 && !specialProfileCapture.m_structuralFieldsComplete
+                 && !specialProfileCapture.m_exactBodyEnd,
+             "unqualified polyline modeler-body profile is retained as bounded opaque tail");
+
+    const auto exactBody = makeBody(false, 5);
+    dwgBuffer exactBuffer(exactBody.first.data(), exactBody.first.size());
+    DRW_AcShHistoryObject::SweepActionBodyCapture exactCapture;
+    std::uint64_t exactEnd = 0;
+    const bool exactRead = DRW_AcShHistoryTestAccess::parseSweepActionBody(
+        DRW::AC1027, exactBuffer, exactBody.second, exactCapture, exactEnd);
+    t.expect(exactRead && exactEnd == exactBody.second
+                 && exactCapture.m_structuralFieldsComplete
+                 && exactCapture.m_exactBodyEnd
+                 && exactCapture.m_opaqueTailBitSize == 0u,
+             "ACSH Sweep action body is complete only when all framed fields end at the exact bound");
+
+    const auto truncatedBody = makeBody(false, 6, 6);
+    dwgBuffer retryBuffer(truncatedBody.first.data(), truncatedBody.first.size());
+    DRW_AcShHistoryObject::SweepActionBodyCapture retryCapture;
+    retryCapture.m_operationMajor = 999;
+    std::uint64_t retryEnd = 999;
+    const bool truncatedRead = DRW_AcShHistoryTestAccess::parseSweepActionBody(
+        DRW::AC1027, retryBuffer, truncatedBody.second - 1u,
+        retryCapture, retryEnd);
+    t.expect(!truncatedRead && retryCapture.m_operationMajor == 999
+                 && retryEnd == 999u && retryBuffer.getPosition() == 0u
+                 && retryBuffer.getBitPos() == 0u,
+             "truncated ACSH Sweep entity body leaves caller state and cursor unchanged");
+    const bool correctedRead = DRW_AcShHistoryTestAccess::parseSweepActionBody(
+        DRW::AC1027, retryBuffer, truncatedBody.second,
+        retryCapture, retryEnd);
+    t.expect(correctedRead && retryCapture.m_profileBitSize == 6u
+                 && retryEnd == truncatedBody.second,
+             "corrected ACSH Sweep body parses on the same buffer after truncation refusal");
+
+    const auto overBudgetBody = makeBody(false, 0, 134217729);
+    dwgBuffer overBudgetBuffer(overBudgetBody.first.data(),
+                               overBudgetBody.first.size());
+    DRW_AcShHistoryObject::SweepActionBodyCapture overBudgetCapture;
+    std::uint64_t overBudgetEnd = 0;
+    const bool overBudgetRead =
+        DRW_AcShHistoryTestAccess::parseSweepActionBody(
+            DRW::AC1027, overBudgetBuffer, overBudgetBody.second,
+            overBudgetCapture, overBudgetEnd);
+    t.expect(!overBudgetRead && overBudgetEnd == 0u
+                 && overBudgetBuffer.getPosition() == 0u
+                 && overBudgetBuffer.getBitPos() == 0u,
+             "oversized ACSH Sweep embedded bit count is rejected without cursor movement");
 }
 
 void testDwgModelerHistoryHandleField(TestContext& t) {

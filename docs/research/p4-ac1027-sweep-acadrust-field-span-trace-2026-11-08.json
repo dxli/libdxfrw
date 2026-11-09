@@ -11,6 +11,16 @@
     "class": "ACSH_SWEEP_CLASS"
   },
   "method": "Ran a debug-only candidate cursor trace from the already bounded action-body start using libdxfrw's existing bounded BL, BS, B, BD and 3BD readers. The trace used an independent buffer cursor. Embedded entity payloads were skipped only by their declared bit lengths; their contents were not semantically decoded. No testing DWG/DXF fixture was added.",
+  "implementationSources": [
+    {
+      "url": "https://github.com/hakanaktt/acadrust/blob/eababc03c625eaf9cfc5169953d7ee88f2015338/src/io/dwg/dwg_stream_readers/object_reader/dynamic_block.rs",
+      "observation": "read_history_sweep uses the candidate field order and reads ordinary embedded entities as type BL, then bit-length BL and that many body bits unless the type has a separately handled special profile."
+    },
+    {
+      "url": "https://github.com/hakanaktt/acadrust/blob/eababc03c625eaf9cfc5169953d7ee88f2015338/src/io/dwg/dwg_stream_readers/object_reader/common.rs",
+      "observation": "The special polyline modeler-body profile codes are OBJ_POLYLINE_2D=15 and OBJ_POLYLINE_3D=16. The witnessed embedded type code 77 is not a special profile and uses the ordinary type-plus-bit-length form."
+    }
+  ],
   "candidateLayout": {
     "bodyStartBit": 228,
     "bodyEndBitExclusive": 2571,
@@ -57,7 +67,7 @@
     "unclassifiedSuffix": {"startBit": 2570, "endBit": 2571, "value": 0}
   },
   "comparison": {
-    "peerParser": "ACadRust read_history_sweep at eababc03c625eaf9cfc5169953d7ee88f2015338 follows this field order.",
+    "peerParser": "ACadRust read_history_sweep at eababc03c625eaf9cfc5169953d7ee88f2015338 follows this field order. Its pinned object_reader/common.rs defines the special modeler wire-body profile type codes as 15 (2D polyline) and 16 (3D polyline); sample code 77 is not one of those profiles and takes the ordinary BL bit-length route.",
     "currentLibdxfrwParser": "The production arm still follows the older direction/ignored-long/two-byte-counted-blobs/six-doubles sequence. Its bounded exact-span status remains Partial after 174 bits.",
     "otherLocalAc1027Samples": "Only /Users/dli/doc/dwg/Cover.dwg is present as an additional local AC1027 DWG; it contains no ACSH_SWEEP_CLASS record."
   },

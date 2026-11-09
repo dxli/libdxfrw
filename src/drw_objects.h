@@ -7787,6 +7787,7 @@ private:
 //! Shell parser for ACSH_* history/action objects.
 class DRW_AcShHistoryObject : public DRW_TableEntry {
   SETOBJFRIENDS
+  friend class DRW_AcShHistoryTestAccess;
 public:
   explicit DRW_AcShHistoryObject(const UTF8STRING &recordName = UTF8STRING())
       : m_recordName(recordName) {
@@ -7839,6 +7840,35 @@ public:
     bool m_hasColorCmcMetadata = false;
   };
 
+  //! Bounded structural capture of the AcDbShSweepBase DWG body. Embedded
+  //! construction entities remain raw bit strings until their own semantic
+  //! codec is qualified; opaque suffix bits never imply a complete parse.
+  struct SweepActionBodyCapture {
+    std::int32_t m_operationMajor = 0;
+    std::int32_t m_operationMinor = 0;
+    DRW_Coord m_direction;
+    std::array<double, 6> m_scalars{}; // draft/start/end/twist/scale/align
+    bool m_hasAlignStart = false;
+    std::int32_t m_alignOption = 0;
+    std::int32_t m_miterOption = 0;
+    std::array<bool, 4> m_optionFlags{}; // align-start, bank, 294, 295
+    DRW_Coord m_dwgVector;
+    bool m_flag296 = false;
+    std::array<double, 16> m_sweepTransform{};
+    std::array<double, 16> m_pathTransform{};
+    std::int32_t m_profileType = 0;
+    std::uint32_t m_profileBitSize = 0;
+    std::vector<std::uint8_t> m_profileBits;
+    std::int32_t m_pathType = 0;
+    std::uint32_t m_pathBitSize = 0;
+    std::vector<std::uint8_t> m_pathBits;
+    std::uint64_t m_opaqueTailStartBit = 0;
+    std::uint32_t m_opaqueTailBitSize = 0;
+    std::vector<std::uint8_t> m_opaqueTailBits;
+    bool m_structuralFieldsComplete = false;
+    bool m_exactBodyEnd = false;
+  };
+
   UTF8STRING m_recordName;
   EvalExprPrefix m_evalExprPrefix;
   HistoryNodePrefix m_historyNodePrefix;
@@ -7863,6 +7893,8 @@ public:
   //! TORUS = {majorRadius, minorRadius}.
   //! Empty for shape classes that are only prefix-decoded + raw-shelved.
   std::vector<double> m_shapeParams;
+
+  SweepActionBodyCapture m_sweepActionBody;
 
   // --- ACSH_BOOLEAN_CLASS body (AcDbShBoolean) ---
   std::int32_t m_operation =
@@ -7911,6 +7943,11 @@ public:
   ExtrusionDxfProjection m_extrusionDxfProjection;
 
   std::vector<DRW_AssociativePrefixStatus> m_prefixStatuses;
+
+private:
+  static bool parseSweepActionBody(
+      DRW::Version version, dwgBuffer* buffer, std::uint32_t bodyEndBit,
+      SweepActionBodyCapture& output, std::uint64_t& parsedEndBit);
 };
 
 //! Shell parser for the dynamic-block object family (BLOCK*PARAMETER /

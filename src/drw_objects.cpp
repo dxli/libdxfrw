@@ -1913,6 +1913,41 @@ bool readBinaryBytesWithinBody(dwgBuffer *buf, DRW::Version version,
     return true;
 }
 
+bool readBitStringWithinBody(dwgBuffer *buf, DRW::Version version,
+                             std::uint32_t bodyEndBit,
+                             std::uint32_t bitCount,
+                             std::vector<std::uint8_t>& target) {
+    constexpr std::uint64_t maxBits =
+        static_cast<std::uint64_t>(kMaxAcShBlobBytes) * 8u;
+    if (buf == nullptr || bitCount > maxBits
+        || !dictionaryBitRangeAvailable(buf, version, bodyEndBit, bitCount))
+        return false;
+
+    const std::uint64_t byteCount64 =
+        (static_cast<std::uint64_t>(bitCount) + 7u) / 8u;
+    if (byteCount64 > static_cast<std::uint64_t>(std::numeric_limits<int>::max()))
+        return false;
+    std::vector<std::uint8_t> parsed;
+    if (!DRW::resize(parsed, static_cast<int>(byteCount64)))
+        return false;
+
+    dwgBuffer probe = buf->forkIndependent();
+    for (std::uint32_t bitIndex = 0; bitIndex < bitCount; ++bitIndex) {
+        const std::uint8_t bit = probe.getBit();
+        if (!probe.isGood())
+            return false;
+        if (bit != 0u)
+            parsed[bitIndex / 8u] |= static_cast<std::uint8_t>(
+                1u << (7u - bitIndex % 8u));
+    }
+    if (!probe.isGood()
+        || !objectBodyFitsSize(currentObjectDwgBit(&probe), bodyEndBit))
+        return false;
+    target = std::move(parsed);
+    *buf = probe;
+    return true;
+}
+
 bool skipAssocActionParamPrefix(DRW::Version version, dwgBuffer *buf,
                                 dwgBuffer *sBuf, std::uint32_t bodySize,
                                 std::uint32_t stringSize) {
@@ -31808,6 +31843,7 @@ void DRW_AcShHistoryObject::reset() {
     m_binaryBlob1.clear();
     m_binaryBlob2.clear();
     m_shapeParams.clear();
+    m_sweepActionBody = SweepActionBodyCapture{};
     m_operation = 0;
     m_operand1 = 0;
     m_operand2 = 0;
@@ -31912,14 +31948,6 @@ bool DRW_AcShHistoryObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
     const auto readBodyRawPoint = [buf, version, boundedBodyEnd](DRW_Coord& value) {
         return read2RawDoubleWithinBody(buf, version, boundedBodyEnd, value);
     };
-    const auto readBodyBytes = [buf, version, boundedBodyEnd](
-                                   std::vector<std::uint8_t>& value,
-                                   std::uint32_t byteCount) {
-        return readBinaryBytesWithinBody(
-            buf, version, boundedBodyEnd, value, byteCount,
-            kMaxAcShBlobBytes);
-    };
-
     auto appendPrefixStatus = [&](DRW_AssociativePrefixStatus::Kind kind,
                                   std::uint64_t startBit,
                                   DRW_AssociativePrefixStatus::ParseStatus status,
@@ -32000,62 +32028,40 @@ bool DRW_AcShHistoryObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
             historyParsed ? m_historyNodePrefix.m_nodeValue : 0);
         if (evalParsed && historyParsed) {
             const std::uint64_t actionBodyStartBit = currentObjectDwgBit(buf);
-            std::int32_t major = 0;
-            std::int32_t minor = 0;
-            std::int32_t ignoredLong = 0;
-            std::int32_t blob1Size = 0;
-            std::int32_t blob2Size = 0;
-            DRW_Coord direction;
-            double draftAngle = 0.0;
-            double startDraftDistance = 0.0;
-            double endDraftDistance = 0.0;
-            double scaleFactor = 0.0;
-            double twistAngle = 0.0;
-            double alignAngle = 0.0;
-            bool sweepTailOk = readBodyLong(major)
-                && readBodyLong(minor)
-                && readBodyPoint(direction)
-                && readBodyLong(ignoredLong)
-                && readBodyLong(blob1Size)
-                && blob1Size >= 0
-                && readBodyBytes(m_binaryBlob1,
-                                 static_cast<std::uint32_t>(blob1Size));
+            SweepActionBodyCapture parsed;
+            std::uint64_t parsedEndBit = actionBodyStartBit;
+            const bool sweepTailOk = parseSweepActionBody(
+                version, buf, boundedBodyEnd, parsed, parsedEndBit);
             if (sweepTailOk) {
-                sweepTailOk = readBodyLong(ignoredLong)
-                    && readBodyLong(blob2Size)
-                    && blob2Size >= 0
-                    && readBodyBytes(m_binaryBlob2,
-                                     static_cast<std::uint32_t>(blob2Size));
+                m_sweepActionBody = std::move(parsed);
+                m_major = static_cast<std::uint32_t>(
+                    m_sweepActionBody.m_operationMajor);
+                m_minor = static_cast<std::uint32_t>(
+                    m_sweepActionBody.m_operationMinor);
+                m_direction = m_sweepActionBody.m_direction;
+                m_draftAngle = m_sweepActionBody.m_scalars[0];
+                m_startDraftDistance = m_sweepActionBody.m_scalars[1];
+                m_endDraftDistance = m_sweepActionBody.m_scalars[2];
+                m_twistAngle = m_sweepActionBody.m_scalars[3];
+                m_scaleFactor = m_sweepActionBody.m_scalars[4];
+                m_alignAngle = m_sweepActionBody.m_scalars[5];
+                m_binaryBlob1 = m_sweepActionBody.m_profileBits;
+                m_binaryBlob2 = m_sweepActionBody.m_pathBits;
             }
-            if (sweepTailOk) {
-                sweepTailOk = readBodyDouble(draftAngle)
-                    && readBodyDouble(startDraftDistance)
-                    && readBodyDouble(endDraftDistance)
-                    && readBodyDouble(scaleFactor)
-                    && readBodyDouble(twistAngle)
-                    && readBodyDouble(alignAngle);
-            }
-            if (sweepTailOk) {
-                m_major = static_cast<std::uint32_t>(major);
-                m_minor = static_cast<std::uint32_t>(minor);
-                m_direction = direction;
-                m_draftAngle = draftAngle;
-                m_startDraftDistance = startDraftDistance;
-                m_endDraftDistance = endDraftDistance;
-                m_scaleFactor = scaleFactor;
-                m_twistAngle = twistAngle;
-                m_alignAngle = alignAngle;
-            }
+            const auto actionStatus = sweepTailOk
+                && m_sweepActionBody.m_exactBodyEnd && bodyFits()
+                ? DRW_AssociativePrefixStatus::ParseStatus::Complete
+                : DRW_AssociativePrefixStatus::ParseStatus::Partial;
             appendPrefixStatus(
                 DRW_AssociativePrefixStatus::Kind::AcShActionBody,
-                actionBodyStartBit,
-                blob1Size < 0 ?
-                    DRW_AssociativePrefixStatus::ParseStatus::BoundedCountOverflow :
-                    DRW_AssociativePrefixStatus::fromBoundedBody(
-                        sweepTailOk && bodyFits(),
-                        currentObjectDwgBit(buf), boundedBodyEnd),
+                actionBodyStartBit, actionStatus,
                 static_cast<std::uint16_t>(m_major), 0,
-                m_binaryBlob1.size() + m_binaryBlob2.size(), blob1Size);
+                m_binaryBlob1.size() + m_binaryBlob2.size(),
+                sweepTailOk ? static_cast<std::int32_t>(
+                    m_sweepActionBody.m_profileBitSize) : -1);
+            if (!m_prefixStatuses.empty())
+                m_prefixStatuses.back().m_sourceAssumption =
+                    "ACadRust peer + hash-bound AC1027 cursor trace";
         }
     } else if (m_recordName == "ACSH_BOX_CLASS"
                || m_recordName == "ACSH_WEDGE_CLASS"

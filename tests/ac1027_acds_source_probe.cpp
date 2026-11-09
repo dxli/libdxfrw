@@ -186,6 +186,21 @@ int main(int argc, char** argv) {
                       << ' ' << static_cast<unsigned>(status.m_status) << ' '
                       << status.m_startBit << ' ' << status.m_bitSize << '\n';
         }
+        if (history.m_recordName == "ACSH_SWEEP_CLASS"
+            || history.m_recordName == "ACSH_EXTRUSION_CLASS") {
+            const auto& sweep = history.m_sweepActionBody;
+            std::cout << "SWEEP_CAPTURE " << std::hex << history.handle
+                      << std::dec << ' ' << sweep.m_operationMajor << ' '
+                      << sweep.m_operationMinor << ' ' << sweep.m_profileType
+                      << ' ' << sweep.m_profileBitSize << ' '
+                      << sweep.m_pathType << ' ' << sweep.m_pathBitSize << ' '
+                      << sweep.m_opaqueTailStartBit << ' '
+                      << sweep.m_opaqueTailBitSize << ' '
+                      << sweep.m_structuralFieldsComplete << ' '
+                      << sweep.m_exactBodyEnd << ' ';
+            hexBytes(sweep.m_opaqueTailBits);
+            std::cout << '\n';
+        }
     }
     for (const DRW_EvaluationGraph& graph : drawing.evaluationGraphs) {
         if (graph.m_nodes.size() > 10000u) return 1;
