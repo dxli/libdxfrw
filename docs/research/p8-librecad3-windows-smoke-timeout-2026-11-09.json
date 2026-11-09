@@ -39,7 +39,7 @@
       "head": "321f2cad7a37c347072d25d72d26a14b1985a441",
       "planSync": "success",
       "buildWindows": "in_progress",
-      "buildWindowsPersistence": "in_progress",
+      "buildWindowsPersistence": "success",
       "buildLinux": "in_progress",
       "codeqlCpp": "in_progress",
       "macOSArm64": "in_progress",
