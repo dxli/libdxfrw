@@ -1,10 +1,10 @@
 # DWG/DXF parity — remaining implementation plan
 
-**Resume checkpoint (2026-11-09, after the latest unlock reply):** the user
-again reported that they would unlock the Mac. A fresh desktop inventory after
-that reply still reports the session locked and exposes no native app surface,
-so native qualification could not be resumed in this pass. Treat this as a
-desktop-access blocker only; it is not file-format evidence. Do not retry the
+**Resume checkpoint (2026-11-09, after the latest unlock reply):** after the
+user's newest “I’ll unlock it now” reply, a fresh desktop inventory still
+reports the session locked and exposes no native app surface, so native
+qualification could not be resumed in this pass. Treat this as a desktop-access
+blocker only; it is not file-format evidence. Do not retry the
 unchanged ODA File Converter 27.1 CLI path, which previously aborted during
 Pasteboard/XPC initialization before processing input. Resume native
 qualification when the desktop inventory exposes the unlocked session or a
