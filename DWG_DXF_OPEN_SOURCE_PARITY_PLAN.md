@@ -7,14 +7,17 @@ and exposed no native app surface. A fresh direct ODA File Converter 27.1
 argument or document processing. No post-unlock native conversion result was
 observed. Keep native qualification pending; do not repeat the unchanged ODA CLI
 route until the desktop reports an unlocked session or the launch path materially
-changes. Local implementation proceeded: `prepareTableEntryEed()`
-now rejects pending APPID/LAYER references and unmodeled group-102 appData
-before a record frame is
-opened, while allowing canonical `ACAD_REACTORS` and `ACAD_XDICTIONARY` groups
-only when their handles match the modeled fields. The focused generated
-control verifies opaque/mismatched refusal, both pending-reference families,
-canonical reactor and xDictionary acceptance, destination preservation, and
-same-writer retry. See [the slice receipt](docs/research/p5-table-entry-common-appdata-preflight-2026-11-08.json).
+changes. The latest local implementation is commit `410f6c51`: TABLE
+physical dimensions now require one valid group-141 row height per row and one
+group-142 column width per column, with focused ASCII/Binary cardinality and
+invalid-value controls ([receipt](docs/research/p5-dxf-table-physical-dimension-cardinality-2026-11-08.json)).
+The earlier `prepareTableEntryEed()` guard rejects pending APPID/LAYER
+references and unmodeled group-102 appData before a record frame is opened,
+while allowing canonical `ACAD_REACTORS` and `ACAD_XDICTIONARY` groups only when
+their handles match the modeled fields. Its focused generated control verifies
+opaque/mismatched refusal, both pending-reference families, canonical reactor
+and xDictionary acceptance, destination preservation, and same-writer retry
+([receipt](docs/research/p5-table-entry-common-appdata-preflight-2026-11-08.json)).
 This guard prevents silent loss; it does not qualify additional table-record
 fields or promote output support claims.
 
