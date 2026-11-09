@@ -937,17 +937,29 @@ void dwgReader::recordBlockControlMemberRoleError(
   }
 
   const std::size_t ownedEntries = slots.size() - 2u;
+  bool missingCountedEntryReported = false;
   for (std::size_t index = 0; index < slots.size(); ++index) {
     const std::uint8_t expected = static_cast<std::uint8_t>(
         index < ownedEntries ? DRW::DwgSoftOwnership
                              : DRW::DwgHardOwnership);
     if (slots[index] == DRW::NoHandle) {
-      recordIntegrityDiagnostic(
-          DwgIntegritySeverity::Error, offsetSpace,
-          DwgIntegrityPhase::SectionParser,
-          DwgIntegrityCheckKind::TableControlNullMember, secEnum::OBJECTS,
-          -1, "BLOCK_CONTROL", 0u, false, source.loc, true, source.handle,
-          source.handle != DRW::NoHandle, expected, roles[index], true);
+      const bool countedEntry = index < ownedEntries;
+      if (!countedEntry || !missingCountedEntryReported) {
+        recordIntegrityDiagnostic(
+            countedEntry ? DwgIntegritySeverity::Warning
+                         : DwgIntegritySeverity::Error,
+            offsetSpace, DwgIntegrityPhase::SectionParser,
+            DwgIntegrityCheckKind::TableControlNullMember, secEnum::OBJECTS,
+            -1, "BLOCK_CONTROL", 0u, false, source.loc, true, source.handle,
+            source.handle != DRW::NoHandle, expected, roles[index], true);
+      }
+      if (countedEntry) {
+        // LibreDWG skips null counted entries, and an Autodesk AC1024 sample
+        // contains them. Continue so required model/paper-space slots
+        // and later role mismatches still receive their own disposition.
+        missingCountedEntryReported = true;
+        continue;
+      }
       return;
     }
     if (roles[index] == expected)

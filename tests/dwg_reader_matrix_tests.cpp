@@ -7852,7 +7852,7 @@ void testBlockControlNullMemberDiagnostic(TestContext& t) {
     t.expect(nullDiagnostics.size() == 1u
                  && nullDiagnostics.front().kind
                      == DwgIntegrityCheckKind::TableControlNullMember
-                 && nullDiagnostics.front().severity == DwgIntegritySeverity::Error
+                 && nullDiagnostics.front().severity == DwgIntegritySeverity::Warning
                  && nullDiagnostics.front().phase == DwgIntegrityPhase::SectionParser
                  && nullDiagnostics.front().logicalHandle == source.handle
                  && nullDiagnostics.front().hasLogicalHandle
@@ -7862,7 +7862,27 @@ void testBlockControlNullMemberDiagnostic(TestContext& t) {
                  && nullDiagnostics.front().observed == DRW::DwgSoftOwnership
                  && nullDiagnostics.front().hasExpected
                  && nullDiagnostics.front().hasObserved,
-             "null BLOCK_CONTROL target is diagnosed separately from a role mismatch");
+             "null counted BLOCK_CONTROL member is a warning, separate from a role mismatch");
+
+    DRW_ObjControl missingPhantom;
+    missingPhantom.orderedHandleSlots = {0u, 0xFF1u, 0u, 0xCu};
+    missingPhantom.orderedHandleRoles = {
+        DRW::DwgSoftOwnership, DRW::DwgSoftOwnership,
+        DRW::DwgHardOwnership, DRW::DwgHardOwnership};
+    TableControlRecoveryReader phantomReader(emptyInput);
+    phantomReader.recordBlockControlRoles(source, missingPhantom);
+    const auto& phantomDiagnostics = phantomReader.diagnostics();
+    t.expect(phantomDiagnostics.size() == 2u
+                 && phantomDiagnostics.front().kind
+                     == DwgIntegrityCheckKind::TableControlNullMember
+                 && phantomDiagnostics.front().severity
+                     == DwgIntegritySeverity::Warning
+                 && phantomDiagnostics.back().kind
+                     == DwgIntegrityCheckKind::TableControlNullMember
+                 && phantomDiagnostics.back().severity == DwgIntegritySeverity::Error
+                 && phantomDiagnostics.back().expected == DRW::DwgHardOwnership
+                 && phantomDiagnostics.back().observed == DRW::DwgHardOwnership,
+             "null BLOCK_CONTROL model/paper-space phantom remains strict-fatal");
 
     DRW_ObjControl wrongRole;
     wrongRole.orderedHandleSlots = {0x127u, 0x2u, 0xCu};
