@@ -16,6 +16,14 @@
     "magic": "AC1024",
     "sha256": "fd87187b435062cb15e0f6a88c2b23546768162f54ffae83a3f51788503ec262"
   },
+  "oda_pair": {
+    "operation": "ODA File Converter GUI, audited conversion to 2010 ASCII DXF",
+    "output_path": "/private/tmp/libdxfrw-nextgis-arc-2010-oda-20261109/nextgis-arc-2010.dxf",
+    "output_bytes": 195074,
+    "output_sha256": "88b094c08ba6361b3d4caf93223f7d14672a001a78366295d453ba42119b44e0",
+    "output_version": "AC1024 / 2010 ASCII DXF",
+    "committed": false
+  },
   "reader": {
     "tool": "build-gcc/dwg2dxf/dwg2dxf",
     "trace_observation": "dwgReader24::readDwgClasses END",
@@ -23,8 +31,16 @@
     "sourceVersion": "AC1024",
     "legacyError": 0,
     "classes_crc_mismatch": false,
-    "strict_dxf_output": "Not produced; the CLI stopped later at a strict output/read-completeness gate. This does not indicate a CLASSES parser failure."
+    "header_envelope": "The canonical size profile ends four bytes early (expected 830, observed 834); the CRC/sentinel-validated zero high-size-word-excluded compatibility profile is accepted with a warning. This warning is not the strict-output blocker.",
+    "table_control_errors": [
+      {"kind": "TableControlNullMember", "control": "LTYPE_CONTROL", "handle": "0x5", "file_offset": 53, "expected_role": 2, "observed_role": 2},
+      {"kind": "TableControlNullMember", "control": "BLOCK_CONTROL", "handle": "0x1", "file_offset": 4, "expected_role": 2, "observed_role": 2}
+    ],
+    "published_frames": 181,
+    "entity_parse_failures": 0,
+    "object_parse_failures": 0,
+    "strict_dxf_output": "Not produced; strict preflight refused the two null table-control members after the complete read. No output file exists. The CLI returned failure. This is unrelated to CLASSES parsing."
   },
-  "interpretation": "The online sample adds an independently sourced AC1024-format input and does not reproduce the reported CLASSES error. Because it was produced by AutoCAD 2016, it cannot resolve an AutoCAD 2010 RTM-specific failure. Keep the issue open pending one of the exact failing RTM files, the missing tenth input, or hashes plus a reproducible BAD_READ_CLASSES trace. Do not infer general AC1024 support from this result.",
-  "fixture_policy": "The sample was used only from /private/tmp and is not added to the repository."
+  "interpretation": "The online sample adds an independently sourced AC1024-format input and an ODA-generated DXF pair; it does not reproduce the reported CLASSES error. Its HEADER uses the already admitted four-byte compatibility profile with a warning, while strict output is correctly refused on null BLOCK_CONTROL/LTYPE_CONTROL members. Because the source was produced by AutoCAD 2016, it cannot resolve an AutoCAD 2010 RTM-specific failure. Keep the issue open pending one of the exact failing RTM files, the missing tenth input, or hashes plus a reproducible BAD_READ_CLASSES trace. Do not infer general AC1024 support from this result.",
+  "fixture_policy": "The DWG and ODA-generated DXF were used only under /private/tmp and are not added to the repository."
 }

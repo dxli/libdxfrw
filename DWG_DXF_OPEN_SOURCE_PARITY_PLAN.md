@@ -2015,9 +2015,16 @@ read through `dwgReader24::readDwgClasses END` with `operationSucceeded=true`,
 `legacyError=0`, and no CLASSES CRC mismatch. The repository identifies the
 sample set as produced with trial AutoCAD 2016 M.49.0.0, so this is an
 independent AC1024-format input but not evidence for AutoCAD 2010 RTM saves.
-Strict DXF output stopped later at an unrelated output/read-completeness gate.
-Keep the RTM discrepancy open; the sample was not copied into the repository
-and no parser change is justified. See the
+ODA File Converter successfully generated a 195,074-byte 2010 ASCII DXF pair
+(SHA-256 `88b094c08ba6361b3d4caf93223f7d14672a001a78366295d453ba42119b44e0`).
+The current reader publishes 181/181 frames with zero entity/object parse
+failures. Its validated HEADER compatibility profile has a four-byte
+canonical-size discrepancy (830 expected, 834 observed) and is warning-only;
+it is not the strict-output blocker. Strict libdxfrw output is correctly
+refused for null members in LTYPE_CONTROL `0x5` and BLOCK_CONTROL `0x1`. The
+DWG and paired DXF remain in `/private/tmp` and are not committed. Keep the RTM
+discrepancy open and preserve strict refusal; no parser change is justified by
+this source. See the
 [online-sample receipt](docs/research/p6-ac1024-online-sample-rtm-nonreproduction-2026-11-09.json)
 and the public [`nextgis/dwg_samples` source](https://github.com/nextgis/dwg_samples).
 
