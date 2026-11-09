@@ -8644,6 +8644,77 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         return table;
     };
 
+    TableDwgCodecProbe multiRowAc1018Table = makeEncodableAc1018Table();
+    multiRowAc1018Table.rowcount = 2;
+    DRW_TableRow secondTextRow;
+    secondTextRow.m_height = 4.5;
+    DRW_TableCell secondTextCell;
+    secondTextCell.m_type = 1;
+    secondTextCell.m_mergedWidth = 1;
+    secondTextCell.m_mergedHeight = 1;
+    secondTextCell.m_overrideFlags = 0x00000010u;
+    secondTextCell.m_textStyleOverrideHandle = 0xA701u;
+    DRW_TableCellContent secondTextContent;
+    secondTextContent.m_type = 1;
+    secondTextContent.m_text = "second AC1018 plain-text row";
+    secondTextCell.m_contents.push_back(secondTextContent);
+    secondTextRow.m_cells.push_back(secondTextCell);
+    multiRowAc1018Table.m_content.m_rows.push_back(secondTextRow);
+
+    dwgBufferW multiRowBody;
+    dwgBufferW multiRowHandles;
+    dwgBufferW multiRowTypePrefix;
+    multiRowTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t multiRowObjectSizeBit =
+        multiRowTypePrefix.bitCount();
+    const bool multiRowEncoded = multiRowAc1018Table.encodeAsTableClass(
+        DRW::AC1018, multiRowBody, multiRowHandles);
+    t.expect(multiRowEncoded,
+             "AC1018 plain-text TABLE profile encodes multiple rows");
+    if (multiRowEncoded) {
+        const std::uint64_t multiRowContentEndBit = multiRowBody.bitCount();
+        constexpr std::int32_t multiRowSentinel = 0x71C0A19;
+        multiRowBody.putBitLong(multiRowSentinel);
+        multiRowBody.patchRawLong32AtBit(
+            multiRowObjectSizeBit, multiRowBody.bitCount());
+        appendBits(multiRowBody, multiRowHandles);
+        dwgBuffer multiRowInput(multiRowBody.data().data(),
+                                multiRowBody.data().size());
+        TableDwgCodecProbe multiRowReadback;
+        const bool multiRowRead = multiRowReadback.parseDwg(
+            DRW::AC1018, &multiRowInput);
+        const bool multiRowShapeMatches = multiRowRead
+            && multiRowInput.isGood()
+            && multiRowReadback.m_semanticContentComplete
+            && multiRowReadback.rowcount == 2
+            && multiRowReadback.m_content.m_rows.size() == 2u
+            && multiRowReadback.m_content.m_rows[0].m_cells.size() == 1u
+            && multiRowReadback.m_content.m_rows[1].m_cells.size() == 1u;
+        const bool multiRowValuesMatch = multiRowShapeMatches
+            && multiRowReadback.m_content.m_rows[0].m_height == 3.0
+            && multiRowReadback.m_content.m_rows[1].m_height == 4.5
+            && multiRowReadback.m_content.m_rows[0].m_cells[0]
+                   .m_contents.front().m_text == "retry AC1018 text"
+            && multiRowReadback.m_content.m_rows[1].m_cells[0]
+                   .m_contents.front().m_text
+                   == "second AC1018 plain-text row"
+            && multiRowReadback.m_content.m_rows[1].m_cells[0]
+                   .m_textStyleOverrideHandle == 0xA701u;
+        const bool multiRowBoundaryMatches =
+            cursorBit(multiRowInput) == multiRowContentEndBit;
+        t.expect(multiRowShapeMatches,
+                 "AC1018 multiple-row encoder readback preserves dimensions");
+        t.expect(multiRowValuesMatch,
+                 "AC1018 multiple-row encoder readback preserves row heights and text order");
+        t.expect(multiRowBoundaryMatches,
+                 "AC1018 multiple-row encoder reaches the exact body boundary");
+        if (multiRowBoundaryMatches) {
+            const std::int32_t sentinel = multiRowInput.getBitLong();
+            t.expect(multiRowInput.isGood() && sentinel == multiRowSentinel,
+                     "AC1018 multiple-row TABLE preserves the following body sentinel");
+        }
+    }
+
     TableDwgCodecProbe scalarOverrideTable = makeEncodableAc1018Table();
     scalarOverrideTable.m_tableOverrideFlags = 0x0000001Fu;
     scalarOverrideTable.m_titleSuppressed = true;
@@ -9878,9 +9949,17 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             table.dataStoragePayloadMarkerSection = "AcDb:AcDsPrototype_1b";
         });
     expectAtomicPreflightRefusal(
-        "AC1018 TABLE encoder rejects extra rows without writing",
+        "AC1018 TABLE encoder rejects an uncounted row atomically",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
+            table.m_content.m_rows.push_back(
+                table.m_content.m_rows.front());
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects a row without exactly one cell atomically",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.rowcount = 2;
             table.m_content.m_rows.push_back(DRW_TableRow{});
         });
     expectAtomicPreflightRefusal(

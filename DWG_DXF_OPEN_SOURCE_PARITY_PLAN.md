@@ -130,7 +130,7 @@ was locked. No native app surface was available, so this created no new ODA,
 FreeCAD, or format evidence. Do not repeat the unchanged ODA CLI launch or
 claim the external qualification gate passed. Continue local implementation.
 
-**Latest TABLE implementation checkpoint (2026-11-08):** commits through
+**Latest TABLE implementation checkpoint (2026-11-09):** commits through
 `f2d113bf` add generated AC1018 plain-text cell and table-scalar DWG codec
 coverage: scalar mask `0x1f`, cell alignment/fill-state/indexed colors/text
 style pointer/text height, and four physical edge color/lineweight/visibility
@@ -143,6 +143,13 @@ generated AC1018 DXF output mapping is now implemented for cell fill-state,
 indexed colors, and uniquely resolved text-style handles/names; focused TABLE grid,
 cell appearance, cell-edge, and legacy unknown-mask controls pass 4/4. See the [DXF mapping
 receipt](docs/research/p5-ac1018-table-cell-appearance-dxf-write-readback-2026-11-08.json).
+The private direct DWG codec now emits multiple one-column plain-text rows per
+ODA v5.4.1 §20.4.96.1 repeat counts. A generated two-row vector checks row
+order, heights, values, per-row text-style handle ordering, exact body
+boundary, and following-sentinel alignment; parser readback publishes the
+table row/column counts in the inherited fields. The focused CTest passes in
+normal and ASan builds; no fixture was added. See the [multi-row codec
+receipt](docs/research/p5-ac1018-table-multirow-plain-text-codec-2026-11-09.json).
 The `*T` block/object graph transaction and independent source/native
 qualification remain open. Keep public TABLE output refused. A fresh desktop
 inventory after the user's unlock message still reports a locked Mac and no
@@ -2729,8 +2736,8 @@ Strict output still fails, and no support claim is promoted.
 **TABLE:**
 
 **DWG `ACAD_TABLE` writer gap — implementation packet added 2026-11-08:**
-`DRW_Table::encodeDwg` now has a narrowly gated AC1018 one-row/one-column
-plain-text-cell body codec, while `dwgRW::writeTable` still refuses the entity
+`DRW_Table::encodeDwg` now has a narrowly gated AC1018 one-or-more-row,
+one-column plain-text-cell body codec, while `dwgRW::writeTable` still refuses the entity
 so it cannot fall through to INSERT-shaped bytes. This is a
 real DWG write-coverage gap; do not remove the refusal until the entity body,
 anonymous `*T` block relationship, cell payloads, owned ATTRIB chain, and
@@ -2917,7 +2924,7 @@ See [ACadSharp PR #1040](https://github.com/DomCR/ACadSharp/pull/1040) and
 Speed-oriented implementation sequence:
 
 1. The direct **AC1018 plain-text-cell** codec is implemented for a generated
-   one-row/one-column profile; its inline string avoids both the R2007+
+   one-column, one-or-more-row profile; its inline strings avoid both the R2007+
    detached string stream and the undocumented R24 TABLECONTENT relationship.
    Focused refusal controls now cover unsupported version, table/cell
    overrides, grid shape/spacing, owner/required handles, incomplete semantic
@@ -2928,6 +2935,11 @@ Speed-oriented implementation sequence:
    one bit and a frame without trailing handles. The direct codec stages both
    streams and publishes only on success; a successful append preserves seeded
    prefixes. No injected mid-emission failure has tested this rollback path.
+   A two-row/one-column generated vector now reads back both row heights and
+   distinct text values, the second cell's hard-pointer text-style override,
+   exact body boundary, and following sentinel; `rowcount`/`colcount` are
+   published from the parsed TABLE grid. The owning CTest passes in normal and
+   ASan builds ([receipt](docs/research/p5-ac1018-table-multirow-plain-text-codec-2026-11-09.json)).
    The latest fast slice extends refusal coverage to missing entity identity,
    noncustom class ordinals, detached string stream/null body, lineweight and
    content override markers, retained geometry coordinates, and typed value
@@ -2939,10 +2951,11 @@ Speed-oriented implementation sequence:
    by identity; its focused control passes. Keep it disconnected from
    `writeTable` until remaining profile and graph gates pass. Do not infer
    class IDs from the DWG version.
-   Require one row/column,
-   one value-content item of type 1, default indexed colors/style, no cell or
-   table overrides, merges, data links, fields, block content, attributes,
-   retained raw subrecords, or unexplained geometry/cache state. Match every
+   Require one column with matching bounded row count, exactly one cell in
+   each row, and one value-content item of type 1 per cell. Allow only the
+   already validated table-scalar and per-cell override subsets; keep merges,
+   data links, fields, block content, attributes, retained raw subrecords, and
+   unexplained geometry/cache state refused. Match every
    gate to the actual public model fields and reject anything outside that
    profile before emitting bytes.
 2. **Complete:** bind CLASS registration and instance-count staging to the
