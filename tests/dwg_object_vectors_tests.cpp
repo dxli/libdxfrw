@@ -8645,20 +8645,34 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     };
 
     TableDwgCodecProbe multiRowAc1018Table = makeEncodableAc1018Table();
+    multiRowAc1018Table.colcount = 2;
     multiRowAc1018Table.rowcount = 2;
+    DRW_TableColumn secondTextColumn;
+    secondTextColumn.m_width = 5.5;
+    multiRowAc1018Table.m_content.m_columns.push_back(secondTextColumn);
+    DRW_TableCell firstRowSecondCell =
+        multiRowAc1018Table.m_content.m_rows[0].m_cells.front();
+    firstRowSecondCell.m_contents.front().m_text =
+        "first row, second column";
+    multiRowAc1018Table.m_content.m_rows[0].m_cells.push_back(
+        firstRowSecondCell);
     DRW_TableRow secondTextRow;
     secondTextRow.m_height = 4.5;
     DRW_TableCell secondTextCell;
     secondTextCell.m_type = 1;
     secondTextCell.m_mergedWidth = 1;
     secondTextCell.m_mergedHeight = 1;
-    secondTextCell.m_overrideFlags = 0x00000010u;
-    secondTextCell.m_textStyleOverrideHandle = 0xA701u;
     DRW_TableCellContent secondTextContent;
     secondTextContent.m_type = 1;
     secondTextContent.m_text = "second AC1018 plain-text row";
     secondTextCell.m_contents.push_back(secondTextContent);
     secondTextRow.m_cells.push_back(secondTextCell);
+    DRW_TableCell secondRowSecondCell = secondTextCell;
+    secondRowSecondCell.m_contents.front().m_text =
+        "second row, second column";
+    secondRowSecondCell.m_overrideFlags = 0x00000010u;
+    secondRowSecondCell.m_textStyleOverrideHandle = 0xA701u;
+    secondTextRow.m_cells.push_back(secondRowSecondCell);
     multiRowAc1018Table.m_content.m_rows.push_back(secondTextRow);
 
     dwgBufferW multiRowBody;
@@ -8686,32 +8700,57 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         const bool multiRowShapeMatches = multiRowRead
             && multiRowInput.isGood()
             && multiRowReadback.m_semanticContentComplete
+            && multiRowReadback.colcount == 2
             && multiRowReadback.rowcount == 2
+            && multiRowReadback.m_content.m_columns.size() == 2u
             && multiRowReadback.m_content.m_rows.size() == 2u
-            && multiRowReadback.m_content.m_rows[0].m_cells.size() == 1u
-            && multiRowReadback.m_content.m_rows[1].m_cells.size() == 1u;
-        const bool multiRowValuesMatch = multiRowShapeMatches
+            && multiRowReadback.m_content.m_rows[0].m_cells.size() == 2u
+            && multiRowReadback.m_content.m_rows[1].m_cells.size() == 2u;
+        const bool multiRowDimensionsMatch = multiRowShapeMatches
+            && multiRowReadback.m_content.m_columns[0].m_width == 8.0
+            && multiRowReadback.m_content.m_columns[1].m_width == 5.5
             && multiRowReadback.m_content.m_rows[0].m_height == 3.0
-            && multiRowReadback.m_content.m_rows[1].m_height == 4.5
+            && multiRowReadback.m_content.m_rows[1].m_height == 4.5;
+        const bool r0c0TextMatches = multiRowShapeMatches
             && multiRowReadback.m_content.m_rows[0].m_cells[0]
-                   .m_contents.front().m_text == "retry AC1018 text"
+                   .m_contents.front().m_text == "retry AC1018 text";
+        const bool r0c1TextMatches = multiRowShapeMatches
+            && multiRowReadback.m_content.m_rows[0].m_cells[1]
+                   .m_contents.front().m_text
+                   == "first row, second column";
+        const bool r1c0TextMatches = multiRowShapeMatches
             && multiRowReadback.m_content.m_rows[1].m_cells[0]
                    .m_contents.front().m_text
-                   == "second AC1018 plain-text row"
+                   == "second AC1018 plain-text row";
+        const bool r1c1TextMatches = multiRowShapeMatches
+            && multiRowReadback.m_content.m_rows[1].m_cells[1]
+                   .m_contents.front().m_text
+                   == "second row, second column";
+        const bool unusedStyleHandleRemainsNull = multiRowShapeMatches
             && multiRowReadback.m_content.m_rows[1].m_cells[0]
+                   .m_textStyleOverrideHandle == 0u;
+        const bool multiRowHandleRolesMatch = multiRowShapeMatches
+            && multiRowReadback.m_content.m_rows[1].m_cells[1]
                    .m_textStyleOverrideHandle == 0xA701u;
         const bool multiRowBoundaryMatches =
             cursorBit(multiRowInput) == multiRowContentEndBit;
         t.expect(multiRowShapeMatches,
-                 "AC1018 multiple-row encoder readback preserves dimensions");
-        t.expect(multiRowValuesMatch,
-                 "AC1018 multiple-row encoder readback preserves row heights and text order");
+                 "AC1018 TABLE grid encoder readback preserves dimensions");
+        t.expect(multiRowDimensionsMatch,
+                 "AC1018 TABLE grid readback preserves column widths and row heights");
+        t.expect(r0c0TextMatches && r0c1TextMatches
+                     && r1c0TextMatches && r1c1TextMatches,
+                 "AC1018 TABLE grid readback preserves row-major cell text order");
+        t.expect(unusedStyleHandleRemainsNull,
+                 "AC1018 TABLE grid does not assign an absent cell text-style override");
+        t.expect(multiRowHandleRolesMatch,
+                 "AC1018 TABLE grid readback preserves per-cell style handle roles");
         t.expect(multiRowBoundaryMatches,
-                 "AC1018 multiple-row encoder reaches the exact body boundary");
+                 "AC1018 TABLE grid encoder reaches the exact body boundary");
         if (multiRowBoundaryMatches) {
             const std::int32_t sentinel = multiRowInput.getBitLong();
             t.expect(multiRowInput.isGood() && sentinel == multiRowSentinel,
-                     "AC1018 multiple-row TABLE preserves the following body sentinel");
+                     "AC1018 TABLE grid preserves the following body sentinel");
         }
     }
 
