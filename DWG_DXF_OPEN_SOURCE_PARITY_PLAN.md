@@ -1,6 +1,36 @@
 # DWG/DXF parity — remaining implementation plan
 
-**Resume checkpoint (2026-11-08, latest desktop check):** after the user said
+**Resume checkpoint (2026-11-08, after the latest unlock message):** the
+desktop inventory still reports the Mac locked and exposes no native app
+surface. An unsandboxed ODA File Converter 27.1 `--help` launch took a changed
+route from the earlier Pasteboard/XPC abort: it remains live with no output,
+but has not shown a window or processed a document. Do not count it as a
+successful launch, conversion, or format evidence; leave that process intact
+and resume native qualification only when the desktop is accessible or a
+materially different launch route is available. The selected AC1021 FreeCAD
+torus B-rep check is recorded in
+[`p7-ac1021-freecad-native-torus-brep-2026-11-08.json`](docs/research/p7-ac1021-freecad-native-torus-brep-2026-11-08.json);
+its one-body/one-face/one-solid result is a bounded selected-profile check,
+not independent-kernel, whole-source, platform, or support-claim evidence.
+
+**LibreCAD_3 P8 compatibility review:** the isolated consumer branch is based
+on `5cf435f4` and contains commits `36082e71` and `93354846`. The upstream
+`DRW_Header::write()` itself gates `$INSUNITS` to targets newer than AC1014;
+the consumer patch now applies the same version gate to preserved and default
+header values, reports explicit unit-metadata loss for non-unitless R12/R14
+exports, and checks that a LINE remains in the output. Existing raw-object
+fixtures were edited in place to remove the optional 330 owner from the first
+dictionary in the low-handle and preservation cases; no fixture was added.
+The focused current-HEAD rebuild succeeded and
+`DxfRoundTripTest.DrawingUnitsSurviveASave` passed for R12 and R14 across inch,
+millimetre, and metre inputs. The broader 64-test log predates the R14 test
+extension and must not be reported as current-HEAD validation. The reviewed
+unit-loss slice has no identified correctness blocker; keep the fixture/root
+dictionary preservation cases and clean-consumer/full-app/Linux/Windows gates
+in the remaining P8 work. This consumer review does not change DWG/DXF support
+claims.
+
+**Earlier checkpoint (2026-11-08, before the latest ODA launch attempt):** after the user said
 they would unlock the Mac, the desktop inventory still reported the session
 locked and exposed no native app surface. No ODA process was retried in this
 check because the unchanged CLI route has already failed during Pasteboard/XPC
