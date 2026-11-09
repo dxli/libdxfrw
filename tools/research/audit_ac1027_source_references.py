@@ -36,6 +36,13 @@ FRAME = re.compile(
 BODY_FRAME = re.compile(
     r"^ typedBodyFrame type=(\S+) handle=(\d+)(?: |$)", re.MULTILINE
 )
+MODELER_HISTORY_PROFILE = re.compile(
+    r"^ typedBodyFrame type=3DSOLID handle=(\d+) layerName=(.*?) "
+    r"layerMatches=(\d+) historyPresent=(\d+) historyCode=(\d+) "
+    r"historySize=(\d+) historyTarget=(\d+) historyStartBit=(\d+) "
+    r"historyBitSize=(\d+) historyComplete=(\d+)$",
+    re.MULTILINE,
+)
 MATERIAL_PROFILE = re.compile(
     r"^ typedBodyFrame type=MATERIAL handle=(\d+) .*?"
     r"semanticFieldsComplete=(\d+) rawTailValidated=(\d+) .*?"
@@ -360,6 +367,23 @@ def main() -> int:
     typed_frames = {
         int(handle): name for name, handle in BODY_FRAME.findall(combined)
     }
+    modeler_history_profiles = {
+        int(handle): {
+            "layerName": layer_name,
+            "layerMatches": int(layer_matches),
+            "historyPresent": bool(int(history_present)),
+            "historyCode": int(history_code),
+            "historySize": int(history_size),
+            "historyTarget": int(history_target),
+            "historyStartBit": int(history_start),
+            "historyBitSize": int(history_bits),
+            "historyComplete": bool(int(history_complete)),
+        }
+        for (handle, layer_name, layer_matches, history_present,
+             history_code, history_size, history_target, history_start,
+             history_bits, history_complete)
+        in MODELER_HISTORY_PROFILE.findall(combined)
+    }
     no_body_handle_profiles = {
         int(handle): rule
         for _record_type, handle, rule in NO_BODY_HANDLE_PROFILE.findall(combined)
@@ -428,6 +452,36 @@ def main() -> int:
             "role": role or "unlabeled",
             "targetHandle": int(target),
         })
+    source_bound_modeler_history_handles: set[int] = set()
+    if source_before == COVER_AC1027_SHA256:
+        expected_history = modeler_history_profiles.get(0x6F)
+        layer_edges = [
+            item for item in typed_references
+            if item["ownerHandle"] == 0x6F and item["role"] == "layer"
+        ]
+        if (
+            len(modeler_history_profiles) != 1
+            or expected_history != {
+                "layerName": "0",
+                "layerMatches": 1,
+                "historyPresent": True,
+                "historyCode": 3,
+                "historySize": 0,
+                "historyTarget": 0,
+                "historyStartBit": 209,
+                "historyBitSize": 8,
+                "historyComplete": True,
+            }
+            or layer_edges != [{
+                "ownerHandle": 0x6F,
+                "role": "layer",
+                "targetHandle": 0x10,
+            }]
+        ):
+            raise SystemExit(
+                "hash-bound Cover 3DSOLID layer/History ID source profile changed"
+            )
+        source_bound_modeler_history_handles.add(0x6F)
     reference_counts = Counter(item["ownerHandle"] for item in typed_references)
     retained_handles = {frame["handle"] for frame in frames}
     for frame in frames:
@@ -435,7 +489,9 @@ def main() -> int:
         frame["reportedTypedBodyReferenceCount"] = reference_counts[frame["handle"]]
         no_body_rule = no_body_handle_profiles.get(frame["handle"])
         frame["bodyReferenceDisposition"] = (
-            "peer-profile-no-body-handles"
+            "source-bound-modeler-history-profile"
+            if frame["handle"] in source_bound_modeler_history_handles
+            else "peer-profile-no-body-handles"
             if no_body_rule is not None and no_body_rule.startswith("LIBREDWG-")
             else "spec-profile-no-body-handles"
             if no_body_rule is not None
@@ -446,6 +502,11 @@ def main() -> int:
             else "not-exhaustively-decoded"
         )
         frame["bodyReferenceRule"] = no_body_handle_profiles.get(frame["handle"])
+        if frame["handle"] in source_bound_modeler_history_handles:
+            frame["bodyReferenceRule"] = "ODA-20.4.41"
+            frame["modelerHistoryProfile"] = modeler_history_profiles[
+                frame["handle"]
+            ]
         if frame["handle"] in handle_body_profiles:
             handle_profile = handle_body_profiles[frame["handle"]]
             frame["bodyReferenceRule"] = handle_profile["rule"]
@@ -811,6 +872,11 @@ def main() -> int:
         "typedBodyReferenceRows": len(typed_references),
         "framesWithSelectedTypedBodyReport": sum(
             frame["bodyReferenceDisposition"] == "selected-typed-report-only"
+            for frame in frames
+        ),
+        "framesWithSourceBoundModelerHistoryProfile": sum(
+            frame["bodyReferenceDisposition"]
+            == "source-bound-modeler-history-profile"
             for frame in frames
         ),
         "framesWithoutExhaustiveBodyReferenceDecode": sum(

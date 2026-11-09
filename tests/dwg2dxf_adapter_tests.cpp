@@ -23597,7 +23597,23 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
       std::cout << " typedBodyFrame type=" << type
                 << " handle=" << modeler->handle
                 << " layerName=" << modeler->layer
-                << " layerMatches=" << layerMatches << '\n';
+                << " layerMatches=" << layerMatches;
+      if (modeler->eType == DRW::E3DSOLID) {
+        const DRW_DwgSubrecordRange& historySpan =
+            modeler->m_dwgHistoryHandleFieldSpan;
+        std::cout << " historyPresent="
+                  << modeler->m_hasDwgHistoryHandleField
+                  << " historyCode="
+                  << static_cast<unsigned>(modeler->m_dwgHistoryHandleField.code)
+                  << " historySize="
+                  << static_cast<unsigned>(modeler->m_dwgHistoryHandleField.size)
+                  << " historyTarget="
+                  << modeler->m_dwgHistoryHandleField.ref
+                  << " historyStartBit=" << historySpan.m_startBit
+                  << " historyBitSize=" << historySpan.m_bitSize
+                  << " historyComplete=" << historySpan.m_parseComplete;
+      }
+      std::cout << '\n';
       if (layerMatches == 1u)
         std::cout << " typedBodyReference owner=" << modeler->handle
                   << " role=layer target=" << layerMatch->handle << '\n';

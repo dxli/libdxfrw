@@ -103,14 +103,29 @@ independent AC1027 source-reference qualification gate; this does not promote
 ACDS semantics, PERSUBENTMGR body support, or whole-file output. No fixture
 was added. See the [AC1027 multi-schdat receipt](docs/research/p6-ac1027-multischdat-reversed-role-profile-2026-11-09.json).
 
-**Next local implementation slice:** continue the strict AC1027
-source-reference/output-qualification gate that now blocks after complete
-frame publication, prioritizing the specific source edge/role evidence and
-fast generated control that can close one guard. Keep output fail-closed until
-the exact owner/target roles and typed/raw source payload are reconciled. In
-parallel, AC1014 PERSUBENTMGR still needs a paired semantic projection before
-typed-prefix admission. AC1027 PERSUBENTMGR and AC1032's six-scalar body remain
-raw-only until their exact class-field profiles are independently reconciled.
+**Resume checkpoint (2026-11-09, AC1027 Cover 3DSOLID source-audit join):**
+the repeatable source-reference inventory now includes the exact History ID
+code, target, bit span, and parse-complete status for 3DSOLID records. For the
+hash-bound Cover handle `0x6f`, the verifier requires the ODA §20.4.41 code-3
+History ID at bits 209–217 with null target and a unique layer-name `0` lookup
+to LAYER `0x10`; it classifies this one record as a source-bound
+History-ID profile. The refreshed audit covers all 88 retained identities,
+129 selected typed-reference rows, zero selected-report-only rows, and zero
+rows labeled not-exhaustively-decoded. This is an exact source profile, not
+proof that all entity/table references, owner roles, or omitted dependencies
+are closed. The separate HEADER suffix and aggregate output disposition still
+block strict export. See the [3DSOLID source-audit receipt](docs/research/p6-ac1027-cover-3dsolid-source-audit-closure-2026-11-09.json).
+
+**Next local implementation slice:** continue the AC1027 aggregate
+source-reference/output gate by enumerating the first remaining common-owner,
+entity, or table edge whose role lacks independent ODA or exact producer
+evidence. For that edge, bind the source frame, raw handle code/span, target
+identity, and output disposition; add a generated exact-role negative and
+retry control. Do not clear the global guard based on inventory coverage
+counts alone. AC1014 PERSUBENTMGR still needs a paired semantic projection
+before typed-prefix admission. AC1027 PERSUBENTMGR and AC1032's six-scalar body
+remain raw-only until their exact class-field profiles are independently
+reconciled.
 
 **Resume checkpoint (2026-11-09 10:22 UTC, desktop access refresh):** after
 the user's latest “I’ll unlock it now” reply, a new native-app inventory still
