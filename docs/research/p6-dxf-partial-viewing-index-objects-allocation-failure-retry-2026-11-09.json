@@ -1,0 +1,32 @@
+{
+  "title": "Generated PARTIAL_VIEWING_INDEX OBJECTS allocation rollback and retry",
+  "date": "2026-11-09",
+  "scope": "AC1027 whole-file dxfRW::write with a locally generated LINE target and one PARTIALVIEWINGINDEX entry; ASCII and Binary.",
+  "source": {
+    "kind": "locally-authored in-memory records",
+    "lineHandle": "0xD7B0",
+    "lineOwner": "0x1F (model-space BLOCK_RECORD)",
+    "partialViewingIndexHandle": "0xD7B2",
+    "partialViewingIndexOwner": "0xC (named-object dictionary)",
+    "entry": {
+      "extentsMin": [0.0, 1.0, 2.0],
+      "extentsMax": [7.0, 8.0, 9.0],
+      "target": "LINE source handle 0xD7B0"
+    },
+    "fixtureCommitted": false
+  },
+  "validation": {
+    "build": "cmake --build build --target libdxfrw_partial_viewing_index_objects_allocation_tests -j4",
+    "test": "ctest --test-dir build -R '^libdxfrw_partial_viewing_index_objects_allocation_retry$' --output-on-failure",
+    "result": "PASS",
+    "asciiAllocationOffsets": 9,
+    "binaryAllocationOffsets": 9,
+    "perOffset": "one-shot std::bad_alloc during the OBJECTS callback; whole-file destination sentinel is preserved, PVI caller state and entity geometry remain intact, same-codec retry restores the source LINE handle, reproduces calibration bytes, and typed readback verifies the LINE/PVI target graph and extents",
+    "gitDiffCheck": "PASS"
+  },
+  "limits": [
+    "The earlier ENTITIES callback commits its minted handle to the caller's LINE before a later OBJECTS callback fails. The test records this cross-stage caller mutation and restores the source handle before retry; whole-operation rollback of previously emitted caller entities remains open.",
+    "Generated serializer transaction and typed DXF readback evidence only; it does not qualify native consumer behavior, external producers, DWG output, or broad support.",
+    "No DWG/DXF fixture was added; test output uses its build scratch directory."
+  ]
+}

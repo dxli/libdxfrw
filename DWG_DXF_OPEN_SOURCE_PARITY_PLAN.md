@@ -1,5 +1,24 @@
 # DWG/DXF parity — remaining implementation plan
 
+**Resume checkpoint (2026-11-09, PARTIAL_VIEWING_INDEX writer allocation safety):**
+the generated AC1027 OBJECTS callback control now sweeps all nine observed
+allocation points in ASCII and Binary. Every injected failure preserves the
+existing destination and PVI record state; restoring the source LINE handle
+allows the same codec to reproduce calibration bytes and typed LINE/PVI graph
+readback. The earlier ENTITIES callback has already assigned its emitted
+handle to the caller's LINE when the later OBJECTS callback fails, so full
+cross-stage caller-memory rollback remains open. No fixture was added. See the
+[PVI allocation receipt](docs/research/p6-dxf-partial-viewing-index-objects-allocation-failure-retry-2026-11-09.json).
+
+The AC1024 online sample search also re-confirmed public candidates: Autodesk's
+catalog describes its samples as AutoCAD 2010 and later, while
+[`nextgis/dwg_samples`](https://github.com/nextgis/dwg_samples) contains
+AC1024 `*_2010.dwg` files but identifies AutoCAD 2016 M.49.0.0 as their
+producer. These are useful AC1024-format samples, not verified AutoCAD 2010
+RTM witnesses. Existing screening of 28 online AC1024 files found no CLASSES
+high-bit failure; keep that issue evidence-gated and do not change the parser
+from this negative screen. No downloaded sample is added to the repository.
+
 **Resume checkpoint (2026-11-09, six-version external POINT read matrix):**
 the hash-pinned AutoCAD 2016 `nextgis/dwg_samples` POINT now matches between
 libdxfrw's current-source semantic adapter and LibreDWG 0.14 for handle `0x7c`,
