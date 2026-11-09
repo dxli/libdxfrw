@@ -43,14 +43,15 @@
   "validation": {
     "build": "cmake --build build --target libdxfrw_partial_viewing_index_objects_allocation_tests -j4",
     "test": "ctest --test-dir build -R '^libdxfrw_partial_viewing_index_objects_allocation_retry$' --output-on-failure",
+    "entityReferenceRegression": "ctest --test-dir build -R '^libdxfrw_entity_reference_remapping$' --output-on-failure",
     "result": "PASS",
     "asciiAllocationOffsets": 45,
     "binaryAllocationOffsets": 43,
-    "perOffset": "one-shot std::bad_alloc across FIELD, FIELDLIST, MOTIONPATH, CURVEPATH, POINTPATH, OBJECTPTR, then PARTIALVIEWINGINDEX in one OBJECTS callback; whole-file destination sentinel is preserved, caller object fields and entity geometry remain intact, same-codec retry restores the source LINE handle, reproduces calibration bytes, and typed readback verifies FIELD values, FIELDLIST membership, MOTIONPATH-to-CURVEPATH/POINTPATH edges, CURVEPATH-to-LINE edge, OBJECTPTR identity, and LINE/PVI graph and extents",
+    "perOffset": "one-shot std::bad_alloc across FIELD, FIELDLIST, MOTIONPATH, CURVEPATH, POINTPATH, OBJECTPTR, then PARTIALVIEWINGINDEX in one OBJECTS callback; whole-file destination sentinel is preserved, caller object fields and entity source handle/geometry remain intact, same-codec retry reproduces calibration bytes, and typed readback verifies FIELD values, FIELDLIST membership, MOTIONPATH-to-CURVEPATH/POINTPATH edges, CURVEPATH-to-LINE edge, OBJECTPTR identity, and LINE/PVI graph and extents",
     "gitDiffCheck": "PASS"
   },
   "limits": [
-    "The earlier ENTITIES callback commits its minted handle to the caller's LINE before a later OBJECTS callback fails. The test records this cross-stage caller mutation and restores the source handle before retry; whole-operation rollback of previously emitted caller entities remains open.",
+    "EntityRecordScope now restores an entity's source handle after committing its emitted record. This generated control verifies the behavior for LINE across a later OBJECTS callback failure; other entity types and consumers require their owning controls.",
     "Generated serializer transaction and typed DXF readback evidence only; it does not qualify native consumer behavior, external producers, DWG output, or broad support.",
     "No DWG/DXF fixture was added; test output uses its build scratch directory."
   ]

@@ -291,7 +291,7 @@ bool run(const std::filesystem::path& directory) {
             if (!exported || !exporter.lineWritten || !exporter.fieldWritten
                 || !exporter.fieldListWritten || !exporter.pathsWritten
                 || !exporter.objectPtrWritten
-                || !exporter.indexWritten
+                || !exporter.indexWritten || exporter.line.handle != 0xD7B0u
                 || !readback) {
                 std::cerr << "calibration codecWrite=" << exported
                           << " lineWrite=" << exporter.lineWritten
@@ -375,12 +375,8 @@ bool run(const std::filesystem::path& directory) {
                 || exporter.objectPtr.parentHandle != sourceObjectPtr.parentHandle
                 || !indexMatches(exporter.index, sourceIndex))
                 return fail("injected failure changed entity, FIELD/path, or PVI state");
-            // Entity serialization assigns the emitted handle to the caller's
-            // entity before the later OBJECTS callback fails. Restore its source
-            // identity so this retry exercises the same source graph.
-            if (exporter.line.handle == sourceLine.handle)
-                return fail("expected prior ENTITIES callback mutation was absent");
-            exporter.line.handle = sourceLine.handle;
+            if (exporter.line.handle != sourceLine.handle)
+                return fail("failed write changed the caller LINE source handle");
             const bool retry = codec.write(&exporter, DRW::AC1027, binary);
             std::string retryBytes;
             if (!retry || !exporter.lineWritten || !exporter.fieldWritten
@@ -389,6 +385,7 @@ bool run(const std::filesystem::path& directory) {
                 || !exporter.indexWritten
                 || !readAll(output, retryBytes) || retryBytes != expectedBytes
                 || !readbackMatches(output, sourceLine, sourceIndex)
+                || exporter.line.handle != sourceLine.handle
                 || !lineMatches(exporter.line, sourceLine)
                 || !indexMatches(exporter.index, sourceIndex))
                 return fail("same-codec retry failed exact bytes or graph readback");
