@@ -30,6 +30,9 @@ public:
         line.parentHandle = DRW::DxfModelSpaceBlockRecordHandle;
         line.basePoint = {1.0, 2.0, 3.0};
         line.secPoint = {4.0, 5.0, 6.0};
+        point.handle = 0xD7B1u;
+        point.parentHandle = DRW::DxfModelSpaceBlockRecordHandle;
+        point.basePoint = {6.0, 5.0, 4.0};
         field.handle = 0xD7B3u;
         field.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
         field.m_evaluatorId = "AcExpr";
@@ -64,7 +67,8 @@ public:
 
     void writeEntities() override {
         lineWritten = codec.writeLine(&line);
-        if (!lineWritten)
+        pointWritten = lineWritten && codec.writePoint(&point);
+        if (!pointWritten)
             (void)codec.writeRawDxfObject(nullptr);
     }
 
@@ -111,13 +115,14 @@ public:
     }
 
     bool finalizeDxfWrite() override {
-        return lineWritten && fieldWritten && fieldListWritten && pathsWritten
-            && objectPtrWritten && indexWritten;
+        return lineWritten && pointWritten && fieldWritten && fieldListWritten
+            && pathsWritten && objectPtrWritten && indexWritten;
     }
 
     dxfRW& codec;
     dx_data storage;
     DRW_Line line;
+    DRW_Point point;
     DRW_Field field;
     DRW_FieldList fieldList;
     DRW_MotionPath motionPath;
@@ -128,6 +133,7 @@ public:
     long failAt = -1;
     long reached = 0;
     bool lineWritten = false;
+    bool pointWritten = false;
     bool fieldWritten = false;
     bool fieldListWritten = false;
     bool pathsWritten = false;
@@ -182,6 +188,7 @@ bool readbackMatches(const std::filesystem::path& path,
     class IndexReadback final : public dx_iface {
     public:
         void addLine(const DRW_Line& value) override { lines.push_back(value); }
+        void addPoint(const DRW_Point& value) override { points.push_back(value); }
         void addField(const DRW_Field& value) override { fields.push_back(value); }
         void addFieldList(const DRW_FieldList& value) override {
             fieldLists.push_back(value);
@@ -203,6 +210,7 @@ bool readbackMatches(const std::filesystem::path& path,
             indexes.push_back(value);
         }
         std::vector<DRW_Line> lines;
+        std::vector<DRW_Point> points;
         std::vector<DRW_Field> fields;
         std::vector<DRW_FieldList> fieldLists;
         std::vector<DRW_MotionPath> motionPaths;
@@ -213,7 +221,8 @@ bool readbackMatches(const std::filesystem::path& path,
     } reader;
     if (!reader.fileImport(path.string(), &data, false)
         || data.sourceFormat != dx_source_format::DXF
-        || reader.lines.size() != 1u || reader.fields.size() != 1u
+        || reader.lines.size() != 1u || reader.points.size() != 1u
+        || reader.fields.size() != 1u
         || reader.fieldLists.size() != 1u
         || reader.motionPaths.size() != 1u || reader.curvePaths.size() != 1u
         || reader.pointPaths.size() != 1u
@@ -228,6 +237,12 @@ bool readbackMatches(const std::filesystem::path& path,
         || actualField.m_fieldCode != "1+1"
         || actualField.m_valueString != "2"
         || actualField.m_valueStringLength != 1)
+        return false;
+    const DRW_Point& actualPoint = reader.points.front();
+    if (actualPoint.handle != 0x34u
+        || actualPoint.parentHandle != DRW::DxfModelSpaceBlockRecordHandle
+        || actualPoint.basePoint.x != 6.0 || actualPoint.basePoint.y != 5.0
+        || actualPoint.basePoint.z != 4.0)
         return false;
     const DRW_FieldList& actualFieldList = reader.fieldLists.front();
     if (actualFieldList.handle != 0xD7B4u
@@ -288,13 +303,15 @@ bool run(const std::filesystem::path& directory) {
             const bool exported = codec.write(&exporter, DRW::AC1027, binary);
             const bool readback = exported && readbackMatches(
                 output, exporter.line, exporter.index);
-            if (!exported || !exporter.lineWritten || !exporter.fieldWritten
+            if (!exported || !exporter.lineWritten || !exporter.pointWritten
+                || exporter.point.handle != 0xD7B1u || !exporter.fieldWritten
                 || !exporter.fieldListWritten || !exporter.pathsWritten
                 || !exporter.objectPtrWritten
                 || !exporter.indexWritten || exporter.line.handle != 0xD7B0u
                 || !readback) {
                 std::cerr << "calibration codecWrite=" << exported
                           << " lineWrite=" << exporter.lineWritten
+                          << " pointWrite=" << exporter.pointWritten
                           << " fieldWrite=" << exporter.fieldWritten
                           << " fieldListWrite=" << exporter.fieldListWritten
                           << " pathsWrite=" << exporter.pathsWritten
@@ -324,6 +341,7 @@ bool run(const std::filesystem::path& directory) {
             codec.setDxfTextWritePolicy(DRW::DxfTextWritePolicy::RequireLossless);
             codec.setDxfWriteRecordInventoryEnabled(true);
             const DRW_Line sourceLine = exporter.line;
+            const DRW_Point sourcePoint = exporter.point;
             const DRW_Field sourceField = exporter.field;
             const DRW_FieldList sourceFieldList = exporter.fieldList;
             const DRW_MotionPath sourceMotionPath = exporter.motionPath;
@@ -334,6 +352,7 @@ bool run(const std::filesystem::path& directory) {
             exporter.failAt = offset;
             exporter.reached = 0;
             exporter.lineWritten = false;
+            exporter.pointWritten = false;
             exporter.fieldWritten = false;
             exporter.fieldListWritten = false;
             exporter.pathsWritten = false;
@@ -346,6 +365,11 @@ bool run(const std::filesystem::path& directory) {
                 || !readAll(output, current) || current != sentinel)
                 return fail("injected failure changed destination or missed allocation");
             if (!lineMatches(exporter.line, sourceLine)
+                || exporter.point.handle != sourcePoint.handle
+                || exporter.point.parentHandle != sourcePoint.parentHandle
+                || exporter.point.basePoint.x != sourcePoint.basePoint.x
+                || exporter.point.basePoint.y != sourcePoint.basePoint.y
+                || exporter.point.basePoint.z != sourcePoint.basePoint.z
                 || exporter.field.handle != sourceField.handle
                 || exporter.field.parentHandle != sourceField.parentHandle
                 || exporter.field.m_evaluatorId != sourceField.m_evaluatorId
@@ -379,13 +403,15 @@ bool run(const std::filesystem::path& directory) {
                 return fail("failed write changed the caller LINE source handle");
             const bool retry = codec.write(&exporter, DRW::AC1027, binary);
             std::string retryBytes;
-            if (!retry || !exporter.lineWritten || !exporter.fieldWritten
+            if (!retry || !exporter.lineWritten || !exporter.pointWritten
+                || !exporter.fieldWritten
                 || !exporter.fieldListWritten || !exporter.pathsWritten
                 || !exporter.objectPtrWritten
                 || !exporter.indexWritten
                 || !readAll(output, retryBytes) || retryBytes != expectedBytes
                 || !readbackMatches(output, sourceLine, sourceIndex)
                 || exporter.line.handle != sourceLine.handle
+                || exporter.point.handle != sourcePoint.handle
                 || !lineMatches(exporter.line, sourceLine)
                 || !indexMatches(exporter.index, sourceIndex))
                 return fail("same-codec retry failed exact bytes or graph readback");

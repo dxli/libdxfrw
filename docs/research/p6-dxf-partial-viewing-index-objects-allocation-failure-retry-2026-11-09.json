@@ -1,11 +1,14 @@
 {
   "title": "Generated FIELD/path/OBJECTPTR/PARTIAL_VIEWING_INDEX OBJECTS allocation rollback and retry",
   "date": "2026-11-09",
-  "scope": "AC1027 whole-file dxfRW::write with a locally generated FIELD, FIELDLIST member, MOTIONPATH, CURVEPATH, POINTPATH, OBJECTPTR, LINE target, and one PARTIALVIEWINGINDEX entry in the same OBJECTS callback; ASCII and Binary.",
+  "scope": "AC1027 whole-file dxfRW::write with locally generated LINE and POINT entities plus FIELD, FIELDLIST member, MOTIONPATH, CURVEPATH, POINTPATH, OBJECTPTR, and one PARTIALVIEWINGINDEX entry in the same OBJECTS callback; ASCII and Binary.",
   "source": {
     "kind": "locally-authored in-memory records",
     "lineHandle": "0xD7B0",
     "lineOwner": "0x1F (model-space BLOCK_RECORD)",
+    "pointHandle": "0xD7B1",
+    "pointOwner": "0x1F (model-space BLOCK_RECORD)",
+    "point": [6.0, 5.0, 4.0],
     "fieldHandle": "0xD7B3",
     "fieldOwner": "0xC (named-object dictionary)",
     "fieldValues": {
@@ -46,13 +49,13 @@
     "entityReferenceRegression": "ctest --test-dir build -R '^libdxfrw_entity_reference_remapping$' --output-on-failure",
     "polylineRegression": "ctest --test-dir build -R '^libdxfrw_polyline_vertex_role_closure$' --output-on-failure",
     "result": "PASS",
-    "asciiAllocationOffsets": 45,
-    "binaryAllocationOffsets": 43,
-    "perOffset": "one-shot std::bad_alloc across FIELD, FIELDLIST, MOTIONPATH, CURVEPATH, POINTPATH, OBJECTPTR, then PARTIALVIEWINGINDEX in one OBJECTS callback; whole-file destination sentinel is preserved, caller object fields and entity source handle/geometry remain intact, same-codec retry reproduces calibration bytes, and typed readback verifies FIELD values, FIELDLIST membership, MOTIONPATH-to-CURVEPATH/POINTPATH edges, CURVEPATH-to-LINE edge, OBJECTPTR identity, and LINE/PVI graph and extents",
+    "asciiAllocationOffsets": 44,
+    "binaryAllocationOffsets": 42,
+    "perOffset": "one-shot std::bad_alloc across FIELD, FIELDLIST, MOTIONPATH, CURVEPATH, POINTPATH, OBJECTPTR, then PARTIALVIEWINGINDEX in one OBJECTS callback; whole-file destination sentinel is preserved, caller object fields and LINE/POINT source handles and geometry remain intact, same-codec retry reproduces calibration bytes, and typed readback verifies FIELD values, FIELDLIST membership, MOTIONPATH-to-CURVEPATH/POINTPATH edges, CURVEPATH-to-LINE edge, OBJECTPTR identity, POINT fields, and LINE/PVI graph and extents",
     "gitDiffCheck": "PASS"
   },
   "limits": [
-    "EntityRecordScope now restores an entity's source handle after committing its emitted record. This generated control verifies the behavior for LINE across a later OBJECTS callback failure; other entity types and consumers require their owning controls.",
+    "RecordStateScope::commit now restores a borrowed entity's source handle after committing its emitted record, covering both EntityRecordScope and direct RecordStateScope writer paths. This control verifies LINE and POINT; other entity types and consumers require their owning controls.",
     "Generated serializer transaction and typed DXF readback evidence only; it does not qualify native consumer behavior, external producers, DWG output, or broad support.",
     "No DWG/DXF fixture was added; test output uses its build scratch directory."
   ]

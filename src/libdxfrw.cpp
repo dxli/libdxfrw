@@ -2857,9 +2857,7 @@ public:
         --m_owner.m_recordStateScopeDepth;
     }
 
-    void commit() noexcept { m_committed = true; }
-
-    void commitRestoringEntityHandle() noexcept {
+    void commit() noexcept {
         if (m_entity != nullptr)
             m_entity->handle = m_handle;
         m_committed = true;
@@ -3091,11 +3089,11 @@ class dxfRW::EntityRecordScope final {
 public:
     EntityRecordScope(dxfRW& owner, DRW_Entity *entity)
         : m_owner(owner), m_writer(owner.writer.get()), m_state(owner, entity),
-          m_record(*owner.writer), m_entity(entity) {}
+          m_record(*owner.writer) {}
 
     EntityRecordScope(dxfRW& owner, DRW_TableEntry *entry)
         : m_owner(owner), m_writer(owner.writer.get()), m_state(owner, entry),
-          m_record(*owner.writer), m_entity(nullptr) {}
+          m_record(*owner.writer) {}
 
     EntityRecordScope(const EntityRecordScope&) = delete;
     EntityRecordScope& operator=(const EntityRecordScope&) = delete;
@@ -3113,10 +3111,7 @@ public:
                 m_owner.m_writeError = true;
                 return false;
             }
-            if (m_entity != nullptr)
-                m_state.commitRestoringEntityHandle();
-            else
-                m_state.commit();
+            m_state.commit();
             m_succeeded = true;
             return true;
         } catch (...) {
@@ -3134,7 +3129,6 @@ private:
     dxfWriter *m_writer;
     RecordStateScope m_state;
     DxfWriterRecordScope m_record;
-    DRW_Entity *m_entity;
     bool m_finished {false};
     bool m_succeeded {false};
 };

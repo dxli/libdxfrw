@@ -2,18 +2,19 @@
 
 **Resume checkpoint (2026-11-09, generated OBJECTS writer allocation safety):**
 the AC1027 callback sweep covers FIELD, FIELDLIST, MOTIONPATH, CURVEPATH,
-POINTPATH, OBJECTPTR, and PARTIALVIEWINGINDEX with a LINE target: 45 allocation
-points in ASCII and 43 in Binary. Every injected failure preserves the
-whole-file destination and modeled caller records; retry reproduces calibration
-bytes and typed readback verifies field values, FIELDLIST membership, path
-fields, MOTIONPATH references to CURVEPATH/POINTPATH, the CURVEPATH-to-LINE
-edge, OBJECTPTR identity, and the LINE/PVI graph. The focused control exposed
-that successful ENTITIES emission changed the caller's LINE handle before a
-later OBJECTS failure. `EntityRecordScope` now restores the original handle
-after committing the emitted record; the failure/retry control and entity
-reference-remapping and polyline vertex-role controls pass. This verifies LINE
-handle preservation and nested polyline emission; other entity types still
-require their owning controls. No fixture was added.
+POINTPATH, OBJECTPTR, and PARTIALVIEWINGINDEX with LINE and POINT targets: 44
+allocation points in ASCII and 42 in Binary. Every injected failure preserves
+the whole-file destination and modeled caller records; retry reproduces
+calibration bytes and typed readback verifies field values, FIELDLIST
+membership, path fields, MOTIONPATH references to CURVEPATH/POINTPATH, the
+CURVEPATH-to-LINE edge, OBJECTPTR identity, POINT fields, and the LINE/PVI
+graph. The focused control exposed caller-handle mutation through both
+`EntityRecordScope` and direct `RecordStateScope` commit paths. Shared
+`RecordStateScope::commit()` now restores the source handle after record
+emission; allocation rollback/retry, entity-reference remapping, and polyline
+vertex-role controls pass. This verifies LINE and POINT handle preservation and
+nested polyline emission; other entity types still require their owning
+controls. No fixture was added.
 See the [allocation receipt](docs/research/p6-dxf-partial-viewing-index-objects-allocation-failure-retry-2026-11-09.json).
 
 The AC1024 online sample search also re-confirmed public candidates: Autodesk's
