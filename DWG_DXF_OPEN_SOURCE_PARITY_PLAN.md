@@ -2083,7 +2083,11 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    walk the stream through a sentinel, reject each wrong role, and verify
    truncation reset plus same-object corrected retry; a pre-R2018 control
    confirms inline indices add no handle spans. The focused build and both
-   object-vector CTests pass. This is generated parser evidence only: there is
+   object-vector CTests pass. A follow-up generated writer round trip confirms
+   zero linetype targets serialize as canonical null (code 0), preserve the
+   following hard-pointer target and sentinel alignment, and parse back with
+   both targets intact; the focused selector passes 1/1 after this control.
+   This is generated codec evidence only: there is
    no physical AC1032 producer witness, target-graph closure, output admission,
    or native-consumer qualification. No fixture was added. See the
    [AC1032 MLINESTYLE receipt](docs/research/p6-ac1032-mlinestyle-linetype-handle-roles-2026-11-09.json).

@@ -32,11 +32,12 @@
   },
   "validation": {
     "command": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests --parallel 4 && ctest --test-dir build-gcc -R '^(libdxfrw_ac1032_mlinestyle_handle_roles|libdxfrw_dwg_object_vectors)$' --output-on-failure",
-    "result": "PASS: build succeeded; 2/2 CTests passed.",
+    "result": "PASS: initial implementation build succeeded and 2/2 object-vector CTests passed; the focused selector was rerun after adding the encoder null-reference round trip and passed 1/1.",
     "controls": [
       "Independent handle-stream walk confirms each role, target, exact span, parsed value and following sentinel.",
       "Each element rejects a soft-pointer role transactionally; corrected same-object retry succeeds.",
       "Canonical null is accepted and retained in the span metadata.",
+      "The AC1032 encoder emits canonical code-0 null for a zero linetype target; an independent handle-stream walk checks the next hard-pointer target and sentinel, then parser readback preserves both targets.",
       "Truncated final handle resets decoded fields and spans; corrected same-object retry succeeds.",
       "Pre-R2018 MLINESTYLE control confirms inline linetype indices have no handle spans."
     ],

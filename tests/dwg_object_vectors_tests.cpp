@@ -5397,6 +5397,46 @@ void testMLineStyleR2018HandleRoles(TestContext& t) {
                      == DRW::DwgNullReference,
              "AC1032 MLINESTYLE accepts only the canonical null linetype handle");
 
+    MLineStyleCodecProbe nullWriterSource = source;
+    nullWriterSource.elements[0].linetypeHandle = 0u;
+    dwgBufferW nullWriterBody(&codec), nullWriterStrings(&codec),
+        nullWriterHandles(&codec);
+    const bool nullWriterEncoded = nullWriterSource.encodeDwg(
+        DRW::AC1032, &nullWriterBody, &nullWriterStrings,
+        &nullWriterHandles);
+    MLineStyleFrame nullWriterFrame;
+    const bool nullWriterFramed = nullWriterEncoded
+        && makeMLineStyleFrame(DRW::AC1032, nullWriterSource,
+                               nullWriterBody, nullWriterStrings,
+                               nullWriterHandles, nullWriterFrame);
+    bool nullWriterRoundTrip = nullWriterFramed;
+    if (nullWriterRoundTrip) {
+        dwgBuffer encodedHandles(nullWriterFrame.handleBytes.data(),
+                                 nullWriterFrame.handleBytes.size());
+        (void)encodedHandles.getHandle(); // common owner
+        const dwgHandle nullReference = encodedHandles.getHandle();
+        const dwgHandle nextReference = encodedHandles.getHandle();
+        const dwgHandle writerSentinel = encodedHandles.getHandle();
+        dwgBuffer encodedInput(nullWriterFrame.bytes.data(),
+                               nullWriterFrame.bytes.size(), &codec);
+        MLineStyleCodecProbe nullWriterParsed;
+        nullWriterRoundTrip = encodedHandles.isGood()
+            && nullReference.rawCode == DRW::DwgNullReference
+            && nullReference.ref == 0u
+            && nextReference.rawCode == DRW::DwgHardPointer
+            && nextReference.ref == source.elements[1].linetypeHandle
+            && writerSentinel.rawCode == DRW::DwgHardPointer
+            && writerSentinel.ref == 0xCAFEu
+            && nullWriterParsed.parseDwg(DRW::AC1032, &encodedInput,
+                                         nullWriterFrame.handleBits)
+            && nullWriterParsed.elements.size() == 2u
+            && nullWriterParsed.elements[0].linetypeHandle == 0u
+            && nullWriterParsed.elements[1].linetypeHandle
+                == source.elements[1].linetypeHandle;
+    }
+    t.expect(nullWriterRoundTrip,
+             "AC1032 MLINESTYLE encoder writes canonical null and preserves following linetype handle alignment");
+
     dwgBuffer truncationCursor(frame.handleBytes.data(),
                                frame.handleBytes.size());
     (void)truncationCursor.getHandle();
