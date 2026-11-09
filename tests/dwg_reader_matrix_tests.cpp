@@ -14606,12 +14606,15 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
                     return publication.m_handle == sentinel.handle;
                 });
             const bool validPrefix = mode <= 1 || mode == 5;
+            const bool rawOnlyFallback = mode == 6;
+            const bool accepted = validPrefix || rawOnlyFallback;
             const bool expectedPartialPrefix = mode == 0 || mode == 5;
-            const bool sourcePublicationMatches = validPrefix
+            const bool sourcePublicationMatches = accepted
                 ? sourcePublication != sink.publications.end()
-                    && sourcePublication->m_carrier == (expectedPartialPrefix
-                        ? DRW_DwgFramePublication::Carrier::Raw
-                        : DRW_DwgFramePublication::Carrier::TypedAndRaw)
+                    && sourcePublication->m_carrier
+                        == ((expectedPartialPrefix || rawOnlyFallback)
+                            ? DRW_DwgFramePublication::Carrier::Raw
+                            : DRW_DwgFramePublication::Carrier::TypedAndRaw)
                 : sourcePublication == sink.publications.end();
             bool partialPrefixMatches = !expectedPartialPrefix;
             if (expectedPartialPrefix && typedSource != sink.typed.end()) {
@@ -14636,7 +14639,7 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
                     && typedSource->m_prefixStatuses[0].m_sourceAssumption.find(
                         expectedVersion) != UTF8STRING::npos;
             }
-            const bool matches = read && reader.objectFailures() == (validPrefix ? 0u : 1u)
+            const bool matches = read && reader.objectFailures() == (accepted ? 0u : 1u)
                          && sink.typed.size() == (validPrefix ? 2u : 1u)
                          && sink.raw.size() == 2u
                          && rawSource != sink.raw.end() && rawSentinel != sink.raw.end()
@@ -14650,11 +14653,11 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
                          && sentinelPublication != sink.publications.end()
                          && sentinelPublication->m_carrier
                               == DRW_DwgFramePublication::Carrier::TypedAndRaw
-                         && sink.publications.size() == (validPrefix ? 2u : 1u)
+                         && sink.publications.size() == (accepted ? 2u : 1u)
                          && (typedSource != sink.typed.end()) == validPrefix
                          && partialPrefixMatches;
             t.expect(matches,
-                     "Only exact source profiles publish partial/raw records; bad frames stay failed and the following object publishes");
+                     "Exact partial profiles stay typed, AC1024 unknown bodies stay raw-only, malformed frames fail and the following object publishes");
             if (!matches) {
                 std::cerr << "Persistent manager dispatch mode=" << mode
                           << " ordinal=" << ordinal << " read=" << read

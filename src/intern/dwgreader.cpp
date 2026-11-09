@@ -14277,7 +14277,8 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
               // preserved byte-for-byte by the raw shelf below.
               DRW_AssociativeObject e(rn);
               const bool barePersistentManagerRawOnlyProfile =
-                  (version == DRW::AC1027 || version == DRW::AC1032)
+                  (version == DRW::AC1024 || version == DRW::AC1027
+                   || version == DRW::AC1032)
                   && rn == "ACDBPERSSUBENTMANAGER"
                   && cit->second->className == "AcDbPersSubentManager";
               const bool ac1027OsnapActionParamRawOnlyProfile =
@@ -14326,7 +14327,7 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                     && RawObjectShell().parseDwg(
                         version, &persistentManagerShellProbe, bs)
                     && persistentManagerShellProbe.isGood();
-                // The AC1027/AC1032 bare manager body layout remains
+                // The AC1024/AC1027/AC1032 bare manager body layout remains
                 // disputed. If only its class-specific body fails, publish
                 // the exact source frame through the validated raw shell.
                 // This is not typed-body success: the raw carrier is
