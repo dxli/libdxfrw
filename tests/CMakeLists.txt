@@ -1562,6 +1562,24 @@ add_test(NAME libdxfrw_dbcolor_objects_allocation_retry
 set_tests_properties(libdxfrw_dbcolor_objects_allocation_retry PROPERTIES
     LABELS "fast;dxf;dbcolor;allocation;transaction;generated"
     TIMEOUT 60)
+add_executable(libdxfrw_background_objects_allocation_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/background_objects_allocation_tests.cpp
+    ${_libdxfrw_test_adapter_source}
+)
+target_compile_features(libdxfrw_background_objects_allocation_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_background_objects_allocation_tests
+    PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_background_objects_allocation_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/dwg2dxf
+    ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(libdxfrw_background_objects_allocation_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_background_objects_allocation_retry
+    COMMAND libdxfrw_background_objects_allocation_tests
+        "${CMAKE_CURRENT_BINARY_DIR}/background-objects-allocation-scratch")
+set_tests_properties(libdxfrw_background_objects_allocation_retry PROPERTIES
+    LABELS "fast;dxf;background;allocation;transaction;generated"
+    TIMEOUT 60)
 add_executable(libdxfrw_scale_objects_allocation_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/scale_objects_allocation_tests.cpp
     ${_libdxfrw_test_adapter_source}
