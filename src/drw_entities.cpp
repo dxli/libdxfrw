@@ -14454,9 +14454,9 @@ bool DRW_Table::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
         std::uint8_t unknownTablePrefix = 0;
         if (!readBoundedRawChar8(*buf, bodyEndBit, unknownTablePrefix))
             return fail();
-        dwgHandle unknownSoftPointer;
-        if (!readBoundedDwgHandle(hBuff, handleEndBit, 0, false,
-                                  unknownSoftPointer))
+        std::uint32_t unknownSoftPointerRef = 0u;
+        if (!readBoundedDwgSoftPointer(
+                hBuff, handleEndBit, handle, unknownSoftPointerRef))
             return fail();
         std::int32_t unknownContentFlag = 0;
         if (!readBoundedBitLong(*buf, bodyEndBit, unknownContentFlag))
@@ -14475,7 +14475,7 @@ bool DRW_Table::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
             return fail();
 
         m_hasSemanticContent = true;
-        if (unknownTablePrefix != 0u || unknownSoftPointer.ref != 0u
+        if (unknownTablePrefix != 0u || unknownSoftPointerRef != 0u
             || unknownContentFlag != 0 || !unknownR2010Flag
             || unknownR2013Flag != 0) {
             m_semanticContentComplete = false;

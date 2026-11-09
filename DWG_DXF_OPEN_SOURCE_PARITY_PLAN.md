@@ -2453,7 +2453,8 @@ Boolean is false, or the R2013+ BL is nonzero. The non-default pointer is no lon
 TABLESTYLE identity; only the TABLECONTENT style reference populates that
 field. Generated AC1024 controls cover the R2010 fields, and an AC1027 control
 exercises both the non-default R2013+ BL refusal and its documented-default
-typed-content path. This is conservative parser
+typed-content path. The H field also uses the existing bounded soft-pointer
+decoder; a generated hard-pointer-role mutation fails closed. This is conservative parser
 disposition, not evidence for non-default field meaning, independent raw-frame
 replay, or native TABLE semantics. See the [focused receipt](docs/research/p5-ac1024-table-unknown-prefix-default-gate-2026-11-09.json).
 

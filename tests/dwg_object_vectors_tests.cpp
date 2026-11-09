@@ -11845,7 +11845,9 @@ bool makeR2010EmbeddedTableFrame(R2010EmbeddedTableFrame& frame,
                                 std::int32_t unknownContentFlag = 0,
                                 bool unknownR2010Flag = true,
                                 std::int32_t unknownR2013Flag = 0,
-                                DRW::Version version = DRW::AC1024) {
+                                DRW::Version version = DRW::AC1024,
+                                std::uint8_t unknownSoftPointerCode =
+                                    DRW::DwgSoftPointer) {
     constexpr std::uint32_t blockRecordHandle = 0xA600u;
     constexpr std::uint32_t tableStyleHandle = 0xA700u;
     const bool generalValue = valueDataType == 512;
@@ -11902,7 +11904,7 @@ bool makeR2010EmbeddedTableFrame(R2010EmbeddedTableFrame& frame,
     body.putRawChar8(unknownTablePrefix);
     handles.putHandle(handle(blockRecordHandle)); // owning BLOCK_RECORD
     dwgHandle unknownSoftPointer;
-    unknownSoftPointer.code = DRW::DwgSoftPointer;
+    unknownSoftPointer.code = unknownSoftPointerCode;
     unknownSoftPointer.ref = unknownSoftPointerRef;
     unknownSoftPointer.ref64 = unknownSoftPointerRef;
     handles.putHandle(unknownSoftPointer);
@@ -12263,14 +12265,15 @@ bool makeR2010EmbeddedTableFrameWithStyleIds(
     std::int32_t unknownContentFlag = 0,
     bool unknownR2010Flag = true,
     std::int32_t unknownR2013Flag = 0,
-    DRW::Version version = DRW::AC1024) {
+    DRW::Version version = DRW::AC1024,
+    std::uint8_t unknownSoftPointerCode = DRW::DwgSoftPointer) {
     return makeR2010EmbeddedTableFrame(
         frame, 1u, 1u, 1u, 0u, 0u, 0u, 1u, 0u, 0u, 0, 0xA710u,
         false, 0u, 0u, DRW::DwgHardOwnership, TablePlacement{}, 0,
         DRW::DwgHardPointer, false, {}, 0, 0, 1, 1, 0, 0, 1, 1, 0, 2,
         DRW::DwgSoftPointer, styleIds, unknownTablePrefix,
         unknownSoftPointerRef, unknownContentFlag, unknownR2010Flag,
-        unknownR2013Flag, version);
+        unknownR2013Flag, version, unknownSoftPointerCode);
 }
 
 bool makeR2010EmbeddedTableMergeFrame(
@@ -14602,23 +14605,34 @@ void testR2010TableUnknownPrefixDefaults(TestContext& t) {
         std::int32_t unknownContentFlag;
         bool unknownR2010Flag;
         std::int32_t unknownR2013Flag;
+        std::uint8_t unknownSoftPointerCode;
         const char* name;
+        bool expectedParsed;
         bool expectedComplete;
     };
-    const std::array<Case, 6> cases = {{
-        {DRW::AC1024, 1u, 0u, 0, true, 0, "R2010 RC", false},
-        {DRW::AC1024, 0u, 0xA701u, 0, true, 0, "R2010 soft pointer", false},
-        {DRW::AC1024, 0u, 0u, 1, true, 0, "R2010 BL", false},
-        {DRW::AC1024, 0u, 0u, 0, false, 0, "R2010 Boolean", false},
-        {DRW::AC1027, 0u, 0u, 0, true, 1, "R2013+ BL", false},
-        {DRW::AC1027, 0u, 0u, 0, true, 0, "R2013+ defaults", true}
+    const std::array<Case, 7> cases = {{
+        {DRW::AC1024, 1u, 0u, 0, true, 0, DRW::DwgSoftPointer,
+         "R2010 RC", true, false},
+        {DRW::AC1024, 0u, 0xA701u, 0, true, 0, DRW::DwgSoftPointer,
+         "R2010 soft pointer", true, false},
+        {DRW::AC1024, 0u, 0u, 1, true, 0, DRW::DwgSoftPointer,
+         "R2010 BL", true, false},
+        {DRW::AC1024, 0u, 0u, 0, false, 0, DRW::DwgSoftPointer,
+         "R2010 Boolean", true, false},
+        {DRW::AC1024, 0u, 0u, 0, true, 0, DRW::DwgHardPointer,
+         "R2010 pointer role", false, false},
+        {DRW::AC1027, 0u, 0u, 0, true, 1, DRW::DwgSoftPointer,
+         "R2013+ BL", true, false},
+        {DRW::AC1027, 0u, 0u, 0, true, 0, DRW::DwgSoftPointer,
+         "R2013+ defaults", true, true}
     }};
     for (const Case& item : cases) {
         R2010EmbeddedTableFrame frame;
         const bool built = makeR2010EmbeddedTableFrameWithStyleIds(
             frame, TableContentStyleIds{}, item.unknownTablePrefix,
             item.unknownSoftPointerRef, item.unknownContentFlag,
-            item.unknownR2010Flag, item.unknownR2013Flag, item.version);
+            item.unknownR2010Flag, item.unknownR2013Flag, item.version,
+            item.unknownSoftPointerCode);
         const std::string profile = item.version == DRW::AC1024
             ? "AC1024" : "AC1027";
         t.expect(built, profile + " TABLE unknown " + item.name
@@ -14631,6 +14645,13 @@ void testR2010TableUnknownPrefixDefaults(TestContext& t) {
         TableDwgCodecProbe table;
         const bool parsed = table.parseDwg(
             item.version, &input, frame.handleBits);
+        if (!item.expectedParsed) {
+            t.expect(!parsed && !input.isGood()
+                         && !table.m_hasSemanticContent,
+                     profile + " TABLE unknown " + item.name
+                         + " rejects the wrong wire handle role");
+            continue;
+        }
         const bool dispositionMatches = item.expectedComplete
             ? (table.m_semanticContentComplete
                 && !table.m_content.m_columns.empty()
