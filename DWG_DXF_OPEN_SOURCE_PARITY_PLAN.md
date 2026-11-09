@@ -1,14 +1,15 @@
 # DWG/DXF parity — remaining implementation plan
 
-**Resume checkpoint (2026-11-09, PARTIAL_VIEWING_INDEX writer allocation safety):**
-the generated AC1027 OBJECTS callback control now sweeps all nine observed
-allocation points in ASCII and Binary. Every injected failure preserves the
-existing destination and PVI record state; restoring the source LINE handle
-allows the same codec to reproduce calibration bytes and typed LINE/PVI graph
+**Resume checkpoint (2026-11-09, FIELD/PARTIAL_VIEWING_INDEX writer allocation safety):**
+the generated AC1027 OBJECTS callback control sweeps 15 allocation points in
+ASCII and 14 in Binary across a FIELD followed by a PARTIALVIEWINGINDEX and its
+LINE target. Each injected failure preserves the existing destination and
+FIELD/PVI record state; restoring the source LINE handle allows the same codec
+to reproduce calibration bytes and typed FIELD values plus LINE/PVI graph
 readback. The earlier ENTITIES callback has already assigned its emitted
 handle to the caller's LINE when the later OBJECTS callback fails, so full
 cross-stage caller-memory rollback remains open. No fixture was added. See the
-[PVI allocation receipt](docs/research/p6-dxf-partial-viewing-index-objects-allocation-failure-retry-2026-11-09.json).
+[allocation receipt](docs/research/p6-dxf-partial-viewing-index-objects-allocation-failure-retry-2026-11-09.json).
 
 The AC1024 online sample search also re-confirmed public candidates: Autodesk's
 catalog describes its samples as AutoCAD 2010 and later, while

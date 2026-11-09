@@ -1,11 +1,19 @@
 {
-  "title": "Generated PARTIAL_VIEWING_INDEX OBJECTS allocation rollback and retry",
+  "title": "Generated FIELD and PARTIAL_VIEWING_INDEX OBJECTS allocation rollback and retry",
   "date": "2026-11-09",
-  "scope": "AC1027 whole-file dxfRW::write with a locally generated LINE target and one PARTIALVIEWINGINDEX entry; ASCII and Binary.",
+  "scope": "AC1027 whole-file dxfRW::write with a locally generated FIELD, LINE target, and one PARTIALVIEWINGINDEX entry in the same OBJECTS callback; ASCII and Binary.",
   "source": {
     "kind": "locally-authored in-memory records",
     "lineHandle": "0xD7B0",
     "lineOwner": "0x1F (model-space BLOCK_RECORD)",
+    "fieldHandle": "0xD7B3",
+    "fieldOwner": "0xC (named-object dictionary)",
+    "fieldValues": {
+      "evaluatorId": "AcExpr",
+      "fieldCode": "1+1",
+      "valueString": "2",
+      "valueStringLength": 1
+    },
     "partialViewingIndexHandle": "0xD7B2",
     "partialViewingIndexOwner": "0xC (named-object dictionary)",
     "entry": {
@@ -19,9 +27,9 @@
     "build": "cmake --build build --target libdxfrw_partial_viewing_index_objects_allocation_tests -j4",
     "test": "ctest --test-dir build -R '^libdxfrw_partial_viewing_index_objects_allocation_retry$' --output-on-failure",
     "result": "PASS",
-    "asciiAllocationOffsets": 9,
-    "binaryAllocationOffsets": 9,
-    "perOffset": "one-shot std::bad_alloc during the OBJECTS callback; whole-file destination sentinel is preserved, PVI caller state and entity geometry remain intact, same-codec retry restores the source LINE handle, reproduces calibration bytes, and typed readback verifies the LINE/PVI target graph and extents",
+    "asciiAllocationOffsets": 15,
+    "binaryAllocationOffsets": 14,
+    "perOffset": "one-shot std::bad_alloc across the FIELD then PARTIALVIEWINGINDEX OBJECTS callback; whole-file destination sentinel is preserved, FIELD/PVI caller state and entity geometry remain intact, same-codec retry restores the source LINE handle, reproduces calibration bytes, and typed readback verifies FIELD values plus the LINE/PVI target graph and extents",
     "gitDiffCheck": "PASS"
   },
   "limits": [
