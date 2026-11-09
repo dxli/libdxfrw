@@ -65,14 +65,16 @@ AC1015 DWG candidate parser, which reads a further `num_subents=4` then
 overruns the object while returning untrusted subentity values. The six local
 DWG/DXF versions and the AutoCAD SAVEAS script are hash-bound in the
 [cross-version conflict receipt](docs/research/p6-persubentmgr-acadsharp-cross-version-dxf-wire-conflict-2026-11-09.json).
-Capture an independent wire-span trace for handles, class-body end, any
-trailing count candidate and versioned padding in AC1015/AC1021/AC1024; align
-those spans with the paired DXF projection. The paired DXF alone cannot prove
-that the DWG trailing count is absent. Preserve the existing AC1021/AC1024
-partial-prefix callbacks with their raw carriers, but keep every profile
-semantically incomplete and output-ineligible. Add generated grammar controls
-only after a physical branch is established, including truncation rollback,
-corrected-input retry, following-frame recovery, and raw-byte preservation.
+The AC1021/AC1024 D63 reads now establish that the eight-value prefix reaches
+each reader's bounded body end, and LibreDWG's AC1024 trace confirms its
+candidate count read crosses into the handle span and overruns. Keep those
+prefixes partial with raw carriers. Next, isolate AC1014/AC1015's body end
+against the handle stream (its peer trace reports a corrupt candidate tail)
+and AC1027/AC1032's six-scalar, zero-step profile against exact string/handle
+boundaries. The paired DXF alone cannot prove DWG field absence. Do not add
+another parser admission until one of those remaining spans is independently
+reconciled. Any later grammar control must retain truncation rollback,
+corrected-input retry, following-frame recovery, and byte-exact raw fallback.
 
 **Resume checkpoint (2026-11-09, AC1032 control-reactor slice):** the
 VPORT_CONTROL reader now consumes declared common reactor references before
