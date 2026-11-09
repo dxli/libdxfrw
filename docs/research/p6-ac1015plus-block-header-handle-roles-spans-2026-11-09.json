@@ -1,6 +1,7 @@
 {
   "schema": "libdxfrw-dwg-handle-role-evidence-v1",
   "date": "2026-11-09",
+  "implementationCommit": "6607186dad50668417b407dfa3dff53596cec79a",
   "slice": "AC1015+ BLOCK_HEADER body handle roles and exact spans",
   "supportClaimEffect": "none",
   "normativeSource": {
@@ -40,6 +41,20 @@
       "result": "Owned Object Count, two hard-owner entity references, two soft-pointer INSERT references, and the hard-pointer LAYOUT reference remain aligned; exact input-wire spans and references match."
     }
   ],
+  "physicalCompatibility": {
+    "source": {
+      "repository": "https://github.com/ACadSharp/ACadSharp",
+      "path": "/Users/dli/dev/ACadSharp/samples/sample_AC1018.dwg",
+      "sha256": "7d26f908516ec5fb89cc8054af33aff233b68a7b63208bbc5b7f9f4d9bff9866",
+      "header": "AC1018",
+      "provenance": "Tracked ACadSharp repository sample; authoring producer is not certified by this receipt."
+    },
+    "command": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/dev/ACadSharp/samples/sample_AC1018.dwg -y -d -v2004 /private/tmp/ac1018-after-block-header-role-validation.dxf",
+    "executableSha256": "0dd19b5211619c79b6df6c254798a189f2e224171718e37132664fbee59a7d4f",
+    "traceSha256": "17c95b28166cdfa9e9c6c0b57599bb950c8798761f8d40fc57583a93bfb6b1c5",
+    "result": "DWG read succeeds (operationSucceeded=true, legacyError=0); 1014/1014 frames are published, entity/object parse failures are zero, and no BLOCK_HEADER role-mismatch diagnostic appears. Strict DXF export stops at the pre-existing IMAGEDEF/reactor source-correlation gate before output preparation.",
+    "qualificationLimit": "Whole-file read compatibility for this input only. It does not expose or independently scan a selected physical BLOCK_HEADER handle span, establish producer role semantics, or qualify DXF output."
+  },
   "failureAndRetry": {
     "wrongRole": "Each body field in each generated profile is independently assigned the opposite pointer/owner role. Parsing fails, the object resets without published spans or stale layout/insert state, and corrected input succeeds on the same object.",
     "truncation": "The final layout handle is truncated in each profile. Parsing fails with no published spans; the complete input then succeeds on the same object.",
