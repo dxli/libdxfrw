@@ -10524,6 +10524,24 @@ progress entry](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#implementation-progress-s3-ac
 
 The bounded AC1021 inline-SAB v2 to SAT v1 path now emits torus range markers by Boolean ordinal and preserves binary64 values with `max_digits10`. Generated controls cover forward/reverse V sense, full and finite ranges, nontrivial coordinates/radii, nonfinite header/vector refusal, and an extra torus Boolean refused with the output buffer preserved. SAT text assembly catches allocation failures; a from-scratch allocation sweep injects all 11 observed failures, confirms a false result and unchanged caller buffer at every failure, and retries successfully with the same buffer. A generated in-memory v21800 point→vertex SAB with heap-backed header strings sweeps the public raw parser, graph builder, wireframe decoder, and `WithHeader` decoder across 14, 9, 26, and 26 allocation-failure positions respectively. Each API clears its output on failure and same-object retry reproduces parsed identities, graph references, output vertex/bounds, and header fields. The earlier heap-backed header copy fault exposed partial caller-header publication; final publication is now a statically verified nonthrowing move. The parse-complete flag retains stage semantics and can be true if projection fails after framing. These are local failure/retry controls only. The exact physical selected SAT payload parses as 14 records with pinned InventorLoader; decoded torus fields exactly equal source SAB binary64 values. The probe uses FreeCAD/Part stubs and constructs no shape. The selected ASCII/Binary carrier/readback route remains limited to the exact AC1021 source graph and AC1024 target; whole-source output still refuses on the separate IMAGEDEF owner-role gate. Native B-rep validity, placement/units, independent-kernel semantics, other producer/version profiles, and support claims remain open. No fixture was added. See the [P7 parser receipt](docs/research/p7-ac1021-inventorloader-sat-parser-crosscheck-2026-11-08.json), [selected carrier receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json), and [implementation history](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#current-execution-checkpoint-2026-11-08).
 
+## Implementation progress — pinned ACadRust exact-payload SAT screen (2026-11-09; research, no production change)
+
+Installed the official Rust ARM64 stable toolchain under `/private/tmp` and
+compiled the pinned ACadRust 0.6.8 parser at commit
+`7717afb7bdcc0a1b6b2fd0ba5ef6e18dda847f0c`. Against the existing
+`torus-precision.sat` payload (SHA-256
+`4917d971df23651987e01f18cf8635d19dab7ec2c306c910734ba0093641da08`), it
+parses 13 records but reports unresolved pointer `$3000` at `eye_refinement`
+record 4 token 42. Its `SatTorusSurface` accessor assumes one pointer before
+numeric geometry; the pinned torus record has two, and the accessor therefore
+returns values shifted from the raw parsed token sequence. ACadRust cannot yet
+supply a valid graph or independent torus semantics for this payload. Do not
+infer a field-layout correction from this screen or use its accessor output as
+semantic proof. Resolve the SAT 21500/profile and pointer/index interpretation
+before retrying this exact peer route. The run changes no production code,
+adds no fixture, and does not promote support. Rust and Cargo live only in
+`/private/tmp`. See the [exact-payload receipt](docs/research/p7-acadrust-pinned-exact-sat-torus-screen-2026-11-09.json).
+
 ## Current execution checkpoint — AC1027 ACSH_SWEEP follow-up (2026-11-08)
 
 The latest committed P4 diagnostic is S2.3.9.4.36 (`dba82679`): under the
