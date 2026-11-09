@@ -889,16 +889,20 @@ do not repeat this TABLESTYLE codec work.
    major/minor/direction it reads profile/path candidates 0/0 at bit 34 (the
    paired record says 77/744 and 77/480), then stops at a reserved BD code at
    bit 186. This rules out that sequence for this witness, not every profile.
-   The paired DWG and DXF
+   With the candidate order held fixed, replacing its two BS option fields
+   with LibreDWG's RC widths fails at the following vector at bit 63; BS yields
+   2/2 and the 2342/2343-bit candidate endpoint. This supports those widths
+   only for the pinned sample. The paired DWG and DXF
    entered LibreDWG's corpus in one 2018 conversion/test commit without naming
    an AutoCAD/ODA producer, so the DXF does not establish independent DWG
    semantics. Do not consume the suffix bit or extra `0xCC` bytes as padding,
    and do not reorder fields from this conflict. Next pursue a native or
    independently authored producer witness. Keep Sweep output refused and support claims unchanged
    until graph dependencies, roles, output/readback and independent consumer
-   semantics close. See the [candidate-field differential receipt](docs/research/p4-ac1027-sweep-dxf-candidate-field-differential-2026-11-08.json)
+   semantics close. See the [candidate-field differential receipt](docs/research/p4-ac1027-sweep-dxf-candidate-field-differential-2026-11-08.json),
    [peer-conflict receipt](docs/research/p4-ac1027-sweep-libredwg-peer-conflict-2026-11-08.json),
-   and [competing-order diagnostic](docs/research/p4-ac1027-sweep-competing-order-diagnostic-2026-11-08.json).
+   [competing-order diagnostic](docs/research/p4-ac1027-sweep-competing-order-diagnostic-2026-11-08.json),
+   and [option-width diagnostic](docs/research/p4-ac1027-sweep-option-width-diagnostic-2026-11-08.json).
    Autodesk's DXF reference explicitly classifies group 350
    as soft-owner, while ODA §2.13 classifies observed DWG H code 3 as hard
    ownership; ODA File Converter emits this same target value as group 350.

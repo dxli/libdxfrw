@@ -109,6 +109,100 @@ void diagnoseLibreDwgSweepOrder(
               << '\n';
 }
 
+void diagnoseSweepOptionWidths(
+    const DRW_AcShHistoryObject::SweepActionBodyCapture& sweep) {
+    if (sweep.m_bodyBits.empty()) return;
+    for (bool rawCharOptions : {false, true}) {
+        dwgBuffer probe(sweep.m_bodyBits.data(), sweep.m_bodyBits.size());
+        const std::uint64_t bound = sweep.m_bodyBitSize;
+        const auto bit = [&]() {
+            return probe.getPosition() * 8u + probe.getBitPos();
+        };
+        const auto readLong = [&](std::int32_t& value) {
+            value = probe.getBitLong();
+            return probe.isGood() && bit() <= bound;
+        };
+        const auto readDouble = [&](double& value) {
+            value = probe.getBitDouble();
+            return probe.isGood() && bit() <= bound;
+        };
+        const auto readPoint = [&](DRW_Coord& value) {
+            value = probe.get3BitDouble();
+            return probe.isGood() && bit() <= bound;
+        };
+        const auto failAt = [&](const char* stage) {
+            std::cout << "SWEEP_OPTION_WIDTH "
+                      << (rawCharOptions ? "RC" : "BS") << " bits="
+                      << bit() << '/' << bound << " stop=" << stage << '\n';
+        };
+
+        std::int32_t ignoredLong = 0;
+        DRW_Coord ignoredPoint;
+        std::uint16_t alignBs = 0;
+        std::uint16_t miterBs = 0;
+        std::uint8_t alignRc = 0;
+        std::uint8_t miterRc = 0;
+        for (unsigned i = 0; i < 2; ++i) {
+            if (!readLong(ignoredLong)) { failAt("majorMinor"); goto nextWidth; }
+        }
+        if (!readPoint(ignoredPoint)) { failAt("direction"); goto nextWidth; }
+        {
+            double value = 0.0;
+            for (unsigned i = 0; i < 6; ++i) {
+                if (!readDouble(value)) { failAt("scalar"); goto nextWidth; }
+            }
+        }
+        probe.getBit();
+        if (!probe.isGood() || bit() > bound) { failAt("firstFlag"); goto nextWidth; }
+        if (rawCharOptions) {
+            alignRc = probe.getRawChar8();
+            if (!probe.isGood() || bit() > bound) { failAt("alignOption"); goto nextWidth; }
+            miterRc = probe.getRawChar8();
+            if (!probe.isGood() || bit() > bound) { failAt("miterOption"); goto nextWidth; }
+        } else {
+            alignBs = probe.getBitShort();
+            if (!probe.isGood() || bit() > bound) { failAt("alignOption"); goto nextWidth; }
+            miterBs = probe.getBitShort();
+            if (!probe.isGood() || bit() > bound) { failAt("miterOption"); goto nextWidth; }
+        }
+        for (unsigned i = 0; i < 4; ++i) {
+            probe.getBit();
+            if (!probe.isGood() || bit() > bound) { failAt("optionFlag"); goto nextWidth; }
+        }
+        if (!readPoint(ignoredPoint)) { failAt("vector"); goto nextWidth; }
+        probe.getBit();
+        if (!probe.isGood() || bit() > bound) { failAt("flag296"); goto nextWidth; }
+        {
+            double value = 0.0;
+            for (unsigned i = 0; i < 32; ++i) {
+                if (!readDouble(value)) { failAt("transform"); goto nextWidth; }
+            }
+        }
+        for (unsigned entity = 0; entity < 2; ++entity) {
+            std::int32_t type = 0;
+            if (!readLong(type)) { failAt("entityType"); goto nextWidth; }
+            if (type != 0) {
+                std::int32_t bits = 0;
+                if (!readLong(bits) || bits < 0
+                    || static_cast<std::uint64_t>(bits) > bound - bit()) {
+                    failAt("entitySize"); goto nextWidth;
+                }
+                if (!probe.moveBitPos(bits) || !probe.isGood() || bit() > bound) {
+                    failAt("entityPayload"); goto nextWidth;
+                }
+            }
+        }
+        std::cout << "SWEEP_OPTION_WIDTH "
+                  << (rawCharOptions ? "RC" : "BS") << " bits=" << bit()
+                  << '/' << bound << " align="
+                  << (rawCharOptions ? static_cast<unsigned>(alignRc) : alignBs)
+                  << " miter="
+                  << (rawCharOptions ? static_cast<unsigned>(miterRc) : miterBs)
+                  << '\n';
+        nextWidth:;
+    }
+}
+
 class AcdsSectionProbe final : public dwgReader27 {
 public:
     using dwgReader27::dwgReader27;
@@ -314,6 +408,7 @@ int main(int argc, char** argv) {
             hexBytes(sweep.m_pathBits);
             std::cout << '\n';
             diagnoseLibreDwgSweepOrder(sweep);
+            diagnoseSweepOptionWidths(sweep);
         }
     }
     for (const DRW_EvaluationGraph& graph : drawing.evaluationGraphs) {
