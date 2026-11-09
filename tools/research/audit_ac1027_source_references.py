@@ -101,6 +101,14 @@ BODY_REFERENCE = re.compile(
     r"^ typedBodyReference owner=(\d+) (?:role=(.*?) )?target=(\d+)$",
     re.MULTILINE,
 )
+LAYER_FRAME = re.compile(
+    r"^ typedBodyFrame type=LAYER handle=(\d+) name=(.*?)$", re.MULTILINE
+)
+LAYER_HANDLE_FIELD = re.compile(
+    r"^ typedLayerHandleField owner=(\d+) role=(xrefBlock|plotStyle|material|lineType|unknown) "
+    r"code=(\d+) target=(\d+) startBit=(\d+) bitSize=(\d+) complete=(\d+)$",
+    re.MULTILINE,
+)
 
 
 def sha256(path: Path) -> str:
@@ -123,6 +131,8 @@ def verify_peer_profiles(
     peer_schema_path: Path,
     source_hash: str,
     frames: list[dict[str, object]],
+    layer_names: dict[int, str],
+    layer_handle_fields: dict[int, list[dict[str, object]]],
 ) -> dict[str, object]:
     peer_json = json.loads(peer_json_path.read_text())
     peer_objects = peer_json.get("OBJECTS")
@@ -268,6 +278,72 @@ def verify_peer_profiles(
         tablestyle_block.encode()
     ).hexdigest()
 
+    layer_schema_path = peer_schema_path.with_name("dwg.spec")
+    if not layer_schema_path.is_file():
+        raise SystemExit("LibreDWG peer directory lacks dwg.spec for LAYER profile")
+    layer_schema_text = layer_schema_path.read_text(errors="replace")
+    layer_start = layer_schema_text.find("DWG_TABLE (LAYER)")
+    layer_end = layer_schema_text.find("DWG_OBJECT_END", layer_start)
+    if layer_start < 0 or layer_end < 0:
+        raise SystemExit("LibreDWG dwg.spec lacks the LAYER table profile")
+    layer_block = layer_schema_text[layer_start:layer_end]
+    expected_layer_fields = (
+        "FIELD_HANDLE (plotstyle, 5, 0);",
+        "FIELD_HANDLE (material, 5, 0);",
+        "FIELD_HANDLE (ltype, 5, 6);",
+    )
+    if any(field not in layer_block for field in expected_layer_fields):
+        raise SystemExit("LibreDWG LAYER handle-role fields changed")
+    schema_blocks["LAYER"] = hashlib.sha256(layer_block.encode()).hexdigest()
+
+    matched_layer = None
+    if source_hash == COVER_AC1027_SHA256:
+        peer_layers = [
+            obj for obj in peer_objects
+            if isinstance(obj, dict) and obj.get("object") == "LAYER"
+            and peer_handle(obj.get("handle")) == 0x10
+        ]
+        source_fields = layer_handle_fields.get(0x10, [])
+        if len(peer_layers) != 1 or layer_names.get(0x10) != "0":
+            raise SystemExit("LibreDWG minJSON lacks the hash-bound Cover LAYER 0")
+        peer_layer = peer_layers[0]
+        peer_field_names = {
+            "xrefBlock": "xref", "plotStyle": "plotstyle",
+            "material": "material", "lineType": "ltype",
+        }
+        matched_fields = []
+        for source_field in source_fields:
+            role = str(source_field["role"])
+            peer_name = peer_field_names.get(role)
+            if peer_name is None:
+                continue  # LibreDWG does not expose ODA's unknown trailing H.
+            wire = peer_layer.get(peer_name)
+            target = peer_handle(wire)
+            raw_role = int(wire[0]) if isinstance(wire, list) and wire else -1
+            if (
+                target != int(source_field["targetHandle"])
+                or raw_role != int(source_field["code"])
+            ):
+                raise SystemExit(
+                    f"LibreDWG LAYER {role} identity/role differs from source-bound profile"
+                )
+            matched_fields.append({
+                "role": role,
+                "peerField": peer_name,
+                "peerRoleCode": raw_role,
+                "peerTargetHandle": target,
+                "matchesSource": True,
+            })
+        if len(matched_fields) != 4:
+            raise SystemExit("LibreDWG did not independently expose four LAYER fields")
+        matched_layer = {
+            "handle": 0x10,
+            "name": "0",
+            "sourceBoundFields": source_fields,
+            "matchedPeerFields": matched_fields,
+            "unmatchedOdaField": "unknown trailing hard-pointer field",
+        }
+
     mleaderstyle_start = schema_text.find("DWG_OBJECT (MLEADERSTYLE)")
     mleaderstyle_end = schema_text.find("DWG_OBJECT_END", mleaderstyle_start)
     if mleaderstyle_start < 0 or mleaderstyle_end < 0:
@@ -305,9 +381,12 @@ def verify_peer_profiles(
         "matchedFrames": rows,
         "schemaPath": str(peer_schema_path),
         "schemaSha256": sha256(peer_schema_path),
+        "layerSchemaPath": str(layer_schema_path),
+        "layerSchemaSha256": sha256(layer_schema_path),
         "schemaBlockSha256": schema_blocks,
         "schemaBodyHandleFieldsBeforeCommonStream": False,
         "sourceSha256": source_hash,
+        "matchedLayer": matched_layer,
     }
 
 
@@ -452,6 +531,33 @@ def main() -> int:
             "role": role or "unlabeled",
             "targetHandle": int(target),
         })
+    layer_names = {
+        int(handle): name for handle, name in LAYER_FRAME.findall(combined)
+    }
+    layer_handle_fields: dict[int, list[dict[str, object]]] = {}
+    for owner, role, code, target, start_bit, bit_size, complete in (
+        LAYER_HANDLE_FIELD.findall(combined)
+    ):
+        layer_handle_fields.setdefault(int(owner), []).append({
+            "role": role,
+            "code": int(code),
+            "targetHandle": int(target),
+            "startBit": int(start_bit),
+            "bitSize": int(bit_size),
+            "complete": bool(int(complete)),
+        })
+    for owner, fields in layer_handle_fields.items():
+        starts = [int(field["startBit"]) for field in fields]
+        if (
+            owner not in layer_names
+            or len({str(field["role"]) for field in fields}) != len(fields)
+            or starts != sorted(starts)
+            or any(
+                not field["complete"] or int(field["bitSize"]) <= 0
+                for field in fields
+            )
+        ):
+            raise SystemExit(f"LAYER {owner:#x} handle-field spans are incomplete or unordered")
     source_bound_modeler_history_handles: set[int] = set()
     if source_before == COVER_AC1027_SHA256:
         expected_history = modeler_history_profiles.get(0x6F)
@@ -480,6 +586,34 @@ def main() -> int:
         ):
             raise SystemExit(
                 "hash-bound Cover 3DSOLID layer/History ID source profile changed"
+            )
+        layer_fields = layer_handle_fields.get(0x10, [])
+        expected_layer_fields = [
+            ("xrefBlock", 5, 0, 155, 8),
+            ("plotStyle", 5, 15, 163, 16),
+            ("material", 5, 70, 179, 16),
+            ("lineType", 5, 22, 195, 16),
+            ("unknown", 5, 0, 211, 8),
+        ]
+        observed_layer_fields = [
+            (field["role"], field["code"], field["targetHandle"],
+             field["startBit"], field["bitSize"])
+            for field in layer_fields
+        ]
+        layer_reference_edges = [
+            (item["role"], item["targetHandle"])
+            for item in typed_references if item["ownerHandle"] == 0x10
+        ]
+        expected_layer_edges = [
+            ("plotStyle", 15), ("material", 70), ("lineType", 22)
+        ]
+        if (
+            layer_names.get(0x10) != "0"
+            or observed_layer_fields != expected_layer_fields
+            or layer_reference_edges != expected_layer_edges
+        ):
+            raise SystemExit(
+                "hash-bound Cover LAYER 0 role/span/target source profile changed"
             )
         source_bound_modeler_history_handles.add(0x6F)
     reference_counts = Counter(item["ownerHandle"] for item in typed_references)
@@ -531,6 +665,8 @@ def main() -> int:
             args.peer_schema.resolve(strict=True),
             source_before,
             frames,
+            layer_names,
+            layer_handle_fields,
         )
     if version == "AC1027":
         mleader_styles = [
@@ -870,6 +1006,17 @@ def main() -> int:
         "retainedStandardObjects": int(standard_retained),
         "capturedFrameIdentities": len(frames),
         "typedBodyReferenceRows": len(typed_references),
+        "typedLayerHandleFieldRows": sum(
+            len(fields) for fields in layer_handle_fields.values()
+        ),
+        "sourceBoundLayerHandleProfiles": (
+            1 if source_before == COVER_AC1027_SHA256 else 0
+        ),
+        "typedLayerHandleFields": [
+            {"ownerHandle": owner, **field}
+            for owner, fields in sorted(layer_handle_fields.items())
+            for field in fields
+        ],
         "framesWithSelectedTypedBodyReport": sum(
             frame["bodyReferenceDisposition"] == "selected-typed-report-only"
             for frame in frames

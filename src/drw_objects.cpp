@@ -5418,28 +5418,57 @@ bool DRW_Layer::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
         parsedXDictHandle = xDict.ref;
     }
 
+    std::vector<DRW_DwgSubrecordRange> parsedHandleFieldSpans;
+    const auto readBodyHandle = [version, baseHandle = handle, hBuf, handleEndBit,
+                                 &parsedHandleFieldSpans](
+        const char *name, dwgHandle& value) {
+        std::uint64_t startBit = 0u;
+        if (!objectCurrentBit(*hBuf, startBit))
+            return false;
+        dwgHandle parsed;
+        if (!readBoundedObjectHandle(*hBuf, baseHandle, false, parsed,
+                                     handleEndBit))
+            return false;
+        std::uint64_t endBit = 0u;
+        if (!objectCurrentBit(*hBuf, endBit) || endBit < startBit)
+            return false;
+        if (version >= DRW::AC1018
+            && parsed.rawCode != DRW::DwgHardPointer
+            && !(parsed.ref == 0u
+                 && parsed.rawCode == DRW::DwgNullReference)) {
+            DRW_DBG("LAYER body hard-pointer role mismatch for ");
+            DRW_DBG(name); DRW_DBG(": raw code ");
+            DRW_DBG(static_cast<unsigned int>(parsed.rawCode));
+            DRW_DBG(" target "); DRW_DBG(parsed.ref); DRW_DBG("\n");
+            return false;
+        }
+        DRW_DwgSubrecordRange span;
+        span.m_name = name;
+        span.m_startBit = startBit;
+        span.m_bitSize = endBit - startBit;
+        span.m_version = version;
+        span.m_parseComplete = true;
+        parsedHandleFieldSpans.push_back(std::move(span));
+        value = parsed;
+        return true;
+    };
     dwgHandle parsedXrefBlockHandle;
-    if (!readBoundedObjectHandle(*hBuf, handle, false, parsedXrefBlockHandle,
-                                 handleEndBit))
+    if (!readBodyHandle("xrefBlock", parsedXrefBlockHandle))
         return fail();
     dwgHandle parsedPlotStyle;
     if (version > DRW::AC1014
-        && !readBoundedObjectHandle(*hBuf, handle, false, parsedPlotStyle,
-                                    handleEndBit))
+        && !readBodyHandle("plotStyle", parsedPlotStyle))
         return fail();
     dwgHandle parsedMaterial;
     if (version > DRW::AC1018
-        && !readBoundedObjectHandle(*hBuf, handle, false, parsedMaterial,
-                                    handleEndBit))
+        && !readBodyHandle("material", parsedMaterial))
         return fail();
     dwgHandle parsedLineType;
-    if (!readBoundedObjectHandle(*hBuf, handle, false, parsedLineType,
-                                 handleEndBit))
+    if (!readBodyHandle("lineType", parsedLineType))
         return fail();
     dwgHandle parsedUnknownHandle;
     if (version >= DRW::AC1027) {
-        if (!readBoundedObjectHandle(*hBuf, handle, false,
-                                     parsedUnknownHandle, handleEndBit))
+        if (!readBodyHandle("unknown", parsedUnknownHandle))
             return fail();
     }
     if (!buf->isGood() || !sBuf->isGood() || !hBuf->isGood()
@@ -5467,6 +5496,7 @@ bool DRW_Layer::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
     plotStyleHandle = parsedPlotStyle;
     materialHandle = parsedMaterial;
     unknownHandle = parsedUnknownHandle;
+    m_dwgHandleFieldSpans = std::move(parsedHandleFieldSpans);
     handlePlotS = version > DRW::AC1014
         ? DRW::toHexStr(parsedPlotStyle.ref) : std::string();
     handleMaterialS = version > DRW::AC1018

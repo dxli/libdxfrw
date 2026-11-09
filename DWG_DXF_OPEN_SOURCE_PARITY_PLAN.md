@@ -132,26 +132,31 @@ No fixture was added. Strict output remains refused by the independent
 source-reference gate. See the [entity receipt](docs/research/p6-ac1018plus-common-entity-handle-role-validation-2026-11-09.json)
 and [OBJECTS receipt](docs/research/p6-ac1018plus-common-object-handle-role-validation-2026-11-09.json).
 
-**Next local implementation slice:** continue the AC1027 Cover source-reference
-closure at the first non-common entity/table body edge whose raw role, field
-span, target identity, or output disposition lacks evidence. Reuse the current
-source-bound inventory and bind the exact frame plus independent ODA or
-producer evidence before editing; keep the strict-output guard until all
-dependencies and dispositions close. AC1014 PERSUBENTMGR still needs a paired
-semantic projection before typed-prefix admission. AC1027 PERSUBENTMGR and
-AC1032's six-scalar body remain raw-only until their exact class-field profiles
-are independently reconciled.
+**Next local implementation packet — DIMSTYLE body handle roles and spans:**
+use ODA v5.4.1 §20.4.68 and the existing AC1027 Cover table-record inventory
+to bind the exact DIMSTYLE record, version-dependent field sequence, raw
+handle roles, consumed spans, and target identities before changing the parser.
+Start with the Cover record and generated AC1018/AC1021/AC1024/AC1027 controls
+only where the ODA version boundary changes the fields. Reuse the existing
+transactional parser/span pattern and fast selector framework; add no drawing
+fixture. The exact LAYER role/span implementation, validation, source audit,
+and remaining compatibility limits are recorded in the [LAYER role/span
+receipt](docs/research/p6-ac1018plus-layer-body-handle-role-spans-2026-11-09.json).
+Keep unresolved DIMSTYLE targets and any unmodeled fields under the strict
+output refusal. AC1014 PERSUBENTMGR still needs a paired semantic projection
+before typed-prefix admission; AC1027 PERSUBENTMGR and AC1032's six-scalar body
+remain raw-only pending independent field reconciliation.
 
-**Resume checkpoint (2026-11-09 10:47 UTC, desktop access refresh):** after
+**Resume checkpoint (2026-11-09 11:43 UTC, desktop access refresh):** after
 the user's latest “I’ll unlock it now” reply, a fresh native-app inventory
 still reports “The Mac is locked and automatic unlock could not unlock it” and
 lists no native apps. No ODA or FreeCAD process was launched. This is an
 access-state condition only; it supplies no format evidence and changes no
 support claim. Keep native ODA/FreeCAD qualification queued and do not retry
 the unchanged ODA File Converter 27.1 CLI route that aborts before processing.
-Continue with the next source-reference slice above. Retry native qualification
-only after a fresh inventory exposes an unlocked session or a materially
-different launch path is available.
+Continue with the DIMSTYLE implementation packet above. Retry native
+qualification only after a fresh inventory exposes an unlocked session or a
+materially different launch path is available.
 
 **Resume checkpoint (2026-11-09, AC1032 control-reactor slice):** the
 VPORT_CONTROL reader now consumes declared common reactor references before

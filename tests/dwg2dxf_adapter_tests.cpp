@@ -23543,12 +23543,52 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
                 << " target=" << target << '\n';
   };
   for (const DRW_Layer &layer : data.layers) {
-    std::cout << " typedBodyFrame type=LAYER handle=" << layer.handle << '\n';
+    std::cout << " typedBodyFrame type=LAYER handle=" << layer.handle
+              << " name=" << layer.name << '\n';
     reportHandle(layer.handle, "xrefBlock", layer.xrefBlockHandle.ref);
     reportHandle(layer.handle, "plotStyle", layer.plotStyleHandle.ref);
     reportHandle(layer.handle, "material", layer.materialHandle.ref);
     reportHandle(layer.handle, "lineType", layer.lTypeH.ref);
     reportHandle(layer.handle, "unknown", layer.unknownHandle.ref);
+    const std::array<std::pair<const char*, const dwgHandle*>, 5> fields{{
+        {"xrefBlock", &layer.xrefBlockHandle},
+        {"plotStyle", &layer.plotStyleHandle},
+        {"material", &layer.materialHandle},
+        {"lineType", &layer.lTypeH},
+        {"unknown", &layer.unknownHandle},
+    }};
+    for (const DRW_DwgSubrecordRange& span : layer.dwgHandleFieldSpans()) {
+      const auto field = std::find_if(
+          fields.begin(), fields.end(), [&span](const auto& item) {
+            return span.m_name == item.first;
+          });
+      if (field == fields.end() || !span.m_parseComplete
+          || span.m_version != data.sourceVersion || span.m_bitSize == 0u) {
+        std::cerr << "LAYER handle span inventory is incomplete for handle "
+                  << layer.handle << '\n';
+        return false;
+      }
+      std::cout << " typedLayerHandleField owner=" << layer.handle
+                << " role=" << field->first
+                << " code="
+                << static_cast<unsigned>(field->second->rawCode)
+                << " target=" << field->second->ref
+                << " startBit=" << span.m_startBit
+                << " bitSize=" << span.m_bitSize
+                << " complete=1\n";
+    }
+    std::size_t expectedSpanCount = 2u;
+    if (data.sourceVersion > DRW::AC1014)
+      ++expectedSpanCount;
+    if (data.sourceVersion > DRW::AC1018)
+      ++expectedSpanCount;
+    if (data.sourceVersion >= DRW::AC1027)
+      ++expectedSpanCount;
+    if (layer.dwgHandleFieldSpans().size() != expectedSpanCount) {
+      std::cerr << "LAYER handle span count differs from its version profile for handle "
+                << layer.handle << '\n';
+      return false;
+    }
   }
   for (const DRW_Dimstyle &style : data.dimStyles) {
     std::cout << " typedBodyFrame type=DIMSTYLE handle=" << style.handle

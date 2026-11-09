@@ -2494,6 +2494,7 @@ public:
     m_dxfRetainedLineTypeBytes = 0u;
     m_dxfRetainedPlotStyleHandleBytes = 0u;
     m_dxfRetainedMaterialHandleBytes = 0u;
+    m_dwgHandleFieldSpans.clear();
     handlePlotS.clear();
     handleMaterialS.clear();
     xrefBlockHandle = dwgHandle{};
@@ -2538,6 +2539,10 @@ public:
         ? m_dwgNameSource->equal(*other.m_dwgNameSource)
         : m_dwgNameSource == other.m_dwgNameSource;
   }
+  //! Exact DWG handle-stream spans for this table entry's body references.
+  //! This records source framing only; target resolution remains consumer work.
+  [[nodiscard]] const std::vector<DRW_DwgSubrecordRange>&
+  dwgHandleFieldSpans() const noexcept { return m_dwgHandleFieldSpans; }
   //! True when a DXF LAYER group 370 held a value outside its defined range.
   [[nodiscard]] bool hasInvalidDxfLineweightValue() const noexcept {
     return hasInvalidDxfLineweight;
@@ -2622,6 +2627,9 @@ private:
   std::size_t m_dxfRetainedLineTypeBytes {0u};
   std::size_t m_dxfRetainedPlotStyleHandleBytes {0u};
   std::size_t m_dxfRetainedMaterialHandleBytes {0u};
+  // Appended to preserve prior member offsets. Consumers must rebuild after
+  // this public structure grows; these spans retain the parsed body handle tail.
+  std::vector<DRW_DwgSubrecordRange> m_dwgHandleFieldSpans;
 };
 
 //! Class to handle block record entries

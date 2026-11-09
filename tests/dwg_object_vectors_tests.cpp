@@ -74,6 +74,11 @@ public:
     }
 };
 
+class LayerHandleRoleProbe final : public DRW_Layer {
+public:
+    using DRW_Layer::parseDwg;
+};
+
 class DictionaryEncodeProbe final : public DRW_Dictionary {
 public:
     using DRW_Dictionary::encodeDwg;
@@ -315,6 +320,77 @@ void appendBits(dwgBufferW& destination, const dwgBufferW& source) {
              >> (7u - static_cast<unsigned>(bit & 7u))) & 1u);
         destination.putBit(value);
     }
+}
+
+struct LayerHandleFrame {
+    std::vector<std::uint8_t> bytes;
+    std::uint32_t handleBits {0};
+    std::uint64_t handleStartBit {0};
+};
+
+bool makeAc1018PlusLayerHandleFrame(DRW::Version version,
+                                    LayerHandleFrame& frame,
+                                    bool includeBodyTargets = true) {
+    if (version < DRW::AC1018)
+        return false;
+    DRW_Layer layer;
+    layer.handle = 0x100u;
+    layer.name = "LAYER0";
+    if (includeBodyTargets) {
+        layer.xrefBlockHandle.ref = 0x21u;
+        layer.plotStyleHandle.ref = 0x31u;
+        layer.lTypeH.ref = 0x51u;
+        if (version > DRW::AC1018)
+            layer.materialHandle.ref = 0x41u;
+        if (version >= DRW::AC1027)
+            layer.unknownHandle.ref = 0x61u;
+    }
+    dwgBufferW body, strings, handles;
+    if (!layer.encodeDwg(version, &body, &strings, &handles))
+        return false;
+
+    dwgBufferW object;
+    object.putObjType(version, DRW::DwgLayerObjectType);
+    const bool explicitObjectSize =
+        version > DRW::AC1014 && version < DRW::AC1024;
+    const std::uint64_t objectSizeBit = object.bitCount();
+    if (explicitObjectSize)
+        object.putRawLong32(0u);
+    dwgHandle own;
+    own.code = DRW::DwgHardPointer;
+    own.rawCode = own.code;
+    own.ref = layer.handle;
+    own.ref64 = own.ref;
+    own.size = 2u;
+    object.putHandle(own);
+    object.putBitShort(0u); // EED size
+    object.putBitLong(0); // reactors
+    object.putBit(0u); // xdictionary handle is present
+    if (version > DRW::AC1024)
+        object.putBit(0u); // no AC1027 DS data
+    appendBits(object, body);
+
+    if (version > DRW::AC1018) {
+        object.alignToByte();
+        strings.alignToByte();
+        object.putBytes(strings.data().data(), strings.size());
+        for (int i = 0; i < 7; ++i)
+            object.putBit(0u);
+        object.putRawShort16(
+            static_cast<std::uint16_t>(strings.size() * 8u + 7u));
+        object.putBit(1u);
+    }
+    if (explicitObjectSize)
+        object.patchRawLong32AtBit(
+            objectSizeBit, static_cast<std::uint32_t>(object.bitCount()));
+    frame.handleStartBit = object.bitCount();
+    handles.alignToByte();
+    frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
+    appendBits(object, handles);
+    if (!object.isGood() || !strings.isGood() || !handles.isGood())
+        return false;
+    frame.bytes = object.data();
+    return true;
 }
 
 struct AcShHistoryFrame {
@@ -15338,6 +15414,153 @@ void testLegacyDictionaryGroupCommonLinkEvidence(TestContext& t) {
     }
 }
 
+void testAc1018PlusLayerBodyHandleRoles(TestContext& t) {
+    const auto versionName = [](DRW::Version version) -> const char* {
+        switch (version) {
+        case DRW::AC1018: return "AC1018";
+        case DRW::AC1021: return "AC1021";
+        case DRW::AC1024: return "AC1024";
+        case DRW::AC1027: return "AC1027";
+        default: return "unexpected-version";
+        }
+    };
+    const auto parse = [](DRW::Version version, LayerHandleRoleProbe& layer,
+                          const std::vector<std::uint8_t>& bytes,
+                          std::uint32_t handleBits) {
+        DRW_TextCodec codec;
+        codec.setVersion(version, false);
+        dwgBuffer input(bytes.data(), bytes.size(), &codec);
+        return layer.parseDwg(version, &input, handleBits);
+    };
+
+    for (const DRW::Version version : {DRW::AC1018, DRW::AC1021,
+                                       DRW::AC1024, DRW::AC1027}) {
+        std::vector<std::string> roles{"xrefBlock", "plotStyle"};
+        std::vector<std::uint32_t> targets{0x21u, 0x31u};
+        if (version > DRW::AC1018) {
+            roles.push_back("material");
+            targets.push_back(0x41u);
+        }
+        roles.push_back("lineType");
+        targets.push_back(0x51u);
+        if (version >= DRW::AC1027) {
+            roles.push_back("unknown");
+            targets.push_back(0x61u);
+        }
+
+        LayerHandleFrame validFrame;
+        const bool built = makeAc1018PlusLayerHandleFrame(version, validFrame);
+        t.expect(built, std::string("generated LAYER body handle profile builds for ")
+                     + versionName(version));
+        if (!built)
+            continue;
+
+        const auto fieldFor = [](DRW_Layer& layer, const std::string& role)
+            -> dwgHandle& {
+            if (role == "xrefBlock") return layer.xrefBlockHandle;
+            if (role == "plotStyle") return layer.plotStyleHandle;
+            if (role == "material") return layer.materialHandle;
+            if (role == "lineType") return layer.lTypeH;
+            return layer.unknownHandle;
+        };
+        LayerHandleRoleProbe valid;
+        const bool parsed = parse(version, valid, validFrame.bytes,
+                                  validFrame.handleBits);
+        t.expect(parsed && valid.handle == 0x100u && valid.name == "LAYER0",
+                 std::string("LAYER parser reads generated ") + versionName(version)
+                     + " handle-role profile");
+        if (parsed) {
+            const auto& spans = valid.dwgHandleFieldSpans();
+            bool exactSpans = spans.size() == roles.size();
+            std::uint64_t nextBit = validFrame.handleStartBit + 24u;
+            for (std::size_t i = 0u; i < spans.size() && i < roles.size(); ++i) {
+                const dwgHandle& field = fieldFor(valid, roles[i]);
+                exactSpans = exactSpans && spans[i].m_name == roles[i]
+                    && spans[i].m_version == version
+                    && spans[i].m_parseComplete && spans[i].m_startBit == nextBit
+                    && spans[i].m_bitSize == 16u
+                    && field.rawCode == DRW::DwgHardPointer
+                    && field.ref == targets[i];
+                nextBit += spans[i].m_bitSize;
+            }
+            exactSpans = exactSpans
+                && nextBit == validFrame.handleStartBit + validFrame.handleBits;
+            t.expect(exactSpans, std::string("LAYER ") + versionName(version)
+                         + " body spans match ordered hard pointers through exact stream end");
+        }
+
+        LayerHandleFrame nullFrame;
+        const bool nullBuilt = makeAc1018PlusLayerHandleFrame(
+            version, nullFrame, false);
+        LayerHandleRoleProbe nullLayer;
+        const bool nullRead = nullBuilt
+            && parse(version, nullLayer, nullFrame.bytes, nullFrame.handleBits);
+        bool nullProfile = nullRead
+            && nullLayer.dwgHandleFieldSpans().size() == roles.size();
+        if (nullProfile) {
+            std::uint64_t nextBit = nullFrame.handleStartBit + 24u;
+            for (std::size_t i = 0u; i < roles.size(); ++i) {
+                const auto& span = nullLayer.dwgHandleFieldSpans()[i];
+                nullProfile = nullProfile && span.m_name == roles[i]
+                    && span.m_startBit == nextBit && span.m_bitSize == 8u
+                    && span.m_parseComplete
+                    && fieldFor(nullLayer, roles[i]).rawCode
+                        == DRW::DwgNullReference;
+                nextBit += span.m_bitSize;
+            }
+            nullProfile = nullProfile
+                && nextBit == nullFrame.handleStartBit + nullFrame.handleBits;
+        }
+        t.expect(nullProfile, std::string("LAYER ") + versionName(version)
+                     + " accepts canonical null references with exact spans");
+
+        for (std::size_t index = 0u; index < roles.size(); ++index) {
+            std::vector<std::uint8_t> invalidBytes = validFrame.bytes;
+            const std::uint64_t fieldStartBit = validFrame.handleStartBit
+                + 24u + 16u * index;
+            if ((fieldStartBit + 4u) > invalidBytes.size() * 8u) {
+                t.expect(false, "generated role byte exists for " + roles[index]);
+                continue;
+            }
+            replaceBitField(invalidBytes, fieldStartBit, 4u,
+                            DRW::DwgSoftPointer);
+
+            LayerHandleRoleProbe retryable;
+            const bool rejected = !parse(version, retryable, invalidBytes,
+                                         validFrame.handleBits);
+            t.expect(rejected && retryable.handle == 0u
+                         && retryable.name.empty()
+                         && retryable.dwgHandleFieldSpans().empty(),
+                     "wrong LAYER " + roles[index] + " role rejects atomically in "
+                         + versionName(version));
+            t.expect(parse(version, retryable, validFrame.bytes,
+                           validFrame.handleBits)
+                         && retryable.handle == 0x100u
+                         && retryable.dwgHandleFieldSpans().size() == roles.size(),
+                     "corrected LAYER " + roles[index]
+                         + " retries on same " + versionName(version)
+                         + " parser");
+        }
+
+        std::vector<std::uint8_t> truncatedBytes = validFrame.bytes;
+        truncatedBytes.pop_back();
+        LayerHandleRoleProbe truncated;
+        const bool truncatedRejected = !parse(
+            version, truncated, truncatedBytes, validFrame.handleBits - 8u);
+        t.expect(truncatedRejected && truncated.handle == 0u
+                     && truncated.name.empty()
+                     && truncated.dwgHandleFieldSpans().empty(),
+                 std::string("truncated LAYER final handle field rejects atomically in ")
+                     + versionName(version));
+        t.expect(parse(version, truncated, validFrame.bytes,
+                       validFrame.handleBits)
+                     && truncated.handle == 0x100u
+                     && truncated.dwgHandleFieldSpans().size() == roles.size(),
+                 std::string("complete LAYER retries after final-handle truncation in ")
+                     + versionName(version));
+    }
+}
+
 void testAc1027ObjectCommonHandleRoles(TestContext& t) {
     struct Stream {
         std::vector<std::uint8_t> bytes;
@@ -23602,6 +23825,14 @@ void testScaleDwgPositiveUnitDomain(TestContext& t) {
 
 int main(int argc, char** argv) {
     if (argc == 2
+        && std::string(argv[1]) == "--ac1018plus-layer-body-handle-roles") {
+        TestContext context;
+        testAc1018PlusLayerBodyHandleRoles(context);
+        std::cout << "AC1018+ LAYER body handle roles and spans: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--ac1027-object-common-handle-roles") {
         TestContext context;
         testAc1027ObjectCommonHandleRoles(context);
@@ -24366,6 +24597,7 @@ int main(int argc, char** argv) {
         return context.failures == 0 ? 0 : 1;
     }
     TestContext context;
+    testAc1018PlusLayerBodyHandleRoles(context);
     testLegacyDictionaryGroupCommonLinkEvidence(context);
     testMeshDwgCreaseCountGuard(context);
     testScaleDwgPositiveUnitDomain(context);
