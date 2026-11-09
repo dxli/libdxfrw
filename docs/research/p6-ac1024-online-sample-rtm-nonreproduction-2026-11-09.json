@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "date": "2026-11-09",
+  "purpose": "Find and check a publicly available AC1024 DWG against the reported AutoCAD 2010 RTM CLASSES high-bit string-size failure.",
+  "source": {
+    "repository": "https://github.com/nextgis/dwg_samples",
+    "file": "arc_2010.dwg",
+    "file_url": "https://github.com/nextgis/dwg_samples/blob/master/arc_2010.dwg",
+    "producer_claim": "The repository README says its drawings were produced with trial AutoCAD 2016 M.49.0.0.",
+    "qualification": "AC1024-format online sample; not an AutoCAD 2010 RTM-produced witness."
+  },
+  "local_copy": {
+    "path": "/private/tmp/nextgis-arc-2010.dwg",
+    "committed": false,
+    "size_bytes": 51549,
+    "magic": "AC1024",
+    "sha256": "fd87187b435062cb15e0f6a88c2b23546768162f54ffae83a3f51788503ec262"
+  },
+  "reader": {
+    "tool": "build-gcc/dwg2dxf/dwg2dxf",
+    "trace_observation": "dwgReader24::readDwgClasses END",
+    "operationSucceeded": true,
+    "sourceVersion": "AC1024",
+    "legacyError": 0,
+    "classes_crc_mismatch": false,
+    "strict_dxf_output": "Not produced; the CLI stopped later at a strict output/read-completeness gate. This does not indicate a CLASSES parser failure."
+  },
+  "interpretation": "The online sample adds an independently sourced AC1024-format input and does not reproduce the reported CLASSES error. Because it was produced by AutoCAD 2016, it cannot resolve an AutoCAD 2010 RTM-specific failure. Keep the issue open pending one of the exact failing RTM files, the missing tenth input, or hashes plus a reproducible BAD_READ_CLASSES trace. Do not infer general AC1024 support from this result.",
+  "fixture_policy": "The sample was used only from /private/tmp and is not added to the repository."
+}

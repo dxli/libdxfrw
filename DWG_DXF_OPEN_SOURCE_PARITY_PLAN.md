@@ -1995,6 +1995,19 @@ reads all strings back through `readDwgClasses()`. No fixture was added. See the
 [2026-11-09 repository-corpus receipt](docs/research/p6-ac1024-classes-repository-corpus-recheck-2026-11-09.json)
 and [earlier recheck](docs/research/p6-ac1024-classes-high-bit-rtm-recheck-2026-11-08.json).
 
+**Online AC1024 sample checked:** `nextgis/dwg_samples/arc_2010.dwg` was
+retrieved to `/private/tmp`, verified as AC1024 (51,549 bytes; SHA-256
+`fd87187b435062cb15e0f6a88c2b23546768162f54ffae83a3f51788503ec262`), and
+read through `dwgReader24::readDwgClasses END` with `operationSucceeded=true`,
+`legacyError=0`, and no CLASSES CRC mismatch. The repository identifies the
+sample set as produced with trial AutoCAD 2016 M.49.0.0, so this is an
+independent AC1024-format input but not evidence for AutoCAD 2010 RTM saves.
+Strict DXF output stopped later at an unrelated output/read-completeness gate.
+Keep the RTM discrepancy open; the sample was not copied into the repository
+and no parser change is justified. See the
+[online-sample receipt](docs/research/p6-ac1024-online-sample-rtm-nonreproduction-2026-11-09.json)
+and the public [`nextgis/dwg_samples` source](https://github.com/nextgis/dwg_samples).
+
 **AC1015 LTYPE_CONTROL outlier:** the unauthenticated local `simple.dwg` still
 fails at the bounded count/boundary check on current code. LibreDWG 0.14 parses
 25 entries, but its decoded profile includes BYBLOCK/BYLAYER in the counted
