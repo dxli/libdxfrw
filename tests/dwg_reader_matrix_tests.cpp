@@ -12246,6 +12246,11 @@ public:
         if (forward)
             dx_iface::addTableContent(object);
     }
+    void addTableGeometry(const DRW_TableGeometry& object) override {
+        tableGeometry.push_back(object);
+        if (forward)
+            dx_iface::addTableGeometry(object);
+    }
     void addDwgFramePublication(const DRW_DwgFramePublication& publication) override {
         publications.push_back(publication);
         if (forward)
@@ -12255,6 +12260,7 @@ public:
     std::vector<DRW_AssociativeObject> typed;
     std::vector<DRW_UnsupportedObject> raw;
     std::vector<DRW_TableContentObject> tableContent;
+    std::vector<DRW_TableGeometry> tableGeometry;
     std::vector<DRW_DwgFramePublication> publications;
 private:
     bool forward;
@@ -15393,6 +15399,130 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
             t.expect(recovered,
                      "body-byte-count candidate stays raw-only and following typed object still publishes");
         }
+    }
+}
+
+struct GeneratedAc1018OpaqueTableObject {
+    std::vector<std::uint8_t> payload;
+    std::vector<std::uint8_t> frame;
+};
+
+bool makeGeneratedAc1018OpaqueTableObject(
+    std::uint16_t classNumber, std::uint32_t handle,
+    GeneratedAc1018OpaqueTableObject& output) {
+    constexpr DRW::Version version = DRW::AC1018;
+    dwgBufferW object;
+    const auto makeHandle = [](std::uint8_t code, std::uint32_t ref) {
+        dwgHandle value;
+        value.code = code;
+        value.size = ref <= 0xFFu ? 1u : 2u;
+        value.ref = ref;
+        value.ref64 = ref;
+        return value;
+    };
+    object.putObjType(version, classNumber);
+    const std::size_t objectSizeBit = object.bitCount();
+    object.putRawLong32(0u); // RL end of pre-handle object data.
+    object.putHandle(makeHandle(DRW::DwgNullReference, handle));
+    object.putBitShort(0u); // no EED.
+    object.putBitLong(1u); // one persistent reactor.
+    object.putBit(1u); // no extension dictionary.
+    const auto objectDataEndBit = static_cast<std::uint32_t>(
+        object.bitCount());
+    object.patchRawLong32AtBit(objectSizeBit, objectDataEndBit);
+    object.putHandle(makeHandle(DRW::DwgSoftPointer, 0xCu)); // parent.
+    object.putHandle(makeHandle(DRW::DwgSoftPointer, 0xCu)); // reactor.
+    object.alignToByte();
+    if (!object.isGood())
+        return false;
+    output.payload = object.data();
+
+    dwgBufferW frame;
+    frame.putModularShort(static_cast<std::int32_t>(output.payload.size()));
+    frame.putBytes(output.payload.data(), output.payload.size());
+    frame.putRawShort16(frame.crc16(0xC0C1u, 0u, frame.size()));
+    if (!frame.isGood())
+        return false;
+    output.frame = frame.data();
+    return true;
+}
+
+void testAc1018TableObjectsRetainOnlyValidatedRawFrames(TestContext& t) {
+    constexpr std::uint16_t tableContentClass = 700u;
+    constexpr std::uint16_t tableGeometryClass = 701u;
+    constexpr std::uint32_t tableContentHandle = 0xA100u;
+    constexpr std::uint32_t tableGeometryHandle = 0xA101u;
+    GeneratedAc1018OpaqueTableObject tableContent, tableGeometry;
+    const bool framesBuilt = makeGeneratedAc1018OpaqueTableObject(
+            tableContentClass, tableContentHandle, tableContent)
+        && makeGeneratedAc1018OpaqueTableObject(
+            tableGeometryClass, tableGeometryHandle, tableGeometry);
+    t.expect(framesBuilt,
+             "AC1018 out-of-version TABLECONTENT/TABLEGEOMETRY frames are generated in memory");
+    if (!framesBuilt)
+        return;
+
+    std::vector<std::uint8_t> bytes = tableContent.frame;
+    const auto tableGeometryOffset = static_cast<std::uint32_t>(bytes.size());
+    bytes.insert(bytes.end(), tableGeometry.frame.begin(),
+                 tableGeometry.frame.end());
+    PersistentManagerDispatchReader reader(bytes, DRW::AC1018, 601u);
+    reader.addClass(tableContentClass, "TABLECONTENT", "AcDbTableContent");
+    reader.addClass(tableGeometryClass, "TABLEGEOMETRY", "AcDbTableGeometry");
+    PersistentManagerDispatchSink sink;
+    const bool read = reader.readObjects(
+        bytes, tableContentHandle, tableGeometryOffset,
+        tableGeometryHandle, sink);
+    const auto rawContent = std::find_if(
+        sink.raw.begin(), sink.raw.end(),
+        [](const DRW_UnsupportedObject& item) {
+            return item.m_handle == tableContentHandle;
+        });
+    const auto rawGeometry = std::find_if(
+        sink.raw.begin(), sink.raw.end(),
+        [](const DRW_UnsupportedObject& item) {
+            return item.m_handle == tableGeometryHandle;
+        });
+    const auto contentPublication = std::find_if(
+        sink.publications.begin(), sink.publications.end(),
+        [](const DRW_DwgFramePublication& item) {
+            return item.m_handle == tableContentHandle;
+        });
+    const auto geometryPublication = std::find_if(
+        sink.publications.begin(), sink.publications.end(),
+        [](const DRW_DwgFramePublication& item) {
+            return item.m_handle == tableGeometryHandle;
+        });
+    const bool rawOnly = read && reader.objectFailures() == 0u
+        && sink.tableContent.empty() && sink.tableGeometry.empty()
+        && sink.raw.size() == 2u && sink.publications.size() == 2u
+        && rawContent != sink.raw.end()
+        && rawContent->m_rawBytes == tableContent.payload
+        && rawContent->m_version == DRW::AC1018
+        && rawContent->m_recordName == "TABLECONTENT"
+        && rawContent->m_className == "AcDbTableContent"
+        && !rawContent->m_typedPayloadValidated
+        && rawGeometry != sink.raw.end()
+        && rawGeometry->m_rawBytes == tableGeometry.payload
+        && rawGeometry->m_version == DRW::AC1018
+        && rawGeometry->m_recordName == "TABLEGEOMETRY"
+        && rawGeometry->m_className == "AcDbTableGeometry"
+        && !rawGeometry->m_typedPayloadValidated
+        && contentPublication != sink.publications.end()
+        && contentPublication->m_carrier
+            == DRW_DwgFramePublication::Carrier::Raw
+        && geometryPublication != sink.publications.end()
+        && geometryPublication->m_carrier
+            == DRW_DwgFramePublication::Carrier::Raw;
+    t.expect(rawOnly,
+             "AC1018 TABLECONTENT/TABLEGEOMETRY bodies remain opaque while validated frames and following-object recovery publish raw-only");
+    if (!rawOnly) {
+        std::cerr << "AC1018 table raw-only read=" << read
+                  << " failures=" << reader.objectFailures()
+                  << " typedContent=" << sink.tableContent.size()
+                  << " typedGeometry=" << sink.tableGeometry.size()
+                  << " raw=" << sink.raw.size()
+                  << " publications=" << sink.publications.size() << '\n';
     }
 }
 
@@ -20368,6 +20498,7 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--persistent-manager-prefix-dispatch") {
         TestContext focused;
         testPersistentManagerPrefixDispatch(focused);
+        testAc1018TableObjectsRetainOnlyValidatedRawFrames(focused);
         std::cout << "Persistent manager bounded-prefix dispatch: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;

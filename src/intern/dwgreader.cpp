@@ -14134,7 +14134,8 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                 cit->second->className == "AcDbTableContent") {
               DRW_TableContentObject e;
               const bool tableContentRawOnlyProfile =
-                  (version == DRW::AC1021 || version == DRW::AC1024
+                  (version == DRW::AC1018 || version == DRW::AC1021
+                   || version == DRW::AC1024
                    || version == DRW::AC1027 || version == DRW::AC1032)
                   && rn == "TABLECONTENT"
                   && cit->second->className == "AcDbTableContent";
@@ -14145,12 +14146,6 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
               if (ret) {
                 intfa.addTableContent(e);
                 intfa.addUnsupportedObject(makeRawObject(oType, cit->second));
-              } else if (version <= DRW::AC1018 && buff.isGood()) {
-                // R2000/R2004 use a body layout that is retained
-                // raw until a typed decoder is available.
-                intfa.addUnsupportedObject(
-                    makeRawObject(oType, cit->second, false));
-                ret = true;
               } else if (tableContentRawOnlyProfile
                          && RawObjectShell().parseDwg(
                              version, &tableContentShellProbe, bs)
@@ -14174,6 +14169,12 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                 DRW_DBG(" handle=");
                 DRW_DBG(obj.handle);
                 DRW_DBG("]\n");
+              } else if (version < DRW::AC1018 && buff.isGood()) {
+                // Legacy R13/R14/R2000 content bodies remain raw while the
+                // independent common shell is unavailable for this profile.
+                intfa.addUnsupportedObject(
+                    makeRawObject(oType, cit->second, false));
+                ret = true;
               }
               break;
             }
@@ -14581,11 +14582,38 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
             if (rn == "TABLEGEOMETRY" ||
                 cit->second->className == "AcDbTableGeometry") {
               DRW_TableGeometry e;
+              const bool legacyTableGeometryRawOnlyProfile =
+                  version == DRW::AC1018
+                  && rn == "TABLEGEOMETRY"
+                  && cit->second->className == "AcDbTableGeometry";
+              dwgBuffer tableGeometryShellProbe = buff.forkIndependent();
               ret = parseTableEntry(e);
               // Raw replay preserves the full byte image. (Phase 2b.4)
               if (ret) {
                 intfa.addTableGeometry(e);
                 intfa.addUnsupportedObject(makeRawObject(oType, cit->second));
+              } else if (legacyTableGeometryRawOnlyProfile
+                         && RawObjectShell().parseDwg(
+                             version, &tableGeometryShellProbe, bs)
+                         && tableGeometryShellProbe.isGood()) {
+                // TABLEGEOMETRY postdates R2004. Preserve only its exact
+                // frame and validated AC1018 common shell for this
+                // out-of-version compatibility occurrence.
+                intfa.addUnsupportedObject(
+                    makeRawObject(oType, cit->second, false));
+                const std::string &className = cit->second->className;
+                const std::string &recordName = cit->second->recName;
+                const std::string objectName =
+                    recordName.empty() ? className : recordName;
+                ++m_skippedCustomClasses[className.empty()
+                    ? recordName.c_str() : className.c_str()];
+                ++m_skippedUnsupportedObjects[objectName];
+                ret = true;
+                DRW_DBG("[table-geometry-raw-only class=");
+                DRW_DBG(className.c_str());
+                DRW_DBG(" handle=");
+                DRW_DBG(obj.handle);
+                DRW_DBG("]\n");
               }
               break;
             }
