@@ -1,20 +1,30 @@
 {
   "date": "2026-11-09",
-  "scope": "Generated AC1027 PERSUBENTMGR common-shell truncation and corrected-input recovery control",
+  "scope": "Generated AC1027 and AC1032 PERSUBENTMGR common-shell truncation and corrected-input recovery controls",
   "evidence_class": "from-scratch generated regression; no external DWG/DXF fixture",
   "selector": "libdxfrw_dwg_reader_matrix_tests --persistent-manager-prefix-dispatch",
-  "profile": {
-    "version": "AC1027",
-    "synthetic_class_ordinal": 601,
-    "class_record_name": "ACDBPERSSUBENTMANAGER",
-    "class_name": "AcDbPersSubentManager",
-    "source_handle": "0xD63",
-    "following_control_handle": "0xD64"
-  },
+  "profiles": [
+    {
+      "version": "AC1027",
+      "synthetic_class_ordinal": 601,
+      "class_record_name": "ACDBPERSSUBENTMANAGER",
+      "class_name": "AcDbPersSubentManager",
+      "source_handle": "0xD63",
+      "following_control_handle": "0xD64"
+    },
+    {
+      "version": "AC1032",
+      "synthetic_class_ordinal": 601,
+      "class_record_name": "ACDBPERSSUBENTMANAGER",
+      "class_name": "AcDbPersSubentManager",
+      "source_handle": "0xD63",
+      "following_control_handle": "0xD64"
+    }
+  ],
   "control": {
-    "valid_source": "Existing generated PERSUBENTMGR profile with independently framed common shell and disputed class body, followed by a generated valid object.",
+    "valid_source": "For each generated version profile, a disputed PERSUBENTMGR class body is paired with a separately framed common shell and a following valid object.",
     "mutation": "Decrease only the generated object frame's declared handle-stream bit count by one, then rebuild the outer frame and CRC.",
-    "malformed_result": {
+    "malformed_result_per_version": {
       "read_operation_succeeded": false,
       "object_parse_failures": 1,
       "source_raw_publication": false,
@@ -22,7 +32,7 @@
       "following_object_raw_publication": true,
       "following_object_frame_publication": true
     },
-    "corrected_retry": {
+    "corrected_retry_per_version": {
       "input": "Original untruncated generated source and following-object frames",
       "read_operation_succeeded": true,
       "object_parse_failures": 0,
@@ -38,7 +48,7 @@
   },
   "limitations": [
     "Generated framing and class ordinal do not establish an external producer's class ordinal or full body schema.",
-    "This verifies raw-shell withholding and following-frame recovery for the selected generated AC1027 vector only.",
+    "This verifies raw-shell withholding and following-frame recovery only for the two selected generated version vectors.",
     "No typed PERSUBENTMGR semantics, graph closure, DXF output, native compatibility, or support claim is established."
   ]
 }

@@ -14776,6 +14776,89 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
                           << " reactors=" << rawSource->m_reactorHandles.size();
             std::cerr << '\n';
         }
+
+        Options truncatedManager = ac1032Source;
+        Frame truncatedManagerObject = ac1032SourceObject;
+        std::vector<std::uint8_t> truncatedManagerFrame;
+        bool truncatedBuilt = truncatedManagerObject.handleBits > 0u;
+        if (truncatedBuilt) {
+            --truncatedManagerObject.handleBits;
+            truncatedBuilt = wrapFrame(truncatedManager,
+                                       truncatedManagerObject,
+                                       truncatedManagerFrame);
+        }
+        t.expect(truncatedBuilt,
+                 "AC1032 PERSUBENTMGR truncated common-handle frame is generated in memory");
+        if (truncatedBuilt) {
+            const auto truncatedNextOffset = static_cast<std::uint32_t>(
+                truncatedManagerFrame.size());
+            std::vector<std::uint8_t> truncatedBytes = truncatedManagerFrame;
+            truncatedBytes.insert(truncatedBytes.end(),
+                                  ac1032SentinelFrame.begin(),
+                                  ac1032SentinelFrame.end());
+            PersistentManagerDispatchReader truncatedReader(
+                truncatedBytes, DRW::AC1032,
+                truncatedManager.classNumber);
+            PersistentManagerDispatchSink truncatedSink;
+            const bool truncatedRead = truncatedReader.readObjects(
+                truncatedBytes, truncatedManager.handle,
+                truncatedNextOffset, ac1032Sentinel.handle,
+                truncatedSink);
+            const bool sourceWithheld =
+                std::none_of(truncatedSink.raw.begin(), truncatedSink.raw.end(),
+                    [&truncatedManager](const DRW_UnsupportedObject& object) {
+                        return object.m_handle == truncatedManager.handle;
+                    })
+                && std::none_of(truncatedSink.publications.begin(),
+                    truncatedSink.publications.end(),
+                    [&truncatedManager](
+                        const DRW_DwgFramePublication& publication) {
+                        return publication.m_handle == truncatedManager.handle;
+                    });
+            const bool sentinelSurvived = truncatedSink.raw.size() == 1u
+                && truncatedSink.raw.front().m_handle
+                    == ac1032Sentinel.handle
+                && truncatedSink.publications.size() == 1u
+                && truncatedSink.publications.front().m_handle
+                    == ac1032Sentinel.handle;
+            const bool truncatedRejected = !truncatedRead
+                && truncatedReader.objectFailures() == 1u
+                && sourceWithheld && sentinelSurvived;
+
+            PersistentManagerDispatchReader correctedReader(
+                bytes, DRW::AC1032, ac1032Source.classNumber);
+            PersistentManagerDispatchSink correctedSink;
+            const bool correctedRead = correctedReader.readObjects(
+                bytes, ac1032Source.handle, nextOffset,
+                ac1032Sentinel.handle, correctedSink);
+            const bool correctedRetry = correctedRead
+                && correctedReader.objectFailures() == 0u
+                && correctedSink.typed.size() == 1u
+                && correctedSink.typed.front().handle
+                    == ac1032Sentinel.handle
+                && correctedSink.raw.size() == 2u
+                && correctedSink.raw.front().m_handle
+                    == ac1032Source.handle
+                && correctedSink.raw.front().m_rawBytes
+                    == ac1032SourceObject.payload
+                && correctedSink.raw.back().m_handle
+                    == ac1032Sentinel.handle
+                && correctedSink.publications.size() == 2u;
+            t.expect(truncatedRejected && correctedRetry,
+                     "truncated AC1032 PERSUBENTMGR common handle tail is withheld, following object survives, and corrected input retries raw-only");
+            if (!truncatedRejected || !correctedRetry) {
+                std::cerr << "AC1032 PERSUBENTMGR bounded-shell retry: truncatedRead="
+                          << truncatedRead
+                          << " failures=" << truncatedReader.objectFailures()
+                          << " raw=" << truncatedSink.raw.size()
+                          << " publications=" << truncatedSink.publications.size()
+                          << " correctedRead=" << correctedRead
+                          << " correctedFailures=" << correctedReader.objectFailures()
+                          << " correctedRaw=" << correctedSink.raw.size()
+                          << " correctedPublications=" << correctedSink.publications.size()
+                          << '\n';
+            }
+        }
     }
 
     Options ac1027RawManager;
