@@ -1,5 +1,16 @@
 # DWG/DXF parity — remaining implementation plan
 
+**Resume checkpoint (2026-11-09, AC1015 PERSUBENTMGR partial profile):** the
+hash-bound AutoCAD 2000 D63 sample now publishes the exact first eight values
+`[2,0,2,4,0,2,3,4]` as a `Partial` prefix at the R2000 RL pre-handles bound
+(bit 150). The DWG/DXF pair agrees on those values; the candidate trailing
+count crosses the bound and remains undecoded. The common-handle raw frame is
+retained unvalidated. A generated control verifies a short-vector rollback,
+same-parser corrected-input retry, and following-object publication. The
+physical read still has 3 entity and 6 object parse failures elsewhere and
+strict export remains refused by the unrelated IMAGEDEF/reactor capture gate.
+See the [cross-version PERSUBENTMGR receipt](docs/research/p6-persubentmgr-acadsharp-cross-version-dxf-wire-conflict-2026-11-09.json).
+
 **Resume checkpoint (2026-11-09, AC1024 PERSUBENTMGR D63 partial profile):**
 the hash-bound AutoCAD SAVEAS sample `sample_AC1024.dwg` at handle `0xD63`
 now enters a source-matched partial-prefix path for values
@@ -65,14 +76,14 @@ AC1015 DWG candidate parser, which reads a further `num_subents=4` then
 overruns the object while returning untrusted subentity values. The six local
 DWG/DXF versions and the AutoCAD SAVEAS script are hash-bound in the
 [cross-version conflict receipt](docs/research/p6-persubentmgr-acadsharp-cross-version-dxf-wire-conflict-2026-11-09.json).
-The AC1021/AC1024 D63 reads now establish that the eight-value prefix reaches
-each reader's bounded body end, and LibreDWG's AC1024 trace confirms its
-candidate count read crosses into the handle span and overruns. Keep those
-prefixes partial with raw carriers. Next, isolate AC1014/AC1015's body end
-against the handle stream (its peer trace reports a corrupt candidate tail)
-and AC1027/AC1032's six-scalar, zero-step profile against exact string/handle
-boundaries. The paired DXF alone cannot prove DWG field absence. Do not add
-another parser admission until one of those remaining spans is independently
+The AC1015/AC1021/AC1024 D63 reads now establish the eight-value prefix to the
+R2000 RL or later bounded body end, and the legacy/AC1024 peer traces show the
+candidate count crosses into the handle span. Keep these profiles partial
+with raw carriers. Next, AC1014 still needs a paired semantic projection
+before typed-prefix admission; AC1027's reader currently stops in
+AcDb:AcDsPrototype_1b before OBJECTS, and AC1032's six-scalar body ends at bit
+76 after `[2,0,2,0,0,0]` but the class-field meanings remain disputed. Keep
+AC1014/AC1027/AC1032 raw-only until those exact profiles are independently
 reconciled. Any later grammar control must retain truncation rollback,
 corrected-input retry, following-frame recovery, and byte-exact raw fallback.
 

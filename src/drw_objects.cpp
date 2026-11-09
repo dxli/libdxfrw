@@ -30276,23 +30276,28 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
         const bool hasAbsentStringFooter = version > DRW::AC1018
             && objSize != 0 && boundedBodyEnd == objSize
             && currentObjectDwgBit(sBuf) == objSize;
-        // ODA section 20.1: even without strings the last pre-handles bit is
-        // the string-presence bit, never part of a scalar count. In particular
-        // an incomplete one-bit BL prefix must not borrow it as a second bit.
+        // ODA section 20.1: only R2007+ has the string-presence footer bit.
+        // Exclude that bit from modern body limits; legacy RL values already
+        // identify the full pre-handles boundary.
         const std::uint32_t bodyEndBit = version > DRW::AC1018
-            ? boundedBodyEnd - (hasAbsentStringFooter ? 1u : 0u) : 0;
+            ? boundedBodyEnd - (hasAbsentStringFooter ? 1u : 0u)
+            : boundedBodyEnd;
         const std::uint64_t prefixStartBit = currentObjectDwgBit(buf);
-        const auto readBodyBitLong = [&](std::int32_t& value) {
-            const std::uint64_t startBit = currentObjectDwgBit(buf);
+        const auto readBodyBitLongFrom = [&](dwgBuffer *input,
+                                             std::int32_t& value) {
+            const std::uint64_t startBit = currentObjectDwgBit(input);
             const bool good = bodyEndBit != 0
-                && readBitLongWithinBody(buf, version, bodyEndBit, value);
+                && readBitLongWithinBody(input, version, bodyEndBit, value);
             DRW_DBG("PERSUBENTMGR BL start/end/limit/good/value=");
             DRW_DBG(startBit); DRW_DBG("/");
-            DRW_DBG(currentObjectDwgBit(buf)); DRW_DBG("/");
+            DRW_DBG(currentObjectDwgBit(input)); DRW_DBG("/");
             DRW_DBG(bodyEndBit); DRW_DBG("/"); DRW_DBG(good ? 1 : 0);
             if (good) { DRW_DBG("/"); DRW_DBG(value); }
             DRW_DBG("\n");
             return good;
+        };
+        const auto readBodyBitLong = [&](std::int32_t& value) {
+            return readBodyBitLongFrom(buf, value);
         };
         const auto readBodyCount = [&](std::uint32_t& value) {
             std::int32_t parsed = 0;

@@ -97,6 +97,46 @@ inline bool makeFrame(const Options& options, Frame& frame) {
     return true;
 }
 
+// AC1015 uses the R2000 RL pre-handles boundary and has no R2007 string
+// footer. This helper emits only from-scratch data for a partial-prefix
+// regression; it does not claim a general PERSUBENTMGR body schema.
+inline bool makeAc1015Frame(const Options& options, Frame& frame) {
+    if (options.version != DRW::AC1015)
+        return false;
+    dwgBufferW object;
+    object.putObjType(options.version, options.classNumber);
+    const std::size_t sizeBit = object.bitCount();
+    object.putRawLong32(0u);
+    object.putHandle(reference(DRW::DwgNullReference, options.handle));
+    object.putBitShort(0u); // no EED
+    object.putBitLong(1); // one reactor
+    frame.bodyStartBit = object.bitCount();
+    object.putBitLong(options.classVersion);
+    object.putBitLong(options.unknown0);
+    object.putBitLong(options.unknown2);
+    object.putBitLong(options.associationStepCount);
+    object.putBitLong(options.associationSubentities);
+    object.putBitLong(options.stepCount);
+    for (const auto step : options.steps)
+        object.putBitLong(step);
+    if (options.hasSubentityCount) {
+        object.putBitLong(options.subentityCount);
+        for (const auto subentity : options.subentities)
+            object.putBitLong(subentity);
+    }
+    frame.scalarEndBit = object.bitCount();
+    frame.objectEndBit = frame.scalarEndBit;
+    object.patchRawLong32AtBit(
+        sizeBit, static_cast<std::uint32_t>(frame.objectEndBit));
+    object.putHandle(reference(DRW::DwgSoftPointer, 0xCu)); // owner
+    object.putHandle(reference(DRW::DwgSoftPointer, 0xCu)); // reactor
+    object.alignToByte();
+    if (!object.isGood() || object.bitCount() < frame.objectEndBit)
+        return false;
+    frame.payload = object.data();
+    return true;
+}
+
 inline bool wrapFrame(const Options& options, const Frame& object,
                       std::vector<std::uint8_t>& bytes) {
     dwgBufferW frame;

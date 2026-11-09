@@ -15850,6 +15850,133 @@ void testAc1018PersubentManagerBodyRemainsUnvalidated(TestContext& t) {
     }
 }
 
+void testAc1015PersubentManagerBoundedPartialPrefix(TestContext& t) {
+    using namespace persistent_manager_test;
+    class ParserProbe final : public DRW_AssociativeObject {
+    public:
+        using DRW_AssociativeObject::DRW_AssociativeObject;
+        using DRW_AssociativeObject::parseDwg;
+    };
+    Options source;
+    source.version = DRW::AC1015;
+    source.classNumber = 601u;
+    source.handle = 0xD63u;
+    source.classVersion = 2;
+    source.unknown0 = 0;
+    source.unknown2 = 2;
+    source.associationStepCount = 4;
+    source.associationSubentities = 0;
+    source.stepCount = 2;
+    source.steps = {3, 4};
+    Options following = source;
+    following.handle = 0xD64u;
+    following.hasSubentityCount = true;
+    following.subentityCount = 0;
+
+    Frame sourceObject, followingObject;
+    std::vector<std::uint8_t> sourceFrame, followingFrame;
+    const bool built = makeAc1015Frame(source, sourceObject)
+        && wrapFrame(source, sourceObject, sourceFrame)
+        && makeAc1015Frame(following, followingObject)
+        && wrapFrame(following, followingObject, followingFrame);
+    t.expect(built,
+             "AC1015 PERSUBENTMGR partial-prefix and following frames are generated in memory");
+    if (!built)
+        return;
+
+    Options truncated = source;
+    truncated.steps = {3};
+    Frame truncatedObject;
+    const bool truncatedBuilt = makeAc1015Frame(truncated, truncatedObject);
+    t.expect(truncatedBuilt,
+             "AC1015 PERSUBENTMGR truncated candidate prefix is generated in memory");
+    if (!truncatedBuilt)
+        return;
+    DRW_TextCodec codec;
+    codec.setVersion(DRW::AC1015, false);
+    ParserProbe retryParser("ACDBPERSSUBENTMANAGER");
+    dwgBuffer truncatedInput(truncatedObject.payload.data(),
+                             truncatedObject.payload.size(), &codec);
+    const bool truncatedRetainedAsMissing =
+        retryParser.parseDwg(DRW::AC1015, &truncatedInput, 0u)
+        && truncatedInput.isGood()
+        && retryParser.m_prefixStatuses.size() == 1u
+        && retryParser.m_prefixStatuses.front().m_status
+            == DRW_AssociativePrefixStatus::ParseStatus::Missing
+        && retryParser.m_persistentSteps.empty()
+        && retryParser.m_persistentAssocStepCount == 0u;
+    dwgBuffer correctedInput(sourceObject.payload.data(),
+                             sourceObject.payload.size(), &codec);
+    const bool correctedRetry =
+        retryParser.parseDwg(DRW::AC1015, &correctedInput, 0u)
+        && correctedInput.isGood()
+        && retryParser.m_prefixStatuses.size() == 1u
+        && retryParser.m_prefixStatuses.front().m_status
+            == DRW_AssociativePrefixStatus::ParseStatus::Partial
+        && retryParser.m_persistentSteps
+            == std::vector<std::uint32_t>{3u, 4u};
+    t.expect(truncatedRetainedAsMissing && correctedRetry,
+             "AC1015 candidate parsing rolls back a short vector and the same parser retries with the exact bounded profile");
+
+    const auto followingOffset = static_cast<std::uint32_t>(sourceFrame.size());
+    std::vector<std::uint8_t> bytes = sourceFrame;
+    bytes.insert(bytes.end(), followingFrame.begin(), followingFrame.end());
+    PersistentManagerDispatchReader reader(bytes, DRW::AC1015,
+                                           source.classNumber);
+    PersistentManagerDispatchSink sink;
+    const bool read = reader.readObjects(
+        bytes, source.handle, followingOffset, following.handle, sink);
+    const auto typedSource = std::find_if(
+        sink.typed.begin(), sink.typed.end(), [&source](
+            const DRW_AssociativeObject& object) {
+            return object.handle == source.handle;
+        });
+    const auto rawSource = std::find_if(
+        sink.raw.begin(), sink.raw.end(), [&source](
+            const DRW_UnsupportedObject& object) {
+            return object.m_handle == source.handle;
+        });
+    const auto followingPublication = std::find_if(
+        sink.publications.begin(), sink.publications.end(), [&following](
+            const DRW_DwgFramePublication& publication) {
+            return publication.m_handle == following.handle;
+        });
+    const bool exactPartialPrefix = typedSource != sink.typed.end()
+        && typedSource->m_classVersion == 2u
+        && typedSource->m_persistentUnknown0 == 0u
+        && typedSource->m_persistentUnknown2 == 2u
+        && typedSource->m_persistentAssocStepCount == 4u
+        && typedSource->m_persistentAssocSubentityCount == 0u
+        && typedSource->m_persistentSteps
+            == std::vector<std::uint32_t>{3u, 4u}
+        && typedSource->m_persistentSubentityIds.empty()
+        && typedSource->m_prefixStatuses.size() == 1u
+        && typedSource->m_prefixStatuses.front().m_status
+            == DRW_AssociativePrefixStatus::ParseStatus::Partial
+        && typedSource->m_prefixStatuses.front().m_decodedCountValue == -1
+        && typedSource->m_prefixStatuses.front().m_sourceAssumption.find(
+               "AC1015") != UTF8STRING::npos;
+    const bool rawRetained = rawSource != sink.raw.end()
+        && rawSource->m_rawBytes == sourceObject.payload
+        && !rawSource->m_typedPayloadValidated;
+    const bool recovered = read && reader.objectFailures() == 0u
+        && sink.typed.size() == 2u && sink.raw.size() == 2u
+        && sink.publications.size() == 2u
+        && exactPartialPrefix && rawRetained
+        && followingPublication != sink.publications.end()
+        && followingPublication->m_carrier
+            == DRW_DwgFramePublication::Carrier::Raw;
+    t.expect(recovered,
+             "AC1015 exact bounded prefix stays partial/raw-carried and following frame recovers");
+    if (!recovered) {
+        std::cerr << "AC1015 PERSUBENTMGR read=" << read
+                  << " failures=" << reader.objectFailures()
+                  << " typed=" << sink.typed.size()
+                  << " raw=" << sink.raw.size()
+                  << " publications=" << sink.publications.size() << '\n';
+    }
+}
+
 void testAc1018TableObjectsRetainOnlyValidatedRawFrames(TestContext& t) {
     constexpr std::uint16_t tableContentClass = 700u;
     constexpr std::uint16_t tableGeometryClass = 701u;
@@ -21146,6 +21273,7 @@ int main(int argc, char** argv) {
         TestContext focused;
         testPersistentManagerPrefixDispatch(focused);
         testAc1018PersubentManagerBodyRemainsUnvalidated(focused);
+        testAc1015PersubentManagerBoundedPartialPrefix(focused);
         testAc1018TableObjectsRetainOnlyValidatedRawFrames(focused);
         testAc1018DataTableRetainsOnlyValidatedRawFrames(focused);
         std::cout << "Persistent manager bounded-prefix dispatch: "
