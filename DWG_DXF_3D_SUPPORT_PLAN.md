@@ -10538,7 +10538,29 @@ capture bounded/raw and `Partial`; do not add typed Sweep output or admit it to
 strict conversion based on cursor fit or the pair alone. The six J items remain
 `DEFERRED_EXTERNAL` and cannot promote support claims.
 
-**Next external evidence action — S2.3.9.4.37 (research/probe, not a parser
+**S2.3.9.4.37 — embedded LWPOLYLINE field-order research (2026-11-09; no
+production change):** ODA v5.4.1 §2.12 identifies fixed type `0x4D` (77) as
+LWPOLYLINE; §2's modeler-body description starts at the flags and omits common
+entity data. The independent [ACadRust embedded-entity reader](https://docs.rs/acadrust/latest/src/acadrust/io/dwg/dwg_stream_readers/object_reader/entities.rs.html)
+routes that profile through `read_embedded_lwpolyline`, whose LWPOLYLINE reader
+uses raw XY doubles for embedded vertices (the normal entity path uses
+default-delta XY doubles). Applying that candidate field order to the pinned
+physical AC1027 Sweep payload reads profile flags `521` and four vertices, and
+path flags `516` and three vertices. It consumes 740/744 and 478/480 declared
+bits respectively, leaving nonzero 4-bit and 2-bit suffixes. Neither the ODA
+description nor the peer reader's source establishes those suffix bits as
+padding or child-body extensions; the peer reader does not provide an exact
+consumption proof for this specimen. Therefore the candidate decode is not
+complete: retain the existing bounded raw payloads, do not publish typed
+profile/path values, and do not change strict-output or support status. The
+temporary decoder experiment was removed after it failed exact-span checks.
+No fixture or source change was retained. Next local step: determine whether
+the suffix is a defined embedded-record field using a primary or independently
+observable producer trace, or keep this child opaque and advance to another
+ready plan item. ODA File Converter retry remains gated on a fresh desktop
+inventory showing the Mac session accessible.
+
+**Next external evidence action — S2.3.9.4.38 (research/probe, not a parser
 rewrite):**
 
 1. Recheck that the desktop session is actually unlocked before invoking ODA.
