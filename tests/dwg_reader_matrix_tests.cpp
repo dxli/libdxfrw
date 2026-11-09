@@ -15764,6 +15764,88 @@ bool makeGeneratedAc1018OpaqueTableObject(
     return true;
 }
 
+void testAc1018PersubentManagerBodyRemainsUnvalidated(TestContext& t) {
+    constexpr std::uint16_t classNumber = 601u;
+    constexpr std::uint32_t sourceHandle = 0xA106u;
+    constexpr std::uint32_t nextHandle = 0xA107u;
+    GeneratedAc1018OpaqueTableObject source, next;
+    const bool framesBuilt = makeGeneratedAc1018OpaqueTableObject(
+            classNumber, sourceHandle, source)
+        && makeGeneratedAc1018OpaqueTableObject(
+            classNumber, nextHandle, next);
+    t.expect(framesBuilt,
+             "AC1018 PERSUBENTMGR missing-body controls are generated in memory");
+    if (!framesBuilt)
+        return;
+
+    const auto nextOffset = static_cast<std::uint32_t>(source.frame.size());
+    std::vector<std::uint8_t> bytes = source.frame;
+    bytes.insert(bytes.end(), next.frame.begin(), next.frame.end());
+    PersistentManagerDispatchReader reader(bytes, DRW::AC1018, classNumber);
+    PersistentManagerDispatchSink sink;
+    const bool read = reader.readObjects(bytes, sourceHandle, nextOffset,
+                                         nextHandle, sink);
+    const auto typedSource = std::find_if(
+        sink.typed.begin(), sink.typed.end(),
+        [sourceHandle](const DRW_AssociativeObject& object) {
+            return object.handle == sourceHandle;
+        });
+    const auto rawSource = std::find_if(
+        sink.raw.begin(), sink.raw.end(),
+        [sourceHandle](const DRW_UnsupportedObject& object) {
+            return object.m_handle == sourceHandle;
+        });
+    const auto sourcePublication = std::find_if(
+        sink.publications.begin(), sink.publications.end(),
+        [sourceHandle](const DRW_DwgFramePublication& publication) {
+            return publication.m_handle == sourceHandle;
+        });
+    const auto nextPublication = std::find_if(
+        sink.publications.begin(), sink.publications.end(),
+        [nextHandle](const DRW_DwgFramePublication& publication) {
+            return publication.m_handle == nextHandle;
+        });
+    const bool missingBodyIsNotValidated = read
+        && reader.objectFailures() == 0u
+        && sink.typed.size() == 2u && sink.raw.size() == 2u
+        && typedSource != sink.typed.end()
+        && typedSource->m_prefixStatuses.size() == 1u
+        && typedSource->m_prefixStatuses.front().m_status
+            == DRW_AssociativePrefixStatus::ParseStatus::Missing
+        && rawSource != sink.raw.end()
+        && rawSource->m_rawBytes == source.payload
+        && rawSource->m_version == DRW::AC1018
+        && !rawSource->m_typedPayloadValidated
+        && sourcePublication != sink.publications.end()
+        && sourcePublication->m_carrier
+            == DRW_DwgFramePublication::Carrier::Raw
+        && nextPublication != sink.publications.end()
+        && nextPublication->m_carrier
+            == DRW_DwgFramePublication::Carrier::Raw;
+    t.expect(missingBodyIsNotValidated,
+             "AC1018 PERSUBENTMGR keeps its missing body status and does not mark its raw carrier typed-validated");
+    if (!missingBodyIsNotValidated) {
+        std::cerr << "AC1018 PERSUBENTMGR missing-body read=" << read
+                  << " failures=" << reader.objectFailures()
+                  << " typed=" << sink.typed.size()
+                  << " raw=" << sink.raw.size();
+        if (typedSource != sink.typed.end())
+            std::cerr << " statusCount=" << typedSource->m_prefixStatuses.size()
+                      << " status="
+                      << (typedSource->m_prefixStatuses.empty() ? -1
+                          : static_cast<int>(typedSource->m_prefixStatuses.front().m_status));
+        if (rawSource != sink.raw.end())
+            std::cerr << " rawValidated=" << rawSource->m_typedPayloadValidated;
+        if (sourcePublication != sink.publications.end())
+            std::cerr << " sourceCarrier="
+                      << static_cast<int>(sourcePublication->m_carrier);
+        if (nextPublication != sink.publications.end())
+            std::cerr << " nextCarrier="
+                      << static_cast<int>(nextPublication->m_carrier);
+        std::cerr << '\n';
+    }
+}
+
 void testAc1018TableObjectsRetainOnlyValidatedRawFrames(TestContext& t) {
     constexpr std::uint16_t tableContentClass = 700u;
     constexpr std::uint16_t tableGeometryClass = 701u;
@@ -21059,6 +21141,7 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--persistent-manager-prefix-dispatch") {
         TestContext focused;
         testPersistentManagerPrefixDispatch(focused);
+        testAc1018PersubentManagerBodyRemainsUnvalidated(focused);
         testAc1018TableObjectsRetainOnlyValidatedRawFrames(focused);
         testAc1018DataTableRetainsOnlyValidatedRawFrames(focused);
         std::cout << "Persistent manager bounded-prefix dispatch: "

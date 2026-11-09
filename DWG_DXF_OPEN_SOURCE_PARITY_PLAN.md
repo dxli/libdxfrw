@@ -1,12 +1,26 @@
 # DWG/DXF parity — remaining implementation plan
 
+**Resume checkpoint (2026-11-09, PERSUBENTMGR legacy raw-validation fix):**
+the object dispatcher now marks the PERSUBENTMGR raw companion
+`typedPayloadValidated=false` whenever its body prefix status is not
+`Complete`, including `Missing` for the AC1018-and-earlier path. It retains the
+existing associative callback and exact raw frame. A generated AC1018 control
+checks the missing status, raw disposition, and following-object recovery.
+`cmake --build build-gcc --target libdxfrw_dwg_reader_matrix_tests -j4 &&
+build-gcc/libdxfrw_dwg_reader_matrix_tests
+--persistent-manager-prefix-dispatch` passes. This fixes the validation
+bookkeeping only; it does not decode the legacy body or change format/support
+claims. See the [cross-version PERSUBENTMGR receipt](docs/research/p6-persubentmgr-acadsharp-cross-version-dxf-wire-conflict-2026-11-09.json).
+
 **Resume checkpoint (2026-11-09, PERSUBENTMGR source-corpus expansion):** a
 LibreDWG 0.14 minJSON scan of 178 already-local DWGs found 41
 PERSUBENTMGR records across 26 source files. This broadens the evidence beyond
 Platte's all-zero six-scalar suffix: the existing ACadSharp AC1014/AC1015
-sample pair reports handle `0xD63`, `numassocsteps=4`, steps `[3,4]`, and
-subentities `[12783812,0,0,256]`; corresponding AC1021/AC1024 samples report
-the same associated-step count and steps but no subentities. The paired
+DWGs at handle `0xD63` report `numassocsteps=4` and steps `[3,4]`. LibreDWG
+also reports subentities `[12783812,0,0,256]` for these versions, but its
+AC1015 trace overruns the object while reading that candidate tail, so those
+values are untrusted. Corresponding AC1021/AC1024 samples report the same
+associated-step count and steps but no subentities. The paired
 AC1024 AutoCAD ASCII DXF at handle `0xD63` has group-90 sequence
 `[2,0,2,4,0,2,3,4]` and ends without a trailing subentity count. These are
 useful nonzero/cross-version observations, but the peer JSON interpretation
@@ -16,18 +30,32 @@ peer count (`numassocsteps=1060`, `numassocsubents=213`) and must be treated as
 a separate anomaly until its raw frame and exact bounds are traced. No
 production parser interpretation or support claim changes in this checkpoint.
 
-**Next PERSUBENTMGR slice:** extract concise, hash-bound DWG/DXF records for
-the exact matching AC1014/15, AC1021/24, and AC1027/32 local samples; establish
-their save provenance and compare every bounded body bit/field span against
-the paired DXF projection. In particular, determine from physical spans—not
-only zero values or peer field names—whether the trailing `num_subents` field
-is conditionally absent when `numassocsubents==0`, and whether AC1014/15's
-nonzero subentity vector uses the candidate count/value order. Add focused
-generated controls only for grammar branches supported by those observations,
-with truncation rollback, corrected-input retry, exact following-frame
-recovery, and byte-preserving raw fallback. Keep disputed or unproven variants
-raw-only; do not promote strict output, semantic support, or version-wide
-claims from this corpus scan.
+The follow-up hash-bound scan confirms that paired AC1015/AC1021/AC1024 DXFs
+at `0xD63` each end the group-90 sequence after `[2,0,2,4,0,2,3,4]`, while
+AC1027/AC1032 end after `[2,0,2,0,0,0]`. LibreDWG's AC1015 trace parses the
+common 68-bit shell and the same first eight candidate values, then reads a
+candidate final count of `4` and overruns the 24-byte object. Its
+`[12783812,0,0,256]` subentity vector is therefore not evidence of valid
+fields. This weakens any argument that an absent DXF group-90 value proves an
+absent DWG scalar; the body/handle/padding bit spans must be isolated first.
+The local AC1015 libdxfrw CLI run publishes 1041/1047 frames with six object
+parse failures and refuses export at the unrelated IMAGEDEF/reactor capture
+gate. See the [wire/projection conflict receipt](docs/research/p6-persubentmgr-acadsharp-cross-version-dxf-wire-conflict-2026-11-09.json).
+
+**Next PERSUBENTMGR slice:** resolve the newly reproduced conflict between
+AC1015/AC1021/AC1024's eight-value group-90 DXF projections and LibreDWG's
+AC1015 DWG candidate parser, which reads a further `num_subents=4` then
+overruns the object while returning untrusted subentity values. The six local
+DWG/DXF versions and the AutoCAD SAVEAS script are hash-bound in the
+[cross-version conflict receipt](docs/research/p6-persubentmgr-acadsharp-cross-version-dxf-wire-conflict-2026-11-09.json).
+Capture an independent wire-span trace for handles, class-body end, any
+trailing count candidate and versioned padding in AC1015/AC1021/AC1024; align
+those spans with the paired DXF projection. The paired DXF alone cannot prove
+that the DWG trailing count is absent. Preserve the existing AC1021/AC1024
+partial-prefix callbacks with their raw carriers, but keep every profile
+semantically incomplete and output-ineligible. Add generated grammar controls
+only after a physical branch is established, including truncation rollback,
+corrected-input retry, following-frame recovery, and raw-byte preservation.
 
 **Resume checkpoint (2026-11-09, AC1032 control-reactor slice):** the
 VPORT_CONTROL reader now consumes declared common reactor references before

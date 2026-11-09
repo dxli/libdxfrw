@@ -14324,11 +14324,11 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                 // class-specific tail is incomplete. Keep that raw carrier
                 // explicitly unvalidated so the prefix callback does not
                 // imply semantic completeness.
-                const bool partialPersistentPrefix = rn == "ACDBPERSSUBENTMANAGER"
+                const bool incompletePersistentPrefix = rn == "ACDBPERSSUBENTMANAGER"
                     && std::any_of(e.m_prefixStatuses.begin(), e.m_prefixStatuses.end(),
                         [](const DRW_AssociativePrefixStatus& status) {
                           return status.m_status
-                              == DRW_AssociativePrefixStatus::ParseStatus::Partial;
+                              != DRW_AssociativePrefixStatus::ParseStatus::Complete;
                         });
                 const bool partialConstraintGroupBody =
                     rn == "ACDBASSOC2DCONSTRAINTGROUP"
@@ -14342,7 +14342,7 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                         });
                 intfa.addUnsupportedObject(makeRawObject(
                     oType, cit->second,
-                    !partialPersistentPrefix && !partialConstraintGroupBody));
+                    !incompletePersistentPrefix && !partialConstraintGroupBody));
               } else {
                 const bool persistentManagerShellValid =
                     barePersistentManagerRawOnlyProfile
