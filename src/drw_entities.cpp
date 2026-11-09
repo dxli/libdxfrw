@@ -12614,18 +12614,28 @@ bool DRW_Table::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     case 141:
         if (!ensureGrid())
             return false;
-        if (m_dxfRowHeightsRead < m_content.m_rows.size())
-            m_content.m_rows[m_dxfRowHeightsRead++].m_height = reader->getDouble();
-        else
+        if (m_dxfRowHeightsRead < m_content.m_rows.size()) {
+            const double height = reader->getDouble();
+            m_content.m_rows[m_dxfRowHeightsRead++].m_height = height;
+            if (!std::isfinite(height) || height <= 0.0)
+                markIncomplete();
+        } else {
             reader->getDouble();
+            markIncomplete();
+        }
         break;
     case 142:
         if (!ensureGrid())
             return false;
-        if (m_dxfColumnWidthsRead < m_content.m_columns.size())
-            m_content.m_columns[m_dxfColumnWidthsRead++].m_width = reader->getDouble();
-        else
+        if (m_dxfColumnWidthsRead < m_content.m_columns.size()) {
+            const double width = reader->getDouble();
+            m_content.m_columns[m_dxfColumnWidthsRead++].m_width = width;
+            if (!std::isfinite(width) || width <= 0.0)
+                markIncomplete();
+        } else {
             reader->getDouble();
+            markIncomplete();
+        }
         break;
     case 145:
         if (DRW_TableCell *cell = currentCell())
@@ -13347,6 +13357,8 @@ void DRW_Table::finalizeDxfParse() noexcept {
         || m_dxfColumnsExpected < 0
         || m_content.m_rows.size() != static_cast<std::size_t>(m_dxfRowsExpected)
         || m_content.m_columns.size() != static_cast<std::size_t>(m_dxfColumnsExpected)
+        || m_dxfRowHeightsRead != m_content.m_rows.size()
+        || m_dxfColumnWidthsRead != m_content.m_columns.size()
         || m_dxfNextCell
             != m_content.m_rows.size() * m_content.m_columns.size()
         || (m_dxfAttributesExpected >= 0

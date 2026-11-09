@@ -80,6 +80,70 @@ bool legacyTableTextHeightTests(const std::filesystem::path& dir) {
             }
         }
     }
+    // Autodesk's TABLE DXF definition requires one physical group-141 row
+    // height per row and one group-142 column width per column. Missing,
+    // duplicate/excess, and nonpositive/non-finite dimensions must remain
+    // readable but cannot be published as semantically complete.
+    for(bool binary:{false,true}) {
+        const auto importComplete = [&](const Tags& candidate, bool complete,
+                                        const std::string& label) {
+            if(!write(source,candidate,binary))return fail(std::string(label)+" write");
+            dx_iface reader;dx_data data;
+            if(!reader.fileImport(source.string(),&data,false))
+                return fail(std::string(label)+" import failed");
+            if(data.tables.size()!=1u)
+                return fail(std::string(label)+" table count");
+            if(data.tables.front().m_semanticContentComplete!=complete)
+                return fail(std::string(label)+" semantic disposition expected="
+                    +std::to_string(complete)+" actual="
+                    +std::to_string(data.tables.front().m_semanticContentComplete));
+            return true;
+        };
+        const auto importRejected = [&](const Tags& candidate,
+                                        const std::string& label) {
+            if(!write(source,candidate,binary))return fail(label+" write");
+            dx_iface reader;dx_data data;
+            if(reader.fileImport(source.string(),&data,false))
+                return fail(label+" unexpectedly imported");
+            return true;
+        };
+        if(!importComplete(tags,true,"physical dimensions baseline"))return false;
+        for(const int code:{141,142}) {
+            const auto missingAt=std::find_if(tags.begin(),tags.end(),[code](const Tag& tag) {
+                return tag.code==code;
+            });
+            if(missingAt==tags.end())return fail("physical dimension source field");
+            Tags missing=tags;missing.erase(missing.begin()+std::distance(tags.begin(),missingAt));
+            if(!importComplete(missing,false,code==141?"missing row height":"missing column width"))return false;
+
+            Tags excess=tags;
+            const auto end=std::find_if(excess.rbegin(),excess.rend(),[](const Tag& tag) {
+                return tag.code==0&&tag.value=="ENDSEC";
+            });
+            if(end==excess.rend())return fail("physical dimension section end");
+            excess.insert(end.base()-1,Tag{code,"9"});
+            if(!importComplete(excess,false,code==141?"excess row height":"excess column width"))return false;
+
+            for(const char* value:{"0","-1"}) {
+                Tags invalid=tags;
+                const auto selected=std::find_if(invalid.begin(),invalid.end(),[code](const Tag& tag) {
+                    return tag.code==code;
+                });
+                if(selected==invalid.end())return fail("physical dimension mutation field");
+                selected->value=value;
+                if(!importComplete(invalid,false,std::string(code==141?"invalid row height ":"invalid column width ")+value))return false;
+            }
+            for(const char* value:{"nan","inf"}) {
+                Tags invalid=tags;
+                const auto selected=std::find_if(invalid.begin(),invalid.end(),[code](const Tag& tag) {
+                    return tag.code==code;
+                });
+                if(selected==invalid.end())return fail("physical dimension mutation field");
+                selected->value=value;
+                if(!importRejected(invalid,std::string(code==141?"non-finite row height ":"non-finite column width ")+value))return false;
+            }
+        }
+    }
     std::cout<<"legacy TABLE height source routes="<<sourceRoutes<<" outputs="<<successes
         <<" atomic refusals="<<refusals<<" corrected retries="<<retries<<'\n';
     return sourceRoutes==2u&&successes==8u&&refusals==72u&&retries==72u

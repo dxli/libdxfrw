@@ -1,0 +1,45 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "id": "p5-dxf-table-physical-dimension-cardinality-2026-11-08",
+  "date": "2026-11-08",
+  "status": "IMPLEMENTED_GENERATED_FAIL_CLOSED_PHYSICAL_DIMENSION_CARDINALITY",
+  "supportClaimEffect": "none",
+  "scope": "Fail closed on missing, excess, duplicate, nonpositive, or non-finite physical TABLE row-height/column-width values without confusing them with title/header/data style-height overrides.",
+  "authority": {
+    "source": "Autodesk TABLE DXF group-code definition",
+    "url": "https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-D8CCD2F0-18A3-42BB-A64D-539114A07DA0.htm",
+    "fields": {
+      "141": "One repeated physical row-height value per row",
+      "142": "One repeated physical column-width value per column"
+    }
+  },
+  "implementation": {
+    "files": [
+      "src/drw_entities.cpp",
+      "tests/table_legacy_height_controls.h"
+    ],
+    "behavior": "DRW_Table retains one finite positive group-141/group-142 value per declared row/column. Excess values mark the record semantically incomplete; finalization also marks missing values and groups consumed before their dimensions are known incomplete. Non-finite numeric spellings are rejected by the DXF reader. Group 140 title/header/data style-height mapping remains separate.",
+    "preservation": "Incomplete TABLE records remain readable where the numeric syntax is valid; the change does not enable broader TABLE output profiles."
+  },
+  "generatedControls": {
+    "source": "TABLE tags authored in memory by the existing focused test; no fixture file added.",
+    "formats": [
+      "ASCII DXF",
+      "Binary DXF"
+    ],
+    "cases": [
+      "valid one-row/one-column baseline remains semantically complete",
+      "missing group 141 or 142 marks the table incomplete",
+      "excess/duplicate group 141 or 142 marks the table incomplete",
+      "zero and negative row heights/column widths mark the table incomplete",
+      "NaN and infinity row heights/column widths are rejected during import"
+    ],
+    "selector": "libdxfrw_table_content_dxf_tests --legacy-table-height",
+    "result": "PASS (exit 0)"
+  },
+  "limitations": [
+    "Generated parser-integrity evidence only; no independent producer or native rendering qualification.",
+    "Noncanonical group order before row/column counts is refused by incomplete semantic disposition rather than buffered and reconstructed.",
+    "No writer support or general TABLE support claim follows."
+  ]
+}

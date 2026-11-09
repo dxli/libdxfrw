@@ -2362,6 +2362,17 @@ That is regression evidence for one local profile, not field-semantic equality
 or producer qualification. Physical producer breadth and the rest of P5 remain
 open ([domain receipt](docs/research/p5-tablestyle-dwg-unit-and-identity-domains-2026-11-07.json), [raw-net receipt](docs/research/p5-tablestyle-nested-raw-net-remapped-identity-fast-slice-2026-11-07.json)).
 
+**Physical TABLE dimensions (group 141/142):** Autodesk defines one repeated
+group-141 row height per row and one repeated group-142 column width per
+column. The parser now marks missing, excess/duplicate, nonpositive and
+non-finite values incomplete/rejected, while keeping group-141 physical row
+heights separate from group-140 title/header/data style-height overrides.
+Generated ASCII/Binary controls pass through the focused legacy TABLE height
+selector. Values encountered before dimensions are known remain unbuffered and
+cause incomplete disposition at finalization. This is a fail-closed parser
+integrity fix, not native producer/rendering or broader TABLE qualification;
+see the [physical dimension cardinality receipt](docs/research/p5-dxf-table-physical-dimension-cardinality-2026-11-08.json).
+
 DXF SUN parsing retains a separately supplied RGB group regardless of the
 order of group 63, so the existing strict output refusal cannot be bypassed by
 reordering. SUN RGB output and native lighting remain unqualified
