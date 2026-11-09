@@ -709,7 +709,8 @@ bool readBoundedObjectHandleList(
 // Common object handle data differs from table-entry handles: only the owner
 // is offset-resolved; reactor and xdictionary handles are absolute stream
 // references (dwgTs readObjectHandleDataFromCurrent).
-bool readObjectCommonHandles(dwgBuffer *buf, std::uint32_t baseHandle,
+bool readObjectCommonHandles(dwgBuffer *buf, DRW::Version version,
+                             std::uint32_t baseHandle,
                              std::int32_t numReactors, std::uint8_t xDictFlag,
                              std::uint32_t *parentHandle = nullptr,
                              std::vector<std::uint32_t> *reactorHandles = nullptr,
@@ -736,24 +737,41 @@ bool readObjectCommonHandles(dwgBuffer *buf, std::uint32_t baseHandle,
     if (!readBoundedObjectHandle(probe, baseHandle, true, parentH,
                                  handleEndBit))
         return false;
-    const auto hasRole = [](const dwgHandle& handle, std::uint8_t role) {
+    const auto hasRole = [](const dwgHandle& handle, std::uint8_t role,
+                            bool offsetField) {
         // Null handles are canonically encoded with code zero. Some producers
         // retain the field's role code on a null value, so accept either form.
-        return handle.ref == 0
-            ? handle.code == 0 || handle.code == role
-            : handle.code == role;
+        const std::uint8_t code = handle.rawCode;
+        const bool roleMatches = code == role
+            || (offsetField && role == DRW::DwgSoftPointer
+                && (code == 0x06u || code == 0x08u || code == 0x0Au
+                    || code == 0x0Cu));
+        return roleMatches || (handle.ref == 0 && code == 0);
     };
-    if (validateLegacyDictionaryGroupRoles
-        && !hasRole(parentH, DRW::DwgSoftPointer))
+    // ODA v5.4.1 §20.1 uses a soft-pointer parent, soft-pointer reactors,
+    // and a hard-owner xdictionary. §2.13 permits relative encodings for
+    // soft-pointer fields when the field is offset-resolved.
+    const bool validateRoles = version >= DRW::AC1018
+        || validateLegacyDictionaryGroupRoles;
+    if (validateRoles
+        && !hasRole(parentH, DRW::DwgSoftPointer, true)) {
+        DRW_DBG("Common object parent role mismatch: raw code ");
+        DRW_DBG(static_cast<unsigned int>(parentH.rawCode));
+        DRW_DBG(" ref "); DRW_DBG(parentH.ref); DRW_DBG("\n");
         return false;
+    }
     for (std::int32_t i = 0; i < numReactors; ++i) {
         dwgHandle reactor;
         if (!readBoundedObjectHandle(probe, baseHandle, false, reactor,
                                      handleEndBit))
             return false;
-        if (validateLegacyDictionaryGroupRoles
-            && !hasRole(reactor, DRW::DwgSoftPointer))
+        if (validateRoles
+            && !hasRole(reactor, DRW::DwgSoftPointer, false)) {
+            DRW_DBG("Common object reactor role mismatch: raw code ");
+            DRW_DBG(static_cast<unsigned int>(reactor.rawCode));
+            DRW_DBG(" ref "); DRW_DBG(reactor.ref); DRW_DBG("\n");
             return false;
+        }
         parsedReactors.push_back(reactor.ref);
     }
     std::uint32_t parsedXDictHandle = 0;
@@ -762,9 +780,13 @@ bool readObjectCommonHandles(dwgBuffer *buf, std::uint32_t baseHandle,
         if (!readBoundedObjectHandle(probe, baseHandle, false, xDict,
                                      handleEndBit))
             return false;
-        if (validateLegacyDictionaryGroupRoles
-            && !hasRole(xDict, DRW::DwgHardOwnership))
+        if (validateRoles
+            && !hasRole(xDict, DRW::DwgHardOwnership, false)) {
+            DRW_DBG("Common object xdictionary role mismatch: raw code ");
+            DRW_DBG(static_cast<unsigned int>(xDict.rawCode));
+            DRW_DBG(" ref "); DRW_DBG(xDict.ref); DRW_DBG("\n");
             return false;
+        }
         parsedXDictHandle = xDict.ref;
     }
 
@@ -794,7 +816,7 @@ bool readEmptyTableEntryHandleTail(
         return false;
     seekObjectHandleStream(version, &handleBuffer, objectSize);
     if (!handleBuffer.isGood()
-        || !readObjectCommonHandles(&handleBuffer, baseHandle, numReactors,
+        || !readObjectCommonHandles(&handleBuffer, version, baseHandle, numReactors,
                                     xDictFlag, &parentHandle, &reactorHandles,
                                     &xDictHandle, handleEndBit))
         return false;
@@ -3742,7 +3764,7 @@ bool DRW_TableEntry::readDwgObjectCommonHandles(
         (version == DRW::AC1012 || version == DRW::AC1014)
         && (oType == DRW_Dictionary::kDwgFixedType
             || oType == DRW_Group::kDwgFixedType);
-    return readObjectCommonHandles(buf, handle, numReactors, xDictFlag,
+    return readObjectCommonHandles(buf, version, handle, numReactors, xDictFlag,
                                    parentHandle, reactorHandles, xDictHandle,
                                    endBit,
                                    validateLegacyDictionaryGroupRoles);
@@ -4600,7 +4622,7 @@ bool DRW_Dimstyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     if (!handleBuf->isGood()
-        || !readObjectCommonHandles(handleBuf, parsed.handle,
+        || !readObjectCommonHandles(handleBuf, version, parsed.handle,
                                     parsed.numReactors, parsed.xDictFlag,
                                     &parsedParentHandle, &parsedReactors,
                                     &parsedXDictHandle, handleEndBit))
@@ -5138,7 +5160,7 @@ bool DRW_LType::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     if (!hBuf->isGood()
-        || !readObjectCommonHandles(hBuf, parsed.handle, parsed.numReactors,
+        || !readObjectCommonHandles(hBuf, version, parsed.handle, parsed.numReactors,
                                     parsed.xDictFlag,
                                     &parsedParentHandle, &parsedReactors,
                                     &parsedXDictHandle, handleEndBit))
@@ -5990,7 +6012,7 @@ bool DRW_Textstyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     if (!hBuf->isGood()
-        || !readObjectCommonHandles(hBuf, handle, numReactors, xDictFlag,
+        || !readObjectCommonHandles(hBuf, version, handle, numReactors, xDictFlag,
                                     &parsedParentHandle, &parsedReactors,
                                     &parsedXDictHandle, handleEndBit))
         return fail();
@@ -7090,7 +7112,7 @@ bool DRW_PlotSettings::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint3
     std::uint32_t parsedParentHandle = 0;
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
-    if (!readObjectCommonHandles(hBuf, parsed.handle, parsed.numReactors,
+    if (!readObjectCommonHandles(hBuf, version, parsed.handle, parsed.numReactors,
                                  parsed.xDictFlag,
                                  &parsedParentHandle, &parsedReactors,
                                  &parsedXDictHandle, handleEndBit))
@@ -11195,7 +11217,7 @@ bool DRW_Field::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
         std::vector<std::uint32_t> parsedReactors;
         std::uint32_t parsedXDictHandle = 0;
         if (!handleBuf->isGood()
-            || !readObjectCommonHandles(handleBuf, handle, numReactors,
+            || !readObjectCommonHandles(handleBuf, version, handle, numReactors,
                                         xDictFlag, &parsedParentHandle,
                                         &parsedReactors, &parsedXDictHandle,
                                         handleEndBit)
@@ -11340,7 +11362,7 @@ bool DRW_Field::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     if (!handleBuf->isGood() ||
-        !readObjectCommonHandles(handleBuf, handle, numReactors, xDictFlag,
+        !readObjectCommonHandles(handleBuf, version, handle, numReactors, xDictFlag,
                                  &parsedParentHandle, &parsedReactors,
                                  &parsedXDictHandle, handleEndBit))
       return fail();
@@ -23585,7 +23607,7 @@ bool DRW_ObjectContextData::parseDwg(DRW::Version version, dwgBuffer *buf, std::
     std::uint32_t parsedParentHandle = 0;
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
-    if (!readObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
+    if (!readObjectCommonHandles(&hBuff, version, handle, numReactors, xDictFlag,
                                  &parsedParentHandle, &parsedReactors,
                                  &parsedXDictHandle, handleEndBit))
         return fail();
@@ -26388,7 +26410,7 @@ bool DRW_TableGeometry::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint
     std::uint32_t parsedParentHandle = 0;
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
-    if (!readObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
+    if (!readObjectCommonHandles(&hBuff, version, handle, numReactors, xDictFlag,
                                  &parsedParentHandle, &parsedReactors,
                                  &parsedXDictHandle, handleEndBit))
         return fail();
@@ -26484,7 +26506,7 @@ bool DRW_DimensionAssociation::parseDwg(DRW::Version version, dwgBuffer *buf, st
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     if (!hBuff.isGood()
-        || !readObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
+        || !readObjectCommonHandles(&hBuff, version, handle, numReactors, xDictFlag,
                                     &parsedParentHandle, &parsedReactors,
                                     &parsedXDictHandle, handleEndBit))
         return fail();
@@ -26798,7 +26820,7 @@ bool DRW_EvaluationGraph::parseDwg(DRW::Version version, dwgBuffer *buf, std::ui
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     if (!hBuff.isGood()
-        || !readObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
+        || !readObjectCommonHandles(&hBuff, version, handle, numReactors, xDictFlag,
                                     &parsedParentHandle, &parsedReactors,
                                     &parsedXDictHandle, handleEndBit))
         return fail();
@@ -26875,7 +26897,7 @@ bool DRW_BlockRepresentationData::parseDwg(DRW::Version version,
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     if (!hBuff.isGood()
-        || !readObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
+        || !readObjectCommonHandles(&hBuff, version, handle, numReactors, xDictFlag,
                                     &parsedParentHandle, &parsedReactors,
                                     &parsedXDictHandle, handleEndBit))
         return fail();
@@ -27026,7 +27048,7 @@ bool DRW_AcDbPlaceholder::parseDwg(DRW::Version version, dwgBuffer *buf, std::ui
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     if (!hBuff.isGood()
-        || !readObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
+        || !readObjectCommonHandles(&hBuff, version, handle, numReactors, xDictFlag,
                                     &parsedParentHandle, &parsedReactors,
                                     &parsedXDictHandle, handleEndBit))
         return fail();
@@ -27115,7 +27137,7 @@ bool DRW_VbaProject::parseDwg(DRW::Version version, dwgBuffer *buf,
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     if (!handleBuffer.isGood()
-        || !readObjectCommonHandles(&handleBuffer, handle, numReactors,
+        || !readObjectCommonHandles(&handleBuffer, version, handle, numReactors,
                                     xDictFlag, &parsedParentHandle,
                                     &parsedReactors, &parsedXDictHandle,
                                     handleEndBit)
@@ -27270,7 +27292,7 @@ bool DRW_ProxyObject::parseDwg(DRW::Version version, dwgBuffer *buf,
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     if (!handleBuffer.isGood()
-        || !readObjectCommonHandles(&handleBuffer, handle, numReactors,
+        || !readObjectCommonHandles(&handleBuffer, version, handle, numReactors,
                                     xDictFlag, &parsedParentHandle,
                                     &parsedReactors, &parsedXDictHandle,
                                     handleEndBit))
@@ -27446,7 +27468,7 @@ bool DRW_Sun::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     if (!hBuff.isGood()
-        || !readObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
+        || !readObjectCommonHandles(&hBuff, version, handle, numReactors, xDictFlag,
                                     &parsedParentHandle, &parsedReactors,
                                     &parsedXDictHandle, handleEndBit))
         return fail();
@@ -29274,7 +29296,7 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     const bool commonHandlesOk = hBuff.isGood()
-        && readObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
+        && readObjectCommonHandles(&hBuff, version, handle, numReactors, xDictFlag,
                                    &parsedParentHandle, &parsedReactors,
                                    &parsedXDictHandle, handleEndBit);
     bool geomEdgeTailIncomplete = false;
@@ -32120,7 +32142,7 @@ bool DRW_AcShHistoryObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     const bool commonHandlesOk = hBuff.isGood()
-        && readObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
+        && readObjectCommonHandles(&hBuff, version, handle, numReactors, xDictFlag,
                                    &parsedParentHandle, &parsedReactors,
                                    &parsedXDictHandle, handleEndBit);
     // Keep the legacy AC1018 raw-shell fallback; modern object frames expose
@@ -33023,7 +33045,7 @@ bool DRW_DynamicBlockObject::parseDwg(DRW::Version version, dwgBuffer *buf, std:
     std::uint32_t parsedParentHandle = 0;
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
-    if (!readObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
+    if (!readObjectCommonHandles(&hBuff, version, handle, numReactors, xDictFlag,
                                  &parsedParentHandle, &parsedReactors,
                                  &parsedXDictHandle, handleEndBit)) {
         return fail();
@@ -34671,7 +34693,7 @@ bool DRW_DetailViewStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::ui
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     if (!hBuff.isGood()
-        || !readObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
+        || !readObjectCommonHandles(&hBuff, version, handle, numReactors, xDictFlag,
                                     &parsedParentHandle, &parsedReactors,
                                     &parsedXDictHandle, handleEndBit))
         return fail();
@@ -35062,7 +35084,7 @@ bool DRW_SectionViewStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::u
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     if (!hBuff.isGood()
-        || !readObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
+        || !readObjectCommonHandles(&hBuff, version, handle, numReactors, xDictFlag,
                                     &parsedParentHandle, &parsedReactors,
                                     &parsedXDictHandle, handleEndBit))
         return fail();
@@ -35281,7 +35303,7 @@ bool DRW_BreakData::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     if (!hBuff.isGood()
-        || !readObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
+        || !readObjectCommonHandles(&hBuff, version, handle, numReactors, xDictFlag,
                                     &parsedParentHandle, &parsedReactors,
                                     &parsedXDictHandle, handleEndBit))
         return fail();
@@ -35363,7 +35385,7 @@ bool DRW_BreakPointRef::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     if (!hBuff.isGood()
-        || !readObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
+        || !readObjectCommonHandles(&hBuff, version, handle, numReactors, xDictFlag,
                                     &parsedParentHandle, &parsedReactors,
                                     &parsedXDictHandle, handleEndBit))
         return fail();
@@ -35672,7 +35694,7 @@ bool DRW_VisualStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     if (!hBuff.isGood()
-        || !readObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
+        || !readObjectCommonHandles(&hBuff, version, handle, numReactors, xDictFlag,
                                     &parsedParentHandle, &parsedReactors,
                                     &parsedXDictHandle, handleEndBit))
         return fail();
@@ -36001,7 +36023,7 @@ bool DRW_DbColor::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t b
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
     if (!hBuff.isGood()
-        || !readObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
+        || !readObjectCommonHandles(&hBuff, version, handle, numReactors, xDictFlag,
                                     &parsedParentHandle, &parsedReactors,
                                     &parsedXDictHandle, handleEndBit))
         return fail();

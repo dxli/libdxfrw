@@ -1695,6 +1695,11 @@ if(LIBDXFRW_BUILD_TESTS)
     target_link_libraries(libdxfrw_dwg_object_vectors_tests PRIVATE dxfrw)
     add_test(NAME libdxfrw_dwg_object_vectors
         COMMAND libdxfrw_dwg_object_vectors_tests)
+    add_test(NAME libdxfrw_ac1027_object_common_handle_roles
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --ac1027-object-common-handle-roles)
+    set_tests_properties(libdxfrw_ac1027_object_common_handle_roles PROPERTIES
+        LABELS "fast;dwg;object-vectors;handles;generated" TIMEOUT 15)
     add_test(NAME libdxfrw_dwg_table_cell_overrides
         COMMAND libdxfrw_dwg_object_vectors_tests --table-cell-overrides)
     set_tests_properties(libdxfrw_dwg_table_cell_overrides PROPERTIES

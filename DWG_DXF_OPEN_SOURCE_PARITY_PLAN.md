@@ -116,28 +116,31 @@ proof that all entity/table references, owner roles, or omitted dependencies
 are closed. The separate HEADER suffix and aggregate output disposition still
 block strict export. See the [3DSOLID source-audit receipt](docs/research/p6-ac1027-cover-3dsolid-source-audit-closure-2026-11-09.json).
 
-**Verified bounded entity slice:** AC1018+ entity common owner/reactor/
-extension-dictionary handle roles now follow ODA v5.4.1 §§2.13 and 20.4.2.
-The AC1027 generated controls cover each wrong role, null encodings, preserved
-state and corrected-input retry. The focused selector passes, all 25 tests in
-the AC1018/AC1024 labeled cohort pass, and the existing ACadSharp AC1027 sample
-still publishes 865/865 frames with zero entity/object parse failures. No
-fixture was added; strict output remains refused by its independent
-source-reference gate. See the [entity handle-role receipt](docs/research/p6-ac1018plus-common-entity-handle-role-validation-2026-11-09.json).
+**Verified bounded common-handle role slice:** AC1018+ entity and OBJECTS
+common owner/reactor/extension-dictionary roles now follow ODA v5.4.1
+§§2.13, 20.1 and 20.4.2. Entity and object generated controls reject each
+wrong role, cover nulls and relative soft-pointer owner forms, preserve staged
+outputs/cursors, and retry corrected input. Every direct
+`readObjectCommonHandles()` call is version-aware. The OBJECTS vector builder's
+common-parent role mistakes were corrected; actual owned/body references keep
+their hard-owner roles. The AC1024 abbreviated PERSUBENTMGR source profile is
+explicitly tested as partial, while AC1027/AC1032 variants remain refused.
+Focused entity/object selectors and the full object-vector cohort pass; all
+25 tests in the AC1018/AC1024 labeled cohort pass. The existing ACadSharp
+AC1027 sample publishes 865/865 frames with zero entity/object parse failures.
+No fixture was added. Strict output remains refused by the independent
+source-reference gate. See the [entity receipt](docs/research/p6-ac1018plus-common-entity-handle-role-validation-2026-11-09.json)
+and [OBJECTS receipt](docs/research/p6-ac1018plus-common-object-handle-role-validation-2026-11-09.json).
 
-**Next implementation packet — OBJECTS common handle roles:** audit
-`readObjectCommonHandles()` and every direct/helper caller, then validate the
-raw parent and reactor roles as soft pointers and the optional xdictionary
-role as hard owner for AC1018+. Preserve canonical/role-preserving nulls and
-the existing AC1012/AC1014 DICTIONARY/GROUP controls. Ensure direct callers
-cannot bypass the versioned policy. Extend the smallest owning generated
-OBJECTS selector with exact wrong-role refusal, truncation rollback and
-corrected-input retry; confirm the physical AC1027 sample still has no object
-parse failures. Keep record failures local and do not change the global
-strict-output guard. AC1014 PERSUBENTMGR still needs a paired semantic
-projection before typed-prefix admission. AC1027 PERSUBENTMGR and AC1032's
-six-scalar body remain raw-only until their exact class-field profiles are
-independently reconciled.
+**Next local implementation slice:** continue the AC1027 Cover source-reference
+closure at the first non-common entity/table body edge whose raw role, field
+span, target identity, or output disposition lacks evidence. Reuse the current
+source-bound inventory and bind the exact frame plus independent ODA or
+producer evidence before editing; keep the strict-output guard until all
+dependencies and dispositions close. AC1014 PERSUBENTMGR still needs a paired
+semantic projection before typed-prefix admission. AC1027 PERSUBENTMGR and
+AC1032's six-scalar body remain raw-only until their exact class-field profiles
+are independently reconciled.
 
 **Resume checkpoint (2026-11-09 10:47 UTC, desktop access refresh):** after
 the user's latest “I’ll unlock it now” reply, a fresh native-app inventory
@@ -146,7 +149,7 @@ lists no native apps. No ODA or FreeCAD process was launched. This is an
 access-state condition only; it supplies no format evidence and changes no
 support claim. Keep native ODA/FreeCAD qualification queued and do not retry
 the unchanged ODA File Converter 27.1 CLI route that aborts before processing.
-Continue with the common-handle-role packet above. Retry native qualification
+Continue with the next source-reference slice above. Retry native qualification
 only after a fresh inventory exposes an unlocked session or a materially
 different launch path is available.
 

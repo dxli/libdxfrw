@@ -56,6 +56,24 @@ public:
     using DRW_Group::parseDwg;
 };
 
+class CommonObjectHandleProbe final : public DRW_Group {
+public:
+    void configure(std::int32_t reactors, std::uint8_t xDictFlag) {
+        DRW_Group::reset();
+        handle = 0x40u;
+        objSize = 0u;
+        handleStreamBitSize = 0u;
+        setDwgCommonObjectState(reactors, xDictFlag, false);
+    }
+
+    bool parseCommonHandles(dwgBuffer& buffer, std::uint32_t& parent,
+                            std::vector<std::uint32_t>& reactors,
+                            std::uint32_t& xDict) const {
+        return readDwgObjectCommonHandles(DRW::AC1027, &buffer, &parent,
+                                          &reactors, &xDict);
+    }
+};
+
 class DictionaryEncodeProbe final : public DRW_Dictionary {
 public:
     using DRW_Dictionary::encodeDwg;
@@ -1021,12 +1039,16 @@ void testPersistentManagerExactFooter(TestContext& t) {
     options.version = DRW::AC1024;
     check(options, true, true, "AC1024 explicit zero final count");
     options = Options{};
+    options.version = DRW::AC1024;
+    check(options, true, false,
+          "AC1024 exact abbreviated source prefix remains partial");
+    options = Options{};
     options.hasSubentityCount = true;
     options.associationSubentities = 2;
     options.subentityCount = 2;
     options.subentities = {11, 12};
     check(options, true, true, "Explicit subentity scalars stay distinct from common handles");
-    for (const auto version : {DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
+    for (const auto version : {DRW::AC1027, DRW::AC1032}) {
         options = Options{};
         options.version = version;
         check(options, false, false, "Later-version omitted count is not the observed R21 profile");
@@ -1179,7 +1201,7 @@ bool makeAssociativeDependencyFrame(
         handle.ref64 = reference;
         handles.putHandle(handle);
     };
-    putHandle(DRW::DwgHardOwnership, 0xA200u); // common owner
+    putHandle(DRW::DwgSoftPointer, 0xA200u); // common owner
     putHandle(dependencyHandleCodes[0], 0xA210u); // dependent_on
     putHandle(dependencyHandleCodes[1], 0xA211u); // read_dependency
     putHandle(dependencyHandleCodes[2], 0xA212u); // node
@@ -1251,7 +1273,7 @@ bool makeAssociativeDimensionDependencyBodyFrame(
         handle.ref64 = ref;
         handles.putHandle(handle);
     };
-    putHandle(DRW::DwgHardOwnership, 0xA200u); // dependency owns this body
+    putHandle(DRW::DwgSoftPointer, 0xA200u); // common owner
     putHandle(DRW::DwgSoftPointer, 0xA201u); // following-handle sentinel
     handles.alignToByte();
     if (!object.isGood() || !handles.isGood()
@@ -1338,7 +1360,7 @@ bool makeAssociativeActionFrame(DRW::Version version, std::int16_t groupCode,
         value.ref64 = ref;
         handles.putHandle(value);
     };
-    putHandle(DRW::DwgHardOwnership, 0xA200u); // common owner
+    putHandle(DRW::DwgSoftPointer, 0xA200u); // common owner
     putHandle(DRW::DwgSoftPointer, 0xA201u); // owning network
     putHandle(DRW::DwgSoftPointer, 0xA202u); // action body
     if (handleVariant)
@@ -1428,7 +1450,7 @@ bool makeAssociativeParamFrame(DRW::Version version, bool osnap,
         handles.putHandle(value);
     };
     dwgHandle owner;
-    owner.code = DRW::DwgHardOwnership;
+    owner.code = DRW::DwgSoftPointer;
     owner.size = 2;
     owner.ref = 0xA200u;
     owner.ref64 = 0xA200u;
@@ -1498,7 +1520,7 @@ bool makeObjectContextFrame(DRW::Version version, const dwgBufferW& body,
     };
     // Common owner and xdictionary references are absolute control values in
     // this vector; the typed context scale follows the common handle fields.
-    putHandle(DRW::DwgHardOwnership, 0xA200u);
+    putHandle(DRW::DwgSoftPointer, 0xA200u);
     if (commonXDictFlag == 0u)
         putHandle(DRW::DwgHardOwnership, 0xA300u);
     putHandle(DRW::DwgHardPointer, 0xA400u);
@@ -2691,7 +2713,7 @@ bool makeTableStyleFrame(DRW::Version version, std::int32_t styleType,
     object.alignToByte();
 
     dwgHandle parent;
-    parent.code = DRW::DwgHardOwnership;
+    parent.code = DRW::DwgSoftPointer;
     parent.size = 2;
     parent.ref = 0xA200u;
     parent.ref64 = parent.ref;
@@ -2784,7 +2806,7 @@ bool makeCellStyleMapIdentityFrame(DRW::Version version,
     object.alignToByte();
 
     dwgHandle parent;
-    parent.code = DRW::DwgHardOwnership;
+    parent.code = DRW::DwgSoftPointer;
     parent.size = 2;
     parent.ref = 0xA200u;
     parent.ref64 = parent.ref;
@@ -11097,7 +11119,7 @@ bool makeR2007TableContentObjectFrame(R2007TableContentObjectFrame& frame,
     body.putBitLong(0); // no merged ranges
 
     dwgHandle parent;
-    parent.code = DRW::DwgHardOwnership;
+    parent.code = DRW::DwgSoftPointer;
     parent.size = 2;
     parent.ref = parentHandle;
     parent.ref64 = parentHandle;
@@ -15314,6 +15336,136 @@ void testLegacyDictionaryGroupCommonLinkEvidence(TestContext& t) {
                      "R13/R14 DICTIONARY rejects a common-parent handle-role mismatch");
         }
     }
+}
+
+void testAc1027ObjectCommonHandleRoles(TestContext& t) {
+    struct Stream {
+        std::vector<std::uint8_t> bytes;
+    };
+    const auto makeStream = [](std::uint8_t ownerCode,
+                               std::uint8_t reactorCode,
+                               std::uint8_t xDictCode,
+                               std::uint32_t ownerReference = 0x49u) {
+        dwgBufferW writer;
+        const auto append = [&writer](std::uint8_t code,
+                                      std::uint32_t reference) {
+            dwgHandle value;
+            value.code = code;
+            value.ref = reference;
+            value.ref64 = reference;
+            writer.putHandle(value);
+        };
+        // ODA v5.4.1 §§2.13 and 20.1: parent/reactors are soft pointers,
+        // xdictionary is a hard owner.
+        append(ownerCode, ownerCode == 0u ? 0u : ownerReference);
+        append(reactorCode, reactorCode == 0u ? 0u : 0x47u);
+        append(reactorCode, reactorCode == 0u ? 0u : 0x48u);
+        append(xDictCode, xDictCode == 0u ? 0u : 0x45u);
+        append(DRW::DwgHardPointer, 0xCAFEu); // following-field sentinel
+        return Stream{writer.data()};
+    };
+    const auto valid = makeStream(DRW::DwgSoftPointer,
+                                  DRW::DwgSoftPointer,
+                                  DRW::DwgHardOwnership);
+
+    CommonObjectHandleProbe validProbe;
+    validProbe.configure(2, 0u);
+    dwgBuffer validBuffer(valid.bytes.data(), valid.bytes.size());
+    std::uint32_t parent = 0u;
+    std::vector<std::uint32_t> reactors;
+    std::uint32_t xDict = 0u;
+    const bool validRead = validProbe.parseCommonHandles(
+        validBuffer, parent, reactors, xDict);
+    const dwgHandle sentinel = validBuffer.getHandle();
+    t.expect(validRead && parent == 0x49u
+                 && reactors == std::vector<std::uint32_t>{0x47u, 0x48u}
+                 && xDict == 0x45u
+                 && sentinel.code == DRW::DwgHardPointer
+                 && sentinel.ref == 0xCAFEu
+                 && validBuffer.numRemainingBytes() == 0,
+             "AC1027 OBJECTS common handles decode roles and preserve next field");
+
+    struct RelativeOwner {
+        std::uint8_t code;
+        std::uint32_t encodedOffset;
+        std::uint32_t expectedHandle;
+    };
+    const RelativeOwner relativeOwners[] = {
+        {0x06u, 0u, 0x41u},
+        {0x08u, 0u, 0x3Fu},
+        {0x0Au, 9u, 0x49u},
+        {0x0Cu, 1u, 0x3Fu}};
+    for (const RelativeOwner& item : relativeOwners) {
+        const Stream relative = makeStream(
+            item.code, DRW::DwgSoftPointer, DRW::DwgHardOwnership,
+            item.encodedOffset);
+        CommonObjectHandleProbe relativeProbe;
+        relativeProbe.configure(2, 0u);
+        dwgBuffer relativeBuffer(relative.bytes.data(), relative.bytes.size());
+        std::uint32_t relativeParent = 0u;
+        std::vector<std::uint32_t> relativeReactors;
+        std::uint32_t relativeXDict = 0u;
+        const bool relativeRead = relativeProbe.parseCommonHandles(
+            relativeBuffer, relativeParent, relativeReactors,
+            relativeXDict);
+        t.expect(relativeRead && relativeParent == item.expectedHandle
+                     && relativeReactors
+                            == std::vector<std::uint32_t>{0x47u, 0x48u}
+                     && relativeXDict == 0x45u,
+                 "AC1027 OBJECTS accepts ODA soft-pointer owner offset code "
+                     + std::to_string(item.code));
+    }
+
+    const auto rejectAndRetry = [&](const Stream& malformed,
+                                    const char* label) {
+        CommonObjectHandleProbe probe;
+        probe.configure(2, 0u);
+        std::uint32_t stagedParent = 0xEEEEu;
+        std::vector<std::uint32_t> stagedReactors{0xDDDDu};
+        std::uint32_t stagedXDict = 0xCCCCu;
+        dwgBuffer malformedBuffer(malformed.bytes.data(),
+                                  malformed.bytes.size());
+        const bool malformedRead = probe.parseCommonHandles(
+            malformedBuffer, stagedParent, stagedReactors, stagedXDict);
+        const bool positionUnchanged = malformedBuffer.getPosition() == 0u
+            && malformedBuffer.getBitPos() == 0u;
+        const bool outputUnchanged = stagedParent == 0xEEEEu
+            && stagedReactors == std::vector<std::uint32_t>{0xDDDDu}
+            && stagedXDict == 0xCCCCu;
+        dwgBuffer correctedBuffer(valid.bytes.data(), valid.bytes.size());
+        const bool correctedRead = probe.parseCommonHandles(
+            correctedBuffer, stagedParent, stagedReactors, stagedXDict);
+        t.expect(!malformedRead && positionUnchanged && outputUnchanged
+                     && correctedRead && stagedParent == 0x49u
+                     && stagedReactors
+                            == std::vector<std::uint32_t>{0x47u, 0x48u}
+                     && stagedXDict == 0x45u,
+                 label);
+    };
+
+    rejectAndRetry(makeStream(DRW::DwgHardPointer, DRW::DwgSoftPointer,
+                              DRW::DwgHardOwnership),
+        "AC1027 OBJECTS rejects wrong parent role atomically and retries");
+    rejectAndRetry(makeStream(DRW::DwgSoftPointer, DRW::DwgHardPointer,
+                              DRW::DwgHardOwnership),
+        "AC1027 OBJECTS rejects wrong reactor role atomically and retries");
+    rejectAndRetry(makeStream(DRW::DwgSoftPointer, DRW::DwgSoftPointer,
+                              DRW::DwgSoftPointer),
+        "AC1027 OBJECTS rejects wrong xdictionary role atomically and retries");
+
+    const auto nulls = makeStream(0u, 0u, 0u);
+    CommonObjectHandleProbe nullProbe;
+    nullProbe.configure(2, 0u);
+    dwgBuffer nullBuffer(nulls.bytes.data(), nulls.bytes.size());
+    std::uint32_t nullParent = 0xEEEEu;
+    std::vector<std::uint32_t> nullReactors;
+    std::uint32_t nullXDict = 0xCCCCu;
+    const bool nullRead = nullProbe.parseCommonHandles(
+        nullBuffer, nullParent, nullReactors, nullXDict);
+    t.expect(nullRead && nullParent == 0u
+                 && nullReactors == std::vector<std::uint32_t>{0u, 0u}
+                 && nullXDict == 0u,
+             "AC1027 OBJECTS common handle roles accept canonical nulls");
 }
 
 void testGroupVectors(TestContext& t) {
@@ -23449,6 +23601,14 @@ void testScaleDwgPositiveUnitDomain(TestContext& t) {
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 2
+        && std::string(argv[1]) == "--ac1027-object-common-handle-roles") {
+        TestContext context;
+        testAc1027ObjectCommonHandleRoles(context);
+        std::cout << "AC1027 OBJECTS common handle roles: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
     if (argc == 2
         && std::string(argv[1]) == "--table-r2007-cell-reader") {
         TestContext context;
