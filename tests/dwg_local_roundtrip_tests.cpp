@@ -35724,9 +35724,18 @@ bool runIssue1410CrossCodecRoundTrip() {
 class XrefMetadataDwgWriter final : public dx_iface {
 public:
     XrefMetadataDwgWriter(dwgRW& writer, DRW_Block_Record record,
-                          bool emitFollowingBlock)
+                          bool emitFollowingBlock,
+                          bool emitXrefInsert = false,
+                          std::uint32_t expectedInsertHandle = 0xA123u,
+                          std::uint32_t emittedInsertHandle = 0xA123u)
         : writer_(writer), record_(std::move(record)),
-          emitFollowingBlock_(emitFollowingBlock) {}
+          emitFollowingBlock_(emitFollowingBlock),
+          emitXrefInsert_(emitXrefInsert),
+          expectedInsertHandle_(expectedInsertHandle),
+          emittedInsertHandle_(emittedInsertHandle) {
+        if (emitXrefInsert_)
+            record_.insertHandles = {expectedInsertHandle_};
+    }
 
     bool succeeded() const noexcept { return succeeded_; }
     bool rejectedXrefContentScope() const noexcept {
@@ -35747,7 +35756,16 @@ public:
     void writeVports() override {}
     void writeDimstyles() override {}
     void writeAppId() override {}
-    void writeEntities() override {}
+    void writeEntities() override {
+        if (!emitXrefInsert_)
+            return;
+        DRW_Insert insert;
+        insert.handle = emittedInsertHandle_;
+        insert.name = record_.name;
+        insert.blockRecH.ref = xrefRecordHandle_;
+        if (!writer_.writeInsert(&insert))
+            fail();
+    }
     void writeObjects() override {}
 
     void writeBlocks() override {
@@ -35782,6 +35800,9 @@ private:
     dwgRW& writer_;
     DRW_Block_Record record_;
     bool emitFollowingBlock_ {true};
+    bool emitXrefInsert_ {false};
+    std::uint32_t expectedInsertHandle_ {0xA123u};
+    std::uint32_t emittedInsertHandle_ {0xA123u};
     bool succeeded_ {true};
     bool rejectedXrefContentScope_ {false};
     std::uint32_t xrefRecordHandle_ {0};
@@ -37583,6 +37604,16 @@ bool runBlockRecordLayoutAssociationControls() {
         });
 }
 
+class XrefInsertCaptureReader final : public dx_iface {
+public:
+    std::vector<DRW_Insert> inserts;
+
+    void addInsert(const DRW_Insert& data) override {
+        inserts.push_back(data);
+        dx_iface::addInsert(data);
+    }
+};
+
 bool runBlockRecordXrefMetadataRoundTrip(
     const std::filesystem::path& parent) {
     const auto scratch = parent / ("libdxfrw-xref-metadata-" + std::to_string(
@@ -37617,7 +37648,8 @@ bool runBlockRecordXrefMetadataRoundTrip(
         }
         dwgRW writer(output.string().c_str());
         XrefMetadataDwgWriter adapter(
-            writer, std::move(sourceRecord), true);
+            writer, std::move(sourceRecord), true,
+            version > DRW::AC1015);
         if (!writer.write(&adapter, version, false) || !adapter.succeeded()
             || !adapter.rejectedXrefContentScope()) {
             const DRW_OperationDiagnostic diagnostic =
@@ -37630,7 +37662,7 @@ bool runBlockRecordXrefMetadataRoundTrip(
         }
 
         dx_data readback;
-        dx_iface reader;
+        XrefInsertCaptureReader reader;
         if (!reader.fileImport(output.string(), &readback, false)) {
             std::cerr << "XREF metadata read-back failed for " << suffix
                       << " (error "
@@ -37663,7 +37695,13 @@ bool runBlockRecordXrefMetadataRoundTrip(
             ? std::string{} : "refs/generated-source.dwg";
         if (xref == nullptr || following == nullptr
             || xrefBlock == nullptr || followingBlock == nullptr
+            || reader.inserts.size()
+                   != (version > DRW::AC1015 ? 1u : 0u)
             || !xrefBlock->ent.empty() || followingBlock->ent.size() != 1u
+            || xref->insertHandles
+                   != (version > DRW::AC1015
+                           ? std::vector<std::uint32_t>{0xA123u}
+                           : std::vector<std::uint32_t>{})
             || xref->layoutHandle != 0 || following->layoutHandle != 0
             || xref->xrefIndex != expectedIndex
             || xref->flags != expectedFlags
@@ -37692,12 +37730,24 @@ bool runBlockRecordXrefMetadataRoundTrip(
             std::cerr << "following geometry escaped ordinary block for " << suffix << '\n';
             return false;
         }
+        if (version > DRW::AC1015) {
+            const auto& xrefInsert = reader.inserts.front();
+            if (xrefInsert.handle != 0xA123u
+                || xrefInsert.space != DRW::ModelSpace
+                || xrefInsert.parentHandle != DRW::NoHandle
+                || xrefInsert.blockRecH.ref != xref->handle) {
+                std::cerr << "XREF INSERT did not close the BLOCK_RECORD reverse list for "
+                          << suffix << '\n';
+                return false;
+            }
+        }
       }
      }
     }
 
     for (const auto version : versions) {
-      for (unsigned fault = 0u; fault < 4u; ++fault) {
+      for (unsigned fault = 0u;
+           fault < (version > DRW::AC1015 ? 5u : 4u); ++fault) {
         const auto output = scratch / ("xref-refusal-"
             + std::to_string(static_cast<int>(version)) + "-"
             + std::to_string(fault) + ".dwg");
@@ -37705,13 +37755,21 @@ bool runBlockRecordXrefMetadataRoundTrip(
         if (fault == 0u) invalid.xrefBlockHandle.ref = 0xDEADu;
         else if (fault == 1u) invalid.flags &= ~4;
         else if (fault == 2u) invalid.layoutHandle = 0xDEADu;
-        else invalid.xrefBlockHandle.ref64 = std::uint64_t{1} << 40u;
+        else if (fault == 3u)
+            invalid.xrefBlockHandle.ref64 = std::uint64_t{1} << 40u;
+        const bool mismatchInsertMembership = fault == 4u;
         dwgRW writer(output.string().c_str());
-        XrefMetadataDwgWriter absent(writer, invalid, false);
-        if (writer.write(&absent, version, false) || absent.succeeded()
-            || absent.xrefRecordHandle() != 0u
-            || std::filesystem::exists(output)
-            || writer.getLastDiagnostic().code != "dwg-block-callback") {
+        XrefMetadataDwgWriter absent(
+            writer, invalid, false, mismatchInsertMembership, 0xA123u,
+            mismatchInsertMembership ? 0xA124u : 0xA123u);
+        const bool absentResult = writer.write(&absent, version, false);
+        if (absentResult
+            || (mismatchInsertMembership
+                ? !absent.succeeded()
+                : absent.succeeded() || absent.xrefRecordHandle() != 0u
+                    || writer.getLastDiagnostic().code
+                           != "dwg-block-callback")
+            || std::filesystem::exists(output)) {
             std::cerr << "invalid XREF unexpectedly published a new destination\n";
             return false;
         }
@@ -37721,8 +37779,12 @@ bool runBlockRecordXrefMetadataRoundTrip(
             stream << sentinel;
             if (!stream.good()) return false;
         }
-        XrefMetadataDwgWriter existing(writer, invalid, false);
-        if (writer.write(&existing, version, false) || existing.succeeded())
+        XrefMetadataDwgWriter existing(
+            writer, invalid, false, mismatchInsertMembership, 0xA123u,
+            mismatchInsertMembership ? 0xA124u : 0xA123u);
+        if (writer.write(&existing, version, false)
+            || (mismatchInsertMembership ? !existing.succeeded()
+                                         : existing.succeeded()))
             return false;
         {
             std::ifstream stream(output, std::ios::binary);
@@ -37734,14 +37796,15 @@ bool runBlockRecordXrefMetadataRoundTrip(
             }
         }
         XrefMetadataDwgWriter corrected(
-            writer, generatedXrefBlockRecord(version, true), true);
+            writer, generatedXrefBlockRecord(version, true), true,
+            mismatchInsertMembership);
         if (!writer.write(&corrected, version, false) || !corrected.succeeded()
             || !corrected.rejectedXrefContentScope()) {
             std::cerr << "corrected XREF transaction failed on same facade\n";
             return false;
         }
         dx_data readback;
-        dx_iface reader;
+        XrefInsertCaptureReader reader;
         if (!reader.fileImport(output.string(), &readback, false)
             || std::count_if(readback.blockRecords.begin(), readback.blockRecords.end(),
                 [](const auto& record) {
@@ -37750,6 +37813,24 @@ bool runBlockRecordXrefMetadataRoundTrip(
                 }) != 1) {
             std::cerr << "corrected XREF destination did not read back uniquely\n";
             return false;
+        }
+        if (mismatchInsertMembership) {
+            const auto record = std::find_if(
+                readback.blockRecords.begin(), readback.blockRecords.end(),
+                [](const DRW_Block_Record& value) {
+                    return value.name == "GENERATED_XREF";
+                });
+            if (record == readback.blockRecords.end()
+                || record->insertHandles
+                       != std::vector<std::uint32_t>{0xA123u}
+                || reader.inserts.size() != 1u
+                || reader.inserts.front().handle != 0xA123u
+                || reader.inserts.front().space != DRW::ModelSpace
+                || reader.inserts.front().parentHandle != DRW::NoHandle
+                || reader.inserts.front().blockRecH.ref != record->handle) {
+                std::cerr << "corrected XREF membership retry did not close\n";
+                return false;
+            }
         }
       }
     }

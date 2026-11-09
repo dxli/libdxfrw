@@ -4019,6 +4019,18 @@ set_tests_properties(dwg_block_record_layout_association PROPERTIES
     TIMEOUT 30
 )
 
+# Verify BLOCK_HEADER INSERT reverse membership, refusal on mismatched source
+# handles, and same-facade retry across generated writer version families.
+add_test(
+    NAME dwg_block_record_xref_insert_membership
+    COMMAND $<TARGET_FILE:libdxfrw_dwg_local_roundtrip>
+            --block-record-xref-roundtrip
+)
+set_tests_properties(dwg_block_record_xref_insert_membership PROPERTIES
+    LABELS "fast;dwg;writer;xref;transaction;generated"
+    TIMEOUT 30
+)
+
 # Unsupported DWG TABLE entities must not be serialized through the inherited
 # INSERT encoder; ensure refusal is atomic across supported writer families.
 add_test(

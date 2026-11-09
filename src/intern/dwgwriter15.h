@@ -856,6 +856,8 @@ private:
         DwgBlockRecordWriteMetadata writeMetadata;
         std::vector<std::uint32_t> entityHandles;
         std::vector<std::uint32_t> insertHandles;
+        bool hasExpectedInsertHandles {false};
+        std::vector<std::uint32_t> expectedInsertHandles;
     };
 
     struct EmittedLayoutAssociation {
@@ -888,7 +890,9 @@ private:
     std::uint32_t defineBlockImpl(const std::string& name,
                                   const DRW_Coord& basePoint, int insUnits,
                                   DwgBlockRecordWriteMetadata* metadata,
-                                  std::uint32_t layoutHandle = 0);
+                                  std::uint32_t layoutHandle = 0,
+                                  const std::vector<std::uint32_t>*
+                                      expectedInsertHandles = nullptr);
 
     /// User-defined blocks from defineBlock(). The Block/ENDBLK entities are
     /// emitted immediately, while the Block_Record is deferred until after

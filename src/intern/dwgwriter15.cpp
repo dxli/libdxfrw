@@ -1155,8 +1155,16 @@ std::uint32_t dwgWriter15::defineBlock(
                > static_cast<std::size_t>(std::numeric_limits<std::int32_t>::max())
         || !record.extData.empty() || !record.appData.empty()
         || !record.reactorHandles.empty() || record.xDictHandle != 0
-        || !record.insertHandles.empty()) {
+        || record.insertHandles.size() > dwgSafety::MaxOwnedObjectCount) {
         return 0;
+    }
+    {
+        std::set<std::uint32_t> uniqueInsertHandles;
+        for (const std::uint32_t handle : record.insertHandles) {
+            if (handle == 0u || handle == DRW::NoHandle
+                || !uniqueInsertHandles.insert(handle).second)
+                return 0;
+        }
     }
 
     // ODA §20.4.52 specifies this common hard-pointer slot as NULL. Preserve
@@ -1200,7 +1208,8 @@ std::uint32_t dwgWriter15::defineBlock(
     }
 
     return defineBlockImpl(record.name, record.basePoint, record.insUnits,
-                           &metadata, record.layoutHandle);
+                           &metadata, record.layoutHandle,
+                           &record.insertHandles);
 }
 
 bool dwgWriter15::ensureUserBlockIndex() const {
@@ -1272,7 +1281,8 @@ void dwgWriter15::invalidateUserBlockIndex() noexcept {
 
 std::uint32_t dwgWriter15::defineBlockImpl(
     const std::string& name, const DRW_Coord& basePoint, int insUnits,
-    DwgBlockRecordWriteMetadata* metadata, std::uint32_t layoutHandle) {
+    DwgBlockRecordWriteMetadata* metadata, std::uint32_t layoutHandle,
+    const std::vector<std::uint32_t>* expectedInsertHandles) {
     if (m_blockControlEmitted || m_activeUserBlockRecordHandle != 0) {
         return 0;
     }
@@ -1295,8 +1305,24 @@ std::uint32_t dwgWriter15::defineBlockImpl(
             || pending->basePoint.y != basePoint.y
             || pending->basePoint.z != basePoint.z)
             return 0;
-        if (metadata == nullptr)
+        if (expectedInsertHandles != nullptr
+            && pending->hasExpectedInsertHandles
+            && pending->expectedInsertHandles != *expectedInsertHandles)
+            return 0;
+        if (metadata == nullptr) {
+            if (expectedInsertHandles != nullptr
+                && !pending->hasExpectedInsertHandles) {
+                std::vector<std::uint32_t> stagedExpected;
+                try {
+                    stagedExpected = *expectedInsertHandles;
+                } catch (...) {
+                    return 0;
+                }
+                pending->expectedInsertHandles = std::move(stagedExpected);
+                pending->hasExpectedInsertHandles = true;
+            }
             return existing->second;
+        }
         if (pending->hasWriteMetadata) {
             const DwgBlockRecordWriteMetadata& prior =
                 pending->writeMetadata;
@@ -1308,12 +1334,34 @@ std::uint32_t dwgWriter15::defineBlockImpl(
                 && prior.previewData == metadata->previewData
                 && prior.canExplode == metadata->canExplode
                 && prior.blockScaling == metadata->blockScaling;
-            return same ? existing->second : 0;
+            if (!same)
+                return 0;
+            if (expectedInsertHandles != nullptr
+                && !pending->hasExpectedInsertHandles) {
+                std::vector<std::uint32_t> stagedExpected;
+                try {
+                    stagedExpected = *expectedInsertHandles;
+                } catch (...) {
+                    return 0;
+                }
+                pending->expectedInsertHandles = std::move(stagedExpected);
+                pending->hasExpectedInsertHandles = true;
+            }
+            return existing->second;
         }
+        std::vector<std::uint32_t> stagedExpected;
         try {
+            if (expectedInsertHandles != nullptr
+                && !pending->hasExpectedInsertHandles)
+                stagedExpected = *expectedInsertHandles;
             pending->writeMetadata = std::move(*metadata);
         } catch (...) {
             return 0;
+        }
+        if (expectedInsertHandles != nullptr
+            && !pending->hasExpectedInsertHandles) {
+            pending->expectedInsertHandles = std::move(stagedExpected);
+            pending->hasExpectedInsertHandles = true;
         }
         pending->hasWriteMetadata = true;
         return existing->second;
@@ -1440,6 +1488,14 @@ std::uint32_t dwgWriter15::defineBlockImpl(
     if (metadata != nullptr) {
         block.hasWriteMetadata = true;
         block.writeMetadata = std::move(*metadata);
+    }
+    if (expectedInsertHandles != nullptr) {
+        try {
+            block.expectedInsertHandles = *expectedInsertHandles;
+        } catch (...) {
+            return fail();
+        }
+        block.hasExpectedInsertHandles = true;
     }
     m_userBlocks.push_back(block);
     invalidateUserBlockIndex();
@@ -2312,9 +2368,12 @@ bool dwgWriter15::emitDeferredBlockControl() {
         if (!validateEntityList(block.entityHandles)
             || !validateEntityList(block.insertHandles))
             return fail();
+        if (block.hasExpectedInsertHandles
+            && block.insertHandles != block.expectedInsertHandles)
+            return fail();
         if (block.hasWriteMetadata
             && (block.writeMetadata.flags & (4 | 8)) != 0) {
-            if (!block.entityHandles.empty() || !block.insertHandles.empty())
+            if (!block.entityHandles.empty())
                 return fail();
         }
     }
@@ -2505,8 +2564,7 @@ bool dwgWriter15::emitBlockRecord(std::uint32_t handle,
     const int flags = metadata == nullptr ? 0 : metadata->flags;
     const bool blockIsXref = (flags & 4) != 0;
     const bool xrefOverlaid = (flags & 8) != 0;
-    if ((blockIsXref || xrefOverlaid)
-        && (!entityHandles.empty() || !insertHandles.empty()))
+    if ((blockIsXref || xrefOverlaid) && !entityHandles.empty())
         return false;
     if (metadata != nullptr && metadata->xrefUnloaded && !blockIsXref)
         return false;
