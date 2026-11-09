@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Generated FIELD/PARTIAL_VIEWING_INDEX OBJECTS allocation rollback/retry control.
+// Generated FIELD/FIELDLIST/PARTIAL_VIEWING_INDEX OBJECTS allocation control.
 #include "dx_iface.h"
 
 #include <cstdlib>
@@ -36,6 +36,9 @@ public:
         field.m_fieldCode = "1+1";
         field.m_valueString = "2";
         field.m_valueStringLength = 1;
+        fieldList.handle = 0xD7B4u;
+        fieldList.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
+        fieldList.m_fieldHandles.push_back(field.handle);
         index.handle = 0xD7B2u;
         index.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
         index.m_entries.push_back({{0.0, 1.0, 2.0}, {7.0, 8.0, 9.0}, line.handle});
@@ -50,7 +53,9 @@ public:
     void writeObjects() override {
         if (failAt < 0) {
             fieldWritten = codec.writeField(&field);
-            indexWritten = fieldWritten
+            fieldListWritten = fieldWritten
+                && codec.writeFieldList(&fieldList);
+            indexWritten = fieldListWritten
                 && codec.writePartialViewingIndex(&index);
             if (!indexWritten)
                 (void)codec.writeRawDxfObject(nullptr);
@@ -60,7 +65,9 @@ public:
         AllocationFailure failure(failAt);
         try {
             fieldWritten = codec.writeField(&field);
-            indexWritten = fieldWritten
+            fieldListWritten = fieldWritten
+                && codec.writeFieldList(&fieldList);
+            indexWritten = fieldListWritten
                 && codec.writePartialViewingIndex(&index);
         } catch (const std::bad_alloc&) {
             reached = failedAllocations != before
@@ -76,18 +83,20 @@ public:
     }
 
     bool finalizeDxfWrite() override {
-        return lineWritten && fieldWritten && indexWritten;
+        return lineWritten && fieldWritten && fieldListWritten && indexWritten;
     }
 
     dxfRW& codec;
     dx_data storage;
     DRW_Line line;
     DRW_Field field;
+    DRW_FieldList fieldList;
     DRW_PartialViewingIndex index;
     long failAt = -1;
     long reached = 0;
     bool lineWritten = false;
     bool fieldWritten = false;
+    bool fieldListWritten = false;
     bool indexWritten = false;
 };
 
@@ -139,17 +148,22 @@ bool readbackMatches(const std::filesystem::path& path,
     public:
         void addLine(const DRW_Line& value) override { lines.push_back(value); }
         void addField(const DRW_Field& value) override { fields.push_back(value); }
+        void addFieldList(const DRW_FieldList& value) override {
+            fieldLists.push_back(value);
+        }
         void addPartialViewingIndex(
                 const DRW_PartialViewingIndex& value) override {
             indexes.push_back(value);
         }
         std::vector<DRW_Line> lines;
         std::vector<DRW_Field> fields;
+        std::vector<DRW_FieldList> fieldLists;
         std::vector<DRW_PartialViewingIndex> indexes;
     } reader;
     if (!reader.fileImport(path.string(), &data, false)
         || data.sourceFormat != dx_source_format::DXF
         || reader.lines.size() != 1u || reader.fields.size() != 1u
+        || reader.fieldLists.size() != 1u
         || reader.indexes.size() != 1u
         || !lineMatches(reader.lines.front(), expectedLine))
         return false;
@@ -161,6 +175,11 @@ bool readbackMatches(const std::filesystem::path& path,
         || actualField.m_valueString != "2"
         || actualField.m_valueStringLength != 1)
         return false;
+    const DRW_FieldList& actualFieldList = reader.fieldLists.front();
+    if (actualFieldList.handle != 0xD7B4u
+        || actualFieldList.parentHandle != DRW::DwgNamedObjectsDictionaryHandle
+        || actualFieldList.m_fieldHandles != std::vector<std::uint32_t>{0xD7B3u})
+        return false;
     DRW_PartialViewingIndex expectedOutput = expectedIndex;
     expectedOutput.m_entries.front().objectHandle = reader.lines.front().handle;
     return indexMatches(reader.indexes.front(), expectedOutput);
@@ -168,7 +187,7 @@ bool readbackMatches(const std::filesystem::path& path,
 
 bool run(const std::filesystem::path& directory) {
     const auto fail = [](const char* message) {
-        std::cerr << "FIELD/PARTIAL_VIEWING_INDEX allocation retry: "
+        std::cerr << "FIELD/FIELDLIST/PARTIAL_VIEWING_INDEX allocation retry: "
                   << message << '\n';
         return false;
     };
@@ -176,8 +195,8 @@ bool run(const std::filesystem::path& directory) {
         && !std::filesystem::is_directory(directory))
         return fail("could not create scratch directory");
 
-    const auto output = directory / "field-partial-viewing-index.dxf";
-    const std::string sentinel = "prior FIELD/PARTIAL_VIEWING_INDEX destination\n";
+    const auto output = directory / "field-fieldlist-partial-viewing-index.dxf";
+    const std::string sentinel = "prior FIELD/FIELDLIST/PARTIAL_VIEWING_INDEX destination\n";
     for (const bool binary : {false, true}) {
         long allocationCount = 0;
         std::string expectedBytes;
@@ -192,11 +211,13 @@ bool run(const std::filesystem::path& directory) {
             const bool readback = exported && readbackMatches(
                 output, exporter.line, exporter.index);
             if (!exported || !exporter.lineWritten || !exporter.fieldWritten
+                || !exporter.fieldListWritten
                 || !exporter.indexWritten
                 || !readback) {
                 std::cerr << "calibration codecWrite=" << exported
                           << " lineWrite=" << exporter.lineWritten
                           << " fieldWrite=" << exporter.fieldWritten
+                          << " fieldListWrite=" << exporter.fieldListWritten
                           << " indexWrite=" << exporter.indexWritten
                           << " readback=" << readback
                           << " binary=" << binary << '\n';
@@ -223,11 +244,13 @@ bool run(const std::filesystem::path& directory) {
             codec.setDxfWriteRecordInventoryEnabled(true);
             const DRW_Line sourceLine = exporter.line;
             const DRW_Field sourceField = exporter.field;
+            const DRW_FieldList sourceFieldList = exporter.fieldList;
             const DRW_PartialViewingIndex sourceIndex = exporter.index;
             exporter.failAt = offset;
             exporter.reached = 0;
             exporter.lineWritten = false;
             exporter.fieldWritten = false;
+            exporter.fieldListWritten = false;
             exporter.indexWritten = false;
             const bool wrote = codec.write(&exporter, DRW::AC1027, binary);
             exporter.failAt = -1;
@@ -242,8 +265,11 @@ bool run(const std::filesystem::path& directory) {
                 || exporter.field.m_fieldCode != sourceField.m_fieldCode
                 || exporter.field.m_valueString != sourceField.m_valueString
                 || exporter.field.m_valueStringLength != sourceField.m_valueStringLength
+                || exporter.fieldList.handle != sourceFieldList.handle
+                || exporter.fieldList.parentHandle != sourceFieldList.parentHandle
+                || exporter.fieldList.m_fieldHandles != sourceFieldList.m_fieldHandles
                 || !indexMatches(exporter.index, sourceIndex))
-                return fail("injected failure changed entity geometry, FIELD, or PVI state");
+                return fail("injected failure changed entity, FIELD/FIELDLIST, or PVI state");
             // Entity serialization assigns the emitted handle to the caller's
             // entity before the later OBJECTS callback fails. Restore its source
             // identity so this retry exercises the same source graph.
@@ -253,6 +279,7 @@ bool run(const std::filesystem::path& directory) {
             const bool retry = codec.write(&exporter, DRW::AC1027, binary);
             std::string retryBytes;
             if (!retry || !exporter.lineWritten || !exporter.fieldWritten
+                || !exporter.fieldListWritten
                 || !exporter.indexWritten
                 || !readAll(output, retryBytes) || retryBytes != expectedBytes
                 || !readbackMatches(output, sourceLine, sourceIndex)
@@ -260,7 +287,7 @@ bool run(const std::filesystem::path& directory) {
                 || !indexMatches(exporter.index, sourceIndex))
                 return fail("same-codec retry failed exact bytes or graph readback");
         }
-        std::cout << "FIELD/PARTIAL_VIEWING_INDEX OBJECTS "
+        std::cout << "FIELD/FIELDLIST/PARTIAL_VIEWING_INDEX OBJECTS "
                   << (binary ? "Binary" : "ASCII")
                   << ": allocation offsets=" << allocationCount
                   << ", rollback/retry/readback=PASS\n";

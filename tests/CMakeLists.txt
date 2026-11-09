@@ -1614,7 +1614,7 @@ add_test(NAME libdxfrw_partial_viewing_index_objects_allocation_retry
     COMMAND libdxfrw_partial_viewing_index_objects_allocation_tests
         "${CMAKE_CURRENT_BINARY_DIR}/partial-viewing-index-objects-allocation-scratch")
 set_tests_properties(libdxfrw_partial_viewing_index_objects_allocation_retry PROPERTIES
-    LABELS "fast;dxf;field;partial-viewing-index;allocation;transaction;generated"
+    LABELS "fast;dxf;field;fieldlist;partial-viewing-index;allocation;transaction;generated"
     TIMEOUT 60)
 add_executable(libdxfrw_scale_objects_allocation_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/scale_objects_allocation_tests.cpp
