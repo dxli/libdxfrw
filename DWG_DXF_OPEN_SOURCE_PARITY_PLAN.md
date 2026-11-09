@@ -1,10 +1,10 @@
 # DWG/DXF parity — remaining implementation plan
 
-**Resume checkpoint (2026-11-08):** after the user said they would unlock the
-Mac, a fresh desktop inventory still reported it locked and exposed no native
-app surface. No post-unlock ODA, FreeCAD, or conversion result was observed.
-Treat native qualification as pending; do not repeat the unchanged ODA CLI
-route until the app surface is available or the launch path materially
+**Resume checkpoint (2026-11-08, latest desktop inventory):** after the user
+said they would unlock the Mac, a fresh inventory again reported it locked and
+exposed no native app surface. No post-unlock ODA, FreeCAD, or conversion result
+was observed. Treat native qualification as pending; do not repeat the unchanged
+ODA CLI route until the app surface is available or the launch path materially
 changes. Local implementation proceeded: `prepareTableEntryEed()`
 now rejects pending APPID/LAYER references and unmodeled group-102 appData
 before a record frame is
@@ -831,7 +831,12 @@ do not repeat this TABLESTYLE codec work.
    the local `ACSH_HISTORY_CLASS` direct fields parse completely, but the
    referenced `ACSH_SWEEP_CLASS` action-body tail is best-effort; the whole
    source has three unrelated object parse failures, and strict output
-   remains refused. Autodesk's DXF reference explicitly classifies group 350
+   remains refused. A current LibreDWG master source screen finds
+   `ACSH_SWEEP_CLASS` classified as `DEBUGGING` but no complete serialized body
+   schema in its class map or release notes; those sources cannot resolve the
+   2,397-bit unparsed tail ([screen receipt](docs/research/p4-ac1027-sweep-open-source-schema-screen-2026-11-08.json)).
+   Keep this profile Partial and output-refused; proceed with independent
+   source-backed work rather than guessing a layout. Autodesk's DXF reference explicitly classifies group 350
    as soft-owner, while ODA §2.13 classifies observed DWG H code 3 as hard
    ownership; ODA File Converter emits this same target value as group 350.
    That is an observed format projection, not a normative role-conversion rule.
