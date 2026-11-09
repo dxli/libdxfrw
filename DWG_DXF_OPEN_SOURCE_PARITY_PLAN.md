@@ -870,6 +870,19 @@ are queued; the preceding `fd5af0b8` Plan Sync passed. The consumer-plan
 locally. No hosted Windows result is yet available. Continue reviewing current-
 head CI, then qualify native Linux/Windows FreeCAD and LibreCAD/LibreCAD_3
 behavior independently. Local macOS checks do not satisfy those platform gates.
+- **Current LibreCAD_3 PR #456 hosted rerun:** the remote head remains
+  `7e81275b71038d4a42fa580842e661ddcee7adbf`, based on the recorded exact
+  `origin/master` commit. The builder, CodeQL, and Python Binding Plan Sync runs
+  pass. The Python-binding macOS workflow fails on both architectures: arm64
+  reaches install and rejects Homebrew's regenerated dependency table, while
+  x86_64 has no CMake bottle under `--force-bottle` and its attempted source
+  build does not qualify the job. The isolated local consumer checkout already
+  contains candidate commit `1a012ff6`, which validates dependency-table
+  schemas without confusing them with the actual Mach-O load graph; its 41
+  focused tests, full plan validation, and whitespace check pass. That commit
+  has no hosted rerun and is not the remote PR head. Keep both Mac gates open;
+  keep the x86_64 provider decision explicit and do not accept source-build
+  fallback. See the [hosted CI recheck receipt](docs/research/p8-librecad3-pr456-hosted-ci-recheck-2026-11-09.json).
 - **Desktop qualification recheck:** after the latest user reply that they
   would unlock the Mac, a fresh desktop inventory still reports the native
   session locked. The ODA File Converter launch therefore remains unexecuted
