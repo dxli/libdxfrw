@@ -2190,6 +2190,14 @@ selector now also generates a complete AC1024 file in memory with three
 reads all strings back through `readDwgClasses()`. No fixture was added. See the
 [2026-11-09 repository-corpus receipt](docs/research/p6-ac1024-classes-repository-corpus-recheck-2026-11-09.json)
 and [earlier recheck](docs/research/p6-ac1024-classes-high-bit-rtm-recheck-2026-11-08.json).
+A further screen of the public LibreDWG `test/test-data/2010` directory found
+18 AC1024 DWGs: all reach the CLASSES end marker without a CRC mismatch, and 17
+complete the full reader operation. One fails later at TABLES; the successful
+reads then fail only at unrelated strict export gates. This directory has no
+per-file AutoCAD 2010 RTM attribution, so it adds AC1024 inputs but does not
+resolve the reported producer-specific failure. See the [LibreDWG 2010 corpus
+screen](docs/research/p6-ac1024-libredwg-2010-corpus-screen-2026-11-09.json);
+no drawings were copied into the repository.
 
 **Online AC1024 sample checked:** `nextgis/dwg_samples/arc_2010.dwg` was
 retrieved to `/private/tmp`, verified as AC1024 (51,549 bytes; SHA-256
