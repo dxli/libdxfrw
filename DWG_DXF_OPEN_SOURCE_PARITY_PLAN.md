@@ -2448,11 +2448,12 @@ output gates are met.
 **R2010+ TABLE unknown-prefix admission:** `DRW_Table::parseDwg` now keeps
 the entity frame readable but withholds semantic completeness when the
 ODA v5.4.1 §20.4.96.2 unknown preamble differs from its documented defaults:
-the RC/BL fields are nonzero, the unknown soft pointer is non-null, or the
-R2010 Boolean is false. The non-default pointer is no longer used as a
+the RC/BL fields are nonzero, the unknown soft pointer is non-null, the R2010
+Boolean is false, or the R2013+ BL is nonzero. The non-default pointer is no longer used as a
 TABLESTYLE identity; only the TABLECONTENT style reference populates that
-field. Generated AC1024 controls cover each case; the documented-default
-AC1024 content/reference profile still passes. This is conservative parser
+field. Generated AC1024 controls cover the R2010 fields, and an AC1027 control
+exercises both the non-default R2013+ BL refusal and its documented-default
+typed-content path. This is conservative parser
 disposition, not evidence for non-default field meaning, independent raw-frame
 replay, or native TABLE semantics. See the [focused receipt](docs/research/p5-ac1024-table-unknown-prefix-default-gate-2026-11-09.json).
 

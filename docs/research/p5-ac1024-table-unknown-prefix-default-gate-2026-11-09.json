@@ -4,7 +4,7 @@
   "date": "2026-11-09",
   "status": "GENERATED_UNKNOWN_PREFIX_DEFAULT_GATE_PASSES",
   "supportClaimEffect": "none",
-  "scope": "Keep the R2010 TABLE semantic projection incomplete when ODA-documented unknown preamble fields differ from their stated defaults.",
+  "scope": "Keep R2010/R2013+ TABLE semantic projection incomplete when ODA-documented unknown preamble fields differ from their stated defaults.",
   "authority": {
     "document": "Open Design Specification for .dwg files",
     "version": "5.4.1",
@@ -13,7 +13,8 @@
       {"type": "RC", "default": 0},
       {"type": "H", "role": "soft pointer", "default": "NULL"},
       {"type": "BL", "default": 0},
-      {"version": "R2010", "type": "B", "default": true}
+      {"version": "R2010", "type": "B", "default": true},
+      {"version": "R2013+", "type": "BL", "default": 0}
     ],
     "interpretation": "The fields are explicitly unknown. A non-default value is retained as an unqualified profile and must not be projected as complete TABLE semantics."
   },
@@ -25,12 +26,14 @@
   },
   "generatedControls": {
     "source": "tests/dwg_object_vectors_tests.cpp",
-    "sourceSha256AfterEdit": "b03bace8a8ab4084127038e06c664eaeb5768af5d363fba4c4238f598d7f0f00",
+    "sourceSha256AfterEdit": "1a2549cdcf449e2148ba2ed7b0b15073a7d8fb3c71ed2cc88fb50aa853cc0d0c",
     "cases": [
-      {"mutation": "unknown RC = 1", "result": "semantic projection incomplete"},
-      {"mutation": "unknown soft pointer = 0xA701", "result": "semantic projection incomplete; pointer not mapped to TABLESTYLE"},
-      {"mutation": "unknown BL = 1", "result": "semantic projection incomplete"},
-      {"mutation": "R2010 unknown Boolean = false", "result": "semantic projection incomplete"}
+      {"revision": "AC1024", "mutation": "unknown RC = 1", "result": "semantic projection incomplete"},
+      {"revision": "AC1024", "mutation": "unknown soft pointer = 0xA701", "result": "semantic projection incomplete; pointer not mapped to TABLESTYLE"},
+      {"revision": "AC1024", "mutation": "unknown BL = 1", "result": "semantic projection incomplete"},
+      {"revision": "AC1024", "mutation": "R2010 unknown Boolean = false", "result": "semantic projection incomplete"},
+      {"revision": "AC1027", "mutation": "R2013+ unknown BL = 1", "result": "semantic projection incomplete"},
+      {"revision": "AC1027", "mutation": "documented unknown-field defaults", "result": "complete TABLECONTENT and style reference parsed"}
     ],
     "frameFilesAdded": false
   },
@@ -47,11 +50,12 @@
       "command": "build/libdxfrw_dwg_object_vectors_tests --table-content-reference-roles",
       "result": "PASS"
     },
-    "testExecutableSha256": "d169529fa7031167a25f19abb2550b5c58005c943c3ef55faa7b2ab953e5904c"
+    "testExecutableSha256": "3b8c3bcfceb8639d0a030049909f9281762ebd518896979446e5f707bc681f51"
   },
   "limitations": [
     "No meaning is assigned to non-default unknown fields.",
     "The generated controls verify parser disposition, not producer interoperability or native rendering.",
+    "AC1027 default and unknown-BL vectors are generated; physical producer values for that prefix remain unqualified.",
     "Exact raw-frame preservation and strict end-to-end output are separate gates and were not established by this vector.",
     "No drawing fixture was added."
   ],
