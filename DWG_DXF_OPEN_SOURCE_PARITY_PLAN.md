@@ -51,6 +51,22 @@ remaining hosted checks complete, and retain the previous CI failure as
 historical evidence. See the
 [Homebrew metadata refresh receipt](docs/research/p8-librecad3-homebrew-api-snapshot-fix-2026-11-09.json).
 
+**P8 current-head CI recheck (2026-11-09 07:58 UTC):** PR #456 remains open
+and mergeable at `7e81275b71038d4a42fa580842e661ddcee7adbf`. The latest hosted
+run (`42573888375`, `42573888467`, `42573888513`) passes Linux x64/ARM64,
+Windows, Windows persistence, AppImage, DWG sanitizers, CodeQL C++/Python, and
+Plan Sync. Both macOS bundle jobs fail on this head for distinct packaging
+environment reasons: Intel Homebrew has no bottles for the requested formulas
+and the bottle-only dependency installer exits; Apple Silicon builds and tests
+but Python-runtime staging refuses because no cached `zstd 1.5.7_1` bottle
+manifest matches the installed `lz4 1.11.0` dependency receipt. The arm64 log
+then reaches its evidence-artifact upload step, but the package stage itself
+failed. Preserve the
+exact Homebrew origin checks while resolving these failures; do not turn either
+red CI result into a format or consumer-support claim. The evidence and
+precise next investigation are in the
+[current CI receipt](docs/research/p8-librecad3-pr456-current-ci-2026-11-09.json).
+
 **LibreCAD_3 P8 compatibility review:** the isolated consumer branch is based
 on `5cf435f4` and contains code commits `36082e71`, `93354846`, and `762a0f1e`,
 plus same-change plan-sync receipt commit `8269dd7b`. The upstream
