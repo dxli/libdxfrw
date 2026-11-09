@@ -1916,9 +1916,12 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    check; physical object `0x2E0` reduced the failure count from two to one.
    The AC1027 `AcDbAssocOsnapPointRefActionParam` at `0x393` now likewise
    publishes raw-only, bringing the same source to 481/481 frames and zero
-   entity/object parse failures. These recoveries do not establish body
-   semantics or qualify output: the strict source-reference gate still refuses
-   export. See the [TABLECONTENT recovery receipt](docs/research/p6-ac1027-tablecontent-raw-only-shell-recovery-2026-11-08.json),
+   entity/object parse failures. ODA Specification 5.4.1 has no class-specific
+   entry for this object, and LibreDWG labels its route `UNSTABLE`; neither
+   provides a safe typed layout. Keep it raw-only pending a later authoritative
+   schema or producer-backed field-span proof. These recoveries do not establish
+   body semantics or qualify output: the strict source-reference gate still
+   refuses export. See the [TABLECONTENT recovery receipt](docs/research/p6-ac1027-tablecontent-raw-only-shell-recovery-2026-11-08.json),
    [PERSUBENTMGR recovery receipt](docs/research/p6-ac1027-persubentmgr-raw-only-shell-recovery-2026-11-08.json),
    and [action-parameter recovery receipt](docs/research/p6-ac1027-osnap-action-param-raw-only-shell-recovery-2026-11-08.json).
    TextObjectContextData remains raw-only.

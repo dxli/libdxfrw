@@ -6,8 +6,19 @@
   "supportClaimEffect": "none",
   "scope": "Retain one hash-bound AC1027 ACDBASSOCOSNAPPOINTREFACTIONPARAM frame raw-only after typed parsing fails and its independent common shell/handle stream validates.",
   "authority": {
-    "oda": "The current source evidence does not establish this object's disputed class-specific body semantics or complete field layout.",
+    "oda": "ODA Open Design Specification for .dwg files v5.4.1 has no named class-specific entry for AcDbAssocOsnapPointRefActionParam; this does not authorize inferring a layout from another object class.",
     "implementationPolicy": "Use only an exact AC1027 record/class identity plus successful RawObjectShell validation. Do not promote typed fields, semantic meaning, or output eligibility."
+  },
+  "externalResearch": {
+    "officialOdaSpecification": "https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf",
+    "check": "Search the official v5.4.1 PDF for ASSOCOSNAPPOINTREFACTIONPARAM, AssocOsnap, and ASSOCACTIONPARAM; none is present.",
+    "peerStatus": {
+      "project": "LibreDWG",
+      "source": "https://github.com/LibreDWG/libredwg/blob/master/src/objects.in",
+      "finding": "The class route is labeled UNSTABLE.",
+      "weight": "Implementation-status warning only; not normative layout evidence."
+    },
+    "effect": "No typed parser change is justified. Retain the exact raw-only frame until an authoritative schema or producer-backed field-span proof is available."
   },
   "implementation": {
     "file": "src/intern/dwgreader.cpp",
