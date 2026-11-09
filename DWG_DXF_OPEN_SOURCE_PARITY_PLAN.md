@@ -1480,6 +1480,13 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    on the raw carrier. This tests the candidate field sequence only; it does not
    qualify physical bodies, graph closure or output. See the
    [PERSUBENTMGR receipt](docs/research/p6-persubentmgr-common-handle-truncation-retry-2026-11-09.json).
+   The companion complete-prefix control checks exact class version, reserved
+   scalars, counts and ordered vectors for both versions, requires a bounded
+   Complete body status and following-frame publication, and asserts the raw
+   carrier remains unvalidated (receipt:
+   [complete-prefix control](docs/research/p6-persubentmgr-generated-complete-prefix-2026-11-09.json)).
+   This is generated parser coverage only; it does not close physical layout,
+   graph, DXF mapping or output eligibility.
    This only improves bounded frame retention: these profiles remain unsupported
    for typed semantics and output. See the
    [cross-version recovery receipt](docs/research/p6-tablecontent-cross-version-raw-only-shell-recovery-2026-11-09.json).
