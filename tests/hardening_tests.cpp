@@ -20399,6 +20399,9 @@ void testAcshActionBodyExactSpan(TestContext& t) {
                  && capture.m_profileBitSize == 5u
                  && capture.m_profileBits == std::vector<std::uint8_t>{0xA8u}
                  && capture.m_pathType == 0
+                 && capture.m_bodyStartBit == 0u
+                 && capture.m_bodyBitSize == validBody.second
+                 && capture.m_bodyBits == validBody.first
                  && capture.m_opaqueTailBitSize == 1u
                  && capture.m_opaqueTailBits == std::vector<std::uint8_t>{0x00u}
                  && !capture.m_structuralFieldsComplete
@@ -20417,6 +20420,7 @@ void testAcshActionBodyExactSpan(TestContext& t) {
     t.expect(specialProfileRead
                  && specialProfileEnd == specialProfileBody.second
                  && specialProfileCapture.m_profileType == 15
+                 && specialProfileCapture.m_bodyBits == specialProfileBody.first
                  && specialProfileCapture.m_opaqueTailBitSize > 0u
                  && !specialProfileCapture.m_structuralFieldsComplete
                  && !specialProfileCapture.m_exactBodyEnd,
@@ -20431,6 +20435,8 @@ void testAcshActionBodyExactSpan(TestContext& t) {
     t.expect(exactRead && exactEnd == exactBody.second
                  && exactCapture.m_structuralFieldsComplete
                  && exactCapture.m_exactBodyEnd
+                 && exactCapture.m_bodyBitSize == exactBody.second
+                 && exactCapture.m_bodyBits == exactBody.first
                  && exactCapture.m_opaqueTailBitSize == 0u,
              "ACSH Sweep action body is complete only when all framed fields end at the exact bound");
 

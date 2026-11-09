@@ -7865,6 +7865,9 @@ public:
     std::uint64_t m_opaqueTailStartBit = 0;
     std::uint32_t m_opaqueTailBitSize = 0;
     std::vector<std::uint8_t> m_opaqueTailBits;
+    std::uint64_t m_bodyStartBit = 0;
+    std::uint32_t m_bodyBitSize = 0;
+    std::vector<std::uint8_t> m_bodyBits;
     bool m_structuralFieldsComplete = false;
     bool m_exactBodyEnd = false;
   };

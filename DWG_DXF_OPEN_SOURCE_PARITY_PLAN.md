@@ -843,15 +843,19 @@ do not repeat this TABLESTYLE codec work.
    The earlier cached docs.rs sequence was stale. This is a peer
    implementation lead, not ODA authority or independent semantic proof (see
    the [ACadRust peer-schema receipt](docs/research/p4-ac1027-sweep-acadrust-peer-schema-2026-11-08.json)).
-   **Bounded structural capture implemented; one tail bit remains unresolved:**
-   the production decoder now follows the peer candidate order with bounded
+   **Bounded structural and whole-span capture implemented; one tail bit remains unresolved:**
+   the production decoder follows the peer candidate order with bounded
    BL/BS/B/BD/3BD reads and transactionally retains both transforms, options,
-   type codes, and raw entity bit strings. It preserves unknown tail bits and
-   keeps `AcShActionBody` Partial unless every field is recognized and the
-   exact bound is reached. Special type-15/16 modeler-wire profiles stay
-   opaque pending their separate codec. The focused generated selector covers
-   exact-body parsing, suffix retention, special-profile refusal, truncation,
-   oversized counts and retry; see the [bounded-capture receipt](docs/research/p4-ac1027-sweep-bounded-capture-2026-11-08.json).
+   type codes, embedded bit strings, and a separate byte-packed exact copy of
+   every bit from action-body start through the object-data bound. The raw copy
+   includes modeled fields and unknown suffix bits, without declaring any
+   suffix padding or serializer-ready. `AcShActionBody` remains Partial unless
+   all fields are recognized and the exact bound is reached. Special type-15/16
+   modeler-wire profiles stay opaque pending their separate codec. Focused
+   generated controls compare the whole retained span against source bits and
+   cover exact-end parsing, suffix retention, special-profile opacity,
+   truncation, oversized counts and retry; see the [bounded-capture receipt](docs/research/p4-ac1027-sweep-bounded-capture-2026-11-08.json)
+   and [whole-body retention receipt](docs/research/p4-ac1027-sweep-whole-body-retention-2026-11-08.json).
    **Physical trace:** using the
    existing bounded DWG readers on an independent cursor, the pinned AC1027
    sample follows ACadRust's candidate order from bit 228 through both finite
@@ -863,12 +867,12 @@ do not repeat this TABLESTYLE codec work.
    2,571-bit body; the last bit is zero but has no established meaning. The
    second local AC1027 file, `Cover.dwg`, contains no Sweep record. See the
    [field-span trace receipt](docs/research/p4-ac1027-sweep-acadrust-field-span-trace-2026-11-08.json).
-   Production readback now consumes the full 2,343-bit action-body span,
-   retains both type-77 bodies (744/480 bits), and preserves the zero bit at
+   Production readback now retains the full 2,343-bit action-body span,
+   including both type-77 bodies (744/480 bits), and preserves the zero bit at
    2570 as a one-bit opaque suffix while reporting Partial. This local cursor
    fit strongly supports the candidate order but does not prove embedded
    entity semantics or explain the suffix. Do not consume the bit as padding.
-   Next resolve its field/framing identity and decode the embedded entity
+   Next resolve its field/framing identity and decode eligible embedded entity
    profiles with bounded transactional codecs. Keep Sweep output refused and
    support claims unchanged until graph dependencies, roles, output/readback
    and independent consumer semantics close. Autodesk's DXF reference explicitly classifies group 350

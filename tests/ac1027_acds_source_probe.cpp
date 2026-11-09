@@ -196,6 +196,8 @@ int main(int argc, char** argv) {
                       << sweep.m_pathType << ' ' << sweep.m_pathBitSize << ' '
                       << sweep.m_opaqueTailStartBit << ' '
                       << sweep.m_opaqueTailBitSize << ' '
+                      << sweep.m_bodyStartBit << ' ' << sweep.m_bodyBitSize << ' '
+                      << sweep.m_bodyBits.size() << ' '
                       << sweep.m_structuralFieldsComplete << ' '
                       << sweep.m_exactBodyEnd << ' ';
             hexBytes(sweep.m_opaqueTailBits);

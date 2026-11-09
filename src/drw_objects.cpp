@@ -31822,6 +31822,143 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
     }
 }
 
+bool DRW_AcShHistoryObject::parseSweepActionBody(
+    DRW::Version version, dwgBuffer* buffer, std::uint32_t bodyEndBit,
+    SweepActionBodyCapture& output, std::uint64_t& parsedEndBit) {
+    if (buffer == nullptr || !buffer->isGood())
+        return false;
+    dwgBuffer probe = buffer->forkIndependent();
+    SweepActionBodyCapture parsed;
+    const std::uint64_t bodyStart = currentObjectDwgBit(&probe);
+    if (bodyStart > bodyEndBit)
+        return false;
+    const std::uint64_t bodyBitSize = bodyEndBit - bodyStart;
+    if (bodyBitSize > std::numeric_limits<std::uint32_t>::max()
+        || bodyBitSize > static_cast<std::uint64_t>(kMaxAcShBlobBytes) * 8u)
+        return false;
+    parsed.m_bodyStartBit = bodyStart;
+    parsed.m_bodyBitSize = static_cast<std::uint32_t>(bodyBitSize);
+    dwgBuffer rawBody = buffer->forkIndependent();
+    if (!readBitStringWithinBody(
+            &rawBody, version, bodyEndBit, parsed.m_bodyBitSize,
+            parsed.m_bodyBits))
+        return false;
+    const auto readLong = [&](std::int32_t& value) {
+        return readBitLongWithinBody(&probe, version, bodyEndBit, value);
+    };
+    const auto readShort = [&](std::int32_t& value) {
+        return readBitShortWithinBody(&probe, version, bodyEndBit, value);
+    };
+    const auto readBit = [&](bool& value) {
+        return readBitWithinBody(&probe, version, bodyEndBit, value);
+    };
+    const auto readDouble = [&](double& value) {
+        return readBitDoubleWithinBody(&probe, version, bodyEndBit, value);
+    };
+    const auto readPoint = [&](DRW_Coord& value) {
+        return read3BitDoubleWithinBody(&probe, version, bodyEndBit, value);
+    };
+
+    if (!readLong(parsed.m_operationMajor)
+        || !readLong(parsed.m_operationMinor)
+        || !readPoint(parsed.m_direction))
+        return false;
+    for (double& value : parsed.m_scalars) {
+        if (!readDouble(value))
+            return false;
+    }
+    if (!readBit(parsed.m_hasAlignStart)
+        || !readShort(parsed.m_alignOption)
+        || !readShort(parsed.m_miterOption)
+        || !readBit(parsed.m_optionFlags[0])
+        || !readBit(parsed.m_optionFlags[1])
+        || !readBit(parsed.m_optionFlags[2])
+        || !readBit(parsed.m_optionFlags[3])
+        || !readPoint(parsed.m_dwgVector)
+        || !readBit(parsed.m_flag296))
+        return false;
+    for (double& value : parsed.m_sweepTransform) {
+        if (!readDouble(value))
+            return false;
+    }
+    for (double& value : parsed.m_pathTransform) {
+        if (!readDouble(value))
+            return false;
+    }
+
+    const auto readEmbedded = [&](std::int32_t& typeCode,
+                                  std::uint32_t& bitSize,
+                                  std::vector<std::uint8_t>& body) {
+        const std::uint64_t entityStart = currentObjectDwgBit(&probe);
+        if (!readLong(typeCode))
+            return false;
+        if (typeCode < 0)
+            return false;
+        if (typeCode == 0)
+            return true;
+
+        // ACadRust's pinned reader routes these polyline body profiles
+        // through a distinct modeler-body codec. Preserve their complete
+        // remaining action-body span opaquely until that codec is qualified.
+        if (typeCode == 15 || typeCode == 16) {
+            const std::uint64_t current = currentObjectDwgBit(&probe);
+            if (entityStart > std::numeric_limits<std::uint32_t>::max()
+                || !probe.setPosition(entityStart / 8u))
+                return false;
+            probe.setBitPos(static_cast<std::uint8_t>(entityStart % 8u));
+            const std::uint64_t tailBits = bodyEndBit - entityStart;
+            if (tailBits > std::numeric_limits<std::uint32_t>::max())
+                return false;
+            parsed.m_opaqueTailStartBit = entityStart;
+            parsed.m_opaqueTailBitSize = static_cast<std::uint32_t>(tailBits);
+            parsed.m_structuralFieldsComplete = false;
+            return readBitStringWithinBody(
+                &probe, version, bodyEndBit, parsed.m_opaqueTailBitSize,
+                parsed.m_opaqueTailBits)
+                && current >= entityStart;
+        }
+
+        std::int32_t declaredBits = 0;
+        if (!readLong(declaredBits) || declaredBits < 0
+            || static_cast<std::uint64_t>(declaredBits)
+                > static_cast<std::uint64_t>(kMaxAcShBlobBytes) * 8u)
+            return false;
+        bitSize = static_cast<std::uint32_t>(declaredBits);
+        return readBitStringWithinBody(
+            &probe, version, bodyEndBit, bitSize, body);
+    };
+
+    if (!readEmbedded(parsed.m_profileType, parsed.m_profileBitSize,
+                      parsed.m_profileBits))
+        return false;
+    if (parsed.m_opaqueTailBitSize == 0
+        && !readEmbedded(parsed.m_pathType, parsed.m_pathBitSize,
+                         parsed.m_pathBits))
+        return false;
+
+    const std::uint64_t cursor = currentObjectDwgBit(&probe);
+    if (cursor > bodyEndBit)
+        return false;
+    if (cursor < bodyEndBit && parsed.m_opaqueTailBitSize == 0) {
+        const std::uint64_t tailBits = bodyEndBit - cursor;
+        if (tailBits > std::numeric_limits<std::uint32_t>::max())
+            return false;
+        parsed.m_opaqueTailStartBit = cursor;
+        parsed.m_opaqueTailBitSize = static_cast<std::uint32_t>(tailBits);
+        if (!readBitStringWithinBody(
+                &probe, version, bodyEndBit, parsed.m_opaqueTailBitSize,
+                parsed.m_opaqueTailBits))
+            return false;
+    }
+    parsed.m_structuralFieldsComplete = parsed.m_opaqueTailBitSize == 0;
+    parsed.m_exactBodyEnd = currentObjectDwgBit(&probe) == bodyEndBit
+        && parsed.m_structuralFieldsComplete;
+    parsedEndBit = currentObjectDwgBit(&probe);
+    output = std::move(parsed);
+    *buffer = probe;
+    return true;
+}
+
 void DRW_AcShHistoryObject::reset() {
     DRW_TableEntry::reset();
     tType = DRW::ACSHHISTORYOBJECT;
