@@ -9693,6 +9693,28 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             table.rowspace = 1.0;
         });
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects columns above its bounded grid limit without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.colcount = 1001;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects rows above its bounded grid limit without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.rowcount = 10001;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects a grid above its total cell budget without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            // Both individual limits are respected; 1000 * 201 exceeds the
+            // 200000-cell total budget and must be rejected before grid shape
+            // or row/column vectors are inspected.
+            table.colcount = 1000;
+            table.rowcount = 201;
+        });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects a mismatched owner record without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {

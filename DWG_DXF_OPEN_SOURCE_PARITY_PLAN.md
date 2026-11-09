@@ -131,7 +131,7 @@ FreeCAD, or format evidence. Do not repeat the unchanged ODA CLI launch or
 claim the external qualification gate passed. Continue local implementation.
 
 **Latest TABLE implementation checkpoint (2026-11-09):** commits through
-`d23e91f5` add generated AC1018 plain-text cell and table-scalar DWG codec
+`ac561329` add generated AC1018 plain-text cell and table-scalar DWG codec
 coverage: scalar mask `0x1f`, cell alignment/fill-state/indexed colors/text
 style pointer/text height, and four physical edge color/lineweight/visibility
 families. Readback checks typed fields, body boundary, following sentinel,
@@ -161,6 +161,10 @@ qualification remain open. Keep public TABLE output refused. A fresh desktop
 inventory after the user's unlock message still reports a locked Mac and no
 native app surface. Do not repeat the unchanged ODA CLI launch. No synthetic
 codec result promotes physical, native, or support claims.
+The latest focused guard slice adds atomic refusals for each TABLE grid budget:
+1,001 columns, 10,001 rows, and 201,000 cells with each dimension individually
+within its limit. The fast TABLE CTest passes in normal and ASan builds; see
+the [grid-budget receipt](docs/research/p5-ac1018-table-grid-budget-refusals-2026-11-09.json).
 
 The P6 audit added generated AC1027 NOD → named DICTIONARY → typed SCALE and
 NOD → named DICTIONARY → DATALINK graph allocation sweeps. SCALE passed 12
@@ -2955,7 +2959,12 @@ Speed-oriented implementation sequence:
    The latest fast slice extends refusal coverage to missing entity identity,
    noncustom class ordinals, detached string stream/null body, lineweight and
    content override markers, retained geometry coordinates, and typed value
-   variants. Continue auditing the remaining guard branches. The production
+   variants. Grid resource preflight now has atomic refusal controls for
+   over-limit columns, rows and total cells; the last case holds both individual
+   dimensions within limits. Normal and ASan focused selectors pass. See the
+   [grid-budget receipt](docs/research/p5-ac1018-table-grid-budget-refusals-2026-11-09.json).
+   Continue auditing remaining guard branches only where a distinct public
+   model invariant lacks an observable refusal/readback control. The production
    compound writer still needs its own graph-level staging and atomic publication. The
    existing AC1018 traces disagree on class number (528 versus
    523), while their CLASS identity metadata agrees. An AC1018-only writer
