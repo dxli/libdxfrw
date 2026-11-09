@@ -1465,8 +1465,12 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    AC1021/AC1024/AC1027/AC1032 TABLECONTENT typed failures likewise fall back
    to raw-only when an independent common-shell/handle parse succeeds; generated
    controls preserve exact bytes and the following frame. The added AC1021 and
-   AC1024 controls publish a subsequent typed object after raw recovery. This
-   only improves bounded frame retention: these profiles remain unsupported
+   AC1024 controls publish a subsequent typed object after raw recovery. The
+   generated AC1027 PERSUBENTMGR control also shortens the common handle span by
+   one bit: the malformed manager is withheld, its following object publishes,
+   and restoring the original span permits raw-only recovery (see the
+   [truncation/retry receipt](docs/research/p6-ac1027-persubentmgr-common-handle-truncation-retry-2026-11-09.json)).
+   This only improves bounded frame retention: these profiles remain unsupported
    for typed semantics and output. See the
    [cross-version recovery receipt](docs/research/p6-tablecontent-cross-version-raw-only-shell-recovery-2026-11-09.json).
    A hash-matched physical recheck of

@@ -14862,6 +14862,93 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
                       << " publications=" << sink.publications.size();
             std::cerr << '\n';
         }
+
+        // A valid outer object CRC is not enough to publish a raw-only
+        // manager when its common handle stream is truncated. Keep the later
+        // frame readable, then prove the original generated profile succeeds
+        // after the handle-span bound is restored.
+        Options truncatedManager = ac1027RawManager;
+        Frame truncatedManagerObject = ac1027RawManagerObject;
+        std::vector<std::uint8_t> truncatedManagerFrame;
+        bool truncatedBuilt = truncatedManagerObject.handleBits > 0u;
+        if (truncatedBuilt) {
+            --truncatedManagerObject.handleBits;
+            truncatedBuilt = wrapFrame(truncatedManager,
+                                       truncatedManagerObject,
+                                       truncatedManagerFrame);
+        }
+        t.expect(truncatedBuilt,
+                 "AC1027 PERSUBENTMGR truncated common-handle frame is generated in memory");
+        if (truncatedBuilt) {
+            const auto truncatedNextOffset = static_cast<std::uint32_t>(
+                truncatedManagerFrame.size());
+            std::vector<std::uint8_t> truncatedBytes = truncatedManagerFrame;
+            truncatedBytes.insert(truncatedBytes.end(),
+                                  ac1027RawManagerNextFrame.begin(),
+                                  ac1027RawManagerNextFrame.end());
+            PersistentManagerDispatchReader truncatedReader(
+                truncatedBytes, DRW::AC1027,
+                truncatedManager.classNumber);
+            PersistentManagerDispatchSink truncatedSink;
+            const bool truncatedRead = truncatedReader.readObjects(
+                truncatedBytes, truncatedManager.handle,
+                truncatedNextOffset, ac1027RawManagerNext.handle,
+                truncatedSink);
+            const bool sourceWithheld =
+                std::none_of(truncatedSink.raw.begin(), truncatedSink.raw.end(),
+                    [&truncatedManager](const DRW_UnsupportedObject& object) {
+                        return object.m_handle == truncatedManager.handle;
+                    })
+                && std::none_of(truncatedSink.publications.begin(),
+                    truncatedSink.publications.end(),
+                    [&truncatedManager](
+                        const DRW_DwgFramePublication& publication) {
+                        return publication.m_handle == truncatedManager.handle;
+                    });
+            const bool sentinelSurvived = truncatedSink.raw.size() == 1u
+                && truncatedSink.raw.front().m_handle
+                    == ac1027RawManagerNext.handle
+                && truncatedSink.publications.size() == 1u
+                && truncatedSink.publications.front().m_handle
+                    == ac1027RawManagerNext.handle;
+            const bool truncatedRejected = !truncatedRead
+                && truncatedReader.objectFailures() == 1u
+                && sourceWithheld && sentinelSurvived;
+
+            PersistentManagerDispatchReader correctedReader(
+                bytes, DRW::AC1027, ac1027RawManager.classNumber);
+            PersistentManagerDispatchSink correctedSink;
+            const bool correctedRead = correctedReader.readObjects(
+                bytes, ac1027RawManager.handle, nextOffset,
+                ac1027RawManagerNext.handle, correctedSink);
+            const bool correctedRetry = correctedRead
+                && correctedReader.objectFailures() == 0u
+                && correctedSink.typed.empty()
+                && correctedSink.raw.size() == 2u
+                && correctedSink.raw[0].m_handle
+                    == ac1027RawManager.handle
+                && correctedSink.raw[0].m_rawBytes
+                    == ac1027RawManagerObject.payload
+                && correctedSink.raw[1].m_handle
+                    == ac1027RawManagerNext.handle
+                && correctedSink.publications.size() == 2u;
+            t.expect(truncatedRejected && correctedRetry,
+                     "truncated PERSUBENTMGR common handle tail is withheld, following object survives, and corrected input retries raw-only");
+            if (!truncatedRejected || !correctedRetry) {
+                std::cerr << "PERSUBENTMGR bounded-shell retry: truncatedRead="
+                          << truncatedRead
+                          << " failures=" << truncatedReader.objectFailures()
+                          << " raw=" << truncatedSink.raw.size()
+                          << " publications=" << truncatedSink.publications.size()
+                          << " sourceWithheld=" << sourceWithheld
+                          << " sentinelSurvived=" << sentinelSurvived
+                          << " correctedRead=" << correctedRead
+                          << " correctedFailures=" << correctedReader.objectFailures()
+                          << " correctedRaw=" << correctedSink.raw.size()
+                          << " correctedPublications=" << correctedSink.publications.size()
+                          << '\n';
+            }
+        }
     }
 
     Options ac1032TableContent;
