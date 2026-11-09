@@ -1,0 +1,30 @@
+{
+  "title": "Generated DBCOLOR OBJECTS allocation rollback and retry",
+  "date": "2026-11-09",
+  "scope": "Direct AC1027 DBCOLOR DXF OBJECTS callback under dxfRW::write; one generated color record with an ACAD_COLOR dictionary owner, ASCII and Binary.",
+  "source": {
+    "kind": "locally-authored in-memory records",
+    "dictionaryHandle": "0xD7AF",
+    "colorHandle": "0xD7B0",
+    "colorDictionaryKey": "LOCAL_COLOR_BOOK$LOCAL_COLOR_ENTRY",
+    "rgb": "0x345678",
+    "bookName": "LOCAL_COLOR_BOOK",
+    "name": "LOCAL_COLOR_ENTRY",
+    "fixtureCommitted": false
+  },
+  "implementation": "Added tests/dbcolor_objects_allocation_tests.cpp and a focused CTest target. The test sweeps allocation failures through the public dxfRW::writeDbColor API. reserveHandle now records handles reserved during an admitted DXF write as attempt-local allocator state so a failed attempt cannot raise HANDSEED on same-codec retry.",
+  "validation": {
+    "build": "cmake --build build-gcc --target libdxfrw_dbcolor_objects_allocation_tests -j4",
+    "test": "ctest --test-dir build-gcc -R '^libdxfrw_dbcolor_objects_allocation_retry$' --output-on-failure",
+    "result": "PASS",
+    "asciiAllocationOffsets": 8,
+    "binaryAllocationOffsets": 8,
+    "perOffset": "one-shot std::bad_alloc; failed write preserves the prior destination and caller DBCOLOR state; same dxfRW codec retry reproduces clean calibration bytes and typed DBCOLOR readback",
+    "gitDiffCheck": "PASS"
+  },
+  "limits": [
+    "Generated serializer transaction and typed DXF readback evidence only.",
+    "Does not qualify a physical producer, ACAD_COLOR graph semantics, native color-book behavior, DWG output, or broad support.",
+    "No DWG/DXF fixture was added; test output uses its build scratch directory."
+  ]
+}

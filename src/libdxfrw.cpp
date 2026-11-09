@@ -3390,7 +3390,10 @@ bool dxfRW::reserveHandle(std::uint32_t h) {
     if (!preflightDxfSetup())
         return false;
     try {
-        m_handleAllocator->reserve(h);
+        if (m_dxfWriteAttemptActive)
+            m_handleAllocator->reserveForWrite(h);
+        else
+            m_handleAllocator->reserve(h);
         return true;
     } catch (...) {
         m_handleReservationFailed = true;
