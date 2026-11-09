@@ -1050,6 +1050,14 @@ behavior independently. Local macOS checks do not satisfy those platform gates.
   reconciled; the imperial census has no TABLECONTENT evidence. See the
   [current type-48 recheck](docs/research/p5-ac1021-metric-table-current-type48-cursor-recheck-2026-11-09.json)
   and [scalar override receipt](docs/research/p5-ac1018-ac1021-table-scalar-overrides-2026-11-08.json).
+  A temporary cursor trace now localizes the first unsupported candidate to
+  row 8/column 0 of TABLE `0x2856e` and row 9/column 0 of TABLE `0x2a974`;
+  all preceding cells complete under the current sequence. ODA §20.4.96.1/.99
+  and ACadSharp use the same candidate field order, while LibreDWG retains both
+  bodies as unknown bits. This does not identify the source of displacement or
+  establish type 48 as valid. The diagnostic edit was reverted; keep both
+  bodies partial until exact spans or an independent producer decode resolve
+  the candidate. See the [first-failure cell trace receipt](docs/research/p5-ac1021-metric-table-first-failure-cell-trace-2026-11-09.json).
   The three row-height values (`0x100000`, `0x200000`, `0x400000`), row
   alignments (`0x4000`, `0x8000`, `0x10000`), and text-style handles
   (`0x20000`, `0x40000`, `0x80000`) now have typed retention. ODA classifies
