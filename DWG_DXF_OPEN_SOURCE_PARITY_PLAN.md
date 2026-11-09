@@ -1,10 +1,12 @@
 # DWG/DXF parity — remaining implementation plan
 
-**Resume checkpoint (2026-11-08, latest desktop inventory):** after the user
-said they would unlock the Mac, a fresh inventory again reported it locked and
-exposed no native app surface. No post-unlock ODA, FreeCAD, or conversion result
-was observed. Treat native qualification as pending; do not repeat the unchanged
-ODA CLI route until the app surface is available or the launch path materially
+**Resume checkpoint (2026-11-08, latest retry):** after the user said they
+would unlock the Mac, the desktop inventory still reported the session locked
+and exposed no native app surface. A fresh direct ODA File Converter 27.1
+`-help` invocation again exited 134 during Pasteboard/XPC initialization, before
+argument or document processing. No post-unlock native conversion result was
+observed. Keep native qualification pending; do not repeat the unchanged ODA CLI
+route until the desktop reports an unlocked session or the launch path materially
 changes. Local implementation proceeded: `prepareTableEntryEed()`
 now rejects pending APPID/LAYER references and unmodeled group-102 appData
 before a record frame is
@@ -3868,10 +3870,12 @@ material references remain refused. The focused
 `libdxfrw_dwg_default_material_optin_tests` passes, including its generated
 AC1021/AC1024/AC1027 readback controls. The adapter and writer receipts are
 recorded in [the P8 fast adapter bridge receipt](docs/research/p8-upstream-librecad-default-graph-adapter-bridge-2026-11-08.json).
-The writer/test edits are local working-tree changes based on
-`6466df12dfb272e1595bcc010681d318c330a04b`; only the isolated consumer slice
-is committed. Do not treat either test as closing native Linux/Windows FreeCAD,
-clean-consumer ABI, or broader DWG graph/output qualification.
+The writer, focused regression, plan update, and receipt are committed in
+`ff0f8dd4` (based on `6466df12dfb272e1595bcc010681d318c330a04b`). The isolated
+consumer slice is separately committed in LibreCAD at
+`e216b44e763a87374556bad13e16628ff95e574c`. Do not treat either test as closing
+native Linux/Windows FreeCAD, clean-consumer ABI, or broader DWG graph/output
+qualification.
 
 **P8 default-graph same-version replay:** the failed import/re-export probe
 identified dictionary children emitted as raw carriers but validated as generic
