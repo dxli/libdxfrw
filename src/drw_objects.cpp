@@ -30319,11 +30319,63 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
             return true;
         };
         if (version <= DRW::AC1018) {
-            appendPrefixStatus(
-                DRW_AssociativePrefixStatus::Kind::AcDbAssocActionBody,
-                currentObjectDwgBit(buf),
-                DRW_AssociativePrefixStatus::ParseStatus::Missing,
-                m_classVersion);
+            bool admittedLegacyAc1015Prefix = false;
+            if (version == DRW::AC1015 && objSize != 0
+                && objectDataEndKnown) {
+                dwgBuffer legacyProbe = *buf;
+                std::int32_t classVersion = 0;
+                std::int32_t unknown0 = 0;
+                std::int32_t unknown2 = 0;
+                std::int32_t associationSteps = 0;
+                std::int32_t associationSubentities = 0;
+                std::int32_t stepCount = 0;
+                std::array<std::int32_t, 2> steps{};
+                const bool prefixParsed =
+                    readBodyBitLongFrom(&legacyProbe, classVersion)
+                    && readBodyBitLongFrom(&legacyProbe, unknown0)
+                    && readBodyBitLongFrom(&legacyProbe, unknown2)
+                    && readBodyBitLongFrom(&legacyProbe, associationSteps)
+                    && readBodyBitLongFrom(&legacyProbe,
+                                           associationSubentities)
+                    && readBodyBitLongFrom(&legacyProbe, stepCount)
+                    && stepCount == 2
+                    && readBodyBitLongFrom(&legacyProbe, steps[0])
+                    && readBodyBitLongFrom(&legacyProbe, steps[1]);
+                const bool exactPhysicalPrefix = prefixParsed
+                    && classVersion == 2 && unknown0 == 0 && unknown2 == 2
+                    && associationSteps == 4
+                    && associationSubentities == 0
+                    && steps[0] == 3 && steps[1] == 4
+                    && currentObjectDwgBit(&legacyProbe) == bodyEndBit;
+                if (exactPhysicalPrefix) {
+                    *buf = legacyProbe;
+                    m_classVersion = static_cast<std::uint16_t>(classVersion);
+                    m_persistentUnknown0 =
+                        static_cast<std::uint32_t>(unknown0);
+                    m_persistentUnknown2 =
+                        static_cast<std::uint32_t>(unknown2);
+                    m_persistentAssocStepCount =
+                        static_cast<std::uint32_t>(associationSteps);
+                    m_persistentAssocSubentityCount =
+                        static_cast<std::uint32_t>(associationSubentities);
+                    m_persistentSteps = {3u, 4u};
+                    appendPrefixStatus(
+                        DRW_AssociativePrefixStatus::Kind::AcDbAssocActionBody,
+                        prefixStartBit,
+                        DRW_AssociativePrefixStatus::ParseStatus::Partial,
+                        m_classVersion, 0, m_persistentSteps.size(), -1);
+                    m_prefixStatuses.back().m_sourceAssumption =
+                        "AC1015 class-version-2 source profile [2,0,2,4,0,2,3,4] reaches the RL pre-handles boundary; trailing count is not decoded";
+                    admittedLegacyAc1015Prefix = true;
+                }
+            }
+            if (!admittedLegacyAc1015Prefix) {
+                appendPrefixStatus(
+                    DRW_AssociativePrefixStatus::Kind::AcDbAssocActionBody,
+                    currentObjectDwgBit(buf),
+                    DRW_AssociativePrefixStatus::ParseStatus::Missing,
+                    m_classVersion);
+            }
         } else if (objSize == 0) {
             return fail();
         } else {
@@ -30357,12 +30409,10 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
                     m_classVersion);
                 return fail();
             }
-            // The traced AC1021 class-version-2 record and its paired DXF
-            // stop after the steps when the association-subentity scalar is
-            // zero. A separate AC1024 handle-363 witness has the exact
-            // [1,2] step vector and the same absent final count. Preserve
-            // only these source profiles; do not infer the missing count or
-            // label the undocumented suffix semantically complete.
+            // These source-matched prefixes end at the independently bounded
+            // pre-handles region. Keep them partial and leave the disputed
+            // trailing count undecoded; a DXF projection does not establish
+            // the meaning of any remaining DWG bits.
             const bool abbreviatedAc1021Prefix = version == DRW::AC1021
                 && classVersion == 2 && unknown0 == 0 && unknown2 == 2
                 && m_persistentAssocSubentityCount == 0u
