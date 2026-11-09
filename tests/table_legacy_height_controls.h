@@ -108,6 +108,41 @@ bool legacyTableTextHeightTests(const std::filesystem::path& dir) {
             return true;
         };
         if(!importComplete(tags,true,"physical dimensions baseline"))return false;
+        Tags dimensionsBeforeCounts=tags;
+        Tag earlyRowHeight{141,"8"};
+        Tag earlyColumnWidth{142,"20"};
+        for(const int code:{141,142}) {
+            const auto field=std::find_if(dimensionsBeforeCounts.begin(),
+                dimensionsBeforeCounts.end(),[code](const Tag& tag) {
+                    return tag.code==code;
+                });
+            if(field==dimensionsBeforeCounts.end())
+                return fail("early physical dimension source field");
+            if(code==141)earlyRowHeight=*field;
+            else earlyColumnWidth=*field;
+            dimensionsBeforeCounts.erase(field);
+        }
+        const auto tableSubclass=std::find_if(dimensionsBeforeCounts.begin(),
+            dimensionsBeforeCounts.end(),[](const Tag& tag) {
+                return tag.code==100&&tag.value=="AcDbTable";
+            });
+        if(tableSubclass==dimensionsBeforeCounts.end())
+            return fail("early physical dimension insertion point");
+        auto insertion=dimensionsBeforeCounts.insert(std::next(tableSubclass),
+                                                     earlyRowHeight);
+        dimensionsBeforeCounts.insert(std::next(insertion),earlyColumnWidth);
+        if(!importComplete(dimensionsBeforeCounts,true,
+                           "dimensions before row/column counts"))return false;
+        if(!write(source,dimensionsBeforeCounts,binary))
+            return fail("reordered physical dimension source write");
+        dx_iface reorderedReader;dx_data reorderedData;
+        if(!reorderedReader.fileImport(source.string(),&reorderedData,false)
+            ||reorderedData.tables.size()!=1u
+            ||reorderedData.tables.front().m_content.m_rows.size()!=1u
+            ||reorderedData.tables.front().m_content.m_columns.size()!=1u
+            ||reorderedData.tables.front().m_content.m_rows.front().m_height!=8.0
+            ||reorderedData.tables.front().m_content.m_columns.front().m_width!=20.0)
+            return fail("reordered physical dimension values");
         for(const int code:{141,142}) {
             const auto missingAt=std::find_if(tags.begin(),tags.end(),[code](const Tag& tag) {
                 return tag.code==code;

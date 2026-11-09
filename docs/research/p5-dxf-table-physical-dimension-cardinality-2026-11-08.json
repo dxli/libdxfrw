@@ -2,7 +2,7 @@
   "schema": "libdxfrw-research-receipt-v1",
   "id": "p5-dxf-table-physical-dimension-cardinality-2026-11-08",
   "date": "2026-11-08",
-  "status": "IMPLEMENTED_GENERATED_FAIL_CLOSED_PHYSICAL_DIMENSION_CARDINALITY",
+  "status": "IMPLEMENTED_GENERATED_ORDER_INDEPENDENT_DIMENSION_CAPTURE_AND_CARDINALITY_GUARD",
   "supportClaimEffect": "none",
   "scope": "Fail closed on missing, excess, duplicate, nonpositive, or non-finite physical TABLE row-height/column-width values without confusing them with title/header/data style-height overrides.",
   "authority": {
@@ -18,7 +18,7 @@
       "src/drw_entities.cpp",
       "tests/table_legacy_height_controls.h"
     ],
-    "behavior": "DRW_Table retains one finite positive group-141/group-142 value per declared row/column. Excess values mark the record semantically incomplete; finalization also marks missing values and groups consumed before their dimensions are known incomplete. Non-finite numeric spellings are rejected by the DXF reader. Group 140 title/header/data style-height mapping remains separate.",
+    "behavior": "DRW_Table retains one finite positive group-141/group-142 value per declared row/column. Values arriving before their row/column count are held in the existing bounded row/column records and preserved as the grid is sized; no class member or public layout was added. Missing, excess, duplicate, contradictory-count and nonpositive values mark the record semantically incomplete. Non-finite numeric spellings are rejected by the DXF reader. Group 140 title/header/data style-height mapping remains separate.",
     "preservation": "Incomplete TABLE records remain readable where the numeric syntax is valid; the change does not enable broader TABLE output profiles."
   },
   "generatedControls": {
@@ -29,6 +29,7 @@
     ],
     "cases": [
       "valid one-row/one-column baseline remains semantically complete",
+      "group 141 and 142 dimensions appearing before row/column count fields remain complete and retain exact values",
       "missing group 141 or 142 marks the table incomplete",
       "excess/duplicate group 141 or 142 marks the table incomplete",
       "zero and negative row heights/column widths mark the table incomplete",
@@ -39,7 +40,7 @@
   },
   "limitations": [
     "Generated parser-integrity evidence only; no independent producer or native rendering qualification.",
-    "Noncanonical group order before row/column counts is refused by incomplete semantic disposition rather than buffered and reconstructed.",
+    "Conflicting later row/column counts remain incomplete; the parser does not promote a contradictory grid.",
     "No writer support or general TABLE support claim follows."
   ]
 }

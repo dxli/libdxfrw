@@ -7,10 +7,10 @@ and exposed no native app surface. A fresh direct ODA File Converter 27.1
 argument or document processing. No post-unlock native conversion result was
 observed. Keep native qualification pending; do not repeat the unchanged ODA CLI
 route until the desktop reports an unlocked session or the launch path materially
-changes. The latest local implementation is commit `410f6c51`: TABLE
-physical dimensions now require one valid group-141 row height per row and one
-group-142 column width per column, with focused ASCII/Binary cardinality and
-invalid-value controls ([receipt](docs/research/p5-dxf-table-physical-dimension-cardinality-2026-11-08.json)).
+changes. The latest local TABLE implementation extends commit `410f6c51` to
+retain group-141 row heights and group-142 column widths even when they precede
+the row/column count fields; exact cardinality and invalid-value controls pass
+in ASCII and Binary ([receipt](docs/research/p5-dxf-table-physical-dimension-cardinality-2026-11-08.json)).
 The earlier `prepareTableEntryEed()` guard rejects pending APPID/LAYER
 references and unmodeled group-102 appData before a record frame is opened,
 while allowing canonical `ACAD_REACTORS` and `ACAD_XDICTIONARY` groups only when
@@ -2367,14 +2367,15 @@ open ([domain receipt](docs/research/p5-tablestyle-dwg-unit-and-identity-domains
 
 **Physical TABLE dimensions (group 141/142):** Autodesk defines one repeated
 group-141 row height per row and one repeated group-142 column width per
-column. The parser now marks missing, excess/duplicate, nonpositive and
-non-finite values incomplete/rejected, while keeping group-141 physical row
-heights separate from group-140 title/header/data style-height overrides.
-Generated ASCII/Binary controls pass through the focused legacy TABLE height
-selector. Values encountered before dimensions are known remain unbuffered and
-cause incomplete disposition at finalization. This is a fail-closed parser
-integrity fix, not native producer/rendering or broader TABLE qualification;
-see the [physical dimension cardinality receipt](docs/research/p5-dxf-table-physical-dimension-cardinality-2026-11-08.json).
+column. The parser retains these values in the existing bounded row/column
+records even when the group codes precede row/column counts, and marks missing,
+excess/duplicate, contradictory-count and nonpositive values incomplete; the
+DXF reader rejects non-finite spellings. Group-141 physical row heights remain
+separate from group-140 title/header/data style-height overrides. Generated
+ASCII/Binary controls pass through the focused legacy TABLE height selector.
+This is parser-integrity/order evidence, not native producer/rendering or
+broader TABLE qualification; see the [physical dimension cardinality
+receipt](docs/research/p5-dxf-table-physical-dimension-cardinality-2026-11-08.json).
 
 DXF SUN parsing retains a separately supplied RGB group regardless of the
 order of group 63, so the existing strict output refusal cannot be bypassed by

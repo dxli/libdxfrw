@@ -12202,43 +12202,73 @@ bool DRW_Table::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     };
 
     auto ensureGrid = [this, &releaseCellTextOwners]() {
-        if (m_dxfRowsExpected < 0 || m_dxfColumnsExpected < 0)
+        const bool rowsKnown = m_dxfRowsExpected >= 0;
+        const bool columnsKnown = m_dxfColumnsExpected >= 0;
+        if (!rowsKnown && !columnsKnown)
             return true;
 
-        const std::uint32_t rows = static_cast<std::uint32_t>(m_dxfRowsExpected);
-        const std::uint32_t columns = static_cast<std::uint32_t>(m_dxfColumnsExpected);
-        if (rows > kMaxTableRows || columns > kMaxTableColumns
-            || (columns != 0 && rows > kMaxTableCells / columns)) {
+        const std::uint32_t rows = rowsKnown
+            ? static_cast<std::uint32_t>(m_dxfRowsExpected) : 0u;
+        const std::uint32_t columns = columnsKnown
+            ? static_cast<std::uint32_t>(m_dxfColumnsExpected) : 0u;
+        if ((rowsKnown && rows > kMaxTableRows)
+            || (columnsKnown && columns > kMaxTableColumns)
+            || (rowsKnown && columnsKnown && columns != 0
+                && rows > kMaxTableCells / columns))
             return false;
+
+        // Size the known axes independently. This retains row heights and
+        // column widths that precede the corresponding dimension records.
+        if (rowsKnown && m_content.m_rows.size() != rows) {
+            if (m_dxfRowHeightsRead > rows) {
+                m_dxfUnsupportedData = true;
+                m_semanticContentComplete = false;
+            }
+            if (m_dxfNextCell != 0u) {
+                m_dxfUnsupportedData = true;
+                m_semanticContentComplete = false;
+                for (DRW_TableRow& row : m_content.m_rows) {
+                    if (!releaseCellTextOwners(row.m_cells, 0u))
+                        return false;
+                    row.m_cells.clear();
+                }
+                m_dxfNextCell = 0u;
+                m_dxfCurrentCell = -1;
+            }
+            if (!DRW::reserve(m_content.m_rows, static_cast<int>(rows))
+                || !DRW::resize(m_content.m_rows, static_cast<int>(rows)))
+                return false;
+        }
+        if (columnsKnown && m_content.m_columns.size() != columns) {
+            if (m_dxfColumnWidthsRead > columns) {
+                m_dxfUnsupportedData = true;
+                m_semanticContentComplete = false;
+            }
+            if (m_dxfNextCell != 0u) {
+                m_dxfUnsupportedData = true;
+                m_semanticContentComplete = false;
+                for (DRW_TableRow& row : m_content.m_rows) {
+                    if (!releaseCellTextOwners(row.m_cells, 0u))
+                        return false;
+                    row.m_cells.clear();
+                }
+                m_dxfNextCell = 0u;
+                m_dxfCurrentCell = -1;
+            }
+            if (!DRW::reserve(m_content.m_columns, static_cast<int>(columns))
+                || !DRW::resize(m_content.m_columns, static_cast<int>(columns)))
+                return false;
         }
 
-        if (m_content.m_columns.size() != columns) {
-            m_content.m_columns.clear();
-            if (!DRW::reserve(m_content.m_columns, static_cast<int>(columns)))
-                return false;
-            if (!DRW::resize(m_content.m_columns, static_cast<int>(columns)))
-                return false;
-            m_dxfColumnWidthsRead = 0;
-        }
-        if (m_content.m_rows.size() != rows) {
-            for (DRW_TableRow& row : m_content.m_rows) {
-                if (!releaseCellTextOwners(row.m_cells, 0u))
-                    return false;
-            }
-            m_content.m_rows.clear();
-            if (!DRW::reserve(m_content.m_rows, static_cast<int>(rows)))
-                return false;
-            if (!DRW::resize(m_content.m_rows, static_cast<int>(rows)))
-                return false;
-            m_dxfRowHeightsRead = 0;
-        }
-        for (auto& row : m_content.m_rows) {
+        if (!rowsKnown || !columnsKnown)
+            return true;
+
+        for (DRW_TableRow& row : m_content.m_rows) {
             if (row.m_cells.size() > columns
                 && !releaseCellTextOwners(row.m_cells, columns))
                 return false;
-            if (!DRW::reserve(row.m_cells, static_cast<int>(columns)))
-                return false;
-            if (!DRW::resize(row.m_cells, static_cast<int>(columns)))
+            if (!DRW::reserve(row.m_cells, static_cast<int>(columns))
+                || !DRW::resize(row.m_cells, static_cast<int>(columns)))
                 return false;
         }
 
@@ -12614,27 +12644,57 @@ bool DRW_Table::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     case 141:
         if (!ensureGrid())
             return false;
-        if (m_dxfRowHeightsRead < m_content.m_rows.size()) {
+        {
             const double height = reader->getDouble();
-            m_content.m_rows[m_dxfRowHeightsRead++].m_height = height;
+            if (m_dxfRowHeightsRead < m_content.m_rows.size()) {
+                m_content.m_rows[m_dxfRowHeightsRead++].m_height = height;
+            } else if (m_dxfRowsExpected < 0
+                       && m_content.m_rows.size() < kMaxTableRows) {
+                if (m_content.m_rows.size() == m_content.m_rows.capacity()) {
+                    const std::size_t target = std::min<std::size_t>(
+                        kMaxTableRows,
+                        std::max<std::size_t>(1u,
+                            m_content.m_rows.size() * 2u));
+                    if (!DRW::reserve(m_content.m_rows,
+                                      static_cast<int>(target)))
+                        return false;
+                }
+                m_content.m_rows.emplace_back();
+                m_content.m_rows.back().m_height = height;
+                ++m_dxfRowHeightsRead;
+            } else {
+                markIncomplete();
+            }
             if (!std::isfinite(height) || height <= 0.0)
                 markIncomplete();
-        } else {
-            reader->getDouble();
-            markIncomplete();
         }
         break;
     case 142:
         if (!ensureGrid())
             return false;
-        if (m_dxfColumnWidthsRead < m_content.m_columns.size()) {
+        {
             const double width = reader->getDouble();
-            m_content.m_columns[m_dxfColumnWidthsRead++].m_width = width;
+            if (m_dxfColumnWidthsRead < m_content.m_columns.size()) {
+                m_content.m_columns[m_dxfColumnWidthsRead++].m_width = width;
+            } else if (m_dxfColumnsExpected < 0
+                       && m_content.m_columns.size() < kMaxTableColumns) {
+                if (m_content.m_columns.size() == m_content.m_columns.capacity()) {
+                    const std::size_t target = std::min<std::size_t>(
+                        kMaxTableColumns,
+                        std::max<std::size_t>(1u,
+                            m_content.m_columns.size() * 2u));
+                    if (!DRW::reserve(m_content.m_columns,
+                                      static_cast<int>(target)))
+                        return false;
+                }
+                m_content.m_columns.emplace_back();
+                m_content.m_columns.back().m_width = width;
+                ++m_dxfColumnWidthsRead;
+            } else {
+                markIncomplete();
+            }
             if (!std::isfinite(width) || width <= 0.0)
                 markIncomplete();
-        } else {
-            reader->getDouble();
-            markIncomplete();
         }
         break;
     case 145:
