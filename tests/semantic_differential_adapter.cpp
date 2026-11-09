@@ -1443,6 +1443,13 @@ public:
         addCallback("finalizeDxfWrite");
         return true;
     }
+    void addDwgTemplateDescription(const std::string&) override {
+        addCallback("addDwgTemplateDescription");
+    }
+    bool addProxySubentityMarker(std::uint32_t, std::uint32_t) override {
+        addCallback("addProxySubentityMarker");
+        return false;
+    }
 #endif
     void writeAppId() override { addCallback("writeAppId"); }
     void writeViews() override { addCallback("writeViews"); }

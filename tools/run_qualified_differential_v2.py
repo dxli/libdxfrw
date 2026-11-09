@@ -2059,8 +2059,9 @@ EXPECTED_INTERFACE_METHOD_COUNT = 170
 EXPECTED_COMMON_INTERFACE_DIGEST = (
     "894c58db480ef3f5c7e25a9066ca9a178ecf5e41137a9e709a1144f340faba7a"
 )
-EXPECTED_INTERFACE_PROFILE_NAME = "common170-standalone174-callbacks-v1"
+EXPECTED_INTERFACE_PROFILE_NAME = "common170-standalone176-callbacks-v2"
 LEGACY_INTERFACE_PROFILE_NAME = "common170-standalone173-callbacks-v1"
+PREVIOUS_INTERFACE_PROFILE_NAME = "common170-standalone174-callbacks-v1"
 LEGACY_STANDALONE_INTERFACE_EXTRAS = [
     "addBlockRecord",
     "addNamedObjectDictionary",
@@ -2068,15 +2069,26 @@ LEGACY_STANDALONE_INTERFACE_EXTRAS = [
 ]
 EXPECTED_STANDALONE_INTERFACE_EXTRAS = [
     "addBlockEnd",
-    *LEGACY_STANDALONE_INTERFACE_EXTRAS,
+    "addBlockRecord",
+    "addDwgTemplateDescription",
+    "addNamedObjectDictionary",
+    "addProxySubentityMarker",
+    "finalizeDxfWrite",
 ]
 STANDALONE_INTERFACE_PROFILE_INVENTORIES = {
     LEGACY_INTERFACE_PROFILE_NAME: {
         "methodCount": 173,
         "extras": LEGACY_STANDALONE_INTERFACE_EXTRAS,
     },
-    EXPECTED_INTERFACE_PROFILE_NAME: {
+    PREVIOUS_INTERFACE_PROFILE_NAME: {
         "methodCount": 174,
+        "extras": [
+            "addBlockEnd",
+            *LEGACY_STANDALONE_INTERFACE_EXTRAS,
+        ],
+    },
+    EXPECTED_INTERFACE_PROFILE_NAME: {
+        "methodCount": 176,
         "extras": EXPECTED_STANDALONE_INTERFACE_EXTRAS,
     },
 }
@@ -6487,7 +6499,7 @@ def self_test() -> None:
         "side": "standalone",
         "commonMethodCount": 170,
         "commonMethodDigest": EXPECTED_COMMON_INTERFACE_DIGEST,
-        "interfaceMethodCount": 174,
+        "interfaceMethodCount": 176,
         "interfaceMethodDigest": _digest_text("standalone-interface"),
         "defaultedInterfaceExtras": EXPECTED_STANDALONE_INTERFACE_EXTRAS,
         "adapterSupplementalMethods": EXPECTED_STANDALONE_INTERFACE_EXTRAS,

@@ -37,7 +37,7 @@ DEFAULT_SEMANTIC_MANIFEST = (
 )
 TARGET_EXECUTABLE = "libdxfrw_semantic_adapter_target"
 STANDALONE_EXECUTABLE = "libdxfrw_semantic_adapter_standalone"
-INTERFACE_PROFILE_NAME = "common170-standalone174-callbacks-v1"
+INTERFACE_PROFILE_NAME = "common170-standalone176-callbacks-v2"
 CAPABILITY_PROFILE_NAME = "semantic-adapter-capabilities-v1"
 CAPABILITY_PROFILE_KEYS = {"schema", "name", "side", "capabilities"}
 CAPABILITY_NAMES = (
@@ -60,7 +60,9 @@ COMMON_INTERFACE_METHOD_DIGEST = (
 SUPPLEMENTAL_INTERFACE_METHODS = (
     "addBlockEnd",
     "addBlockRecord",
+    "addDwgTemplateDescription",
     "addNamedObjectDictionary",
+    "addProxySubentityMarker",
     "finalizeDxfWrite",
 )
 # Ownership-transfer callbacks are additive overloads whose base
@@ -2409,7 +2411,7 @@ def _self_test_named_interface_profile() -> None:
     standalone_profile = standalone["interfaceProfile"]
     if not isinstance(standalone_profile, dict):
         raise BuildError("self-test named profile omitted its inventory")
-    if (standalone_profile["interfaceMethodCount"] != 174
+    if (standalone_profile["interfaceMethodCount"] != 176
             or standalone_profile["defaultedInterfaceExtras"]
                 != list(SUPPLEMENTAL_INTERFACE_METHODS)
             or standalone_profile["adapterSupplementalMethods"]
@@ -2548,7 +2550,7 @@ def _self_test_named_interface_profile() -> None:
                 profile=INTERFACE_PROFILE_NAME,
             )
         except BuildError as exc:
-            if "expected 174" not in str(exc):
+            if "expected 176" not in str(exc):
                 raise
         else:
             raise BuildError("self-test accepted a stale standalone callback set")
