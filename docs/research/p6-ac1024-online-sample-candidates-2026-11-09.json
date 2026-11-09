@@ -1,0 +1,38 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "date": "2026-11-09",
+  "title": "Online AC1024 sample candidates for new-source qualification",
+  "status": "CANDIDATES_IDENTIFIED_SIGNATURE_UNVERIFIED",
+  "scope": "Locate candidate files for a second independent AC1024 input profile without admitting any file as a fixture or evidence before inspecting its bytes and provenance.",
+  "sources": [
+    {
+      "title": "Autodesk AutoCAD LT Sample Files",
+      "url": "https://www.autodesk.com/support/technical/article/caas/tsarticles/ts/01em4r6LLJgnQQVBlk5GqD.html",
+      "evidence": "Autodesk lists sample DWGs and says the sample set applies to AutoCAD LT 2010 and later.",
+      "limitation": "The page does not identify the saved DWG format version for each individual download."
+    },
+    {
+      "title": "AutoCAD 2010 sample-file list and archive pointer",
+      "url": "https://blog.jtbworld.com/2009/06/where-are-the-sample-dwg-files-for-autocad.html",
+      "evidence": "The 2009 post identifies the listed files as AutoCAD 2010 samples and points to Autodesk's sample archive.",
+      "limitation": "Secondary historical source; it does not provide file hashes or verify that current archive bytes are unchanged."
+    }
+  ],
+  "candidateDownloads": [
+    {"name": "architectural_example-imperial.dwg", "url": "https://download.autodesk.com/us/samplefiles/acad/architectural_example-imperial.dwg"},
+    {"name": "civil_example-imperial.dwg", "url": "https://download.autodesk.com/us/samplefiles/acad/civil_example-imperial.dwg"},
+    {"name": "mechanical_example-imperial.dwg", "url": "https://download.autodesk.com/us/samplefiles/acad/mechanical_example-imperial.dwg"},
+    {"name": "blocks_and_tables_-_metric.dwg", "url": "https://download.autodesk.com/us/samplefiles/acad/blocks_and_tables_-_metric.dwg"},
+    {"name": "blocks_and_tables_-_imperial.dwg", "url": "https://download.autodesk.com/us/samplefiles/acad/blocks_and_tables_-_imperial.dwg"}
+  ],
+  "qualificationGate": [
+    "Download only to a scratch location and record URL, retrieval date, byte length and SHA-256.",
+    "Verify the first six bytes are AC1024 before treating a file as an AC1024 sample.",
+    "Check hashes against the existing local corpus so aliases do not count as independent sources.",
+    "Run current fast read/strict-output probes and independent reader comparison on eligible candidates.",
+    "Do not commit downloaded DWG or derived DXF fixtures; create a local-from-scratch fixture only if a minimized regression is needed."
+  ],
+  "result": "Candidate locations were identified from Autodesk's archive and its historical AutoCAD 2010 sample list. The binary download endpoints were not fetched in this research pass; no candidate has an observed AC1024 signature, hash, reader result, or producer-qualification status.",
+  "supportClaimEffect": "none",
+  "newFixtureCommitted": false
+}
