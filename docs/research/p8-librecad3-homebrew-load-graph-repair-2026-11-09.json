@@ -28,6 +28,12 @@
     "command": "python3 -m unittest scripts.tests.test_native_origins -q",
     "result": "passed",
     "tests": 41,
+    "planSync": {
+      "fullValidation": "python3 scripts/validate_python_binding_plan.py --full: PASS",
+      "regressions": "python3 -m unittest scripts.tests.test_validate_python_binding_plan -q: PASS, 31 tests",
+      "worktreeCoverage": "python3 scripts/validate_python_binding_plan.py --worktree --exclude-path build.log --exclude-path configure.log --exclude-path tests.log: PASS; no changed paths in the isolated checkout, no stale evidence",
+      "diffCheck": "git diff --check: PASS"
+    },
     "whitespace": "git diff --check passed",
     "hostedCI": "not rerun; local candidate 1a012ff6 has not yet been pushed"
   },
