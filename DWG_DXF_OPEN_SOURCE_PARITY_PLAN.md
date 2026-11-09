@@ -133,15 +133,22 @@ source-reference gate. See the [entity receipt](docs/research/p6-ac1018plus-comm
 and [OBJECTS receipt](docs/research/p6-ac1018plus-common-object-handle-role-validation-2026-11-09.json).
 
 **Next local implementation packet — DIMSTYLE body handle roles and spans:**
-use ODA v5.4.1 §20.4.68 and the existing AC1027 Cover table-record inventory
-to bind the exact DIMSTYLE record, version-dependent field sequence, raw
-handle roles, consumed spans, and target identities before changing the parser.
-Start with the Cover record and generated AC1018/AC1021/AC1024/AC1027 controls
-only where the ODA version boundary changes the fields. Reuse the existing
-transactional parser/span pattern and fast selector framework; add no drawing
-fixture. The exact LAYER role/span implementation, validation, source audit,
-and remaining compatibility limits are recorded in the [LAYER role/span
-receipt](docs/research/p6-ac1018plus-layer-body-handle-role-spans-2026-11-09.json).
+use ODA v5.4.1 §20.4.68 and the hash-bound AC1027 Cover DIMSTYLE record at
+handle `0x27` (`STANDARD`). The local DWG parse and independent LibreDWG 0.14
+minJSON both resolve its DIMTXSTY to STYLE `0x11`; LibreDWG reports canonical
+nulls for the four arrow/block references and three R2007+ linetypes. Capture
+the physical field spans and targets from the handle stream before editing,
+including the preceding external-reference-block hard pointer, which the
+current DIMSTYLE model does not expose. Validate every non-null field as a
+hard pointer and only accept a raw null code when its resolved target is zero.
+Use ODA's version gates: DIMTXSTY is common, leader/arrow-block handles begin
+at R2000, and the three DIMSTYLE linetypes begin at R2007. Add generated
+AC1018/AC1021/AC1024/AC1027 parser controls only for these distinct boundaries;
+cover every field's wrong role, null, exact span, final-field truncation, and
+same-parser corrected retry. Reuse the transactional parser/span pattern and
+fast selector framework; add no drawing fixture. The completed LAYER role/span
+implementation, validation, source audit, and compatibility limits are in the
+[LAYER role/span receipt](docs/research/p6-ac1018plus-layer-body-handle-role-spans-2026-11-09.json).
 Keep unresolved DIMSTYLE targets and any unmodeled fields under the strict
 output refusal. AC1014 PERSUBENTMGR still needs a paired semantic projection
 before typed-prefix admission; AC1027 PERSUBENTMGR and AC1032's six-scalar body
