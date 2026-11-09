@@ -1042,9 +1042,14 @@ behavior independently. Local macOS checks do not satisfy those platform gates.
   default values; unmodeled table bits and all border override masks refuse.
   Generated AC1021 boundary/alignment controls and ASCII/Binary DXF
   readback/refusal/retry controls pass. This is bounded schema/codec evidence,
-  not producer or whole-drawing qualification. The current local metric TABLE
-  parser stops earlier at cell-value types 16/92, and the imperial census has
-  no TABLECONTENT evidence. See the [scalar override receipt](docs/research/p5-ac1018-ac1021-table-scalar-overrides-2026-11-08.json).
+  not producer or whole-drawing qualification. A current hash-bound trace of
+  the local metric TABLE observes candidate CadValue type 48 at two offsets,
+  with large adjacent format-flag values; this is not a valid ODA §20.4.99 type
+  and may indicate earlier cursor misalignment. Type 16 is handled by the
+  current reader. Keep the TABLE content partial until source spans are
+  reconciled; the imperial census has no TABLECONTENT evidence. See the
+  [current type-48 recheck](docs/research/p5-ac1021-metric-table-current-type48-cursor-recheck-2026-11-09.json)
+  and [scalar override receipt](docs/research/p5-ac1018-ac1021-table-scalar-overrides-2026-11-08.json).
   The three row-height values (`0x100000`, `0x200000`, `0x400000`), row
   alignments (`0x4000`, `0x8000`, `0x10000`), and text-style handles
   (`0x20000`, `0x40000`, `0x80000`) now have typed retention. ODA classifies
@@ -1695,9 +1700,10 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    stored boolean remains uninterpreted. See the [cell-appearance receipt](docs/research/p5-ac1018-table-cell-appearance-dxf-write-readback-2026-11-08.json).
    This closes the selected codec slice only; physical ordering, native
    precedence, and rendering remain unqualified.
-   Physical-source coverage remains open: the available metric TABLE fails
-   before these fields at
-   unmodeled cell-value types 16/92. See the [scalar override receipt](docs/research/p5-ac1018-ac1021-table-scalar-overrides-2026-11-08.json).
+   Physical-source coverage remains open: the current metric TABLE trace reads
+   candidate type 48 at two offsets, with suspicious large format flags; type
+   16 is already supported. Do not broaden the parser before resolving the
+   preceding physical spans. See the [current type-48 recheck](docs/research/p5-ac1021-metric-table-current-type48-cursor-recheck-2026-11-09.json).
 4. **P6 / source-backed parser and no-loss gaps.** The
    raster wire observer now recognizes the witnessed IMAGEDEF code-`0xC`
    parent in AC1021/24/27/32 as `UnqualifiedOwnerRole`; the generated control
@@ -3590,8 +3596,8 @@ Speed-oriented implementation sequence:
    excluded from TABLECONTENT evidence. See the
    [AC1021 edge-census screen](docs/research/p5-ac1021-blocks-and-tables-edge-census-screen-2026-11-08.json).
    **Saved-evidence inventory screen complete:** the AC1021 imperial candidate
-   has no TABLECONTENT frames; the AC1021 metric candidate stops before these
-   fields on unsupported cell-value types 16/92; AC1027 object `0xC94` has
+   has no TABLECONTENT frames; the AC1021 metric candidate remains partial at
+   candidate type 48 pending cursor/span reconciliation; AC1027 object `0xC94` has
    unresolved body/string/handle alignment and no typed/raw callback; and
    AC1032 objects `0xE5F`/`0x747` remain raw-only with semantic completeness
    false. The alternate parses and peer observations do not establish an
