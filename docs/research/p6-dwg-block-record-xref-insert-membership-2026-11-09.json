@@ -51,11 +51,25 @@
   },
   "independent_peer": {
     "tool": "LibreDWG dwgread 0.14",
-    "sample": "generated AC1018 reference-loaded output",
-    "dwg_sha256": "4d76b052855278d894356da5f96e53d686fe3255d290676c2260903d83643aab",
-    "json_sha256": "4fbe0cfff30e01428b7eb5f938c30abdfedb26a0c1955f19ef52d99bb8f035ac",
-    "log_sha256": "ce81db1496448d5c00d1dd8eafdc473ee584045c32aa4dbfac1d871855ffbb1d",
-    "observation": "LibreDWG peer JSON identifies the modelspace INSERT and XREF BLOCK_HEADER; manual peer inspection confirmed the reciprocal INSERT list and target handle. This independent peer witness covers generated AC1018 only. AC1015 coverage in the focused matrix is libdxfrw writer/parser round-trip and is not independent interoperability evidence."
+    "samples": [
+      {
+        "version": "AC1015",
+        "sample": "generated reference-loaded XREF output with AC1015 magic",
+        "dwg_sha256": "cf98c4dc623aaba5f32bd884b3ed5a43a84052f4768bdd567b45853e5c745429",
+        "json_sha256": "28d46aaf4c8c393b145cb6276f9e299c0fd532b6c79c04047d17ea81f2ce45b9",
+        "log_sha256": "7cc96654896aaa6dba1679527237be1c3e121c69c10ca29a54127ef1f33cc55c",
+        "observation": "Peer JSON parses the file as AC1015, reports GENERATED_XREF BLOCK_HEADER inserts=[0xA123], and reports INSERT handle 0xA123 targeting BLOCK_HEADER 0x30."
+      },
+      {
+        "version": "AC1018",
+        "sample": "generated AC1018 reference-loaded output",
+        "dwg_sha256": "4d76b052855278d894356da5f96e53d686fe3255d290676c2260903d83643aab",
+        "json_sha256": "4fbe0cfff30e01428b7eb5f938c30abdfedb26a0c1955f19ef52d99bb8f035ac",
+        "log_sha256": "ce81db1496448d5c00d1dd8eafdc473ee584045c32aa4dbfac1d871855ffbb1d",
+        "observation": "Peer JSON identifies the modelspace INSERT and XREF BLOCK_HEADER; manual peer inspection confirmed the reciprocal INSERT list and target handle."
+      }
+    ],
+    "scope": "These are generated interoperability witnesses only, not native source-producer qualification."
   },
   "validation": {
     "build": "cmake --build build-gcc --target libdxfrw_dwg_local_roundtrip -j4",
@@ -65,7 +79,7 @@
   },
   "limits": [
     "Generated writer/parser consistency across AC1015-AC1032 does not establish native AutoCAD producer behavior or imported-source graph closure.",
-    "The independent LibreDWG peer witness remains limited to one generated AC1018 sample.",
+    "LibreDWG independently reads one generated AC1015 witness and one generated AC1018 witness; this does not qualify all producer profiles.",
     "This receipt does not promote a DWG/XREF feature support claim."
   ]
 }
