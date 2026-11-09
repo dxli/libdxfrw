@@ -8072,50 +8072,106 @@ bool DRW_View::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
     dwgBuffer hBuff = *buf;
     dwgBuffer *hBuf = (version > DRW::AC1018) ? &hBuff : buf;
     std::uint64_t handleEndBit = 0;
-    if (!parsed.getDwgHandleEndBit(version, *hBuf, handleEndBit))
+    if (!objectHandleStreamEndBit(*hBuf, version, parsed.objSize, bs,
+                                  handleEndBit))
         return fail();
     seekObjectHandleStream(version, hBuf, parsed.objSize);
     if (!hBuf->isGood())
         return fail();
 
+    std::vector<DRW_DwgSubrecordRange> parsedHandleFieldSpans;
+    const auto readViewHandle = [version, baseHandle = parsed.handle,
+                                 hBuf, handleEndBit,
+                                 &parsedHandleFieldSpans](
+        const char *name, bool offset, std::uint8_t expectedRole,
+        dwgHandle& value) {
+        std::uint64_t startBit = 0u;
+        if (!objectCurrentBit(*hBuf, startBit))
+            return false;
+        dwgHandle field;
+        if (!readBoundedObjectHandle(*hBuf, baseHandle, offset, field,
+                                     handleEndBit))
+            return false;
+        std::uint64_t endBit = 0u;
+        if (!objectCurrentBit(*hBuf, endBit) || endBit < startBit)
+            return false;
+        const bool canonicalNull = field.ref == 0u
+            && field.rawCode == DRW::DwgNullReference;
+        if (field.rawCode != expectedRole && !canonicalNull) {
+            DRW_DBG("VIEW handle role mismatch for ");
+            DRW_DBG(name); DRW_DBG(": raw code ");
+            DRW_DBG(static_cast<unsigned int>(field.rawCode));
+            DRW_DBG(" target "); DRW_DBG(field.ref); DRW_DBG("\n");
+            return false;
+        }
+        DRW_DwgSubrecordRange span;
+        span.m_name = name;
+        span.m_startBit = startBit;
+        span.m_bitSize = endBit - startBit;
+        span.m_version = version;
+        span.m_rawHandleCode = field.rawCode;
+        span.m_parseComplete = true;
+        parsedHandleFieldSpans.push_back(std::move(span));
+        value = field;
+        return true;
+    };
+
     dwgHandle parsedControlHandle;
     std::vector<std::uint32_t> parsedReactors;
     dwgHandle parsedXDictHandle;
-    if (!parsed.readDwgObjectHandleWithinFrame(version, *hBuf, true, parsedControlHandle)
-        || !parsed.readDwgObjectHandleListWithinFrame(
-            version, *hBuf, parsed.numReactors, false, &parsedReactors))
+    if (!readViewHandle("control", true, DRW::DwgSoftPointer,
+                        parsedControlHandle)
+        || !dwgSafety::validReactorCount(parsed.numReactors)
+        || !DRW::reserve(parsedReactors, parsed.numReactors))
         return fail();
+    for (std::int32_t index = 0; index < parsed.numReactors; ++index) {
+        const std::string spanName =
+            "reactor[" + std::to_string(index) + "]";
+        dwgHandle reactor;
+        if (!readViewHandle(spanName.c_str(), false,
+                            DRW::DwgSoftPointer, reactor))
+            return fail();
+        parsedReactors.push_back(reactor.ref);
+    }
     if (parsed.xDictFlag != 1
-        && !parsed.readDwgObjectHandleWithinFrame(version, *hBuf, false, parsedXDictHandle))
+        && !readViewHandle("xdict", false, DRW::DwgHardOwnership,
+                           parsedXDictHandle))
         return fail();
 
     // COMMON_TABLE_FLAGS carries the external-reference block handle for all
     // R13+ table records, including views that have no associated UCS.
     dwgHandle parsedXrefBlockHandle;
-    if (!parsed.readDwgObjectHandleWithinFrame(version, *hBuf, false, parsedXrefBlockHandle))
+    if (!readViewHandle("xrefBlock", false, DRW::DwgHardPointer,
+                        parsedXrefBlockHandle))
         return fail();
 
     dwgHandle parsedBackgroundHandle;
     dwgHandle parsedVisualStyleHandle;
     dwgHandle parsedSunHandle;
     if (version > DRW::AC1018) { //2007+
-        if (!parsed.readDwgObjectHandleWithinFrame(version, *hBuf, false, parsedBackgroundHandle)
-            || !parsed.readDwgObjectHandleWithinFrame(version, *hBuf, false, parsedVisualStyleHandle)
-            || !parsed.readDwgObjectHandleWithinFrame(version, *hBuf, false, parsedSunHandle))
+        if (!readViewHandle("background", false, DRW::DwgSoftPointer,
+                            parsedBackgroundHandle)
+            || !readViewHandle("visualStyle", false, DRW::DwgHardPointer,
+                               parsedVisualStyleHandle)
+            || !readViewHandle("sun", false, DRW::DwgHardOwnership,
+                               parsedSunHandle))
             return fail();
     }
 
     dwgHandle parsedBaseUcsHandle;
     dwgHandle parsedNamedUcsHandle;
-    if (version > DRW::AC1014 && parsedHasUCS) { //2000+
-        if (!parsed.readDwgObjectHandleWithinFrame(version, *hBuf, false, parsedBaseUcsHandle)
-            || !parsed.readDwgObjectHandleWithinFrame(version, *hBuf, false, parsedNamedUcsHandle))
+    if (version > DRW::AC1014) { //2000+; refs exist even when HasUCS is false
+        if (!readViewHandle("baseUcs", false, DRW::DwgHardPointer,
+                            parsedBaseUcsHandle)
+            || !readViewHandle("namedUcs", false,
+                               DRW::DwgHardPointer, parsedNamedUcsHandle))
             return fail();
     }
 
     dwgHandle parsedLiveSectionHandle;
     if (version > DRW::AC1018) { //2007+
-        if (!parsed.readDwgObjectHandleWithinFrame(version, *hBuf, false, parsedLiveSectionHandle))
+        if (!readViewHandle("liveSection", false, DRW::DwgSoftPointer,
+                            parsedLiveSectionHandle))
             return fail();
     }
 
@@ -8171,6 +8227,7 @@ bool DRW_View::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
     parsed.m_backgroundHandle = parsedBackgroundHandle.ref;
     parsed.m_visualStyleHandle = parsedVisualStyleHandle.ref;
     parsed.m_sunHandle = parsedSunHandle.ref;
+    parsed.m_dwgHandleFieldSpans = std::move(parsedHandleFieldSpans);
     parsed.baseUCS_ID = parsedBaseUcsHandle.ref;
     parsed.namedUCS_ID = parsedNamedUcsHandle.ref;
     parsed.m_liveSectionHandle = parsedLiveSectionHandle.ref;
@@ -10090,7 +10147,7 @@ bool DRW_View::encodeDwg(DRW::Version version, dwgBufferW *buf,
         hb->putHandle(makeRefW(m_visualStyleHandle, DRW::DwgHardPointer));
         hb->putHandle(makeRefW(m_sunHandle, DRW::DwgHardOwnership));
     }
-    if (version > DRW::AC1014 && hasUCS) {
+    if (version > DRW::AC1014) {
         hb->putHandle(makeRefW(baseUCS_ID, DRW::DwgHardPointer));
         hb->putHandle(makeRefW(namedUCS_ID, DRW::DwgHardPointer));
     }

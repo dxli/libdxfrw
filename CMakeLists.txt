@@ -1720,6 +1720,11 @@ if(LIBDXFRW_BUILD_TESTS)
             --ac1012plus-ucs-handle-roles)
     set_tests_properties(libdxfrw_ac1012plus_ucs_handle_roles PROPERTIES
         LABELS "fast;dwg;object-vectors;handles;generated" TIMEOUT 30)
+    add_test(NAME libdxfrw_ac1015plus_view_handle_roles
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --ac1015plus-view-handle-roles)
+    set_tests_properties(libdxfrw_ac1015plus_view_handle_roles PROPERTIES
+        LABELS "fast;dwg;object-vectors;handles;generated" TIMEOUT 30)
     add_test(NAME libdxfrw_dwg_table_cell_overrides
         COMMAND libdxfrw_dwg_object_vectors_tests --table-cell-overrides)
     set_tests_properties(libdxfrw_dwg_table_cell_overrides PROPERTIES

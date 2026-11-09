@@ -3456,6 +3456,7 @@ public:
     m_sunHandle = 0;
     m_liveSectionHandle = 0;
     xrefBlockHandle = dwgHandle{};
+    m_dwgHandleFieldSpans.clear();
     DRW_TableEntry::reset();
   }
 
@@ -3472,6 +3473,9 @@ protected:
                                dwgBufferW *hdlBuf = nullptr) const;
 
 public:
+  //! Exact DWG handle-stream spans for common, view-resource, and UCS refs.
+  [[nodiscard]] const std::vector<DRW_DwgSubrecordRange>&
+  dwgHandleFieldSpans() const noexcept { return m_dwgHandleFieldSpans; }
   [[nodiscard]] const DRW_DwgCmcColorMetadata&
   ambientColorDwgCmc() const noexcept { return m_ambientColorCmc; }
   DRW_Coord size;   /*!< View width/height in DCS, codes 40 & 41 */
@@ -3519,6 +3523,7 @@ public:
 private:
   DRW_DwgCmcColorMetadata m_ambientColorCmc;
   std::size_t m_dxfAmbientColorNameBytes {0u};
+  std::vector<DRW_DwgSubrecordRange> m_dwgHandleFieldSpans;
 };
 
 //! Class to handle AppId entries

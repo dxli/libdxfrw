@@ -183,6 +183,23 @@ promoted. Receipt:
 [`p6-ac1012plus-ucs-body-handle-role-spans-2026-11-09.json`](docs/research/p6-ac1012plus-ucs-body-handle-role-spans-2026-11-09.json).
 Code, focused controls, and UCS evidence receipt were committed as `f050ad28`.
 
+**Completed P6 local implementation packet — VIEW body-handle roles and
+spans:** ODA v5.4.1 §20.4.60 (pp. 173–175) confirms R2000+ Base UCS and Named
+UCS handles are present even when the body `HasUCS` bit is false, before the
+R2007+ Live Section handle. `DRW_View::parseDwg` and the writer now preserve
+that order. The parser validates bounded control/reactor, xdictionary,
+xref-block, background, visual-style, SUN, base/named UCS, and live-section
+roles, and records ordered bit spans. Generated AC1015/18/21/24/27 vectors
+cover `HasUCS` both ways, exact field spans and roles against an independent
+wire walk, canonical nulls, each wrong-role rollback, final-field truncation,
+copy/reset, and same-object retry; the focused CTest passes 1/1. The local
+AC1027 Cover source publishes 111/111 frames with no entity/object parse
+failures or CRC mismatches and no VIEW role mismatch, but strict output remains
+refused by the separate source-reference gate. This closes only the local
+VIEW codec slice; graph closure, full producer coverage, native behavior, and
+strict whole-source output remain open. No fixture was added. Receipt:
+[`p6-ac1015plus-view-body-handle-roles-spans-2026-11-09.json`](docs/research/p6-ac1015plus-view-body-handle-roles-spans-2026-11-09.json).
+
 **Completed local investigation — PERSUBENTMGR D63 boundary traces:** fresh
 LibreDWG 0.14 `-v5` traces for hash-bound AC1015/AC1021/AC1024 sources confirm
 the eight candidate prefix values and record the respective 150-, 152-, and

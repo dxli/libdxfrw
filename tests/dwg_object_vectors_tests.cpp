@@ -171,6 +171,12 @@ public:
     using DRW_UCS::parseDwg;
 };
 
+class ViewCodecProbe final : public DRW_View {
+public:
+    using DRW_View::encodeDwg;
+    using DRW_View::parseDwg;
+};
+
 class PlotSettingsEncodeProbe final : public DRW_PlotSettings {
 public:
     using DRW_PlotSettings::encodeDwg;
@@ -4622,6 +4628,53 @@ bool makeUcsHandleFrame(DRW::Version version, UcsCodecProbe& source,
         return false;
     const auto fields = ucsHandleFieldsFor(version, source);
     return makeTableEntryHandleFrame(version, source, 63u, body, strings,
+                                     fields, wrongRoleIndex, canonicalNulls,
+                                     frame);
+}
+
+std::vector<VportHandleField> viewHandleFieldsFor(
+    DRW::Version version, const ViewCodecProbe& source) {
+    std::vector<VportHandleField> fields;
+    fields.push_back({"control", DRW::DwgSoftPointer, source.parentHandle});
+    for (std::size_t index = 0u; index < source.reactorHandles.size(); ++index)
+        fields.push_back({"reactor[" + std::to_string(index) + "]",
+                          DRW::DwgSoftPointer,
+                          source.reactorHandles[index]});
+    if (source.extensionDictionaryFlag() != 1u)
+        fields.push_back({"xdict", DRW::DwgHardOwnership,
+                          source.xDictHandle});
+    fields.push_back({"xrefBlock", DRW::DwgHardPointer,
+                      source.xrefBlockHandle.ref});
+    if (version > DRW::AC1018) {
+        fields.push_back({"background", DRW::DwgSoftPointer,
+                          source.m_backgroundHandle});
+        fields.push_back({"visualStyle", DRW::DwgHardPointer,
+                          source.m_visualStyleHandle});
+        fields.push_back({"sun", DRW::DwgHardOwnership,
+                          source.m_sunHandle});
+    }
+    if (version > DRW::AC1014) {
+        fields.push_back({"baseUcs", DRW::DwgHardPointer,
+                          source.baseUCS_ID});
+        fields.push_back({"namedUcs", DRW::DwgHardPointer,
+                          source.namedUCS_ID});
+    }
+    if (version > DRW::AC1018)
+        fields.push_back({"liveSection", DRW::DwgSoftPointer,
+                          source.m_liveSectionHandle});
+    return fields;
+}
+
+bool makeViewHandleFrame(DRW::Version version, ViewCodecProbe& source,
+                         int wrongRoleIndex, bool canonicalNulls,
+                         VportHandleFrame& frame) {
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    dwgBufferW body(&codec), strings(&codec), ignoredHandles(&codec);
+    if (!source.encodeDwg(version, &body, &strings, &ignoredHandles))
+        return false;
+    const auto fields = viewHandleFieldsFor(version, source);
+    return makeTableEntryHandleFrame(version, source, 61u, body, strings,
                                      fields, wrongRoleIndex, canonicalNulls,
                                      frame);
 }
@@ -16461,6 +16514,214 @@ void testAc1012PlusUcsHandleRoles(TestContext& t) {
     }
 }
 
+void testAc1015PlusViewHandleRoles(TestContext& t) {
+    const auto versionName = [](DRW::Version version) {
+        switch (version) {
+        case DRW::AC1015: return "AC1015";
+        case DRW::AC1018: return "AC1018";
+        case DRW::AC1021: return "AC1021";
+        case DRW::AC1024: return "AC1024";
+        case DRW::AC1027: return "AC1027";
+        default: return "unexpected-version";
+        }
+    };
+    const auto targetFor = [](const ViewCodecProbe& view,
+                              const std::string& name) -> std::uint32_t {
+        if (name == "control") return view.parentHandle;
+        if (name == "reactor[0]") return view.reactorHandles[0];
+        if (name == "xdict") return view.xDictHandle;
+        if (name == "xrefBlock") return view.xrefBlockHandle.ref;
+        if (name == "background") return view.m_backgroundHandle;
+        if (name == "visualStyle") return view.m_visualStyleHandle;
+        if (name == "sun") return view.m_sunHandle;
+        if (name == "baseUcs") return view.baseUCS_ID;
+        if (name == "namedUcs") return view.namedUCS_ID;
+        return view.m_liveSectionHandle;
+    };
+    const auto parse = [](DRW::Version version, ViewCodecProbe& target,
+                          const VportHandleFrame& frame) {
+        DRW_TextCodec codec;
+        codec.setVersion(version, false);
+        dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+        return target.parseDwg(version, &input, frame.handleBits)
+            && input.isGood();
+    };
+
+    for (const DRW::Version version : {DRW::AC1015, DRW::AC1018,
+                                       DRW::AC1021, DRW::AC1024,
+                                       DRW::AC1027}) {
+        for (const bool hasUcs : {false, true}) {
+            ViewCodecProbe source;
+            source.handle = 0x7100u + static_cast<std::uint32_t>(version);
+            source.parentHandle = 6u; // ODA VIEW_CONTROL table record handle
+            source.reactorHandles = {source.handle + 0x11u};
+            source.xDictHandle = source.handle + 0x12u;
+            source.xrefBlockHandle.ref = source.handle + 0x13u;
+            source.setDwgCommonObjectState(1, 0u, false);
+            source.name = "generated-view";
+            source.hasUCS = hasUcs;
+            source.baseUCS_ID = source.handle + 0x14u;
+            source.namedUCS_ID = source.handle + 0x15u;
+            if (version > DRW::AC1018) {
+                source.m_backgroundHandle = source.handle + 0x16u;
+                source.m_visualStyleHandle = source.handle + 0x17u;
+                source.m_sunHandle = source.handle + 0x18u;
+                source.m_liveSectionHandle = source.handle + 0x19u;
+            }
+            const auto fields = viewHandleFieldsFor(version, source);
+            VportHandleFrame validFrame;
+            const bool built = makeViewHandleFrame(
+                version, source, -1, false, validFrame);
+            t.expect(built, std::string("generated VIEW profile builds for ")
+                         + versionName(version));
+            if (!built)
+                continue;
+
+            // The production encoder must emit R2000+ base/named UCS handles
+            // even when the optional associated-UCS body is absent. Check its
+            // full handle sequence independently of the parser vector below.
+            DRW_TextCodec codec;
+            codec.setVersion(version, false);
+            dwgBufferW encodedBody(&codec), encodedStrings(&codec),
+                encodedHandles(&codec);
+            const bool encoded = source.encodeDwg(
+                version, &encodedBody, &encodedStrings, &encodedHandles);
+            dwgBuffer encodedHandleReader(encodedHandles.data().data(),
+                                          encodedHandles.size(), &codec);
+            bool encoderSequence = encoded;
+            for (const auto& field : fields) {
+                const dwgHandle actual = encodedHandleReader.getHandle();
+                encoderSequence = encoderSequence
+                    && encodedHandleReader.isGood()
+                    && actual.rawCode == field.role
+                    && actual.ref == field.target;
+            }
+            t.expect(encoderSequence,
+                     std::string("VIEW encoder emits ordered R2000+ refs with HasUCS=")
+                         + (hasUcs ? "1 in " : "0 in ") + versionName(version));
+
+            ViewCodecProbe parsed;
+            const bool read = parse(version, parsed, validFrame);
+            t.expect(read && parsed.handle == source.handle
+                         && parsed.hasUCS == hasUcs
+                         && parsed.baseUCS_ID == source.baseUCS_ID
+                         && parsed.namedUCS_ID == source.namedUCS_ID
+                         && parsed.m_liveSectionHandle
+                             == source.m_liveSectionHandle,
+                     std::string("VIEW reads base/named UCS and following refs when HasUCS=")
+                         + (hasUcs ? "1 in " : "0 in ") + versionName(version));
+            if (!read)
+                continue;
+
+            const auto& spans = parsed.dwgHandleFieldSpans();
+            bool exact = spans.size() == fields.size();
+            dwgBuffer oracle(validFrame.bytes.data(), validFrame.bytes.size());
+            oracle.setPosition(validFrame.handleStartBit >> 3u);
+            oracle.setBitPos(static_cast<std::uint8_t>(
+                validFrame.handleStartBit & 7u));
+            for (std::size_t index = 0u;
+                 index < fields.size() && index < spans.size(); ++index) {
+                const std::uint64_t start = oracle.getPosition() * 8u
+                    + oracle.getBitPos();
+                const dwgHandle wire = oracle.getHandle();
+                const std::uint64_t end = oracle.getPosition() * 8u
+                    + oracle.getBitPos();
+                exact = exact && spans[index].m_name == fields[index].name
+                    && spans[index].m_startBit == start
+                    && spans[index].m_bitSize == end - start
+                    && spans[index].m_rawHandleCode == fields[index].role
+                    && wire.rawCode == fields[index].role
+                    && wire.ref == fields[index].target
+                    && targetFor(parsed, fields[index].name)
+                        == fields[index].target;
+            }
+            const dwgHandle sentinel = oracle.getHandle();
+            exact = exact && oracle.isGood()
+                && sentinel.rawCode == DRW::DwgHardPointer
+                && sentinel.ref == 0xCAFEu;
+            t.expect(exact, std::string("VIEW ") + versionName(version)
+                         + " field spans match independent walk and sentinel");
+
+            ViewCodecProbe copied(parsed);
+            ViewCodecProbe assigned;
+            assigned = parsed;
+            const bool copiedSpans =
+                copied.dwgHandleFieldSpans().size() == fields.size()
+                && assigned.dwgHandleFieldSpans().size() == fields.size();
+            assigned.reset();
+            t.expect(copiedSpans && assigned.dwgHandleFieldSpans().empty(),
+                     std::string("VIEW ") + versionName(version)
+                         + " copies, assigns, and resets handle spans");
+
+            ViewCodecProbe nullSource(source);
+            VportHandleFrame nullFrame;
+            const bool nullBuilt = makeViewHandleFrame(
+                version, nullSource, -1, true, nullFrame);
+            ViewCodecProbe nullParsed;
+            const bool nullRead = nullBuilt
+                && parse(version, nullParsed, nullFrame);
+            bool nullProfile = nullRead
+                && nullParsed.dwgHandleFieldSpans().size() == fields.size();
+            if (nullProfile) {
+                for (const auto& field : fields) {
+                    const auto span = std::find_if(
+                        nullParsed.dwgHandleFieldSpans().begin(),
+                        nullParsed.dwgHandleFieldSpans().end(),
+                        [&field](const DRW_DwgSubrecordRange& item) {
+                            return item.m_name == field.name;
+                        });
+                    nullProfile = nullProfile
+                        && span != nullParsed.dwgHandleFieldSpans().end()
+                        && span->m_rawHandleCode == DRW::DwgNullReference
+                        && targetFor(nullParsed, field.name) == 0u;
+                }
+            }
+            t.expect(nullProfile, std::string("VIEW ") + versionName(version)
+                         + " accepts canonical null field roles");
+
+            for (std::size_t index = 0u; index < fields.size(); ++index) {
+                VportHandleFrame badFrame;
+                const bool badBuilt = makeViewHandleFrame(
+                    version, source, static_cast<int>(index), false, badFrame);
+                ViewCodecProbe retryable;
+                const bool rejected = badBuilt
+                    && !parse(version, retryable, badFrame);
+                t.expect(rejected && retryable.handle == DRW::NoHandle
+                             && retryable.dwgHandleFieldSpans().empty(),
+                         "wrong VIEW " + fields[index].name
+                             + " role rejects atomically in "
+                             + versionName(version));
+                t.expect(parse(version, retryable, validFrame)
+                             && retryable.handle == source.handle
+                             && retryable.dwgHandleFieldSpans().size()
+                                 == fields.size(),
+                         "corrected VIEW " + fields[index].name
+                             + " retries on same " + versionName(version)
+                             + " parser");
+            }
+
+            VportHandleFrame truncatedFrame = validFrame;
+            const std::uint64_t finalStart = spans.back().m_startBit;
+            truncatedFrame.bytes.resize(static_cast<std::size_t>(
+                (finalStart + 7u) / 8u));
+            truncatedFrame.handleBits = static_cast<std::uint32_t>(
+                finalStart - validFrame.handleStartBit);
+            ViewCodecProbe truncated;
+            const bool truncatedRejected = !parse(version, truncated,
+                                                    truncatedFrame);
+            t.expect(truncatedRejected
+                         && truncated.dwgHandleFieldSpans().empty(),
+                     std::string("truncated VIEW final handle rejects in ")
+                         + versionName(version));
+            t.expect(parse(version, truncated, validFrame)
+                         && truncated.dwgHandleFieldSpans().size()
+                             == fields.size(),
+                     std::string("VIEW retries after final-field truncation in ")
+                         + versionName(version));
+        }
+    }
+}
+
 void testAc1027ObjectCommonHandleRoles(TestContext& t) {
     struct Stream {
         std::vector<std::uint8_t> bytes;
@@ -24753,6 +25014,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testAc1012PlusUcsHandleRoles(context);
         std::cout << "AC1012+ UCS handle roles and spans: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--ac1015plus-view-handle-roles") {
+        TestContext context;
+        testAc1015PlusViewHandleRoles(context);
+        std::cout << "AC1015+ VIEW handle roles and spans: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
