@@ -115,5 +115,20 @@
     },
     "decision": "The prior nextAction named a DWG writer route that does not exist in this codebase and was stale. Do not create a DWG writer. The actual gap is independent physical span/role evidence for AC1027/AC1032 TABLEGEOMETRY bodies and non-null cell soft-pointer targets; retain current null-reference and whole-source refusal until that evidence supports a bounded DXF profile expansion."
   },
-  "nextAction": "Capture and independently compare the exact AC1027/AC1032 TABLEGEOMETRY body and string-stream field spans, including the standalone unknown BD field and cell soft-pointer roles, using the existing hash-pinned ACadSharp sources and LibreDWG 0.14 outputs. Preserve the current bounded AC1021+ DXF writer, null-reference refusal, AC1018 raw-only behavior and whole-source refusal until the missing source profile is proven."
+  "physicalSpanRecheck": {
+    "receipt": "docs/research/p5-acadsharp-tablegeometry-ac1027-ac1032-physical-spans-2026-11-09.json",
+    "result": "Independent Python bit walk and separately sequenced C++ source walk now agree on exact body/string boundaries, per-field bit intervals and handle roles for all four hash-pinned AC1027/AC1032 TABLEGEOMETRY records. The typed callbacks and LibreDWG 0.14 agree on all decoded values; the captured object bytes after the five-byte type prefix equal LibreDWG unknown_bits byte-for-byte.",
+    "profileLimit": "All 41 cell soft pointers are encoded as null absolute soft pointers (code 4), and all 37 standalone unknown BD values are zero. This does not prove non-null pointer graph semantics, nonzero unknown-value semantics, or wider output eligibility."
+  },
+  "nextAction": "The current local corpus search is exhausted and found no non-null cell soft-pointer target or nonzero standalone unknown BD. Seek a new traceable producer sample for independent semantics; a generated-from-scratch vector may test implementation paths but cannot promote producer support. Keep the bounded null-reference DXF profile and whole-source refusal unchanged until physical spans, roles, target graph, and peer semantics support a scoped expansion.",
+  "localCorpusSweep": {
+    "receipt": "docs/research/p5-tablegeometry-local-nonnull-reference-corpus-scan-2026-11-09.json",
+    "paths": 397,
+    "uniqueFiles": 177,
+    "tableGeometryObjects": 18,
+    "filesWithTableGeometry": 11,
+    "objectsWithNonNullCellSoftPointer": 0,
+    "objectsWithNonZeroStandaloneUnknownBD": 0,
+    "decision": "No current local candidate advances the disputed profile."
+  }
 }
