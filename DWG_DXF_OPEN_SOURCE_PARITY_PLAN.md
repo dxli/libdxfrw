@@ -1,14 +1,15 @@
 # DWG/DXF parity — remaining implementation plan
 
 **Resume checkpoint (2026-11-09, generated OBJECTS writer allocation safety):**
-the AC1027 callback sweep now covers FIELD, FIELDLIST, MOTIONPATH, CURVEPATH,
-POINTPATH, and PARTIALVIEWINGINDEX with a LINE target: 38 allocation points in
-ASCII and 37 in Binary. Every injected failure preserves the whole-file
-destination and modeled caller records; retry reproduces calibration bytes and
-typed readback verifies field values, FIELDLIST membership, path fields, and
-the LINE/PVI graph. The earlier ENTITIES callback has already assigned its
-emitted handle to the caller's LINE when the later OBJECTS callback fails, so
-full cross-stage caller-memory rollback remains open. No fixture was added.
+the AC1027 callback sweep covers FIELD, FIELDLIST, MOTIONPATH, CURVEPATH,
+POINTPATH, OBJECTPTR, and PARTIALVIEWINGINDEX with a LINE target: 45 allocation
+points in ASCII and 43 in Binary. Every injected failure preserves the
+whole-file destination and modeled caller records; retry reproduces calibration
+bytes and typed readback verifies field values, FIELDLIST membership, path
+fields, OBJECTPTR identity, and the LINE/PVI graph. The earlier ENTITIES
+callback has already assigned its emitted handle to the caller's LINE when the
+later OBJECTS callback fails, so full cross-stage caller-memory rollback
+remains open. No fixture was added.
 See the [allocation receipt](docs/research/p6-dxf-partial-viewing-index-objects-allocation-failure-retry-2026-11-09.json).
 
 The AC1024 online sample search also re-confirmed public candidates: Autodesk's
