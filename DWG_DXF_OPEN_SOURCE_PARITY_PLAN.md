@@ -453,6 +453,11 @@ created locally from scratch for the specific control.
   merged into LibreCAD_3 `origin/master`. Preserve libdxfrw's unsupported
   version refusal and root-dictionary validation. Receipt:
   [clean master compatibility probe](docs/research/p8-librecad3-origin-master-clean-consumer-2026-11-08.json).
+  Follow-up commit `93354846` extends the drawing-unit regression to both R12
+  and R14 for three nonzero unit profiles; the focused build and targeted test
+  pass 1/1, verifying unit-loss reporting, `$INSUNITS` omission, and LINE
+  preservation in both legacy outputs. No fixture was added. See the [R14
+  regression receipt](docs/research/p8-librecad3-legacy-units-r14-regression-2026-11-08.json).
   Next: review/propose this consumer patch, then complete native Linux/Windows
   and application qualification independently. This macOS result does not
   satisfy those gates.
@@ -1475,9 +1480,11 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    evidence. P8 now has a clean `origin/master` compile and focused
    64-test export/round-trip pass only after the scratch consumer's
    version-aware `$INSUNITS` callback and malformed root-DICTIONARY fixtures
-   were corrected. Apply those changes in a clean LibreCAD_3 branch and retain
-   their regression tests; then qualify native Linux/Windows FreeCAD and
-   LibreCAD/LibreCAD_3 runs. Keep the dirty-checkout build as integration
+   were corrected. Those changes are applied in clean-master branch
+   `codex/libdxfrw-upstream-compat` (`36082e71`); follow-up `93354846` covers
+   both R12 and R14 unit-loss behavior with a focused regression. Next review
+   and propose that consumer patch, then qualify native Linux/Windows FreeCAD
+   and LibreCAD/LibreCAD_3 runs. Keep the dirty-checkout build as integration
    evidence only. P9 remains
    `DEFERRED_EXTERNAL` for J256, J260, J268,
    J284, J293 and J295. These do not block independent local slices and cannot
