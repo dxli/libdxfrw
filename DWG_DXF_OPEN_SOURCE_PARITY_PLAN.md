@@ -867,19 +867,27 @@ do not repeat this TABLESTYLE codec work.
    2,571-bit body; the last bit is zero but has no established meaning. The
    second local AC1027 file, `Cover.dwg`, contains no Sweep record. See the
    [field-span trace receipt](docs/research/p4-ac1027-sweep-acadrust-field-span-trace-2026-11-08.json).
-   Production readback now retains the full 2,343-bit action-body span,
-   including both type-77 bodies (744/480 bits), and preserves the zero bit at
-   2570 as a one-bit opaque suffix while reporting Partial. In the hash-pinned
-   paired DXF, the captured first option bit matches documented group 290
-   (`solid=1`); the next flag matches group 292 (`align start=1`). The separate
-   DWG-only 3BD `(1,1,1)` does not match paired DXF reference vector groups
-   11/21/31 `(0,0,0)`, so those values must not be conflated. This one-pair
-   correlation corrects a field label but does not prove a producer-wide DWG
-   layout or embedded-entity semantics. Do not consume the bit as padding.
-   Next resolve its field/framing identity and decode eligible embedded entity
-   profiles with bounded transactional codecs. Keep Sweep output refused and
-   support claims unchanged until graph dependencies, roles, output/readback
-   and independent consumer semantics close. Autodesk's DXF reference explicitly classifies group 350
+   Production readback retains the full 2,343-bit action-body span, including
+   both type-77 bodies (744/480 bits), and preserves the zero bit at 2570 as a
+   one-bit opaque suffix while reporting Partial. A complete candidate-field
+   differential against the hash-pinned same-handle `ACSH_SWEEP_CLASS` DXF
+   record matches operation version, direction, six scalars, group-70
+   alignment option, documented groups 290/292–296, and matrices 46/47 within
+   1.82e-12 maximum absolute delta. Captured embedded payloads equal the
+   declared 744/480-bit prefixes of group 310; each DXF string has one extra
+   `0xCC` byte, which remains unexplained. The captured second short option
+   equals group 71, but [Autodesk's swept-surface table](https://help.autodesk.com/cloudhelp/2019/ENU/AutoCAD-DXF/files/GUID-55DCEC23-9286-4A32-AAFA-E1F945B10A19.htm)
+   does not document group 71, so it remains semantically unnamed. The separate DWG-only 3BD
+   `(1,1,1)` does not match paired DXF reference-vector groups 11/21/31
+   `(0,0,0)`; do not conflate them. This co-located LibreDWG pair is not
+   authenticated AutoCAD/ODA output and cannot prove a producer-wide DWG
+   layout or embedded-entity semantics. Do not consume the suffix bit or
+   extra `0xCC` bytes as padding. Next resolve the vector, group-71 candidate,
+   framing and embedded entity profiles with independent evidence and bounded
+   transactional codecs. Keep Sweep output refused and support claims unchanged
+   until graph dependencies, roles, output/readback and independent consumer
+   semantics close. See the [candidate-field differential receipt](docs/research/p4-ac1027-sweep-dxf-candidate-field-differential-2026-11-08.json).
+   Autodesk's DXF reference explicitly classifies group 350
    as soft-owner, while ODA §2.13 classifies observed DWG H code 3 as hard
    ownership; ODA File Converter emits this same target value as group 350.
    That is an observed format projection, not a normative role-conversion rule.

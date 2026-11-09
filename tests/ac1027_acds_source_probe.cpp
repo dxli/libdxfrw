@@ -205,6 +205,30 @@ int main(int argc, char** argv) {
                       << sweep.m_exactBodyEnd << ' ';
             hexBytes(sweep.m_opaqueTailBits);
             std::cout << '\n';
+            std::cout << std::setprecision(17) << "SWEEP_CANDIDATE_FIELDS "
+                      << sweep.m_direction.x << ' ' << sweep.m_direction.y
+                      << ' ' << sweep.m_direction.z;
+            for (double value : sweep.m_scalars)
+                std::cout << ' ' << value;
+            std::cout << ' ' << sweep.m_alignOption << ' '
+                      << sweep.m_miterOption;
+            for (bool value : sweep.m_optionFlags)
+                std::cout << ' ' << value;
+            std::cout << ' ' << sweep.m_dwgVector.x << ' '
+                      << sweep.m_dwgVector.y << ' ' << sweep.m_dwgVector.z
+                      << ' ' << sweep.m_flag296;
+            for (double value : sweep.m_sweepTransform)
+                std::cout << ' ' << value;
+            for (double value : sweep.m_pathTransform)
+                std::cout << ' ' << value;
+            std::cout << '\n';
+            std::cout << "SWEEP_PROFILE_BITS " << sweep.m_profileType << ' '
+                      << sweep.m_profileBitSize << ' ';
+            hexBytes(sweep.m_profileBits);
+            std::cout << '\n' << "SWEEP_PATH_BITS " << sweep.m_pathType << ' '
+                      << sweep.m_pathBitSize << ' ';
+            hexBytes(sweep.m_pathBits);
+            std::cout << '\n';
         }
     }
     for (const DRW_EvaluationGraph& graph : drawing.evaluationGraphs) {
