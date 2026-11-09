@@ -1,13 +1,14 @@
 # DWG/DXF parity — remaining implementation plan
 
-**Resume checkpoint (2026-11-08, after the latest unlock message):** the
-desktop inventory still reports the Mac locked and exposes no native app
-surface. An unsandboxed ODA File Converter 27.1 `--help` launch took a changed
-route from the earlier Pasteboard/XPC abort: it remains live with no output,
-but has not shown a window or processed a document. Do not count it as a
-successful launch, conversion, or format evidence; leave that process intact
-and resume native qualification only when the desktop is accessible or a
-materially different launch route is available. The selected AC1021 FreeCAD
+**Resume checkpoint (2026-11-08, after the latest unlock reply):** the user
+reported they would unlock the Mac, but a fresh desktop inventory still reports
+the session locked and exposes no native app surface. This is not an unlock
+confirmation. The unsandboxed ODA File Converter 27.1 `--help` process remains
+live with no output and has not shown a window or processed a document. Do not
+count it as a successful launch, conversion, or format evidence; leave that
+process intact and resume native qualification only when the desktop is
+accessible or a materially different launch route is available. Continue
+independently actionable local work. The selected AC1021 FreeCAD
 torus B-rep check is recorded in
 [`p7-ac1021-freecad-native-torus-brep-2026-11-08.json`](docs/research/p7-ac1021-freecad-native-torus-brep-2026-11-08.json);
 its one-body/one-face/one-solid result is a bounded selected-profile check,
@@ -524,15 +525,15 @@ created locally from scratch for the specific control.
   result is inferred from local validation. Next: review CI results and complete native
   Linux/Windows and application qualification independently. This macOS result
   does not satisfy those gates.
-- **Desktop qualification recheck:** after the user indicated they were
-  unlocking the Mac, the desktop inventory still reported the native session
-  locked. The ODA File Converter launch therefore remains unexecuted against
-  any drawing; its earlier PasteBoard/XPC abort is not format evidence. Do not
-  retry the same CLI launch or mark FreeCAD/ODA qualification complete until a
-  fresh desktop inventory exposes an unlocked native app surface. Continue
-  independently actionable repository work and keep platform qualification as
-  a separate external gate. A fresh inventory after the latest unlock reply
-  again reports the Mac locked; no application qualification was run.
+- **Desktop qualification recheck:** after the latest user reply that they
+  would unlock the Mac, a fresh desktop inventory still reports the native
+  session locked. The ODA File Converter launch therefore remains unexecuted
+  against any drawing; its earlier PasteBoard/XPC abort is not format evidence.
+  Do not retry the same CLI launch or mark FreeCAD/ODA qualification complete
+  until a fresh desktop inventory exposes an unlocked native app surface.
+  Continue independently actionable repository work and keep platform
+  qualification as a separate external gate. No application qualification was
+  run in this recheck.
 - **Latest ACIS writer hardening:** commit `e3111a82` preserves binary64
   precision in SAT v1 output using `max_digits10`. Follow-up commit
   `a3d58f7f` adds nonfinite header-scalar refusal, `dce17422` adds a
