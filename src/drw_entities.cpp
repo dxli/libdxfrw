@@ -30836,6 +30836,8 @@ bool DRW_Viewport::validateDxf() const {
     // values remain readable, while typed DXF output refuses values that the
     // published DXF schema does not define.
     return validatePayloadFields()
+        && vpstatus >= -1
+        && shadePlotMode <= 3
         && renderMode <= 6
         && defaultLightingType <= 1
         && ucsOrthographicType <= 6

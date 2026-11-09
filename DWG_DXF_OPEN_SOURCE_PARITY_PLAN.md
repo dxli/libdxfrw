@@ -477,7 +477,7 @@ generated controls should cover the ordinary edit/retry loop. Keep test DWG/DXF
 fixtures out of commits unless they already exist in LibreCAD/libdxfrw or were
 created locally from scratch for the specific control.
 
-### Current execution checkpoint (2026-11-08)
+### Current execution checkpoint (2026-11-09)
 
 - **Clean LibreCAD_3 master compatibility patch:** a fresh archive of
   `origin/master` (`5cf435f4a5a57d8dba1599c720917b902e74b25b`) was populated
@@ -534,6 +534,14 @@ created locally from scratch for the specific control.
   Continue independently actionable repository work and keep platform
   qualification as a separate external gate. No application qualification was
   run in this recheck.
+- **P5 VIEWPORT DXF domain guard:** strict typed output now admits the
+  Autodesk-documented group-68 status values (`-1`, `0`, positive) and group-170
+  shade-plot values (`0`–`3`). The generated focused test passes in ASCII and
+  Binary, including tolerant field parsing, destination-preserving refusal,
+  same-writer correction/retry, and readback for valid statuses and shade-plot
+  modes. No DWG/DXF fixture was added. The DWG wire-width checks are unchanged;
+  viewport group 91 remains unresolved and output-refused pending a qualified
+  native witness. See the [domain receipt](docs/research/p5-viewport-status-dxf-domain-2026-11-09.json).
 - **Latest ACIS writer hardening:** commit `e3111a82` preserves binary64
   precision in SAT v1 output using `max_digits10`. Follow-up commit
   `a3d58f7f` adds nonfinite header-scalar refusal, `dce17422` adds a

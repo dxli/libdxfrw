@@ -5556,6 +5556,19 @@ target_link_libraries(libdxfrw_dxf_viewport_ambient_color_order_tests PRIVATE dx
 add_test(NAME libdxfrw_dxf_viewport_ambient_color_order COMMAND libdxfrw_dxf_viewport_ambient_color_order_tests)
 set_tests_properties(libdxfrw_dxf_viewport_ambient_color_order PROPERTIES LABELS "fast;dxf;viewport;color" TIMEOUT 30)
 
+add_executable(libdxfrw_dxf_viewport_status_domain_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dxf_viewport_status_domain_tests.cpp)
+target_compile_features(libdxfrw_dxf_viewport_status_domain_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dxf_viewport_status_domain_tests
+    PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dxf_viewport_status_domain_tests
+    PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dxf_viewport_status_domain_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dxf_viewport_status_domain
+    COMMAND libdxfrw_dxf_viewport_status_domain_tests)
+set_tests_properties(libdxfrw_dxf_viewport_status_domain PROPERTIES
+    LABELS "fast;dxf;viewport;domain" TIMEOUT 30)
+
 add_executable(libdxfrw_dwg_hatch_pattern_angle_units_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/dwg_hatch_pattern_angle_units_tests.cpp)
 target_compile_features(libdxfrw_dwg_hatch_pattern_angle_units_tests PRIVATE cxx_std_17)
