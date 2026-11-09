@@ -15,6 +15,20 @@ torus B-rep check is recorded in
 its one-body/one-face/one-solid result is a bounded selected-profile check,
 not independent-kernel, whole-source, platform, or support-claim evidence.
 
+**P8 LibreCAD_3 CI follow-up (2026-11-09):** the previous PR #456 head
+`321f2cad` passed build and required regressions on macOS arm64, then failed
+while installing the app because the runner's cached Homebrew formula/API
+snapshot produced runtime-dependency metadata inconsistent with the bottles
+downloaded later in that job. The existing PR branch now includes commit
+`7e81275b`, which explicitly refreshes Homebrew metadata before dependency
+resolution; focused installer tests verify call ordering and fail-closed
+behavior. Current PR head is
+[`7e81275b71038d4a42fa580842e661ddcee7adbf`](https://github.com/LibreCAD/LibreCAD_3/pull/456/commits/7e81275b71038d4a42fa580842e661ddcee7adbf).
+Hosted current-head checks are running; the arm64 application job is queued.
+Keep the packaging/platform gate open until those checks complete, and retain
+the previous CI failure as historical evidence. See the
+[Homebrew metadata refresh receipt](docs/research/p8-librecad3-homebrew-api-snapshot-fix-2026-11-09.json).
+
 **LibreCAD_3 P8 compatibility review:** the isolated consumer branch is based
 on `5cf435f4` and contains code commits `36082e71`, `93354846`, and `762a0f1e`,
 plus same-change plan-sync receipt commit `8269dd7b`. The upstream
