@@ -181,19 +181,29 @@ This closes the local generated-codec action only. Physical UCS field-role
 evidence and target-graph closure remain open, and no support claim is
 promoted. Receipt:
 [`p6-ac1012plus-ucs-body-handle-role-spans-2026-11-09.json`](docs/research/p6-ac1012plus-ucs-body-handle-role-spans-2026-11-09.json).
+Code, focused controls, and UCS evidence receipt were committed as `f050ad28`.
 
-**Next local packet — AC1014 PERSUBENTMGR semantic projection:** use the
-existing source-bound AC1014/PERSUBENTMGR traces and paired semantic output
-work to identify which typed prefix fields have independent, source-matched
-meaning. First revalidate the exact source/tool hashes and current parser route;
-then implement only the proved field projection with raw-only fallback for
-unresolved suffixes. Require a focused generated or existing-source check for
-field equality, exact frame retention, following-frame recovery, and failure /
-retry before admitting any typed prefix. If the existing evidence cannot bind
-the field semantics, finish the missing source/peer differential and keep the
-record raw-only. Do not alter AC1027 PERSUBENTMGR or AC1032's six-scalar body:
-both remain raw-only until independent field reconciliation. Add no drawing
-fixture and do not promote support claims from transport-only agreement.
+**Completed local investigation — PERSUBENTMGR D63 boundary traces:** fresh
+LibreDWG 0.14 `-v5` traces for hash-bound AC1015/AC1021/AC1024 sources confirm
+the eight candidate prefix values and record the respective 150-, 152-, and
+112-bit object-data limits and handle-stream starts. The peer's candidate
+trailing count overruns AC1015, is absent at the AC1021 bound, and is
+out-of-bounds for AC1024. Its per-step cursor labels overflow, so no exact
+subfield span or class schema is accepted from these logs. The paired DXFs
+still carry the same eight group-90 values; this is insufficient to infer
+complete DWG grammar or semantics. Receipt:
+[`p6-persubentmgr-libreDWG-v5-boundary-traces-2026-11-09.json`](docs/research/p6-persubentmgr-libreDWG-v5-boundary-traces-2026-11-09.json).
+
+**Next local work — continue independent source qualification while leaving
+PERSUBENTMGR interpretation unchanged:** AC1014 has no paired DXF in the
+available corpus; AC1027/AC1032 semantic field meanings remain disputed. Look
+for an independently maintained parser or native producer/consumer result
+that can distinguish the body schema. If no such source exists locally, record
+that exact evidence gap and move to another implementation-ready local item;
+do not retry the same unstable peer tail decode or broaden the Partial profile.
+Any eventual parser change must retain truncation rollback, corrected-input
+retry, following-frame recovery, and byte-exact raw fallback. Add no drawing
+fixture and promote no support claim from transport-only agreement.
 
 **Resume checkpoint (2026-11-09, latest desktop inventory):** after the
 user's unlock-in-progress reply, the native-app inventory still reports “The
@@ -201,8 +211,8 @@ Mac is locked and automatic unlock could not unlock it” and lists no native
 apps. No ODA or FreeCAD process was launched. This is an access-state condition
 only; it supplies no format evidence and changes no support claim. Keep native
 ODA/FreeCAD qualification queued and do not retry the unchanged ODA File
-Converter 27.1 CLI route that aborts before processing. Continue with the UCS
-implementation packet above. Retry native qualification only after a fresh
+Converter 27.1 CLI route that aborts before processing. Continue with other
+independently actionable local work. Retry native qualification only after a fresh
 inventory exposes an unlocked session or a materially different launch path is
 available.
 
