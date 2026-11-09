@@ -197,7 +197,8 @@ AC1027 Cover source publishes 111/111 frames with no entity/object parse
 failures or CRC mismatches and no VIEW role mismatch, but strict output remains
 refused by the separate source-reference gate. This closes only the local
 VIEW codec slice; graph closure, full producer coverage, native behavior, and
-strict whole-source output remain open. No fixture was added. Receipt:
+strict whole-source output remain open. The focused AddressSanitizer selector
+also passes without diagnostics. No fixture was added. Receipt:
 [`p6-ac1015plus-view-body-handle-roles-spans-2026-11-09.json`](docs/research/p6-ac1015plus-view-body-handle-roles-spans-2026-11-09.json).
 
 **Completed local investigation — PERSUBENTMGR D63 boundary traces:** fresh

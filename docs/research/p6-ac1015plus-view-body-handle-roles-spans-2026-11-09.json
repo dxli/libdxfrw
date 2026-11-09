@@ -36,9 +36,14 @@
     "commands": [
       "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests dwg2dxf -j4",
       "build-gcc/libdxfrw_dwg_object_vectors_tests --ac1015plus-view-handle-roles",
-      "ctest --test-dir build-gcc -R '^libdxfrw_ac1015plus_view_handle_roles$' --output-on-failure"
+      "ctest --test-dir build-gcc -R '^libdxfrw_ac1015plus_view_handle_roles$' --output-on-failure",
+      "cmake --build build-asan-custom --target libdxfrw_dwg_object_vectors_tests -j4 && build-asan-custom/libdxfrw_dwg_object_vectors_tests --ac1015plus-view-handle-roles"
     ],
-    "result": "PASS; focused CTest 1/1"
+    "result": "PASS; focused CTest 1/1 and focused AddressSanitizer selector",
+    "addressSanitizer": {
+      "flags": "-fsanitize=address -fno-omit-frame-pointer",
+      "result": "PASS; no sanitizer diagnostics"
+    }
   },
   "physical_read_check": {
     "path": "/Users/dli/doc/dwg/Cover.dwg",
