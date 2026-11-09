@@ -1082,6 +1082,14 @@ behavior independently. Local macOS checks do not satisfy those platform gates.
   establish type 48 as valid. The diagnostic edit was reverted; keep both
   bodies partial until exact spans or an independent producer decode resolve
   the candidate. See the [first-failure cell trace receipt](docs/research/p5-ac1021-metric-table-first-failure-cell-trace-2026-11-09.json).
+  The current AC1021 metric read publishes all 4,408 frames with zero entity
+  or object parse failures. TABLE handles `0x2856e` and `0x2a974` now retain
+  their complete raw entity bodies alongside the existing typed, semantically
+  incomplete TABLE view; the raw peers are marked unvalidated. This preserves
+  2D consumer behavior and source bytes without admitting the disputed cell
+  tail. Strict export still stops at FIELD/FIELDLIST qualification. The
+  focused DWG reader build and physical read pass; no drawing fixture was
+  added. See the [raw-peer retention receipt](docs/research/p5-ac1021-incomplete-table-raw-peer-retention-2026-11-09.json).
   The three row-height values (`0x100000`, `0x200000`, `0x400000`), row
   alignments (`0x4000`, `0x8000`, `0x10000`), and text-style handles
   (`0x20000`, `0x40000`, `0x80000`) now have typed retention. ODA classifies

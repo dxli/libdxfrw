@@ -12582,6 +12582,21 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
             if (entryParse(e, buff, bs, ret)) {
               e.name = findTableName(DRW::BLOCK_RECORD, e.blockRecH.ref);
               output.appendValue(e, &DRW_Interface::addTable);
+              if (e.m_hasSemanticContent && !e.m_semanticContentComplete) {
+                // Keep the usable 2D TABLE prefix for existing consumers and
+                // retain the complete decompressed object body and frame
+                // metadata beside it. The raw peer is
+                // explicitly unvalidated: an unknown cell/schema tail must
+                // not be replayed as complete TABLE semantics.
+                DRW_UnsupportedObject raw = makeRawEntity(
+                    oType, cit->second, false, DRW::NoHandle, &e);
+                raw.m_typedPayloadValidated = false;
+                output.appendValue(raw,
+                                   &DRW_Interface::addUnsupportedObject);
+                DRW_DBG("[acad-table-incomplete-raw handle=");
+                DRW_DBG(obj.handle);
+                DRW_DBG(" semantic-tail=unvalidated]\n");
+              }
             }
             break;
           }
