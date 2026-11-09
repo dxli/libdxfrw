@@ -15415,7 +15415,8 @@ struct GeneratedAc1018OpaqueTableObject {
 
 bool makeGeneratedAc1018OpaqueTableObject(
     std::uint16_t classNumber, std::uint32_t handle,
-    GeneratedAc1018OpaqueTableObject& output) {
+    GeneratedAc1018OpaqueTableObject& output,
+    bool truncateObjectData = false) {
     constexpr DRW::Version version = DRW::AC1018;
     dwgBufferW object;
     const auto makeHandle = [](std::uint8_t code, std::uint32_t ref) {
@@ -15434,7 +15435,7 @@ bool makeGeneratedAc1018OpaqueTableObject(
     object.putBitLong(1u); // one persistent reactor.
     object.putBit(1u); // no extension dictionary.
     const auto objectDataEndBit = static_cast<std::uint32_t>(
-        object.bitCount());
+        object.bitCount() - (truncateObjectData ? 1u : 0u));
     object.patchRawLong32AtBit(objectSizeBit, objectDataEndBit);
     object.putHandle(makeHandle(DRW::DwgSoftPointer, 0xCu)); // parent.
     object.putHandle(makeHandle(DRW::DwgSoftPointer, 0xCu)); // reactor.
@@ -15536,6 +15537,8 @@ void testAc1018DataTableRetainsOnlyValidatedRawFrames(TestContext& t) {
     constexpr std::uint16_t dataTableClass = 702u;
     constexpr std::uint32_t sourceHandle = 0xA102u;
     constexpr std::uint32_t nextHandle = 0xA103u;
+    constexpr std::uint32_t malformedHandle = 0xA104u;
+    constexpr std::uint32_t recoveryHandle = 0xA105u;
     GeneratedAc1018OpaqueTableObject source, next;
     const bool framesBuilt = makeGeneratedAc1018OpaqueTableObject(
             dataTableClass, sourceHandle, source)
@@ -15604,6 +15607,94 @@ void testAc1018DataTableRetainsOnlyValidatedRawFrames(TestContext& t) {
                   << " raw=" << sink.raw.size()
                   << " publications=" << sink.publications.size() << '\n';
     }
+
+    GeneratedAc1018OpaqueTableObject malformed, recovery;
+    const bool failureFramesBuilt = makeGeneratedAc1018OpaqueTableObject(
+            dataTableClass, malformedHandle, malformed, true)
+        && makeGeneratedAc1018OpaqueTableObject(
+            dataTableClass, recoveryHandle, recovery);
+    t.expect(failureFramesBuilt,
+             "AC1018 DATATABLE malformed-shell and recovery frames are generated in memory");
+    if (!failureFramesBuilt)
+        return;
+
+    const auto recoveryOffset = static_cast<std::uint32_t>(
+        malformed.frame.size());
+    std::vector<std::uint8_t> failureBytes = malformed.frame;
+    failureBytes.insert(failureBytes.end(), recovery.frame.begin(),
+                        recovery.frame.end());
+    PersistentManagerDispatchReader failureReader(
+        failureBytes, DRW::AC1018, 601u);
+    failureReader.addClass(dataTableClass, "DATATABLE", "AcDbDataTable");
+    PersistentManagerDispatchSink failureSink;
+    const bool failureRead = failureReader.readObjects(
+        failureBytes, malformedHandle, recoveryOffset, recoveryHandle,
+        failureSink);
+    const auto rawMalformed = std::find_if(
+        failureSink.raw.begin(), failureSink.raw.end(),
+        [malformedHandle](const DRW_UnsupportedObject& item) {
+            return item.m_handle == malformedHandle;
+        });
+    const auto rawRecovery = std::find_if(
+        failureSink.raw.begin(), failureSink.raw.end(),
+        [recoveryHandle](const DRW_UnsupportedObject& item) {
+            return item.m_handle == recoveryHandle;
+        });
+    const bool malformedShellRejected = failureReader.objectFailures() == 1u
+        && failureSink.dataTables.empty()
+        && failureSink.raw.size() == 1u
+        && rawMalformed == failureSink.raw.end()
+        && rawRecovery != failureSink.raw.end()
+        && rawRecovery->m_rawBytes == recovery.payload
+        && !rawRecovery->m_typedPayloadValidated;
+    t.expect(malformedShellRejected,
+             "AC1018 DATATABLE with a truncated common shell stays a parse failure while the following independently validated frame recovers raw-only");
+    if (!malformedShellRejected) {
+        std::cerr << "AC1018 DATATABLE malformed-shell read=" << failureRead
+                  << " failures=" << failureReader.objectFailures()
+                  << " typed=" << failureSink.dataTables.size()
+                  << " raw=" << failureSink.raw.size()
+                  << " publications=" << failureSink.publications.size()
+                  << '\n';
+    }
+
+    GeneratedAc1018OpaqueTableObject corrected;
+    const bool correctedBuilt = makeGeneratedAc1018OpaqueTableObject(
+        dataTableClass, malformedHandle, corrected);
+    t.expect(correctedBuilt,
+             "corrected AC1018 DATATABLE retry frame is generated in memory");
+    if (!correctedBuilt)
+        return;
+    std::vector<std::uint8_t> retryBytes = corrected.frame;
+    const auto retryRecoveryOffset = static_cast<std::uint32_t>(
+        retryBytes.size());
+    retryBytes.insert(retryBytes.end(), recovery.frame.begin(),
+                      recovery.frame.end());
+    PersistentManagerDispatchReader retryReader(
+        retryBytes, DRW::AC1018, 601u);
+    retryReader.addClass(dataTableClass, "DATATABLE", "AcDbDataTable");
+    PersistentManagerDispatchSink retrySink;
+    const bool retried = retryReader.readObjects(
+        retryBytes, malformedHandle, retryRecoveryOffset, recoveryHandle,
+        retrySink);
+    const auto rawCorrected = std::find_if(
+        retrySink.raw.begin(), retrySink.raw.end(),
+        [malformedHandle](const DRW_UnsupportedObject& item) {
+            return item.m_handle == malformedHandle;
+        });
+    const auto rawRetryRecovery = std::find_if(
+        retrySink.raw.begin(), retrySink.raw.end(),
+        [recoveryHandle](const DRW_UnsupportedObject& item) {
+            return item.m_handle == recoveryHandle;
+        });
+    t.expect(retried && retryReader.objectFailures() == 0u
+                 && retrySink.dataTables.empty()
+                 && retrySink.raw.size() == 2u
+                 && rawCorrected != retrySink.raw.end()
+                 && rawCorrected->m_rawBytes == corrected.payload
+                 && rawRetryRecovery != retrySink.raw.end()
+                 && rawRetryRecovery->m_rawBytes == recovery.payload,
+             "corrected AC1018 DATATABLE input retries through the validated raw-only path and preserves following-frame recovery");
 }
 
 int runPersistentManagerSourcePrefix(const std::string& path) {

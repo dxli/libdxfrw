@@ -37,16 +37,21 @@
   "generatedControl": {
     "selector": "libdxfrw_persistent_manager_prefix_dispatch",
     "file": "tests/dwg_reader_matrix_tests.cpp",
-    "coverage": "Two from-scratch AC1018 DATATABLE frames with bounded common fields and deliberately absent class body are framed with valid CRCs. Assertions require exact raw payloads, no typed callbacks, raw publication, and following-frame recovery. No DWG/DXF fixture was added."
+    "coverage": "Two from-scratch AC1018 DATATABLE frames with bounded common fields and deliberately absent class body are framed with valid CRCs. Assertions require exact raw payloads, no typed callbacks, raw publication, and following-frame recovery. A negative control shortens the declared common-body bound by one bit: it must not publish the malformed DATATABLE raw-only, records one object failure, and still publishes the following independently valid DATATABLE. Rebuilding the corrected frame then passes the same raw-only route with zero failures. No DWG/DXF fixture was added.",
+    "malformedShellControl": {
+      "failure": "The one-bit-short declared body is rejected by the independent common-shell probe; it is not promoted to a raw-only publication.",
+      "continuation": "The object reader returns false for this malformed frame, records exactly one object failure, and nevertheless publishes the following valid DATATABLE raw-only.",
+      "correctedRetry": "A corrected in-memory frame is accepted by a fresh reader with zero object failures; both corrected and following frames publish exact raw payloads without typed callbacks."
+    }
   },
   "verification": {
     "normal": {
       "build": "PASS: cmake --build build --target libdxfrw_dwg_reader_matrix_tests dwg2dxf -j2",
-      "focused": "PASS: ctest --test-dir build -R '^libdxfrw_persistent_manager_prefix_dispatch$' --output-on-failure (1/1; 0.05 s)"
+      "focused": "PASS: ctest --test-dir build -R '^libdxfrw_persistent_manager_prefix_dispatch$' --output-on-failure (1/1; 0.50 s)"
     },
     "asan": {
       "build": "PASS: cmake --build build-asan-custom --target libdxfrw_dwg_reader_matrix_tests -j2",
-      "focused": "PASS: ctest --test-dir build-asan-custom -R '^libdxfrw_persistent_manager_prefix_dispatch$' --output-on-failure (1/1; 0.87 s)"
+      "focused": "PASS: ctest --test-dir build-asan-custom -R '^libdxfrw_persistent_manager_prefix_dispatch$' --output-on-failure (1/1; 0.85 s)"
     },
     "physicalRead": {
       "command": "build/dwg2dxf/dwg2dxf /Users/dli/dev/ACadSharp/samples/sample_AC1018.dwg -y -d -v2004 /tmp/sample_AC1018-raw-only-all-unknown-tables.dxf",
