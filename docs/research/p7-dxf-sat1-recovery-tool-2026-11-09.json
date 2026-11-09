@@ -4,7 +4,7 @@
   "purpose": "Make the already-evidenced SAT1 DXF carrier recovery reproducible for future independent ACIS reader checks.",
   "implementation": {
     "path": "tools/research/decode_dxf_sat1.py",
-    "sha256": "f8b17444fee7e748a2a5d7822c814b8cbde7368b863706cc36c62ffc76c7ee26",
+    "sha256": "305d15b69528c90a92cc306b981acecfbab3334540a418094e07151c8a54f1c0",
     "scope": "Exact-handle extraction for one ASCII DXF 3DSOLID/REGION/BODY, SAT v1 group-1/group-3 joining, inverse SAT1 byte transform, caret escape reversal, minimal SAT header/end-marker validation, and safe output overwrite refusal. Research aid only."
   },
   "algorithmEvidence": {
@@ -14,7 +14,7 @@
   },
   "focusedValidation": {
     "pythonSyntaxCompile": "PASS: python3 -m py_compile tools/research/decode_dxf_sat1.py",
-    "generatedInMemoryCarrier": "PASS: exact-handle selection, group-1/group-3 joining, SAT1 inverse, escaped-caret reversal, terminator acceptance, malformed continuation refusal, and invalid-handle refusal.",
+    "generatedInMemoryCarrier": "PASS: exact-handle selection, group-1/group-3 joining, SAT1 inverse, escaped-caret reversal, exact four-field header and terminal marker, trailing-garbage refusal, malformed continuation refusal, and invalid-handle refusal.",
     "cliOutputSafety": "PASS: generated scratch ASCII DXF decoded to the expected SAT bytes; a second invocation without --force refused to overwrite and preserved the output.",
     "fixturePolicy": "All controls were generated in memory or under /private/tmp. No DWG, DXF, or SAT fixture was added to the repository."
   },

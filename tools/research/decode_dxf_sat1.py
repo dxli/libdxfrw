@@ -119,8 +119,8 @@ def extract_sat1_payload(dxf: bytes, handle: str) -> bytes:
     sat_lines = [_decode_sat1_line(line) for line in lines]
     payload = b"\n".join(sat_lines) + b"\n"
     header = payload.splitlines()[0].split()
-    if len(header) < 4:
-        raise DecodeError("decoded payload does not have a SAT header")
+    if len(header) != 4:
+        raise DecodeError("decoded payload does not have a four-field SAT header")
     try:
         int(header[0])
         int(header[1])
@@ -128,8 +128,9 @@ def extract_sat1_payload(dxf: bytes, handle: str) -> bytes:
         int(header[3])
     except ValueError as exc:
         raise DecodeError("decoded payload has a malformed SAT header") from exc
-    if b"#End-of-ACIS-data" not in payload and b"#End-of-ASM-data" not in payload:
-        raise DecodeError("decoded payload has no ACIS/ASM end marker")
+    end_line = payload.splitlines()[-1]
+    if end_line not in {b"#End-of-ACIS-data", b"#End-of-ASM-data"}:
+        raise DecodeError("decoded payload does not end with an ACIS/ASM end marker")
     return payload
 
 

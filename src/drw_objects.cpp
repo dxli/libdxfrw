@@ -32471,12 +32471,11 @@ bool DRW_AcShHistoryObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
         m_recordHistory = recordHistory;
     } else if (m_recordName == "ACSH_SWEEP_CLASS"
                || m_recordName == "ACSH_EXTRUSION_CLASS") {
-        // ACSH_EXTRUSION_CLASS (AcDbShExtrusion) shares AcDbShSweepBase with
-        // ACSH_SWEEP_CLASS (dwg2.spec:4257 vs 4210 — only the trailing SUBCLASS
-        // marker differs), so it decodes through the same arm. The reliable
-        // fields are major/minor/direction; the tail past `direction` is an
-        // undocumented embedded sweep/path entity blob + SweepOptions and is
-        // best-effort only (matches dwgTs parseAcshSweepBaseBody).
+        // ACSH_EXTRUSION_CLASS and ACSH_SWEEP_CLASS share this candidate
+        // AcDbShSweepBase action-body order. parseSweepActionBody bounds every
+        // read, captures both embedded entity bit strings and preserves any
+        // unclassified suffix; an opaque suffix keeps the prefix Partial and
+        // the profile remains excluded from strict output.
         const std::uint64_t evalStartBit = currentObjectDwgBit(buf);
         const bool evalParsed = readEvalExprPrefix(
             version, buf, sBuf, &hBuff, boundedBodyEnd, objSize,
