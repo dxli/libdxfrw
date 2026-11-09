@@ -48,23 +48,41 @@ TableProbe makeTable() {
     table.basePoint = DRW_Coord{4.0, 5.0, 0.0};
     table.extPoint = DRW_Coord{0.0, 0.0, 1.0};
     table.m_horizontalDirection = DRW_Coord{1.0, 0.0, 0.0};
+    table.colcount = 2;
+    table.rowcount = 2;
 
     DRW_TableColumn column;
     column.m_width = 8.0;
     table.m_content.m_columns.push_back(column);
+    DRW_TableColumn secondColumn;
+    secondColumn.m_width = 5.5;
+    table.m_content.m_columns.push_back(secondColumn);
 
-    DRW_TableRow row;
-    row.m_height = 3.0;
-    DRW_TableCell cell;
-    cell.m_type = 1;
-    cell.m_mergedWidth = 1;
-    cell.m_mergedHeight = 1;
-    DRW_TableCellContent content;
-    content.m_type = 1;
-    content.m_text = "generated allocation retry";
-    cell.m_contents.push_back(content);
-    row.m_cells.push_back(cell);
-    table.m_content.m_rows.push_back(row);
+    const auto makeCell = [](const std::string& text) {
+        DRW_TableCell cell;
+        cell.m_type = 1;
+        cell.m_mergedWidth = 1;
+        cell.m_mergedHeight = 1;
+        DRW_TableCellContent content;
+        content.m_type = 1;
+        content.m_text = text;
+        cell.m_contents.push_back(content);
+        return cell;
+    };
+    DRW_TableRow firstRow;
+    firstRow.m_height = 3.0;
+    firstRow.m_cells.push_back(makeCell("generated grid cell 0,0"));
+    firstRow.m_cells.push_back(makeCell("generated grid cell 0,1"));
+    table.m_content.m_rows.push_back(firstRow);
+
+    DRW_TableRow secondRow;
+    secondRow.m_height = 4.5;
+    secondRow.m_cells.push_back(makeCell("generated grid cell 1,0"));
+    DRW_TableCell styledCell = makeCell("generated grid cell 1,1");
+    styledCell.m_overrideFlags = 0x00000010u;
+    styledCell.m_textStyleOverrideHandle = 0xA701u;
+    secondRow.m_cells.push_back(styledCell);
+    table.m_content.m_rows.push_back(secondRow);
     return table;
 }
 
@@ -89,6 +107,9 @@ bool run() {
     const std::size_t allocationCount = allocationAttempts;
     if (!calibrationResult || allocationCount == 0u)
         return false;
+    const std::vector<std::uint8_t> expectedBody = calibrationBody.data();
+    const std::vector<std::uint8_t> expectedHandles =
+        calibrationHandles.data();
 
     std::size_t exercised = 0u;
     for (std::size_t offset = 0u; offset < allocationCount; ++offset) {
@@ -121,7 +142,9 @@ bool run() {
         // failure. The seeded prefixes must be preserved on successful append.
         if (!table.encode(body, handles)
             || body.data().empty() || body.data().front() != 0xA5u
-            || handles.data().empty() || handles.data().front() != 0x5Au)
+            || handles.data().empty() || handles.data().front() != 0x5Au
+            || body.data() != expectedBody
+            || handles.data() != expectedHandles)
             return false;
     }
 

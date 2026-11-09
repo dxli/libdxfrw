@@ -131,7 +131,7 @@ FreeCAD, or format evidence. Do not repeat the unchanged ODA CLI launch or
 claim the external qualification gate passed. Continue local implementation.
 
 **Latest TABLE implementation checkpoint (2026-11-09):** commits through
-`f2d113bf` add generated AC1018 plain-text cell and table-scalar DWG codec
+`d23e91f5` add generated AC1018 plain-text cell and table-scalar DWG codec
 coverage: scalar mask `0x1f`, cell alignment/fill-state/indexed colors/text
 style pointer/text height, and four physical edge color/lineweight/visibility
 families. Readback checks typed fields, body boundary, following sentinel,
@@ -151,6 +151,11 @@ the table row/column counts in the inherited fields. The focused CTest passes
 in normal and ASan builds; no fixture was added. See the [multi-row
 receipt](docs/research/p5-ac1018-table-multirow-plain-text-codec-2026-11-09.json)
 and [rectangular-grid receipt](docs/research/p5-ac1018-table-multicolumn-plain-text-codec-2026-11-09.json).
+The generated 2x2 grid's allocation sweep injects failure at all 25 measured
+allocation points, verifies byte and bit-count rollback for both output buffers,
+then retries the same object and buffers and compares both output streams exactly
+with calibration. Normal and ASan focused CTests pass; see the [grid allocation
+rollback receipt](docs/research/p5-ac1018-table-grid-allocation-rollback-2026-11-09.json).
 The `*T` block/object graph transaction and independent source/native
 qualification remain open. Keep public TABLE output refused. A fresh desktop
 inventory after the user's unlock message still reports a locked Mac and no
@@ -2935,7 +2940,11 @@ Speed-oriented implementation sequence:
    same-object retry. Parser controls now refuse a declared body shortened by
    one bit and a frame without trailing handles. The direct codec stages both
    streams and publishes only on success; a successful append preserves seeded
-   prefixes. No injected mid-emission failure has tested this rollback path.
+   prefixes. Generated codec-level allocation failure injection now covers all
+   25 measured allocations for a 2x2 grid, with destination byte/bit rollback
+   and exact same-object retry (normal and ASan); this verifies the direct codec
+   boundary only, not the outer `dwgRW` compound graph transaction. See the
+   [grid allocation rollback receipt](docs/research/p5-ac1018-table-grid-allocation-rollback-2026-11-09.json).
    A generated 2x2 vector now reads back both column widths, both row heights,
    all four row-major text values, the bottom-right cell's hard-pointer
    text-style override, exact body boundary, and following sentinel;
