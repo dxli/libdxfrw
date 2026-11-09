@@ -1,5 +1,23 @@
 # DWG/DXF parity — remaining implementation plan
 
+**Resume checkpoint (2026-11-09, AC1032 control-reactor slice):** the
+VPORT_CONTROL reader now consumes declared common reactor references before
+the XDictionary and table-entry handles. The generated AC1032 regression
+proves reactor `0x3d126` stays separate from VPORT row `0x57`, and checks
+truncation reset/retry and the zero-reactor case. The focused target passes.
+All five scratch-only public DWGs from LibreDWG issue #1021 now pass VPORT and
+reach OBJECTS. Platte and Stahl publish every observed frame with zero
+entity/object parse failures; Teile, test-trichter and xx17 retain 2, 1 and 3
+unrelated frame failures respectively. Strict DXF output remains refused due
+to those failures and the corpus's large custom/unsupported object sets.
+Platte's PERSUBENTMGR object `0x20c50` is now reachable: its bounded 84-bit
+body ends after candidate scalar values `2, 0, 2, 0, 0, 0`, before the next
+candidate count. Keep it raw-only while resolving the physical schema. The
+source archive, hashes, per-file outcomes, test command and limitations are in
+the [control-reactor receipt](docs/research/p6-ac1032-control-common-reactor-fix-2026-11-09.json);
+the [source-pair receipt](docs/research/p6-ac1032-vport-public-pair-read-blocker-2026-11-09.json)
+records the pre-fix baseline and provenance.
+
 **Resume checkpoint (2026-11-09 08:57 UTC):** after the user's latest
 “I’ll unlock it now” reply, a fresh desktop inventory still reports the
 session locked and exposes no native app surface. Native qualification could
@@ -1497,6 +1515,16 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    [LibreDWG issue #1398](https://github.com/LibreDWG/libredwg/issues/1398).
    This is generated parser coverage only; it does not close physical layout,
    graph, DXF mapping or output eligibility.
+   The initial AC1032 corpus run exposed and then resolved a VPORT_CONTROL
+   common-reactor ordering defect. The parser now keeps Platte's reactor
+   `0x3d126` separate from its VPORT entry `0x57`; the generated control test
+   covers distinct handles, truncation/retry and zero reactors. All five
+   scratch DWGs now reach OBJECTS. Platte's PERSUBENTMGR object `0x20c50` has
+   an 84-bit body ending after candidate scalars `2,0,2,0,0,0`; the longer
+   generated candidate is therefore incomplete for this physical profile and
+   must remain raw-only. See the
+   [control-reactor receipt](docs/research/p6-ac1032-control-common-reactor-fix-2026-11-09.json)
+   and the [source/provenance receipt](docs/research/p6-ac1032-vport-public-pair-read-blocker-2026-11-09.json).
    A hash-matched physical recheck of
    `example_2013.dwg` publishes object `0xC94` raw-only; its remaining object
    parse failure was subsequently recovered. Bare AC1027/AC1032 PERSUBENTMGR

@@ -15302,11 +15302,13 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
   DRW_DBG(buf->numRemainingBytes());
   DRW_DBG("\n");
 
-  // The AC1021 BLOCK_CONTROL common tail contains persistent soft-pointer
-  // reactors between the null owner and the optional extension dictionary.
-  // Other control/version routes retain their existing parsing policy.
+  // Object-control common handles begin with the null owner, then the
+  // persistent reactors declared by numReactors, followed by the optional
+  // extension dictionary and the control-specific table entries.  Keep the
+  // exact old inline BLOCK_CONTROL compatibility profile separate: it has no
+  // common reactor tail and is validated as a complete historical frame.
   std::vector<std::uint32_t> parsedControlReactors;
-  if (version == DRW::AC1021 && oType == DRW::DwgBlockControlObjectType) {
+  if (!legacyR2007InlineBlockControl) {
     // Every H needs at least its 8-bit header, even at an unaligned cursor.
     // Bound allocation by actual remaining bits before reserving a vector.
     const std::uint64_t reactorStartBit =
@@ -15434,7 +15436,6 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
   phantomHandles = std::move(parsedPhantoms);
   orderedHandleSlots = std::move(parsedHandleSlots);
   orderedHandleRoles = std::move(parsedHandleRoles);
-  if (version == DRW::AC1021 && oType == DRW::DwgBlockControlObjectType)
-    reactorHandles = std::move(parsedControlReactors);
+  reactorHandles = std::move(parsedControlReactors);
   return buf->isGood() && hBuf->isGood() ? true : fail();
 }

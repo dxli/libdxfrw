@@ -25,6 +25,10 @@ struct Frame {
     std::vector<std::uint8_t> bytes;
     std::size_t reactorBit;
 };
+struct DetachedFrame {
+    std::vector<std::uint8_t> bytes;
+    std::uint32_t handleBits;
+};
 Frame frame(bool dictionary, bool aligned, unsigned count, unsigned reactorCode = DRW::DwgSoftPointer,
             std::uint64_t reactorRef = 0x40,
             unsigned declaredCount = std::numeric_limits<unsigned>::max()) {
@@ -54,6 +58,42 @@ Frame frame(bool dictionary, bool aligned, unsigned count, unsigned reactorCode 
 bool parse(DRW_ObjControl& control, const Frame& f) {
     dwgBuffer b(f.bytes.data(), f.bytes.size());
     return control.parseDwg(DRW::AC1021, &b, 0);
+}
+DetachedFrame ac1032VportControl(bool includeReactor = true) {
+    dwgBufferW body;
+    body.putObjType(DRW::AC1032, DRW::DwgVPortControlObjectType);
+    put(body, 0, DRW::DwgVportControlHandle);
+    body.putBitShort(0); // Empty EED.
+    body.putBitLong(includeReactor ? 1 : 0);
+    body.putBit(1); // XDictionary is absent.
+    body.putBit(0); // No R2013+ binary data.
+    body.putBitShort(1); // One VPORT row.
+    body.putBit(0); // No detached strings.
+    body.alignToByte();
+    const std::uint64_t handleStartBit = body.bitCount();
+
+    dwgBufferW handles;
+    put(handles, DRW::DwgSoftPointer, 0); // Control owner.
+    if (includeReactor)
+        put(handles, DRW::DwgSoftPointer, 0x3d126); // Reactor, not a VPORT.
+    put(handles, DRW::DwgSoftOwnership, 0x57); // *Active VPORT row.
+    handles.alignToByte();
+    if (handleStartBit > std::numeric_limits<std::uint32_t>::max()
+        || handles.size() > std::numeric_limits<std::uint32_t>::max() / 8u)
+        return {};
+
+    DetachedFrame result;
+    result.bytes = body.data();
+    result.bytes.insert(result.bytes.end(), handles.data().begin(),
+                        handles.data().end());
+    result.handleBits = static_cast<std::uint32_t>(handles.size() * 8u);
+    return result;
+}
+bool parse(DRW_ObjControl& control, const DetachedFrame& f) {
+    if (f.bytes.empty())
+        return false;
+    dwgBuffer b(f.bytes.data(), f.bytes.size());
+    return control.parseDwg(DRW::AC1032, &b, f.handleBits);
 }
 void assertReset(const DRW_ObjControl& c) {
     require(c.reactorCount() == 0 && c.reactorHandles.empty() && c.orderedHandleSlots.empty()
@@ -107,5 +147,27 @@ int main() {
     }
     require(parse(c, frame(false, false, 0)), "zero-reactor frame rejected");
     require(c.reactorHandles.empty() && c.reactorCount() == 0, "zero-reactor state dirty");
+
+    const auto vport = ac1032VportControl();
+    require(parse(c, vport), "AC1032 VPORT control with reactor rejected");
+    require(c.reactorHandles == std::vector<std::uint32_t>({0x3d126})
+                && c.orderedHandleSlots == std::vector<std::uint32_t>({0x57})
+                && c.handlesList == std::list<std::uint32_t>({0x57}),
+            "AC1032 VPORT reactor was confused with its table entry");
+
+    auto truncated = vport;
+    truncated.bytes.pop_back();
+    require(!parse(c, truncated), "truncated AC1032 VPORT control accepted");
+    assertReset(c);
+    require(parse(c, vport), "AC1032 VPORT control retry after truncation failed");
+    require(c.reactorHandles == std::vector<std::uint32_t>({0x3d126})
+                && c.orderedHandleSlots == std::vector<std::uint32_t>({0x57}),
+            "AC1032 VPORT control retry changed handle roles");
+
+    auto noReactor = ac1032VportControl(false);
+    require(parse(c, noReactor), "AC1032 VPORT control without reactor rejected");
+    require(c.reactorHandles.empty()
+                && c.orderedHandleSlots == std::vector<std::uint32_t>({0x57}),
+            "AC1032 zero-reactor control altered its table entry");
     return 0;
 }
