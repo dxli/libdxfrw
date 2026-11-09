@@ -3,7 +3,7 @@
   "id": "p8-librecad3-origin-master-clean-consumer-2026-11-08",
   "date": "2026-11-08",
   "title": "LibreCAD_3 clean origin/master compatibility probe",
-  "status": "CLEAN_CONSUMER_COMPATIBILITY_PATCH_COMMITTED_LOCAL_BRANCH",
+  "status": "PR_OPEN_CI_PENDING",
   "supportClaimEffect": "none",
   "sources": {
     "libdxfrwCommit": "045a389252bd465fb385d348960a05f331883ca1",
@@ -69,13 +69,31 @@
     "testCommand": "/private/tmp/librecad3-p8/build/bin/lcunittest --gtest_filter='DxfExportTest.*:DxfRoundTripTest.*'",
     "testResult": "PASS; 64/64 tests"
   },
-  "interpretation": "This records two LibreCAD_3 consumer/test-fixture changes, not a libdxfrw parser or writer defect. The patch is committed on a local LibreCAD_3 branch but is not merged into LibreCAD_3 origin/master. Keep the unsupported-version $INSUNITS refusal and first-root-DICTIONARY validation. The evidence is a macOS clean-consumer build and focused export/readback result only.",
+  "pullRequest": {
+    "url": "https://github.com/LibreCAD/LibreCAD_3/pull/456",
+    "number": 456,
+    "base": "LibreCAD/LibreCAD_3:master",
+    "head": "dxli/LibreCAD_3:codex/libdxfrw-upstream-compat",
+    "headCommit": "93354846165b3ca206d7071f2b99519e3a2f183d",
+    "opened": "2026-11-08",
+    "mergeability": "GitHub reports no conflicts",
+    "checksAtObservation": {
+      "inProgress": 4,
+      "queued": 7,
+      "result": "pending"
+    }
+  },
+  "currentHeadFocusedRerun": {
+    "command": "./build/bin/lcunittest --gtest_filter='DxfExportTest.*:DxfRoundTripTest.*'",
+    "result": "PASS; 64/64 tests, including the R14 extension"
+  },
+  "interpretation": "This records two LibreCAD_3 consumer/test-fixture changes, not a libdxfrw parser or writer defect. The changes are proposed in PR #456 against LibreCAD_3 origin/master; the PR was mergeable with 4 checks in progress and 7 queued at observation time. Keep the unsupported-version $INSUNITS refusal and first-root-DICTIONARY validation. Evidence is a macOS clean-consumer build and focused export/readback result only; CI, application behavior and other platforms remain unqualified.",
   "limitations": [
-    "The consumer changes exist only on the local /private/tmp/librecad3-p8 branch; they have not been pushed, reviewed, or merged.",
-    "The aggregate test suite was not run; only the 3 DxfExportTest and 61 DxfRoundTripTest cases were selected.",
+    "The PR is open but has not been reviewed or merged; CI checks were pending at the recorded observation.",
+    "The aggregate test suite was not run; the current focused selector covers the 3 DxfExportTest and 61 DxfRoundTripTest cases.",
     "No native LibreCAD_3 application run or Linux/Windows FreeCAD/LibreCAD qualification was performed.",
     "No DWG/DXF fixture was added to libdxfrw or any repository.",
     "No support claim or external J disposition changed."
   ],
-  "next": "Review and propose the local consumer patch for LibreCAD_3 origin/master; then qualify native Linux/Windows and application behavior. Keep those gates separate from this macOS result."
+  "next": "Review PR #456 CI and feedback; then qualify native Linux/Windows and application behavior. Keep those gates separate from this macOS result."
 }
