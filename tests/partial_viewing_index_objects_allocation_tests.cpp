@@ -42,12 +42,15 @@ public:
         motionPath.handle = 0xD7B5u;
         motionPath.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
         motionPath.m_classVersion = 1;
+        motionPath.m_cameraPathHandle = 0xD7B6u;
+        motionPath.m_targetPathHandle = 0xD7B7u;
         motionPath.m_frames = 120;
         motionPath.m_frameRate = 30;
         motionPath.m_cornerDeceleration = true;
         curvePath.handle = 0xD7B6u;
         curvePath.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
         curvePath.m_classVersion = 1;
+        curvePath.m_entityHandle = line.handle;
         pointPath.handle = 0xD7B7u;
         pointPath.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
         pointPath.m_classVersion = 1;
@@ -238,11 +241,14 @@ bool readbackMatches(const std::filesystem::path& path,
         || !actualMotionPath.m_cornerDeceleration)
         return false;
     const DRW_CurvePath& actualCurvePath = reader.curvePaths.front();
+    const DRW_PointPath& actualPointPath = reader.pointPaths.front();
+    if (actualMotionPath.m_cameraPathHandle != actualCurvePath.handle
+        || actualMotionPath.m_targetPathHandle != actualPointPath.handle)
+        return false;
     if (actualCurvePath.handle != 0xD7B6u
         || actualCurvePath.m_classVersion != 1
-        || actualCurvePath.m_entityHandle != 0u)
+        || actualCurvePath.m_entityHandle != reader.lines.front().handle)
         return false;
-    const DRW_PointPath& actualPointPath = reader.pointPaths.front();
     if (actualPointPath.handle != 0xD7B7u
         || actualPointPath.m_classVersion != 1
         || actualPointPath.m_point.x != 9.0 || actualPointPath.m_point.y != 8.0
@@ -351,6 +357,9 @@ bool run(const std::filesystem::path& directory) {
                 || exporter.fieldList.m_fieldHandles != sourceFieldList.m_fieldHandles
                 || exporter.motionPath.handle != sourceMotionPath.handle
                 || exporter.motionPath.parentHandle != sourceMotionPath.parentHandle
+                || exporter.motionPath.m_cameraPathHandle != sourceMotionPath.m_cameraPathHandle
+                || exporter.motionPath.m_targetPathHandle != sourceMotionPath.m_targetPathHandle
+                || exporter.motionPath.m_viewTableHandle != sourceMotionPath.m_viewTableHandle
                 || exporter.motionPath.m_frames != sourceMotionPath.m_frames
                 || exporter.motionPath.m_frameRate != sourceMotionPath.m_frameRate
                 || exporter.motionPath.m_cornerDeceleration != sourceMotionPath.m_cornerDeceleration

@@ -18,9 +18,16 @@
     "fieldListOwner": "0xC (named-object dictionary)",
     "fieldListMembers": ["0xD7B3"],
     "motionPathHandle": "0xD7B5",
-    "motionPath": {"classVersion": 1, "frames": 120, "frameRate": 30, "cornerDeceleration": true},
+    "motionPath": {
+      "classVersion": 1,
+      "cameraPath": "CURVEPATH 0xD7B6",
+      "targetPath": "POINTPATH 0xD7B7",
+      "frames": 120,
+      "frameRate": 30,
+      "cornerDeceleration": true
+    },
     "curvePathHandle": "0xD7B6",
-    "curvePath": {"classVersion": 1, "entityHandle": "null"},
+    "curvePath": {"classVersion": 1, "entityHandle": "LINE source handle 0xD7B0"},
     "pointPathHandle": "0xD7B7",
     "pointPath": {"classVersion": 1, "point": [9.0, 8.0, 7.0]},
     "objectPtrHandle": "0xD7B8",
@@ -39,7 +46,7 @@
     "result": "PASS",
     "asciiAllocationOffsets": 45,
     "binaryAllocationOffsets": 43,
-    "perOffset": "one-shot std::bad_alloc across FIELD, FIELDLIST, MOTIONPATH, CURVEPATH, POINTPATH, OBJECTPTR, then PARTIALVIEWINGINDEX in one OBJECTS callback; whole-file destination sentinel is preserved, caller object fields and entity geometry remain intact, same-codec retry restores the source LINE handle, reproduces calibration bytes, and typed readback verifies FIELD values, FIELDLIST membership, all path fields, OBJECTPTR identity, and LINE/PVI graph and extents",
+    "perOffset": "one-shot std::bad_alloc across FIELD, FIELDLIST, MOTIONPATH, CURVEPATH, POINTPATH, OBJECTPTR, then PARTIALVIEWINGINDEX in one OBJECTS callback; whole-file destination sentinel is preserved, caller object fields and entity geometry remain intact, same-codec retry restores the source LINE handle, reproduces calibration bytes, and typed readback verifies FIELD values, FIELDLIST membership, MOTIONPATH-to-CURVEPATH/POINTPATH edges, CURVEPATH-to-LINE edge, OBJECTPTR identity, and LINE/PVI graph and extents",
     "gitDiffCheck": "PASS"
   },
   "limits": [

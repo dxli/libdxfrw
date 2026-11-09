@@ -6,10 +6,11 @@ POINTPATH, OBJECTPTR, and PARTIALVIEWINGINDEX with a LINE target: 45 allocation
 points in ASCII and 43 in Binary. Every injected failure preserves the
 whole-file destination and modeled caller records; retry reproduces calibration
 bytes and typed readback verifies field values, FIELDLIST membership, path
-fields, OBJECTPTR identity, and the LINE/PVI graph. The earlier ENTITIES
-callback has already assigned its emitted handle to the caller's LINE when the
-later OBJECTS callback fails, so full cross-stage caller-memory rollback
-remains open. No fixture was added.
+fields, MOTIONPATH references to CURVEPATH/POINTPATH, the CURVEPATH-to-LINE
+edge, OBJECTPTR identity, and the LINE/PVI graph. The earlier ENTITIES callback
+has already assigned its emitted handle to the caller's LINE when the later
+OBJECTS callback fails, so full cross-stage caller-memory rollback remains
+open. No fixture was added.
 See the [allocation receipt](docs/research/p6-dxf-partial-viewing-index-objects-allocation-failure-retry-2026-11-09.json).
 
 The AC1024 online sample search also re-confirmed public candidates: Autodesk's
