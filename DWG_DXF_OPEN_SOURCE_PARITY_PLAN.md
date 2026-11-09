@@ -34,14 +34,17 @@ LINE. The reviewed unit-loss slice has no identified correctness blocker. PR
 [#456](https://github.com/LibreCAD/LibreCAD_3/pull/456) is open against
 `LibreCAD/LibreCAD_3:master`; GitHub reports no merge conflict. Code head
 `762a0f1e` has a plan-only follow-up at `8269dd7b`; its focused behavior result
-remains the 64/64 run on the unchanged code. The earlier Python Binding Plan
-Sync check failed because the mapped persistence/test paths lacked a
-same-change plan receipt. The consumer plan now records the affected gates;
-`--full`, `--base-ref origin/master`, and 31 checker tests pass locally. Four
-workflows for `8269dd7b`, including the Plan Sync rerun, are queued. Keep the
-fixture/root-dictionary preservation cases and clean-consumer/full-app/Linux/
-Windows gates in remaining P8 work. This consumer review does not change
-DWG/DXF support claims.
+remains the 64/64 run on the unchanged code. PR #456's prior Plan Sync failure
+was repaired. Commit `fd5af0b8` raises the Windows package-layout test's
+temporary CMake timeout from 30 to 120 seconds
+after hosted `BuildWindows` timed out at 30 seconds; the Windows package smoke
+suite passes 19/19 locally on macOS. Plan commit `321f2cad` records that result.
+The consumer-plan `--full`, explicit-path, actual-base (`origin/master`), and
+31-test checks pass locally. On current PR head `321f2cad`, hosted
+`BuildWindows` and `BuildWindowsPersistence` are in progress; Plan Sync, Linux,
+AppImage, sanitizer, CodeQL and both macOS jobs are queued. Keep native
+Windows/Linux and application qualification open. This consumer review does not
+change DWG/DXF support claims.
 
 **Earlier checkpoint (2026-11-08, before the latest ODA launch attempt):** after the user said
 they would unlock the Mac, the desktop inventory still reported the session
@@ -275,47 +278,7 @@ graph was also refused by strict adapter preflight because it lacks the
 source-bound AC1024 group-owned dimension profile. Its temporary prototype was
 removed; neither output policy nor source gates were changed.
 
-**Next implementation gate:** continue rooted dimension-constraint transaction
-work from the hash-bound AC1024 mechanical source profile
-(`854c8ebed8726add72ba4a9a2a19ba0d010372f5cadefb40e648cdf881cad858`). Its
-existing physical output/readback control passes both encodings for 17 linked
-dimension-dependency/body pairs, 399 constraint nodes, group membership,
-dimension targets, and reactor links. It now also proves that each of the 17
-dimension dependencies is referenced by exactly one admitted `Distance` or
-`RadiusDiameter` node in its owning constraint group; that node's hard-pointer
-value edge resolves to one typed, wire-complete `ACDBASSOCVALUEDEPENDENCY`
-listed exactly once in the group's action list; and that value dependency
-targets a typed `ACDBASSOCVARIABLE`. ASCII/Binary output, fresh readback,
-late-mutation refusal, sentinel preservation, and same-adapter retry still
-pass. See the [node dependency closure receipt](docs/research/p6-ac1024-mechanical-dimension-node-dependency-closure-2026-11-08.json).
-A locally authored graph without that source-bound profile is correctly
-refused by strict adapter preflight; do not manufacture a receipt or relax the
-gate. The readback gate now also proves 17 distinct value-dependency and
-associative-variable pairs: each dimension node resolves to its own typed value
-dependency, and the corresponding variable and value-dependency fields survive
-fresh ASCII/Binary DXF readback. The DXF check compares represented semantic
-fields and does not compare the DWG-only `m_associativeVariableWireComplete`
-marker. The physical adapter check now also mutates one source value dependency
-after `writeObjects()`, requires an atomic destination-preserving refusal, then
-restores the source value and retries successfully on the same adapter in both
-encodings. This complements the existing body-name and constraint-node
-late-mutation controls. A temporary scoped allocation/time probe measured the physical
-`writeObjects()` callback at 6,419 allocations / 19.1–19.5 ms for ASCII and
-6,321 allocations / 19.3–19.5 ms for Binary across the successful and expected
-late-mutation refusal attempts. The probe was removed after measurement. A
-full allocation-offset sweep would require thousands of callback attempts, so
-keep exhaustive fault injection on the bounded standalone pair/value writers
-and add only targeted callback failure points for the physical graph path. A
-focused callback-level `std::bad_alloc` injection now runs after the complete
-physical OBJECTS callback in ASCII and Binary: output preserves its sentinel,
-the same adapter retries, and the final readback again closes all 17 pairs and
-399 nodes. The build and source-bound selector pass; see the updated
-[node dependency closure receipt](docs/research/p6-ac1024-mechanical-dimension-node-dependency-closure-2026-11-08.json).
-No additional physical OBJECTS profile is currently ready in the saved P4
-census. Keep this graph's mutation/retry gates; resume P4 only when a distinct
-source profile closes identity, ownership, dependencies, and byte/frame
-disposition. Continue with independent locally actionable P5/P6 work without
-repeating the census. See the [callback cost receipt](docs/research/p6-ac1024-mechanical-objects-callback-cost-2026-11-08.json).
+**P6 rooted dimension-constraint generated profile — local transaction gate complete; broader qualification remains open.** The hash-bound AC1024 mechanical profile closes the 17 dimension-dependency/body pairs, 399 constraint nodes, distinct value-dependency and associative-variable targets, ASCII/Binary readback, late-mutation refusal, destination rollback, and same-adapter retry. The focused receipt also covers a post-OBJECTS-callback allocation failure. This is selected graph transport evidence only; it does not establish whole-file output or native associative meaning. The earlier locally authored graph refusal was correct and remains separate; do not relax source preflight. The saved P4 census has no additional ready physical object graph. Continue with a distinct evidence-backed P5/P6 action only when its source/schema boundary is actionable. See the [node dependency closure receipt](docs/research/p6-ac1024-mechanical-dimension-node-dependency-closure-2026-11-08.json).
 
 **Resume checkpoint (2026-11-07):** the Mac session was unlocked and the
 audit-enabled ODA 27.1 GUI route has completed the AC1024 civil residual
@@ -517,14 +480,16 @@ created locally from scratch for the specific control.
   loss note for each nonzero profile, while both legacy outputs retain LINE
   and omit `$INSUNITS`. The patch is pushed and proposed as
   [LibreCAD_3 PR #456](https://github.com/LibreCAD/LibreCAD_3/pull/456), based
-  on the exact `origin/master` commit above. The latest head is `8269dd7b`, a
-  plan-only follow-up to code head `762a0f1e`. Its preceding Python Binding
-  Plan Sync workflow failed because the consumer plan receipt was missing;
-  that receipt is now present and passes local `--full`, actual-base, and
-  31-test checks. GitHub has queued four workflows for the new head; no hosted
-  result is inferred from local validation. Next: review CI results and complete native
-  Linux/Windows and application qualification independently. This macOS result
-  does not satisfy those gates.
+  on the exact `origin/master` commit above. The code head remains `762a0f1e`;
+  the PR branch also contains `fd5af0b8` (Windows smoke timeout fix plus plan
+  receipt) and `321f2cad` (19/19 local package-smoke receipt). On current head
+  `321f2cad`, `BuildWindows` and
+`BuildWindowsPersistence` are in progress and the other required hosted jobs
+are queued; the preceding `fd5af0b8` Plan Sync passed. The consumer-plan
+`--full`, explicit candidate paths, actual-base check and 31 checker tests pass
+locally. No hosted Windows result is yet available. Continue reviewing current-
+head CI, then qualify native Linux/Windows FreeCAD and LibreCAD/LibreCAD_3
+behavior independently. Local macOS checks do not satisfy those platform gates.
 - **Desktop qualification recheck:** after the latest user reply that they
   would unlock the Mac, a fresh desktop inventory still reports the native
   session locked. The ODA File Converter launch therefore remains unexecuted
@@ -1575,7 +1540,7 @@ integration/release checkpoints.
 | P5 | OPEN — dynamic-block semantics, rendering and TABLE profiles | Find a complete FIELD/FIELDLIST source graph with a visible root; qualify physical TABLEGEOMETRY spans and remaining CONTENTFORMAT/CELLSTYLEMAP combinations; obtain a native ASCII/Binary VIEWPORT group-91 witness to resolve its conflict (VIEWPORT-specific docs say soft pointer, generic DXF typing says I32); qualify native layer-override activation/rendering; establish native dynamic constraint evaluation. For pre-R24 TABLE, groups 7/140/170/63/64/283 and border lineweight/visibility groups 274–279/284–289 now have bounded parser/writer/readback mappings using ODA title/header/data order and the exact 27-value AcDb::LineWeight domain; Autodesk documents repeats but not their order, so retain physical DXF order evidence for broad producer/native claims. Keep group 141 as physical row height. General per-row border CMC is output-refused because four border categories have one DXF entity-level value across three independent DWG row values; see the representability audit. | P4 closure where needed; ODA §20.4.96.1 + Autodesk TABLE group definitions; source-bound spans/roles plus native semantic evidence for promotion. |
 | P6 | OPEN — version, schema and semantic residuals | Resolve only evidence-backed source gaps: AC1021/24/27/32 IMAGEDEF parent-role conflict (source capture now retained as unqualified; DXF output still refused); raw-only TABLECONTENT/PERSUBENTMGR/TextObjectContextData; unclaimed AC1027/AC1032 HEADER suffixes; remaining version boundaries, geometry/no-loss, HEADER/CLI, parser disposition and caller-state contracts. The minimal generated AC1021 ODA matrix passes only when both default-layer graph opt-ins are enabled; the AC1021/24/27 fast material control now checks both output layer-0 references against planned targets. This is bounded writer evidence, not a broad support claim. Preserve strict refusal for unsupported or unclaimed bytes. | ODA v5.4.1 plus AutoCAD DWG/DXF source pairs; focused fast controls. Owner-semantic promotion still needs independent native rewrite or normative resolution. Suffix work requires a materially changed converter route. See the [IMAGEDEF role receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json) and [AC1021 writer probe receipt](docs/research/p6-ac1021-minimal-writer-oda-gui-rejection-2026-11-07.json). |
 | P7 | OPEN — ACIS/ACDS and independent 3D meaning | Complete entity/owner/key/AcDs/SAT-SAB association, versioned framing/index/suffix/prototype assembly and exact output binding; qualify transforms, units, topology, trims, periodicity and spline meaning with an independent kernel. | P4 graph/output bindings and independent semantic/kernel evidence. |
-| P8 | OPEN — consumers, platforms and release | The isolated LibreCAD `origin/master` adapter bridge is implemented and committed at `e216b44e763a87374556bad13e16628ff95e574c`; it adds provider cross-casts, bounded opt-in plotstyle/material default graphs, opaque-reference suppression and upstream hatch-angle unit conversion. The focused generated AC1021/24/27 import → re-export → readback test passes (80 assertions); three focused hatch-unit cases pass (19 assertions). The matching libdxfrw writer/readback guard and receipt are committed at `ff0f8dd4`. LibreCAD_3's clean-master legacy DXF adapter fix is proposed in [PR #456](https://github.com/LibreCAD/LibreCAD_3/pull/456), based on `5cf435f4`; code head `762a0f1e` passes the focused export/round-trip cohort 64/64, including unitless and nonzero unit-loss cases. Plan-only head `8269dd7b` records and locally validates the same-change receipt after its predecessor's hosted Plan Sync check failed; four workflows, including the Plan Sync rerun, are queued. Remaining: clean-consumer reproducibility/ABI qualification; LibreCAD and LibreCAD_3 2D behavior across supported builds; native Linux/Windows FreeCAD open/insert checks; 3D consumer, packaging and release qualification. These generated controls do not establish application semantics or native platform support. | Stable candidate plus native platform access and reproducible consumer build receipts; preserve existing 2D behavior and refuse unresolved references. |
+| P8 | OPEN — consumers, platforms and release | The isolated LibreCAD `origin/master` adapter bridge and its generated import/re-export checks remain implemented. LibreCAD_3 PR #456 is open on `codex/libdxfrw-upstream-compat`, based on `5cf435f4`; code head `762a0f1e` passes the focused 64/64 export/round-trip cohort. Follow-up `fd5af0b8` raises the temporary Windows package-layout CMake timeout after a hosted timeout; its smoke suite passes 19/19 locally on macOS. Plan receipt `321f2cad` is the current PR head. Hosted `BuildWindows` and `BuildWindowsPersistence` are in progress; remaining checks are queued. Remaining: current-head hosted CI, clean-consumer reproducibility/ABI, LibreCAD and LibreCAD_3 2D behavior across supported builds, native Linux/Windows FreeCAD open/insert checks, and 3D consumer/package/release qualification. These checks do not change DWG/DXF support claims. | Stable candidate plus native platform access and reproducible consumer build receipts; preserve existing 2D behavior and refuse unresolved references. |
 | P9 | DEFERRED_EXTERNAL — six non-promoting items | Resolve J256, J260, J268, J284, J293 and J295 only through the successor registry and eligible independent evidence. J268 still needs original input identity/digest; J284 has 11 target-debt/integrity blockers; J295 needs native receipts for four RTEXT position/rotation claims. None can promote support claims alone. | `metadata/external-evidence-resolution-v1.json`; retain lineage and exclusions. |
 
 **AC1024 CLASSES high-bit string-size recheck (2026-11-08):** the earlier
