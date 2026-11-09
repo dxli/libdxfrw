@@ -3372,6 +3372,7 @@ public:
     xrefBlockHandle = dwgHandle{};
     baseUcsHandle = dwgHandle{};
     namedUcsHandle = dwgHandle{};
+    m_dwgHandleFieldSpans.clear();
     DRW_TableEntry::reset();
   }
 
@@ -3387,6 +3388,9 @@ protected:
                                dwgBufferW *handleBuf = nullptr) const;
 
 public:
+  //! Exact DWG handle-stream spans for common and R2000+ UCS refs.
+  [[nodiscard]] const std::vector<DRW_DwgSubrecordRange>&
+  dwgHandleFieldSpans() const noexcept { return m_dwgHandleFieldSpans; }
   DRW_Coord origin;         /*!< UCS origin, codes 10/20/30 */
   DRW_Coord xAxisDirection; /*!< UCS X-axis direction, codes 11/21/31 */
   DRW_Coord yAxisDirection; /*!< UCS Y-axis direction, codes 12/22/32 */
@@ -3401,6 +3405,9 @@ public:
   // Phase 4 (P4-04): resolved handle-stream refs (R2000+).
   dwgHandle baseUcsHandle;  /*!< base UCS handle (code 346) */
   dwgHandle namedUcsHandle; /*!< named UCS handle (code 345) */
+
+private:
+  std::vector<DRW_DwgSubrecordRange> m_dwgHandleFieldSpans;
 };
 
 //! Class to handle VIEW entries

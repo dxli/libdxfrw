@@ -166,25 +166,34 @@ closure, visual semantics, broad producer support, and native-app
 qualification remain open. Receipt:
 [`p6-ac1012plus-vport-body-handle-role-spans-2026-11-09.json`](docs/research/p6-ac1012plus-vport-body-handle-role-spans-2026-11-09.json).
 
-**Next local implementation packet — UCS table-record handle roles and
-spans:** use ODA v5.4.1 §20.4.62 (pp. 176–177) and the existing
-`DRW_UCS::parseDwg` body/handle split. Before parser edits, inventory the
-already available AC1018/AC1021/AC1024/AC1027 DWGs and LibreDWG 0.14 views for
-a hash-bound UCS record with at least one non-null base/named-UCS reference;
-record its exact source identity and every decoded role/target. Then add span
-capture and role checks for the common control soft pointer, reactors, optional
-xdictionary hard owner, xref-block hard pointer, and R2000+ base/named UCS hard
-pointers, following ODA's stream order. Reuse the VPORT generated table-entry
-frame builder to cover AC1012/14, AC1015/18, and AC1021+ boundaries; test each
-wrong role, canonical null, exact ordered span, sentinel, truncation/reset,
-and corrected same-object retry in one fast selector. If the census finds no
-physical non-null UCS reference, still finish the bounded generated codec
-controls but retain the missing source profile as a support-claim gate. Keep
-target-graph closure separate, add no drawing fixture, and record exact source,
-peer, spec, and test hashes in the receipt. AC1014 PERSUBENTMGR still needs a
-paired semantic projection before typed-prefix admission; AC1027 PERSUBENTMGR
-and AC1032's six-scalar body remain raw-only pending independent field
-reconciliation.
+**Completed P6 local implementation packet — UCS table-record handle roles
+and spans:** ODA v5.4.1 §20.4.62 (pp. 176–177) now drives `DRW_UCS::parseDwg`
+role checks and ordered raw-role/bit-span capture for the control soft pointer,
+reactors, optional xdictionary hard owner, xref-block hard pointer, and R2000+
+base/named UCS hard pointers. Generated AC1012/14, AC1015/18, and
+AC1021/24/27 controls cover each wrong role with atomic same-object retry,
+canonical nulls, exact span/role/target comparison against an independent wire
+walk, a following sentinel, copy/assignment/reset, final-field truncation, and
+corrected retry. The focused UCS, VPORT, and object-vector cohort passes 3/3;
+no fixture was added. The LibreDWG 0.14 census of five valid local minJSON
+outputs found no UCS table records; one malformed JSON output was excluded.
+This closes the local generated-codec action only. Physical UCS field-role
+evidence and target-graph closure remain open, and no support claim is
+promoted. Receipt:
+[`p6-ac1012plus-ucs-body-handle-role-spans-2026-11-09.json`](docs/research/p6-ac1012plus-ucs-body-handle-role-spans-2026-11-09.json).
+
+**Next local packet — AC1014 PERSUBENTMGR semantic projection:** use the
+existing source-bound AC1014/PERSUBENTMGR traces and paired semantic output
+work to identify which typed prefix fields have independent, source-matched
+meaning. First revalidate the exact source/tool hashes and current parser route;
+then implement only the proved field projection with raw-only fallback for
+unresolved suffixes. Require a focused generated or existing-source check for
+field equality, exact frame retention, following-frame recovery, and failure /
+retry before admitting any typed prefix. If the existing evidence cannot bind
+the field semantics, finish the missing source/peer differential and keep the
+record raw-only. Do not alter AC1027 PERSUBENTMGR or AC1032's six-scalar body:
+both remain raw-only until independent field reconciliation. Add no drawing
+fixture and do not promote support claims from transport-only agreement.
 
 **Resume checkpoint (2026-11-09, latest desktop inventory):** after the
 user's unlock-in-progress reply, the native-app inventory still reports “The
@@ -244,6 +253,15 @@ reply):** a new native-app inventory again returned “The Mac is locked and
 automatic unlock could not unlock it.” No app was launched. Leave the ODA and
 native FreeCAD qualification items queued; continue with local source-bound
 work and retry only after a later inventory reports an unlocked session.
+
+**Latest user update (2026-11-09):** the user again reports that they are
+unlocking the Mac. No fresh desktop inventory has been run after this message,
+so the access state remains unverified; do not infer that it is unlocked or
+retry the unchanged ODA CLI route. Continue the UCS generated-codec slice. On
+the next native-qualification attempt, first inspect the desktop inventory;
+if an unlocked app surface is present, resume the already planned ODA/FreeCAD
+qualification route, otherwise record the observed access state and continue
+local work.
 
 **Earlier access recheck (2026-11-09 07:51 UTC):** following the user's
 unlock-in-progress reply, direct CUA inventory still returned “The Mac is

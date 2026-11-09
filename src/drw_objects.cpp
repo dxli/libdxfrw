@@ -7570,34 +7570,78 @@ bool DRW_UCS::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
     if (!hBuf->isGood())
         return fail();
 
+    std::vector<DRW_DwgSubrecordRange> parsedHandleFieldSpans;
+    const auto readUcsHandle = [version, baseHandle = parsed.handle,
+                                hBuf, handleEndBit,
+                                &parsedHandleFieldSpans](
+        const char *name, bool offset, std::uint8_t expectedRole,
+        dwgHandle& value) {
+        std::uint64_t startBit = 0u;
+        if (!objectCurrentBit(*hBuf, startBit))
+            return false;
+        dwgHandle field;
+        if (!readBoundedObjectHandle(*hBuf, baseHandle, offset, field,
+                                     handleEndBit))
+            return false;
+        std::uint64_t endBit = 0u;
+        if (!objectCurrentBit(*hBuf, endBit) || endBit < startBit)
+            return false;
+        const bool canonicalNull = field.ref == 0u
+            && field.rawCode == DRW::DwgNullReference;
+        if (field.rawCode != expectedRole && !canonicalNull) {
+            DRW_DBG("UCS handle role mismatch for ");
+            DRW_DBG(name); DRW_DBG(": raw code ");
+            DRW_DBG(static_cast<unsigned int>(field.rawCode));
+            DRW_DBG(" target "); DRW_DBG(field.ref); DRW_DBG("\n");
+            return false;
+        }
+        DRW_DwgSubrecordRange span;
+        span.m_name = name;
+        span.m_startBit = startBit;
+        span.m_bitSize = endBit - startBit;
+        span.m_version = version;
+        span.m_rawHandleCode = field.rawCode;
+        span.m_parseComplete = true;
+        parsedHandleFieldSpans.push_back(std::move(span));
+        value = field;
+        return true;
+    };
     dwgHandle parsedControlHandle;
     std::vector<std::uint32_t> parsedReactors;
     dwgHandle parsedXDictHandle;
-    if (!readBoundedObjectHandle(*hBuf, parsed.handle, true,
-                                 parsedControlHandle, handleEndBit)
-        || !readBoundedObjectHandleList(*hBuf, parsed.handle, parsed.numReactors, false,
-                                        &parsedReactors, handleEndBit))
+    if (!readUcsHandle("control", true, DRW::DwgSoftPointer,
+                       parsedControlHandle)
+        || !dwgSafety::validReactorCount(parsed.numReactors)
+        || !DRW::reserve(parsedReactors, parsed.numReactors))
         return fail();
+    for (std::int32_t index = 0; index < parsed.numReactors; ++index) {
+        const std::string name = "reactor[" + std::to_string(index) + "]";
+        dwgHandle reactor;
+        if (!readUcsHandle(name.c_str(), false, DRW::DwgSoftPointer,
+                           reactor))
+            return fail();
+        parsedReactors.push_back(reactor.ref);
+    }
     if (parsed.xDictFlag != 1
-        && !readBoundedObjectHandle(*hBuf, parsed.handle, false,
-                                    parsedXDictHandle, handleEndBit))
+        && !readUcsHandle("xdict", false, DRW::DwgHardOwnership,
+                          parsedXDictHandle))
         return fail();
 
     // COMMON_TABLE_FLAGS always carries the external-reference block handle
     // after the optional extension dictionary, even when it is null. Unlike
     // the control handle, this and the remaining table handles are raw refs.
     dwgHandle parsedXrefBlockHandle;
-    if (!readBoundedObjectHandle(*hBuf, parsed.handle, false,
-                                 parsedXrefBlockHandle, handleEndBit))
+    if (!readUcsHandle("xrefBlock", false, DRW::DwgHardPointer,
+                       parsedXrefBlockHandle))
         return fail();
 
     dwgHandle parsedBaseUcsHandle;
     dwgHandle parsedNamedUcsHandle;
     if (version > DRW::AC1014) { //R2000+
-        if (!readBoundedObjectHandle(*hBuf, parsed.handle, false,
-                                     parsedBaseUcsHandle, handleEndBit)
-            || !readBoundedObjectHandle(*hBuf, parsed.handle, false,
-                                        parsedNamedUcsHandle, handleEndBit))
+        if (!readUcsHandle("baseUcs", false, DRW::DwgHardPointer,
+                           parsedBaseUcsHandle)
+            || !readUcsHandle("namedUcs", false, DRW::DwgHardPointer,
+                              parsedNamedUcsHandle))
             return fail();
         DRW_DBG(" base UCS Handle: "); DRW_DBGHL(parsedBaseUcsHandle.code, parsedBaseUcsHandle.size, parsedBaseUcsHandle.ref); DRW_DBG("\n");
         DRW_DBG(" named UCS Handle: "); DRW_DBGHL(parsedNamedUcsHandle.code, parsedNamedUcsHandle.size, parsedNamedUcsHandle.ref); DRW_DBG("\n");
@@ -7621,6 +7665,7 @@ bool DRW_UCS::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
     parsed.xrefBlockHandle = parsedXrefBlockHandle;
     parsed.baseUcsHandle = parsedBaseUcsHandle;
     parsed.namedUcsHandle = parsedNamedUcsHandle;
+    parsed.m_dwgHandleFieldSpans = std::move(parsedHandleFieldSpans);
     if (!parsed.validatePayloadFields())
         return fail();
     *this = std::move(parsed);
