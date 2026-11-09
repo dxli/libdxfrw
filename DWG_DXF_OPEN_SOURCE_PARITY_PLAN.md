@@ -1853,8 +1853,7 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    any conversion was started. Two locally authored AC1027 controls intended
    to differ only in `$LTSCALE` were readable with zero frame failures, but
    strict DXF output stopped at the unrelated AC1027 source-reference gate.
-   No ODA comparison or independent `$LTSCALE` readback was obtained; see the
-   [controlled-variable attempt receipt](docs/research/p6-ac1027-header-variable-controlled-conversion-lock-2026-11-09.json).
+   No ODA comparison was obtained. LibreDWG 0.14 independently decodes `$LTSCALE=1.0` and `$LTSCALE=2.0` from the controlled pair, verifying the input difference but not its relationship to suffix bytes. A follow-up ODA CLI startup check again aborts with PasteBoard/XPC errors before input processing; conversion remains unstarted. See the [controlled-variable receipt](docs/research/p6-ac1027-header-variable-controlled-conversion-lock-2026-11-09.json).
    Earlier checksum-valid suffix mutations already yielded identical ODA DXF
    apart from timestamp variables, so do not repeat suffix-only mutations or
    unchanged resaves. When the GUI session is available, first verify both
