@@ -74,9 +74,9 @@
       "libdxfrw_table_content_grid_write": "PASS",
       "libdxfrw_table_content_cell_border_visibility_edges": "PASS"
     },
-    "focused_ctest": "3/3 passed",
+    "focused_ctest": "4/4 passed",
     "legacy_override_guard": {
-      "selector": "build-gcc/tests/libdxfrw_table_content_dxf_tests --legacy-table-177",
+      "selector": "libdxfrw_table_legacy_override_177",
       "result": "PASS",
       "observations": "16 imports, 56 unsupported-mask refusal cases, 58 retries, and 56 zero/nonzero/reset counterfactuals"
     },

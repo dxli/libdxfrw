@@ -86,7 +86,7 @@ added. This does not enable `dwgRW::writeTable`. The physical AC1018 TABLE
 sources still stop at undocumented cell masks `0x40000`/`0x40020`. The matching
 generated AC1018 DXF output mapping is now implemented for cell fill-state,
 indexed colors, and uniquely resolved text-style handles/names; focused TABLE grid,
-cell appearance, and cell-edge controls pass 3/3. See the [DXF mapping
+cell appearance, cell-edge, and legacy unknown-mask controls pass 4/4. See the [DXF mapping
 receipt](docs/research/p5-ac1018-table-cell-appearance-dxf-write-readback-2026-11-08.json).
 The `*T` block/object graph transaction and independent source/native
 qualification remain open. Keep public TABLE output refused. A fresh desktop

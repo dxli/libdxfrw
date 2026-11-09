@@ -2543,7 +2543,8 @@ set_tests_properties(libdxfrw_acds_source_delivery PROPERTIES LABELS "fast;dxf;a
 add_test(NAME libdxfrw_table_content_dxf_projection COMMAND libdxfrw_table_content_dxf_tests)
 add_test(NAME libdxfrw_table_legacy_override_177
     COMMAND libdxfrw_table_content_dxf_tests --legacy-table-177)
-set_tests_properties(libdxfrw_table_legacy_override_177 PROPERTIES LABELS "dxf;table")
+set_tests_properties(libdxfrw_table_legacy_override_177 PROPERTIES
+    LABELS "fast;dxf;adapter;table;generated;transaction" TIMEOUT 30)
 add_test(NAME libdxfrw_table_row_alignment_override_parse
     COMMAND libdxfrw_table_content_dxf_tests --table-row-alignment-overrides)
 set_tests_properties(libdxfrw_table_row_alignment_override_parse PROPERTIES
