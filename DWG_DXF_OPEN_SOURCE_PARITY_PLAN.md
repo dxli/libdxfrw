@@ -15,13 +15,23 @@ torus B-rep check is recorded in
 its one-body/one-face/one-solid result is a bounded selected-profile check,
 not independent-kernel, whole-source, platform, or support-claim evidence.
 
-**Latest access recheck (2026-11-09 07:27 UTC):** following the user's
-unlock-in-progress reply, direct CUA inventory again returned “The Mac is
+**Latest access recheck (2026-11-09 07:51 UTC):** following the user's
+unlock-in-progress reply, direct CUA inventory still returned “The Mac is
 locked and automatic unlock could not unlock it”; no native apps were listed.
 No ODA or FreeCAD process was launched, and this observation does not qualify
 or disqualify any drawing profile. Retry native qualification only after a new
 inventory reports an unlocked session; until then, proceed with local slices
 whose evidence does not depend on the desktop.
+
+**Latest implementation checkpoint (2026-11-09 07:51 UTC):** commits
+`387d1920`, `a1c5314c`, `327f0aa7`, and `8a948465` add the R2010/R2013+
+TABLE unknown-prefix fail-closed profile, soft-pointer role validation, and
+generated AC1024/AC1027/AC1032 controls. The focused TABLE test and default
+TABLE reference-role control pass; no fixture was added and no support claim
+is promoted. See the P5 entry and
+[`p5-ac1024-table-unknown-prefix-default-gate-2026-11-09.json`](docs/research/p5-ac1024-table-unknown-prefix-default-gate-2026-11-09.json).
+Continue with another independent local P4/P5/P6 item; native qualification
+remains gated on an unlocked desktop inventory.
 
 **P8 LibreCAD_3 CI follow-up (2026-11-09, live status checked 06:45 UTC):** the previous PR #456 head
 `321f2cad` passed build and required regressions on macOS arm64, then failed
