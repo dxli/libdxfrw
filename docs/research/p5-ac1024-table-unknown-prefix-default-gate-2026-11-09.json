@@ -26,7 +26,7 @@
   },
   "generatedControls": {
     "source": "tests/dwg_object_vectors_tests.cpp",
-    "sourceSha256AfterEdit": "79842e4d6fc5d63d5e04d4596e19c1dd3487e0dd4d41b173b7eef8692aaaff26",
+    "sourceSha256AfterEdit": "79ee15ccc997fa50e157454693de07bc05b098e7e08fc99e00711fc52f203b3c",
     "cases": [
       {"revision": "AC1024", "mutation": "unknown RC = 1", "result": "semantic projection incomplete"},
       {"revision": "AC1024", "mutation": "unknown soft pointer = 0xA701", "result": "semantic projection incomplete; pointer not mapped to TABLESTYLE"},
@@ -34,7 +34,9 @@
       {"revision": "AC1024", "mutation": "unknown BL = 1", "result": "semantic projection incomplete"},
       {"revision": "AC1024", "mutation": "R2010 unknown Boolean = false", "result": "semantic projection incomplete"},
       {"revision": "AC1027", "mutation": "R2013+ unknown BL = 1", "result": "semantic projection incomplete"},
-      {"revision": "AC1027", "mutation": "documented unknown-field defaults", "result": "complete TABLECONTENT and style reference parsed"}
+      {"revision": "AC1027", "mutation": "documented unknown-field defaults", "result": "complete TABLECONTENT and style reference parsed"},
+      {"revision": "AC1032", "mutation": "R2018+ unknown BL = 1", "result": "semantic projection incomplete"},
+      {"revision": "AC1032", "mutation": "documented unknown-field defaults", "result": "complete TABLECONTENT and style reference parsed"}
     ],
     "frameFilesAdded": false
   },
@@ -51,12 +53,12 @@
       "command": "build/libdxfrw_dwg_object_vectors_tests --table-content-reference-roles",
       "result": "PASS"
     },
-    "testExecutableSha256": "b2675d39b05e78f919b3108b83d3549cb16f1ffc2ef533e571c450b7facf7f1f"
+    "testExecutableSha256": "8d7c33c88e6de5d96e773e1a19a26745a5c652aceb787ef37311175d89c28e1e"
   },
   "limitations": [
     "No meaning is assigned to non-default unknown fields.",
     "The generated controls verify parser disposition, not producer interoperability or native rendering.",
-    "AC1027 default and unknown-BL vectors are generated; physical producer values for that prefix remain unqualified.",
+    "AC1027/AC1032 default and unknown-BL vectors are generated; physical producer values for those prefixes remain unqualified.",
     "Exact raw-frame preservation and strict end-to-end output are separate gates and were not established by this vector.",
     "No drawing fixture was added."
   ],

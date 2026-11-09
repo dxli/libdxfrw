@@ -14610,7 +14610,7 @@ void testR2010TableUnknownPrefixDefaults(TestContext& t) {
         bool expectedParsed;
         bool expectedComplete;
     };
-    const std::array<Case, 7> cases = {{
+    const std::array<Case, 9> cases = {{
         {DRW::AC1024, 1u, 0u, 0, true, 0, DRW::DwgSoftPointer,
          "R2010 RC", true, false},
         {DRW::AC1024, 0u, 0xA701u, 0, true, 0, DRW::DwgSoftPointer,
@@ -14624,7 +14624,11 @@ void testR2010TableUnknownPrefixDefaults(TestContext& t) {
         {DRW::AC1027, 0u, 0u, 0, true, 1, DRW::DwgSoftPointer,
          "R2013+ BL", true, false},
         {DRW::AC1027, 0u, 0u, 0, true, 0, DRW::DwgSoftPointer,
-         "R2013+ defaults", true, true}
+         "R2013+ defaults", true, true},
+        {DRW::AC1032, 0u, 0u, 0, true, 1, DRW::DwgSoftPointer,
+         "R2018+ BL", true, false},
+        {DRW::AC1032, 0u, 0u, 0, true, 0, DRW::DwgSoftPointer,
+         "R2018+ defaults", true, true}
     }};
     for (const Case& item : cases) {
         R2010EmbeddedTableFrame frame;
@@ -14633,8 +14637,9 @@ void testR2010TableUnknownPrefixDefaults(TestContext& t) {
             item.unknownSoftPointerRef, item.unknownContentFlag,
             item.unknownR2010Flag, item.unknownR2013Flag, item.version,
             item.unknownSoftPointerCode);
-        const std::string profile = item.version == DRW::AC1024
-            ? "AC1024" : "AC1027";
+        const char* revision = item.version == DRW::AC1024 ? "AC1024"
+            : item.version == DRW::AC1027 ? "AC1027" : "AC1032";
+        const std::string profile(revision);
         t.expect(built, profile + " TABLE unknown " + item.name
                             + " control builds");
         if (!built)
