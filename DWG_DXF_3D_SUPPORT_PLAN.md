@@ -10558,7 +10558,9 @@ No fixture or source change was retained. Next local step: determine whether
 the suffix is a defined embedded-record field using a primary or independently
 observable producer trace, or keep this child opaque and advance to another
 ready plan item. ODA File Converter retry remains gated on a fresh desktop
-inventory showing the Mac session accessible.
+inventory showing the Mac session accessible. The exact payload hashes, bytes,
+candidate field-order basis, prefix-consumption positions, and unknown suffix
+bits are recorded in the [research receipt](docs/research/p4-ac1027-sweep-embedded-lwpolyline-boundary-2026-11-09.json).
 
 **Next external evidence action — S2.3.9.4.38 (research/probe, not a parser
 rewrite):**
