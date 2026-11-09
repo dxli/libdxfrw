@@ -25,6 +25,90 @@ void hexBytes(const std::vector<std::uint8_t>& bytes) {
     std::cout << std::dec;
 }
 
+void diagnoseLibreDwgSweepOrder(
+    const DRW_AcShHistoryObject::SweepActionBodyCapture& sweep) {
+    if (sweep.m_bodyBits.empty()) return;
+    dwgBuffer probe(sweep.m_bodyBits.data(), sweep.m_bodyBits.size());
+    const std::uint64_t bound = sweep.m_bodyBitSize;
+    const auto bit = [&]() {
+        return probe.getPosition() * 8u + probe.getBitPos();
+    };
+    const auto readLong = [&](std::int32_t& value) {
+        value = probe.getBitLong();
+        return probe.isGood() && bit() <= bound;
+    };
+    const auto readDouble = [&](double& value) {
+        value = probe.getBitDouble();
+        return probe.isGood() && bit() <= bound;
+    };
+    const auto readPoint = [&](DRW_Coord& value) {
+        value = probe.get3BitDouble();
+        return probe.isGood() && bit() <= bound;
+    };
+    const auto failAt = [&](const char* stage) {
+        std::cout << "SWEEP_LIBREDWG_ORDER bits=" << bit() << '/' << bound
+                  << " stop=" << stage << '\n';
+    };
+
+    std::int32_t major = 0;
+    std::int32_t minor = 0;
+    DRW_Coord direction;
+    std::int32_t profileType = 0;
+    std::int32_t profileBits = 0;
+    std::int32_t pathType = 0;
+    std::int32_t pathBits = 0;
+    if (!readLong(major)) return failAt("major");
+    if (!readLong(minor)) return failAt("minor");
+    if (!readPoint(direction)) return failAt("direction");
+    if (!readLong(profileType)) return failAt("profileType");
+    if (!readLong(profileBits)) return failAt("profileSize");
+    if (profileBits < 0 || static_cast<std::uint64_t>(profileBits) > bound - bit())
+        return failAt("profilePayloadBound");
+    if (!probe.moveBitPos(profileBits) || !probe.isGood() || bit() > bound)
+        return failAt("profilePayload");
+    if (!readLong(pathType)) return failAt("pathType");
+    if (!readLong(pathBits)) return failAt("pathSize");
+    if (pathBits < 0 || static_cast<std::uint64_t>(pathBits) > bound - bit())
+        return failAt("pathPayloadBound");
+    if (!probe.moveBitPos(pathBits) || !probe.isGood() || bit() > bound)
+        return failAt("pathPayload");
+
+    std::cout << "SWEEP_LIBREDWG_PREFIX bits=" << bit() << '/' << bound
+              << " major=" << major << " minor=" << minor
+              << " direction=" << direction.x << ',' << direction.y << ','
+              << direction.z << " profile=" << profileType << '/'
+              << profileBits << " path=" << pathType << '/' << pathBits
+              << '\n';
+
+    double value = 0.0;
+    for (unsigned i = 0; i < 6; ++i) {
+        if (!readDouble(value)) return failAt("scalar");
+    }
+    for (unsigned i = 0; i < 32; ++i) {
+        if (!readDouble(value)) return failAt("transform");
+    }
+    const std::uint8_t align = probe.getRawChar8();
+    if (!probe.isGood() || bit() > bound) return failAt("alignOptionRC");
+    const std::uint8_t miter = probe.getRawChar8();
+    if (!probe.isGood() || bit() > bound) return failAt("miterOptionRC");
+    for (unsigned i = 0; i < 6; ++i) {
+        probe.getBit();
+        if (!probe.isGood() || bit() > bound) return failAt("optionFlag");
+    }
+    DRW_Coord point;
+    if (!readPoint(point)) return failAt("pt2");
+
+    std::cout << "SWEEP_LIBREDWG_ORDER bits=" << bit() << '/' << bound
+              << " major=" << major << " minor=" << minor
+              << " direction=" << direction.x << ',' << direction.y << ','
+              << direction.z << " profile=" << profileType << '/'
+              << profileBits << " path=" << pathType << '/' << pathBits
+              << " alignRC=" << static_cast<unsigned>(align)
+              << " miterRC=" << static_cast<unsigned>(miter)
+              << " pt2=" << point.x << ',' << point.y << ',' << point.z
+              << '\n';
+}
+
 class AcdsSectionProbe final : public dwgReader27 {
 public:
     using dwgReader27::dwgReader27;
@@ -229,6 +313,7 @@ int main(int argc, char** argv) {
                       << sweep.m_pathBitSize << ' ';
             hexBytes(sweep.m_pathBits);
             std::cout << '\n';
+            diagnoseLibreDwgSweepOrder(sweep);
         }
     }
     for (const DRW_EvaluationGraph& graph : drawing.evaluationGraphs) {

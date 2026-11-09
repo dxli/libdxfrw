@@ -884,16 +884,21 @@ do not repeat this TABLESTYLE codec work.
    layout or embedded-entity semantics. A peer cross-check further lowers
    confidence: LibreDWG 0.14 marks this class `DEBUGGING`; its `dwg2.spec`
    order conflicts with ACadRust, and its exact-input JSON/DXF outputs contain
-   2,568 unknown object bits and malformed values. The paired DWG and DXF
+   2,568 unknown object bits and malformed values. A body-bounded competing-
+   order diagnostic tries that `dwg2.spec` sequence directly: after
+   major/minor/direction it reads profile/path candidates 0/0 at bit 34 (the
+   paired record says 77/744 and 77/480), then stops at a reserved BD code at
+   bit 186. This rules out that sequence for this witness, not every profile.
+   The paired DWG and DXF
    entered LibreDWG's corpus in one 2018 conversion/test commit without naming
    an AutoCAD/ODA producer, so the DXF does not establish independent DWG
    semantics. Do not consume the suffix bit or extra `0xCC` bytes as padding,
-   and do not reorder fields from this conflict. Next add a bounded
-   competing-order diagnostic and pursue a native or independently authored
-   producer witness. Keep Sweep output refused and support claims unchanged
+   and do not reorder fields from this conflict. Next pursue a native or
+   independently authored producer witness. Keep Sweep output refused and support claims unchanged
    until graph dependencies, roles, output/readback and independent consumer
    semantics close. See the [candidate-field differential receipt](docs/research/p4-ac1027-sweep-dxf-candidate-field-differential-2026-11-08.json)
-   and [peer-conflict receipt](docs/research/p4-ac1027-sweep-libredwg-peer-conflict-2026-11-08.json).
+   [peer-conflict receipt](docs/research/p4-ac1027-sweep-libredwg-peer-conflict-2026-11-08.json),
+   and [competing-order diagnostic](docs/research/p4-ac1027-sweep-competing-order-diagnostic-2026-11-08.json).
    Autodesk's DXF reference explicitly classifies group 350
    as soft-owner, while ODA §2.13 classifies observed DWG H code 3 as hard
    ownership; ODA File Converter emits this same target value as group 350.
