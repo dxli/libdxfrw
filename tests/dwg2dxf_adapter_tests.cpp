@@ -53671,6 +53671,51 @@ bool physicalMLineStyleOutputReadback(
     return true;
 }
 
+bool physicalAc1032MLineStyleHandleSourceProfile(
+        const std::filesystem::path& sourcePath) {
+    dx_iface reader;
+    dx_data data;
+    if (!reader.fileImport(sourcePath.string(), &data, false)
+        || data.sourceFormat != dx_source_format::DWG
+        || data.sourceVersion != DRW::AC1032
+        || data.mLineStyles.size() != 1u)
+        return fail("physical AC1032 MLINESTYLE source did not import as one typed style");
+
+    const DRW_MLineStyle& style = data.mLineStyles.front();
+    const auto& spans = style.getLinetypeHandleSpans();
+    if (style.handle != 0x18u || style.parentHandle != 0x17u
+        || style.reactorHandles != std::vector<std::uint32_t>{0x17u}
+        || style.name != "STANDARD" || style.elements.size() != 2u
+        || spans.size() != 2u)
+        return fail("physical AC1032 MLINESTYLE identity, ownership or element count changed");
+
+    const std::array<double, 2> expectedOffsets{{0.5, -0.5}};
+    for (std::size_t index = 0; index < spans.size(); ++index) {
+        const DRW_DwgSubrecordRange& span = spans[index];
+        const DRW_MLineElement& element = style.elements[index];
+        if (element.offset != expectedOffsets[index]
+            || element.linetypeHandle != 0x15u
+            || span.m_name != "element[" + std::to_string(index)
+                + "].linetypeHandle"
+            || span.m_version != DRW::AC1032
+            || span.m_startBit != 627u + 16u * index
+            || span.m_bitSize != 16u
+            || span.m_rawHandleCode != DRW::DwgHardPointer
+            || !span.m_parseComplete
+            || (index != 0u
+                && spans[index - 1u].m_startBit + spans[index - 1u].m_bitSize
+                    > span.m_startBit))
+            return fail("physical AC1032 MLINESTYLE linetype handle role, target or span is not source-consistent");
+        std::cerr << "physical MLINESTYLE handle span " << index
+                  << ": start=" << span.m_startBit
+                  << " bits=" << span.m_bitSize
+                  << " role=" << static_cast<unsigned int>(span.m_rawHandleCode)
+                  << " target=" << element.linetypeHandle << '\n';
+    }
+    std::cout << "Physical AC1032 MLINESTYLE handle roles and spans PASS\n";
+    return true;
+}
+
 bool physicalViewportOutputReadback(
         const std::filesystem::path& sourcePath) {
     dx_iface sourceReader;
@@ -88910,6 +88955,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--mline-style-physical-output-readback")
         return physicalMLineStyleOutputReadback(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--mline-style-ac1032-source-profile")
+        return physicalAc1032MLineStyleHandleSourceProfile(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--viewport-physical-output-readback")
         return physicalViewportOutputReadback(argv[2]) ? 0 : 1;

@@ -1,0 +1,78 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "id": "p6-ac1032-mlinestyle-libredwg-source-profile-2026-11-09",
+  "date": "2026-11-09",
+  "status": "BOUNDED_PHYSICAL_PROFILE_PEER_VALUES_AND_ROLES_AGREE",
+  "scope": "Check the generated AC1032 MLINESTYLE per-element handle-span implementation against one already-present public DWG and an independent LibreDWG 0.14 decode.",
+  "supportClaimEffect": "none",
+  "source": {
+    "repository": "/Users/dli/dev/libredwg",
+    "revision": "6d6a33987a1a97095b069c799c3d8a793320f812",
+    "path": "test/test-data/example_2018.dwg",
+    "sha256": "7bc7721224003062b237845842b7a976e46771c37eba6833b9ed3712e7a5a65a",
+    "headerVersion": "AC1032",
+    "fixturePolicy": "The DWG already exists in the adjacent LibreDWG repository. It was read in place and was not copied into or committed in libdxfrw.",
+    "producerProvenance": "Not established. Repository location, AC1032 header and filename do not prove AutoCAD/ODA authorship.",
+    "currentReaderOutcome": {
+      "operationSucceeded": true,
+      "legacyError": 0,
+      "entityParseFailures": 0,
+      "objectParseFailures": 1,
+      "unrelatedFailure": "ACDBASSOCOSNAPPOINTREFACTIONPARAM at handle 0x521",
+      "strictWholeSourceOutput": "Refused because DWG read disposition is incomplete; no output was published."
+    }
+  },
+  "observedProfile": {
+    "objectType": 73,
+    "handle": "0x18",
+    "name": "STANDARD",
+    "parent": "0x17",
+    "reactors": ["0x17"],
+    "elements": [
+      {"offset": 0.5, "linetypeHandle": "0x15"},
+      {"offset": -0.5, "linetypeHandle": "0x15"}
+    ],
+    "libdxfrwParserSpans": [
+      {"field": "element[0].linetypeHandle", "startBit": 627, "bitSize": 16, "rawHandleCode": 5},
+      {"field": "element[1].linetypeHandle", "startBit": 643, "bitSize": 16, "rawHandleCode": 5}
+    ]
+  },
+  "independentPeer": {
+    "tool": "LibreDWG 0.14 dwgread",
+    "command": "dwgread -O JSON -o /private/tmp/libdxfrw-example-2018.json /Users/dli/dev/libredwg/test/test-data/example_2018.dwg",
+    "jsonSha256": "ec0239edbe7873919527136c111a089090310d70a255b440f9df55158e05ad56",
+    "objectRow": {
+      "index": 20,
+      "type": 73,
+      "handle": [0, 1, 24],
+      "size": 83,
+      "bitsize": 603,
+      "ownerhandle": [8, 0, 0, 23],
+      "reactors": [[4, 1, 23, 23]],
+      "name": "STANDARD",
+      "lines": [
+        {"offset": 0.5, "lt_ltype": [5, 1, 21, 21]},
+        {"offset": -0.5, "lt_ltype": [5, 1, 21, 21]}
+      ]
+    },
+    "comparison": "The peer independently agrees on the object and target identities, field order, and hard-pointer role code 5 for both element linetype references. It reports the common owner as code 8 and reactor as code 4; this receipt records those peer observations without widening the ODA-defined parser contract. LibreDWG JSON does not independently report the parser's absolute span offsets."
+  },
+  "implementation": {
+    "file": "tests/dwg2dxf_adapter_tests.cpp",
+    "selector": "--mline-style-ac1032-source-profile",
+    "change": "Add a manual corpus-profile selector that asserts the typed style identity, two target handles, exact parser-reported offsets and span widths/roles observed for this source. The receipt binds the invocation to the DWG SHA-256; the selector does not implement its own hash check and is not registered in CTest."
+  },
+  "validation": {
+    "build": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests --parallel 4",
+    "buildResult": "PASS with configured warning-as-error flags.",
+    "physicalSelector": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --mline-style-ac1032-source-profile /Users/dli/dev/libredwg/test/test-data/example_2018.dwg",
+    "physicalSelectorResult": "PASS: parser spans 627+16 and 643+16 bits; both use hard-pointer code 5 and resolve to 0x15. The read reports one unrelated object parse failure; strict whole-source conversion remains refused.",
+    "diffCheck": "PASS",
+    "fullTestSuites": "NOT RUN; focused source-profile selector and target-local build used."
+  },
+  "remainingGates": [
+    "Producer-qualified AutoCAD/ODA AC1032 span evidence remains absent.",
+    "No MLINESTYLE source graph closure, strict output admission, writer, native CAD, LibreCAD, LibreCAD_3, or support claim follows from this profile.",
+    "Generated exact-span, malformed-role, null, truncation, rollback and retry controls remain the primary span-boundary validation."
+  ]
+}

@@ -48,6 +48,20 @@ discard derived maps. The old assertions that expected successful caller-handle
 mutation were corrected; the focused attempt-failure control passes.
 See the [allocation receipt](docs/research/p6-dxf-partial-viewing-index-objects-allocation-failure-retry-2026-11-09.json).
 
+**Resume checkpoint (2026-11-09, physical AC1032 MLINESTYLE handle profile):**
+The already-present LibreDWG `test/test-data/example_2018.dwg` at pinned
+revision `6d6a33987a1a97095b069c799c3d8a793320f812` contains one AC1032
+MLINESTYLE, handle `0x18`, with two element linetype refs to `0x15`. The
+current parser reports ordered 16-bit hard-pointer spans at bits 627 and 643.
+LibreDWG 0.14 independently reports both refs with handle role code 5 and the
+same targets; its JSON does not independently expose those absolute span
+offsets. This closes a bounded physical-value/role corroboration gap for one
+corpus file, not AutoCAD/ODA producer qualification. The source read has one
+unrelated ACDBASSOCOSNAPPOINTREFACTIONPARAM object failure; strict whole-source
+output remains refused. No fixture was copied or added. See the
+[source-profile receipt](docs/research/p6-ac1032-mlinestyle-libredwg-source-profile-2026-11-09.json)
+and the [generated parser receipt](docs/research/p6-ac1032-mlinestyle-linetype-handle-roles-2026-11-09.json).
+
 The AC1024 online sample search also re-confirmed public candidates: Autodesk's
 catalog describes its samples as AutoCAD 2010 and later, while
 [`nextgis/dwg_samples`](https://github.com/nextgis/dwg_samples) contains

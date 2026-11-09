@@ -46,7 +46,7 @@
     "fixturesAdded": false
   },
   "remainingGates": [
-    "No physical AC1032 producer frame independently confirms these spans and targets.",
+    "One LibreDWG corpus DWG now corroborates the element values and hard-pointer targets, but no producer-qualified AutoCAD/ODA AC1032 source independently confirms the spans and targets; see p6-ac1032-mlinestyle-libredwg-source-profile-2026-11-09.json.",
     "Resolve source target identity and graph dependencies before any strict-output admission.",
     "No whole-object writer, native application, LibreCAD, or LibreCAD_3 support claim follows from this generated parser control."
   ]
