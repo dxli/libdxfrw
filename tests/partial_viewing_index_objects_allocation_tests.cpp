@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Generated FIELD/FIELDLIST/PARTIAL_VIEWING_INDEX OBJECTS allocation control.
+// Generated FIELD, path-object, and PARTIAL_VIEWING_INDEX allocation control.
 #include "dx_iface.h"
 
 #include <cstdlib>
@@ -39,6 +39,19 @@ public:
         fieldList.handle = 0xD7B4u;
         fieldList.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
         fieldList.m_fieldHandles.push_back(field.handle);
+        motionPath.handle = 0xD7B5u;
+        motionPath.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
+        motionPath.m_classVersion = 1;
+        motionPath.m_frames = 120;
+        motionPath.m_frameRate = 30;
+        motionPath.m_cornerDeceleration = true;
+        curvePath.handle = 0xD7B6u;
+        curvePath.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
+        curvePath.m_classVersion = 1;
+        pointPath.handle = 0xD7B7u;
+        pointPath.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
+        pointPath.m_classVersion = 1;
+        pointPath.m_point = {9.0, 8.0, 7.0};
         index.handle = 0xD7B2u;
         index.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
         index.m_entries.push_back({{0.0, 1.0, 2.0}, {7.0, 8.0, 9.0}, line.handle});
@@ -55,7 +68,11 @@ public:
             fieldWritten = codec.writeField(&field);
             fieldListWritten = fieldWritten
                 && codec.writeFieldList(&fieldList);
-            indexWritten = fieldListWritten
+            pathsWritten = fieldListWritten
+                && codec.writeMotionPath(&motionPath)
+                && codec.writeCurvePath(&curvePath)
+                && codec.writePointPath(&pointPath);
+            indexWritten = pathsWritten
                 && codec.writePartialViewingIndex(&index);
             if (!indexWritten)
                 (void)codec.writeRawDxfObject(nullptr);
@@ -67,7 +84,11 @@ public:
             fieldWritten = codec.writeField(&field);
             fieldListWritten = fieldWritten
                 && codec.writeFieldList(&fieldList);
-            indexWritten = fieldListWritten
+            pathsWritten = fieldListWritten
+                && codec.writeMotionPath(&motionPath)
+                && codec.writeCurvePath(&curvePath)
+                && codec.writePointPath(&pointPath);
+            indexWritten = pathsWritten
                 && codec.writePartialViewingIndex(&index);
         } catch (const std::bad_alloc&) {
             reached = failedAllocations != before
@@ -83,7 +104,8 @@ public:
     }
 
     bool finalizeDxfWrite() override {
-        return lineWritten && fieldWritten && fieldListWritten && indexWritten;
+        return lineWritten && fieldWritten && fieldListWritten && pathsWritten
+            && indexWritten;
     }
 
     dxfRW& codec;
@@ -91,12 +113,16 @@ public:
     DRW_Line line;
     DRW_Field field;
     DRW_FieldList fieldList;
+    DRW_MotionPath motionPath;
+    DRW_CurvePath curvePath;
+    DRW_PointPath pointPath;
     DRW_PartialViewingIndex index;
     long failAt = -1;
     long reached = 0;
     bool lineWritten = false;
     bool fieldWritten = false;
     bool fieldListWritten = false;
+    bool pathsWritten = false;
     bool indexWritten = false;
 };
 
@@ -151,6 +177,15 @@ bool readbackMatches(const std::filesystem::path& path,
         void addFieldList(const DRW_FieldList& value) override {
             fieldLists.push_back(value);
         }
+        void addMotionPath(const DRW_MotionPath& value) override {
+            motionPaths.push_back(value);
+        }
+        void addCurvePath(const DRW_CurvePath& value) override {
+            curvePaths.push_back(value);
+        }
+        void addPointPath(const DRW_PointPath& value) override {
+            pointPaths.push_back(value);
+        }
         void addPartialViewingIndex(
                 const DRW_PartialViewingIndex& value) override {
             indexes.push_back(value);
@@ -158,12 +193,17 @@ bool readbackMatches(const std::filesystem::path& path,
         std::vector<DRW_Line> lines;
         std::vector<DRW_Field> fields;
         std::vector<DRW_FieldList> fieldLists;
+        std::vector<DRW_MotionPath> motionPaths;
+        std::vector<DRW_CurvePath> curvePaths;
+        std::vector<DRW_PointPath> pointPaths;
         std::vector<DRW_PartialViewingIndex> indexes;
     } reader;
     if (!reader.fileImport(path.string(), &data, false)
         || data.sourceFormat != dx_source_format::DXF
         || reader.lines.size() != 1u || reader.fields.size() != 1u
         || reader.fieldLists.size() != 1u
+        || reader.motionPaths.size() != 1u || reader.curvePaths.size() != 1u
+        || reader.pointPaths.size() != 1u
         || reader.indexes.size() != 1u
         || !lineMatches(reader.lines.front(), expectedLine))
         return false;
@@ -180,6 +220,23 @@ bool readbackMatches(const std::filesystem::path& path,
         || actualFieldList.parentHandle != DRW::DwgNamedObjectsDictionaryHandle
         || actualFieldList.m_fieldHandles != std::vector<std::uint32_t>{0xD7B3u})
         return false;
+    const DRW_MotionPath& actualMotionPath = reader.motionPaths.front();
+    if (actualMotionPath.handle != 0xD7B5u
+        || actualMotionPath.m_classVersion != 1
+        || actualMotionPath.m_frames != 120 || actualMotionPath.m_frameRate != 30
+        || !actualMotionPath.m_cornerDeceleration)
+        return false;
+    const DRW_CurvePath& actualCurvePath = reader.curvePaths.front();
+    if (actualCurvePath.handle != 0xD7B6u
+        || actualCurvePath.m_classVersion != 1
+        || actualCurvePath.m_entityHandle != 0u)
+        return false;
+    const DRW_PointPath& actualPointPath = reader.pointPaths.front();
+    if (actualPointPath.handle != 0xD7B7u
+        || actualPointPath.m_classVersion != 1
+        || actualPointPath.m_point.x != 9.0 || actualPointPath.m_point.y != 8.0
+        || actualPointPath.m_point.z != 7.0)
+        return false;
     DRW_PartialViewingIndex expectedOutput = expectedIndex;
     expectedOutput.m_entries.front().objectHandle = reader.lines.front().handle;
     return indexMatches(reader.indexes.front(), expectedOutput);
@@ -187,7 +244,7 @@ bool readbackMatches(const std::filesystem::path& path,
 
 bool run(const std::filesystem::path& directory) {
     const auto fail = [](const char* message) {
-        std::cerr << "FIELD/FIELDLIST/PARTIAL_VIEWING_INDEX allocation retry: "
+        std::cerr << "FIELD/path/PARTIAL_VIEWING_INDEX allocation retry: "
                   << message << '\n';
         return false;
     };
@@ -211,13 +268,14 @@ bool run(const std::filesystem::path& directory) {
             const bool readback = exported && readbackMatches(
                 output, exporter.line, exporter.index);
             if (!exported || !exporter.lineWritten || !exporter.fieldWritten
-                || !exporter.fieldListWritten
+                || !exporter.fieldListWritten || !exporter.pathsWritten
                 || !exporter.indexWritten
                 || !readback) {
                 std::cerr << "calibration codecWrite=" << exported
                           << " lineWrite=" << exporter.lineWritten
                           << " fieldWrite=" << exporter.fieldWritten
                           << " fieldListWrite=" << exporter.fieldListWritten
+                          << " pathsWrite=" << exporter.pathsWritten
                           << " indexWrite=" << exporter.indexWritten
                           << " readback=" << readback
                           << " binary=" << binary << '\n';
@@ -245,12 +303,16 @@ bool run(const std::filesystem::path& directory) {
             const DRW_Line sourceLine = exporter.line;
             const DRW_Field sourceField = exporter.field;
             const DRW_FieldList sourceFieldList = exporter.fieldList;
+            const DRW_MotionPath sourceMotionPath = exporter.motionPath;
+            const DRW_CurvePath sourceCurvePath = exporter.curvePath;
+            const DRW_PointPath sourcePointPath = exporter.pointPath;
             const DRW_PartialViewingIndex sourceIndex = exporter.index;
             exporter.failAt = offset;
             exporter.reached = 0;
             exporter.lineWritten = false;
             exporter.fieldWritten = false;
             exporter.fieldListWritten = false;
+            exporter.pathsWritten = false;
             exporter.indexWritten = false;
             const bool wrote = codec.write(&exporter, DRW::AC1027, binary);
             exporter.failAt = -1;
@@ -268,8 +330,21 @@ bool run(const std::filesystem::path& directory) {
                 || exporter.fieldList.handle != sourceFieldList.handle
                 || exporter.fieldList.parentHandle != sourceFieldList.parentHandle
                 || exporter.fieldList.m_fieldHandles != sourceFieldList.m_fieldHandles
+                || exporter.motionPath.handle != sourceMotionPath.handle
+                || exporter.motionPath.parentHandle != sourceMotionPath.parentHandle
+                || exporter.motionPath.m_frames != sourceMotionPath.m_frames
+                || exporter.motionPath.m_frameRate != sourceMotionPath.m_frameRate
+                || exporter.motionPath.m_cornerDeceleration != sourceMotionPath.m_cornerDeceleration
+                || exporter.curvePath.handle != sourceCurvePath.handle
+                || exporter.curvePath.parentHandle != sourceCurvePath.parentHandle
+                || exporter.curvePath.m_entityHandle != sourceCurvePath.m_entityHandle
+                || exporter.pointPath.handle != sourcePointPath.handle
+                || exporter.pointPath.parentHandle != sourcePointPath.parentHandle
+                || exporter.pointPath.m_point.x != sourcePointPath.m_point.x
+                || exporter.pointPath.m_point.y != sourcePointPath.m_point.y
+                || exporter.pointPath.m_point.z != sourcePointPath.m_point.z
                 || !indexMatches(exporter.index, sourceIndex))
-                return fail("injected failure changed entity, FIELD/FIELDLIST, or PVI state");
+                return fail("injected failure changed entity, FIELD/path, or PVI state");
             // Entity serialization assigns the emitted handle to the caller's
             // entity before the later OBJECTS callback fails. Restore its source
             // identity so this retry exercises the same source graph.
@@ -279,7 +354,7 @@ bool run(const std::filesystem::path& directory) {
             const bool retry = codec.write(&exporter, DRW::AC1027, binary);
             std::string retryBytes;
             if (!retry || !exporter.lineWritten || !exporter.fieldWritten
-                || !exporter.fieldListWritten
+                || !exporter.fieldListWritten || !exporter.pathsWritten
                 || !exporter.indexWritten
                 || !readAll(output, retryBytes) || retryBytes != expectedBytes
                 || !readbackMatches(output, sourceLine, sourceIndex)
@@ -287,7 +362,7 @@ bool run(const std::filesystem::path& directory) {
                 || !indexMatches(exporter.index, sourceIndex))
                 return fail("same-codec retry failed exact bytes or graph readback");
         }
-        std::cout << "FIELD/FIELDLIST/PARTIAL_VIEWING_INDEX OBJECTS "
+        std::cout << "FIELD/path/PARTIAL_VIEWING_INDEX OBJECTS "
                   << (binary ? "Binary" : "ASCII")
                   << ": allocation offsets=" << allocationCount
                   << ", rollback/retry/readback=PASS\n";

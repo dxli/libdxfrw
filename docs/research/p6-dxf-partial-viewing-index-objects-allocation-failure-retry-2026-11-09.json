@@ -1,7 +1,7 @@
 {
-  "title": "Generated FIELD, FIELDLIST, and PARTIAL_VIEWING_INDEX OBJECTS allocation rollback and retry",
+  "title": "Generated FIELD/path-object/PARTIAL_VIEWING_INDEX OBJECTS allocation rollback and retry",
   "date": "2026-11-09",
-  "scope": "AC1027 whole-file dxfRW::write with a locally generated FIELD, FIELDLIST member, LINE target, and one PARTIALVIEWINGINDEX entry in the same OBJECTS callback; ASCII and Binary.",
+  "scope": "AC1027 whole-file dxfRW::write with a locally generated FIELD, FIELDLIST member, MOTIONPATH, CURVEPATH, POINTPATH, LINE target, and one PARTIALVIEWINGINDEX entry in the same OBJECTS callback; ASCII and Binary.",
   "source": {
     "kind": "locally-authored in-memory records",
     "lineHandle": "0xD7B0",
@@ -17,6 +17,12 @@
     "fieldListHandle": "0xD7B4",
     "fieldListOwner": "0xC (named-object dictionary)",
     "fieldListMembers": ["0xD7B3"],
+    "motionPathHandle": "0xD7B5",
+    "motionPath": {"classVersion": 1, "frames": 120, "frameRate": 30, "cornerDeceleration": true},
+    "curvePathHandle": "0xD7B6",
+    "curvePath": {"classVersion": 1, "entityHandle": "null"},
+    "pointPathHandle": "0xD7B7",
+    "pointPath": {"classVersion": 1, "point": [9.0, 8.0, 7.0]},
     "partialViewingIndexHandle": "0xD7B2",
     "partialViewingIndexOwner": "0xC (named-object dictionary)",
     "entry": {
@@ -30,9 +36,9 @@
     "build": "cmake --build build --target libdxfrw_partial_viewing_index_objects_allocation_tests -j4",
     "test": "ctest --test-dir build -R '^libdxfrw_partial_viewing_index_objects_allocation_retry$' --output-on-failure",
     "result": "PASS",
-    "asciiAllocationOffsets": 17,
-    "binaryAllocationOffsets": 17,
-    "perOffset": "one-shot std::bad_alloc across the FIELD, FIELDLIST, then PARTIALVIEWINGINDEX OBJECTS callback; whole-file destination sentinel is preserved, FIELD/FIELDLIST/PVI caller state and entity geometry remain intact, same-codec retry restores the source LINE handle, reproduces calibration bytes, and typed readback verifies FIELD values, FIELDLIST membership, and the LINE/PVI target graph and extents",
+    "asciiAllocationOffsets": 38,
+    "binaryAllocationOffsets": 37,
+    "perOffset": "one-shot std::bad_alloc across the FIELD, FIELDLIST, MOTIONPATH, CURVEPATH, POINTPATH, then PARTIALVIEWINGINDEX OBJECTS callback; whole-file destination sentinel is preserved, caller object fields and entity geometry remain intact, same-codec retry restores the source LINE handle, reproduces calibration bytes, and typed readback verifies FIELD values, FIELDLIST membership, all path fields, and the LINE/PVI target graph and extents",
     "gitDiffCheck": "PASS"
   },
   "limits": [
