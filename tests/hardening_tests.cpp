@@ -20393,6 +20393,7 @@ void testAcshActionBodyExactSpan(TestContext& t) {
                  && capture.m_direction.z == 1.0
                  && capture.m_scalars[0] == 0.25
                  && capture.m_scalars[4] == 1.0
+                 && capture.m_solid
                  && capture.m_alignOption == 2
                  && capture.m_miterOption == 3
                  && capture.m_profileType == 77

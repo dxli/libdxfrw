@@ -7848,7 +7848,7 @@ public:
     std::int32_t m_operationMinor = 0;
     DRW_Coord m_direction;
     std::array<double, 6> m_scalars{}; // draft/start/end/twist/scale/align
-    bool m_hasAlignStart = false;
+    bool m_solid = false;
     std::int32_t m_alignOption = 0;
     std::int32_t m_miterOption = 0;
     std::array<bool, 4> m_optionFlags{}; // align-start, bank, 294, 295

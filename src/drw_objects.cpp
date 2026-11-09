@@ -31867,7 +31867,7 @@ bool DRW_AcShHistoryObject::parseSweepActionBody(
         if (!readDouble(value))
             return false;
     }
-    if (!readBit(parsed.m_hasAlignStart)
+    if (!readBit(parsed.m_solid)
         || !readShort(parsed.m_alignOption)
         || !readShort(parsed.m_miterOption)
         || !readBit(parsed.m_optionFlags[0])

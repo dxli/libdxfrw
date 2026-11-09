@@ -191,13 +191,16 @@ int main(int argc, char** argv) {
             const auto& sweep = history.m_sweepActionBody;
             std::cout << "SWEEP_CAPTURE " << std::hex << history.handle
                       << std::dec << ' ' << sweep.m_operationMajor << ' '
-                      << sweep.m_operationMinor << ' ' << sweep.m_profileType
+                      << sweep.m_operationMinor << ' ' << sweep.m_solid << ' '
+                      << sweep.m_profileType
                       << ' ' << sweep.m_profileBitSize << ' '
                       << sweep.m_pathType << ' ' << sweep.m_pathBitSize << ' '
                       << sweep.m_opaqueTailStartBit << ' '
                       << sweep.m_opaqueTailBitSize << ' '
                       << sweep.m_bodyStartBit << ' ' << sweep.m_bodyBitSize << ' '
                       << sweep.m_bodyBits.size() << ' '
+                      << sweep.m_dwgVector.x << ' ' << sweep.m_dwgVector.y << ' '
+                      << sweep.m_dwgVector.z << ' '
                       << sweep.m_structuralFieldsComplete << ' '
                       << sweep.m_exactBodyEnd << ' ';
             hexBytes(sweep.m_opaqueTailBits);

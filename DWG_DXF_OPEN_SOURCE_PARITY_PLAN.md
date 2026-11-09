@@ -869,9 +869,13 @@ do not repeat this TABLESTYLE codec work.
    [field-span trace receipt](docs/research/p4-ac1027-sweep-acadrust-field-span-trace-2026-11-08.json).
    Production readback now retains the full 2,343-bit action-body span,
    including both type-77 bodies (744/480 bits), and preserves the zero bit at
-   2570 as a one-bit opaque suffix while reporting Partial. This local cursor
-   fit strongly supports the candidate order but does not prove embedded
-   entity semantics or explain the suffix. Do not consume the bit as padding.
+   2570 as a one-bit opaque suffix while reporting Partial. In the hash-pinned
+   paired DXF, the captured first option bit matches documented group 290
+   (`solid=1`); the next flag matches group 292 (`align start=1`). The separate
+   DWG-only 3BD `(1,1,1)` does not match paired DXF reference vector groups
+   11/21/31 `(0,0,0)`, so those values must not be conflated. This one-pair
+   correlation corrects a field label but does not prove a producer-wide DWG
+   layout or embedded-entity semantics. Do not consume the bit as padding.
    Next resolve its field/framing identity and decode eligible embedded entity
    profiles with bounded transactional codecs. Keep Sweep output refused and
    support claims unchanged until graph dependencies, roles, output/readback
