@@ -46,9 +46,10 @@
       "linuxArm64": "queued",
       "appImage": "queued",
       "readDwgUnderSanitizers": "queued",
-      "codeqlPython": "queued",
+      "codeqlPython": "success",
       "macOSX86_64": "queued",
-      "result": "Plan Sync passed; Windows package qualification is pending."
+      "result": "Plan Sync, Windows persistence, and CodeQL Python passed; Windows package remains in progress.",
+      "aggregateCodeQL": "neutral: base branch C++ configuration missing"
     }
   },
   "limitations": [
