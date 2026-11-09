@@ -43,6 +43,15 @@
     "sample": {"object": "BLOCK_HEADER", "handle": "0x2", "field": "blockControl", "rawCode": "0x8", "resolvedTarget": "0x1"},
     "peer": {"name": "LibreDWG", "version": "0.14", "result": "SUCCESS", "minJsonSha256": "a84c33e5e641357d549f8f1c961d2a5ad43ecf28c22460be2feb478ed9f300c7", "jsonObservation": "BLOCK_HEADER handle [0,1,2] has ownerhandle [8,0,0,1]; BLOCK_CONTROL handle is [0,1,1]. BLOCK_CONTROL has three null entries in its counted list and non-null model_space/paper_space phantom targets 0x2 and 0xC."}
   },
+  "sortEntsTableOwnerAudit": {
+    "authority": "Autodesk's DXF SORTENTSTABLE definition restricts group-330 owner to *MODEL_SPACE or *PAPER_SPACE; the existing implementation plan keeps other owner scopes refused.",
+    "physicalPeerRows": [
+      {"tableHandle": "0xD46", "ownerHandle": "0xCCE", "ownerBlockName": "*U", "entryCount": 25, "scope": "anonymous non-model/paper block; refused"},
+      {"tableHandle": "0xE54", "ownerHandle": "0x127", "ownerBlockName": "Title_Block-ANSI", "entryCount": 25, "scope": "named non-model/paper block; refused"},
+      {"tableHandle": "0xF54", "ownerHandle": "0xEDC", "ownerBlockName": "*U", "entryCount": 25, "scope": "anonymous non-model/paper block; refused"}
+    ],
+    "currentReaderDisposition": "All three are parsed as typed callbacks and retained as unsupported raw source callbacks, but strict output correctly refuses these owner scopes. Do not lift the owner restriction from local readback or raw-byte agreement."
+  },
   "implementation": {
     "files": ["src/drw_objects.cpp", "src/intern/dwgreader.cpp", "tests/dwg_reader_matrix_tests.cpp"],
     "behavior": "BLOCK_HEADER role validation now accepts DWG relative handle encodings 0x6, 0x8, 0xA and 0xC when the expected semantic role is soft pointer. For BLOCK_CONTROL, a null counted entry now emits one Warning and scanning continues; null model/paper-space phantom entries and non-null wrong-role members remain Error observations.",
@@ -81,6 +90,7 @@
     "Do not commit downloaded DWG or derived DXF fixtures; create a local-from-scratch fixture only if a minimized regression is needed."
   ],
   "result": "Autodesk's title_block-ansi sample is a new unique AC1024 source. It exposed both a relative soft-pointer role false rejection and null counted BLOCK_CONTROL entries. The parser now accepts the documented relative codes; it warns on counted BLOCK_CONTROL holes but preserves strict-fatal handling for required model/paper-space members. The sample reads 498/498 observed frames with zero entity/object parse failures. Strict DXF output now reaches and refuses the independent opaque-output gate at 106/109. Other retrieved samples either match existing AC1024 hashes or are AC1021. No drawing fixture was added to the repository.",
+  "nextReadyAction": "Continue P4 with a different source-evidenced OBJECTS subgraph whose owner scope is allowed by the applicable format contract; keep all three non-model/paper SORTENTSTABLE source routes refused.",
   "supportClaimEffect": "none",
   "validation": {
     "build": "PASS: cmake --build build-gcc --target libdxfrw_dwg_reader_matrix_tests dwg2dxf -j4",
