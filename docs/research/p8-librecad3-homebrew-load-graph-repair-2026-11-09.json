@@ -9,6 +9,7 @@
     "head": "7e81275b71038d4a42fa580842e661ddcee7adbf",
     "base": "5cf435f4a5a57d8dba1599c720917b902e74b25b",
     "localCandidateCommit": "1a012ff6",
+    "localRegressionCommit": "8412c5e0",
     "published": false,
     "publicationReview": "Automatic review rejected the GitHub content upload: it would publish a large potentially sensitive internal implementation plan, and conversation history was not accepted as authorization for that disclosure. Review explicitly prohibits retry through another route.",
     "checkout": "/private/tmp/librecad3-p8"
@@ -22,16 +23,18 @@
     "Removed selected_dependency_receipt validation of package-level dependency rows.",
     "Retained strict dependency-table schema and identity-shape validation for both original and installed tables.",
     "Updated regression coverage to permit post-pour table changes while checking malformed table refusal.",
-    "Added a direct control that an actual loaded dependency with a source-built receipt is refused independently."
+    "Added a direct control that an actual loaded dependency with a source-built receipt is refused independently.",
+    "Added direct RuntimeStager coverage proving actual-load-source capture occurs before byte-identical copying and source-built load rejection leaves no staged destination."
   ],
   "validation": {
     "command": "python3 -m unittest scripts.tests.test_native_origins -q",
     "result": "passed",
-    "tests": 41,
+    "tests": 42,
+    "regressionCommit": "8412c5e0",
     "planSync": {
       "fullValidation": "python3 scripts/validate_python_binding_plan.py --full: PASS",
       "regressions": "python3 -m unittest scripts.tests.test_validate_python_binding_plan -q: PASS, 31 tests",
-      "worktreeCoverage": "python3 scripts/validate_python_binding_plan.py --worktree --exclude-path build.log --exclude-path configure.log --exclude-path tests.log: PASS; no changed paths in the isolated checkout, no stale evidence",
+      "worktreeCoverage": "python3 scripts/validate_python_binding_plan.py --worktree --exclude-path build.log --exclude-path configure.log --exclude-path tests.log: PASS; the test and plan paths map to all 12 required gates, no unmapped paths or stale validated evidence",
       "diffCheck": "git diff --check: PASS"
     },
     "whitespace": "git diff --check passed",

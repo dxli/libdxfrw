@@ -368,17 +368,21 @@ The local LibreCAD_3 candidate commit `1a012ff6` schema-validates both retained
 and installed dependency tables without using either as a keg-resolution
 graph; exact source/bottle checks remain mandatory for each actual selected
 load. Focused provenance
-tests pass 41/41, including updated-table/replaced-dependency-table controls,
-malformed table rejection, and independent rejection of a source-built loaded
-dependency; a fresh rerun on 2026-11-09 again passed all 41 tests. This is local fixture evidence only: the revised code has not yet
+tests pass 42/42, including updated-table/replaced-dependency-table controls,
+malformed table rejection, independent rejection of a source-built loaded
+dependency, and a direct `RuntimeStager._stage_external` control proving source
+capture precedes byte-identical staging and rejected source-built loads publish
+no destination. The regression and its plan update are committed locally as
+`8412c5e0`; the 12-gate worktree audit passes with no unmapped paths or stale
+evidence. This is local fixture evidence only: the revised code has not yet
 passed hosted arm64 CI or been published to PR #456. Automatic review rejected
 the GitHub content upload because it would publish a large internal
 implementation plan; it explicitly disallowed retrying through another route.
 Follow-up plan synchronization in the isolated checkout passed `--full`, all
 31 plan-checker regression tests, the worktree coverage audit, and
-`git diff --check`; the checkout was clean, so that audit found no uncommitted
-paths. The detailed commands are in the receipt. The local implementation commit is preserved, and PR publication now needs the
-user's explicit approval for that disclosure. Intel remains blocked because the
+`git diff --check`. The detailed commands are in the receipt. The local
+implementation commit is preserved, and PR publication now needs the user's
+explicit approval for that disclosure. Intel remains blocked because the
 runner cannot obtain the required bottles under `--force-bottle`; determine a
 supported binary provider/runner policy without permitting silent source
 builds. See the
