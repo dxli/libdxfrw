@@ -207,7 +207,8 @@ public:
 
 std::vector<std::uint8_t> makeGeneratedR2000XrefBlockRecord(
     DRW::Version version, std::uint16_t xrefIndexPlusOne, bool overlaid,
-    bool xrefUnloaded = false, int wrongBodyRoleField = -1) {
+    bool xrefUnloaded = false, int wrongBodyRoleField = -1,
+    std::uint8_t relativeBlockControlCode = 0u) {
     dwgBufferW output;
     output.putObjType(version,
                       static_cast<std::uint16_t>(DRW::BLOCK_RECORD));
@@ -228,7 +229,9 @@ std::vector<std::uint8_t> makeGeneratedR2000XrefBlockRecord(
                 : DRW::DwgSoftPointer;
         output.putHandle(makeHandle(code, reference));
     };
-    output.putHandle(makeHandle(0u, 0x200u)); // Object's own handle.
+    output.putHandle(makeHandle(
+        0u, relativeBlockControlCode != 0u ? 2u : 0x200u));
+    // Object's own handle.
     output.putBitShort(0u); // EED terminator.
     output.putBitLong(0); // Reactor count.
     if (version > DRW::AC1015)
@@ -251,7 +254,16 @@ std::vector<std::uint8_t> makeGeneratedR2000XrefBlockRecord(
 
     // Common table links followed by BLOCK_HEADER links. XREF records do not
     // carry first/last entity handles, so the next reference is ENDBLK.
-    putBodyHandle(DRW::DwgSoftPointer, 0x10u); // BLOCK_CONTROL
+    if (relativeBlockControlCode != 0u) {
+        // ODA §2.13 codes 0x6/0x8/0xA/0xC encode relative soft pointers.
+        if (relativeBlockControlCode == 0x0Au
+            || relativeBlockControlCode == 0x0Cu)
+            output.putFixedHandle(relativeBlockControlCode, 1u, 1u);
+        else
+            output.putHandle(makeHandle(relativeBlockControlCode, 0u));
+    } else {
+        putBodyHandle(DRW::DwgSoftPointer, 0x10u); // BLOCK_CONTROL
+    }
     output.putHandle(makeHandle(DRW::DwgHardOwnership, 0u)); // XDictionary
     putBodyHandle(DRW::DwgHardPointer, 0u); // XREF pointer
     putBodyHandle(DRW::DwgHardOwnership, 0x201u); // BLOCK
@@ -6683,6 +6695,27 @@ void testBlockRecordBodyHandleRoles(TestContext& t) {
                                 == profile.names.size(),
                      "corrected BLOCK_HEADER body role retries on same object");
         }
+    }
+
+    for (const std::uint8_t code : {0x06u, 0x08u, 0x0Au, 0x0Cu}) {
+        std::vector<std::uint8_t> relativeSoftPointer =
+            makeGeneratedR2000XrefBlockRecord(DRW::AC1018, 0u, false, false,
+                                               -1, code);
+        dwgBuffer relativeBuffer(relativeSoftPointer.data(),
+                                 relativeSoftPointer.size());
+        DRW_Block_Record relativeRecord;
+        const bool relativeParsed = DwgBlockOwnershipTestAccess::parse(
+            relativeRecord, DRW::AC1018, relativeBuffer);
+        const std::uint32_t expectedTarget =
+            code == 0x06u || code == 0x0Au ? 3u : 1u;
+        t.expect(relativeParsed
+                     && relativeRecord.parentHandle == expectedTarget
+                     && !relativeRecord.dwgHandleFieldSpans().empty()
+                     && relativeRecord.dwgHandleFieldSpans().front().m_name
+                            == "blockControl"
+                     && relativeRecord.dwgHandleFieldSpans().front()
+                            .m_rawHandleCode == code,
+                 "BLOCK_HEADER accepts ODA relative soft-pointer encoding");
     }
 }
 

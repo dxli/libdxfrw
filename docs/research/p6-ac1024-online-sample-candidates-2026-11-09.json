@@ -1,8 +1,8 @@
 {
   "schema": "libdxfrw.research-receipt.v1",
   "date": "2026-11-09",
-  "title": "Online AC1024 sample candidates for new-source qualification",
-  "status": "CANDIDATES_IDENTIFIED_SIGNATURE_UNVERIFIED",
+  "title": "Online AC1024 samples and BLOCK_HEADER relative soft-pointer fix",
+  "status": "IMPLEMENTED_FAST_CONTROL_PASS",
   "scope": "Locate candidate files for a second independent AC1024 input profile without admitting any file as a fixture or evidence before inspecting its bytes and provenance.",
   "sources": [
     {
@@ -23,8 +23,46 @@
     {"name": "civil_example-imperial.dwg", "url": "https://download.autodesk.com/us/samplefiles/acad/civil_example-imperial.dwg"},
     {"name": "mechanical_example-imperial.dwg", "url": "https://download.autodesk.com/us/samplefiles/acad/mechanical_example-imperial.dwg"},
     {"name": "blocks_and_tables_-_metric.dwg", "url": "https://download.autodesk.com/us/samplefiles/acad/blocks_and_tables_-_metric.dwg"},
-    {"name": "blocks_and_tables_-_imperial.dwg", "url": "https://download.autodesk.com/us/samplefiles/acad/blocks_and_tables_-_imperial.dwg"}
+    {"name": "blocks_and_tables_-_imperial.dwg", "url": "https://download.autodesk.com/us/samplefiles/acad/blocks_and_tables_-_imperial.dwg"},
+    {"name": "title_block-ansi.dwg", "url": "https://download.autodesk.com/us/samplefiles/acad/title_block-ansi.dwg"}
   ],
+  "downloadAudit": {
+    "scratchDirectory": "/private/tmp",
+    "retrieved": [
+      {"name": "title_block-ansi.dwg", "versionSignature": "AC1024", "sha256": "907398897552a090182f5446f18ad1ef82b91176764c8ccf08b5c5799546eeba", "newUniqueInput": true},
+      {"name": "architectural_example-imperial.dwg", "versionSignature": "AC1024", "sha256": "52d14a7bdb946099d3cf16fd276d19bd8924348fd02b2ddd0003cd4f6b34cce7", "newUniqueInput": false},
+      {"name": "civil_example-imperial.dwg", "versionSignature": "AC1024", "sha256": "45b419d0c7382eb271079b80c3237a52183f4fa09e7b495c3d7a65c6baa927dc", "newUniqueInput": false},
+      {"name": "mechanical_example-imperial.dwg", "versionSignature": "AC1024", "sha256": "854c8ebed8726add72ba4a9a2a19ba0d010372f5cadefb40e648cdf881cad858", "newUniqueInput": false},
+      {"name": "blocks_and_tables_-_metric.dwg", "versionSignature": "AC1021", "sha256": "7d5507da05fb70ba55875d99e676524ca2caa0ed7a5582ad130c3c06e8d925f1", "newUniqueInput": false},
+      {"name": "blocks_and_tables_-_imperial.dwg", "versionSignature": "AC1021", "sha256": "3c95e8a82d5c8c251483fabc61efa8ca904f4e4bc8c2fce4786d74e812284d07", "newUniqueInput": false}
+    ],
+    "otherEndpoints": "Several newer sample filenames listed on the LT archive returned HTTP 403; no bytes were retained for them."
+  },
+  "independentWireEvidence": {
+    "normativeSource": "Open Design Specification for .dwg files v5.4.1 §2.13: raw handle codes 0x6/0x8/0xA/0xC encode relative soft-pointer references; code 0x8 resolves to base handle minus one.",
+    "sample": {"object": "BLOCK_HEADER", "handle": "0x2", "field": "blockControl", "rawCode": "0x8", "resolvedTarget": "0x1"},
+    "peer": {"name": "LibreDWG", "version": "0.14", "result": "SUCCESS", "minJsonSha256": "a84c33e5e641357d549f8f1c961d2a5ad43ecf28c22460be2feb478ed9f300c7", "jsonObservation": "BLOCK_HEADER handle [0,1,2] has ownerhandle [8,0,0,1]; BLOCK_CONTROL handle is [0,1,1]."}
+  },
+  "implementation": {
+    "files": ["src/drw_objects.cpp", "tests/dwg_reader_matrix_tests.cpp"],
+    "behavior": "BLOCK_HEADER role validation now accepts DWG relative handle encodings 0x6, 0x8, 0xA and 0xC when the expected semantic role is soft pointer. It still rejects wrong semantic roles and canonical null is accepted only for a null reference.",
+    "sampleRead": {
+      "command": "build-gcc/dwg2dxf/dwg2dxf /private/tmp/libdxfrw-title_block-ansi.dwg -y -d -v2010 /private/tmp/libdxfrw-title_block-ansi-after-fix.dxf",
+      "traceSha256": "77904a5dda5c1e0f1fd8e22d474f1aabc6142ec034438f2d6e25fea3f9668e80",
+      "result": "PASS: current libdxfrw reports operationSucceeded=true and legacyError=0, publishes all 498/498 observed frames, and has zero entity/object parse failures. Strict DXF output remains refused because the source read disposition is not qualified for strict-complete export.",
+      "preFixTraceSha256": "59aa6844c7c5452175978168b9e948ff12b5fcab96f7e88b7147f0a5df54284d",
+      "preFixDiagnostic": "BLOCK_HEADER body handle role mismatch for blockControl: raw code 8 target 1"
+    },
+    "generatedControl": "PASS: libdxfrw_block_record_body_handle_roles covers all four ODA relative soft-pointer encodings and the existing wrong-role, truncation/reset and corrected-retry cases."
+  },
+  "bindings": {
+    "src/drw_objects.cpp": "94d043a584d1570668ad2faa9a44a713fb49196e699241a84817b7dcd86183d0",
+    "tests/dwg_reader_matrix_tests.cpp": "b9fe3bbcbfcb6e788ee420ed51346a305ee74562da48b1d40b63c9e7889ef36b",
+    "dwg2dxf": "602c954e81cce94676e8b4b4caf80099abc19b151d0065b6ed34a3333d0d63d0",
+    "readerTestExecutable": "a98136c06db84f01c9045b11550c6b2771969dace51302f85a8bed6237b5946f",
+    "postFixTrace": "77904a5dda5c1e0f1fd8e22d474f1aabc6142ec034438f2d6e25fea3f9668e80",
+    "odaSpecTextExtract": "f2b23bb7b0e7191a1a18f9f32c643c5635a90c65ee692e6913988820e032953a"
+  },
   "qualificationGate": [
     "Download only to a scratch location and record URL, retrieval date, byte length and SHA-256.",
     "Verify the first six bytes are AC1024 before treating a file as an AC1024 sample.",
@@ -32,7 +70,12 @@
     "Run current fast read/strict-output probes and independent reader comparison on eligible candidates.",
     "Do not commit downloaded DWG or derived DXF fixtures; create a local-from-scratch fixture only if a minimized regression is needed."
   ],
-  "result": "Candidate locations were identified from Autodesk's archive and its historical AutoCAD 2010 sample list. The binary download endpoints were not fetched in this research pass; no candidate has an observed AC1024 signature, hash, reader result, or producer-qualification status.",
+  "result": "Autodesk's title_block-ansi sample is a new unique AC1024 source. It exposed a real BLOCK_HEADER false rejection caused by treating a relative soft-pointer wire code as a different semantic role. The bounded parser fix is covered by a generated fast test and the entire sample now reads with 498/498 frames published and no entity/object parse failures. Other retrieved samples either match existing AC1024 hashes or are AC1021. No drawing fixture was added to the repository.",
   "supportClaimEffect": "none",
+  "validation": {
+    "build": "PASS: cmake --build build-gcc --target libdxfrw_dwg_reader_matrix_tests dwg2dxf -j4",
+    "test": "PASS 1/1: ctest --test-dir build-gcc -R '^libdxfrw_block_record_body_handle_roles$' --output-on-failure",
+    "diffCheck": "PASS: git diff --check"
+  },
   "newFixtureCommitted": false
 }

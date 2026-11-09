@@ -5788,7 +5788,11 @@ bool DRW_Block_Record::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint3
         std::uint64_t endBit = 0u;
         if (!objectCurrentBit(handleBuffer, endBit) || endBit < startBit)
             return false;
-        if (parsed.rawCode != expectedRole
+        const bool relativeSoftPointer =
+            expectedRole == DRW::DwgSoftPointer
+            && (parsed.rawCode == 0x06u || parsed.rawCode == 0x08u
+                || parsed.rawCode == 0x0Au || parsed.rawCode == 0x0Cu);
+        if (parsed.rawCode != expectedRole && !relativeSoftPointer
             && !(parsed.ref == 0u
                  && parsed.rawCode == DRW::DwgNullReference)) {
             DRW_DBG("BLOCK_HEADER body handle role mismatch for ");
