@@ -119,9 +119,10 @@ no native apps. No ODA or FreeCAD process was launched. Treat this as an
 access-state blocker only; it supplies no format evidence and changes no
 support claim. Keep native ODA/FreeCAD qualification queued, do not retry the
 unchanged ODA File Converter 27.1 CLI route that aborts before processing,
-and continue the local AC1027 DataStorage source-span diagnosis above. Retry
-native qualification only after a fresh inventory exposes an unlocked
-session or a materially different launch path is available.
+and continue with the next local source-backed implementation item: the AC1027
+source-reference/output gate listed above. Retry native qualification only
+after a fresh inventory exposes an unlocked session or a materially different
+launch path is available.
 
 **Resume checkpoint (2026-11-09, AC1032 control-reactor slice):** the
 VPORT_CONTROL reader now consumes declared common reactor references before
