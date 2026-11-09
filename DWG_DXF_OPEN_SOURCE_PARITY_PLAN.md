@@ -1,5 +1,34 @@
 # DWG/DXF parity — remaining implementation plan
 
+**Resume checkpoint (2026-11-09, PERSUBENTMGR source-corpus expansion):** a
+LibreDWG 0.14 minJSON scan of 178 already-local DWGs found 41
+PERSUBENTMGR records across 26 source files. This broadens the evidence beyond
+Platte's all-zero six-scalar suffix: the existing ACadSharp AC1014/AC1015
+sample pair reports handle `0xD63`, `numassocsteps=4`, steps `[3,4]`, and
+subentities `[12783812,0,0,256]`; corresponding AC1021/AC1024 samples report
+the same associated-step count and steps but no subentities. The paired
+AC1024 AutoCAD ASCII DXF at handle `0xD63` has group-90 sequence
+`[2,0,2,4,0,2,3,4]` and ends without a trailing subentity count. These are
+useful nonzero/cross-version observations, but the peer JSON interpretation
+and a DXF projection do not by themselves prove the DWG body grammar or its
+semantics. The local AC1024 visualization fixture also produces an extreme
+peer count (`numassocsteps=1060`, `numassocsubents=213`) and must be treated as
+a separate anomaly until its raw frame and exact bounds are traced. No
+production parser interpretation or support claim changes in this checkpoint.
+
+**Next PERSUBENTMGR slice:** extract concise, hash-bound DWG/DXF records for
+the exact matching AC1014/15, AC1021/24, and AC1027/32 local samples; establish
+their save provenance and compare every bounded body bit/field span against
+the paired DXF projection. In particular, determine from physical spans—not
+only zero values or peer field names—whether the trailing `num_subents` field
+is conditionally absent when `numassocsubents==0`, and whether AC1014/15's
+nonzero subentity vector uses the candidate count/value order. Add focused
+generated controls only for grammar branches supported by those observations,
+with truncation rollback, corrected-input retry, exact following-frame
+recovery, and byte-preserving raw fallback. Keep disputed or unproven variants
+raw-only; do not promote strict output, semantic support, or version-wide
+claims from this corpus scan.
+
 **Resume checkpoint (2026-11-09, AC1032 control-reactor slice):** the
 VPORT_CONTROL reader now consumes declared common reactor references before
 the XDictionary and table-entry handles. The generated AC1032 regression
@@ -41,6 +70,12 @@ This checkpoint is an access-state refresh only: it does not alter the earlier
 successful GUI conversions or their hash-bound receipts, does not qualify any
 new file-format profile, and does not change support claims. No ODA or FreeCAD
 process was launched during this recheck.
+
+**Desktop access refresh (2026-11-09, after the latest unlock-in-progress
+reply):** a new native-app inventory again returned “The Mac is locked and
+automatic unlock could not unlock it.” No app was launched. Leave the ODA and
+native FreeCAD qualification items queued; continue with local source-bound
+work and retry only after a later inventory reports an unlocked session.
 
 **Earlier access recheck (2026-11-09 07:51 UTC):** following the user's
 unlock-in-progress reply, direct CUA inventory still returned “The Mac is
