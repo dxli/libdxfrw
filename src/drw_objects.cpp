@@ -5774,9 +5774,44 @@ bool DRW_Block_Record::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint3
         return readBoundedObjectHandle(handleBuffer, handle, offset, value,
                                        handleEndBit);
     };
+    std::vector<DRW_DwgSubrecordRange> parsedHandleFieldSpans;
+    const auto readBodyHandle = [version, &handleBuffer, &readHandle,
+                                 &parsedHandleFieldSpans](
+        const char *name, std::uint8_t expectedRole, bool offset,
+        dwgHandle& value) {
+        std::uint64_t startBit = 0u;
+        if (!objectCurrentBit(handleBuffer, startBit))
+            return false;
+        dwgHandle parsed;
+        if (!readHandle(offset, parsed))
+            return false;
+        std::uint64_t endBit = 0u;
+        if (!objectCurrentBit(handleBuffer, endBit) || endBit < startBit)
+            return false;
+        if (parsed.rawCode != expectedRole
+            && !(parsed.ref == 0u
+                 && parsed.rawCode == DRW::DwgNullReference)) {
+            DRW_DBG("BLOCK_HEADER body handle role mismatch for ");
+            DRW_DBG(name); DRW_DBG(": raw code ");
+            DRW_DBG(static_cast<unsigned int>(parsed.rawCode));
+            DRW_DBG(" target "); DRW_DBG(parsed.ref); DRW_DBG("\n");
+            return false;
+        }
+        DRW_DwgSubrecordRange span;
+        span.m_name = name;
+        span.m_startBit = startBit;
+        span.m_bitSize = endBit - startBit;
+        span.m_version = version;
+        span.m_rawHandleCode = parsed.rawCode;
+        span.m_parseComplete = true;
+        parsedHandleFieldSpans.push_back(std::move(span));
+        value = parsed;
+        return true;
+    };
 
     dwgHandle blockControlH;
-    if (!readHandle(true, blockControlH))
+    if (!readBodyHandle("blockControl", DRW::DwgSoftPointer, true,
+                        blockControlH))
         return fail();
     std::vector<std::uint32_t> parsedReactors;
     if (!DRW::reserve(parsedReactors, numReactors))
@@ -5798,10 +5833,11 @@ bool DRW_Block_Record::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint3
     // BLOCK_HEADER-specific block entity handle. It is usually null, but is
     // part of the ownership graph and must not be discarded.
     dwgHandle parsedXrefBlockHandle;
-    if (!readHandle(false, parsedXrefBlockHandle))
+    if (!readBodyHandle("xrefBlock", DRW::DwgHardPointer, false,
+                        parsedXrefBlockHandle))
         return fail();
     dwgHandle blockH;
-    if (!readHandle(true, blockH))
+    if (!readBodyHandle("block", DRW::DwgHardOwnership, true, blockH))
         return fail();
     parsedBlock = blockH.ref;
 
@@ -5811,7 +5847,8 @@ bool DRW_Block_Record::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint3
     if (version > DRW::AC1015 && !blockIsXref && !xrefOverlaid) {//2004+, non-XREF
         for (std::uint32_t i = 0; i < objectCount; ++i) {
             dwgHandle entityH;
-            if (!readHandle(false, entityH))
+            if (!readBodyHandle("ownedEntity", DRW::DwgHardOwnership,
+                                false, entityH))
                 return fail();
             parsedEntMap.push_back(entityH.ref);
         }
@@ -5819,15 +5856,18 @@ bool DRW_Block_Record::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint3
         if(!blockIsXref && !xrefOverlaid){
             dwgHandle firstH;
             dwgHandle lastH;
-            if (!readHandle(false, firstH)
-                || !readHandle(false, lastH))
+            if (!readBodyHandle("firstEntity", DRW::DwgSoftPointer,
+                                false, firstH)
+                || !readBodyHandle("lastEntity", DRW::DwgSoftPointer,
+                                   false, lastH))
                 return fail();
             parsedFirstEntity = firstH.ref;
             parsedLastEntity = lastH.ref;
         }
     }
     dwgHandle endBlockH;
-    if (!readHandle(true, endBlockH))
+    if (!readBodyHandle("endBlock", DRW::DwgHardOwnership, true,
+                        endBlockH))
         return fail();
     parsedEndBlock = endBlockH.ref;
 
@@ -5842,15 +5882,16 @@ bool DRW_Block_Record::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint3
         }
         for (std::uint32_t i = 0; i < insertCount; ++i) {
             dwgHandle insertH;
-            if (!readHandle(false, insertH))
+            if (!readBodyHandle("insert", DRW::DwgSoftPointer, false,
+                                insertH))
                 return fail();
             if (insertH.ref != 0)
                 parsedInsertHandles.push_back(insertH.ref);
         }
         dwgHandle layoutH;
-        if (!readHandle(false, layoutH))
+        if (!readBodyHandle("layout", DRW::DwgHardPointer, false, layoutH))
             return fail();
-        parsedLayoutHandle = layoutH.ref;  // soft ptr to owning LAYOUT (DXF 340)
+        parsedLayoutHandle = layoutH.ref;  // hard pointer to owning LAYOUT (DXF 340)
     }
     if (!buf->isGood() || !sBuf->isGood() || !handleBuffer.isGood()
         || (version > DRW::AC1018
@@ -5882,6 +5923,7 @@ bool DRW_Block_Record::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint3
     layoutHandle = parsedLayoutHandle;
     this->insertCount = parsedInsertCount;
     insertHandles = std::move(parsedInsertHandles);
+    m_dwgHandleFieldSpans = std::move(parsedHandleFieldSpans);
     return true;
     } catch (...) {
         return fail();

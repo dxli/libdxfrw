@@ -2673,6 +2673,7 @@ public:
     xrefBlockHandle = dwgHandle{};
     insertCount = 0;
     insertHandles.clear();
+    m_dwgHandleFieldSpans.clear();
     firstEH = lastEH = DRW::NoHandle;
     block = endBlock = 0;
     entMap.clear();
@@ -2706,6 +2707,11 @@ public:
   std::uint32_t insertCount = 0; /*!< number of DWG INSERT reference slots */
   std::vector<std::uint32_t>
       insertHandles; /*!< non-null DWG INSERT references */
+  //! Exact ordered DWG handle-stream spans for BLOCK_HEADER body references.
+  //! Common table-record owner/reactor/xdictionary references are parsed by
+  //! DRW_TableEntry and are not included here.
+  [[nodiscard]] const std::vector<DRW_DwgSubrecordRange>&
+  dwgHandleFieldSpans() const noexcept { return m_dwgHandleFieldSpans; }
   // Adapter retention accounting needs only the private entity-map size; keep
   // the mapping itself encapsulated because it is parser/writer bookkeeping.
   [[nodiscard]] std::size_t entityMapCount() const noexcept {
@@ -2719,6 +2725,7 @@ private:
   std::uint32_t firstEH;  // handle of first entity, only in pre-2004
   std::uint32_t lastEH;   // handle of last entity, only in pre-2004
   std::vector<std::uint32_t> entMap;
+  std::vector<DRW_DwgSubrecordRange> m_dwgHandleFieldSpans;
 };
 
 //! Class to handle text style entries

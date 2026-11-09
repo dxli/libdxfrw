@@ -207,7 +207,7 @@ public:
 
 std::vector<std::uint8_t> makeGeneratedR2000XrefBlockRecord(
     DRW::Version version, std::uint16_t xrefIndexPlusOne, bool overlaid,
-    bool xrefUnloaded = false) {
+    bool xrefUnloaded = false, int wrongBodyRoleField = -1) {
     dwgBufferW output;
     output.putObjType(version,
                       static_cast<std::uint16_t>(DRW::BLOCK_RECORD));
@@ -218,6 +218,15 @@ std::vector<std::uint8_t> makeGeneratedR2000XrefBlockRecord(
         value.code = code;
         value.ref = reference;
         return value;
+    };
+    int bodyRoleField = 0;
+    const auto putBodyHandle = [&output, &makeHandle, &bodyRoleField,
+                                wrongBodyRoleField](std::uint8_t code,
+                                                    std::uint32_t reference) {
+        if (bodyRoleField++ == wrongBodyRoleField)
+            code = code == DRW::DwgSoftPointer ? DRW::DwgHardPointer
+                : DRW::DwgSoftPointer;
+        output.putHandle(makeHandle(code, reference));
     };
     output.putHandle(makeHandle(0u, 0x200u)); // Object's own handle.
     output.putBitShort(0u); // EED terminator.
@@ -242,12 +251,77 @@ std::vector<std::uint8_t> makeGeneratedR2000XrefBlockRecord(
 
     // Common table links followed by BLOCK_HEADER links. XREF records do not
     // carry first/last entity handles, so the next reference is ENDBLK.
-    output.putHandle(makeHandle(DRW::DwgSoftPointer, 0x10u)); // BLOCK_CONTROL
+    putBodyHandle(DRW::DwgSoftPointer, 0x10u); // BLOCK_CONTROL
     output.putHandle(makeHandle(DRW::DwgHardOwnership, 0u)); // XDictionary
-    output.putHandle(makeHandle(DRW::DwgHardPointer, 0u)); // XREF pointer
-    output.putHandle(makeHandle(DRW::DwgHardOwnership, 0x201u)); // BLOCK
-    output.putHandle(makeHandle(DRW::DwgHardOwnership, 0x202u)); // ENDBLK
-    output.putHandle(makeHandle(DRW::DwgHardPointer, 0u)); // LAYOUT
+    putBodyHandle(DRW::DwgHardPointer, 0u); // XREF pointer
+    putBodyHandle(DRW::DwgHardOwnership, 0x201u); // BLOCK
+    putBodyHandle(DRW::DwgHardOwnership, 0x202u); // ENDBLK
+    putBodyHandle(DRW::DwgHardPointer, 0u); // LAYOUT
+    return output.data();
+}
+
+std::vector<std::uint8_t> makeGeneratedR2000NonXrefBlockRecord(
+    DRW::Version version, int wrongBodyRoleField = -1) {
+    dwgBufferW output;
+    output.putObjType(version,
+                      static_cast<std::uint16_t>(DRW::BLOCK_RECORD));
+    output.putRawLong32(0u); // Legacy object-size sentinel: inline handles.
+
+    const auto makeHandle = [](std::uint8_t code, std::uint32_t reference) {
+        dwgHandle value;
+        value.code = code;
+        value.ref = reference;
+        return value;
+    };
+    int bodyRoleField = 0;
+    const auto putBodyHandle = [&output, &makeHandle, &bodyRoleField,
+                                wrongBodyRoleField](std::uint8_t code,
+                                                    std::uint32_t reference) {
+        if (bodyRoleField++ == wrongBodyRoleField)
+            code = code == DRW::DwgSoftPointer ? DRW::DwgHardPointer
+                : DRW::DwgSoftPointer;
+        output.putHandle(makeHandle(code, reference));
+    };
+    output.putHandle(makeHandle(DRW::DwgNullReference, 0x200u));
+    output.putBitShort(0u); // EED terminator.
+    output.putBitLong(0); // Reactor count.
+    if (version > DRW::AC1015)
+        output.putBoolBit(false); // XDictionary handle follows.
+    output.putVariableText(version, "BLOCK_ROLE_TEST");
+    output.putBoolBit(false); // is_xref_ref
+    output.putBitShort(0u); // xrefindex+1
+    output.putBoolBit(false); // xref-dependent
+    output.putBoolBit(false); // anonymous
+    output.putBoolBit(false); // has attributes
+    output.putBoolBit(false); // not an XREF
+    output.putBoolBit(false); // not overlaid
+    if (version > DRW::AC1014)
+        output.putBoolBit(false); // loaded (wire zero)
+    if (version > DRW::AC1015)
+        output.putBitLong(2); // Owned Object Count.
+    output.put3BitDouble(DRW_Coord(0.0, 0.0, 0.0));
+    output.putVariableText(version, "");
+    output.putRawChar8(1u); // Two non-zero INSERT count markers.
+    output.putRawChar8(1u);
+    output.putRawChar8(0u); // INSERT count terminator.
+    output.putVariableText(version, "generated BLOCK_HEADER handle test");
+    output.putBitLong(0); // Preview size.
+
+    putBodyHandle(DRW::DwgSoftPointer, 0x10u); // BLOCK_CONTROL
+    output.putHandle(makeHandle(DRW::DwgHardOwnership, 0x203u)); // XDictionary
+    putBodyHandle(DRW::DwgHardPointer, 0u); // XREF pointer
+    putBodyHandle(DRW::DwgHardOwnership, 0x201u); // BLOCK
+    if (version > DRW::AC1015) {
+        putBodyHandle(DRW::DwgHardOwnership, 0x210u); // Owned entity 1
+        putBodyHandle(DRW::DwgHardOwnership, 0x211u); // Owned entity 2
+    } else {
+        putBodyHandle(DRW::DwgSoftPointer, 0x210u); // First entity
+        putBodyHandle(DRW::DwgSoftPointer, 0x211u); // Last entity
+    }
+    putBodyHandle(DRW::DwgHardOwnership, 0x202u); // ENDBLK
+    putBodyHandle(DRW::DwgSoftPointer, 0x220u); // INSERT 1
+    putBodyHandle(DRW::DwgSoftPointer, 0x221u); // INSERT 2
+    putBodyHandle(DRW::DwgHardPointer, 0x230u); // LAYOUT
     return output.data();
 }
 
@@ -6473,6 +6547,142 @@ void testBlockRecordXrefIndexRetention(TestContext& t) {
                      && record.xrefBlockHandle.ref == 0u
                      && record.layoutHandle == 0u,
                  "XREF parse keeps path and typed references without resolving external files");
+    }
+}
+
+void testBlockRecordBodyHandleRoles(TestContext& t) {
+    struct Profile {
+        DRW::Version version;
+        bool modernOwnedList;
+        std::vector<std::string> names;
+        std::vector<std::uint8_t> roles;
+        std::vector<std::uint32_t> references;
+    };
+    const std::vector<Profile> profiles{
+        {DRW::AC1015, false,
+         {"blockControl", "xrefBlock", "block", "firstEntity",
+          "lastEntity", "endBlock", "insert", "insert", "layout"},
+         {DRW::DwgSoftPointer, DRW::DwgHardPointer,
+          DRW::DwgHardOwnership, DRW::DwgSoftPointer,
+          DRW::DwgSoftPointer, DRW::DwgHardOwnership,
+          DRW::DwgSoftPointer, DRW::DwgSoftPointer,
+          DRW::DwgHardPointer},
+         {0x10u, 0u, 0x201u, 0x210u, 0x211u, 0x202u,
+          0x220u, 0x221u, 0x230u}},
+        {DRW::AC1018, false,
+         {"blockControl", "xrefBlock", "block", "endBlock", "layout"},
+         {DRW::DwgSoftPointer, DRW::DwgHardPointer,
+          DRW::DwgHardOwnership, DRW::DwgHardOwnership,
+          DRW::DwgHardPointer},
+         {0x10u, 0u, 0x201u, 0x202u, 0u}},
+        {DRW::AC1018, true,
+         {"blockControl", "xrefBlock", "block", "ownedEntity",
+          "ownedEntity", "endBlock", "insert", "insert", "layout"},
+         {DRW::DwgSoftPointer, DRW::DwgHardPointer,
+          DRW::DwgHardOwnership, DRW::DwgHardOwnership,
+          DRW::DwgHardOwnership, DRW::DwgHardOwnership,
+          DRW::DwgSoftPointer, DRW::DwgSoftPointer,
+          DRW::DwgHardPointer},
+         {0x10u, 0u, 0x201u, 0x210u, 0x211u, 0x202u,
+          0x220u, 0x221u, 0x230u}},
+    };
+
+    const auto makeBytes = [](const Profile& profile, int badField) {
+        if (profile.modernOwnedList)
+            return makeGeneratedR2000NonXrefBlockRecord(profile.version,
+                                                        badField);
+        if (profile.version == DRW::AC1015 && !profile.modernOwnedList)
+            return makeGeneratedR2000NonXrefBlockRecord(profile.version,
+                                                        badField);
+        return makeGeneratedR2000XrefBlockRecord(
+            profile.version, 0u, false, false, badField);
+    };
+    for (const Profile& profile : profiles) {
+        std::vector<std::uint8_t> bytes = makeBytes(profile, -1);
+        dwgBuffer buffer(bytes.data(), bytes.size());
+        DRW_Block_Record record;
+        const bool parsed = DwgBlockOwnershipTestAccess::parse(
+            record, profile.version, buffer);
+        t.expect(parsed, profile.modernOwnedList
+                             ? "generated AC1018 owned-list BLOCK_HEADER parses"
+                             : profile.version == DRW::AC1015
+                                   ? "generated AC1015 legacy BLOCK_HEADER parses"
+                                   : "generated AC1018 XREF BLOCK_HEADER parses");
+        if (!parsed)
+            continue;
+        const auto& spans = record.dwgHandleFieldSpans();
+        t.expect(spans.size() == profile.names.size(),
+                 "BLOCK_HEADER publishes every selected body handle span");
+        std::uint64_t previousEnd = 0u;
+        for (std::size_t i = 0; i < spans.size(); ++i) {
+            const auto& span = spans[i];
+            dwgBuffer sourceScan(bytes.data(), bytes.size());
+            const bool seeked = sourceScan.setPosition(span.m_startBit / 8u);
+            if (seeked)
+                sourceScan.setBitPos(static_cast<std::uint8_t>(
+                    span.m_startBit % 8u));
+            const dwgHandle wire = seeked ? sourceScan.getHandle()
+                                           : dwgHandle{};
+            const std::uint64_t wireEnd = sourceScan.getPosition() * 8u
+                + sourceScan.getBitPos();
+            t.expect(span.m_name == profile.names[i]
+                         && span.m_version == profile.version
+                         && span.m_rawHandleCode == profile.roles[i]
+                         && span.m_parseComplete
+                         && span.m_bitSize > 0u
+                         && (i == 0u || span.m_startBit >= previousEnd),
+                     "BLOCK_HEADER span preserves field order, role, and bounds");
+            t.expect(seeked && sourceScan.isGood()
+                         && wire.rawCode == profile.roles[i]
+                         && wire.ref == profile.references[i]
+                         && wireEnd - span.m_startBit == span.m_bitSize,
+                     "BLOCK_HEADER span matches independent input-wire scan");
+            previousEnd = span.m_startBit + span.m_bitSize;
+        }
+        if (profile.modernOwnedList) {
+            t.expect(record.entityMapCount() == 2u
+                         && record.insertCount == 2u
+                         && record.insertHandles
+                                == std::vector<std::uint32_t>{0x220u, 0x221u}
+                         && record.layoutHandle == 0x230u,
+                     "AC1018 owned entities, INSERTs, and LAYOUT stay aligned");
+        }
+
+        std::vector<std::uint8_t> truncated = bytes;
+        truncated.pop_back();
+        dwgBuffer truncatedBuffer(truncated.data(), truncated.size());
+        const bool truncatedParsed = DwgBlockOwnershipTestAccess::parse(
+            record, profile.version, truncatedBuffer);
+        t.expect(!truncatedParsed && record.dwgHandleFieldSpans().empty(),
+                 "truncated final BLOCK_HEADER handle publishes no spans");
+        dwgBuffer completeRetry(bytes.data(), bytes.size());
+        const bool completeRetryParsed = DwgBlockOwnershipTestAccess::parse(
+            record, profile.version, completeRetry);
+        t.expect(completeRetryParsed
+                     && record.dwgHandleFieldSpans().size()
+                            == profile.names.size(),
+                 "complete BLOCK_HEADER input retries after truncation");
+
+        for (std::size_t badField = 0; badField < profile.names.size();
+             ++badField) {
+            std::vector<std::uint8_t> malformed = makeBytes(
+                profile, static_cast<int>(badField));
+            dwgBuffer malformedBuffer(malformed.data(), malformed.size());
+            const bool malformedParsed = DwgBlockOwnershipTestAccess::parse(
+                record, profile.version, malformedBuffer);
+            t.expect(!malformedParsed
+                         && record.dwgHandleFieldSpans().empty()
+                         && record.layoutHandle == 0u
+                         && record.insertHandles.empty(),
+                     "wrong BLOCK_HEADER body role resets published state");
+            dwgBuffer retryBuffer(bytes.data(), bytes.size());
+            const bool retryParsed = DwgBlockOwnershipTestAccess::parse(
+                record, profile.version, retryBuffer);
+            t.expect(retryParsed
+                         && record.dwgHandleFieldSpans().size()
+                                == profile.names.size(),
+                     "corrected BLOCK_HEADER body role retries on same object");
+        }
     }
 }
 
@@ -21556,6 +21766,13 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--block-record-xref-index") {
         TestContext focused;
         testBlockRecordXrefIndexRetention(focused);
+        std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--block-record-body-handle-roles") {
+        TestContext focused;
+        testBlockRecordBodyHandleRoles(focused);
         std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
