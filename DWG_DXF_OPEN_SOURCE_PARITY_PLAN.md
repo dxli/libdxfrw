@@ -11,8 +11,13 @@ entity/object parse failures; Teile, test-trichter and xx17 retain 2, 1 and 3
 unrelated frame failures respectively. Strict DXF output remains refused due
 to those failures and the corpus's large custom/unsupported object sets.
 Platte's PERSUBENTMGR object `0x20c50` is now reachable: its bounded 84-bit
-body ends after candidate scalar values `2, 0, 2, 0, 0, 0`, before the next
-candidate count. Keep it raw-only while resolving the physical schema. The
+body ends after scalar values `2, 0, 2, 0, 0, 0`. The AutoCAD 2019 and 2027
+paired DXFs contain the same six group-90 values. A generated exact-profile
+regression now verifies raw-only byte retention, common-link validation,
+following-frame publication and failure/retry behavior. Keep it raw-only:
+the zero-valued suffix cannot distinguish competing field meanings. See the
+[PERSUBENTMGR profile receipt](docs/research/p6-ac1032-persubentmgr-six-scalar-raw-only-profile-2026-11-09.json).
+The
 source archive, hashes, per-file outcomes, test command and limitations are in
 the [control-reactor receipt](docs/research/p6-ac1032-control-common-reactor-fix-2026-11-09.json);
 the [source-pair receipt](docs/research/p6-ac1032-vport-public-pair-read-blocker-2026-11-09.json)

@@ -14821,7 +14821,16 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
     Options ac1032Source;
     ac1032Source.version = DRW::AC1032;
     ac1032Source.classNumber = 601u;
-    ac1032Source.singleCountBit = true;
+    // Reproduce the public Platte physical profile: six BL values
+    // [2,0,2,0,0,0], followed by the absent-string footer and no proven
+    // num_subents field. Keep it raw-only until the field layout is resolved.
+    ac1032Source.classVersion = 2;
+    ac1032Source.unknown0 = 0;
+    ac1032Source.unknown2 = 2;
+    ac1032Source.associationStepCount = 0;
+    ac1032Source.associationSubentities = 0;
+    ac1032Source.stepCount = 0;
+    ac1032Source.steps.clear();
     Options ac1032Sentinel;
     ac1032Sentinel.version = DRW::AC1032;
     ac1032Sentinel.classNumber = ac1032Source.classNumber;
