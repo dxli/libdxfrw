@@ -23655,6 +23655,66 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
     reportHandle(vport.handle, "namedUcs", vport.namedUcsHandle);
     reportHandle(vport.handle, "baseUcs", vport.baseUcsHandle);
     reportHandle(vport.handle, "xrefBlock", vport.xrefBlockHandle.ref);
+    const auto targetFor = [&vport](const DRW_DwgSubrecordRange& span,
+                                    std::uint32_t& target) {
+      if (span.m_name == "control") {
+        target = vport.parentHandle;
+      } else if (span.m_name == "xdict") {
+        target = vport.xDictHandle;
+      } else if (span.m_name == "xrefBlock") {
+        target = vport.xrefBlockHandle.ref;
+      } else if (span.m_name == "background") {
+        target = vport.backgroundHandle;
+      } else if (span.m_name == "visualStyle") {
+        target = vport.visualStyleHandle;
+      } else if (span.m_name == "sun") {
+        target = vport.m_sunHandle;
+      } else if (span.m_name == "namedUcs") {
+        target = vport.namedUcsHandle;
+      } else if (span.m_name == "baseUcs") {
+        target = vport.baseUcsHandle;
+      } else if (span.m_name.compare(0u, 7u, "reactor[") == 0u
+                 && span.m_name.back() == ']') {
+        const std::string indexText = span.m_name.substr(
+            7u, span.m_name.size() - 8u);
+        std::size_t index = 0u;
+        const auto parsed = std::from_chars(indexText.data(),
+                                            indexText.data() + indexText.size(),
+                                            index);
+        if (parsed.ec != std::errc{}
+            || parsed.ptr != indexText.data() + indexText.size()
+            || index >= vport.reactorHandles.size())
+          return false;
+        target = vport.reactorHandles[index];
+      } else {
+        return false;
+      }
+      return true;
+    };
+    for (const DRW_DwgSubrecordRange& span : vport.dwgHandleFieldSpans()) {
+      std::uint32_t target = 0u;
+      if (!targetFor(span, target) || !span.m_parseComplete
+          || span.m_bitSize == 0u || span.m_version != data.sourceVersion) {
+        std::cerr << "VPORT handle span inventory is incomplete for handle "
+                  << vport.handle << '\n';
+        return false;
+      }
+      std::cout << " typedVportHandleField owner=" << vport.handle
+                << " role=" << span.m_name
+                << " code=" << static_cast<unsigned>(span.m_rawHandleCode)
+                << " target=" << target << " startBit=" << span.m_startBit
+                << " bitSize=" << span.m_bitSize << " complete=1\n";
+    }
+    if (data.sourceVersion == DRW::AC1027) {
+      const std::size_t expectedFields =
+          1u + (vport.extensionDictionaryFlag() == 1u ? 0u : 1u)
+          + vport.reactorHandles.size() + 1u + 3u + 2u;
+      if (vport.dwgHandleFieldSpans().size() != expectedFields) {
+        std::cerr << "VPORT handle span count differs from its version profile for handle "
+                  << vport.handle << '\n';
+        return false;
+      }
+    }
   }
   std::vector<const dx_ifaceBlock *> bodyBlocks{data.mBlock};
   for (const dx_ifaceBlock *block : data.blocks)

@@ -4657,6 +4657,7 @@ bool DRW_Dimstyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
         span.m_startBit = startBit;
         span.m_bitSize = endBit - startBit;
         span.m_version = version;
+        span.m_rawHandleCode = field.rawCode;
         span.m_parseComplete = true;
         parsedHandleFieldSpans.push_back(std::move(span));
         value = field;
@@ -5473,6 +5474,7 @@ bool DRW_Layer::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
         span.m_startBit = startBit;
         span.m_bitSize = endBit - startBit;
         span.m_version = version;
+        span.m_rawHandleCode = parsed.rawCode;
         span.m_parseComplete = true;
         parsedHandleFieldSpans.push_back(std::move(span));
         value = parsed;
@@ -6616,42 +6618,88 @@ bool DRW_Vport::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
     if (!hBuf->isGood())
         return fail();
 
+    std::vector<DRW_DwgSubrecordRange> parsedHandleFieldSpans;
+    const auto readVportHandle = [version, baseHandle = parsed.handle,
+                                  hBuf, handleEndBit,
+                                  &parsedHandleFieldSpans](
+        const char *name, bool offset, std::uint8_t expectedRole,
+        dwgHandle& value) {
+        std::uint64_t startBit = 0u;
+        if (!objectCurrentBit(*hBuf, startBit))
+            return false;
+        dwgHandle field;
+        if (!readBoundedObjectHandle(*hBuf, baseHandle, offset, field,
+                                     handleEndBit))
+            return false;
+        std::uint64_t endBit = 0u;
+        if (!objectCurrentBit(*hBuf, endBit) || endBit < startBit)
+            return false;
+        const bool canonicalNull = field.ref == 0u
+            && field.rawCode == DRW::DwgNullReference;
+        if (field.rawCode != expectedRole && !canonicalNull) {
+            DRW_DBG("VPORT handle role mismatch for ");
+            DRW_DBG(name); DRW_DBG(": raw code ");
+            DRW_DBG(static_cast<unsigned int>(field.rawCode));
+            DRW_DBG(" target "); DRW_DBG(field.ref); DRW_DBG("\n");
+            return false;
+        }
+        DRW_DwgSubrecordRange span;
+        span.m_name = name;
+        span.m_startBit = startBit;
+        span.m_bitSize = endBit - startBit;
+        span.m_version = version;
+        span.m_rawHandleCode = field.rawCode;
+        span.m_parseComplete = true;
+        parsedHandleFieldSpans.push_back(std::move(span));
+        value = field;
+        return true;
+    };
     dwgHandle parsedControlHandle;
     std::vector<std::uint32_t> parsedReactors;
     dwgHandle parsedXDictHandle;
-    if (!readBoundedObjectHandle(*hBuf, parsed.handle, true,
-                                 parsedControlHandle, handleEndBit)
-        || !readBoundedObjectHandleList(*hBuf, parsed.handle, parsed.numReactors, false,
-                                        &parsedReactors, handleEndBit))
+    if (!readVportHandle("control", true, DRW::DwgSoftPointer,
+                         parsedControlHandle))
         return fail();
+    if (!dwgSafety::validReactorCount(parsed.numReactors)
+        || !DRW::reserve(parsedReactors, parsed.numReactors))
+        return fail();
+    for (std::int32_t index = 0; index < parsed.numReactors; ++index) {
+        const std::string name = "reactor[" + std::to_string(index) + "]";
+        dwgHandle reactor;
+        if (!readVportHandle(name.c_str(), false, DRW::DwgSoftPointer,
+                             reactor))
+            return fail();
+        parsedReactors.push_back(reactor.ref);
+    }
     if (parsed.xDictFlag != 1
-        && !readBoundedObjectHandle(*hBuf, parsed.handle, false,
-                                    parsedXDictHandle, handleEndBit))
+        && !readVportHandle("xdict", false, DRW::DwgHardOwnership,
+                            parsedXDictHandle))
         return fail();
 
     dwgHandle parsedXrefBlockHandle;
-    if (!readBoundedObjectHandle(*hBuf, parsed.handle, false,
-                                 parsedXrefBlockHandle, handleEndBit))
+    if (!readVportHandle("xrefBlock", false, DRW::DwgHardPointer,
+                         parsedXrefBlockHandle))
         return fail();
     dwgHandle parsedBackgroundHandle;
     dwgHandle parsedVisualStyleHandle;
     dwgHandle parsedSunHandle;
     if (version > DRW::AC1018) {
-        if (!readBoundedObjectHandle(*hBuf, parsed.handle, false,
-                                     parsedBackgroundHandle, handleEndBit)
-            || !readBoundedObjectHandle(*hBuf, parsed.handle, false,
-                                        parsedVisualStyleHandle, handleEndBit)
-            || !readBoundedObjectHandle(*hBuf, parsed.handle, false,
-                                        parsedSunHandle, handleEndBit))
+        if (!readVportHandle("background", false, DRW::DwgSoftPointer,
+                             parsedBackgroundHandle)
+            || !readVportHandle("visualStyle", false,
+                                DRW::DwgHardPointer,
+                                parsedVisualStyleHandle)
+            || !readVportHandle("sun", false, DRW::DwgHardOwnership,
+                                parsedSunHandle))
             return fail();
     }
     dwgHandle parsedNamedUcsHandle;
     dwgHandle parsedBaseUcsHandle;
     if (version > DRW::AC1014) {
-        if (!readBoundedObjectHandle(*hBuf, parsed.handle, false,
-                                     parsedNamedUcsHandle, handleEndBit)
-            || !readBoundedObjectHandle(*hBuf, parsed.handle, false,
-                                        parsedBaseUcsHandle, handleEndBit))
+        if (!readVportHandle("namedUcs", false, DRW::DwgHardPointer,
+                             parsedNamedUcsHandle)
+            || !readVportHandle("baseUcs", false, DRW::DwgHardPointer,
+                                parsedBaseUcsHandle))
             return fail();
     }
 
@@ -6730,6 +6778,7 @@ bool DRW_Vport::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
     parsed.m_sunHandle = parsedSunHandle.ref;
     parsed.namedUcsHandle = parsedNamedUcsHandle.ref;
     parsed.baseUcsHandle = parsedBaseUcsHandle.ref;
+    parsed.m_dwgHandleFieldSpans = std::move(parsedHandleFieldSpans);
     *this = std::move(parsed);
     return true;
     } catch (...) {

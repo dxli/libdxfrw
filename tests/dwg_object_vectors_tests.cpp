@@ -159,6 +159,12 @@ public:
     using DRW_Dimstyle::parseDwg;
 };
 
+class VportCodecProbe final : public DRW_Vport {
+public:
+    using DRW_Vport::encodeDwg;
+    using DRW_Vport::parseDwg;
+};
+
 class PlotSettingsEncodeProbe final : public DRW_PlotSettings {
 public:
     using DRW_PlotSettings::encodeDwg;
@@ -320,6 +326,28 @@ void appendBits(dwgBufferW& destination, const dwgBufferW& source) {
              >> (7u - static_cast<unsigned>(bit & 7u))) & 1u);
         destination.putBit(value);
     }
+}
+
+bool patchRawLong32AtAnyBit(std::vector<std::uint8_t>& bytes,
+                            std::uint64_t startBit,
+                            std::uint32_t value) {
+    if (startBit > static_cast<std::uint64_t>(bytes.size()) * 8u
+        || 32u > static_cast<std::uint64_t>(bytes.size()) * 8u - startBit)
+        return false;
+    for (unsigned byteIndex = 0u; byteIndex < 4u; ++byteIndex) {
+        const std::uint8_t byte = static_cast<std::uint8_t>(
+            (value >> (byteIndex * 8u)) & 0xFFu);
+        for (unsigned bitIndex = 0u; bitIndex < 8u; ++bitIndex) {
+            const std::uint64_t bit = startBit + byteIndex * 8u + bitIndex;
+            const std::uint8_t mask = static_cast<std::uint8_t>(
+                1u << (7u - static_cast<unsigned>(bit & 7u)));
+            std::uint8_t& target = bytes[static_cast<std::size_t>(bit >> 3u)];
+            const bool set = (byte & (1u << (7u - bitIndex))) != 0u;
+            target = set ? static_cast<std::uint8_t>(target | mask)
+                         : static_cast<std::uint8_t>(target & ~mask);
+        }
+    }
+    return true;
 }
 
 struct LayerHandleFrame {
@@ -4408,6 +4436,138 @@ bool makeDimstyleFrame(DRW::Version version,
             objectSizeBit, static_cast<std::uint32_t>(object.bitCount()));
     frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
     frame.handleStartBit = object.bitCount();
+    object.putBytes(handles.data().data(), handles.size());
+    if (!object.isGood())
+        return false;
+    frame.bytes = object.data();
+    return true;
+}
+
+struct VportHandleField {
+    std::string name;
+    std::uint8_t role = 0u;
+    std::uint32_t target = 0u;
+};
+
+struct VportHandleFrame {
+    std::vector<std::uint8_t> bytes;
+    std::uint32_t handleBits {0};
+    std::uint64_t handleStartBit {0};
+};
+
+std::vector<VportHandleField> vportHandleFieldsFor(
+    DRW::Version version, const VportCodecProbe& source) {
+    std::vector<VportHandleField> fields;
+    fields.push_back({"control", DRW::DwgSoftPointer, source.parentHandle});
+    for (std::size_t index = 0u; index < source.reactorHandles.size(); ++index)
+        fields.push_back({"reactor[" + std::to_string(index) + "]",
+                          DRW::DwgSoftPointer,
+                          source.reactorHandles[index]});
+    if (source.extensionDictionaryFlag() != 1u)
+        fields.push_back({"xdict", DRW::DwgHardOwnership,
+                          source.xDictHandle});
+    fields.push_back({"xrefBlock", DRW::DwgHardPointer,
+                      source.xrefBlockHandle.ref});
+    if (version > DRW::AC1018) {
+        fields.push_back({"background", DRW::DwgSoftPointer,
+                          source.backgroundHandle});
+        fields.push_back({"visualStyle", DRW::DwgHardPointer,
+                          source.visualStyleHandle});
+        fields.push_back({"sun", DRW::DwgHardOwnership, source.m_sunHandle});
+    }
+    if (version > DRW::AC1014) {
+        fields.push_back({"namedUcs", DRW::DwgHardPointer,
+                          source.namedUcsHandle});
+        fields.push_back({"baseUcs", DRW::DwgHardPointer,
+                          source.baseUcsHandle});
+    }
+    return fields;
+}
+
+bool makeVportHandleFrame(DRW::Version version, VportCodecProbe& source,
+                          int wrongRoleIndex, bool canonicalNulls,
+                          VportHandleFrame& frame) {
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    dwgBufferW body(&codec), strings(&codec), ignoredHandles(&codec);
+    if (!source.encodeDwg(version, &body, &strings, &ignoredHandles))
+        return false;
+
+    dwgBufferW object;
+    object.putObjType(version, 65u); // ODA AcDbVPort table-record type
+    const bool explicitPrefixObjectSize =
+        version > DRW::AC1014 && version < DRW::AC1024;
+    const std::uint64_t prefixObjectSizeBit = object.bitCount();
+    if (explicitPrefixObjectSize)
+        object.putRawLong32(0u);
+    dwgHandle own;
+    own.code = DRW::DwgHardPointer;
+    own.rawCode = own.code;
+    own.ref = source.handle;
+    own.ref64 = own.ref;
+    object.putHandle(own);
+    object.putBitShort(0u); // no EED
+    const std::uint64_t legacyObjectSizeBit = object.bitCount();
+    if (version < DRW::AC1015)
+        object.putRawLong32(0u); // R13/R14 table-record object size
+    object.putBitLong(static_cast<std::int32_t>(source.reactorHandles.size()));
+    if (version > DRW::AC1015)
+        object.putBit(source.extensionDictionaryFlag());
+    if (version > DRW::AC1024)
+        object.putBit(0u); // no AcDs data
+    appendBits(object, body);
+    object.alignToByte();
+
+    if (version > DRW::AC1018) {
+        strings.alignToByte();
+        if (!strings.data().empty())
+            object.putBytes(strings.data().data(), strings.size());
+        for (int bit = 0; bit < 7; ++bit)
+            object.putBit(0u);
+        const std::uint64_t stringBits = strings.size() * 8u + 7u;
+        if (stringBits > std::numeric_limits<std::uint16_t>::max())
+            return false;
+        object.putRawShort16(static_cast<std::uint16_t>(stringBits));
+        object.putBit(1u);
+        object.alignToByte();
+    }
+
+    dwgBufferW handles;
+    const auto put = [&handles, canonicalNulls, wrongRoleIndex](
+        std::size_t index, const VportHandleField& field) {
+        dwgHandle value;
+        value.code = canonicalNulls ? DRW::DwgNullReference
+            : (static_cast<int>(index) == wrongRoleIndex
+                ? (field.role == DRW::DwgHardOwnership
+                    ? DRW::DwgSoftPointer : DRW::DwgHardOwnership)
+                : field.role);
+        value.rawCode = value.code;
+        value.ref = canonicalNulls ? 0u : field.target;
+        value.ref64 = value.ref;
+        handles.putHandle(value);
+    };
+    const auto fields = vportHandleFieldsFor(version, source);
+    for (std::size_t index = 0u; index < fields.size(); ++index)
+        put(index, fields[index]);
+    dwgHandle sentinel;
+    sentinel.code = DRW::DwgHardPointer;
+    sentinel.rawCode = sentinel.code;
+    sentinel.ref = 0xCAFEu;
+    sentinel.ref64 = sentinel.ref;
+    handles.putHandle(sentinel);
+    handles.alignToByte();
+    if (!object.isGood() || !handles.isGood())
+        return false;
+    if (explicitPrefixObjectSize)
+        object.patchRawLong32AtBit(
+            prefixObjectSizeBit, static_cast<std::uint32_t>(object.bitCount()));
+    else if (version < DRW::AC1015)
+        if (!patchRawLong32AtAnyBit(
+                object.data(), legacyObjectSizeBit,
+                static_cast<std::uint32_t>(object.bitCount())))
+            return false;
+    frame.handleStartBit = object.bitCount();
+    frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
     object.putBytes(handles.data().data(), handles.size());
     if (!object.isGood())
         return false;
@@ -15881,6 +16041,192 @@ void testAc1015PlusDimstyleBodyHandleRoles(TestContext& t) {
     }
 }
 
+void testAc1012PlusVportHandleRoles(TestContext& t) {
+    const auto versionName = [](DRW::Version version) -> const char* {
+        switch (version) {
+        case DRW::AC1012: return "AC1012";
+        case DRW::AC1014: return "AC1014";
+        case DRW::AC1015: return "AC1015";
+        case DRW::AC1018: return "AC1018";
+        case DRW::AC1021: return "AC1021";
+        case DRW::AC1024: return "AC1024";
+        case DRW::AC1027: return "AC1027";
+        default: return "unexpected-version";
+        }
+    };
+    const auto targetFor = [](const VportCodecProbe& vport,
+                              const std::string& name) -> std::uint32_t {
+        if (name == "control") return vport.parentHandle;
+        if (name == "reactor[0]") return vport.reactorHandles[0];
+        if (name == "xdict") return vport.xDictHandle;
+        if (name == "xrefBlock") return vport.xrefBlockHandle.ref;
+        if (name == "background") return vport.backgroundHandle;
+        if (name == "visualStyle") return vport.visualStyleHandle;
+        if (name == "sun") return vport.m_sunHandle;
+        if (name == "namedUcs") return vport.namedUcsHandle;
+        return vport.baseUcsHandle;
+    };
+    const auto parse = [](DRW::Version version, VportCodecProbe& target,
+                          const VportHandleFrame& frame,
+                          std::uint32_t handleBits = 0u) {
+        DRW_TextCodec codec;
+        codec.setVersion(version, false);
+        dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+        const std::uint32_t bits = handleBits == 0u
+            ? frame.handleBits : handleBits;
+        return target.parseDwg(version, &input, bits) && input.isGood();
+    };
+
+    for (const DRW::Version version : {DRW::AC1012, DRW::AC1014,
+                                       DRW::AC1015, DRW::AC1018,
+                                       DRW::AC1021, DRW::AC1024,
+                                       DRW::AC1027}) {
+        VportCodecProbe source;
+        source.handle = 0x5000u + static_cast<std::uint32_t>(version);
+        source.parentHandle = source.handle + 0x10u;
+        source.reactorHandles = {source.handle + 0x11u};
+        source.xDictHandle = source.handle + 0x12u;
+        source.xrefBlockHandle.ref = source.handle + 0x13u;
+        source.setDwgCommonObjectState(1, 0u, false);
+        source.name = "generated-vport";
+        if (version > DRW::AC1018) {
+            source.backgroundHandle = source.handle + 0x14u;
+            source.visualStyleHandle = source.handle + 0x15u;
+            source.m_sunHandle = source.handle + 0x16u;
+        }
+        if (version > DRW::AC1014) {
+            source.namedUcsHandle = source.handle + 0x17u;
+            source.baseUcsHandle = source.handle + 0x18u;
+        }
+        const auto fields = vportHandleFieldsFor(version, source);
+        VportHandleFrame validFrame;
+        const bool built = makeVportHandleFrame(
+            version, source, -1, false, validFrame);
+        t.expect(built, std::string("generated VPORT profile builds for ")
+                     + versionName(version));
+        if (!built)
+            continue;
+        VportCodecProbe parsed;
+        const bool parsedValid = parse(version, parsed, validFrame);
+        t.expect(parsedValid && parsed.handle == source.handle
+                     && parsed.visualStyleHandle == source.visualStyleHandle
+                     && parsed.m_sunHandle == source.m_sunHandle,
+                 std::string("VPORT reads versioned handle roles in ")
+                     + versionName(version));
+        if (parsedValid) {
+            const auto& spans = parsed.dwgHandleFieldSpans();
+            bool exact = spans.size() == fields.size();
+            dwgBuffer oracle(validFrame.bytes.data(), validFrame.bytes.size());
+            oracle.setPosition(validFrame.handleStartBit >> 3u);
+            oracle.setBitPos(static_cast<std::uint8_t>(
+                validFrame.handleStartBit & 7u));
+            std::uint64_t nextBit = validFrame.handleStartBit;
+            for (std::size_t index = 0u;
+                 index < fields.size() && index < spans.size(); ++index) {
+                const std::uint64_t start = oracle.getPosition() * 8u
+                    + oracle.getBitPos();
+                const dwgHandle wire = oracle.getHandle();
+                const std::uint64_t end = oracle.getPosition() * 8u
+                    + oracle.getBitPos();
+                exact = exact && spans[index].m_name == fields[index].name
+                    && spans[index].m_startBit == start
+                    && spans[index].m_bitSize == end - start
+                    && spans[index].m_rawHandleCode == fields[index].role
+                    && wire.rawCode == fields[index].role
+                    && wire.ref == fields[index].target
+                    && targetFor(parsed, fields[index].name)
+                        == fields[index].target;
+                nextBit = end;
+            }
+            const std::uint64_t sentinelStart = oracle.getPosition() * 8u
+                + oracle.getBitPos();
+            const dwgHandle sentinel = oracle.getHandle();
+            exact = exact && oracle.isGood() && sentinel.ref == 0xCAFEu
+                && sentinel.rawCode == DRW::DwgHardPointer
+                && nextBit == sentinelStart;
+            t.expect(exact, std::string("VPORT ") + versionName(version)
+                         + " spans match independent handle walk and sentinel");
+            VportCodecProbe copied(parsed);
+            VportCodecProbe assigned;
+            assigned = parsed;
+            bool metadataCopied = copied.dwgHandleFieldSpans().size()
+                    == fields.size()
+                && assigned.dwgHandleFieldSpans().size() == fields.size();
+            assigned.reset();
+            t.expect(metadataCopied && assigned.dwgHandleFieldSpans().empty(),
+                     std::string("VPORT ") + versionName(version)
+                         + " copies, assigns, and resets handle spans");
+        }
+
+        VportHandleFrame nullFrame;
+        VportCodecProbe nullSource(source);
+        const bool nullBuilt = makeVportHandleFrame(
+            version, nullSource, -1, true, nullFrame);
+        VportCodecProbe nullParsed;
+        const bool nullRead = nullBuilt && parse(version, nullParsed,
+                                                 nullFrame);
+        bool nullProfile = nullRead
+            && nullParsed.dwgHandleFieldSpans().size() == fields.size();
+        if (nullProfile) {
+            for (const auto& field : fields) {
+                const auto span = std::find_if(
+                    nullParsed.dwgHandleFieldSpans().begin(),
+                    nullParsed.dwgHandleFieldSpans().end(),
+                    [&field](const DRW_DwgSubrecordRange& item) {
+                        return item.m_name == field.name;
+                    });
+                nullProfile = nullProfile
+                    && span != nullParsed.dwgHandleFieldSpans().end()
+                    && span->m_rawHandleCode == DRW::DwgNullReference
+                    && targetFor(nullParsed, field.name) == 0u;
+            }
+        }
+        t.expect(nullProfile, std::string("VPORT ") + versionName(version)
+                     + " accepts canonical null handle roles");
+
+        for (std::size_t index = 0u; index < fields.size(); ++index) {
+            VportHandleFrame badFrame;
+            const bool badBuilt = makeVportHandleFrame(
+                version, source, static_cast<int>(index), false, badFrame);
+            VportCodecProbe retryable;
+            const bool rejected = badBuilt
+                && !parse(version, retryable, badFrame);
+            t.expect(rejected && retryable.handle == DRW::NoHandle
+                         && retryable.dwgHandleFieldSpans().empty(),
+                     "wrong VPORT " + fields[index].name
+                         + " role rejects atomically in " + versionName(version));
+            t.expect(parse(version, retryable, validFrame)
+                         && retryable.handle == source.handle
+                         && retryable.dwgHandleFieldSpans().size()
+                             == fields.size(),
+                     "corrected VPORT " + fields[index].name
+                         + " retries on same " + versionName(version)
+                         + " parser");
+        }
+
+        VportHandleFrame truncatedFrame = validFrame;
+        const std::uint64_t finalStart = parsedValid
+            ? parsed.dwgHandleFieldSpans().back().m_startBit
+            : validFrame.handleStartBit + validFrame.handleBits;
+        truncatedFrame.bytes.resize(static_cast<std::size_t>(
+            (finalStart + 7u) / 8u));
+        truncatedFrame.handleBits = static_cast<std::uint32_t>(
+            finalStart - validFrame.handleStartBit);
+        VportCodecProbe truncated;
+        const bool truncatedRejected = !parse(version, truncated,
+                                               truncatedFrame);
+        t.expect(truncatedRejected && truncated.handle == DRW::NoHandle
+                     && truncated.dwgHandleFieldSpans().empty(),
+                 std::string("truncated VPORT final handle rejects atomically in ")
+                     + versionName(version));
+        t.expect(parse(version, truncated, validFrame)
+                     && truncated.handle == source.handle
+                     && truncated.dwgHandleFieldSpans().size() == fields.size(),
+                 std::string("VPORT retries after final-field truncation in ")
+                     + versionName(version));
+    }
+}
+
 void testAc1027ObjectCommonHandleRoles(TestContext& t) {
     struct Stream {
         std::vector<std::uint8_t> bytes;
@@ -24161,6 +24507,14 @@ int main(int argc, char** argv) {
         return context.failures == 0 ? 0 : 1;
     }
     if (argc == 2
+        && std::string(argv[1]) == "--ac1012plus-vport-handle-roles") {
+        TestContext context;
+        testAc1012PlusVportHandleRoles(context);
+        std::cout << "AC1012+ VPORT handle roles and spans: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--ac1027-object-common-handle-roles") {
         TestContext context;
         testAc1027ObjectCommonHandleRoles(context);
@@ -24927,6 +25281,7 @@ int main(int argc, char** argv) {
     TestContext context;
     testAc1018PlusLayerBodyHandleRoles(context);
     testAc1015PlusDimstyleBodyHandleRoles(context);
+    testAc1012PlusVportHandleRoles(context);
     testLegacyDictionaryGroupCommonLinkEvidence(context);
     testMeshDwgCreaseCountGuard(context);
     testScaleDwgPositiveUnitDomain(context);

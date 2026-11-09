@@ -149,27 +149,42 @@ no drawing fixture was added. This is one source profile plus generated codec
 evidence, not broad producer or native-app qualification. Receipt:
 [`p6-ac1015plus-dimstyle-body-handle-roles-spans-2026-11-09.json`](docs/research/p6-ac1015plus-dimstyle-body-handle-roles-spans-2026-11-09.json).
 
-**Next local implementation packet — VPORT body handle roles and spans:**
-use ODA v5.4.1 §20.4.64 and the same hash-bound AC1027 Cover record, whose
-VPORT `0x29` already exposes `visualStyle → 0x2f` and `sun → 0x6d` in the
-local diagnostic. Before changing the parser, capture every VPORT handle
-field's source span and compare role/target observations with LibreDWG 0.14.
-Implement only the documented versioned handle stream: common control soft
-pointer, optional XDictionary hard owner, xref-block hard pointer; R2000+
-named/base UCS hard pointers; R2007+ background soft pointer, visual-style
-hard pointer, and SUN hard owner. Generated controls should cover AC1012/14,
-AC1015/18, and AC1021+ presence boundaries, each wrong role, canonical nulls,
-exact ordered spans, following-field sentinel, truncation/reset, and corrected
-same-object retry. Keep strict-output reference closure as a separate gate;
-the Cover source's VisualStyle and SUN observations do not establish their
-recursive graph or consumer semantics. Use an existing generated-vector
-builder, one focused selector, and no new drawing fixture. If the physical
-source lacks a versioned non-null field or peer agreement on role, stop that
-profile at evidence capture and choose the next already-supported local
-version boundary rather than broadening support claims. AC1014 PERSUBENTMGR
-still needs a paired semantic projection before typed-prefix admission;
-AC1027 PERSUBENTMGR and AC1032's six-scalar body remain raw-only pending
-independent field reconciliation.
+**Completed P6 local implementation packet — VPORT body handle roles and
+spans:** ODA v5.4.1 §20.4.64 is implemented across the R13 through R2013
+reader versions. The parser validates the common control and reactor soft
+pointers, optional xdictionary hard owner, xref-block hard pointer, R2000+
+named/base UCS hard pointers, and R2007+ background, visual-style, and SUN
+roles. It preserves raw role codes and exact ordered bit spans; canonical
+code-0/target-0 nulls, wrong-role rollback, final-field truncation, and
+same-object retry have generated controls. The version matrix covers AC1012,
+AC1014, AC1015, AC1018, AC1021, AC1024, and AC1027. The hash-bound AC1027
+Cover VPORT `0x29` (`*Active`) has seven captured fields; LibreDWG 0.14 matches
+all seven role codes and targets, including VisualStyle `0x2f` and SUN `0x6d`.
+The five-test focused VPORT/object-vector cohort passes. No fixture was added.
+This is one physical profile plus generated parser evidence; strict graph
+closure, visual semantics, broad producer support, and native-app
+qualification remain open. Receipt:
+[`p6-ac1012plus-vport-body-handle-role-spans-2026-11-09.json`](docs/research/p6-ac1012plus-vport-body-handle-role-spans-2026-11-09.json).
+
+**Next local implementation packet — UCS table-record handle roles and
+spans:** use ODA v5.4.1 §20.4.62 (pp. 176–177) and the existing
+`DRW_UCS::parseDwg` body/handle split. Before parser edits, inventory the
+already available AC1018/AC1021/AC1024/AC1027 DWGs and LibreDWG 0.14 views for
+a hash-bound UCS record with at least one non-null base/named-UCS reference;
+record its exact source identity and every decoded role/target. Then add span
+capture and role checks for the common control soft pointer, reactors, optional
+xdictionary hard owner, xref-block hard pointer, and R2000+ base/named UCS hard
+pointers, following ODA's stream order. Reuse the VPORT generated table-entry
+frame builder to cover AC1012/14, AC1015/18, and AC1021+ boundaries; test each
+wrong role, canonical null, exact ordered span, sentinel, truncation/reset,
+and corrected same-object retry in one fast selector. If the census finds no
+physical non-null UCS reference, still finish the bounded generated codec
+controls but retain the missing source profile as a support-claim gate. Keep
+target-graph closure separate, add no drawing fixture, and record exact source,
+peer, spec, and test hashes in the receipt. AC1014 PERSUBENTMGR still needs a
+paired semantic projection before typed-prefix admission; AC1027 PERSUBENTMGR
+and AC1032's six-scalar body remain raw-only pending independent field
+reconciliation.
 
 **Resume checkpoint (2026-11-09, latest desktop inventory):** after the
 user's unlock-in-progress reply, the native-app inventory still reports “The
@@ -177,7 +192,7 @@ Mac is locked and automatic unlock could not unlock it” and lists no native
 apps. No ODA or FreeCAD process was launched. This is an access-state condition
 only; it supplies no format evidence and changes no support claim. Keep native
 ODA/FreeCAD qualification queued and do not retry the unchanged ODA File
-Converter 27.1 CLI route that aborts before processing. Continue with the VPORT
+Converter 27.1 CLI route that aborts before processing. Continue with the UCS
 implementation packet above. Retry native qualification only after a fresh
 inventory exposes an unlocked session or a materially different launch path is
 available.

@@ -1710,6 +1710,11 @@ if(LIBDXFRW_BUILD_TESTS)
             --ac1015plus-dimstyle-body-handle-roles)
     set_tests_properties(libdxfrw_ac1015plus_dimstyle_body_handle_roles PROPERTIES
         LABELS "fast;dwg;object-vectors;handles;generated" TIMEOUT 30)
+    add_test(NAME libdxfrw_ac1012plus_vport_handle_roles
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --ac1012plus-vport-handle-roles)
+    set_tests_properties(libdxfrw_ac1012plus_vport_handle_roles PROPERTIES
+        LABELS "fast;dwg;object-vectors;handles;generated" TIMEOUT 30)
     add_test(NAME libdxfrw_dwg_table_cell_overrides
         COMMAND libdxfrw_dwg_object_vectors_tests --table-cell-overrides)
     set_tests_properties(libdxfrw_dwg_table_cell_overrides PROPERTIES

@@ -119,6 +119,12 @@ DIMSTYLE_HANDLE_FIELD = re.compile(
     r"startBit=(\d+) bitSize=(\d+) complete=(\d+)$",
     re.MULTILINE,
 )
+VPORT_HANDLE_FIELD = re.compile(
+    r"^ typedVportHandleField owner=(\d+) role=(control|reactor\[\d+\]|"
+    r"xdict|xrefBlock|background|visualStyle|sun|namedUcs|baseUcs) "
+    r"code=(\d+) target=(\d+) startBit=(\d+) bitSize=(\d+) complete=(\d+)$",
+    re.MULTILINE,
+)
 
 
 def sha256(path: Path) -> str:
@@ -145,6 +151,7 @@ def verify_peer_profiles(
     layer_handle_fields: dict[int, list[dict[str, object]]],
     dimstyle_names: dict[int, str],
     dimstyle_handle_fields: dict[int, list[dict[str, object]]],
+    vport_handle_fields: dict[int, list[dict[str, object]]],
 ) -> dict[str, object]:
     peer_json = json.loads(peer_json_path.read_text())
     peer_objects = peer_json.get("OBJECTS")
@@ -156,7 +163,7 @@ def verify_peer_profiles(
             continue
         handle = peer_handle(obj.get("handle"))
         if handle is None or (
-            int(obj.get("type", -1)) not in (69, 73, 80, 501, 502, 504, 506)
+            int(obj.get("type", -1)) not in (65, 69, 73, 80, 501, 502, 504, 506)
             and obj.get("object") != "MLEADERSTYLE"
         ):
             continue
@@ -165,7 +172,7 @@ def verify_peer_profiles(
         peer_by_handle[handle] = obj
 
     names = {
-        69: "DIMSTYLE", 73: "MLINESTYLE", 80: "ACDBPLACEHOLDER",
+        65: "VPORT", 69: "DIMSTYLE", 73: "MLINESTYLE", 80: "ACDBPLACEHOLDER",
         501: "VISUALSTYLE", 502: "MATERIAL", 504: "TABLESTYLE",
         505: "MLEADERSTYLE", 506: "SUN",
     }
@@ -176,6 +183,7 @@ def verify_peer_profiles(
             continue
         obj = peer_by_handle.get(int(frame["handle"]))
         expected_object = {
+            65: "VPORT",
             69: "DIMSTYLE",
             73: "MLINESTYLE",
             80: "PLACEHOLDER",
@@ -186,6 +194,7 @@ def verify_peer_profiles(
             506: "SUN",
         }[object_type]
         expected_dxf = {
+            65: None,
             69: None,
             73: None,
             80: "ACDBPLACEHOLDER",
@@ -434,6 +443,61 @@ def verify_peer_profiles(
             "matchedPeerFields": matched_fields,
         }
 
+    matched_vport = None
+    if source_hash == COVER_AC1027_SHA256:
+        peer_vports = [
+            obj for obj in peer_objects
+            if isinstance(obj, dict) and obj.get("object") == "VPORT"
+            and peer_handle(obj.get("handle")) == 0x29
+        ]
+        source_fields = vport_handle_fields.get(0x29, [])
+        if len(peer_vports) != 1:
+            raise SystemExit("LibreDWG minJSON lacks the hash-bound Cover VPORT 0x29")
+        peer_vport = peer_vports[0]
+        peer_field_names = {
+            "control": "ownerhandle", "xrefBlock": "xref",
+            "background": "background", "visualStyle": "visualstyle",
+            "sun": "sun", "namedUcs": "named_ucs", "baseUcs": "base_ucs",
+        }
+        expected_roles = (
+            "control", "xrefBlock", "background", "visualStyle", "sun",
+            "namedUcs", "baseUcs",
+        )
+        matched_fields = []
+        for source_field in source_fields:
+            role = str(source_field["role"])
+            if role.startswith("reactor[") or role == "xdict":
+                continue
+            peer_name = peer_field_names.get(role)
+            if peer_name is None:
+                raise SystemExit(f"unmapped VPORT source handle role {role}")
+            wire = peer_vport.get(peer_name)
+            target = peer_handle(wire)
+            raw_role = int(wire[0]) if isinstance(wire, list) and wire else -1
+            if (
+                target != int(source_field["targetHandle"])
+                or raw_role != int(source_field["code"])
+            ):
+                raise SystemExit(
+                    f"LibreDWG VPORT {role} role/target differs from source profile"
+                )
+            matched_fields.append({
+                "role": role,
+                "peerField": peer_name,
+                "peerRoleCode": raw_role,
+                "peerTargetHandle": target,
+                "matchesSource": True,
+            })
+        if tuple(str(field["role"]) for field in matched_fields) != expected_roles:
+            raise SystemExit("Cover VPORT body handle field order/profile changed")
+        matched_vport = {
+            "handle": 0x29,
+            "name": "*Active",
+            "sourceBoundFields": source_fields,
+            "matchedPeerFields": matched_fields,
+            "independentPeerLimit": "LibreDWG exposes resolved fields and raw role codes, not physical bit spans",
+        }
+
     mleaderstyle_start = schema_text.find("DWG_OBJECT (MLEADERSTYLE)")
     mleaderstyle_end = schema_text.find("DWG_OBJECT_END", mleaderstyle_start)
     if mleaderstyle_start < 0 or mleaderstyle_end < 0:
@@ -478,6 +542,7 @@ def verify_peer_profiles(
         "sourceSha256": source_hash,
         "matchedLayer": matched_layer,
         "matchedDimstyle": matched_dimstyle,
+        "matchedVport": matched_vport,
     }
 
 
@@ -679,6 +744,31 @@ def main() -> int:
             raise SystemExit(
                 f"DIMSTYLE {owner:#x} handle-field spans are incomplete or unordered"
             )
+    vport_handle_fields: dict[int, list[dict[str, object]]] = {}
+    for owner, role, code, target, start_bit, bit_size, complete in (
+        VPORT_HANDLE_FIELD.findall(combined)
+    ):
+        vport_handle_fields.setdefault(int(owner), []).append({
+            "role": role,
+            "code": int(code),
+            "targetHandle": int(target),
+            "startBit": int(start_bit),
+            "bitSize": int(bit_size),
+            "complete": bool(int(complete)),
+        })
+    for owner, fields in vport_handle_fields.items():
+        starts = [int(field["startBit"]) for field in fields]
+        if (
+            len({str(field["role"]) for field in fields}) != len(fields)
+            or starts != sorted(starts)
+            or any(
+                not field["complete"] or int(field["bitSize"]) <= 0
+                for field in fields
+            )
+        ):
+            raise SystemExit(
+                f"VPORT {owner:#x} handle-field spans are incomplete or unordered"
+            )
     source_bound_modeler_history_handles: set[int] = set()
     source_bound_dimstyle_handles: set[int] = set()
     if source_before == COVER_AC1027_SHA256:
@@ -823,6 +913,7 @@ def main() -> int:
             layer_handle_fields,
             dimstyle_names,
             dimstyle_handle_fields,
+            vport_handle_fields,
         )
     if version == "AC1027":
         mleader_styles = [
@@ -1182,6 +1273,17 @@ def main() -> int:
         "typedDimstyleHandleFields": [
             {"ownerHandle": owner, **field}
             for owner, fields in sorted(dimstyle_handle_fields.items())
+            for field in fields
+        ],
+        "typedVportHandleFieldRows": sum(
+            len(fields) for fields in vport_handle_fields.values()
+        ),
+        "sourceBoundVportHandleProfiles": (
+            1 if source_before == COVER_AC1027_SHA256 else 0
+        ),
+        "typedVportHandleFields": [
+            {"ownerHandle": owner, **field}
+            for owner, fields in sorted(vport_handle_fields.items())
             for field in fields
         ],
         "framesWithSelectedTypedBodyReport": sum(

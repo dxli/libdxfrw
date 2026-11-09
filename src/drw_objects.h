@@ -146,6 +146,7 @@ struct DRW_DwgSubrecordRange {
   std::uint64_t m_bitSize = 0;
   DRW::Version m_version = DRW::UNKNOWNV;
   std::uint32_t m_count = 0;
+  std::uint8_t m_rawHandleCode = 0u;
   bool m_parseComplete = true;
 };
 
@@ -2830,6 +2831,7 @@ public:
     ucsElevation = 0.0;
     ucsOrthoType = 0;
     ucsPerVP = false;
+    m_dwgHandleFieldSpans.clear();
     xrefBlockHandle = dwgHandle{};
     DRW_TableEntry::reset();
   }
@@ -2848,6 +2850,9 @@ public:
                                dwgBufferW *hdlBuf = nullptr) const;
   [[nodiscard]] const DRW_DwgCmcColorMetadata&
   ambientColorDwgCmc() const noexcept { return m_ambientColorCmc; }
+  //! Exact DWG handle-stream spans for the common and versioned VPORT refs.
+  [[nodiscard]] const std::vector<DRW_DwgSubrecordRange>&
+  dwgHandleFieldSpans() const noexcept { return m_dwgHandleFieldSpans; }
   DRW_Coord lowerLeft;   /*!< Lower left corner, code 10 & 20 */
   DRW_Coord UpperRight;  /*!< Upper right corner, code 11 & 21 */
   DRW_Coord center;      /*!< center point in WCS, code 12 & 22 */
@@ -2918,6 +2923,7 @@ private:
                                         bool typedNullReferences) const;
   DRW_DwgCmcColorMetadata m_ambientColorCmc;
   std::size_t m_dxfAmbientColorNameBytes {0u};
+  std::vector<DRW_DwgSubrecordRange> m_dwgHandleFieldSpans;
 };
 
 //! Class to handle fixed type 71 VPORT_ENTITY_HEADER records.
