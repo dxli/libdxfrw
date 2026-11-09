@@ -74,12 +74,18 @@
     "number": 456,
     "base": "LibreCAD/LibreCAD_3:master",
     "head": "dxli/LibreCAD_3:codex/libdxfrw-upstream-compat",
-    "headCommit": "762a0f1ea69d9c1e994c101c2aa6b97132aced25",
+    "headCommit": "8269dd7be7209436d26ceb022c913b76bd92f7e8",
     "opened": "2026-11-08",
     "mergeability": "GitHub reports no conflicts",
     "checksAtObservation": {
       "workflowRunsQueued": 4,
-      "result": "pending"
+      "result": "pending",
+      "commit": "8269dd7b"
+    },
+    "previousHeadPlanSync": {
+      "commit": "762a0f1ea69d9c1e994c101c2aa6b97132aced25",
+      "result": "failure: mapped persistence/test changes lacked a same-change plan update",
+      "resolvedBy": "8269dd7be7209436d26ceb022c913b76bd92f7e8"
     }
   },
   "currentHeadFocusedRerun": {
@@ -95,11 +101,15 @@
     {
       "commit": "762a0f1ea69d9c1e994c101c2aa6b97132aced25",
       "change": "Cover unitless inputs and require zero loss notes for R12/R14; keep one loss note for each nonzero insertion-unit input."
+    },
+    {
+      "commit": "8269dd7be7209436d26ceb022c913b76bd92f7e8",
+      "change": "Add the same-change LibreCAD_3 plan receipt after the hosted Plan Sync check rejected the missing receipt. Local --full, actual-base, and 31 checker tests pass; hosted rerun is queued."
     }
   ],
-  "interpretation": "This records two LibreCAD_3 consumer/test-fixture changes, not a libdxfrw parser or writer defect. The changes are proposed in PR #456 against LibreCAD_3 origin/master; the latest PR head is mergeable and has four workflow runs queued. Keep the unsupported-version $INSUNITS refusal and first-root-DICTIONARY validation. Evidence is a macOS clean-consumer build and focused export/readback result only; CI, application behavior and other platforms remain unqualified.",
+  "interpretation": "This records LibreCAD_3 consumer/test-fixture changes, not a libdxfrw parser or writer defect. The changes are proposed in PR #456 against LibreCAD_3 origin/master; latest PR head 8269dd7b is mergeable and has four workflow runs queued. The preceding Plan Sync failure was caused by the missing same-change receipt; commit 8269dd7b adds the receipt, and local --full, actual-base, and 31 checker tests pass. Keep the unsupported-version $INSUNITS refusal and first-root-DICTIONARY validation. Evidence is a macOS clean-consumer build and 64/64 focused export/readback run on unchanged code head 762a0f1e; latest hosted CI, application behavior and other platforms remain unqualified.",
   "limitations": [
-    "The PR is open but has not been reviewed or merged; four workflow runs for its latest head were queued at the recorded observation.",
+    "The PR is open but has not been reviewed or merged; four workflow runs for head 8269dd7b were queued at the recorded observation.",
     "The aggregate test suite was not run; the current focused selector covers the 3 DxfExportTest and 61 DxfRoundTripTest cases.",
     "No native LibreCAD_3 application run or Linux/Windows FreeCAD/LibreCAD qualification was performed.",
     "No DWG/DXF fixture was added to libdxfrw or any repository.",

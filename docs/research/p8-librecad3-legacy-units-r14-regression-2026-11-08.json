@@ -21,6 +21,8 @@
   },
   "followup_commit": "762a0f1e",
   "current_head_focused_cohort": "DxfExportTest.*:DxfRoundTripTest.* passed 64/64 after unitless coverage was added.",
+  "plan_sync_followup_commit": "8269dd7be7209436d26ceb022c913b76bd92f7e8",
+  "plan_sync_validation": "PASS locally: --full, --base-ref origin/master, checker regression suite 31/31; hosted rerun queued.",
   "pull_request": "https://github.com/LibreCAD/LibreCAD_3/pull/456",
   "scope_limit": "This closes only legacy insertion-unit loss regression coverage for the already implemented LibreCAD_3 export behavior. It does not establish general DXF support, upstream LibreCAD adapter migration, DWG compatibility, ABI, Linux/Windows, or native FreeCAD qualification."
 }

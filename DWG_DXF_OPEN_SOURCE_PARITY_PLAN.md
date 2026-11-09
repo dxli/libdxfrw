@@ -14,7 +14,8 @@ its one-body/one-face/one-solid result is a bounded selected-profile check,
 not independent-kernel, whole-source, platform, or support-claim evidence.
 
 **LibreCAD_3 P8 compatibility review:** the isolated consumer branch is based
-on `5cf435f4` and contains commits `36082e71` and `93354846`. The upstream
+on `5cf435f4` and contains code commits `36082e71`, `93354846`, and `762a0f1e`,
+plus same-change plan-sync receipt commit `8269dd7b`. The upstream
 `DRW_Header::write()` itself gates `$INSUNITS` to targets newer than AC1014;
 the consumer patch now applies the same version gate to preserved and default
 header values, reports explicit unit-metadata loss for non-unitless R12/R14
@@ -30,10 +31,16 @@ unitless case confirms R12/R14 exports omit `$INSUNITS` without reporting a
 loss, while each nonzero unit reports exactly one loss note and retains its
 LINE. The reviewed unit-loss slice has no identified correctness blocker. PR
 [#456](https://github.com/LibreCAD/LibreCAD_3/pull/456) is open against
-`LibreCAD/LibreCAD_3:master`; GitHub reports no merge conflict. The latest
-head `762a0f1e` has four workflow runs queued. Keep the fixture/root-dictionary
-preservation cases and clean-consumer/full-app/Linux/Windows gates in the
-remaining P8 work. This consumer review does not change DWG/DXF support claims.
+`LibreCAD/LibreCAD_3:master`; GitHub reports no merge conflict. Code head
+`762a0f1e` has a plan-only follow-up at `8269dd7b`; its focused behavior result
+remains the 64/64 run on the unchanged code. The earlier Python Binding Plan
+Sync check failed because the mapped persistence/test paths lacked a
+same-change plan receipt. The consumer plan now records the affected gates;
+`--full`, `--base-ref origin/master`, and 31 checker tests pass locally. Four
+workflows for `8269dd7b`, including the Plan Sync rerun, are queued. Keep the
+fixture/root-dictionary preservation cases and clean-consumer/full-app/Linux/
+Windows gates in remaining P8 work. This consumer review does not change
+DWG/DXF support claims.
 
 **Earlier checkpoint (2026-11-08, before the latest ODA launch attempt):** after the user said
 they would unlock the Mac, the desktop inventory still reported the session
@@ -485,8 +492,9 @@ created locally from scratch for the specific control.
   owner, violating the root-dictionary rule. Correcting that owner in the two
   existing LibreCAD_3 fixtures brought the cohort to 64/64. The consumer
   patch is committed on `/private/tmp/librecad3-p8`, branch
-  `codex/libdxfrw-upstream-compat`, with commits `36082e71`, `93354846`, and
-  `762a0f1e`; it is proposed in [LibreCAD_3 PR #456](https://github.com/LibreCAD/LibreCAD_3/pull/456).
+  `codex/libdxfrw-upstream-compat`, with code commits `36082e71`, `93354846`,
+  and `762a0f1e`, plus plan-sync follow-up `8269dd7b`; it is proposed in
+  [LibreCAD_3 PR #456](https://github.com/LibreCAD/LibreCAD_3/pull/456).
   The build command `cmake --build /private/tmp/librecad3-p8/build --target
   persistence lcunittest -j4` passed; the focused
   `lcunittest --gtest_filter='DxfExportTest.*:DxfRoundTripTest.*'` run passes
@@ -508,9 +516,12 @@ created locally from scratch for the specific control.
   loss note for each nonzero profile, while both legacy outputs retain LINE
   and omit `$INSUNITS`. The patch is pushed and proposed as
   [LibreCAD_3 PR #456](https://github.com/LibreCAD/LibreCAD_3/pull/456), based
-  on the exact `origin/master` commit above. Its latest head is `762a0f1e`;
-  GitHub reports four workflow runs queued, with no CI result inferred from
-  the local run. Next: review CI results and complete native
+  on the exact `origin/master` commit above. The latest head is `8269dd7b`, a
+  plan-only follow-up to code head `762a0f1e`. Its preceding Python Binding
+  Plan Sync workflow failed because the consumer plan receipt was missing;
+  that receipt is now present and passes local `--full`, actual-base, and
+  31-test checks. GitHub has queued four workflows for the new head; no hosted
+  result is inferred from local validation. Next: review CI results and complete native
   Linux/Windows and application qualification independently. This macOS result
   does not satisfy those gates.
 - **Desktop qualification recheck:** after the user indicated they were
@@ -1555,7 +1566,7 @@ integration/release checkpoints.
 | P5 | OPEN — dynamic-block semantics, rendering and TABLE profiles | Find a complete FIELD/FIELDLIST source graph with a visible root; qualify physical TABLEGEOMETRY spans and remaining CONTENTFORMAT/CELLSTYLEMAP combinations; obtain a native ASCII/Binary VIEWPORT group-91 witness to resolve its conflict (VIEWPORT-specific docs say soft pointer, generic DXF typing says I32); qualify native layer-override activation/rendering; establish native dynamic constraint evaluation. For pre-R24 TABLE, groups 7/140/170/63/64/283 and border lineweight/visibility groups 274–279/284–289 now have bounded parser/writer/readback mappings using ODA title/header/data order and the exact 27-value AcDb::LineWeight domain; Autodesk documents repeats but not their order, so retain physical DXF order evidence for broad producer/native claims. Keep group 141 as physical row height. General per-row border CMC is output-refused because four border categories have one DXF entity-level value across three independent DWG row values; see the representability audit. | P4 closure where needed; ODA §20.4.96.1 + Autodesk TABLE group definitions; source-bound spans/roles plus native semantic evidence for promotion. |
 | P6 | OPEN — version, schema and semantic residuals | Resolve only evidence-backed source gaps: AC1021/24/27/32 IMAGEDEF parent-role conflict (source capture now retained as unqualified; DXF output still refused); raw-only TABLECONTENT/PERSUBENTMGR/TextObjectContextData; unclaimed AC1027/AC1032 HEADER suffixes; remaining version boundaries, geometry/no-loss, HEADER/CLI, parser disposition and caller-state contracts. The minimal generated AC1021 ODA matrix passes only when both default-layer graph opt-ins are enabled; the AC1021/24/27 fast material control now checks both output layer-0 references against planned targets. This is bounded writer evidence, not a broad support claim. Preserve strict refusal for unsupported or unclaimed bytes. | ODA v5.4.1 plus AutoCAD DWG/DXF source pairs; focused fast controls. Owner-semantic promotion still needs independent native rewrite or normative resolution. Suffix work requires a materially changed converter route. See the [IMAGEDEF role receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json) and [AC1021 writer probe receipt](docs/research/p6-ac1021-minimal-writer-oda-gui-rejection-2026-11-07.json). |
 | P7 | OPEN — ACIS/ACDS and independent 3D meaning | Complete entity/owner/key/AcDs/SAT-SAB association, versioned framing/index/suffix/prototype assembly and exact output binding; qualify transforms, units, topology, trims, periodicity and spline meaning with an independent kernel. | P4 graph/output bindings and independent semantic/kernel evidence. |
-| P8 | OPEN — consumers, platforms and release | The isolated LibreCAD `origin/master` adapter bridge is implemented and committed at `e216b44e763a87374556bad13e16628ff95e574c`; it adds provider cross-casts, bounded opt-in plotstyle/material default graphs, opaque-reference suppression and upstream hatch-angle unit conversion. The focused generated AC1021/24/27 import → re-export → readback test passes (80 assertions); three focused hatch-unit cases pass (19 assertions). The matching libdxfrw writer/readback guard and receipt are committed at `ff0f8dd4`. LibreCAD_3's clean-master legacy DXF adapter fix is proposed in [PR #456](https://github.com/LibreCAD/LibreCAD_3/pull/456), based on `5cf435f4`; the current-head focused export/round-trip cohort passes 64/64, including unitless and nonzero unit-loss cases. The latest PR head has four workflow runs queued. Remaining: clean-consumer reproducibility/ABI qualification; LibreCAD and LibreCAD_3 2D behavior across supported builds; native Linux/Windows FreeCAD open/insert checks; 3D consumer, packaging and release qualification. These generated controls do not establish application semantics or native platform support. | Stable candidate plus native platform access and reproducible consumer build receipts; preserve existing 2D behavior and refuse unresolved references. |
+| P8 | OPEN — consumers, platforms and release | The isolated LibreCAD `origin/master` adapter bridge is implemented and committed at `e216b44e763a87374556bad13e16628ff95e574c`; it adds provider cross-casts, bounded opt-in plotstyle/material default graphs, opaque-reference suppression and upstream hatch-angle unit conversion. The focused generated AC1021/24/27 import → re-export → readback test passes (80 assertions); three focused hatch-unit cases pass (19 assertions). The matching libdxfrw writer/readback guard and receipt are committed at `ff0f8dd4`. LibreCAD_3's clean-master legacy DXF adapter fix is proposed in [PR #456](https://github.com/LibreCAD/LibreCAD_3/pull/456), based on `5cf435f4`; code head `762a0f1e` passes the focused export/round-trip cohort 64/64, including unitless and nonzero unit-loss cases. Plan-only head `8269dd7b` records and locally validates the same-change receipt after its predecessor's hosted Plan Sync check failed; four workflows, including the Plan Sync rerun, are queued. Remaining: clean-consumer reproducibility/ABI qualification; LibreCAD and LibreCAD_3 2D behavior across supported builds; native Linux/Windows FreeCAD open/insert checks; 3D consumer, packaging and release qualification. These generated controls do not establish application semantics or native platform support. | Stable candidate plus native platform access and reproducible consumer build receipts; preserve existing 2D behavior and refuse unresolved references. |
 | P9 | DEFERRED_EXTERNAL — six non-promoting items | Resolve J256, J260, J268, J284, J293 and J295 only through the successor registry and eligible independent evidence. J268 still needs original input identity/digest; J284 has 11 target-debt/integrity blockers; J295 needs native receipts for four RTEXT position/rotation claims. None can promote support claims alone. | `metadata/external-evidence-resolution-v1.json`; retain lineage and exclusions. |
 
 **AC1024 CLASSES high-bit string-size recheck (2026-11-08):** the earlier
