@@ -2857,8 +2857,8 @@ public:
         --m_owner.m_recordStateScopeDepth;
     }
 
-    void commit() noexcept {
-        if (m_entity != nullptr)
+    void commit(bool preserveEntityHandle = false) noexcept {
+        if (m_entity != nullptr && !preserveEntityHandle)
             m_entity->handle = m_handle;
         m_committed = true;
     }
@@ -3087,9 +3087,11 @@ private:
 // callers must never receive a pointer that a scope destructor can roll back.
 class dxfRW::EntityRecordScope final {
 public:
-    EntityRecordScope(dxfRW& owner, DRW_Entity *entity)
+    EntityRecordScope(dxfRW& owner, DRW_Entity *entity,
+                      bool preserveEntityHandle = false)
         : m_owner(owner), m_writer(owner.writer.get()), m_state(owner, entity),
-          m_record(*owner.writer) {}
+          m_record(*owner.writer),
+          m_preserveEntityHandle(preserveEntityHandle) {}
 
     EntityRecordScope(dxfRW& owner, DRW_TableEntry *entry)
         : m_owner(owner), m_writer(owner.writer.get()), m_state(owner, entry),
@@ -3111,7 +3113,7 @@ public:
                 m_owner.m_writeError = true;
                 return false;
             }
-            m_state.commit();
+            m_state.commit(m_preserveEntityHandle);
             m_succeeded = true;
             return true;
         } catch (...) {
@@ -3129,6 +3131,7 @@ private:
     dxfWriter *m_writer;
     RecordStateScope m_state;
     DxfWriterRecordScope m_record;
+    bool m_preserveEntityHandle {false};
     bool m_finished {false};
     bool m_succeeded {false};
 };
@@ -11696,7 +11699,9 @@ bool dxfRW::writeInsert(DRW_Insert *ent){
         m_writeError = true;
         return false;
     }
-    state.commit();
+    // The compound INSERT/ATTRIB sequence exposes these minted identities as
+    // caller state so its child owner links remain usable after emission.
+    state.commit(hasAttribs);
     attributeState.committed = true;
     return true;
 }
@@ -13927,7 +13932,8 @@ bool dxfRW::writeAttrib(DRW_Attrib *ent,
             return writeAttdef(attdef, ownerOverride);
     }
 
-    EntityRecordScope scope(*this, ent);
+    // ATTRIB handles are retained with their owning INSERT's minted identity.
+    EntityRecordScope scope(*this, ent, true);
     writer->writeString(0, "ATTRIB");
     if (!writeEntity(ent, true, ownerOverride))
         return false;

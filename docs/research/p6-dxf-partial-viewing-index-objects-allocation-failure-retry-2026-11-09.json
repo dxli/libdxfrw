@@ -52,11 +52,11 @@
     "result": "PASS",
     "asciiAllocationOffsets": 44,
     "binaryAllocationOffsets": 42,
-    "perOffset": "one-shot std::bad_alloc across FIELD, FIELDLIST, MOTIONPATH, CURVEPATH, POINTPATH, OBJECTPTR, then PARTIALVIEWINGINDEX in one OBJECTS callback; whole-file destination sentinel is preserved, caller object fields and LINE/POINT source handles and geometry remain intact, same-codec retry reproduces calibration bytes, and typed readback verifies FIELD values, FIELDLIST membership, MOTIONPATH-to-CURVEPATH/POINTPATH edges, CURVEPATH-to-LINE edge, OBJECTPTR identity, POINT fields, and LINE/PVI graph and extents",
+    "perOffset": "one-shot std::bad_alloc across FIELD, FIELDLIST, MOTIONPATH, CURVEPATH, POINTPATH, OBJECTPTR, then PARTIALVIEWINGINDEX in one OBJECTS callback; whole-file destination sentinel is preserved, LINE/POINT source handles and caller object fields remain intact, same-codec retry reproduces calibration bytes, and typed readback verifies FIELD values, FIELDLIST membership, MOTIONPATH-to-CURVEPATH/POINTPATH edges, CURVEPATH-to-LINE edge, OBJECTPTR identity, POINT fields, and LINE/PVI graph and extents",
     "gitDiffCheck": "PASS"
   },
   "limits": [
-    "RecordStateScope::commit now restores a borrowed entity's source handle after committing its emitted record, covering both EntityRecordScope and direct RecordStateScope writer paths. This control verifies LINE and POINT; other entity types and consumers require their owning controls.",
+    "Ordinary entity emission restores source handles after success, while the compound INSERT/ATTRIB sequence retains minted identities required by child owner links. This generated control verifies LINE and POINT; other entity types and consumers require their owning controls.",
     "Generated serializer transaction and typed DXF readback evidence only; it does not qualify native consumer behavior, external producers, DWG output, or broad support.",
     "No DWG/DXF fixture was added; test output uses its build scratch directory."
   ]

@@ -8,14 +8,15 @@ the whole-file destination and modeled caller records; retry reproduces
 calibration bytes and typed readback verifies field values, FIELDLIST
 membership, path fields, MOTIONPATH references to CURVEPATH/POINTPATH, the
 CURVEPATH-to-LINE edge, OBJECTPTR identity, POINT fields, and the LINE/PVI
-graph. The focused control exposed caller-handle mutation through both
-`EntityRecordScope` and direct `RecordStateScope` commit paths. Shared
-`RecordStateScope::commit()` now restores the source handle after record
-emission; allocation rollback/retry, entity-reference remapping,
-BLOCK_RECORD/INSERT reference, and polyline vertex-role controls pass. The
-remapping selectors verify LINE, POINT, and INSERT caller-handle preservation;
-nested polyline emission also passes. Remaining entity types still require
-their owning controls. No fixture was added.
+graph. Ordinary entity emission preserves source handles on success and failure;
+the compound INSERT/ATTRIB path retains minted handles when children need the
+parent/child identities for the emitted sequence. `RecordStateScope::commit()`
+restores entity handles by default, with the compound sequence opting into
+identity retention. The focused allocation sweep verifies that LINE and POINT
+retain their source handles through successful calibration, each injected
+failure, and retry; emitted DXF readback verifies the minted record identities.
+Entity-reference remapping and polyline vertex-role controls pass. Other entity
+types still require their owning controls. No fixture was added.
 See the [allocation receipt](docs/research/p6-dxf-partial-viewing-index-objects-allocation-failure-retry-2026-11-09.json).
 
 The AC1024 online sample search also re-confirmed public candidates: Autodesk's
