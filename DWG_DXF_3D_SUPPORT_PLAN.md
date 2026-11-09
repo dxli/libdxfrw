@@ -8491,6 +8491,16 @@ checkpoints and release review.
    affected support rows unqualified. Do not let a missing oracle halt
    independent ready slices or become a reason to guess DWG bytes.
 
+6. **Self-update and continue after every slice.** Once an implementation
+   slice passes its owning fast validation, update this plan and its evidence
+   receipt in the same change, mark only that bounded item complete, record
+   the commit identifier, and report the slice and validation result. Then
+   select the next dependency-ready item from the live ledger and continue;
+   an external/platform gate blocks only its dependent row, never the whole
+   implementation queue. If a slice fails, record the exact failure and a
+   concrete recovery or alternate ready slice before moving on. Do not leave
+   completed work labeled pending or stop at an external gate.
+
 ## Execution and progress contract
 
 Initial dependency/readiness order:
@@ -9249,7 +9259,7 @@ Additional implementation-item record:
 | S2.3.9.4.27 | COMMITTED / DXF GROUP-WIDTH CORRECTION | Autodesk documents groups 70/71 as 16-bit DXF integers; fixed the capture to use int16 bounds instead of experimental DWG `RC` bounds. Group 70 is additionally limited to documented alignment choices 0–3; group 71 remains an opaque integer pending a source for its enum. Runtime-generated checks accept group 71 value 128 for type-width coverage, reject group 70 value 4, and assert raw values remain preserved in both cases. Focused target build, `libdxfrw_dwg_local_roundtrip` (1/1), and `git diff --check` pass. No fixture or support claim was added. |
 | S2.3.9.4.28 | COMMITTED / RAW-RETENTION REGRESSION | Expanded the generated extrusion DXF control to include unprojected group-90/91/92/93 values, direction, sweep scalars, and an opaque group-310 chunk. Assertions confirm the selected typed subset can complete while all those additional fields survive in the raw DXF record. Focused target build, `libdxfrw_dwg_local_roundtrip` (1/1), and `git diff --check` pass. No external fixture, DWG decoder, serializer, or support claim was added. |
 
-| S2.2.5 | IN_PROGRESS / SCHEMA_COMMITTED / LOCAL_CUT_BOUNDARY_MATRIX_TESTED | S2.2.5a repairs the independently reproduced legacy ASCII modeler loss: group 70/SAT stay in AcDbModelerGeometry; only AC1021+ 3DSOLID adds its subclass and explicit null/remapped group 350 after the payload. Unsupported nonzero history rejects transactionally. The existing target's focused matrix passes 1,170 records per pass/two passes and 24 rejection/retry controls across five versions/both encodings; local-roundtrip CTest passes and lc3 source check builds. Durable report `docs/research/modeler-dxf-syntax-2026-10-15.json` records ODA acceptance of 12 actual legacy ASCII and six R2013 ASCII/binary controls. All 12 legacy binary subjects and ezdxf binary baselines fail the same ODA screen; generated AC1015 caret-escape coverage and the 254/255/256, 509/510/511 AC1018 ASCII/AC1021 Binary matrix now verify exact decoded payload and ordered group lengths, including boundary whitespace and crossing tokens. These are local preservation regressions only: binary-SAT independent/native acceptance and the general cut-policy decision stay open. Optional qualification script returns nonzero for the incomplete whole matrix. No drawing fixture, CTest registration or support promotion. The separate FreeCAD CLI RTEXT/header failure is reproduced on clean baseline291858e and recorded above. Next ready: S2.3.9.4.37, obtain a native or independently authored producer witness. The ODA desktop retry still fails before conversion while the Mac is locked; keep this evidence gate open and advance other ready P4/P6 work rather than pausing implementation. |
+| S2.2.5 | IN_PROGRESS / SCHEMA_COMMITTED / LOCAL_CUT_BOUNDARY_MATRIX_TESTED | S2.2.5a repairs the independently reproduced legacy ASCII modeler loss: group 70/SAT stay in AcDbModelerGeometry; only AC1021+ 3DSOLID adds its subclass and explicit null/remapped group 350 after the payload. Unsupported nonzero history rejects transactionally. The existing target's focused matrix passes 1,170 records per pass/two passes and 24 rejection/retry controls across five versions/both encodings; local-roundtrip CTest passes and lc3 source check builds. Durable report `docs/research/modeler-dxf-syntax-2026-10-15.json` records ODA acceptance of 12 actual legacy ASCII and six R2013 ASCII/binary controls. All 12 legacy binary subjects and ezdxf binary baselines fail the same ODA screen; generated AC1015 caret-escape coverage and the 254/255/256, 509/510/511 AC1018 ASCII/AC1021 Binary matrix now verify exact decoded payload and ordered group lengths, including boundary whitespace and crossing tokens. These are local preservation regressions only: binary-SAT independent/native acceptance and the general cut-policy decision stay open. Optional qualification script returns nonzero for the incomplete whole matrix. No drawing fixture, CTest registration or support promotion. The separate FreeCAD CLI RTEXT/header failure is reproduced on clean baseline291858e and recorded above. Next external probe: S2.3.9.4.37, obtain a native or independently authored producer witness. The user reports starting the Mac unlock; treat the ODA retry as pending until the desktop confirms it is accessible. If still locked, do not rerun the converter; keep this witness gate open and advance other ready P4/P6 work. |
 | S2.3.9.4.29 | COMMITTED / LOCAL_IMPLEMENTATION_COMPLETE | B1 source census8/14 and B2 codec16/physical-oracle12 remain frozen. B3 adds strict modern INSERT-target closure and specific unchanged-admission modeler diagnostics;28 actual refusal/destination checks,28 corrected fresh-data retries and four default/R12 compatibility controls pass. Actual CLI refuses four missing-target cells/two R12 modeler exports with absent/preserved output; four valid two-pass conversions/verifiers are byte-stable. Strict compile/build/lc3 and retained final-source focused2/2 pass. Separate B3 source/binary/baseline/command receipt is docs/research/modeler-block-failures-b3-2026-10-15.json. Closes only generated legacy-SAT block transport; no external fixture/new registration, nested DWG AcDs/SAB, native/B-rep, whole-model same-data rollback or J promotion. Next parity3.1. |
 | S2.3.9.4.30 | COMMITTED / STRUCTURAL CAPTURE ONLY | Replaced the incorrect Sweep/Extrusion action-body prefix order with transactional bounded capture of the peer-reconciled operation scalars, flags/options, both 16-value transforms, entity type/bit spans and raw entity bits. The bounded reader stores unknown suffix bits without labeling them padding; AC1027 type-15/16 polyline modeler-body profiles remain opaque. Generated `--acsh-action-body-exact-span` controls pass exact-end, opaque suffix, opaque special profile, truncation/reset/same-buffer retry, and oversized-count cases. Focused build succeeds; the hash-pinned AC1027 probe captures all 2,343 action-body bits through the 2,571-bit object bound (type 77 profile/path lengths 744/480; 1 trailing zero bit) and correctly reports Partial. No fixture, writer route, strict-output admission or support claim was added. Remaining: resolve the tail bit; semantically decode embedded paths and modeler-body profile; complete owner/graph/writer/readback closure and independent native/kernel qualification. See `docs/research/p4-ac1027-sweep-bounded-capture-2026-11-08.json`. |
 | S2.3.9.4.31 | COMMITTED / WHOLE-SPAN RAW PRESERVATION ONLY | `SweepActionBodyCapture` retains a separate exact byte-packed copy of the complete bounded action-body bits plus source start/length, alongside typed candidate fields and embedded raw bit spans. The focused generated selector checks byte-exact body preservation for ordinary, suffix-bearing and type-15 special-profile controls; failure/retry remains transactional. The pinned physical probe captures the 2,343-bit body through its 2,571-bit bound, retaining the final bit opaquely and reporting Partial. No semantic entity decoding, writer, admission, fixture or support claim was added. See `docs/research/p4-ac1027-sweep-whole-body-retention-2026-11-08.json`. |
@@ -10513,3 +10523,57 @@ progress entry](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#implementation-progress-s3-ac
 ## Implementation progress — AC1021 inline-SAB SAT numeric and failure-safety controls (2026-11-08; generated fast slice)
 
 The bounded AC1021 inline-SAB v2 to SAT v1 path now emits torus range markers by Boolean ordinal and preserves binary64 values with `max_digits10`. Generated controls cover forward/reverse V sense, full and finite ranges, nontrivial coordinates/radii, nonfinite header/vector refusal, and an extra torus Boolean refused with the output buffer preserved. SAT text assembly catches allocation failures; a from-scratch allocation sweep injects all 11 observed failures, confirms a false result and unchanged caller buffer at every failure, and retries successfully with the same buffer. A generated in-memory v21800 point→vertex SAB with heap-backed header strings sweeps the public raw parser, graph builder, wireframe decoder, and `WithHeader` decoder across 14, 9, 26, and 26 allocation-failure positions respectively. Each API clears its output on failure and same-object retry reproduces parsed identities, graph references, output vertex/bounds, and header fields. The earlier heap-backed header copy fault exposed partial caller-header publication; final publication is now a statically verified nonthrowing move. The parse-complete flag retains stage semantics and can be true if projection fails after framing. These are local failure/retry controls only. The exact physical selected SAT payload parses as 14 records with pinned InventorLoader; decoded torus fields exactly equal source SAB binary64 values. The probe uses FreeCAD/Part stubs and constructs no shape. The selected ASCII/Binary carrier/readback route remains limited to the exact AC1021 source graph and AC1024 target; whole-source output still refuses on the separate IMAGEDEF owner-role gate. Native B-rep validity, placement/units, independent-kernel semantics, other producer/version profiles, and support claims remain open. No fixture was added. See the [P7 parser receipt](docs/research/p7-ac1021-inventorloader-sat-parser-crosscheck-2026-11-08.json), [selected carrier receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json), and [implementation history](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#current-execution-checkpoint-2026-11-08).
+
+## Current execution checkpoint — AC1027 ACSH_SWEEP follow-up (2026-11-08)
+
+The latest committed P4 diagnostic is S2.3.9.4.36 (`dba82679`): under the
+ACadRust candidate field order, two BS option widths reach relative bit 2342
+of the 2343-bit action body and preserve the paired profile/path lengths;
+substituting RC widths fails at the vector at bit 63. Together with .33–.35,
+this narrows the candidate profile for one corpus sample, but does not establish
+the normative DWG layout. The paired DXF is co-located with the DWG in
+LibreDWG's corpus and has no authenticated AutoCAD/ODA lineage; LibreDWG's
+competing schema is experimental and fails on this sample. Keep the production
+capture bounded/raw and `Partial`; do not add typed Sweep output or admit it to
+strict conversion based on cursor fit or the pair alone. The six J items remain
+`DEFERRED_EXTERNAL` and cannot promote support claims.
+
+**Next external evidence action — S2.3.9.4.37 (research/probe, not a parser
+rewrite):**
+
+1. Recheck that the desktop session is actually unlocked before invoking ODA.
+   The user has said they are unlocking it; that is an in-progress handoff, not
+   evidence that the GUI/XPC failure is cleared. If still inaccessible, skip
+   this action without retry loops and continue the local queue.
+2. Once accessible, first verify the installed ODA executable can start. Then
+   use a locally-from-scratch, hash-recorded DXF with deliberately distinct
+   swept-surface scalar, flag, transform, profile/path, and reference values as
+   the source; have ODA produce AC1027 DWG and independently export that exact
+   DWG back to DXF. Keep both generated drawings under the build/temp area and
+   out of Git. Record executable/version, argv, return codes, hashes, and every
+   compared group/bit span in a receipt.
+3. Compare source DXF → produced DWG physical probe → ODA readback DXF. Require
+   all compared values and references to agree, no unexplained body bits, and
+   an independently checkable semantic result for the embedded profile/path
+   before considering any typed decode. Treat ODA's own roundtrip as a
+   producer/profile differential, not a second independent geometry oracle.
+   For a normative or semantic support claim, obtain an AutoCAD/ObjectARX or
+   independently implemented reader/kernel observation on the same hash-pinned
+   model; otherwise document the exact remaining gap and keep status partial.
+4. Only after field order, types, references, and body termination are
+   resolved, draft the smallest parser/test change. Reuse the existing
+   generated truncation/reset/retry and opaque-suffix tests; add only the
+   missing positive/negative cases. Run the affected `-Werror` target and
+   focused CTest, update this ledger/receipt, commit the bounded slice, report
+   the result, then immediately select the next ready item.
+
+**Parallel local queue while the external gate is pending:** take the next
+ready P4/P6 item from the live ledger; prioritize narrow generated tests or
+DXF-side implementation whose wire contract is already sourced. Do not repeat
+.33–.36 diagnostics, broaden Sweep semantics from this one sample, wait idle
+for the desktop, or launch a full suite for a probe-only change. The owning
+fast test/build is sufficient for probe-only receipts; reserve integration and
+full suites for the planned checkpoints above. Every implementation slice
+must update the plan and receipt, commit only intended files, report its commit
+and fast validation, and self-unblock by selecting the next ready slice.
+Preserve unrelated worktree changes and never stage external DWG/DXF evidence.
