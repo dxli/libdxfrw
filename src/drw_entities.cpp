@@ -5663,18 +5663,33 @@ bool DRW_Entity::parseDwgEntHandle(
             : readBoundedDwgHandle(*buf, handleEndBit, handle, false, out);
     };
     auto readHandleList = [&]() {
-        if (handleEndBit == std::numeric_limits<std::uint64_t>::max())
-            return readDwgHandleList(*buf, handle, numReactors, false,
-                                     &newReactorHandles);
         if (!dwgSafety::validReactorCount(numReactors))
             return false;
+        if (handleEndBit == std::numeric_limits<std::uint64_t>::max()) {
+            const int remaining = buf->numRemainingBytes();
+            if (remaining < 0
+                || static_cast<std::uint32_t>(numReactors)
+                       > static_cast<std::uint32_t>(remaining))
+                return false;
+        }
         std::vector<std::uint32_t> parsed;
         if (!DRW::reserve(parsed, numReactors))
             return false;
         for (std::int32_t i = 0; i < numReactors; ++i) {
             dwgHandle reactor;
-            if (!readBoundedDwgHandle(*buf, handleEndBit, handle, false,
-                                      reactor))
+            const bool read =
+                handleEndBit == std::numeric_limits<std::uint64_t>::max()
+                    ? readDwgHandleChecked(*buf, handle, false, reactor)
+                    : readBoundedDwgHandle(*buf, handleEndBit, handle, false,
+                                           reactor);
+            if (!read)
+                return false;
+            // ODA v5.4.1 §20.4.2 defines common entity reactors as soft
+            // pointers. They are read as absolute references here, so require
+            // the absolute soft-pointer code (or a canonical null).
+            if (version >= DRW::AC1018
+                && reactor.rawCode != DRW::DwgSoftPointer
+                && !(reactor.ref == 0u && reactor.rawCode == 0u))
                 return false;
             parsed.push_back(reactor.ref);
         }
@@ -5688,6 +5703,13 @@ bool DRW_Entity::parseDwgEntHandle(
             return false;
         DRW_DBG("owner (parent) Handle: "); DRW_DBGHL(ownerH.code, ownerH.size, ownerH.ref); DRW_DBG("\n");
         DRW_DBG("   Remaining bytes: "); DRW_DBG(buf->numRemainingBytes()); DRW_DBG("\n");
+        // The owner is a soft pointer (ODA §20.4.2). Unlike reactors, this
+        // field is offset-decoded, so inspect rawCode to retain the soft
+        // pointer relation when getOffsetHandle normalizes the decoded code.
+        if (version >= DRW::AC1018
+            && !((ownerH.ref == 0u && ownerH.rawCode == 0u)
+                 || isDwgSoftPointerHandleCode(ownerH.rawCode)))
+            return false;
         newParentHandle = ownerH.ref;
         DRW_DBG("Block (parent) Handle: "); DRW_DBGHL(ownerH.code, ownerH.size, newParentHandle); DRW_DBG("\n");
     } else
@@ -5699,6 +5721,12 @@ bool DRW_Entity::parseDwgEntHandle(
     if (xDictFlag !=1){//linetype in 2004 seems not have XDicObjH or NULL handle
         dwgHandle XDicObjH;
         if (!readRawHandle(XDicObjH))
+            return false;
+        // ODA §20.4.2 declares the common entity extension dictionary a hard
+        // owner. Preserve the null encoding used by files with no dictionary.
+        if (version >= DRW::AC1018
+            && XDicObjH.rawCode != DRW::DwgHardOwnership
+            && !(XDicObjH.ref == 0u && XDicObjH.rawCode == 0u))
             return false;
         newXDictHandle = XDicObjH.ref;  // 2a.2: persist xdict
         DRW_DBG(" XDicObj control Handle: "); DRW_DBGHL(XDicObjH.code, XDicObjH.size, XDicObjH.ref); DRW_DBG("\n");

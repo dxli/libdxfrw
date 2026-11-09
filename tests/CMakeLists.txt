@@ -5334,6 +5334,12 @@ add_test(NAME libdxfrw_persistent_manager_prefix_dispatch
 set_tests_properties(libdxfrw_persistent_manager_prefix_dispatch PROPERTIES
     LABELS "fast;dwg;objects;associative;generated" TIMEOUT 15)
 
+add_test(NAME libdxfrw_ac1027_common_entity_handle_roles
+    COMMAND libdxfrw_dwg_reader_matrix_tests
+        --ac1027-common-entity-handle-roles)
+set_tests_properties(libdxfrw_ac1027_common_entity_handle_roles PROPERTIES
+    LABELS "fast;dwg;entities;handles;generated" TIMEOUT 15)
+
 add_test(NAME libdxfrw_entity_space_from_block_record
     COMMAND libdxfrw_dwg_reader_matrix_tests
         --entity-space-from-block-record)

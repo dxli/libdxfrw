@@ -17454,7 +17454,10 @@ void testAc1027CommonEntityHandleOrder(TestContext& t) {
         std::uint64_t layerEndBit{0};
     };
     const auto makeStream = [](bool hasColorBookHandle,
-                               bool hasLinetypeHandle) {
+                               bool hasLinetypeHandle,
+                               std::uint8_t ownerCode = DRW::DwgSoftPointer,
+                               std::uint8_t reactorCode = DRW::DwgSoftPointer,
+                               std::uint8_t xDictCode = DRW::DwgHardOwnership) {
         GeneratedStream result;
         dwgBufferW writer;
         const auto appendHandle = [&writer](std::uint8_t code,
@@ -17468,10 +17471,10 @@ void testAc1027CommonEntityHandleOrder(TestContext& t) {
 
         // ODA v5.4.1 §20.4.2: owner, reactors, XDICTIONARY, optional
         // R2004+ color-book handle, layer, then optional linetype.
-        appendHandle(DRW::DwgSoftPointer, 0x49u); // owner
-        appendHandle(DRW::DwgSoftPointer, 0x47u); // reactor 1
-        appendHandle(DRW::DwgSoftPointer, 0x48u); // reactor 2
-        appendHandle(DRW::DwgHardOwnership, 0x45u); // XDICTIONARY
+        appendHandle(ownerCode, 0x49u); // owner
+        appendHandle(reactorCode, 0x47u); // reactor 1
+        appendHandle(reactorCode, 0x48u); // reactor 2
+        appendHandle(xDictCode, 0x45u); // XDICTIONARY
         if (hasColorBookHandle)
             appendHandle(DRW::DwgHardPointer, 0x46u); // ENC AcDbColor
         appendHandle(DRW::DwgSoftPointer, 0x42u); // layer
@@ -17536,6 +17539,78 @@ void testAc1027CommonEntityHandleOrder(TestContext& t) {
                  && rejected.dwgLayerHandle() == 0xAAAAu
                  && rejected.dwgLinetypeHandle() == 0x9999u,
              "AC1027 truncated common handle tail fails without publishing partial roles");
+
+    const auto rejectsRoleAndRetries = [&](const GeneratedStream& malformed,
+                                           const char* label) {
+        Ac1027CommonEntityHandleProbe retryable;
+        retryable.configure(0x40u, true, 2, true, true);
+        retryable.parentHandle = 0xEEEEu;
+        retryable.reactorHandles = {0xDDDDu};
+        retryable.xDictHandle = 0xCCCCu;
+        retryable.setDwgAcDbColorHandle(true, 0xBBBBu);
+        retryable.setDwgLayerHandle(0xAAAAu);
+        retryable.setDwgLinetypeHandle(0x9999u);
+        dwgBuffer malformedBuffer(malformed.bytes.data(),
+                                  malformed.bytes.size());
+        const bool acceptedMalformed = retryable.parseHandles(
+            malformedBuffer, malformed.fieldEndBit);
+        const bool preserved = retryable.parentHandle == 0xEEEEu
+            && retryable.reactorHandles == std::vector<std::uint32_t>{0xDDDDu}
+            && retryable.xDictHandle == 0xCCCCu
+            && retryable.dwgAcDbColorHandle() == 0xBBBBu
+            && retryable.dwgLayerHandle() == 0xAAAAu
+            && retryable.dwgLinetypeHandle() == 0x9999u;
+        dwgBuffer correctedBuffer(valid.bytes.data(), valid.bytes.size());
+        const bool correctedAccepted = retryable.parseHandles(
+            correctedBuffer, valid.fieldEndBit);
+        t.expect(!acceptedMalformed && preserved && correctedAccepted
+                     && retryable.parentHandle == 0x49u
+                     && retryable.reactorHandles
+                            == std::vector<std::uint32_t>{0x47u, 0x48u}
+                     && retryable.xDictHandle == 0x45u,
+                 label);
+    };
+
+    rejectsRoleAndRetries(makeStream(true, true, DRW::DwgHardPointer),
+        "AC1027 wrong common-owner role is atomic and corrected input retries");
+    rejectsRoleAndRetries(makeStream(true, true, DRW::DwgSoftPointer,
+                                      DRW::DwgHardPointer),
+        "AC1027 wrong common-reactor role is atomic and corrected input retries");
+    rejectsRoleAndRetries(makeStream(true, true, DRW::DwgSoftPointer,
+                                      DRW::DwgSoftPointer,
+                                      DRW::DwgSoftPointer),
+        "AC1027 wrong extension-dictionary role is atomic and corrected input retries");
+
+    dwgBufferW nullWriter;
+    const auto appendNullHandle = [&nullWriter](std::uint8_t code,
+                                                 std::uint32_t reference = 0u) {
+        dwgHandle value;
+        value.code = code;
+        value.ref = reference;
+        value.ref64 = reference;
+        nullWriter.putHandle(value);
+    };
+    appendNullHandle(0u); // owner
+    appendNullHandle(0u); // reactor 1
+    appendNullHandle(DRW::DwgSoftPointer); // reactor 2: role-preserving null
+    appendNullHandle(0u); // XDICTIONARY
+    appendNullHandle(DRW::DwgHardPointer, 0x46u); // color book
+    appendNullHandle(DRW::DwgSoftPointer, 0x42u); // layer
+    appendNullHandle(DRW::DwgSoftPointer, 0x41u); // linetype
+    const std::uint64_t nullFieldsEndBit = nullWriter.bitCount();
+    appendNullHandle(DRW::DwgHardPointer, 0xCAFEu); // sentinel
+    Ac1027CommonEntityHandleProbe parsedNulls;
+    parsedNulls.configure(0x40u, true, 2, true, true);
+    dwgBuffer nullBuffer(nullWriter.data().data(), nullWriter.data().size());
+    const bool parsedNullCommon = parsedNulls.parseHandles(
+        nullBuffer, nullFieldsEndBit);
+    const dwgHandle nullSentinel = nullBuffer.getHandle();
+    t.expect(parsedNullCommon && parsedNulls.parentHandle == 0u
+                 && parsedNulls.reactorHandles
+                        == std::vector<std::uint32_t>{0u, 0u}
+                 && parsedNulls.xDictHandle == 0u
+                 && nullSentinel.ref == 0xCAFEu,
+             "AC1027 common roles accept canonical and role-preserving null handles");
 }
 
 void testTrackedHeaderRead(TestContext& t) {
@@ -21414,6 +21489,13 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--header-reference-roles") {
         TestContext focused;
         testHeaderReferenceRoles(focused);
+        std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--ac1027-common-entity-handle-roles") {
+        TestContext focused;
+        testAc1027CommonEntityHandleOrder(focused);
         std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
