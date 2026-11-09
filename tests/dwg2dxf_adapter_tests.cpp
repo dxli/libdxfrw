@@ -53689,6 +53689,41 @@ bool physicalAc1032MLineStyleHandleSourceProfile(
         || spans.size() != 2u)
         return fail("physical AC1032 MLINESTYLE identity, ownership or element count changed");
 
+    const DRW_Dictionary* owner = nullptr;
+    for (const DRW_Dictionary& dictionary : data.dictionaries) {
+        if (dictionary.handle != style.parentHandle)
+            continue;
+        if (owner != nullptr)
+            return fail("physical AC1032 MLINESTYLE owner dictionary is ambiguous");
+        owner = &dictionary;
+    }
+    const auto rootEntry = std::find_if(
+        data.namedObjectDictionary.m_entries.begin(),
+        data.namedObjectDictionary.m_entries.end(),
+        [](const DRW_Dictionary::Entry& entry) {
+            return entry.m_name == "ACAD_MLINESTYLE";
+        });
+    const auto linetype = std::find_if(
+        data.lineTypes.begin(), data.lineTypes.end(),
+        [](const DRW_LType& candidate) {
+            return candidate.handle == 0x15u
+                && candidate.name == "ByLayer";
+        });
+    if (data.namedObjectDictionary.handle == 0u
+        || std::count_if(data.namedObjectDictionary.m_entries.begin(),
+                         data.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_MLINESTYLE";
+            }) != 1
+        || rootEntry == data.namedObjectDictionary.m_entries.end()
+        || rootEntry->m_handle != 0x17u || owner == nullptr
+        || owner->parentHandle != data.namedObjectDictionary.handle
+        || owner->m_entries.size() != 1u
+        || owner->m_entries.front().m_name != "Standard"
+        || owner->m_entries.front().m_handle != style.handle
+        || linetype == data.lineTypes.end())
+        return fail("physical AC1032 MLINESTYLE NOD, owner-dictionary or LTYPE dependency graph changed");
+
     const std::array<double, 2> expectedOffsets{{0.5, -0.5}};
     for (std::size_t index = 0; index < spans.size(); ++index) {
         const DRW_DwgSubrecordRange& span = spans[index];
@@ -53712,7 +53747,8 @@ bool physicalAc1032MLineStyleHandleSourceProfile(
                   << " role=" << static_cast<unsigned int>(span.m_rawHandleCode)
                   << " target=" << element.linetypeHandle << '\n';
     }
-    std::cout << "Physical AC1032 MLINESTYLE handle roles and spans PASS\n";
+    std::cout << "Physical AC1032 MLINESTYLE rooted dictionary and LTYPE "
+                 "dependency graph, handle roles and spans PASS\n";
     return true;
 }
 

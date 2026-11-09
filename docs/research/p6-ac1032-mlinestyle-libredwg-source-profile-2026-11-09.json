@@ -2,7 +2,7 @@
   "schema": "libdxfrw-research-receipt-v1",
   "id": "p6-ac1032-mlinestyle-libredwg-source-profile-2026-11-09",
   "date": "2026-11-09",
-  "status": "BOUNDED_PHYSICAL_PROFILE_PEER_VALUES_AND_ROLES_AGREE",
+  "status": "BOUNDED_PHYSICAL_PROFILE_AND_SELECTED_DEPENDENCY_GRAPH_AGREE",
   "scope": "Check the generated AC1032 MLINESTYLE per-element handle-span implementation against one already-present public DWG and an independent LibreDWG 0.14 decode.",
   "supportClaimEffect": "none",
   "source": {
@@ -32,6 +32,12 @@
       {"offset": 0.5, "linetypeHandle": "0x15"},
       {"offset": -0.5, "linetypeHandle": "0x15"}
     ],
+    "typedDependencyGraph": {
+      "namedObjectDictionaryEntry": {"key": "ACAD_MLINESTYLE", "target": "0x17", "occurrences": 1},
+      "ownerDictionary": {"handle": "0x17", "parent": "NOD", "entry": {"key": "Standard", "target": "0x18"}},
+      "linetype": {"handle": "0x15", "name": "ByLayer"},
+      "closure": "The typed callback graph closes for this selected MLINESTYLE and its two LTYPE dependencies. This does not close the drawing-wide object graph or prove native semantics."
+    },
     "libdxfrwParserSpans": [
       {"field": "element[0].linetypeHandle", "startBit": 627, "bitSize": 16, "rawHandleCode": 5},
       {"field": "element[1].linetypeHandle", "startBit": 643, "bitSize": 16, "rawHandleCode": 5}
@@ -60,19 +66,19 @@
   "implementation": {
     "file": "tests/dwg2dxf_adapter_tests.cpp",
     "selector": "--mline-style-ac1032-source-profile",
-    "change": "Add a manual corpus-profile selector that asserts the typed style identity, two target handles, exact parser-reported offsets and span widths/roles observed for this source. The receipt binds the invocation to the DWG SHA-256; the selector does not implement its own hash check and is not registered in CTest."
+    "change": "Add a manual corpus-profile selector that asserts the typed style identity, NOD-to-owner-to-style links, unique ByLayer LTYPE dependency, two target handles, exact parser-reported offsets and span widths/roles observed for this source. The receipt binds the invocation to the DWG SHA-256; the selector does not implement its own hash check and is not registered in CTest."
   },
   "validation": {
     "build": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests --parallel 4",
     "buildResult": "PASS with configured warning-as-error flags.",
     "physicalSelector": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --mline-style-ac1032-source-profile /Users/dli/dev/libredwg/test/test-data/example_2018.dwg",
-    "physicalSelectorResult": "PASS: parser spans 627+16 and 643+16 bits; both use hard-pointer code 5 and resolve to 0x15. The read reports one unrelated object parse failure; strict whole-source conversion remains refused.",
+    "physicalSelectorResult": "PASS: exact NOD ACAD_MLINESTYLE entry -> dictionary 0x17 -> style 0x18 graph; both linetype refs resolve to unique LTYPE 0x15 ByLayer; parser spans are 627+16 and 643+16 bits, both hard-pointer code 5. The read reports one unrelated object parse failure; strict whole-source conversion remains refused.",
     "diffCheck": "PASS",
     "fullTestSuites": "NOT RUN; focused source-profile selector and target-local build used."
   },
   "remainingGates": [
     "Producer-qualified AutoCAD/ODA AC1032 span evidence remains absent.",
-    "No MLINESTYLE source graph closure, strict output admission, writer, native CAD, LibreCAD, LibreCAD_3, or support claim follows from this profile.",
+    "Only the selected typed MLINESTYLE dependency graph closes. Drawing-wide graph closure, strict output admission, writer, native CAD, LibreCAD, LibreCAD_3, or support claim does not follow from this profile.",
     "Generated exact-span, malformed-role, null, truncation, rollback and retry controls remain the primary span-boundary validation."
   ]
 }
