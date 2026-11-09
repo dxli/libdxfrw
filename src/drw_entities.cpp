@@ -14448,24 +14448,26 @@ bool DRW_Table::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
     extPoint = parsedExtPoint;
 
     if (version >= DRW::AC1024) {
-        std::uint8_t ignoredTableVersion = 0;
-        if (!readBoundedRawChar8(*buf, bodyEndBit, ignoredTableVersion))
+        // ODA v5.4.1 §20.4.96.2 documents these R2010+ fields as unknown
+        // and gives their defaults. Do not project a non-default prefix as
+        // complete TABLE semantics until its meaning is established.
+        std::uint8_t unknownTablePrefix = 0;
+        if (!readBoundedRawChar8(*buf, bodyEndBit, unknownTablePrefix))
             return fail();
-        dwgHandle parsedTableStyleHandle;
+        dwgHandle unknownSoftPointer;
         if (!readBoundedDwgHandle(hBuff, handleEndBit, 0, false,
-                                  parsedTableStyleHandle))
+                                  unknownSoftPointer))
             return fail();
-        const std::uint32_t tableStyleHandle = parsedTableStyleHandle.ref;
-        std::int32_t ignoredContentFlag = 0;
-        if (!readBoundedBitLong(*buf, bodyEndBit, ignoredContentFlag))
+        std::int32_t unknownContentFlag = 0;
+        if (!readBoundedBitLong(*buf, bodyEndBit, unknownContentFlag))
             return fail();
+        bool unknownR2010Flag = true;
+        std::int32_t unknownR2013Flag = 0;
         if (version >= DRW::AC1027) {
-            std::int32_t ignoredContentVersion = 0;
-            if (!readBoundedBitLong(*buf, bodyEndBit, ignoredContentVersion))
+            if (!readBoundedBitLong(*buf, bodyEndBit, unknownR2013Flag))
                 return fail();
         } else {
-            bool ignoredContentBit = false;
-            if (!readBoundedBit(*buf, bodyEndBit, ignoredContentBit))
+            if (!readBoundedBit(*buf, bodyEndBit, unknownR2010Flag))
                 return fail();
         }
 
@@ -14473,6 +14475,12 @@ bool DRW_Table::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
             return fail();
 
         m_hasSemanticContent = true;
+        if (unknownTablePrefix != 0u || unknownSoftPointer.ref != 0u
+            || unknownContentFlag != 0 || !unknownR2010Flag
+            || unknownR2013Flag != 0) {
+            m_semanticContentComplete = false;
+            return commit();
+        }
         // TABLECONTENT is an optional semantic tail. Decode it on independent
         // cursors so a newer/partially supported cell variant cannot poison the
         // already validated entity prefix and common handle stream.
@@ -14509,10 +14517,7 @@ bool DRW_Table::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
         *sBuf = contentStringBuf;
         hBuff = contentHandleBuf;
         m_content = std::move(parsedContent);
-        if (m_content.m_tableStyleHandle != 0)
-            m_tableStyleHandle = m_content.m_tableStyleHandle;
-        else
-            m_tableStyleHandle = tableStyleHandle;
+        m_tableStyleHandle = m_content.m_tableStyleHandle;
         if (!buf->isGood() || !sBuf->isGood() || !hBuff.isGood())
             return fail();
         if (!m_semanticContentComplete) {

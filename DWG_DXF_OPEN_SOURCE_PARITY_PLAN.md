@@ -15,6 +15,14 @@ torus B-rep check is recorded in
 its one-body/one-face/one-solid result is a bounded selected-profile check,
 not independent-kernel, whole-source, platform, or support-claim evidence.
 
+**Latest access recheck (2026-11-09 07:27 UTC):** following the user's
+unlock-in-progress reply, direct CUA inventory again returned “The Mac is
+locked and automatic unlock could not unlock it”; no native apps were listed.
+No ODA or FreeCAD process was launched, and this observation does not qualify
+or disqualify any drawing profile. Retry native qualification only after a new
+inventory reports an unlocked session; until then, proceed with local slices
+whose evidence does not depend on the desktop.
+
 **P8 LibreCAD_3 CI follow-up (2026-11-09, live status checked 06:45 UTC):** the previous PR #456 head
 `321f2cad` passed build and required regressions on macOS arm64, then failed
 while installing the app because the runner's cached Homebrew formula/API
@@ -2436,6 +2444,17 @@ capture, keep default legacy consumers opted out until codec, source, dependency
 output gates are met.
 
 ## P5 — rendering and TABLE
+
+**R2010+ TABLE unknown-prefix admission:** `DRW_Table::parseDwg` now keeps
+the entity frame readable but withholds semantic completeness when the
+ODA v5.4.1 §20.4.96.2 unknown preamble differs from its documented defaults:
+the RC/BL fields are nonzero, the unknown soft pointer is non-null, or the
+R2010 Boolean is false. The non-default pointer is no longer used as a
+TABLESTYLE identity; only the TABLECONTENT style reference populates that
+field. Generated AC1024 controls cover each case; the documented-default
+AC1024 content/reference profile still passes. This is conservative parser
+disposition, not evidence for non-default field meaning, independent raw-frame
+replay, or native TABLE semantics. See the [focused receipt](docs/research/p5-ac1024-table-unknown-prefix-default-gate-2026-11-09.json).
 
 The generated nested TABLESTYLE raw-net control now models ordinary and covered
 cells with explicit unit spans and uses the output's remapped raw-object handles

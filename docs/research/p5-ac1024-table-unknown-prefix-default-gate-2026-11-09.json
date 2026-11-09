@@ -1,0 +1,59 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p5-ac1024-table-unknown-prefix-default-gate-2026-11-09",
+  "date": "2026-11-09",
+  "status": "GENERATED_UNKNOWN_PREFIX_DEFAULT_GATE_PASSES",
+  "supportClaimEffect": "none",
+  "scope": "Keep the R2010 TABLE semantic projection incomplete when ODA-documented unknown preamble fields differ from their stated defaults.",
+  "authority": {
+    "document": "Open Design Specification for .dwg files",
+    "version": "5.4.1",
+    "section": "20.4.96.2",
+    "fields": [
+      {"type": "RC", "default": 0},
+      {"type": "H", "role": "soft pointer", "default": "NULL"},
+      {"type": "BL", "default": 0},
+      {"version": "R2010", "type": "B", "default": true}
+    ],
+    "interpretation": "The fields are explicitly unknown. A non-default value is retained as an unqualified profile and must not be projected as complete TABLE semantics."
+  },
+  "implementation": {
+    "baseRevision": "7da70ef4821ad1a49c180c56eb0e70b519a4fdde",
+    "source": "src/drw_entities.cpp",
+    "behavior": "AC1024+ TABLE parsing accepts the documented preamble defaults. A nonzero unknown RC/BL, non-null unknown soft pointer, false R2010 Boolean, or nonzero R2013+ BL commits the structurally readable entity prefix with semantic completeness false. The unknown soft pointer is not used as a TABLESTYLE identity; the TABLECONTENT style reference remains authoritative for the modeled field.",
+    "sourceSha256AfterEdit": "cb796ba22b2e443b7129bab6ef92683ef0cd35ab808f1ec7f460c554f5782a16"
+  },
+  "generatedControls": {
+    "source": "tests/dwg_object_vectors_tests.cpp",
+    "sourceSha256AfterEdit": "b03bace8a8ab4084127038e06c664eaeb5768af5d363fba4c4238f598d7f0f00",
+    "cases": [
+      {"mutation": "unknown RC = 1", "result": "semantic projection incomplete"},
+      {"mutation": "unknown soft pointer = 0xA701", "result": "semantic projection incomplete; pointer not mapped to TABLESTYLE"},
+      {"mutation": "unknown BL = 1", "result": "semantic projection incomplete"},
+      {"mutation": "R2010 unknown Boolean = false", "result": "semantic projection incomplete"}
+    ],
+    "frameFilesAdded": false
+  },
+  "validation": {
+    "build": {
+      "command": "cmake --build build --target libdxfrw_dwg_object_vectors_tests -j2",
+      "result": "PASS"
+    },
+    "focused": {
+      "command": "ctest --test-dir build -R '^libdxfrw_table_r2010_unknown_prefix_defaults$' --output-on-failure",
+      "result": "PASS (1/1)"
+    },
+    "defaultProfileCompatibility": {
+      "command": "build/libdxfrw_dwg_object_vectors_tests --table-content-reference-roles",
+      "result": "PASS"
+    },
+    "testExecutableSha256": "d169529fa7031167a25f19abb2550b5c58005c943c3ef55faa7b2ab953e5904c"
+  },
+  "limitations": [
+    "No meaning is assigned to non-default unknown fields.",
+    "The generated controls verify parser disposition, not producer interoperability or native rendering.",
+    "Exact raw-frame preservation and strict end-to-end output are separate gates and were not established by this vector.",
+    "No drawing fixture was added."
+  ],
+  "next": "Continue with the next locally ready source-backed P4/P6 slice; keep physical TABLE, native rendering, and non-default-prefix semantics unqualified."
+}

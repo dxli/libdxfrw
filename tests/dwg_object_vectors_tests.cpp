@@ -11839,7 +11839,11 @@ bool makeR2010EmbeddedTableFrame(R2010EmbeddedTableFrame& frame,
                                 std::int32_t valueDataType = 2,
                                 std::uint8_t valueHandleRole =
                                     DRW::DwgSoftPointer,
-                                TableContentStyleIds styleIds = {}) {
+                                TableContentStyleIds styleIds = {},
+                                std::uint8_t unknownTablePrefix = 0u,
+                                std::uint32_t unknownSoftPointerRef = 0u,
+                                std::int32_t unknownContentFlag = 0,
+                                bool unknownR2010Flag = true) {
     constexpr DRW::Version version = DRW::AC1024;
     constexpr std::uint32_t blockRecordHandle = 0xA600u;
     constexpr std::uint32_t tableStyleHandle = 0xA700u;
@@ -11894,11 +11898,15 @@ bool makeR2010EmbeddedTableFrame(R2010EmbeddedTableFrame& frame,
 
     // ODA §20.4.96.2 R2010 prefix: preserve unknown fields at their documented
     // widths; the first handle is the unknown null soft pointer.
-    body.putRawChar8(0);
+    body.putRawChar8(unknownTablePrefix);
     handles.putHandle(handle(blockRecordHandle)); // owning BLOCK_RECORD
-    handles.putHandle(handle(0));
-    body.putBitLong(0);
-    body.putBit(1);
+    dwgHandle unknownSoftPointer;
+    unknownSoftPointer.code = DRW::DwgSoftPointer;
+    unknownSoftPointer.ref = unknownSoftPointerRef;
+    unknownSoftPointer.ref64 = unknownSoftPointerRef;
+    handles.putHandle(unknownSoftPointer);
+    body.putBitLong(unknownContentFlag);
+    body.putBit(unknownR2010Flag);
 
     // ODA §§20.4.96.2 and 20.4.97: the R24 content is inline in the TABLE
     // entity stream (without a second common OBJECT header).
@@ -12245,12 +12253,17 @@ bool makeR2010EmbeddedTableFrame(R2010EmbeddedTableFrame& frame,
 }
 
 bool makeR2010EmbeddedTableFrameWithStyleIds(
-    R2010EmbeddedTableFrame& frame, TableContentStyleIds styleIds) {
+    R2010EmbeddedTableFrame& frame, TableContentStyleIds styleIds,
+    std::uint8_t unknownTablePrefix = 0u,
+    std::uint32_t unknownSoftPointerRef = 0u,
+    std::int32_t unknownContentFlag = 0,
+    bool unknownR2010Flag = true) {
     return makeR2010EmbeddedTableFrame(
         frame, 1u, 1u, 1u, 0u, 0u, 0u, 1u, 0u, 0u, 0, 0xA710u,
         false, 0u, 0u, DRW::DwgHardOwnership, TablePlacement{}, 0,
         DRW::DwgHardPointer, false, {}, 0, 0, 1, 1, 0, 0, 1, 1, 0, 2,
-        DRW::DwgSoftPointer, styleIds);
+        DRW::DwgSoftPointer, styleIds, unknownTablePrefix,
+        unknownSoftPointerRef, unknownContentFlag, unknownR2010Flag);
 }
 
 bool makeR2010EmbeddedTableMergeFrame(
@@ -14571,6 +14584,46 @@ void testTableContentStyleIdDomains(TestContext& t) {
                      && cursorBit(input)
                          == ac1024InvalidFrame.tableContentStartBit,
                  "AC1024 refuses an invalid style-ID snapshot without advancing the committed cursor");
+    }
+}
+
+void testR2010TableUnknownPrefixDefaults(TestContext& t) {
+    struct Case {
+        std::uint8_t unknownTablePrefix;
+        std::uint32_t unknownSoftPointerRef;
+        std::int32_t unknownContentFlag;
+        bool unknownR2010Flag;
+        const char* name;
+    };
+    const std::array<Case, 4> cases = {{
+        {1u, 0u, 0, true, "RC"},
+        {0u, 0xA701u, 0, true, "soft pointer"},
+        {0u, 0u, 1, true, "BL"},
+        {0u, 0u, 0, false, "R2010 Boolean"}
+    }};
+    for (const Case& item : cases) {
+        R2010EmbeddedTableFrame frame;
+        const bool built = makeR2010EmbeddedTableFrameWithStyleIds(
+            frame, TableContentStyleIds{}, item.unknownTablePrefix,
+            item.unknownSoftPointerRef, item.unknownContentFlag,
+            item.unknownR2010Flag);
+        t.expect(built, std::string("AC1024 TABLE unknown ") + item.name
+                            + " control builds");
+        if (!built)
+            continue;
+        DRW_TextCodec codec;
+        codec.setVersion(DRW::AC1024, false);
+        dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+        TableDwgCodecProbe table;
+        const bool parsed = table.parseDwg(
+            DRW::AC1024, &input, frame.handleBits);
+        t.expect(parsed && input.isGood() && table.m_hasSemanticContent
+                     && !table.m_semanticContentComplete
+                     && table.m_content.m_columns.empty()
+                     && table.m_content.m_rows.empty()
+                     && table.m_tableStyleHandle == 0u,
+                 std::string("AC1024 TABLE unknown ") + item.name
+                     + " remains structurally readable and semantically incomplete");
     }
 }
 
@@ -23778,6 +23831,14 @@ int main(int argc, char** argv) {
         testR2007TableContentObjectVector(context);
         testR2010EmbeddedTableContentVector(context);
         std::cout << "AC1021/AC1024 TABLECONTENT reference-role vectors: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--table-r2010-unknown-prefix") {
+        TestContext context;
+        testR2010TableUnknownPrefixDefaults(context);
+        std::cout << "AC1024 TABLE unknown-prefix default gate: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

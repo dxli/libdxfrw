@@ -1900,6 +1900,12 @@ if(LIBDXFRW_BUILD_TESTS)
             --table-cadvalue-unsupported-buffers)
     set_tests_properties(libdxfrw_table_cadvalue_unsupported_buffers PROPERTIES
         LABELS "fast;dwg;object-vectors;tables" TIMEOUT 10)
+    add_test(NAME libdxfrw_table_r2010_unknown_prefix_defaults
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --table-r2010-unknown-prefix)
+    set_tests_properties(libdxfrw_table_r2010_unknown_prefix_defaults
+        PROPERTIES LABELS "fast;dwg;object-vectors;tables;generated"
+            TIMEOUT 10)
     add_test(NAME libdxfrw_tablestyle_data_flag_domain
         COMMAND libdxfrw_dwg_object_vectors_tests --tablestyle-data-flag)
     set_tests_properties(libdxfrw_tablestyle_data_flag_domain PROPERTIES
