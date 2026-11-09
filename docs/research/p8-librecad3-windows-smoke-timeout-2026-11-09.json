@@ -45,11 +45,11 @@
       "macOSArm64": "in_progress",
       "linuxArm64": "queued",
       "appImage": "queued",
-      "readDwgUnderSanitizers": "queued",
+      "readDwgUnderSanitizers": "success",
       "codeqlPython": "success",
-      "macOSX86_64": "queued",
-      "result": "Plan Sync, Windows persistence, and CodeQL Python passed; Windows package remains in progress.",
-      "aggregateCodeQL": "neutral: base branch C++ configuration missing"
+      "macOSX86_64": "in_progress",
+      "aggregateCodeQL": "neutral: base branch C++ configuration missing",
+      "result": "Plan Sync, Windows persistence, DWG sanitizers, and CodeQL Python passed; the Windows package job remains in progress."
     }
   },
   "limitations": [
