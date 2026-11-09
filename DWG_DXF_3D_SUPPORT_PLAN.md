@@ -10542,9 +10542,11 @@ strict conversion based on cursor fit or the pair alone. The six J items remain
 rewrite):**
 
 1. Recheck that the desktop session is actually unlocked before invoking ODA.
-   The user has said they are unlocking it; that is an in-progress handoff, not
-   evidence that the GUI/XPC failure is cleared. If still inaccessible, skip
-   this action without retry loops and continue the local queue.
+   The user said they were unlocking it, but the latest Computer Use inventory
+   still reports the Mac locked and native apps unavailable. Treat the external
+   retry as blocked on that observable state, not on the user's intent. Skip
+   this action without retry loops and continue the local queue; retry only
+   after a fresh inventory confirms the session is accessible.
 2. Once accessible, first verify the installed ODA executable can start. Then
    use a locally-from-scratch, hash-recorded DXF with deliberately distinct
    swept-surface scalar, flag, transform, profile/path, and reference values as
