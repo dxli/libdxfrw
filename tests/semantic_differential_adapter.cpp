@@ -2771,17 +2771,24 @@ void writeFields(std::ostream& out, const std::vector<Field>& fields) {
 }
 
 template <typename Prefix>
-void writeBytePrefix(std::ostream& out, const Prefix& prefix) {
+void writeBytePrefixFields(std::ostream& out, const Prefix& prefix) {
     if (prefix.length > prefix.bytes.size())
         throw std::runtime_error("DWG observation prefix exceeds its storage");
-    out << "{\"bytesHex\":\"" << std::hex << std::nouppercase
+    out << "\"bytesHex\":\"" << std::hex << std::nouppercase
         << std::setfill('0');
     for (std::size_t i = 0; i < prefix.length; ++i)
         out << std::setw(2) << static_cast<unsigned>(prefix.bytes[i]);
     out << std::dec << "\",\"prefixLength\":" << prefix.length
         << ",\"sourceLength\":" << prefix.sourceBytes
         << ",\"truncated\":"
-        << (prefix.truncated() ? "true" : "false") << '}';
+        << (prefix.truncated() ? "true" : "false");
+}
+
+template <typename Prefix>
+void writeBytePrefix(std::ostream& out, const Prefix& prefix) {
+    out << '{';
+    writeBytePrefixFields(out, prefix);
+    out << '}';
 }
 
 template <typename Summary>
@@ -2792,7 +2799,7 @@ void writeNamedSummary(std::ostream& out, const Summary& summary) {
     for (std::size_t i = 0; i < summary.retained; ++i) {
         if (i != 0) out << ',';
         out << '{';
-        writeBytePrefix(out, summary.rows[i].name);
+        writeBytePrefixFields(out, summary.rows[i].name);
         out << ",\"instances\":" << summary.rows[i].instances << '}';
     }
     out << "],\"retainedRowCount\":" << summary.retained

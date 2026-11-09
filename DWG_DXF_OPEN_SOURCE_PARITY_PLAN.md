@@ -1,17 +1,20 @@
 # DWG/DXF parity — remaining implementation plan
 
-**Resume checkpoint (2026-11-09, AC1024 external POINT cross-check):** the
-online `nextgis/dwg_samples` `point3d_2010` DWG and paired DXF now match on the
-POINT at handle `0x7c`, WCS `(50, 50, 50)`, and extrusion `(0, 0, 1)`, using a
-current-source libdxfrw semantic adapter and independent LibreDWG 0.14
-`dwgread`. The adapter inventory was refreshed for two current defaulted
-callbacks; its self-test and controlled build pass. This is one bounded
-read-field witness and does not qualify other entities, versions, DWG writing,
-or FreeCAD geometry. The broader online AC1024 sample sweep still does not
-reproduce the AutoCAD 2010 RTM CLASSES high-bit-size failure; the exact RTM
-input remains needed. No downloaded DWG/DXF was added as a fixture. See the
-[AC1024 POINT witness](docs/research/p6-ac1024-point3d-independent-read-witness-2026-11-09.json)
-and [online sample RTM recheck](docs/research/p6-ac1024-online-sample-rtm-nonreproduction-2026-11-09.json).
+**Resume checkpoint (2026-11-09, six-version external POINT read matrix):**
+the hash-pinned AutoCAD 2016 `nextgis/dwg_samples` POINT now matches between
+libdxfrw's current-source semantic adapter and LibreDWG 0.14 for handle `0x7c`,
+WCS `(50, 50, 50)`, and extrusion `(0, 0, 1)` across AC1014/AC1015/AC1018/
+AC1021/AC1024/AC1027; all five available paired source DXFs match as well. This
+matrix exposed and fixed malformed JSON in the test adapter's named-summary
+rows, which had blocked AC1015 and AC1018 comparisons. The controlled build,
+adapter self-test and differential-runner self-test pass. This remains one
+bounded POINT witness per pinned version and does not qualify other entities,
+general version support, DWG writing or native geometry. The online AC1024
+sample sweep still does not reproduce the AutoCAD 2010 RTM CLASSES high-bit
+size failure; the exact RTM input remains needed. No downloaded DWG/DXF was
+added as a fixture. See the [six-version POINT matrix](docs/research/p6-autocad-point3d-six-version-read-matrix-2026-11-09.json),
+[AC1024 sample RTM recheck](docs/research/p6-ac1024-online-sample-rtm-nonreproduction-2026-11-09.json),
+and [AC1024 sample downloads](docs/research/p6-ac1024-online-sample-download-check-2026-11-09.json).
 
 **Resume checkpoint (2026-11-09, AC1015 PERSUBENTMGR partial profile):** the
 hash-bound AutoCAD 2000 D63 sample now publishes the exact first eight values
