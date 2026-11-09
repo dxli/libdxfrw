@@ -1,14 +1,15 @@
 # DWG/DXF parity — remaining implementation plan
 
-**Resume checkpoint (2026-11-08, after the latest unlock reply):** the user
-reported they would unlock the Mac, but a fresh desktop inventory still reports
-the session locked and exposes no native app surface. This is not an unlock
-confirmation. The unsandboxed ODA File Converter 27.1 `--help` process remains
-live with no output and has not shown a window or processed a document. Do not
-count it as a successful launch, conversion, or format evidence; leave that
-process intact and resume native qualification only when the desktop is
-accessible or a materially different launch route is available. Continue
-independently actionable local work. The selected AC1021 FreeCAD
+**Resume checkpoint (2026-11-09, after the latest unlock reply):** the user
+again reported that they would unlock the Mac. A fresh desktop inventory after
+that reply still reports the session locked and exposes no native app surface,
+so native qualification could not be resumed in this pass. Treat this as a
+desktop-access blocker only; it is not file-format evidence. Do not retry the
+unchanged ODA File Converter 27.1 CLI path, which previously aborted during
+Pasteboard/XPC initialization before processing input. Resume native
+qualification when the desktop inventory exposes the unlocked session or a
+materially different launch route is available. Continue independently
+actionable local work. The selected AC1021 FreeCAD
 torus B-rep check is recorded in
 [`p7-ac1021-freecad-native-torus-brep-2026-11-08.json`](docs/research/p7-ac1021-freecad-native-torus-brep-2026-11-08.json);
 its one-body/one-face/one-solid result is a bounded selected-profile check,
