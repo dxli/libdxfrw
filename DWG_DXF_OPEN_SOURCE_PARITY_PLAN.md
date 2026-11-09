@@ -2,21 +2,24 @@
 
 **Resume checkpoint (2026-11-09, generated OBJECTS writer allocation safety):**
 the AC1027 callback sweep covers FIELD, FIELDLIST, MOTIONPATH, CURVEPATH,
-POINTPATH, OBJECTPTR, and PARTIALVIEWINGINDEX with LINE and POINT targets: 44
-allocation points in ASCII and 42 in Binary. Every injected failure preserves
+POINTPATH, OBJECTPTR, and PARTIALVIEWINGINDEX with LINE, POINT, and a two-vertex
+POLYLINE target: 44 allocation points in ASCII and 42 in Binary. Every injected failure preserves
 the whole-file destination and modeled caller records; retry reproduces
 calibration bytes and typed readback verifies field values, FIELDLIST
 membership, path fields, MOTIONPATH references to CURVEPATH/POINTPATH, the
 CURVEPATH-to-LINE edge, OBJECTPTR identity, POINT fields, and the LINE/PVI
-graph. Ordinary entity emission preserves source handles on success and failure;
-the compound INSERT/ATTRIB path retains minted handles when children need the
-parent/child identities for the emitted sequence. `RecordStateScope::commit()`
-restores entity handles by default, with the compound sequence opting into
-identity retention. The focused allocation sweep verifies that LINE and POINT
-retain their source handles through successful calibration, each injected
-failure, and retry; emitted DXF readback verifies the minted record identities.
-Entity-reference remapping and polyline vertex-role controls pass. Other entity
-types still require their owning controls. No fixture was added.
+graph. Ordinary entities and POLYLINE/VERTEX preserve source handles on success
+and failure; the compound INSERT/ATTRIB path retains minted handles when child
+owner links need the emitted parent/child identities. `RecordStateScope::commit()`
+restores entity handles by default, with only that INSERT/ATTRIB path opting
+into identity retention. `writePolyline()` now restores each caller vertex
+handle after emitting it, while retaining source-to-emitted mappings for the
+DXF graph. The focused allocation sweep verifies LINE, POINT and POLYLINE/
+VERTEX source state through calibration, every injected failure, and retry;
+typed DXF readback checks the minted parent, vertex and owner identities.
+Entity-reference remapping, INSERT rollback, vertex XDATA and polyline role
+controls pass. Other entity types still require their owning controls. No
+fixture was added.
 See the [allocation receipt](docs/research/p6-dxf-partial-viewing-index-objects-allocation-failure-retry-2026-11-09.json).
 
 The AC1024 online sample search also re-confirmed public candidates: Autodesk's

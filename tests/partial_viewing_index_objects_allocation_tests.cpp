@@ -33,6 +33,14 @@ public:
         point.handle = 0xD7B1u;
         point.parentHandle = DRW::DxfModelSpaceBlockRecordHandle;
         point.basePoint = {6.0, 5.0, 4.0};
+        polyline.handle = 0xD7B9u;
+        polyline.parentHandle = DRW::DxfModelSpaceBlockRecordHandle;
+        DRW_Vertex firstVertex(10.0, 20.0, 0.0, 0.0);
+        firstVertex.handle = 0xD7BAu;
+        DRW_Vertex secondVertex(30.0, 40.0, 0.0, 0.0);
+        secondVertex.handle = 0xD7BBu;
+        polyline.addVertex(firstVertex);
+        polyline.addVertex(secondVertex);
         field.handle = 0xD7B3u;
         field.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
         field.m_evaluatorId = "AcExpr";
@@ -68,7 +76,8 @@ public:
     void writeEntities() override {
         lineWritten = codec.writeLine(&line);
         pointWritten = lineWritten && codec.writePoint(&point);
-        if (!pointWritten)
+        polylineWritten = pointWritten && codec.writePolyline(&polyline);
+        if (!polylineWritten)
             (void)codec.writeRawDxfObject(nullptr);
     }
 
@@ -115,14 +124,16 @@ public:
     }
 
     bool finalizeDxfWrite() override {
-        return lineWritten && pointWritten && fieldWritten && fieldListWritten
-            && pathsWritten && objectPtrWritten && indexWritten;
+        return lineWritten && pointWritten && polylineWritten && fieldWritten
+            && fieldListWritten && pathsWritten && objectPtrWritten
+            && indexWritten;
     }
 
     dxfRW& codec;
     dx_data storage;
     DRW_Line line;
     DRW_Point point;
+    DRW_Polyline polyline;
     DRW_Field field;
     DRW_FieldList fieldList;
     DRW_MotionPath motionPath;
@@ -134,6 +145,7 @@ public:
     long reached = 0;
     bool lineWritten = false;
     bool pointWritten = false;
+    bool polylineWritten = false;
     bool fieldWritten = false;
     bool fieldListWritten = false;
     bool pathsWritten = false;
@@ -160,6 +172,28 @@ bool lineMatches(const DRW_Line& actual, const DRW_Line& expected) {
         && actual.secPoint.z == expected.secPoint.z;
 }
 
+bool polylineMatches(const DRW_Polyline& actual,
+                     const DRW_Polyline& expected) {
+    if (actual.handle != expected.handle
+        || actual.parentHandle != expected.parentHandle
+        || actual.flags != expected.flags
+        || actual.vertlist.size() != expected.vertlist.size())
+        return false;
+    for (std::size_t i = 0; i < expected.vertlist.size(); ++i) {
+        const auto& left = actual.vertlist[i];
+        const auto& right = expected.vertlist[i];
+        if (!left || !right || left->handle != right->handle
+            || left->basePoint.x != right->basePoint.x
+            || left->basePoint.y != right->basePoint.y
+            || left->basePoint.z != right->basePoint.z
+            || left->bulge != right->bulge
+            || left->stawidth != right->stawidth
+            || left->endwidth != right->endwidth)
+            return false;
+    }
+    return true;
+}
+
 bool indexMatches(const DRW_PartialViewingIndex& actual,
                   const DRW_PartialViewingIndex& expected) {
     if (actual.handle != expected.handle
@@ -183,12 +217,16 @@ bool indexMatches(const DRW_PartialViewingIndex& actual,
 
 bool readbackMatches(const std::filesystem::path& path,
                      const DRW_Line& expectedLine,
+                     const DRW_Polyline& expectedPolyline,
                      const DRW_PartialViewingIndex& expectedIndex) {
     dx_data data;
     class IndexReadback final : public dx_iface {
     public:
         void addLine(const DRW_Line& value) override { lines.push_back(value); }
         void addPoint(const DRW_Point& value) override { points.push_back(value); }
+        void addPolyline(const DRW_Polyline& value) override {
+            polylines.push_back(value);
+        }
         void addField(const DRW_Field& value) override { fields.push_back(value); }
         void addFieldList(const DRW_FieldList& value) override {
             fieldLists.push_back(value);
@@ -211,6 +249,7 @@ bool readbackMatches(const std::filesystem::path& path,
         }
         std::vector<DRW_Line> lines;
         std::vector<DRW_Point> points;
+        std::vector<DRW_Polyline> polylines;
         std::vector<DRW_Field> fields;
         std::vector<DRW_FieldList> fieldLists;
         std::vector<DRW_MotionPath> motionPaths;
@@ -222,6 +261,7 @@ bool readbackMatches(const std::filesystem::path& path,
     if (!reader.fileImport(path.string(), &data, false)
         || data.sourceFormat != dx_source_format::DXF
         || reader.lines.size() != 1u || reader.points.size() != 1u
+        || reader.polylines.size() != 1u
         || reader.fields.size() != 1u
         || reader.fieldLists.size() != 1u
         || reader.motionPaths.size() != 1u || reader.curvePaths.size() != 1u
@@ -243,6 +283,36 @@ bool readbackMatches(const std::filesystem::path& path,
         || actualPoint.parentHandle != DRW::DxfModelSpaceBlockRecordHandle
         || actualPoint.basePoint.x != 6.0 || actualPoint.basePoint.y != 5.0
         || actualPoint.basePoint.z != 4.0)
+        return false;
+    const DRW_Polyline& actualPolyline = reader.polylines.front();
+    if (actualPolyline.handle == 0xD7B9u
+        || actualPolyline.parentHandle
+            != DRW::DxfModelSpaceBlockRecordHandle
+        || actualPolyline.flags != expectedPolyline.flags
+        || expectedPolyline.vertlist.size() != 2u
+        || actualPolyline.vertlist.size() != expectedPolyline.vertlist.size()
+        || !expectedPolyline.vertlist[0] || !expectedPolyline.vertlist[1]
+        || !actualPolyline.vertlist[0] || !actualPolyline.vertlist[1]
+        || actualPolyline.vertlist[0]->handle == 0xD7BAu
+        || actualPolyline.vertlist[1]->handle == 0xD7BBu
+        || actualPolyline.vertlist[0]->parentHandle != actualPolyline.handle
+        || actualPolyline.vertlist[1]->parentHandle != actualPolyline.handle
+        || actualPolyline.vertlist[0]->basePoint.x
+            != expectedPolyline.vertlist[0]->basePoint.x
+        || actualPolyline.vertlist[0]->basePoint.y
+            != expectedPolyline.vertlist[0]->basePoint.y
+        || actualPolyline.vertlist[0]->basePoint.z
+            != expectedPolyline.vertlist[0]->basePoint.z
+        || actualPolyline.vertlist[1]->basePoint.x
+            != expectedPolyline.vertlist[1]->basePoint.x
+        || actualPolyline.vertlist[1]->basePoint.y
+            != expectedPolyline.vertlist[1]->basePoint.y
+        || actualPolyline.vertlist[1]->basePoint.z
+            != expectedPolyline.vertlist[1]->basePoint.z
+        || actualPolyline.vertlist[0]->bulge
+            != expectedPolyline.vertlist[0]->bulge
+        || actualPolyline.vertlist[1]->bulge
+            != expectedPolyline.vertlist[1]->bulge)
         return false;
     const DRW_FieldList& actualFieldList = reader.fieldLists.front();
     if (actualFieldList.handle != 0xD7B4u
@@ -299,11 +369,14 @@ bool run(const std::filesystem::path& directory) {
             IndexExport exporter(codec);
             codec.setDxfTextWritePolicy(DRW::DxfTextWritePolicy::RequireLossless);
             codec.setDxfWriteRecordInventoryEnabled(true);
+            const DRW_Polyline sourcePolyline = exporter.polyline;
             exporter.failAt = 1000000;
             const bool exported = codec.write(&exporter, DRW::AC1027, binary);
             const bool readback = exported && readbackMatches(
-                output, exporter.line, exporter.index);
+                output, exporter.line, sourcePolyline, exporter.index);
             if (!exported || !exporter.lineWritten || !exporter.pointWritten
+                || !exporter.polylineWritten
+                || !polylineMatches(exporter.polyline, sourcePolyline)
                 || exporter.point.handle != 0xD7B1u || !exporter.fieldWritten
                 || !exporter.fieldListWritten || !exporter.pathsWritten
                 || !exporter.objectPtrWritten
@@ -312,6 +385,16 @@ bool run(const std::filesystem::path& directory) {
                 std::cerr << "calibration codecWrite=" << exported
                           << " lineWrite=" << exporter.lineWritten
                           << " pointWrite=" << exporter.pointWritten
+                          << " polylineWrite=" << exporter.polylineWritten
+                          << " polylineSourceState="
+                          << polylineMatches(exporter.polyline, sourcePolyline)
+                          << " polylineHandle=" << exporter.polyline.handle
+                          << " vertexHandles="
+                          << (exporter.polyline.vertlist[0]
+                                  ? exporter.polyline.vertlist[0]->handle : 0u)
+                          << ','
+                          << (exporter.polyline.vertlist[1]
+                                  ? exporter.polyline.vertlist[1]->handle : 0u)
                           << " fieldWrite=" << exporter.fieldWritten
                           << " fieldListWrite=" << exporter.fieldListWritten
                           << " pathsWrite=" << exporter.pathsWritten
@@ -342,6 +425,7 @@ bool run(const std::filesystem::path& directory) {
             codec.setDxfWriteRecordInventoryEnabled(true);
             const DRW_Line sourceLine = exporter.line;
             const DRW_Point sourcePoint = exporter.point;
+            const DRW_Polyline sourcePolyline = exporter.polyline;
             const DRW_Field sourceField = exporter.field;
             const DRW_FieldList sourceFieldList = exporter.fieldList;
             const DRW_MotionPath sourceMotionPath = exporter.motionPath;
@@ -353,6 +437,7 @@ bool run(const std::filesystem::path& directory) {
             exporter.reached = 0;
             exporter.lineWritten = false;
             exporter.pointWritten = false;
+            exporter.polylineWritten = false;
             exporter.fieldWritten = false;
             exporter.fieldListWritten = false;
             exporter.pathsWritten = false;
@@ -370,6 +455,7 @@ bool run(const std::filesystem::path& directory) {
                 || exporter.point.basePoint.x != sourcePoint.basePoint.x
                 || exporter.point.basePoint.y != sourcePoint.basePoint.y
                 || exporter.point.basePoint.z != sourcePoint.basePoint.z
+                || !polylineMatches(exporter.polyline, sourcePolyline)
                 || exporter.field.handle != sourceField.handle
                 || exporter.field.parentHandle != sourceField.parentHandle
                 || exporter.field.m_evaluatorId != sourceField.m_evaluatorId
@@ -404,14 +490,17 @@ bool run(const std::filesystem::path& directory) {
             const bool retry = codec.write(&exporter, DRW::AC1027, binary);
             std::string retryBytes;
             if (!retry || !exporter.lineWritten || !exporter.pointWritten
+                || !exporter.polylineWritten
                 || !exporter.fieldWritten
                 || !exporter.fieldListWritten || !exporter.pathsWritten
                 || !exporter.objectPtrWritten
                 || !exporter.indexWritten
                 || !readAll(output, retryBytes) || retryBytes != expectedBytes
-                || !readbackMatches(output, sourceLine, sourceIndex)
+                || !readbackMatches(output, sourceLine, sourcePolyline,
+                                    sourceIndex)
                 || exporter.line.handle != sourceLine.handle
                 || exporter.point.handle != sourcePoint.handle
+                || !polylineMatches(exporter.polyline, sourcePolyline)
                 || !lineMatches(exporter.line, sourceLine)
                 || !indexMatches(exporter.index, sourceIndex))
                 return fail("same-codec retry failed exact bytes or graph readback");

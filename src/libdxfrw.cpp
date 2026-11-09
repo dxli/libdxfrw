@@ -10083,17 +10083,14 @@ bool dxfRW::writePolyline(DRW_Polyline *ent) {
             "POLYLINE WCS extrusion vector");
     RecordStateScope state(*this, ent);
     DxfWriterRecordScope record(*writer);
-    // Child records share this parent transaction. Keep the existing minted
-    // handle assignment on success, but restore every emitted prefix when a
-    // later child (including its trailing XDATA) rejects the compound record.
-    struct VertexHandleRollback {
+    // Child records share this parent transaction. Keep source identities in
+    // the caller-owned graph on both success and failure; writeEntity records
+    // the source-to-emitted mapping used by BLOCK_HEADER and owner references.
+    struct VertexHandleRestore {
         std::vector<std::pair<DRW_Vertex*, std::uint32_t>> handles;
-        bool committed {false};
-        ~VertexHandleRollback() {
-            if (!committed) {
-                for (auto saved = handles.rbegin(); saved != handles.rend(); ++saved)
-                    saved->first->handle = saved->second;
-            }
+        ~VertexHandleRestore() {
+            for (auto saved = handles.rbegin(); saved != handles.rend(); ++saved)
+                saved->first->handle = saved->second;
         }
     } vertexState;
     if (!DRW::reserve(vertexState.handles,
@@ -10256,7 +10253,6 @@ bool dxfRW::writePolyline(DRW_Polyline *ent) {
         return false;
     }
     state.commit();
-    vertexState.committed = true;
     return true;
 }
 
