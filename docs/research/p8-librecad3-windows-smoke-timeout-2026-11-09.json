@@ -37,11 +37,18 @@
     },
     "hostedAtLatestObservation": {
       "head": "321f2cad7a37c347072d25d72d26a14b1985a441",
+      "planSync": "success",
       "buildWindows": "in_progress",
       "buildWindowsPersistence": "in_progress",
-      "planSync": "queued",
-      "otherRequiredChecks": "queued",
-      "result": "PENDING; no hosted Windows qualification claim"
+      "buildLinux": "in_progress",
+      "codeqlCpp": "in_progress",
+      "macOSArm64": "in_progress",
+      "linuxArm64": "queued",
+      "appImage": "queued",
+      "readDwgUnderSanitizers": "queued",
+      "codeqlPython": "queued",
+      "macOSX86_64": "queued",
+      "result": "Plan Sync passed; Windows package qualification is pending."
     }
   },
   "limitations": [
