@@ -74,17 +74,141 @@
   "additionalOnlineAc1024Inventory": {
     "repository": "https://github.com/nextgis/dwg_samples",
     "treeCommit": "ff05d5a89ce123da511ed93c5fe5e6df85e02ab8",
-    "provenance": "The repository README says all samples were produced with trial AutoCAD 2016 M.49.0.0. The repository has matching DWG/DXF pairs for the listed 2010 profiles. These are AC1024-format candidates, not AutoCAD 2010 RTM witnesses. Only arc_2010.dwg is covered by this receipt's local reader/ODA run; other entries are inventory leads and have not been individually downloaded or checked here.",
+    "provenance": "The repository README says all samples were produced with trial AutoCAD 2016 M.49.0.0. The repository has matching DWG/DXF pairs for the listed 2010 profiles. These are AC1024-format candidates, not AutoCAD 2010 RTM witnesses. Four pairs (line, circle, point3d, polyline2d_line) have now been downloaded and checked through CLASSES; arc_2010 also has the prior reader/ODA run. Other entries remain inventory leads.",
     "profiles": [
-      {"name": "arc_2010", "dwgBytes": 51549, "dwgGitBlob": "b0d66b291082da3d0c6e5048a65e88902f5152d7", "dxfBytes": 114618, "dxfGitBlob": "7a44bf1a16414b0b9af134133a8d433fff07171e"},
-      {"name": "circle_2010", "dwgBytes": 51805, "dwgGitBlob": "fb186bab5b418c057f477f7a0ca6bd5d6122b93c", "dxfBytes": 114614, "dxfGitBlob": "1e92a75e590be6b33eb7ab61709aa60cef4ad8ce"},
-      {"name": "ellipse_2010", "dwgBytes": 51773, "dwgGitBlob": "f006f5f06265aebc9a90e20438a1496776384946", "dxfBytes": 114741, "dxfGitBlob": "67df8074cbcf09d98f83d82c467a3f087aadae87"},
-      {"name": "line_2010", "dwgBytes": 51741, "dwgGitBlob": "a49465d4f4a4bf4acf859173810d10d9bb8a75d0", "dxfBytes": 114619, "dxfGitBlob": "f3075b07af20a042ae6c129465ef8e1a79e5de0a"},
-      {"name": "point2d_2010", "dwgBytes": 51482, "dwgGitBlob": "559e11b5d0cfadc30c5942398a789834edda0d43", "dxfBytes": 114431, "dxfGitBlob": "8a4cb5fafc09531f467466ed394b563d203f717b"},
-      {"name": "point3d_2010", "dwgBytes": 51834, "dwgGitBlob": "f38b7430c6b7eecb0a553c4d9b734b10aef67f17", "dxfBytes": 114434, "dxfGitBlob": "3bd23d32ff9db242de6d8fab0defe94d4ba2b6cd"},
-      {"name": "polyline2d_line_2010", "dwgBytes": 51773, "dwgGitBlob": "5f1e25298a6b6db4e80493ec9c83ec8f86a8ddad", "dxfBytes": 114653, "dxfGitBlob": "0d431443d33a01cd8285b9387768657e51ebbaad"}
+      {
+        "name": "arc_2010",
+        "dwgBytes": 51549,
+        "dwgGitBlob": "b0d66b291082da3d0c6e5048a65e88902f5152d7",
+        "dxfBytes": 114618,
+        "dxfGitBlob": "7a44bf1a16414b0b9af134133a8d433fff07171e"
+      },
+      {
+        "name": "circle_2010",
+        "dwgBytes": 51805,
+        "dwgGitBlob": "fb186bab5b418c057f477f7a0ca6bd5d6122b93c",
+        "dxfBytes": 114614,
+        "dxfGitBlob": "1e92a75e590be6b33eb7ab61709aa60cef4ad8ce"
+      },
+      {
+        "name": "ellipse_2010",
+        "dwgBytes": 51773,
+        "dwgGitBlob": "f006f5f06265aebc9a90e20438a1496776384946",
+        "dxfBytes": 114741,
+        "dxfGitBlob": "67df8074cbcf09d98f83d82c467a3f087aadae87"
+      },
+      {
+        "name": "line_2010",
+        "dwgBytes": 51741,
+        "dwgGitBlob": "a49465d4f4a4bf4acf859173810d10d9bb8a75d0",
+        "dxfBytes": 114619,
+        "dxfGitBlob": "f3075b07af20a042ae6c129465ef8e1a79e5de0a"
+      },
+      {
+        "name": "point2d_2010",
+        "dwgBytes": 51482,
+        "dwgGitBlob": "559e11b5d0cfadc30c5942398a789834edda0d43",
+        "dxfBytes": 114431,
+        "dxfGitBlob": "8a4cb5fafc09531f467466ed394b563d203f717b"
+      },
+      {
+        "name": "point3d_2010",
+        "dwgBytes": 51834,
+        "dwgGitBlob": "f38b7430c6b7eecb0a553c4d9b734b10aef67f17",
+        "dxfBytes": 114434,
+        "dxfGitBlob": "3bd23d32ff9db242de6d8fab0defe94d4ba2b6cd"
+      },
+      {
+        "name": "polyline2d_line_2010",
+        "dwgBytes": 51773,
+        "dwgGitBlob": "5f1e25298a6b6db4e80493ec9c83ec8f86a8ddad",
+        "dxfBytes": 114653,
+        "dxfGitBlob": "0d431443d33a01cd8285b9387768657e51ebbaad"
+      }
     ],
-    "fixturePolicy": "No DWG/DXF was added to this repository. Existing tested arc_2010 scratch-copy hashes and results remain in the source section above."
+    "fixturePolicy": "All newly fetched DWG/DXF pairs are stored only under /tmp/nextgis_ac1024 and are not committed. The generated output paths are separate from downloaded source DXFs. No repository fixture was added.",
+    "checkedOnlinePairs": [
+      {
+        "name": "circle_2010",
+        "dwgBytes": 51805,
+        "dwgSha256": "4244fd138b749584003a071b085a879848e0ab6f71fbc6ab4fc14193a37f9900",
+        "dwgGitBlob": "fb186bab5b418c057f477f7a0ca6bd5d6122b93c",
+        "dxfBytes": 114614,
+        "dxfSha256": "6b6da34f81d2c98cb72e8ae07d99d65e04c631c4b6d96e776458c7927d6f3ca3",
+        "dxfGitBlob": "1e92a75e590be6b33eb7ab61709aa60cef4ad8ce",
+        "magic": "AC1024",
+        "readerCheck": {
+          "tool": "build-gcc/dwg2dxf/dwg2dxf -y -d -v2010",
+          "trace": "dwgReader24::readDwgClasses END",
+          "operationSucceeded": true,
+          "legacyError": 0,
+          "classesCrcMismatch": false,
+          "entityParseFailures": 0,
+          "objectParseFailures": 0,
+          "strictOutput": "refused after read; strict-complete conversion requires complete DWG read disposition"
+        }
+      },
+      {
+        "name": "line_2010",
+        "dwgBytes": 51741,
+        "dwgSha256": "60e06849a90e6724a495e3a05d867a8621f19a876ec3bcdb8af4c731cba6f214",
+        "dwgGitBlob": "a49465d4f4a4bf4acf859173810d10d9bb8a75d0",
+        "dxfBytes": 114619,
+        "dxfSha256": "7ff15d083bde220ac90ac994db5ee4f78455dedf9eb7b67a1a6e04d8c4447141",
+        "dxfGitBlob": "f3075b07af20a042ae6c129465ef8e1a79e5de0a",
+        "magic": "AC1024",
+        "readerCheck": {
+          "tool": "build-gcc/dwg2dxf/dwg2dxf -y -d -v2010",
+          "trace": "dwgReader24::readDwgClasses END",
+          "operationSucceeded": true,
+          "legacyError": 0,
+          "classesCrcMismatch": false,
+          "entityParseFailures": 0,
+          "objectParseFailures": 0,
+          "strictOutput": "refused after read; strict-complete conversion requires complete DWG read disposition"
+        }
+      },
+      {
+        "name": "point3d_2010",
+        "dwgBytes": 51834,
+        "dwgSha256": "9819e04c3ae5e75fb4aa0c6265e77421faa833acec0ebbb60feb34f019259b19",
+        "dwgGitBlob": "f38b7430c6b7eecb0a553c4d9b734b10aef67f17",
+        "dxfBytes": 114434,
+        "dxfSha256": "1bccc1155424d48fe7d79de991db9d3dd5b9e818298e50c1e73a6579d6132cdf",
+        "dxfGitBlob": "3bd23d32ff9db242de6d8fab0defe94d4ba2b6cd",
+        "magic": "AC1024",
+        "readerCheck": {
+          "tool": "build-gcc/dwg2dxf/dwg2dxf -y -d -v2010",
+          "trace": "dwgReader24::readDwgClasses END",
+          "operationSucceeded": true,
+          "legacyError": 0,
+          "classesCrcMismatch": false,
+          "entityParseFailures": 0,
+          "objectParseFailures": 0,
+          "strictOutput": "refused at extension-object graph validation; VISUALSTYLE carrier coverage"
+        }
+      },
+      {
+        "name": "polyline2d_line_2010",
+        "dwgBytes": 51773,
+        "dwgSha256": "0438fa332d881996b79cc58e3d9e2008e1326cda9881051251c49cf9855eca84",
+        "dwgGitBlob": "5f1e25298a6b6db4e80493ec9c83ec8f86a8ddad",
+        "dxfBytes": 114653,
+        "dxfSha256": "1275317903f05ab7267e179c6ee4915e67ab1e6def4594984bba3082723d98fd",
+        "dxfGitBlob": "0d431443d33a01cd8285b9387768657e51ebbaad",
+        "magic": "AC1024",
+        "readerCheck": {
+          "tool": "build-gcc/dwg2dxf/dwg2dxf -y -d -v2010",
+          "trace": "dwgReader24::readDwgClasses END",
+          "operationSucceeded": true,
+          "legacyError": 0,
+          "classesCrcMismatch": false,
+          "entityParseFailures": 0,
+          "objectParseFailures": 0,
+          "strictOutput": "refused after read; strict-complete conversion requires complete DWG read disposition"
+        }
+      }
+    ]
   },
   "historicalAutodeskSampleSet": {
     "catalogSource": "https://blog.jtbworld.com/2009/06/where-are-sample-dwg-files-for-autocad.html",
@@ -165,5 +289,16 @@
     "purpose": "Check that filenames from the historical Autodesk sample collection do not imply AC1024 format.",
     "result": "Four additional direct Autodesk downloads (lineweights.dwg, tablet.dwg, plot_screening_and_fill_patterns.dwg, blocks_and_tables_-_metric.dwg) have AC1021 headers; excluded from AC1024 evidence.",
     "fixturePolicy": "All files remained under /private/tmp and were not committed."
+  },
+  "latestAc1024OnlinePairRun": {
+    "date": "2026-11-09",
+    "source": "https://github.com/nextgis/dwg_samples",
+    "producerClaim": "AutoCAD 2016 M.49.0.0 per repository README",
+    "result": "Four additional distinct AC1024 DWGs were downloaded with their paired source DXFs. Each DWG reaches the dwgReader24 CLASSES END marker with operationSucceeded=true, legacyError=0, zero CLASSES CRC mismatch, and zero entity/object parse failures. Strict output is refused by later read-completeness or extension-graph gates. This corpus therefore does not reproduce the reported AutoCAD 2010 RTM class-size error and cannot qualify strict AC1024 output. External source files remain under /tmp only.",
+    "limitations": [
+      "AutoCAD 2016 producer claim is not an AutoCAD 2010 RTM producer witness.",
+      "Paired source DXFs were hash-pinned but not used to assert semantic equivalence in this pass.",
+      "Later strict-output failures are unrelated to CLASSES and do not constitute an output qualification."
+    ]
   }
 }
