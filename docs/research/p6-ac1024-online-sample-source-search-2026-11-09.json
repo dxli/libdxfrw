@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "date": "2026-11-09",
+  "purpose": "Find publicly available AC1024 DWGs that could reproduce the AutoCAD 2010 RTM CLASSES string-size high-bit failure without overstating producer provenance.",
+  "finding": "No exact AutoCAD 2010 RTM-produced failing DWG was found in the searched public sources. Several additional AC1024 candidate sources exist, but current public metadata does not establish the creating application build for each file.",
+  "candidate_sources": [
+    {
+      "name": "Autodesk AutoCAD sample files",
+      "urls": [
+        "https://www.autodesk.com/support/technical/article/caas/tsarticles/ts/6XGQklp3ZcBFqljLPjrnQ9.html",
+        "https://blog.jtbworld.com/2009/06/where-are-sample-dwg-files-for-autocad.html"
+      ],
+      "evidence": "Autodesk says the current sample set applies to AutoCAD 2010 and later. A contemporaneous June 2009 index calls the files AutoCAD 2010 sample files and lists candidate DWGs including lineweights.dwg and visualization examples.",
+      "limitation": "Neither page identifies the producing AutoCAD executable/build or confirms that the currently hosted bytes are original AutoCAD 2010 RTM saves. Treat as candidate corpus only."
+    },
+    {
+      "name": "LibreDWG test-data/2010",
+      "url": "https://github.com/LibreDWG/libredwg/tree/master/test/test-data/2010",
+      "evidence": "The public directory contains a broad set of 2010-labelled DWG samples (including Arc.dwg, Constraints.dwg, Line.dwg, Point.dwg, PolyLine3D.dwg, Spline.dwg and others) plus some paired DXFs.",
+      "limitation": "The directory label is a version/corpus label, not per-file AutoCAD 2010 RTM producer provenance. No file was downloaded or tested in this search pass."
+    },
+    {
+      "name": "nextgis/dwg_samples",
+      "url": "https://github.com/nextgis/dwg_samples",
+      "evidence": "The README says the sample files were produced with trial AutoCAD 2016 M.49.0.0; its 2010-suffixed files use AC1024.",
+      "limitation": "Already screened online AC1024 samples reach readDwgClasses END; this source does not qualify AutoCAD 2010 RTM behavior."
+    },
+    {
+      "name": "monozukuri-ai/ezdwg example data",
+      "url": "https://github.com/monozukuri-ai/ezdwg/tree/main/examples/data",
+      "evidence": "The visible example directory contains AC1015/AC1018 samples (2000 and 2004 labels).",
+      "limitation": "No AC1024 candidate appears in the listed example directory."
+    }
+  ],
+  "next_action": "Obtain the LibreDWG 2010 and Autodesk sample candidates in a scratch directory, record hashes and all available provenance, then run the narrow CLASSES-stage scan. Do not add downloaded files to the repository. If none reproduces the failure, keep the parser issue open and request the exact failing DWG or a provenance-bearing AutoCAD 2010 RTM witness before changing the high-bit size path.",
+  "fixture_policy": "Downloaded samples remain outside the repository; only files already in LibreCAD/libdxfrw repositories or authored locally from scratch may become committed fixtures.",
+  "sources_checked": [
+    "https://www.autodesk.com/support/technical/article/caas/tsarticles/ts/6XGQklp3ZcBFqljLPjrnQ9.html",
+    "https://blog.jtbworld.com/2009/06/where-are-sample-dwg-files-for-autocad.html",
+    "https://github.com/LibreDWG/libredwg/tree/master/test/test-data/2010",
+    "https://github.com/nextgis/dwg_samples",
+    "https://github.com/monozukuri-ai/ezdwg/tree/main/examples/data"
+  ]
+}
