@@ -7,10 +7,11 @@ and exposed no native app surface. A fresh direct ODA File Converter 27.1
 argument or document processing. No post-unlock native conversion result was
 observed. Keep native qualification pending; do not repeat the unchanged ODA CLI
 route until the desktop reports an unlocked session or the launch path materially
-changes. The latest local TABLE implementation extends commit `410f6c51` to
-retain group-141 row heights and group-142 column widths even when they precede
-the row/column count fields; exact cardinality and invalid-value controls pass
-in ASCII and Binary ([receipt](docs/research/p5-dxf-table-physical-dimension-cardinality-2026-11-08.json)).
+changes. The latest local TABLE work extends commit `410f6c51` with
+order-independent group-141/142 dimension retention and fail-closed handling
+for nonzero group-94 border-color masks. Focused ASCII/Binary controls pass
+([dimension receipt](docs/research/p5-dxf-table-physical-dimension-cardinality-2026-11-08.json),
+[border-color receipt](docs/research/p5-table-border-color-mask-incomplete-2026-11-08.json)).
 The earlier `prepareTableEntryEed()` guard rejects pending APPID/LAYER
 references and unmodeled group-102 appData before a record frame is opened,
 while allowing canonical `ACAD_REACTORS` and `ACAD_XDICTIONARY` groups only when
@@ -2376,6 +2377,15 @@ ASCII/Binary controls pass through the focused legacy TABLE height selector.
 This is parser-integrity/order evidence, not native producer/rendering or
 broader TABLE qualification; see the [physical dimension cardinality
 receipt](docs/research/p5-dxf-table-physical-dimension-cardinality-2026-11-08.json).
+
+**TABLE border-color mask (group 94):** ODA v5.4.1 §20.4.96.1 defines 18
+selected border CMC fields across title/header/data rows. Since the general DXF
+profile cannot preserve arbitrary per-row border colors, the parser now retains
+a nonzero group-94 mask but marks the TABLE semantically incomplete, including
+unsupported high bits. Generated ASCII/Binary controls check the zero-mask
+baseline and both selected/unknown-bit refusals. Group-95 lineweight and
+96 visibility paths are unchanged; see the [border-color mask receipt](docs/research/p5-table-border-color-mask-incomplete-2026-11-08.json)
+and the existing [CMC representability audit](docs/research/p5-ac1021-table-border-cmc-lossless-dxf-audit-2026-11-08.json).
 
 DXF SUN parsing retains a separately supplied RGB group regardless of the
 order of group 63, so the existing strict output refusal cannot be bypassed by

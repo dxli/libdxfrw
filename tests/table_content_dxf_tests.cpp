@@ -1063,6 +1063,23 @@ bool tableRowAlignmentOverrideParseTests(const std::filesystem::path& dir) {
             || !table.m_semanticContentComplete)
             return fail("title/header/data order or completion state differs");
 
+        for (const int mask : {1, 0x40000}) {
+            Tags borderColorMask = source();
+            const auto maskField = std::find_if(
+                borderColorMask.begin(), borderColorMask.end(),
+                [](const Tag& tag) { return tag.code == 94; });
+            if (maskField == borderColorMask.end())
+                return fail("border-color override mask field was not found");
+            maskField->value = std::to_string(mask);
+            dx_data incompleteColor;
+            if (!import(borderColorMask, binary, incompleteColor)
+                || incompleteColor.tables.size() != 1u
+                || incompleteColor.tables.front().m_borderColorOverrideFlags
+                    != static_cast<std::uint32_t>(mask)
+                || incompleteColor.tables.front().m_semanticContentComplete)
+                return fail("unmapped border-color mask was accepted as complete");
+        }
+
         for (const int missingCode : {274, 275, 279, 285, 286, 288}) {
             Tags missing = source();
             const auto found = std::find_if(missing.begin(), missing.end(),

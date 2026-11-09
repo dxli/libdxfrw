@@ -12558,6 +12558,12 @@ bool DRW_Table::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
                     markIncomplete();
             } else {
                 m_borderColorOverrideFlags = static_cast<std::uint32_t>(value);
+                // Border-color row overrides have no lossless representation
+                // in the current typed DXF TABLE model. Preserve the mask for
+                // diagnostics and refuse semantic completeness until its
+                // selected group-63..69 values can be mapped without loss.
+                if (m_borderColorOverrideFlags != 0u)
+                    markIncomplete();
             }
         }
         break;
