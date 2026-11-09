@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "date": "2026-11-09",
-  "title": "AC1015+ VIEW handle-stream roles and spans",
+  "title": "AC1012+ VIEW handle-stream roles and spans",
   "status": "BOUNDED_GENERATED_CODEC_PROFILE_WITH_ONE_PHYSICAL_READ_CHECK",
   "scope": "Correct the R2000+ VIEW body-handle order and add transactional role/span evidence. This does not qualify full VIEW graph output or native view semantics.",
   "authority": {
@@ -26,20 +26,20 @@
     ]
   },
   "generated_validation": {
-    "versions": ["AC1015", "AC1018", "AC1021", "AC1024", "AC1027"],
-    "hasUcs": [false, true],
+    "versions": ["AC1012", "AC1014", "AC1015", "AC1018", "AC1021", "AC1024", "AC1027"],
+    "hasUcs": "false for AC1012/AC1014 (field absent); false and true for AC1015+",
     "coverage": [
-      "Independent encoder walk verifies expected field order, raw roles, targets and following sentinel.",
-      "Independent parser wire walk matches every recorded bit span, role and target.",
+      "For AC1015+, independent encoder walk verifies expected field order, raw roles and targets.",
+      "Independent parser wire walk matches every recorded bit span, role and target across AC1012/AC1014 and AC1015+ version gates.",
       "Wrong-role refusal for each field, canonical nulls, final-field truncation, reset, copy/assignment and same-object corrected retry."
     ],
     "commands": [
       "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests dwg2dxf -j4",
-      "build-gcc/libdxfrw_dwg_object_vectors_tests --ac1015plus-view-handle-roles",
-      "ctest --test-dir build-gcc -R '^libdxfrw_ac1015plus_view_handle_roles$' --output-on-failure",
-      "cmake --build build-asan-custom --target libdxfrw_dwg_object_vectors_tests -j4 && build-asan-custom/libdxfrw_dwg_object_vectors_tests --ac1015plus-view-handle-roles"
+      "build-gcc/libdxfrw_dwg_object_vectors_tests --ac1012plus-view-handle-roles",
+      "ctest --test-dir build-gcc -R '^libdxfrw_ac1012plus_view_handle_roles$' --output-on-failure",
+      "cmake --build build-asan-custom --target libdxfrw_dwg_object_vectors_tests -j4 && build-asan-custom/libdxfrw_dwg_object_vectors_tests --ac1012plus-view-handle-roles"
     ],
-    "result": "PASS; focused CTest 1/1 and focused AddressSanitizer selector",
+    "result": "PASS; AC1012/AC1014 common-role parser vectors, AC1015+ encoder/parser vectors, focused CTest 1/1 and focused AddressSanitizer selector after expanding the matrix.",
     "addressSanitizer": {
       "flags": "-fsanitize=address -fno-omit-frame-pointer",
       "result": "PASS; no sanitizer diagnostics"

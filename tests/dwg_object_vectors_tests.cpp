@@ -16514,9 +16514,11 @@ void testAc1012PlusUcsHandleRoles(TestContext& t) {
     }
 }
 
-void testAc1015PlusViewHandleRoles(TestContext& t) {
+void testAc1012PlusViewHandleRoles(TestContext& t) {
     const auto versionName = [](DRW::Version version) {
         switch (version) {
+        case DRW::AC1012: return "AC1012";
+        case DRW::AC1014: return "AC1014";
         case DRW::AC1015: return "AC1015";
         case DRW::AC1018: return "AC1018";
         case DRW::AC1021: return "AC1021";
@@ -16547,10 +16549,13 @@ void testAc1015PlusViewHandleRoles(TestContext& t) {
             && input.isGood();
     };
 
-    for (const DRW::Version version : {DRW::AC1015, DRW::AC1018,
+    for (const DRW::Version version : {DRW::AC1012, DRW::AC1014,
+                                       DRW::AC1015, DRW::AC1018,
                                        DRW::AC1021, DRW::AC1024,
                                        DRW::AC1027}) {
-        for (const bool hasUcs : {false, true}) {
+        const std::vector<bool> hasUcsCases = version > DRW::AC1014
+            ? std::vector<bool>{false, true} : std::vector<bool>{false};
+        for (const bool hasUcs : hasUcsCases) {
             ViewCodecProbe source;
             source.handle = 0x7100u + static_cast<std::uint32_t>(version);
             source.parentHandle = 6u; // ODA VIEW_CONTROL table record handle
@@ -16580,32 +16585,36 @@ void testAc1015PlusViewHandleRoles(TestContext& t) {
             // The production encoder must emit R2000+ base/named UCS handles
             // even when the optional associated-UCS body is absent. Check its
             // full handle sequence independently of the parser vector below.
-            DRW_TextCodec codec;
-            codec.setVersion(version, false);
-            dwgBufferW encodedBody(&codec), encodedStrings(&codec),
-                encodedHandles(&codec);
-            const bool encoded = source.encodeDwg(
-                version, &encodedBody, &encodedStrings, &encodedHandles);
-            dwgBuffer encodedHandleReader(encodedHandles.data().data(),
-                                          encodedHandles.size(), &codec);
-            bool encoderSequence = encoded;
-            for (const auto& field : fields) {
-                const dwgHandle actual = encodedHandleReader.getHandle();
-                encoderSequence = encoderSequence
-                    && encodedHandleReader.isGood()
-                    && actual.rawCode == field.role
-                    && actual.ref == field.target;
+            bool encoderSequence = false;
+            if (version > DRW::AC1014) {
+                DRW_TextCodec codec;
+                codec.setVersion(version, false);
+                dwgBufferW encodedBody(&codec), encodedStrings(&codec),
+                    encodedHandles(&codec);
+                const bool encoded = source.encodeDwg(
+                    version, &encodedBody, &encodedStrings, &encodedHandles);
+                dwgBuffer encodedHandleReader(encodedHandles.data().data(),
+                                              encodedHandles.size(), &codec);
+                encoderSequence = encoded;
+                for (const auto& field : fields) {
+                    const dwgHandle actual = encodedHandleReader.getHandle();
+                    encoderSequence = encoderSequence
+                        && encodedHandleReader.isGood()
+                        && actual.rawCode == field.role
+                        && actual.ref == field.target;
+                }
+                t.expect(encoderSequence,
+                         std::string("VIEW encoder emits ordered R2000+ refs with HasUCS=")
+                             + (hasUcs ? "1 in " : "0 in ") + versionName(version));
             }
-            t.expect(encoderSequence,
-                     std::string("VIEW encoder emits ordered R2000+ refs with HasUCS=")
-                         + (hasUcs ? "1 in " : "0 in ") + versionName(version));
 
             ViewCodecProbe parsed;
             const bool read = parse(version, parsed, validFrame);
             t.expect(read && parsed.handle == source.handle
                          && parsed.hasUCS == hasUcs
-                         && parsed.baseUCS_ID == source.baseUCS_ID
-                         && parsed.namedUCS_ID == source.namedUCS_ID
+                         && (version <= DRW::AC1014
+                             || (parsed.baseUCS_ID == source.baseUCS_ID
+                                 && parsed.namedUCS_ID == source.namedUCS_ID))
                          && parsed.m_liveSectionHandle
                              == source.m_liveSectionHandle,
                      std::string("VIEW reads base/named UCS and following refs when HasUCS=")
@@ -25018,10 +25027,10 @@ int main(int argc, char** argv) {
         return context.failures == 0 ? 0 : 1;
     }
     if (argc == 2
-        && std::string(argv[1]) == "--ac1015plus-view-handle-roles") {
+        && std::string(argv[1]) == "--ac1012plus-view-handle-roles") {
         TestContext context;
-        testAc1015PlusViewHandleRoles(context);
-        std::cout << "AC1015+ VIEW handle roles and spans: "
+        testAc1012PlusViewHandleRoles(context);
+        std::cout << "AC1012+ VIEW handle roles and spans: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
