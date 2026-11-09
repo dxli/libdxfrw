@@ -11,10 +11,11 @@ CURVEPATH-to-LINE edge, OBJECTPTR identity, POINT fields, and the LINE/PVI
 graph. The focused control exposed caller-handle mutation through both
 `EntityRecordScope` and direct `RecordStateScope` commit paths. Shared
 `RecordStateScope::commit()` now restores the source handle after record
-emission; allocation rollback/retry, entity-reference remapping, and polyline
-vertex-role controls pass. This verifies LINE and POINT handle preservation and
-nested polyline emission; other entity types still require their owning
-controls. No fixture was added.
+emission; allocation rollback/retry, entity-reference remapping,
+BLOCK_RECORD/INSERT reference, and polyline vertex-role controls pass. The
+remapping selectors verify LINE, POINT, and INSERT caller-handle preservation;
+nested polyline emission also passes. Remaining entity types still require
+their owning controls. No fixture was added.
 See the [allocation receipt](docs/research/p6-dxf-partial-viewing-index-objects-allocation-failure-retry-2026-11-09.json).
 
 The AC1024 online sample search also re-confirmed public candidates: Autodesk's

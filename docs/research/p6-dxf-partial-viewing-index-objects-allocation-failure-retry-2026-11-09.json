@@ -47,6 +47,7 @@
     "build": "cmake --build build --target libdxfrw_partial_viewing_index_objects_allocation_tests -j4",
     "test": "ctest --test-dir build -R '^libdxfrw_partial_viewing_index_objects_allocation_retry$' --output-on-failure",
     "entityReferenceRegression": "ctest --test-dir build -R '^libdxfrw_entity_reference_remapping$' --output-on-failure",
+    "insertHandleRegression": "ctest --test-dir build -R '^libdxfrw_blockrecord_insert_reference_remapping$' --output-on-failure",
     "polylineRegression": "ctest --test-dir build -R '^libdxfrw_polyline_vertex_role_closure$' --output-on-failure",
     "result": "PASS",
     "asciiAllocationOffsets": 44,

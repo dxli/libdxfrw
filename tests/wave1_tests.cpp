@@ -3971,9 +3971,10 @@ void testBlockRecordInsertReferenceRemapping(TestContext& t) {
             insert.name = "BLKREFS_TEST";
             const bool insertWritten = blockWritten
                 && owner.writeInsert(&insert)
+                && insert.handle == 0xA50u
                 && owner.writer->writeString(0, "WIRE_END");
             t.expect(insertWritten,
-                     "BLOCK_RECORD plans its BLKREFS INSERT identity before emission");
+                     "BLOCK_RECORD plans INSERT identity while preserving its caller source handle");
             if (!insertWritten)
                 continue;
 
