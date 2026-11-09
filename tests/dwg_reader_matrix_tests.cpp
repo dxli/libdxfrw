@@ -14548,7 +14548,7 @@ void testAssociativeConstraintGroupGenerated(TestContext& t) {
 void testPersistentManagerPrefixDispatch(TestContext& t) {
     using namespace persistent_manager_test;
     for (const std::uint16_t ordinal : {601u, 667u}) {
-        for (int mode = 0; mode < 7; ++mode) {
+        for (int mode = 0; mode < 8; ++mode) {
             Options source;
             source.classNumber = ordinal;
             if (mode == 1)
@@ -14566,6 +14566,10 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
             } else if (mode == 6) {
                 source.version = DRW::AC1024;
                 source.associationStepCount = 2;
+            } else if (mode == 7) {
+                source.version = DRW::AC1024;
+                source.associationStepCount = 4;
+                source.steps = {3, 4};
             }
             Options sentinel;
             sentinel.classNumber = ordinal;
@@ -14617,10 +14621,10 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
                 [&sentinel](const DRW_DwgFramePublication& publication) {
                     return publication.m_handle == sentinel.handle;
                 });
-            const bool validPrefix = mode <= 1 || mode == 5;
+            const bool validPrefix = mode <= 1 || mode == 5 || mode == 7;
             const bool rawOnlyFallback = mode == 6;
             const bool accepted = validPrefix || rawOnlyFallback;
-            const bool expectedPartialPrefix = mode == 0 || mode == 5;
+            const bool expectedPartialPrefix = mode == 0 || mode == 5 || mode == 7;
             const bool sourcePublicationMatches = accepted
                 ? sourcePublication != sink.publications.end()
                     && sourcePublication->m_carrier
@@ -14630,7 +14634,7 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
                 : sourcePublication == sink.publications.end();
             bool partialPrefixMatches = !expectedPartialPrefix;
             if (expectedPartialPrefix && typedSource != sink.typed.end()) {
-                const UTF8STRING expectedVersion = mode == 5
+                const UTF8STRING expectedVersion = mode == 5 || mode == 7
                     ? "AC1024" : "AC1021";
                 partialPrefixMatches = typedSource->m_classVersion == 2u
                     && typedSource->m_persistentUnknown0 == 0u

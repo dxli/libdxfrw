@@ -1,5 +1,19 @@
 # DWG/DXF parity — remaining implementation plan
 
+**Resume checkpoint (2026-11-09, AC1024 PERSUBENTMGR D63 partial profile):**
+the hash-bound AutoCAD SAVEAS sample `sample_AC1024.dwg` at handle `0xD63`
+now enters a source-matched partial-prefix path for values
+`[2,0,2,4,0,2,3,4]`. The reader consumes only bits 47–111, exactly to the
+validated body bound, records `ParseStatus::Partial`, and does not consume the
+following candidate `num_subents`. The paired ASCII DXF has the same eight
+group-90 values; LibreDWG independently reads the same prefix but overruns
+when it guesses the next count. The raw source remains unvalidated and strict
+output remains refused. The physical AC1024 sample now publishes 923/923
+frames with zero entity/object parse failures; export stops at standalone
+OBJECTCONTEXTDATA's unqualified replay path. The generated focused selector
+passes, including rollback/retry controls. See the
+[cross-version conflict receipt](docs/research/p6-persubentmgr-acadsharp-cross-version-dxf-wire-conflict-2026-11-09.json).
+
 **Resume checkpoint (2026-11-09, PERSUBENTMGR legacy raw-validation fix):**
 the object dispatcher now marks the PERSUBENTMGR raw companion
 `typedPayloadValidated=false` whenever its body prefix status is not

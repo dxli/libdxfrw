@@ -30365,12 +30365,15 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
                 && currentObjectDwgBit(buf) == bodyEndBit;
             const bool abbreviatedAc1024Prefix = version == DRW::AC1024
                 && classVersion == 2 && unknown0 == 0 && unknown2 == 2
-                && m_persistentAssocStepCount == 2u
                 && m_persistentAssocSubentityCount == 0u
                 && stepCount == 2u
                 && m_persistentSteps.size() == 2u
-                && m_persistentSteps[0] == 1u
-                && m_persistentSteps[1] == 2u
+                && ((m_persistentAssocStepCount == 2u
+                     && m_persistentSteps[0] == 1u
+                     && m_persistentSteps[1] == 2u)
+                    || (m_persistentAssocStepCount == 4u
+                        && m_persistentSteps[0] == 3u
+                        && m_persistentSteps[1] == 4u))
                 && hasAbsentStringFooter
                 && currentObjectDwgBit(buf) == bodyEndBit;
             const bool abbreviatedSourcePrefix = abbreviatedAc1021Prefix
