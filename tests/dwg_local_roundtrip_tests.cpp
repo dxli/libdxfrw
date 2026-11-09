@@ -37649,7 +37649,7 @@ bool runBlockRecordXrefMetadataRoundTrip(
         dwgRW writer(output.string().c_str());
         XrefMetadataDwgWriter adapter(
             writer, std::move(sourceRecord), true,
-            version > DRW::AC1015);
+            version > DRW::AC1014);
         if (!writer.write(&adapter, version, false) || !adapter.succeeded()
             || !adapter.rejectedXrefContentScope()) {
             const DRW_OperationDiagnostic diagnostic =
@@ -37696,10 +37696,10 @@ bool runBlockRecordXrefMetadataRoundTrip(
         if (xref == nullptr || following == nullptr
             || xrefBlock == nullptr || followingBlock == nullptr
             || reader.inserts.size()
-                   != (version > DRW::AC1015 ? 1u : 0u)
+                   != (version > DRW::AC1014 ? 1u : 0u)
             || !xrefBlock->ent.empty() || followingBlock->ent.size() != 1u
             || xref->insertHandles
-                   != (version > DRW::AC1015
+                   != (version > DRW::AC1014
                            ? std::vector<std::uint32_t>{0xA123u}
                            : std::vector<std::uint32_t>{})
             || xref->layoutHandle != 0 || following->layoutHandle != 0
@@ -37730,7 +37730,7 @@ bool runBlockRecordXrefMetadataRoundTrip(
             std::cerr << "following geometry escaped ordinary block for " << suffix << '\n';
             return false;
         }
-        if (version > DRW::AC1015) {
+        if (version > DRW::AC1014) {
             const auto& xrefInsert = reader.inserts.front();
             if (xrefInsert.handle != 0xA123u
                 || xrefInsert.space != DRW::ModelSpace
@@ -37747,7 +37747,7 @@ bool runBlockRecordXrefMetadataRoundTrip(
 
     for (const auto version : versions) {
       for (unsigned fault = 0u;
-           fault < (version > DRW::AC1015 ? 5u : 4u); ++fault) {
+           fault < (version > DRW::AC1014 ? 5u : 4u); ++fault) {
         const auto output = scratch / ("xref-refusal-"
             + std::to_string(static_cast<int>(version)) + "-"
             + std::to_string(fault) + ".dwg");
