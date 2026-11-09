@@ -30393,8 +30393,10 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
                 abbreviatedSourcePrefix ? -1 : static_cast<std::int32_t>(subentityCount));
             if (abbreviatedSourcePrefix) {
                 m_prefixStatuses.back().m_sourceAssumption = abbreviatedAc1024Prefix
-                    ? "AC1024 class-version-2 source prefix with steps [1,2] ends before the string-presence bit; final subentity count is absent and not inferred"
-                    : "AC1021 class-version-2 source prefix ends before the string-presence bit; final subentity count is absent and not inferred";
+                    ? (m_persistentAssocStepCount == 4u
+                        ? "AC1024 class-version-2 source prefix with association-step count 4 and steps [3,4] ends before the string-presence bit; final subentity count is not decoded"
+                        : "AC1024 class-version-2 source prefix with steps [1,2] ends before the string-presence bit; final subentity count is not decoded")
+                    : "AC1021 class-version-2 source prefix ends before the string-presence bit; final subentity count is not decoded";
             }
         }
         // The manager's num_subents is a scalar-vector count, not the
