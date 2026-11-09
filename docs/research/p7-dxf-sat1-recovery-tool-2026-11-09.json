@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "date": "2026-11-09",
+  "purpose": "Make the already-evidenced SAT1 DXF carrier recovery reproducible for future independent ACIS reader checks.",
+  "implementation": {
+    "path": "tools/research/decode_dxf_sat1.py",
+    "sha256": "f8b17444fee7e748a2a5d7822c814b8cbde7368b863706cc36c62ffc76c7ee26",
+    "scope": "Exact-handle extraction for one ASCII DXF 3DSOLID/REGION/BODY, SAT v1 group-1/group-3 joining, inverse SAT1 byte transform, caret escape reversal, minimal SAT header/end-marker validation, and safe output overwrite refusal. Research aid only."
+  },
+  "algorithmEvidence": {
+    "priorReceipt": "docs/research/p7-oda-ac1021-torus-semantic-crosscheck-2026-11-09.json",
+    "priorExternalResult": "For AC1021 source entity 0x452, ODA ACAD2007/2010 DXF recovered SAT payloads of 1071 bytes; the ACAD2010 payload was read by pinned ACadRust 0.6.8 with zero validation errors and its torus fields matched the source-derived SAT profile.",
+    "implementationReference": "LibreDWG 0.14 DXF output's SAT1 encryption and group-3 continuation handling, as detailed in the prior cross-check receipt."
+  },
+  "focusedValidation": {
+    "pythonSyntaxCompile": "PASS: python3 -m py_compile tools/research/decode_dxf_sat1.py",
+    "generatedInMemoryCarrier": "PASS: exact-handle selection, group-1/group-3 joining, SAT1 inverse, escaped-caret reversal, terminator acceptance, malformed continuation refusal, and invalid-handle refusal.",
+    "cliOutputSafety": "PASS: generated scratch ASCII DXF decoded to the expected SAT bytes; a second invocation without --force refused to overwrite and preserved the output.",
+    "fixturePolicy": "All controls were generated in memory or under /private/tmp. No DWG, DXF, or SAT fixture was added to the repository."
+  },
+  "limitations": [
+    "This receipt does not re-run against the original ODA DXF files, which were not present in the current temporary directory.",
+    "The helper validates carrier framing only; it does not validate ACIS semantic records, geometry, graph association, native acceptance, or libdxfrw support.",
+    "It handles ASCII DXF and SAT v1 only; Binary DXF and SAB remain outside scope."
+  ],
+  "supportClaimEffect": "none; research workflow improvement only"
+}
