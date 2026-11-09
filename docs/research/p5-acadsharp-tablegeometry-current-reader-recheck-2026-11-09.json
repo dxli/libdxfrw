@@ -104,5 +104,16 @@
   },
   "decision": "The historical 2026-11-01 note that current libdxfrw failed to complete the AC1027/AC1032 samples is stale. Current code completes both frame censuses and emits two typed TABLEGEOMETRY callbacks matching the peer object counts. This closes only this parser-delivery observation. It does not qualify physical field spans, nonzero unknown content values, non-null soft-pointer targets, complete TABLE/TABLECONTENT graphs, whole-source output, or native TABLE rendering.",
   "fixturePolicy": "Only existing ACadSharp samples were read; no DWG/DXF fixtures were added or modified.",
-  "nextAction": "Implement a bounded AC1021+ DWG TABLEGEOMETRY writer route only after owner-reference remapping, exact object class registration, unsupported-field refusal and full transaction/readback conditions are specified. Keep AC1018 raw-only and preserve current whole-source refusal."
+  "followupCurrentCodeAudit": {
+    "auditHead": "8554b992",
+    "dwgWriterApi": "None; this repository reads DWG and writes DXF.",
+    "dxfWriter": "dxfRW::writeTableGeometry already emits a bounded AC1021+ planar/null-cell-reference TABLEGEOMETRY profile. It refuses unsupported flags, nonzero cell references, unmodeled common metadata, nonplanar content and nonzero unknown values.",
+    "focusedValidation": {
+      "command": "cmake --build build --target libdxfrw_table_geometry_dxf_tests --parallel 4; ctest --test-dir build -R '^libdxfrw_table_geometry_dxf_projection$' --output-on-failure",
+      "result": "PASS (1/1)",
+      "testExecutableSha256": "0bc60c546660d0264e75260f4ce1d0711704bef6143bacb03700ac12413451d5"
+    },
+    "decision": "The prior nextAction named a DWG writer route that does not exist in this codebase and was stale. Do not create a DWG writer. The actual gap is independent physical span/role evidence for AC1027/AC1032 TABLEGEOMETRY bodies and non-null cell soft-pointer targets; retain current null-reference and whole-source refusal until that evidence supports a bounded DXF profile expansion."
+  },
+  "nextAction": "Capture and independently compare the exact AC1027/AC1032 TABLEGEOMETRY body and string-stream field spans, including the standalone unknown BD field and cell soft-pointer roles, using the existing hash-pinned ACadSharp sources and LibreDWG 0.14 outputs. Preserve the current bounded AC1021+ DXF writer, null-reference refusal, AC1018 raw-only behavior and whole-source refusal until the missing source profile is proven."
 }
