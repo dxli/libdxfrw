@@ -2086,6 +2086,22 @@ this source. See the
 [online-sample receipt](docs/research/p6-ac1024-online-sample-rtm-nonreproduction-2026-11-09.json)
 and the public [`nextgis/dwg_samples` source](https://github.com/nextgis/dwg_samples).
 
+**Historical Autodesk sample-set follow-up (2026-11-09):** the contemporaneous
+[2009 AutoCAD 2010 sample listing](https://blog.jtbworld.com/2009/06/where-are-the-sample-dwg-files-for-autocad.html)
+links directly to Autodesk-hosted DWGs. Six downloaded files have AC1024
+magic. All six complete `dwgReader24::readDwgClasses` with
+`operationSucceeded=true`, `legacyError=0`, and `classesCrcMismatch=0`; five
+are byte-identical to files already in the repository corpus, while
+`title_block-ansi.dwg` adds one unique public source. Their embedded product
+metadata says AutoCAD `D.40.0.200` / registry `18.0`, with AutoCAD 2009 and
+Gator Beta 2 metadata, so the files are beta/pre-RTM sources despite the
+catalog's AutoCAD 2010 title. They strengthen format-path coverage but do not
+qualify the reported RTM-specific failure. Five command exits occur after
+CLASSES parsing at later strict-output gates. No parser change or committed
+fixture is warranted; retain the RTM issue pending the exact failing hash or
+a source with verifiable RTM provenance. Full hashes and outcomes are in the
+[expanded online-sample receipt](docs/research/p6-ac1024-online-sample-rtm-nonreproduction-2026-11-09.json).
+
 **AC1015 LTYPE_CONTROL outlier:** the unauthenticated local `simple.dwg` still
 fails at the bounded count/boundary check on current code. LibreDWG 0.14 parses
 25 entries, but its decoded profile includes BYBLOCK/BYLAYER in the counted

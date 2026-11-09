@@ -69,6 +69,52 @@
         "finding": "Public repository includes arc_2010.dwg and explicitly says its DWGs were produced with trial AutoCAD 2016 M.49.0.0; therefore it is AC1024-format evidence but not an AutoCAD 2010 RTM witness."
       }
     ],
-    "result": "No newly located public download establishes AutoCAD 2010 RTM provenance for the reported failing AC1024 CLASSES case. The existing nextgis arc_2010 sample remains the available public AC1024 online sample checked locally; keep the RTM-specific report unresolved."
+    "result": "The historical Autodesk-hosted AutoCAD 2010 sample list yielded six AC1024 files. All pass CLASSES parsing with operationSucceeded=true and classesCrcMismatch=0. Their embedded product metadata is AutoCAD 2009 D.40.0.200 / Gator Beta 2, so they are not RTM witnesses. The nextgis AC1024 samples are AutoCAD 2016. No exact failing AutoCAD 2010 RTM source was found."
+  },
+  "historicalAutodeskSampleSet": {
+    "catalogSource": "https://blog.jtbworld.com/2009/06/where-are-sample-dwg-files-for-autocad.html",
+    "downloadHost": "https://images.autodesk.com/adsk/files/",
+    "catalogDate": "2009-06-18",
+    "catalogClaim": "Contemporaneous listing titled AutoCAD 2010 Sample Files; direct file URLs point to Autodesk-hosted DWGs.",
+    "producerMetadata": "All six AC1024 files contain ProductInformation name=AutoCAD, build_version=D.40.0.200, registry_version=18.0. Embedded property metadata identifies AutoCAD 2009; stored font paths include AutoCAD Gator Beta 2. This is beta/pre-RTM metadata and does not establish an AutoCAD 2010 RTM save.",
+    "files": [
+      {
+        "name": "architectural_example-imperial.dwg",
+        "size_bytes": 148638,
+        "sha256": "52d14a7bdb946099d3cf16fd276d19bd8924348fd02b2ddd0003cd4f6b34cce7"
+      },
+      {
+        "name": "civil_example-imperial.dwg",
+        "size_bytes": 169592,
+        "sha256": "45b419d0c7382eb271079b80c3237a52183f4fa09e7b495c3d7a65c6baa927dc"
+      },
+      {
+        "name": "mechanical_example-imperial.dwg",
+        "size_bytes": 142267,
+        "sha256": "854c8ebed8726add72ba4a9a19ba0d010372f5cadefb40e648cdf881cad858"
+      },
+      {
+        "name": "title_block-ansi.dwg",
+        "size_bytes": 125896,
+        "sha256": "907398897552a090182f5446f18ad1ef82b91176764c8ccf08b5c5799546eeba"
+      },
+      {
+        "name": "title_block-arch.dwg",
+        "size_bytes": 126985,
+        "sha256": "59876d9e1fa9f4d64304d6e7e35cbfafa127e0b5363b3afbe6ed48ef3d2e867d"
+      },
+      {
+        "name": "title_block-iso.dwg",
+        "size_bytes": 128233,
+        "sha256": "b874d82c5ee04f8a4fa6e907408c4ed770ee8208740fe4e1eb0f96fb2f793bc2"
+      }
+    ],
+    "readerCheck": {
+      "tool": "build-gcc/dwg2dxf/dwg2dxf",
+      "operation": "dwg2dxf <source> -y -d -v2010 <temporary-output>",
+      "results": "All six have AC1024 magic, reach dwgReader24::readDwgClasses END, report operationSucceeded=true, legacyError=0, classesCrcMismatch=0, entityParseFailures=0, and objectParseFailures=0. Five hashes duplicate the existing repository sample corpus; title_block-ansi is an additional unique public source. Nonzero CLI exits on five files happen after read completion at later strict-output gates.",
+      "fixturePolicy": "All downloaded DWGs and generated outputs remain under /private/tmp; no fixture was added."
+    },
+    "result": "Expanded public AC1024 corpus evidence, but did not locate or reproduce the reported AutoCAD 2010 RTM CLASSES failure. The original failure still needs the exact RTM sample/hash or another independently verified RTM-produced source."
   }
 }
