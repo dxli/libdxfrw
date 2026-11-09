@@ -877,11 +877,10 @@ bool hasAc1027ReversedSchemaTableRoles(
             schemaSegmentIndex = segment.index;
     }
 
-    // Multi-schdat splitting is observed on the AC1032 sample only. Retain
-    // the earlier single-segment AC1027 profile without widening its source
-    // qualification from a generated vector.
-    return haveSchemaSegment
-        && (section.m_version != DRW::AC1027 || usedSchemaSegmentCount == 1u);
+    // The multi-schdat reversed-role layout is now source-bound for AC1027
+    // as well as AC1032. Keep every per-segment reference, ordering, count,
+    // and alignment check above; do not infer support from version alone.
+    return haveSchemaSegment && usedSchemaSegmentCount != 0u;
 }
 
 void readSchemaNames(const ByteReader& r,

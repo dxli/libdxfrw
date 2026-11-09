@@ -13982,26 +13982,30 @@ void testDataStorageDefaultSchemaOnlySection(TestContext& t) {
     t.expect(multiSegmentProfile,
              "DataStorage accepts reversed schema-table roles partitioned across two schdat segments");
 
-    const DRW_DataStorageSection rejectedUnwitnessedAc1027MultiSegmentRoles =
+    const DRW_DataStorageSection acceptedAc1027MultiSegmentRoles =
         DRW_parseDataStorage(multiSegmentRoles, DRW::AC1027);
-    const bool selectedUnwitnessedAc1027Compatibility = std::any_of(
-        rejectedUnwitnessedAc1027MultiSegmentRoles.diagnostics.cbegin(),
-        rejectedUnwitnessedAc1027MultiSegmentRoles.diagnostics.cend(),
+    const bool selectedAc1027Compatibility = std::any_of(
+        acceptedAc1027MultiSegmentRoles.diagnostics.cbegin(),
+        acceptedAc1027MultiSegmentRoles.diagnostics.cend(),
         [](const DRW_DataStorageDiagnostic& diagnostic) {
             return diagnostic.code
                 == "datastorage-ac1027-schema-table-role-compatibility";
         });
-    t.expect(!rejectedUnwitnessedAc1027MultiSegmentRoles.structurallyValid
-                 && !rejectedUnwitnessedAc1027MultiSegmentRoles.replayAllowed
-                 && !selectedUnwitnessedAc1027Compatibility,
-             "DataStorage keeps the multi-schdat reversed-role profile AC1032-specific");
+    t.expect(acceptedAc1027MultiSegmentRoles.structurallyValid
+                 && acceptedAc1027MultiSegmentRoles.replayAllowed
+                 && acceptedAc1027MultiSegmentRoles.schemaCount == 2u
+                 && acceptedAc1027MultiSegmentRoles.schemas.size() == 2u
+                 && acceptedAc1027MultiSegmentRoles.schemaUnknownProperties.size()
+                     == 2u
+                 && selectedAc1027Compatibility,
+             "DataStorage accepts the source-bound AC1027 multi-schdat role profile");
 
     std::vector<std::uint8_t> malformedMultiSegmentRoles = multiSegmentRoles;
     for (unsigned byte = 0; byte < 4u; ++byte)
         malformedMultiSegmentRoles[multiSchemaIndexPayload + 8u + 8u + byte]
             = static_cast<std::uint8_t>(127u >> (byte * 8u));
     const DRW_DataStorageSection rejectedMultiSegmentRoles =
-        DRW_parseDataStorage(malformedMultiSegmentRoles, DRW::AC1032);
+        DRW_parseDataStorage(malformedMultiSegmentRoles, DRW::AC1027);
     const bool selectedMultiSegmentCompatibility = std::any_of(
         rejectedMultiSegmentRoles.diagnostics.cbegin(),
         rejectedMultiSegmentRoles.diagnostics.cend(),
@@ -14013,6 +14017,19 @@ void testDataStorageDefaultSchemaOnlySection(TestContext& t) {
                  && !rejectedMultiSegmentRoles.replayAllowed
                  && !selectedMultiSegmentCompatibility,
              "DataStorage rejects an out-of-segment multi-schdat schema root without selecting the compatibility profile");
+    const DRW_DataStorageSection rejectedMultiSegmentRolesAc1032 =
+        DRW_parseDataStorage(malformedMultiSegmentRoles, DRW::AC1032);
+    const bool selectedAc1032MultiSegmentCompatibility = std::any_of(
+        rejectedMultiSegmentRolesAc1032.diagnostics.cbegin(),
+        rejectedMultiSegmentRolesAc1032.diagnostics.cend(),
+        [](const DRW_DataStorageDiagnostic& diagnostic) {
+            return diagnostic.code
+                == "datastorage-ac1027-schema-table-role-compatibility";
+        });
+    t.expect(!rejectedMultiSegmentRolesAc1032.structurallyValid
+                 && !rejectedMultiSegmentRolesAc1032.replayAllowed
+                 && !selectedAc1032MultiSegmentCompatibility,
+             "DataStorage rejects malformed multi-schdat references for AC1032 as well");
 }
 
 void testFramePublicationContract(TestContext& t) {

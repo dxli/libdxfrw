@@ -70,22 +70,58 @@ The local AC1015 libdxfrw CLI run publishes 1041/1047 frames with six object
 parse failures and refuses export at the unrelated IMAGEDEF/reactor capture
 gate. See the [wire/projection conflict receipt](docs/research/p6-persubentmgr-acadsharp-cross-version-dxf-wire-conflict-2026-11-09.json).
 
-**Next PERSUBENTMGR slice:** resolve the newly reproduced conflict between
-AC1015/AC1021/AC1024's eight-value group-90 DXF projections and LibreDWG's
-AC1015 DWG candidate parser, which reads a further `num_subents=4` then
-overruns the object while returning untrusted subentity values. The six local
-DWG/DXF versions and the AutoCAD SAVEAS script are hash-bound in the
-[cross-version conflict receipt](docs/research/p6-persubentmgr-acadsharp-cross-version-dxf-wire-conflict-2026-11-09.json).
-The AC1015/AC1021/AC1024 D63 reads now establish the eight-value prefix to the
-R2000 RL or later bounded body end, and the legacy/AC1024 peer traces show the
-candidate count crosses into the handle span. Keep these profiles partial
-with raw carriers. Next, AC1014 still needs a paired semantic projection
-before typed-prefix admission; AC1027's reader currently stops in
-AcDb:AcDsPrototype_1b before OBJECTS, and AC1032's six-scalar body ends at bit
-76 after `[2,0,2,0,0,0]` but the class-field meanings remain disputed. Keep
+**PERSUBENTMGR disposition and next evidence:** the AC1015/AC1021/AC1024
+prefix conflict is narrowed to a bounded partial profile: the paired DXFs
+show eight group-90 values, while the candidate trailing count in peer
+readers crosses the DWG body/handle bound. The physical D63 reads establish
+the first eight values only; they do not establish the complete DWG grammar
+or field meanings. Keep those records `Partial` with unvalidated raw
+carriers. Do not spend another implementation slice retrying the same
+overrunning count. AC1014 still needs a paired semantic projection before
+typed-prefix admission; the AC1027 DataStorage blocker is resolved for the
+exact multi-schdat reversed-role profile below, but that does not interpret
+AC1027 PERSUBENTMGR; and AC1032's six-scalar body ends at bit 76 after
+`[2,0,2,0,0,0]` with disputed meanings. Keep
 AC1014/AC1027/AC1032 raw-only until those exact profiles are independently
 reconciled. Any later grammar control must retain truncation rollback,
 corrected-input retry, following-frame recovery, and byte-exact raw fallback.
+The hash-bound cross-version observations remain in the
+[conflict receipt](docs/research/p6-persubentmgr-acadsharp-cross-version-dxf-wire-conflict-2026-11-09.json).
+
+**Resume checkpoint (2026-11-09, AC1027 multi-schdat DataStorage profile):**
+the parser now admits the exact AC1027 reversed schema-index table-role
+profile when its six schema roots and eight unknown-property headers are
+partitioned across two `schdat` segments. The hash-bound physical
+ACadSharp `sample_AC1027.dwg` proves the bounded references, four contiguous
+8-byte header offsets per segment, root start at local offset 32, and both
+system-data alignment limits. The generated bounds test now admits the
+well-formed AC1027 vector and still rejects malformed references in both
+AC1027 and AC1032. The physical read advances from the DataStorage error to
+865/865 published frames with zero entity/object parse failures and zero
+DataStorage link/orphan failures. Strict DXF export remains refused by the
+independent AC1027 source-reference qualification gate; this does not promote
+ACDS semantics, PERSUBENTMGR body support, or whole-file output. No fixture
+was added. See the [AC1027 multi-schdat receipt](docs/research/p6-ac1027-multischdat-reversed-role-profile-2026-11-09.json).
+
+**Next local implementation slice:** continue the strict AC1027
+source-reference/output-qualification gate that now blocks after complete
+frame publication, prioritizing the specific source edge/role evidence and
+fast generated control that can close one guard. Keep output fail-closed until
+the exact owner/target roles and typed/raw source payload are reconciled. In
+parallel, AC1014 PERSUBENTMGR still needs a paired semantic projection before
+typed-prefix admission. AC1027 PERSUBENTMGR and AC1032's six-scalar body remain
+raw-only until their exact class-field profiles are independently reconciled.
+
+**Resume checkpoint (2026-11-09 10:22 UTC, desktop access refresh):** after
+the user's latest “I’ll unlock it now” reply, a new native-app inventory still
+reports “The Mac is locked and automatic unlock could not unlock it” and lists
+no native apps. No ODA or FreeCAD process was launched. Treat this as an
+access-state blocker only; it supplies no format evidence and changes no
+support claim. Keep native ODA/FreeCAD qualification queued, do not retry the
+unchanged ODA File Converter 27.1 CLI route that aborts before processing,
+and continue the local AC1027 DataStorage source-span diagnosis above. Retry
+native qualification only after a fresh inventory exposes an unlocked
+session or a materially different launch path is available.
 
 **Resume checkpoint (2026-11-09, AC1032 control-reactor slice):** the
 VPORT_CONTROL reader now consumes declared common reactor references before
