@@ -264,14 +264,13 @@ automatic unlock could not unlock it.” No app was launched. Leave the ODA and
 native FreeCAD qualification items queued; continue with local source-bound
 work and retry only after a later inventory reports an unlocked session.
 
-**Latest user update (2026-11-09):** the user again reports that they are
-unlocking the Mac. No fresh desktop inventory has been run after this message,
-so the access state remains unverified; do not infer that it is unlocked or
-retry the unchanged ODA CLI route. Continue the UCS generated-codec slice. On
-the next native-qualification attempt, first inspect the desktop inventory;
-if an unlocked app surface is present, resume the already planned ODA/FreeCAD
-qualification route, otherwise record the observed access state and continue
-local work.
+**Latest desktop check (2026-11-09, after the user's unlock message):** the
+fresh inventory still reports “The Mac is locked and automatic unlock could
+not unlock it” and lists no native apps. No ODA or FreeCAD process was
+launched. This is an access-state blocker only; it is not format evidence. Do
+not retry the unchanged ODA CLI route. Continue independently actionable local
+work and inspect desktop state again before the next native qualification
+attempt.
 
 **Earlier access recheck (2026-11-09 07:51 UTC):** following the user's
 unlock-in-progress reply, direct CUA inventory still returned “The Mac is
