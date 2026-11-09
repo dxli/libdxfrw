@@ -19304,6 +19304,14 @@ public:
             return true;
         }
     }
+    bool classStringsMatch(std::uint32_t classNumber,
+                           const DRW_Class& expected) const {
+        const auto found = this->classesmap.find(classNumber);
+        return found != this->classesmap.end() && found->second != nullptr
+            && found->second->appName == expected.appName
+            && found->second->className == expected.className
+            && found->second->recName == expected.recName;
+    }
 };
 
 template<class Writer, class Reader>
@@ -19341,6 +19349,77 @@ void testClassHeaderTrueFlag(TestContext& t, DRW::Version version,
              std::string(label) + " existing reader accepts the corrected physical section");
 }
 
+class Ac1024LongClassWriter final : public dwgWriter24 {
+public:
+    using dwgWriter24::dwgWriter24;
+
+    bool addClass(const DwgClassDefinition& definition) {
+        return registerDwgClass(definition);
+    }
+};
+
+void testAc1024PhysicalHighBitClassStringFooter(TestContext& t) {
+    std::stringbuf output(std::ios::out | std::ios::binary);
+    std::ofstream stream;
+    static_cast<std::ostream&>(stream).rdbuf(&output);
+    DRW_Header header;
+    Ac1024LongClassWriter writer(&stream, &header);
+
+    DwgClassDefinition definition;
+    definition.m_classNum = 600;
+    definition.m_proxyFlag = 0x401;
+    definition.m_appName.assign(2048u, 'A');
+    definition.m_className.assign(2048u, 'B');
+    definition.m_recordName.assign(2048u, 'C');
+    definition.m_entityFlagRaw = 0x1F3;
+    const bool registered = writer.addClass(definition);
+    const bool generated = registered && writer.prepareDwgClassManifest()
+        && writer.writeFileHeaderStub() && writer.writeDwgHeader()
+        && writer.writeDwgClasses() && writer.writeDwgObjects()
+        && writer.emitDeferredBlockControl() && writer.finalizeHeaderHandseed()
+        && writer.writeDwgHandles() && writer.writeSecondHeader()
+        && writer.finalize();
+    t.expect(generated,
+             "AC1024 high-bit CLASSES source generated in memory");
+    if (!generated)
+        return;
+
+    const std::string raw = output.str();
+    std::vector<std::uint8_t> bytes(raw.begin(), raw.end());
+    ClassHeaderPhysicalProbe<dwgReader24> reader(bytes, DRW::AC1024);
+    std::vector<std::uint8_t> classes;
+    const bool decoded = reader.decode(classes) && classes.size() > 28u;
+    t.expect(decoded, "AC1024 high-bit CLASSES section decoded");
+    if (!decoded)
+        return;
+
+    dwgBuffer sectionHeader(classes.data(), classes.size());
+    const bool headerPositioned = sectionHeader.setPosition(16u);
+    const std::uint32_t classDataSize = sectionHeader.getRawLong32();
+    const std::uint32_t classDataBits = sectionHeader.getRawLong32();
+    std::uint64_t stringStartBit = 0u;
+    std::uint64_t stringSizeBits = 0u;
+    dwgBuffer sectionFooter(classes.data(), classes.size());
+    const bool extendedFooter = headerPositioned && sectionHeader.isGood()
+        && classDataSize != 0u
+        && readDwgClassStringFooter(sectionFooter,
+                                    static_cast<std::uint64_t>(classDataBits) + 159u,
+                                    stringStartBit, stringSizeBits)
+        && stringSizeBits > 0x7FFFu;
+    t.expect(extendedFooter,
+             "AC1024 physical CLASSES stream sets and decodes the high-size extension");
+
+    const bool parsed = reader.readDwgClasses();
+    t.expect(parsed, "AC1024 reader parses the complete high-bit CLASSES section");
+    DRW_Class expectedClass;
+    expectedClass.appName = definition.m_appName;
+    expectedClass.className = definition.m_className;
+    expectedClass.recName = definition.m_recordName;
+    t.expect(parsed && reader.classStringsMatch(definition.m_classNum,
+                                                 expectedClass),
+             "AC1024 reader recovers all long class strings after the high-bit footer");
+}
+
 void testClassHeaderTrueFlags(TestContext& t) {
     testClassHeaderTrueFlag<dwgWriter18, dwgReader18>(t, DRW::AC1018, 20u, "AC1018");
     testClassHeaderTrueFlag<dwgWriter21, dwgReader21>(t, DRW::AC1021, 24u, "AC1021");
@@ -19351,6 +19430,7 @@ void testClassHeaderTrueFlags(TestContext& t) {
 
 void testR2007ClassStringFooter(TestContext& t) {
     testClassHeaderTrueFlags(t);
+    testAc1024PhysicalHighBitClassStringFooter(t);
     // The AC1024 RTM class footer uses the high-bit extension when the UTF-16
     // string stream exceeds 0x7fff bits. Keep this vector local and synthetic:
     // it exercises the wire arithmetic without retaining a drawing fixture.

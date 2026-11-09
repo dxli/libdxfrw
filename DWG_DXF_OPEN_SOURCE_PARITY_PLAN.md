@@ -1,21 +1,25 @@
 # DWG/DXF parity — remaining implementation plan
 
-**Resume checkpoint (2026-11-09, after the latest unlock reply):** after the
-user's newest “I’ll unlock it now” reply, a fresh desktop inventory still
-reports the session locked and exposes no native app surface, so native
-qualification could not be resumed in this pass. Treat this as a desktop-access
-blocker only; it is not file-format evidence. Do not retry the
-unchanged ODA File Converter 27.1 CLI path, which previously aborted during
-Pasteboard/XPC initialization before processing input. Resume native
-qualification when the desktop inventory exposes the unlocked session or a
-materially different launch route is available. Continue independently
-actionable local work. The selected AC1021 FreeCAD
+**Resume checkpoint (2026-11-09 08:32 UTC):** after the user's latest
+“I’ll unlock it now” reply, a fresh desktop inventory still reports the
+session locked and exposes no native app surface. Native qualification could
+not be resumed in this pass. Treat this as a desktop-access blocker only; it
+is not file-format evidence. Do not retry the unchanged ODA File Converter
+27.1 CLI path, which previously aborted during Pasteboard/XPC initialization
+before processing input. Resume native qualification when a fresh inventory
+exposes the unlocked session or a materially different launch route is
+available. Continue independently actionable local work. The selected AC1021 FreeCAD
 torus B-rep check is recorded in
 [`p7-ac1021-freecad-native-torus-brep-2026-11-08.json`](docs/research/p7-ac1021-freecad-native-torus-brep-2026-11-08.json);
 its one-body/one-face/one-solid result is a bounded selected-profile check,
 not independent-kernel, whole-source, platform, or support-claim evidence.
 
-**Latest access recheck (2026-11-09 07:51 UTC):** following the user's
+This checkpoint is an access-state refresh only: it does not alter the earlier
+successful GUI conversions or their hash-bound receipts, does not qualify any
+new file-format profile, and does not change support claims. No ODA or FreeCAD
+process was launched during this recheck.
+
+**Earlier access recheck (2026-11-09 07:51 UTC):** following the user's
 unlock-in-progress reply, direct CUA inventory still returned “The Mac is
 locked and automatic unlock could not unlock it”; no native apps were listed.
 No ODA or FreeCAD process was launched, and this observation does not qualify
@@ -1476,18 +1480,19 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    and [action-parameter recovery receipt](docs/research/p6-ac1027-osnap-action-param-raw-only-shell-recovery-2026-11-08.json).
    TextObjectContextData remains raw-only.
    Remaining P6 work is limited to source-backed version/layout gaps and independent evidence for the
-   IMAGEDEF owner-role conflict and AC1027/AC1032 HEADER suffixes. The successful
-   27.1 GUI route supersedes the earlier plan to wait for a changed launch
-   environment: two AC1027 outputs are now available, but neither isolates the
-   suffix's meaning. Next, avoid another identical resave; if suffix work is
-   pursued, make one controlled change to a locally generated or scratch source
-   and capture the matching GUI output, then compare only the validated HEADER
-   section and independently decoded fields. Keep this lane advisory until a
-   repeatable field-to-byte mapping or authoritative wire definition accounts
-   for every suffix byte. Do not repeat the unchanged ODA CLI launch: the latest
-   post-unlock attempt still aborts during Pasteboard/XPC startup, while the GUI
-   route has already reached document processing. Resume suffix work only with
-   a controlled source mutation or a newly available converter route.
+   IMAGEDEF owner-role conflict and AC1027/AC1032 HEADER suffixes. The prior
+   successful 27.1 GUI route produced two hash-bound AC1027 outputs, but neither
+   isolates the suffix's meaning. That historical result remains valid; the
+   current desktop is locked, so no GUI capture was available in this pass.
+   Avoid another identical resave or CLI launch. Resume suffix work only after
+   GUI access returns or a materially different converter route becomes
+   available, and then make one controlled change to a locally generated or
+   scratch source before comparing only the validated HEADER section and
+   independently decoded fields. Keep this lane advisory until a repeatable
+   field-to-byte mapping or authoritative wire definition accounts for every
+   suffix byte. The last unchanged direct CLI attempt aborted during
+   Pasteboard/XPC startup before processing input; that failure is not format
+   evidence.
 
    **AC1027 source-reference audit update (the guard change remains
    unauthorized):** marker lifecycle is audited:
@@ -1677,19 +1682,24 @@ integration/release checkpoints.
 | P8 | OPEN — consumers, platforms and release | The isolated LibreCAD `origin/master` adapter bridge and its generated import/re-export checks remain implemented. LibreCAD_3 PR #456 is open on `codex/libdxfrw-upstream-compat`, based on `5cf435f4`; code head `762a0f1e` passes the focused 64/64 export/round-trip cohort. Follow-up `fd5af0b8` raises the temporary Windows package-layout CMake timeout after a hosted timeout; its smoke suite passes 19/19 locally on macOS. PR head `7e81275b71038d4a42fa580842e661ddcee7adbf` adds the Homebrew metadata refresh fix; local candidate `1a012ff6` has a focused provenance repair, but has not passed hosted CI or been published. Automatic review rejected uploading its large plan file to GitHub and prohibited alternate upload routes; the code and plan remain committed in the isolated local checkout pending explicit user approval for that disclosure. Homebrew now officially classifies Intel x86_64 as Tier 3 and has stopped building new bottles; MacPorts is suggested but its Intel Tahoe binary set is explicitly incomplete. Do not treat the current Intel force-bottle job as a sustainable provider. Keep hosted qualification open. Remaining: authorize and publish the arm64 provenance repair, pass hosted arm64 CI, decide whether Intel remains a release target and either qualify a complete maintained binary provider or retire that job/target explicitly, clean-consumer reproducibility/ABI, LibreCAD and LibreCAD_3 2D behavior across supported builds, native Linux/Windows FreeCAD open/insert checks, and 3D consumer/package/release qualification. These checks do not change DWG/DXF support claims. | Stable candidate plus native platform access and reproducible consumer build receipts; preserve existing 2D behavior and refuse unresolved references. |
 | P9 | DEFERRED_EXTERNAL — six non-promoting items | Resolve J256, J260, J268, J284, J293 and J295 only through the successor registry and eligible independent evidence. J268 still needs original input identity/digest; J284 has 11 target-debt/integrity blockers; J295 needs native receipts for four RTEXT position/rotation claims. None can promote support claims alone. | `metadata/external-evidence-resolution-v1.json`; retain lineage and exclusions. |
 
-**AC1024 CLASSES high-bit string-size recheck (2026-11-08):** the earlier
-local note that AutoCAD 2010 RTM samples fail `readDwgClasses()` is stale for
-the current tree. The implementation reads the optional high-size footer word
-through `readDwgClassStringFooter()` and accounts for the separately gated
-extended CLASSES prefix. The focused generated control
-`libdxfrw_dwg_reader_matrix_tests --r2007-class-string-footer` passes. A
-current-tree trace recheck of the nine AC1024 DWGs in `/Users/dli/doc/dwg/`
-reaches the `readDwgClasses()` return with `legacyError=0` for every sample,
-including all five samples whose application maintenance version is 2. Three
-later imports report unrelated object-parse failures; strict CLI conversion
-can also stop at opaque callback qualification. Neither outcome is a CLASSES
-failure. No reader change or fixture is needed for this stale issue; see the
-[recheck receipt](docs/research/p6-ac1024-classes-high-bit-rtm-recheck-2026-11-08.json).
+**AC1024 CLASSES high-bit string-size discrepancy:** the 2026-11-09 current-
+binary recheck confirms `operationSucceeded=true`, `legacyError=0` and no
+CLASSES CRC mismatch for all nine AC1024 DWGs currently under
+`/Users/dli/doc/dwg/`; all ten repository fixture paths also pass, with the
+`mechanical_example-imperial-alt.dwg` path duplicating an existing source hash.
+Some files still fail later strict-output gates, which are not CLASSES errors.
+This conflicts with the repo guidance's six-of-ten AutoCAD 2010 RTM report;
+the referenced directory currently contains only nine AC1024 paths. Keep the
+reported failure unresolved until the missing tenth input or exact failing
+hashes are identified and `BAD_READ_CLASSES` is reproduced. Do not change the
+parser or commit fixtures from this evidence. The bounded high-bit footer
+decoder and extended-prefix gate remain covered by the generated
+`libdxfrw_dwg_reader_matrix_tests --r2007-class-string-footer` control. That
+selector now also generates a complete AC1024 file in memory with three
+2048-character class strings, verifies the footer exceeds `0x7fff` bits, and
+reads all strings back through `readDwgClasses()`. No fixture was added. See the
+[2026-11-09 repository-corpus receipt](docs/research/p6-ac1024-classes-repository-corpus-recheck-2026-11-09.json)
+and [earlier recheck](docs/research/p6-ac1024-classes-high-bit-rtm-recheck-2026-11-08.json).
 
 **AC1015 LTYPE_CONTROL outlier:** the unauthenticated local `simple.dwg` still
 fails at the bounded count/boundary check on current code. LibreDWG 0.14 parses
