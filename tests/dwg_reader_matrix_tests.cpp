@@ -15132,6 +15132,96 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
         }
     }
 
+    for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+        Options tableContentSource;
+        tableContentSource.version = version;
+        tableContentSource.classNumber = 700u;
+        Options typedSentinel;
+        typedSentinel.version = version;
+        typedSentinel.classNumber = 601u;
+        typedSentinel.handle = 0xD64u;
+        typedSentinel.hasSubentityCount = true;
+        Frame tableContentObject, sentinelObject;
+        std::vector<std::uint8_t> tableContentFrame, sentinelFrame;
+        const bool built = makeFrame(tableContentSource, tableContentObject)
+            && wrapFrame(tableContentSource, tableContentObject,
+                         tableContentFrame)
+            && makeFrame(typedSentinel, sentinelObject)
+            && wrapFrame(typedSentinel, sentinelObject, sentinelFrame);
+        t.expect(built,
+                 "R2007/R2010 TABLECONTENT raw-shell recovery inputs are generated in memory");
+        if (!built)
+            continue;
+
+        const auto nextOffset = static_cast<std::uint32_t>(
+            tableContentFrame.size());
+        std::vector<std::uint8_t> bytes = tableContentFrame;
+        bytes.insert(bytes.end(), sentinelFrame.begin(), sentinelFrame.end());
+        PersistentManagerDispatchReader reader(bytes, version, 601u);
+        reader.addTableContentClass(tableContentSource.classNumber);
+        PersistentManagerDispatchSink sink;
+        const bool read = reader.readObjects(
+            bytes, tableContentSource.handle, nextOffset,
+            typedSentinel.handle, sink);
+        const auto rawSource = std::find_if(
+            sink.raw.begin(), sink.raw.end(),
+            [&tableContentSource](const DRW_UnsupportedObject& object) {
+                return object.m_handle == tableContentSource.handle;
+            });
+        const auto rawSentinel = std::find_if(
+            sink.raw.begin(), sink.raw.end(),
+            [&typedSentinel](const DRW_UnsupportedObject& object) {
+                return object.m_handle == typedSentinel.handle;
+            });
+        const auto sourcePublication = std::find_if(
+            sink.publications.begin(), sink.publications.end(),
+            [&tableContentSource](const DRW_DwgFramePublication& value) {
+                return value.m_handle == tableContentSource.handle;
+            });
+        const auto sentinelPublication = std::find_if(
+            sink.publications.begin(), sink.publications.end(),
+            [&typedSentinel](const DRW_DwgFramePublication& value) {
+                return value.m_handle == typedSentinel.handle;
+            });
+        const bool rawOnlyFallback = read && reader.objectFailures() == 0u
+            && sink.tableContent.empty() && sink.typed.size() == 1u
+            && sink.typed.front().handle == typedSentinel.handle
+            && sink.raw.size() == 2u
+            && rawSource != sink.raw.end()
+            && rawSource->m_rawBytes == tableContentObject.payload
+            && rawSource->m_version == version
+            && rawSource->m_objectType == tableContentSource.classNumber
+            && rawSource->m_recordName == "TABLECONTENT"
+            && rawSource->m_className == "AcDbTableContent"
+            && !rawSource->m_typedPayloadValidated
+            && rawSource->m_commonLinkEvidence
+                == DRW_DwgCommonLinkEvidence::Validated
+            && rawSource->m_parentHandle == 0xCu
+            && rawSource->m_reactorHandles
+                == std::vector<std::uint32_t>{0xCu}
+            && rawSentinel != sink.raw.end()
+            && rawSentinel->m_rawBytes == sentinelObject.payload
+            && sourcePublication != sink.publications.end()
+            && sourcePublication->m_carrier
+                == DRW_DwgFramePublication::Carrier::Raw
+            && sentinelPublication != sink.publications.end()
+            && sentinelPublication->m_carrier
+                == DRW_DwgFramePublication::Carrier::TypedAndRaw
+            && sink.publications.size() == 2u;
+        t.expect(rawOnlyFallback,
+                 "AC1021/AC1024 failed TABLECONTENT body stays raw-only after common-shell validation and following typed object recovers");
+        if (!rawOnlyFallback) {
+            std::cerr << "TABLECONTENT raw-only fallback version="
+                      << static_cast<int>(version) << " read=" << read
+                      << " failures=" << reader.objectFailures()
+                      << " typed=" << sink.typed.size()
+                      << " tableContent=" << sink.tableContent.size()
+                      << " raw=" << sink.raw.size()
+                      << " publications=" << sink.publications.size()
+                      << '\n';
+        }
+    }
+
     GeneratedTableContentObject detachedValueObject;
     const bool detachedValueBuilt = makeGeneratedR24TableContentObject(
         0xE700u, false, detachedValueObject);

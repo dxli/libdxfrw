@@ -14134,11 +14134,12 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                 cit->second->className == "AcDbTableContent") {
               DRW_TableContentObject e;
               const bool tableContentRawOnlyProfile =
-                  (version == DRW::AC1027 || version == DRW::AC1032)
+                  (version == DRW::AC1021 || version == DRW::AC1024
+                   || version == DRW::AC1027 || version == DRW::AC1032)
                   && rn == "TABLECONTENT"
                   && cit->second->className == "AcDbTableContent";
               // Preserve a pristine cursor for the versioned raw-only
-              // fallback if this disputed body fails typed decoding.
+              // fallback if this body fails typed decoding.
               dwgBuffer tableContentShellProbe = buff.forkIndependent();
               ret = parseTableEntry(e);
               if (ret) {
@@ -14154,10 +14155,10 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                          && RawObjectShell().parseDwg(
                              version, &tableContentShellProbe, bs)
                          && tableContentShellProbe.isGood()) {
-                // The AC1027/AC1032 TABLECONTENT body layout is unresolved.
-                // Publish only the validated common shell and exact raw
-                // frame; do not expose a partial typed table or qualify DXF
-                // output from this fallback.
+                // Preserve a validated frame even when its typed
+                // TABLECONTENT body is incomplete or unrecognized. Publish
+                // only the common shell and exact raw frame; do not expose a
+                // partial typed table or qualify DXF output from this fallback.
                 intfa.addUnsupportedObject(
                     makeRawObject(oType, cit->second, false));
                 const std::string &className = cit->second->className;
