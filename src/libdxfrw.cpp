@@ -11931,10 +11931,24 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
     };
 
     std::vector<std::string> legacyCellTextStyleNames;
-    try {
-        legacyCellTextStyleNames.resize(rows * columns);
-    } catch (...) {
-        return failDxfWrite();
+    bool hasLegacyCellTextStyleOverride = false;
+    if (version == DRW::AC1018) {
+        for (const DRW_TableRow& row : ent->m_content.m_rows) {
+            if (std::any_of(row.m_cells.begin(), row.m_cells.end(),
+                    [](const DRW_TableCell& cell) {
+                        return (cell.m_overrideFlags & 0x10u) != 0u;
+                    })) {
+                hasLegacyCellTextStyleOverride = true;
+                break;
+            }
+        }
+    }
+    if (hasLegacyCellTextStyleOverride) {
+        try {
+            legacyCellTextStyleNames.resize(rows * columns);
+        } catch (...) {
+            return failDxfWrite();
+        }
     }
 
     std::size_t mergedCellCount = 0;
