@@ -1,11 +1,11 @@
 # DWG/DXF parity — remaining implementation plan
 
-**Resume checkpoint (2026-11-08):** the latest confirmed desktop inventory
-reported the Mac locked and exposed no native app surface. The user has since
-said they will unlock it, but no post-unlock app or conversion result has yet
-been observed. Treat native qualification as pending; do not repeat the
-unchanged ODA CLI route until the app surface is available or the launch path
-materially changes. Local implementation proceeded: `prepareTableEntryEed()`
+**Resume checkpoint (2026-11-08):** after the user said they would unlock the
+Mac, a fresh desktop inventory still reported it locked and exposed no native
+app surface. No post-unlock ODA, FreeCAD, or conversion result was observed.
+Treat native qualification as pending; do not repeat the unchanged ODA CLI
+route until the app surface is available or the launch path materially
+changes. Local implementation proceeded: `prepareTableEntryEed()`
 now rejects pending APPID/LAYER references and unmodeled group-102 appData
 before a record frame is
 opened, while allowing canonical `ACAD_REACTORS` and `ACAD_XDICTIONARY` groups
@@ -55,22 +55,16 @@ See [the cell-alignment receipt](docs/research/p5-ac1018-table-cell-alignment-ov
 See [the cell-appearance receipt](docs/research/p5-ac1018-table-cell-appearance-overrides-dwg-writer-2026-11-08.json).
 See [the cell text-style receipt](docs/research/p5-ac1018-table-cell-text-style-override-dwg-writer-2026-11-08.json).
 
-**Next ready TABLE slice — align generated DXF cell overrides:** the AC1018
-DWG codec now admits cell fill-state (`0x02`) and indexed background/content
-colors (`0x04`/`0x08`), but the existing DXF TABLE writer's legacy preflight
-and emission path does not yet consistently carry those selected cell-level
-values. Extend only the bounded representable projection: preserve the raw
-group-283 boolean and canonical indexed CMC values through groups 283, 63 and
-64; keep the three entity-level row values distinct from cell-level overrides;
-reject non-indexed/named/book colors, orphaned values, and the DWG text-style
-hard pointer when no uniquely resolved DXF STYLE name is available. Add a
-focused generated ASCII/Binary DXF write/read control with selected false and
-true group-283 values, indexed colors, refusal, destination preservation and
-same-writer retry. This validates codec mapping only; do not infer native fill
-semantics, physical producer ordering, or TABLE support. Then update the
-receipt and remove this slice from the queue. Keep public `dwgRW::writeTable`
-disabled until the physical TABLE profile, `*T` block/object graph transaction,
-and independent readback gates below are satisfied.
+**Completed AC1018 TABLE DXF cell-appearance slice:** selected cell fill-state
+(`0x02`), indexed background/content colors (`0x04`/`0x08`), and uniquely
+resolved text-style hard pointers (`0x10`) now map to groups 283, 63, 64, and 7.
+The generated ASCII/Binary control checks explicit false and true group-283
+values, indexed endpoints, STYLE resolution, field order, refusal, destination
+preservation, and same-writer retry. See the [DXF mapping receipt](docs/research/p5-ac1018-table-cell-appearance-dxf-write-readback-2026-11-08.json).
+This is codec self-consistency only; it does not prove physical producer
+ordering, native fill semantics, or TABLE support. Public `dwgRW::writeTable`
+remains disabled until the physical TABLE profile, `*T` block/object graph
+transaction, and independent readback gates below are satisfied.
 
 Updated 2026-11-08 (AC1027 Cover source-reference audit now has authoritative no-body/handle profiles for 40/18 records plus source-matched LibreDWG no-body profiles for 29 more; TABLESTYLE and MLEADERSTYLE now have complete ODA body-handle field profiles, leaving only 3DSOLID partial, with no body reference profile left unknown. The three AC1027 default MATERIAL bodies now have source-matched no-body-handle and semantic profiles; the AC1027 SUN body has a peer no-body-handle profile and ODA-backed VPORT hard-owner edge; DICTIONARYWDFLT has an ODA §20.4.45 default hard-pointer profile. AC1027 DWG MATERIAL encoding remains guarded because retained modern body tails are not replayable; a bounded selected physical Cover MATERIAL-to-DXF ASCII/Binary route now passes local readback, without qualifying whole-document output or external semantics. See [current audit receipt](docs/research/p6-ac1027-cover-reference-guard-audit-refresh-2026-11-07.json) and [selected physical MATERIAL receipt](docs/research/p6-ac1027-material-physical-output-probe-2026-11-08.json). AC1032 multi-schdat DataStorage plus raw-only TextObjectContextData, PERSUBENTMGR, and TABLECONTENT shell recovery now reaches 842/842 published frames with zero entity/object parse failures; the bounded AC1032 MentalRay recovery separately reaches 182/182 frames with zero entity/object parse failures, while strict output remains refused at unrelated HEADER integrity rows ([receipt](docs/research/p6-ac1032-acad-table-cells-reader-fix-2026-11-07.json)); generated AC1032 TABLECONTENT detached-TV controls publish complete typed values, while the alternative body-byte-count control stays raw-only and verifies rollback, retry, destination preservation and following-frame recovery; AC1027/AC1032 TABLECONTENT and PERSUBENTMGR typed failures, plus one exact AC1027 osnap action-parameter failure, now retain exact frames raw-only after independent common-shell validation. The hash-matched `example_2013.dwg` now publishes 481/481 frames with zero entity/object parse failures, while strict output remains blocked at the AC1027 source-reference gate and no class-body/output claim is promoted ([TABLECONTENT](docs/research/p6-ac1027-tablecontent-raw-only-shell-recovery-2026-11-08.json), [PERSUBENTMGR](docs/research/p6-ac1027-persubentmgr-raw-only-shell-recovery-2026-11-08.json), [osnap action parameter](docs/research/p6-ac1027-osnap-action-param-raw-only-shell-recovery-2026-11-08.json)); the PERSUBENTMGR/TABLECONTENT source bodies remain disputed and raw-only; AutoCAD SAVEAS AC1021/24/27/32 samples now establish the same IMAGEDEF code-0xC parent and group-350 dictionary membership, and the independent wire observer captures that cross-version pattern as explicitly unqualified while strict output remains refused ([receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json)); an unlocked Aqua session was observed, but the Launch Services attempt for ODA 27.1 failed with `kLSNoExecutableErr`; the installed 27.1 app passes native verification outside the sandbox; the downloaded official ODA 27.10 ARM64 bundle still fails local code-signature verification although the 27.10 DMG's internal checksums pass, so 27.10 was not executed and no signature was modified ([package receipt](docs/research/p6-oda-27-10-official-arm64-package-signature-2026-11-07.json)); repeated direct 27.1 attempts, including the latest post-unlock retry, aborted during Pasteboard/XPC initialization before document processing. A materially changed GUI route then produced two same-version AC1027 resaves from scratch copies; both validated trailers end at byte 844 and both 739-byte suffixes remain unclaimed. The hashes differ, with no equal byte positions but matching low three bits at every position ([receipt](docs/research/p6-ac1027-oda-gui-same-version-resave-2026-11-07.json)). The read publishes 119/119 frames with zero entity/object parse failures, while strict DXF output remains blocked by the separate AC1027 source-reference gate. Do not repeat the unchanged direct launch method; continue local work and suffix analysis without promoting support claims; the R13 GROUP trace now binds the DICTIONARY issue to EED app `ACAD`, value `TREAT_AS_HARD`, raw ASCII bytes and per-value codepage `0`; ODA v5.4.1 does not define zero as file-codepage inheritance, so the source remains blocked without a production decoder change; the post-unlock ODA 27.1 GUI conversion emitted the ordered GROUP/dictionary relations but omitted that EED value and a referenced SHAPE; the AC1012/AC1014 DICTIONARY/GROUP common-link profile now passes bounded role/count controls and the source-bound R13 recheck, leaving EED codepage 0 as the sole GROUP source blocker ([receipt](docs/research/p4-populated-group-candidate-census-2026-11-07.json)); current strict `blocks_and_tables` diagnostic reaches 3,586/3,586 frames, and LibreDWG 0.14 repeats the unqualified FIELD child flag values without resolving their semantics, so strict FIELD/FIELDLIST output remains refused; ODA §2's detached-string rule conflicts with ACadSharp-derived TABLE value byte-count parsing; a debug-only alternate body-string parse of both AC1032 TABLECONTENT objects reaches the exact body and detached-string boundaries; the 17-bit interval is the encoded string-size word plus presence bit, and the final handle bit is byte-alignment padding under ODA §20.1; the candidate still conflicts with the TABLECONTENT schema and remains semantically incomplete, so both objects stay raw/refused with no production parser interpretation change; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the focused named-resource import selector now passes after synthetic receipts stopped authorizing strict-complete DWG output, with destination-preserving refusals and no support-claim change; AC1024 mechanical physical selected-output routes now cover 17 associative dependency/body pairs, 399 constraint nodes, and 17 variables across two networks and 13 value-dependency children in ASCII/Binary; the DXF `AcDbAssocEdgePersSubentId` codec slice is complete, and ten AC1024 civil Edge bodies decode to source-matched vertex-index cycles and their bounded selected ASCII/Binary output/readback passes; whole-source conversion and native meaning remain open ([read receipt](docs/research/p4-ac1024-civil-assoc-edge-dwg-read-2026-11-07.json), [selected-route receipt](docs/research/p4-ac1024-civil-assoc-selected-route-readiness-2026-11-07.json)); the viewport DWG debug trace now prints `centerPY` for its Y coordinate (diagnostic only; [receipt](docs/research/p6-viewport-debug-center-y-log-fix-2026-11-07.json)); a LibreCAD_3 persistence probe using raw include/library paths fails because the consumer compiles as C++14 while current upstream libdxfrw requires C++17, and this configuration bypasses libdxfrw's PUBLIC compile-feature propagation ([receipt](docs/research/p8-librecad3-cxx-standard-consumer-compat-2026-11-07.json)); AC1021 tablet now passes strict same-version output and fresh DXF readback after the WCS mesh extrusion default fix; generated WCS mesh round-trip controls pass across all six DWG writer releases ([receipt](docs/research/p4-ac1021-tablet-wcs-mesh-default-2026-11-07.json)); broader source graph closure remains open; saved-evidence TABLECONTENT inventory screening found no eligible physical witness and the overlapping edge masks stay refused ([receipt](docs/research/p5-tablecontent-existing-source-evidence-screen-2026-11-08.json))). This file
 
@@ -88,14 +82,16 @@ families. Readback checks typed fields, body boundary, following sentinel,
 handle role/order, refusal, and rollback/retry. The focused
 `libdxfrw_dwg_table_cell_overrides` CTest passes; no new DWG/DXF fixture was
 added. This does not enable `dwgRW::writeTable`. The physical AC1018 TABLE
-sources still stop at undocumented cell masks `0x40000`/`0x40020`; the DXF
-writer still needs a bounded mapping for the newly supported cell-level
-group-283 and indexed group-63/64 fields. The `*T` block/object graph transaction
-and independent source/native qualification remain open. Keep public TABLE
-output refused. The latest confirmed desktop inventory reported a locked Mac;
-the user has said they will unlock it, but no later app-surface check is yet
-recorded. Do not repeat the unchanged ODA CLI launch. No synthetic codec result
-promotes physical, native, or support claims.
+sources still stop at undocumented cell masks `0x40000`/`0x40020`. The matching
+generated AC1018 DXF output mapping is now implemented for cell fill-state,
+indexed colors, and uniquely resolved text-style names; focused TABLE grid,
+cell appearance, and cell-edge controls pass 3/3. See the [DXF mapping
+receipt](docs/research/p5-ac1018-table-cell-appearance-dxf-write-readback-2026-11-08.json).
+The `*T` block/object graph transaction and independent source/native
+qualification remain open. Keep public TABLE output refused. A fresh desktop
+inventory after the user's unlock message still reports a locked Mac and no
+native app surface. Do not repeat the unchanged ODA CLI launch. No synthetic
+codec result promotes physical, native, or support claims.
 
 The P6 audit added generated AC1027 NOD → named DICTIONARY → typed SCALE and
 NOD → named DICTIONARY → DATALINK graph allocation sweeps. SCALE passed 12
@@ -1185,15 +1181,12 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    border CMC remains output-refused because the DXF schema cannot represent
    four categories of distinct row values. These are generated codec mappings,
    not producer ordering, native precedence, or rendering qualification.
-   **Next implementation slice:** align AC1018 cell-level DWG fill-state and
-   indexed background/content CMC overrides with DXF groups 283/63/64. Keep
-   entity-level row values separate; preserve group 283's raw stored boolean
-   without assigning fill semantics. Admit only canonical indexed CMC, and
-   refuse orphan values, named/book/true-color methods, and a text-style
-   hard-pointer lacking a unique emitted STYLE name. Add one focused generated
-   ASCII/Binary write/read control covering selected false/true group 283,
-   selected colors, atomic refusal, output preservation, and retry. This is
-   codec mapping only; no physical producer or native rendering claim follows.
+   AC1018 cell-level fill-state, indexed background/content colors, and
+   uniquely resolved text-style hard pointers now map through groups 283/63/64/7
+   with generated ASCII/Binary readback and refusal/retry controls. Group 283's
+   stored boolean remains uninterpreted. See the [cell-appearance receipt](docs/research/p5-ac1018-table-cell-appearance-dxf-write-readback-2026-11-08.json).
+   This closes the selected codec slice only; physical ordering, native
+   precedence, and rendering remain unqualified.
    Physical-source coverage remains open: the available metric TABLE fails
    before these fields at
    unmodeled cell-value types 16/92. See the [scalar override receipt](docs/research/p5-ac1018-ac1021-table-scalar-overrides-2026-11-08.json).

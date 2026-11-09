@@ -2669,6 +2669,10 @@ add_test(NAME libdxfrw_table_content_grid_write
     COMMAND libdxfrw_table_content_dxf_tests --table-grid-write)
 set_tests_properties(libdxfrw_table_content_grid_write PROPERTIES
     LABELS "fast;dxf;adapter;table;generated;transaction" TIMEOUT 30)
+add_test(NAME libdxfrw_table_cell_appearance_override_write
+    COMMAND libdxfrw_table_content_dxf_tests --table-cell-appearance-write)
+set_tests_properties(libdxfrw_table_cell_appearance_override_write PROPERTIES
+    LABELS "fast;dxf;adapter;table;generated;transaction" TIMEOUT 30)
 add_test(NAME libdxfrw_table_content_cell_border_visibility_edges
     COMMAND libdxfrw_table_content_dxf_tests
         --table-cell-border-visibility-edges)

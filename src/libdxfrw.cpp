@@ -11815,6 +11815,36 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
         }
     }
 
+    const auto resolveLegacyCellTextStyle = [this](
+            const DRW_TableCell& cell, std::string& resolvedName) {
+        constexpr std::uint32_t textStyleFlag = 0x00000010u;
+        if ((cell.m_overrideFlags & textStyleFlag) == 0u)
+            return cell.m_textStyleOverrideHandle == 0u;
+        const std::uint32_t sourceHandle = cell.m_textStyleOverrideHandle;
+        if (sourceHandle == 0u || sourceHandle == DRW::NoHandle
+            || m_writingContext.ambiguousSourceHandles.count(sourceHandle) != 0u)
+            return false;
+        const auto sourceName = m_sourceTextStyleNamesByHandle.find(sourceHandle);
+        if (sourceName == m_sourceTextStyleNamesByHandle.end())
+            return false;
+        const std::string& name = sourceName->second;
+        const std::string key = dxfSymbolNameKey(name);
+        const std::size_t sourceNameMatches = static_cast<std::size_t>(
+            std::count_if(m_sourceTextStyleNamesByHandle.begin(),
+                          m_sourceTextStyleNamesByHandle.end(),
+                [&key](const auto& candidate) {
+                    return candidate.second == key;
+                }));
+        if (key.empty() || sourceNameMatches != 1u
+            || getTextStyleHandle(name) == DRW::NoHandle
+            || !isSafeDxfRecordText(name)
+            || (!cell.m_textStyleName.empty()
+                && dxfSymbolNameKey(cell.m_textStyleName) != key))
+            return false;
+        resolvedName = name;
+        return true;
+    };
+
     const auto selectedLegacyCellOverride = [this](
             const DRW_TableCell& cell) {
         constexpr std::array<std::uint32_t, 4> borderColorFlags = {{
@@ -11826,11 +11856,18 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
         constexpr std::array<std::uint32_t, 4> borderVisibilityFlags = {{
             0x00004000u, 0x00008000u, 0x00010000u, 0x00020000u
         }};
+        constexpr std::uint32_t cellAlignmentFlag = 0x00000001u;
+        constexpr std::uint32_t fillStateFlag = 0x00000002u;
+        constexpr std::uint32_t backgroundColorFlag = 0x00000004u;
+        constexpr std::uint32_t contentColorFlag = 0x00000008u;
+        constexpr std::uint32_t textStyleFlag = 0x00000010u;
         constexpr std::uint32_t textHeightFlag = 0x00000020u;
         if (version != DRW::AC1018 || cell.m_type != 1
             || cell.m_overrideFlags == 0u)
             return false;
-        std::uint32_t representableFlags = textHeightFlag;
+        std::uint32_t representableFlags = cellAlignmentFlag | fillStateFlag
+            | backgroundColorFlag | contentColorFlag | textStyleFlag
+            | textHeightFlag;
         int expectedEdgeFlags = 0;
         for (std::size_t edge = 0u; edge < borderColorFlags.size(); ++edge) {
             const std::uint32_t edgeFlags = borderColorFlags[edge]
@@ -11842,9 +11879,23 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
         }
         if ((cell.m_overrideFlags & ~representableFlags) != 0u
             || cell.m_overrideFlags > 0x0000FFFFu
-            || (cell.m_overrideFlags & ~textHeightFlag) == 0u
             || cell.m_edgeFlags != expectedEdgeFlags
             || cell.m_virtualEdgeFlags != 0
+            || ((cell.m_overrideFlags & cellAlignmentFlag) != 0u
+                ? (cell.m_textAlignment < 1 || cell.m_textAlignment > 9)
+                : cell.m_textAlignment != 0)
+            || ((cell.m_overrideFlags & fillStateFlag) == 0u
+                && cell.m_backgroundEnabled)
+            || ((cell.m_overrideFlags & backgroundColorFlag) != 0u
+                ? (cell.m_fillColorRgb < 0 || cell.m_fillColorRgb > 256
+                    || cell.m_fillColorMethod != 0u)
+                : (cell.m_fillColorRgb != -1
+                    || cell.m_fillColorMethod != 0u))
+            || ((cell.m_overrideFlags & contentColorFlag) != 0u
+                ? (cell.m_textColorRgb < 0 || cell.m_textColorRgb > 256
+                    || cell.m_textColorMethod != 0u)
+                : (cell.m_textColorRgb != -1
+                    || cell.m_textColorMethod != 0u))
             || ((cell.m_overrideFlags & textHeightFlag) != 0u
                 && (!std::isfinite(cell.m_textHeight)
                     || cell.m_textHeight <= 0.0)))
@@ -11879,6 +11930,13 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
             });
     };
 
+    std::vector<std::string> legacyCellTextStyleNames;
+    try {
+        legacyCellTextStyleNames.resize(rows * columns);
+    } catch (...) {
+        return failDxfWrite();
+    }
+
     std::size_t mergedCellCount = 0;
     for (std::size_t rowIndex = 0; rowIndex < rows; ++rowIndex) {
         const DRW_TableRow& row = ent->m_content.m_rows[rowIndex];
@@ -11889,11 +11947,19 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
             || !std::isfinite(row.m_height)
             || row.m_height < 0.0)
             return failDxfWrite();
-        for (const DRW_TableCell& cell : row.m_cells) {
+        for (std::size_t columnIndex = 0u;
+             columnIndex < row.m_cells.size(); ++columnIndex) {
+            const DRW_TableCell& cell = row.m_cells[columnIndex];
             const bool textCell = cell.m_type == 1;
             const bool blockCell = cell.m_type == 2;
+            const bool legacyCellTextStyle = version == DRW::AC1018
+                && textCell && (cell.m_overrideFlags & 0x10u) != 0u
+                && resolveLegacyCellTextStyle(cell,
+                    legacyCellTextStyleNames[rowIndex * columns + columnIndex]);
             const bool selectedLegacyBorder =
-                selectedLegacyCellOverride(cell);
+                selectedLegacyCellOverride(cell)
+                && ((cell.m_overrideFlags & 0x10u) == 0u
+                    || legacyCellTextStyle);
             // AC1018 alignment/text-height use group 177 bits 0x01/0x20;
             // the bounded text-height and cell-edge profile is checked above.
             const bool legacyTextHeight = version == DRW::AC1018 && textCell
@@ -11905,9 +11971,15 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
             const bool legacyBasicOverrides = version == DRW::AC1018
                 && (textCell || blockCell)
                 && cell.m_overrideFlags != 0u
-                && (cell.m_overrideFlags & ~(textCell ? 0x21u : 0x01u)) == 0u
+                && (cell.m_overrideFlags
+                    & ~(textCell ? 0x3Fu : 0x01u)) == 0u
                 && ((cell.m_overrideFlags & 0x20u) == 0u || legacyTextHeight)
-                && ((cell.m_overrideFlags & 0x01u) == 0u || legacyAlignment);
+                && ((cell.m_overrideFlags & 0x01u) == 0u || legacyAlignment)
+                && ((cell.m_overrideFlags & 0x10u) == 0u
+                    || legacyCellTextStyle)
+                && ((cell.m_overrideFlags & 0x0Eu) == 0u || textCell)
+                && ((cell.m_overrideFlags & 0x0Eu) == 0u
+                    || selectedLegacyCellOverride(cell));
             const bool legacyOverrides = legacyBasicOverrides
                 || selectedLegacyBorder;
             const bool cellContentMatches = cell.m_contents.size() == 1u
@@ -11939,7 +12011,8 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
                 || cell.m_styleId != 0 || cell.m_overrideStyleType != 1
                 || cell.m_valueHandle != 0u
                 || cell.m_textStyleHandle != 0u
-                || cell.m_textStyleOverrideHandle != 0u
+                || (cell.m_textStyleOverrideHandle != 0u
+                    && !legacyCellTextStyle)
                 || (textCell && (cell.m_blockHandle != 0u
                                  || cell.m_blockScale != 1.0))
                 || (blockCell
@@ -11975,12 +12048,19 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
                 || (version < DRW::AC1021
                     && ((cell.m_overrideFlags != 0u && !legacyOverrides)
                         || cell.m_virtualEdgeFlags != 0 || cell.m_flags != 0
-                        || !cell.m_textStyleName.empty()
+                        || (!cell.m_textStyleName.empty()
+                            && !legacyCellTextStyle)
                         || (cell.m_textHeight != 0.0 && !legacyTextHeight)
                         || (cell.m_textAlignment != 0 && !legacyAlignment)
-                        || cell.m_textColorRgb >= 0
-                        || cell.m_fillColorRgb >= 0
-                        || cell.m_backgroundEnabled))
+                        || (cell.m_textColorRgb >= 0
+                            && !(textCell
+                                && (cell.m_overrideFlags & 0x08u) != 0u))
+                        || (cell.m_fillColorRgb >= 0
+                            && !(textCell
+                                && (cell.m_overrideFlags & 0x04u) != 0u))
+                        || (cell.m_backgroundEnabled
+                            && !(textCell
+                                && (cell.m_overrideFlags & 0x02u) != 0u))))
                 || (!legacyCoveredMerge && !cell.m_isMerged
                     && (cell.m_mergedWidth > 1 || cell.m_mergedHeight > 1))
                 || (cell.m_isMerged
@@ -12447,6 +12527,10 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
                     writer->writeInt16(63, cell->m_fillColorRgb);
                 if (cell->m_backgroundEnabled)
                     writer->writeInt16(283, 1);
+            } else if (version == DRW::AC1018
+                       && (cell->m_overrideFlags & 0x10u) != 0u) {
+                writer->writeUtf8String(7,
+                    legacyCellTextStyleNames[row * columns + column]);
             }
 
             static const int borderColorCodes[] = {69, 65, 66, 68};
@@ -12531,6 +12615,13 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
                     writer->writeInt16(170, cell->m_textAlignment);
                 if ((cell->m_overrideFlags & 0x20u) != 0u)
                     writer->writeDouble(140, cell->m_textHeight);
+                if ((cell->m_overrideFlags & 0x08u) != 0u)
+                    writer->writeInt16(64, cell->m_textColorRgb);
+                if ((cell->m_overrideFlags & 0x04u) != 0u)
+                    writer->writeInt16(63, cell->m_fillColorRgb);
+                if ((cell->m_overrideFlags & 0x02u) != 0u)
+                    writer->writeInt16(283,
+                        cell->m_backgroundEnabled ? 1 : 0);
             }
         }
     }

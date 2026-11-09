@@ -2283,6 +2283,166 @@ bool tableContentGridWriteTests(const std::filesystem::path& dir) {
     return true;
 }
 
+bool tableCellAppearanceOverrideWriteTests(
+        const std::filesystem::path& dir) {
+    const auto fail = [](const std::string& why) {
+        std::cerr << "AC1018 TABLE cell appearance: " << why << '\n';
+        return false;
+    };
+    const auto path = dir / "table-cell-appearance-override.dxf";
+    const auto addModelSpace = [](dx_data& data) {
+        DRW_Block_Record record;
+        record.handle = 0x1Fu;
+        record.name = "*Model_Space";
+        data.blockRecords.push_back(record);
+    };
+    const auto verify = [&](bool binary, bool fillState,
+                            int backgroundColor, int contentColor,
+                            bool withTextStyle) {
+        dx_data data;
+        dx_iface exporter;
+        tableExportReuseDrawing(exporter, data, 0u, false);
+        addModelSpace(data);
+        DRW_TableCell& cell = data.tables.front().m_content.m_rows[0]
+            .m_cells[0];
+        cell.m_overrideFlags = withTextStyle ? 0x1Eu : 0x0Eu;
+        cell.m_backgroundEnabled = fillState;
+        cell.m_fillColorRgb = backgroundColor;
+        cell.m_textColorRgb = contentColor;
+        if (withTextStyle) {
+            DRW_Textstyle style;
+            style.handle = 0xA70u;
+            style.name = "CELLOVERRIDESTYLE";
+            exporter.addTextStyle(style);
+            cell.m_textStyleOverrideHandle = style.handle;
+        }
+        if (!exporter.fileExport(path.string(), DRW::AC1018, binary,
+                                 &data, false)) {
+            std::string detail = "selected representable fields were refused";
+            detail += " (binary=" + std::to_string(binary)
+                + ", fill=" + std::to_string(fillState)
+                + ", bg=" + std::to_string(backgroundColor)
+                + ", content=" + std::to_string(contentColor)
+                + ", style=" + std::to_string(withTextStyle) + ")";
+            if (exporter.dxfW != nullptr) {
+                const DRW_OperationDiagnostic diagnostic =
+                    exporter.dxfW->getLastDiagnostic();
+                detail += " (" + diagnostic.code + ": "
+                    + diagnostic.message + ")";
+            }
+            return fail(detail);
+        }
+        const auto tags = attdefWireTags(path, binary);
+        std::vector<int> tableCellCodes;
+        bool inTable = false;
+        for (const AttdefWireTag& tag : tags) {
+            if (tag.code == 0) {
+                inTable = tag.text == "ACAD_TABLE";
+                continue;
+            }
+            if (inTable)
+                tableCellCodes.push_back(tag.code);
+        }
+        const auto position = [&tableCellCodes](int code) {
+            const auto found = std::find(tableCellCodes.begin(),
+                                         tableCellCodes.end(), code);
+            return found == tableCellCodes.end()
+                ? tableCellCodes.size()
+                : static_cast<std::size_t>(found - tableCellCodes.begin());
+        };
+        if (std::count(tableCellCodes.begin(), tableCellCodes.end(), 283) != 1
+            || std::count(tableCellCodes.begin(), tableCellCodes.end(), 63) != 1
+            || std::count(tableCellCodes.begin(), tableCellCodes.end(), 64) != 1
+            || (withTextStyle
+                ? std::count(tableCellCodes.begin(), tableCellCodes.end(), 7) != 1
+                : std::find(tableCellCodes.begin(), tableCellCodes.end(), 7)
+                    != tableCellCodes.end())
+            || !(position(177) < position(64)
+                && position(64) < position(63)
+                && position(63) < position(283)))
+            return fail("selected group-code presence or order differs");
+
+        Probe reader;
+        dx_data parsed;
+        if (!reader.fileImport(path.string(), &parsed, false)
+            || parsed.tables.size() != 1u
+            || !parsed.tables.front().m_semanticContentComplete)
+            return fail("generated ASCII/Binary readback was incomplete");
+        const DRW_TableCell& restored = parsed.tables.front()
+            .m_content.m_rows[0].m_cells[0];
+        if (restored.m_overrideFlags != cell.m_overrideFlags
+            || restored.m_backgroundEnabled != fillState
+            || restored.m_fillColorRgb != backgroundColor
+            || restored.m_textColorRgb != contentColor
+            || restored.m_textStyleName
+                != (withTextStyle ? "CELLOVERRIDESTYLE" : "")) {
+            return fail("cell appearance typed fields differ after readback: flags="
+                + std::to_string(restored.m_overrideFlags)
+                + " fillState=" + std::to_string(restored.m_backgroundEnabled)
+                + " bg=" + std::to_string(restored.m_fillColorRgb)
+                + " content=" + std::to_string(restored.m_textColorRgb)
+                + " style=" + restored.m_textStyleName);
+        }
+        return true;
+    };
+
+    for (bool binary : {false, true}) {
+        if (!verify(binary, false, 0, 256, false)
+            || !verify(binary, true, 3, 4, true))
+            return false;
+
+        dx_data data;
+        dx_iface exporter;
+        tableExportReuseDrawing(exporter, data, 0u, false);
+        addModelSpace(data);
+        DRW_TableCell& cell = data.tables.front().m_content.m_rows[0]
+            .m_cells[0];
+        cell.m_overrideFlags = 0x06u;
+        cell.m_fillColorRgb = 3;
+        cell.m_fillColorMethod = 1u;
+        const std::string sentinel = "PRESERVE_TABLE_CELL_APPEARANCE";
+        { std::ofstream output(path, std::ios::binary); output << sentinel; }
+        if (exporter.fileExport(path.string(), DRW::AC1018, binary,
+                                &data, false))
+            return fail("unsupported cell color method was accepted");
+        { std::ifstream input(path, std::ios::binary);
+          if (std::string(std::istreambuf_iterator<char>(input), {}) != sentinel)
+              return fail("refusal changed destination"); }
+        if (cell.m_overrideFlags != 0x06u || cell.m_fillColorRgb != 3
+            || cell.m_fillColorMethod != 1u)
+            return fail("refusal changed the caller model");
+        cell.m_fillColorMethod = 0u;
+        if (!exporter.fileExport(path.string(), DRW::AC1018, binary,
+                                 &data, false))
+            return fail("same-writer correction retry failed");
+        Probe retryReader;
+        dx_data retried;
+        if (!retryReader.fileImport(path.string(), &retried, false)
+            || retried.tables.size() != 1u
+            || !retried.tables.front().m_semanticContentComplete
+            || retried.tables.front().m_content.m_rows[0]
+                    .m_cells[0].m_fillColorRgb != 3)
+            return fail("corrected retry readback differs");
+
+        dx_data unresolved;
+        dx_iface unresolvedWriter;
+        tableExportReuseDrawing(unresolvedWriter, unresolved, 0u, false);
+        addModelSpace(unresolved);
+        DRW_TableCell& unresolvedCell = unresolved.tables.front()
+            .m_content.m_rows[0].m_cells[0];
+        unresolvedCell.m_overrideFlags = 0x10u;
+        unresolvedCell.m_textStyleOverrideHandle = 0xA70u;
+        { std::ofstream output(path, std::ios::binary); output << sentinel; }
+        if (unresolvedWriter.fileExport(path.string(), DRW::AC1018, binary,
+                                        &unresolved, false))
+            return fail("unresolved text-style hard pointer was accepted");
+        { std::ifstream input(path, std::ios::binary);
+          if (std::string(std::istreambuf_iterator<char>(input), {}) != sentinel)
+              return fail("unresolved style refusal changed destination"); }
+    }
+    return true;
+}
+
 bool tableContentCellBorderVisibilityEdgesWriteTests(
         const std::filesystem::path& dir) {
     const auto fail = [](const std::string& why) {
@@ -5918,6 +6078,8 @@ int main(int argc,char** argv) {
     const bool tableProfiles=argc==2 && std::string(argv[1])=="--table-profiles";
     const bool tableValueScopes=argc==2 && std::string(argv[1])=="--table-value-scopes";
     const bool tableGridWrite=argc==2 && std::string(argv[1])=="--table-grid-write";
+    const bool tableCellAppearanceWrite=argc==2
+        && std::string(argv[1])=="--table-cell-appearance-write";
     const bool tableCellBorderVisibilityEdges=argc==2
         && std::string(argv[1])=="--table-cell-border-visibility-edges";
     const bool tableRowMarginWrite=argc==2 && std::string(argv[1])=="--table-row-margin-write";
@@ -5949,7 +6111,7 @@ int main(int argc,char** argv) {
     const bool auxiliaryProof=argc==2 && std::string(argv[1])=="--auxiliary-source-proof";
     const bool spineProof=argc==2 && std::string(argv[1])=="--spine-source-proof";
     const bool blockRecordProof=argc==2 && std::string(argv[1])=="--block-record-source-proof";
-    if (argc!=1 && !viewportSources && !viewUcsSources && !layoutDependencies && !entityDependencies && !tableGeometryDependencies && !effectiveOwnership && !plotSources && !styleFont && !dependencies && !symbolOrigins && !resourceOrigins && !compound && !proof && !bindings && !blockBindings && !blockNames && !entitiesSource && !entitiesDelivery && !entitiesOrigins && !entitiesCompounds && !entitiesPrimaries && !layoutSource && !identitySource && !structuralSource && !dictionarySource && !layoutRoles && !entitiesRoles && !blockRoles && !attdefRoles && !tableBlockSource && !tableInputs && !tableBodies && !tableProfiles && !tableValueScopes && !tableGridWrite && !tableCellBorderVisibilityEdges && !tableRowMarginWrite && !tableColumnTableMarginWrite && !tableSingleCellStyleMarginWrite && !tableStyleFormatWrite && !tableStyleReferenceWrite && !tableLinkedGridWrite && !tableExportReuse && !tableValuePayload && !tableValueProfiles && !tableReferences && !maps && !mapProof && !styleProof && !symbolProof && !complexBindings && !auxiliaryProof && !spineProof && !blockRecordProof) return 2;
+    if (argc!=1 && !viewportSources && !viewUcsSources && !layoutDependencies && !entityDependencies && !tableGeometryDependencies && !effectiveOwnership && !plotSources && !styleFont && !dependencies && !symbolOrigins && !resourceOrigins && !compound && !proof && !bindings && !blockBindings && !blockNames && !entitiesSource && !entitiesDelivery && !entitiesOrigins && !entitiesCompounds && !entitiesPrimaries && !layoutSource && !identitySource && !structuralSource && !dictionarySource && !layoutRoles && !entitiesRoles && !blockRoles && !attdefRoles && !tableBlockSource && !tableInputs && !tableBodies && !tableProfiles && !tableValueScopes && !tableGridWrite && !tableCellAppearanceWrite && !tableCellBorderVisibilityEdges && !tableRowMarginWrite && !tableColumnTableMarginWrite && !tableSingleCellStyleMarginWrite && !tableStyleFormatWrite && !tableStyleReferenceWrite && !tableLinkedGridWrite && !tableExportReuse && !tableValuePayload && !tableValueProfiles && !tableReferences && !maps && !mapProof && !styleProof && !symbolProof && !complexBindings && !auxiliaryProof && !spineProof && !blockRecordProof) return 2;
     const auto parent=std::filesystem::temp_directory_path();
     const auto stem="libdxfrw-table-content-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     std::error_code error;const auto dir=reserveTestScratch(parent,stem,error);
@@ -5989,6 +6151,8 @@ int main(int argc,char** argv) {
         : tableProfiles ? tableProfileTests(dir)
         : tableValueScopes ? tableValueScopeTests(dir)
         : tableGridWrite ? tableContentGridWriteTests(dir)
+        : tableCellAppearanceWrite
+            ? tableCellAppearanceOverrideWriteTests(dir)
         : tableCellBorderVisibilityEdges
             ? tableContentCellBorderVisibilityEdgesWriteTests(dir)
         : tableRowMarginWrite ? tableContentRowMarginWriteTests(dir)
