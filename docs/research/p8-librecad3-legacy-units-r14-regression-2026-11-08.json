@@ -8,16 +8,19 @@
   "change": {
     "file": "unittest/persistence/dxfroundtriptest.cpp",
     "test": "DxfRoundTripTest.DrawingUnitsSurviveASave",
-    "behavior": "The existing nonzero insertion-unit cases now exercise both R12 and R14 exports. Each export must succeed, report exactly one insertion-unit loss note, omit $INSUNITS, and preserve the generated LINE entity.",
+    "behavior": "Unitless and three nonzero insertion-unit cases exercise both R12 and R14 exports. Every export must succeed, omit $INSUNITS, and preserve the generated LINE. Unitless exports report zero loss notes; each nonzero profile reports exactly one insertion-unit loss note.",
     "fixture_policy": "No fixture files added; test DXFs are generated in the system temporary directory and removed."
   },
   "validation": {
     "build_command": "cmake --build build --target lcunittest -j4",
     "build_result": "PASS",
     "test_command": "./build/bin/lcunittest --gtest_filter='DxfRoundTripTest.DrawingUnitsSurviveASave'",
-    "test_result": "PASS: 1 test; three nonzero unit profiles; R12 and R14 each preserved LINE and omitted $INSUNITS with the expected loss note.",
+    "test_result": "PASS: 1 test; one unitless and three nonzero unit profiles; R12 and R14 each preserved LINE and omitted $INSUNITS. Unitless reported no loss; each nonzero input reported one insertion-unit loss note.",
     "diff_check": "PASS",
     "warnings": "Build succeeded with pre-existing missing-override warnings and a missing gtest_build linker search path warning."
   },
-  "scope_limit": "This closes only the R14 regression-coverage gap for the already implemented LibreCAD_3 legacy export behavior. It does not establish general DXF support, upstream LibreCAD adapter migration, DWG compatibility, ABI, Linux/Windows, or native FreeCAD qualification."
+  "followup_commit": "762a0f1e",
+  "current_head_focused_cohort": "DxfExportTest.*:DxfRoundTripTest.* passed 64/64 after unitless coverage was added.",
+  "pull_request": "https://github.com/LibreCAD/LibreCAD_3/pull/456",
+  "scope_limit": "This closes only legacy insertion-unit loss regression coverage for the already implemented LibreCAD_3 export behavior. It does not establish general DXF support, upstream LibreCAD adapter migration, DWG compatibility, ABI, Linux/Windows, or native FreeCAD qualification."
 }
