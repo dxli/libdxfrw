@@ -14022,6 +14022,11 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
             if (rn == "DATATABLE" ||
                 cit->second->className == "AcDbDataTable") {
               DRW_DataTable e;
+              const bool legacyDataTableRawOnlyProfile =
+                  version == DRW::AC1018
+                  && rn == "DATATABLE"
+                  && cit->second->className == "AcDbDataTable";
+              dwgBuffer dataTableShellProbe = buff.forkIndependent();
               ret = parseTableEntry(e);
               // DATATABLE's body is a DEBUG_CLASS ("(varies)") whose
               // cell walk may drift; parseDwg graceful-degrades to the
@@ -14030,6 +14035,27 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
               if (ret) {
                 intfa.addDataTable(e);
                 intfa.addUnsupportedObject(makeRawObject(oType, cit->second));
+              } else if (legacyDataTableRawOnlyProfile
+                         && RawObjectShell().parseDwg(
+                             version, &dataTableShellProbe, bs)
+                         && dataTableShellProbe.isGood()) {
+                // Preserve this R2004 compatibility occurrence without
+                // interpreting its class-specific variable body.
+                intfa.addUnsupportedObject(
+                    makeRawObject(oType, cit->second, false));
+                const std::string &className = cit->second->className;
+                const std::string &recordName = cit->second->recName;
+                const std::string objectName =
+                    recordName.empty() ? className : recordName;
+                ++m_skippedCustomClasses[className.empty()
+                    ? recordName.c_str() : className.c_str()];
+                ++m_skippedUnsupportedObjects[objectName];
+                ret = true;
+                DRW_DBG("[data-table-raw-only class=");
+                DRW_DBG(className.c_str());
+                DRW_DBG(" handle=");
+                DRW_DBG(obj.handle);
+                DRW_DBG("]\n");
               }
               break;
             }

@@ -12251,6 +12251,11 @@ public:
         if (forward)
             dx_iface::addTableGeometry(object);
     }
+    void addDataTable(const DRW_DataTable& object) override {
+        dataTables.push_back(object);
+        if (forward)
+            dx_iface::addDataTable(object);
+    }
     void addDwgFramePublication(const DRW_DwgFramePublication& publication) override {
         publications.push_back(publication);
         if (forward)
@@ -12261,6 +12266,7 @@ public:
     std::vector<DRW_UnsupportedObject> raw;
     std::vector<DRW_TableContentObject> tableContent;
     std::vector<DRW_TableGeometry> tableGeometry;
+    std::vector<DRW_DataTable> dataTables;
     std::vector<DRW_DwgFramePublication> publications;
 private:
     bool forward;
@@ -15521,6 +15527,80 @@ void testAc1018TableObjectsRetainOnlyValidatedRawFrames(TestContext& t) {
                   << " failures=" << reader.objectFailures()
                   << " typedContent=" << sink.tableContent.size()
                   << " typedGeometry=" << sink.tableGeometry.size()
+                  << " raw=" << sink.raw.size()
+                  << " publications=" << sink.publications.size() << '\n';
+    }
+}
+
+void testAc1018DataTableRetainsOnlyValidatedRawFrames(TestContext& t) {
+    constexpr std::uint16_t dataTableClass = 702u;
+    constexpr std::uint32_t sourceHandle = 0xA102u;
+    constexpr std::uint32_t nextHandle = 0xA103u;
+    GeneratedAc1018OpaqueTableObject source, next;
+    const bool framesBuilt = makeGeneratedAc1018OpaqueTableObject(
+            dataTableClass, sourceHandle, source)
+        && makeGeneratedAc1018OpaqueTableObject(
+            dataTableClass, nextHandle, next);
+    t.expect(framesBuilt,
+             "AC1018 DATATABLE body-failure frames are generated in memory");
+    if (!framesBuilt)
+        return;
+
+    const auto nextOffset = static_cast<std::uint32_t>(source.frame.size());
+    std::vector<std::uint8_t> bytes = source.frame;
+    bytes.insert(bytes.end(), next.frame.begin(), next.frame.end());
+    PersistentManagerDispatchReader reader(bytes, DRW::AC1018, 601u);
+    reader.addClass(dataTableClass, "DATATABLE", "AcDbDataTable");
+    PersistentManagerDispatchSink sink;
+    const bool read = reader.readObjects(bytes, sourceHandle, nextOffset,
+                                         nextHandle, sink);
+    const auto rawSource = std::find_if(
+        sink.raw.begin(), sink.raw.end(),
+        [sourceHandle](const DRW_UnsupportedObject& item) {
+            return item.m_handle == sourceHandle;
+        });
+    const auto rawNext = std::find_if(
+        sink.raw.begin(), sink.raw.end(),
+        [nextHandle](const DRW_UnsupportedObject& item) {
+            return item.m_handle == nextHandle;
+        });
+    const auto sourcePublication = std::find_if(
+        sink.publications.begin(), sink.publications.end(),
+        [sourceHandle](const DRW_DwgFramePublication& item) {
+            return item.m_handle == sourceHandle;
+        });
+    const auto nextPublication = std::find_if(
+        sink.publications.begin(), sink.publications.end(),
+        [nextHandle](const DRW_DwgFramePublication& item) {
+            return item.m_handle == nextHandle;
+        });
+    const bool rawOnly = read && reader.objectFailures() == 0u
+        && sink.dataTables.empty() && sink.raw.size() == 2u
+        && sink.publications.size() == 2u
+        && rawSource != sink.raw.end()
+        && rawSource->m_rawBytes == source.payload
+        && rawSource->m_version == DRW::AC1018
+        && rawSource->m_recordName == "DATATABLE"
+        && rawSource->m_className == "AcDbDataTable"
+        && !rawSource->m_typedPayloadValidated
+        && rawNext != sink.raw.end()
+        && rawNext->m_rawBytes == next.payload
+        && rawNext->m_version == DRW::AC1018
+        && rawNext->m_recordName == "DATATABLE"
+        && rawNext->m_className == "AcDbDataTable"
+        && !rawNext->m_typedPayloadValidated
+        && sourcePublication != sink.publications.end()
+        && sourcePublication->m_carrier
+            == DRW_DwgFramePublication::Carrier::Raw
+        && nextPublication != sink.publications.end()
+        && nextPublication->m_carrier
+            == DRW_DwgFramePublication::Carrier::Raw;
+    t.expect(rawOnly,
+             "AC1018 DATATABLE variable bodies remain opaque while validated frames and following-object recovery publish raw-only");
+    if (!rawOnly) {
+        std::cerr << "AC1018 DATATABLE raw-only read=" << read
+                  << " failures=" << reader.objectFailures()
+                  << " typed=" << sink.dataTables.size()
                   << " raw=" << sink.raw.size()
                   << " publications=" << sink.publications.size() << '\n';
     }
@@ -20499,6 +20579,7 @@ int main(int argc, char** argv) {
         TestContext focused;
         testPersistentManagerPrefixDispatch(focused);
         testAc1018TableObjectsRetainOnlyValidatedRawFrames(focused);
+        testAc1018DataTableRetainsOnlyValidatedRawFrames(focused);
         std::cout << "Persistent manager bounded-prefix dispatch: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
