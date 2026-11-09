@@ -1788,18 +1788,23 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    TextObjectContextData remains raw-only.
    Remaining P6 work is limited to source-backed version/layout gaps and independent evidence for the
    IMAGEDEF owner-role conflict and AC1027/AC1032 HEADER suffixes. The prior
-   successful 27.1 GUI route produced two hash-bound AC1027 outputs, but neither
-   isolates the suffix's meaning. That historical result remains valid; the
-   current desktop is locked, so no GUI capture was available in this pass.
-   Avoid another identical resave or CLI launch. Resume suffix work only after
-   GUI access returns or a materially different converter route becomes
-   available, and then make one controlled change to a locally generated or
-   scratch source before comparing only the validated HEADER section and
-   independently decoded fields. Keep this lane advisory until a repeatable
-   field-to-byte mapping or authoritative wire definition accounts for every
-   suffix byte. The last unchanged direct CLI attempt aborted during
-   Pasteboard/XPC startup before processing input; that failure is not format
-   evidence.
+   successful 27.1 GUI route produced hash-bound AC1027 outputs, but did not
+   isolate the suffix's meaning. On 2026-11-09 the ODA GUI was visible in one
+   desktop check, then its accessibility check reported the Mac locked before
+   any conversion was started. Two locally authored AC1027 controls intended
+   to differ only in `$LTSCALE` were readable with zero frame failures, but
+   strict DXF output stopped at the unrelated AC1027 source-reference gate.
+   No ODA comparison or independent `$LTSCALE` readback was obtained; see the
+   [controlled-variable attempt receipt](docs/research/p6-ac1027-header-variable-controlled-conversion-lock-2026-11-09.json).
+   Earlier checksum-valid suffix mutations already yielded identical ODA DXF
+   apart from timestamp variables, so do not repeat suffix-only mutations or
+   unchanged resaves. When the GUI session is available, first verify both
+   decoded values, convert only the two-file scratch input folder, and compare
+   CRC/sentinel-validated HEADER envelopes with independently decoded values;
+   keep every suffix byte unclaimed until its meaning is established. The last
+   direct CLI attempt aborted during PasteBoard/XPC startup before processing
+   input; that failure is not format evidence. Continue independent local
+   implementation while this platform check waits.
 
    **AC1027 source-reference audit update (the guard change remains
    unauthorized):** marker lifecycle is audited:
