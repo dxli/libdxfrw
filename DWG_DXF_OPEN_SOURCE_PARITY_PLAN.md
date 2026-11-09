@@ -1470,8 +1470,11 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    AC1021/AC1024/AC1027/AC1032 TABLECONTENT typed failures likewise fall back
    to raw-only when an independent common-shell/handle parse succeeds; generated
    controls preserve exact bytes and the following frame. The added AC1021 and
-   AC1024 controls publish a subsequent typed object after raw recovery. The
-   generated AC1027 and AC1032 PERSUBENTMGR controls also shorten the common
+   AC1024 controls publish a subsequent typed object after raw recovery. These
+   TABLECONTENT controls only improve bounded frame retention; typed semantics
+   and output remain unsupported. See the
+   [cross-version recovery receipt](docs/research/p6-tablecontent-cross-version-raw-only-shell-recovery-2026-11-09.json).
+   The generated AC1027 and AC1032 PERSUBENTMGR controls also shorten the common
    handle span by one bit in each profile: the malformed manager is withheld,
    its following object publishes, and restoring the original span permits
    raw-only recovery. Complete generated vectors for both versions also decode
@@ -1485,11 +1488,15 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    Complete body status and following-frame publication, and asserts the raw
    carrier remains unvalidated (receipt:
    [complete-prefix control](docs/research/p6-persubentmgr-generated-complete-prefix-2026-11-09.json)).
+   A separate LibreDWG issue #1398 recheck confirms the physical body order is
+   still disputed: its Platte sample reports `2, 0, 2, 0, 0, 0` before an
+   implausible final count; the author lists competing layouts, and the merged
+   change was clarified as targeting the distinct ASSOCPERSSUBENTMANAGER class.
+   Treat the generated Complete vectors as candidate-parser coverage only; do
+   not infer a physical schema or output route from the peer code. See
+   [LibreDWG issue #1398](https://github.com/LibreDWG/libredwg/issues/1398).
    This is generated parser coverage only; it does not close physical layout,
    graph, DXF mapping or output eligibility.
-   This only improves bounded frame retention: these profiles remain unsupported
-   for typed semantics and output. See the
-   [cross-version recovery receipt](docs/research/p6-tablecontent-cross-version-raw-only-shell-recovery-2026-11-09.json).
    A hash-matched physical recheck of
    `example_2013.dwg` publishes object `0xC94` raw-only; its remaining object
    parse failure was subsequently recovered. Bare AC1027/AC1032 PERSUBENTMGR
