@@ -57,10 +57,11 @@ See [the cell text-style receipt](docs/research/p5-ac1018-table-cell-text-style-
 
 **Completed AC1018 TABLE DXF cell-appearance slice:** selected cell fill-state
 (`0x02`), indexed background/content colors (`0x04`/`0x08`), and uniquely
-resolved text-style hard pointers (`0x10`) now map to groups 283, 63, 64, and 7.
+resolved text-style hard pointers or name-only overrides (`0x10`) now map to
+groups 283, 63, 64, and 7.
 The generated ASCII/Binary control checks explicit false and true group-283
-values, indexed endpoints, STYLE resolution, field order, refusal, destination
-preservation, and same-writer retry. See the [DXF mapping receipt](docs/research/p5-ac1018-table-cell-appearance-dxf-write-readback-2026-11-08.json).
+values, indexed endpoints, handle/name-only STYLE resolution, field order,
+refusal, destination preservation, and same-writer retry. See the [DXF mapping receipt](docs/research/p5-ac1018-table-cell-appearance-dxf-write-readback-2026-11-08.json).
 This is codec self-consistency only; it does not prove physical producer
 ordering, native fill semantics, or TABLE support. Public `dwgRW::writeTable`
 remains disabled until the physical TABLE profile, `*T` block/object graph
@@ -84,7 +85,7 @@ handle role/order, refusal, and rollback/retry. The focused
 added. This does not enable `dwgRW::writeTable`. The physical AC1018 TABLE
 sources still stop at undocumented cell masks `0x40000`/`0x40020`. The matching
 generated AC1018 DXF output mapping is now implemented for cell fill-state,
-indexed colors, and uniquely resolved text-style names; focused TABLE grid,
+indexed colors, and uniquely resolved text-style handles/names; focused TABLE grid,
 cell appearance, and cell-edge controls pass 3/3. See the [DXF mapping
 receipt](docs/research/p5-ac1018-table-cell-appearance-dxf-write-readback-2026-11-08.json).
 The `*T` block/object graph transaction and independent source/native
@@ -1182,7 +1183,7 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    four categories of distinct row values. These are generated codec mappings,
    not producer ordering, native precedence, or rendering qualification.
    AC1018 cell-level fill-state, indexed background/content colors, and
-   uniquely resolved text-style hard pointers now map through groups 283/63/64/7
+   uniquely resolved text-style handles/names now map through groups 283/63/64/7
    with generated ASCII/Binary readback and refusal/retry controls. Group 283's
    stored boolean remains uninterpreted. See the [cell-appearance receipt](docs/research/p5-ac1018-table-cell-appearance-dxf-write-readback-2026-11-08.json).
    This closes the selected codec slice only; physical ordering, native

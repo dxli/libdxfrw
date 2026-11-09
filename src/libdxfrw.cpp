@@ -11821,14 +11821,17 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
         if ((cell.m_overrideFlags & textStyleFlag) == 0u)
             return cell.m_textStyleOverrideHandle == 0u;
         const std::uint32_t sourceHandle = cell.m_textStyleOverrideHandle;
-        if (sourceHandle == 0u || sourceHandle == DRW::NoHandle
-            || m_writingContext.ambiguousSourceHandles.count(sourceHandle) != 0u)
+        if (sourceHandle != 0u
+            && m_writingContext.ambiguousSourceHandles.count(sourceHandle) != 0u)
             return false;
-        const auto sourceName = m_sourceTextStyleNamesByHandle.find(sourceHandle);
-        if (sourceName == m_sourceTextStyleNamesByHandle.end())
+        const auto sourceName = sourceHandle == 0u
+            ? m_sourceTextStyleNamesByHandle.end()
+            : m_sourceTextStyleNamesByHandle.find(sourceHandle);
+        if (sourceHandle != 0u
+            && sourceName == m_sourceTextStyleNamesByHandle.end())
             return false;
-        const std::string& name = sourceName->second;
-        const std::string key = dxfSymbolNameKey(name);
+        const std::string key = dxfSymbolNameKey(
+            sourceHandle == 0u ? cell.m_textStyleName : sourceName->second);
         const std::size_t sourceNameMatches = static_cast<std::size_t>(
             std::count_if(m_sourceTextStyleNamesByHandle.begin(),
                           m_sourceTextStyleNamesByHandle.end(),
@@ -11836,12 +11839,12 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
                     return candidate.second == key;
                 }));
         if (key.empty() || sourceNameMatches != 1u
-            || getTextStyleHandle(name) == DRW::NoHandle
-            || !isSafeDxfRecordText(name)
+            || getTextStyleHandle(key) == DRW::NoHandle
+            || !isSafeDxfRecordText(key)
             || (!cell.m_textStyleName.empty()
                 && dxfSymbolNameKey(cell.m_textStyleName) != key))
             return false;
-        resolvedName = name;
+        resolvedName = key;
         return true;
     };
 

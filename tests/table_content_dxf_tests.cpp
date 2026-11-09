@@ -2298,7 +2298,8 @@ bool tableCellAppearanceOverrideWriteTests(
     };
     const auto verify = [&](bool binary, bool fillState,
                             int backgroundColor, int contentColor,
-                            bool withTextStyle) {
+                            bool withTextStyle,
+                            bool styleByNameOnly) {
         dx_data data;
         dx_iface exporter;
         tableExportReuseDrawing(exporter, data, 0u, false);
@@ -2314,7 +2315,10 @@ bool tableCellAppearanceOverrideWriteTests(
             style.handle = 0xA70u;
             style.name = "CELLOVERRIDESTYLE";
             exporter.addTextStyle(style);
-            cell.m_textStyleOverrideHandle = style.handle;
+            if (styleByNameOnly)
+                cell.m_textStyleName = style.name;
+            else
+                cell.m_textStyleOverrideHandle = style.handle;
         }
         if (!exporter.fileExport(path.string(), DRW::AC1018, binary,
                                  &data, false)) {
@@ -2387,8 +2391,9 @@ bool tableCellAppearanceOverrideWriteTests(
     };
 
     for (bool binary : {false, true}) {
-        if (!verify(binary, false, 0, 256, false)
-            || !verify(binary, true, 3, 4, true))
+        if (!verify(binary, false, 0, 256, false, false)
+            || !verify(binary, true, 3, 4, true, false)
+            || !verify(binary, true, 5, 6, true, true))
             return false;
 
         dx_data data;

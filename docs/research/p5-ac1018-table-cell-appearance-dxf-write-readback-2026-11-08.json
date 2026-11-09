@@ -24,7 +24,7 @@
     "constraints": [
       "Group 283 is emitted when selected even when its stored boolean is false; the wire value is preserved verbatim without assigning fill semantics.",
       "Groups 63/64 are emitted only for selected cell overrides and only for canonical indexed color values 0 through 256 with method 0.",
-      "A selected text-style hard pointer is emitted as group 7 only when its source STYLE handle resolves to exactly one safe, emitted STYLE name; unresolved or ambiguous pointers fail closed.",
+      "A selected text-style hard pointer or name-only DXF cell override is emitted as group 7 only when it resolves to exactly one safe, emitted STYLE name; unresolved or ambiguous references fail closed.",
       "Unselected color/state residue, unsupported color methods, unknown override bits, and unresolved STYLE pointers are refused before output publication."
     ],
     "public_dwg_table_writer": "remains disabled"
@@ -48,6 +48,17 @@
         "content_color_index": 4,
         "text_style": "CELLOVERRIDESTYLE",
         "encodings": ["ASCII", "Binary"],
+        "text_style_source": "DWG hard-pointer handle",
+        "result": "unique STYLE resolution, selected group presence/order, typed readback, and semantic completeness verified"
+      },
+      {
+        "override_flags": "0x1e",
+        "fill_state": true,
+        "background_color_index": 5,
+        "content_color_index": 6,
+        "text_style": "CELLOVERRIDESTYLE",
+        "encodings": ["ASCII", "Binary"],
+        "text_style_source": "name-only DXF cell override",
         "result": "unique STYLE resolution, selected group presence/order, typed readback, and semantic completeness verified"
       }
     ],
