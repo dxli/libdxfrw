@@ -2692,6 +2692,7 @@ struct MLineStyleFrame {
     std::vector<std::uint8_t> stringBytes;
     std::vector<std::uint8_t> handleBytes;
     std::uint32_t handleBits {0};
+    std::uint64_t handleStartBit {0};
 };
 
 struct MLeaderStyleFrame {
@@ -2753,6 +2754,24 @@ bool makeMLeaderStyleFrame(DRW::Version version,
         return false;
     frame.bytes = object.data();
     return true;
+}
+
+bool makeMLineStyleR2018HandleStream(
+        std::uint32_t parent, const std::vector<std::uint32_t>& linetypes,
+        const std::vector<std::uint8_t>& rawCodes, dwgBufferW& handles) {
+    if (linetypes.size() != rawCodes.size())
+        return false;
+    dwgHandle parentHandle;
+    parentHandle.code = DRW::DwgSoftPointer;
+    parentHandle.ref = parent;
+    handles.putHandle(parentHandle);
+    for (std::size_t i = 0; i < linetypes.size(); ++i) {
+        dwgHandle handle;
+        handle.code = rawCodes[i];
+        handle.ref = linetypes[i];
+        handles.putHandle(handle);
+    }
+    return handles.isGood();
 }
 
 bool makeTableStyleFrame(DRW::Version version, std::int32_t styleType,
@@ -4803,6 +4822,8 @@ bool makeMLineStyleFrame(DRW::Version version,
     object.putBitLong(static_cast<std::int32_t>(
         source.reactorHandles.size()));
     object.putBit(source.extensionDictionaryFlag());
+    if (version > DRW::AC1024)
+        object.putBit(0u); // no R2013+ AcDs binary data
     appendBits(object, bodyData);
     object.alignToByte();
 
@@ -4821,6 +4842,7 @@ bool makeMLineStyleFrame(DRW::Version version,
     object.putBit(1u); // bounded R2007+ string stream
     object.alignToByte();
 
+    frame.handleStartBit = static_cast<std::uint64_t>(object.size()) * 8u;
     dwgBufferW handles = handleData;
     dwgHandle sentinel;
     sentinel.code = DRW::DwgHardPointer;
@@ -5248,6 +5270,156 @@ void testDbColorUnsupportedMethodRefusal(TestContext& t) {
     }
 }
 
+void testMLineStyleR2018HandleRoles(TestContext& t) {
+    DRW_TextCodec codec;
+    codec.setVersion(DRW::AC1032, false);
+    MLineStyleCodecProbe source;
+    source.handle = 0xA100u;
+    source.parentHandle = 0xA200u;
+    source.setDwgCommonObjectState(0, 1, false);
+    source.name = "R2018_HANDLE_PROFILE";
+    source.description = "generated handle-role control";
+    source.flags = 3;
+    source.fillColor = 256;
+    source.startAngle = 0.5;
+    source.endAngle = 1.25;
+    for (std::size_t i = 0; i < 2u; ++i) {
+        DRW_MLineElement element;
+        element.offset = i == 0u ? 0.5 : -0.25;
+        element.color = 256;
+        element.linetypeHandle = i == 0u ? 0xA301u : 0xA302u;
+        source.elements.push_back(std::move(element));
+    }
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    const bool encoded = source.encodeDwg(
+        DRW::AC1032, &body, &strings, &handles);
+    t.expect(encoded && body.isGood() && strings.isGood()
+                 && handles.isGood(),
+             "AC1032 MLINESTYLE source with per-element handle references builds");
+    if (!encoded)
+        return;
+    MLineStyleFrame frame;
+    const bool framed = makeMLineStyleFrame(
+        DRW::AC1032, source, body, strings, handles, frame);
+    t.expect(framed, "AC1032 MLINESTYLE handle frame builds");
+    if (!framed)
+        return;
+
+    dwgBuffer wire(frame.handleBytes.data(), frame.handleBytes.size());
+    const dwgHandle parent = wire.getHandle();
+    bool spansMatch = wire.isGood() && parent.rawCode == DRW::DwgSoftPointer
+        && parent.ref == source.parentHandle;
+    MLineStyleCodecProbe parsed;
+    dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+    const bool parsedOk = parsed.parseDwg(DRW::AC1032, &input,
+                                          frame.handleBits);
+    const auto& spans = parsed.getLinetypeHandleSpans();
+    spansMatch = spansMatch && parsedOk && spans.size() == 2u
+        && parsed.elements.size() == 2u;
+    for (std::size_t i = 0; spansMatch && i < 2u; ++i) {
+        const std::uint64_t startBit = frame.handleStartBit
+            + static_cast<std::uint64_t>(wire.getPosition()) * 8u
+            + wire.getBitPos();
+        const dwgHandle expected = wire.getHandle();
+        const std::uint64_t endBit = frame.handleStartBit
+            + static_cast<std::uint64_t>(wire.getPosition()) * 8u
+            + wire.getBitPos();
+        const DRW_DwgSubrecordRange& span = spans[i];
+        spansMatch = wire.isGood()
+            && expected.rawCode == DRW::DwgHardPointer
+            && expected.ref == source.elements[i].linetypeHandle
+            && span.m_name == "element[" + std::to_string(i)
+                + "].linetypeHandle"
+            && span.m_startBit == startBit
+            && span.m_bitSize == endBit - startBit
+            && span.m_version == DRW::AC1032
+            && span.m_rawHandleCode == expected.rawCode
+            && span.m_parseComplete
+            && parsed.elements[i].linetypeHandle == expected.ref;
+    }
+    const dwgHandle sentinel = wire.getHandle();
+    spansMatch = spansMatch && wire.isGood()
+        && sentinel.rawCode == DRW::DwgHardPointer
+        && sentinel.ref == 0xCAFEu;
+    t.expect(spansMatch,
+             "AC1032 MLINESTYLE hard-pointer roles and exact spans match an independent handle-stream walk");
+
+    for (std::size_t wrongIndex = 0; wrongIndex < 2u; ++wrongIndex) {
+        std::vector<std::uint8_t> roles(2u, DRW::DwgHardPointer);
+        roles[wrongIndex] = DRW::DwgSoftPointer;
+        dwgBufferW wrongHandles(&codec);
+        const bool built = makeMLineStyleR2018HandleStream(
+            source.parentHandle,
+            {source.elements[0].linetypeHandle,
+             source.elements[1].linetypeHandle}, roles, wrongHandles);
+        MLineStyleFrame wrongFrame;
+        const bool wrongFramed = built && makeMLineStyleFrame(
+            DRW::AC1032, source, body, strings, wrongHandles, wrongFrame);
+        t.expect(wrongFramed,
+                 "AC1032 MLINESTYLE wrong-role frame builds");
+        if (!wrongFramed)
+            continue;
+        dwgBuffer wrongInput(wrongFrame.bytes.data(),
+                             wrongFrame.bytes.size(), &codec);
+        const bool rejected = !parsed.parseDwg(
+            DRW::AC1032, &wrongInput, wrongFrame.handleBits);
+        t.expect(rejected && parsed.elements.empty()
+                     && parsed.getLinetypeHandleSpans().empty(),
+                 "AC1032 MLINESTYLE rejects each non-hard linetype role atomically");
+        dwgBuffer retryInput(frame.bytes.data(), frame.bytes.size(), &codec);
+        t.expect(parsed.parseDwg(DRW::AC1032, &retryInput,
+                                 frame.handleBits)
+                     && parsed.getLinetypeHandleSpans().size() == 2u,
+                 "AC1032 MLINESTYLE corrected role retries on the same object");
+    }
+
+    dwgBufferW nullHandles(&codec);
+    const bool nullBuilt = makeMLineStyleR2018HandleStream(
+        source.parentHandle,
+        {0u, source.elements[1].linetypeHandle},
+        {DRW::DwgNullReference, DRW::DwgHardPointer}, nullHandles);
+    MLineStyleFrame nullFrame;
+    const bool nullFramed = nullBuilt && makeMLineStyleFrame(
+        DRW::AC1032, source, body, strings, nullHandles, nullFrame);
+    bool nullRead = false;
+    if (nullFramed) {
+        dwgBuffer nullInput(nullFrame.bytes.data(), nullFrame.bytes.size(),
+                            &codec);
+        nullRead = parsed.parseDwg(DRW::AC1032, &nullInput,
+                                   nullFrame.handleBits);
+    }
+    t.expect(nullFramed && nullRead
+                 && !parsed.elements.empty()
+                 && parsed.elements[0].linetypeHandle == 0u
+                 && parsed.getLinetypeHandleSpans().size() == 2u
+                 && parsed.getLinetypeHandleSpans()[0].m_rawHandleCode
+                     == DRW::DwgNullReference,
+             "AC1032 MLINESTYLE accepts only the canonical null linetype handle");
+
+    dwgBuffer truncationCursor(frame.handleBytes.data(),
+                               frame.handleBytes.size());
+    (void)truncationCursor.getHandle();
+    (void)truncationCursor.getHandle();
+    const std::uint64_t truncatedHandleBits =
+        static_cast<std::uint64_t>(truncationCursor.getPosition()) * 8u
+        + truncationCursor.getBitPos();
+    MLineStyleFrame truncatedFrame = frame;
+    truncatedFrame.handleBits = static_cast<std::uint32_t>(
+        truncatedHandleBits);
+    dwgBuffer truncatedInput(truncatedFrame.bytes.data(),
+                             truncatedFrame.bytes.size(), &codec);
+    const bool truncatedRejected = !parsed.parseDwg(
+        DRW::AC1032, &truncatedInput, truncatedFrame.handleBits);
+    t.expect(truncatedRejected && parsed.elements.empty()
+                 && parsed.getLinetypeHandleSpans().empty(),
+             "AC1032 MLINESTYLE truncated final handle resets parsed fields");
+    dwgBuffer retryInput(frame.bytes.data(), frame.bytes.size(), &codec);
+    t.expect(parsed.parseDwg(DRW::AC1032, &retryInput, frame.handleBits)
+                 && parsed.getLinetypeHandleSpans().size() == 2u,
+             "AC1032 MLINESTYLE succeeds after same-object truncation retry");
+}
+
 void testMLineStyleCmcRetention(TestContext& t) {
     struct ColorCase {
         std::uint32_t scalar;
@@ -5398,6 +5570,8 @@ void testMLineStyleCmcRetention(TestContext& t) {
                  && parsed.startAngle == source.startAngle
                  && parsed.endAngle == source.endAngle && parsedColors,
              "MLINESTYLE parser retains C0-C3 CMC and following fields");
+    t.expect(parsed.getLinetypeHandleSpans().empty(),
+             "pre-R2018 MLINESTYLE keeps inline linetype indices without handle spans");
 
     dwgBufferW anomalousBody(&codec);
     appendBits(anomalousBody, body);
@@ -25428,6 +25602,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testMLineStyleCmcRetention(context);
         std::cout << "MLINESTYLE CMC retention: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--ac1032-mlinestyle-handle-roles") {
+        TestContext context;
+        testMLineStyleR2018HandleRoles(context);
+        std::cout << "AC1032 MLINESTYLE per-element handle roles: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

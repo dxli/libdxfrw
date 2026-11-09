@@ -2075,6 +2075,19 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    dictionary edge. The peer PLACEHOLDER evidence is scoped to the same source
    and exact AC1027 graph; it does not replace the ODA authority.
 
+   **Completed generated AC1032 MLINESTYLE handle-role parser slice
+   (2026-11-09):** ODA §20.4.73 changes per-element linetype fields from
+   inline BS indices to H hard pointers in R2018+. `DRW_MLineStyle::parseDwg`
+   now validates those roles, permits only canonical null, and retains ordered
+   exact handle-stream spans transactionally. Generated controls independently
+   walk the stream through a sentinel, reject each wrong role, and verify
+   truncation reset plus same-object corrected retry; a pre-R2018 control
+   confirms inline indices add no handle spans. The focused build and both
+   object-vector CTests pass. This is generated parser evidence only: there is
+   no physical AC1032 producer witness, target-graph closure, output admission,
+   or native-consumer qualification. No fixture was added. See the
+   [AC1032 MLINESTYLE receipt](docs/research/p6-ac1032-mlinestyle-linetype-handle-roles-2026-11-09.json).
+
    **AC1027 MATERIAL default parser profile completed; DWG encoding remains open.**
    The three type-502 MATERIAL frames (handles 68/69/70; keys
    ByLayer/ByBlock/Global) match LibreDWG minJSON from the same Cover source by

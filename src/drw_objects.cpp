@@ -20259,7 +20259,7 @@ bool DRW_MLineStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_
     DRW_DBG("\n***************************** parsing MLineStyle ***************************************\n");
     if (!ret)
         return fail();
-    // Per ODA spec §19.4.73 / libreDWG dwg_decode_MLINESTYLE:
+    // Per ODA spec §20.4.73 / LibreDWG dwg_decode_MLINESTYLE:
     //   TV name, TV description, BS flags, CMC fill_color, BD start_angle,
     //   BD end_angle, RC num_lines, then per-line: BD offset, CMC color,
     //   BS lt_index OR H lt_handle (handle in handle stream R2007+).
@@ -20377,11 +20377,41 @@ bool DRW_MLineStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_
     if (!hBuf->isGood()
         || !parsed.readDwgObjectCommonHandles(version, hBuf, &parsedParentHandle, &parsedReactors, &parsedXDictHandle))
         return fail();
+    std::vector<DRW_DwgSubrecordRange> parsedLinetypeHandleSpans;
     if (version >= DRW::AC1032) {  // R2018+: linetypes are handles
+        if (!DRW::reserve(parsedLinetypeHandleSpans,
+                          static_cast<int>(parsedElements.size())))
+            return fail();
         for (DRW_MLineElement& e : parsedElements) {
+            std::uint64_t startBit = 0u;
+            if (!objectCurrentBit(*hBuf, startBit))
+                return fail();
             dwgHandle linetypeHandle;
             if (!parsed.readDwgObjectHandleWithinFrame(version, *hBuf, false, linetypeHandle))
                 return fail();
+            std::uint64_t endBit = 0u;
+            if (!objectCurrentBit(*hBuf, endBit) || endBit < startBit)
+                return fail();
+            const bool canonicalNull = linetypeHandle.ref == 0u
+                && linetypeHandle.rawCode == DRW::DwgNullReference;
+            if (linetypeHandle.rawCode != DRW::DwgHardPointer
+                && !canonicalNull) {
+                DRW_DBG("MLINESTYLE element linetype handle role mismatch: ");
+                DRW_DBG(static_cast<unsigned int>(linetypeHandle.rawCode));
+                DRW_DBG(" target "); DRW_DBG(linetypeHandle.ref);
+                DRW_DBG("\n");
+                return fail();
+            }
+            DRW_DwgSubrecordRange span;
+            span.m_name = "element["
+                + std::to_string(parsedLinetypeHandleSpans.size())
+                + "].linetypeHandle";
+            span.m_startBit = startBit;
+            span.m_bitSize = endBit - startBit;
+            span.m_version = version;
+            span.m_rawHandleCode = linetypeHandle.rawCode;
+            span.m_parseComplete = true;
+            parsedLinetypeHandleSpans.push_back(std::move(span));
             e.linetypeHandle = linetypeHandle.ref;
             DRW_DBG(" mlinestyle element linetype Handle: ");
             DRW_DBG(e.linetypeHandle); DRW_DBG("\n");
@@ -20401,6 +20431,7 @@ bool DRW_MLineStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_
     parsed.startAngle = parsedStartAngle;
     parsed.endAngle = parsedEndAngle;
     parsed.elements = std::move(parsedElements);
+    parsed.m_linetypeHandleSpans = std::move(parsedLinetypeHandleSpans);
     parsed.parentHandle = parsedParentHandle;
     parsed.reactorHandles = std::move(parsedReactors);
     parsed.xDictHandle = parsedXDictHandle;

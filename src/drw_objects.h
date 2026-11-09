@@ -6400,6 +6400,7 @@ public:
     dxfElementCountSeen = false;
     dxfStyleFieldsSeen = 0u;
     dxfElementFieldMasks.clear();
+    m_linetypeHandleSpans.clear();
     DRW_TableEntry::reset();
   }
   [[nodiscard]] bool validateDxfRecord() const noexcept;
@@ -6442,6 +6443,13 @@ private:
   std::vector<std::uint8_t> dxfElementFieldMasks;
   // Logical bytes retained by DXF-parsed description text only.
   std::size_t m_dxfRetainedDescriptionBytes {0u};
+  // Ordered per-element R2018+ linetype handle spans from the DWG handle
+  // stream. Empty for versions that store linetype indices inline.
+  std::vector<DRW_DwgSubrecordRange> m_linetypeHandleSpans;
+
+public:
+  [[nodiscard]] const std::vector<DRW_DwgSubrecordRange>&
+  getLinetypeHandleSpans() const noexcept { return m_linetypeHandleSpans; }
 };
 
 //! Class to handle MLEADERSTYLE (ODA spec §20.4.87, AcDbMLeaderStyle).
