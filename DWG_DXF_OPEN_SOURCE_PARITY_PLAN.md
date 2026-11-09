@@ -3845,6 +3845,47 @@ unqualified; it cannot promote support claims
 
 ## P8 — consumer, platform, packaging and release gates
 
+### Upstream LibreCAD adapter bridge (bounded fast slice)
+
+The isolated LibreCAD `origin/master` checkout at `9889c13cdc2ef18b774abd9ff00a652594f07485`
+now has a focused adapter bridge at `e216b44e763a87374556bad13e16628ff95e574c`.
+It makes `DRW_Interface` public for provider cross-casts, implements opt-in
+default plot-style/material providers with fail-closed opaque-reference and
+existing-graph checks, binds a synthesized layer 0 to the planned Global
+material, and converts hatch angles at the API boundary when building against
+upstream's degree-valued fields while preserving the bundled fork's
+radian-valued API. The generated default-graph adapter test passes (80
+assertions in 2 cases) against the upstream libdxfrw overlay. It verifies
+write/readback and LibreCAD import/re-export/readback for AC1021/AC1024/AC1027,
+including suppression of both synthesized graphs when group-1005 XDATA carries
+an opaque handle. The three focused hatch-unit cases pass (19 assertions).
+This is bounded compile/transport/readback evidence, not native consumer
+semantics, ABI qualification, or platform qualification.
+
+The matching libdxfrw writer change permits a supplied AC1027 layer 0 only when
+its material reference is the exact staged Global handle; arbitrary supplied
+material references remain refused. The focused
+`libdxfrw_dwg_default_material_optin_tests` passes, including its generated
+AC1021/AC1024/AC1027 readback controls. The adapter and writer receipts are
+recorded in [the P8 fast adapter bridge receipt](docs/research/p8-upstream-librecad-default-graph-adapter-bridge-2026-11-08.json).
+The writer/test edits are local working-tree changes based on
+`6466df12dfb272e1595bcc010681d318c330a04b`; only the isolated consumer slice
+is committed. Do not treat either test as closing native Linux/Windows FreeCAD,
+clean-consumer ABI, or broader DWG graph/output qualification.
+
+**P8 default-graph same-version replay:** the failed import/re-export probe
+identified dictionary children emitted as raw carriers but validated as generic
+objects before their frames were written. The adapter now reserves eligible
+raw identities during CLASSES admission, resolves DICTIONARY entries with the
+actual RawCarrier kind, and avoids treating reservation-only typed identities
+as selected outputs. Generated AC1021/AC1024/AC1027 import → LibreCAD export →
+readback now passes with exactly one plot-style dictionary/placeholder and
+three MATERIAL records, plus the LINE. This closes only the generated
+same-version graph round-trip. The broad hatch microtarget remains 7/9 due to
+an absent `support/library/misc/a3.dxf` and a legacy version-comment expectation;
+the three relevant focused cases pass. See the [P8 adapter bridge
+receipt](docs/research/p8-upstream-librecad-default-graph-adapter-bridge-2026-11-08.json).
+
 The plot-style provider passes the LibreCAD_3 facade compile guard and the
 FreeCAD 1.1.4 converter subprocess contract in build-tree and installed CLI
 tests. Native application execution, binary ABI and Linux/Windows remain

@@ -302,7 +302,7 @@ bool directControls() {
 enum class Mode { Normal, EarlyRoot, SourceRoot, HeaderInvalid, HeaderGlobal, EarlyMaterialClass, LateMaterialClass,
                   EarlyRawSection, LateRawSection, LateRoot, NodAlias, GroupAlias, DictionaryOwner,
                   DictionaryChild, DictionaryHandle, XrecordOwner, RawObject, CallerMaterial,
-                  SuppliedLayer, LateEntityHandle };
+                  SuppliedLayer, SuppliedLayerGlobal, LateEntityHandle };
 struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultPlotStyleProvider {
     explicit Adapter(dwgRW& writer) : output(writer) {}
     bool wantsDwgDefaultMaterialGraph() const override { return enabled; }
@@ -362,8 +362,10 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
             rejected = !output.registerDwgGroupDictionaryEntry("ALIAS", handles[slot]);
     }
     void writeLayers() override {
-        if (mode == Mode::SuppliedLayer) {
-            DRW_Layer layer; layer.name="0"; layer.materialHandle.ref=0xB200u;
+        if (mode == Mode::SuppliedLayer || mode == Mode::SuppliedLayerGlobal) {
+            DRW_Layer layer; layer.name="0";
+            layer.materialHandle.ref = mode == Mode::SuppliedLayerGlobal
+                ? handles[3] : 0xB200u;
             supplied = output.addLayer(&layer);
         }
     }
@@ -615,6 +617,12 @@ int main(int argc,char**argv) {
             adapter.mode=Mode::Normal;
             if (!output.write(&adapter,version,true)||!inspect(path,adapter.handles,false,version)) return 1;
         } else if(!output.write(&adapter,version,true)||!adapter.supplied||!inspect(path,adapter.handles,true,version)) {std::cerr<<"supplied layer failed\n";return 1;}
+        adapter.mode=Mode::SuppliedLayerGlobal;
+        if (!output.write(&adapter, version, true) ||
+            !inspect(path, adapter.handles, false, version)) {
+            std::cerr << "supplied layer with planned Global material failed\n";
+            return 1;
+        }
         if (version == DRW::AC1027) {
             adapter.plotEnabled=false;
             {std::ofstream f(path,std::ios::binary);f<<"prior destination";}

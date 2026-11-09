@@ -7600,7 +7600,8 @@ bool dwgWriter15::writeDwgObjects() {
                 layerChildren))
             return false;
         if (m_haveLayer0) {
-            if (m_version == DRW::AC1027 && defaultDwgMaterialGraphActive())
+            if (m_version == DRW::AC1027 && defaultDwgMaterialGraphActive()
+                && m_layer0.materialHandle.ref != m_defaultMaterialHandles[3])
                 return false;
             if (!emitLayerRecord(DRW::DwgLayer0Handle, m_layer0))
                 return false;
