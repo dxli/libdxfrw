@@ -1,13 +1,14 @@
 # DWG/DXF parity — remaining implementation plan
 
-**Resume checkpoint (2026-11-08, latest retry):** after the user said they
-would unlock the Mac, the desktop inventory still reported the session locked
-and exposed no native app surface. A fresh direct ODA File Converter 27.1
-`-help` invocation again exited 134 during Pasteboard/XPC initialization, before
-argument or document processing. No post-unlock native conversion result was
-observed. Keep native qualification pending; do not repeat the unchanged ODA CLI
-route until the desktop reports an unlocked session or the launch path materially
-changes. The latest local TABLE work extends commit `410f6c51` with
+**Resume checkpoint (2026-11-08, latest desktop check):** after the user said
+they would unlock the Mac, the desktop inventory still reported the session
+locked and exposed no native app surface. No ODA process was retried in this
+check because the unchanged CLI route has already failed during Pasteboard/XPC
+initialization before argument or document processing. No new native conversion
+result was observed. Keep native qualification pending; do not repeat the
+unchanged ODA CLI route until the desktop reports an unlocked session or the
+launch path materially changes. The latest local TABLE work extends commit
+`410f6c51` with
 order-independent group-141/142 dimension retention and fail-closed handling
 for nonzero group-94 border-color masks. Focused ASCII/Binary controls pass
 ([dimension receipt](docs/research/p5-dxf-table-physical-dimension-cardinality-2026-11-08.json),
@@ -2374,8 +2375,16 @@ excess/duplicate, contradictory-count and nonpositive values incomplete; the
 DXF reader rejects non-finite spellings. Group-141 physical row heights remain
 separate from group-140 title/header/data style-height overrides. Generated
 ASCII/Binary controls pass through the focused legacy TABLE height selector.
-This is parser-integrity/order evidence, not native producer/rendering or
-broader TABLE qualification; see the [physical dimension cardinality
+The current positive-finite value rule is a conservative fail-closed
+implementation constraint, not a confirmed DXF numeric-domain requirement:
+Autodesk's [TABLE DXF definition](https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-D8CCD2F0-18A3-42BB-A64D-539114A07DA0.htm)
+documents the repetition counts but gives no numeric range, and the
+[AcDbTable::setRowHeight API entry](https://help.autodesk.com/cloudhelp/2027/ENU/OARX-RefGuide/files/OARX-RefGuide-AcDbTable__setRowHeight_int_double.html)
+describes the argument without specifying its accepted range. Keep the
+conservative refusal until an eligible producer/native probe or authoritative
+API contract establishes the boundary; do not describe zero/negative values as
+spec-invalid. This remains parser-integrity/order evidence, not native producer,
+rendering or broader TABLE qualification; see the [physical dimension cardinality
 receipt](docs/research/p5-dxf-table-physical-dimension-cardinality-2026-11-08.json).
 
 **TABLE border-color mask (group 94):** ODA v5.4.1 §20.4.96.1 defines 18
