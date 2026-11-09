@@ -4628,10 +4628,41 @@ bool DRW_Dimstyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
                                     &parsedXDictHandle, handleEndBit))
         return fail();
 
-    dwgHandle ignoredXref;
-    if (!readBoundedObjectHandle(*handleBuf, parsed.handle, false, ignoredXref,
-                                 handleEndBit))
-        return fail();
+    std::vector<DRW_DwgSubrecordRange> parsedHandleFieldSpans;
+    const auto readBodyHandle = [version, baseHandle = parsed.handle,
+                                 handleBuf, handleEndBit,
+                                 &parsedHandleFieldSpans](
+        const char *name, dwgHandle& value) {
+        std::uint64_t startBit = 0u;
+        if (!objectCurrentBit(*handleBuf, startBit))
+            return false;
+        dwgHandle field;
+        if (!readBoundedObjectHandle(*handleBuf, baseHandle, false, field,
+                                     handleEndBit))
+            return false;
+        std::uint64_t endBit = 0u;
+        if (!objectCurrentBit(*handleBuf, endBit) || endBit < startBit)
+            return false;
+        const bool canonicalNull = field.ref == 0u
+            && field.rawCode == DRW::DwgNullReference;
+        if (field.rawCode != DRW::DwgHardPointer && !canonicalNull) {
+            DRW_DBG("DIMSTYLE body hard-pointer role mismatch for ");
+            DRW_DBG(name); DRW_DBG(": raw code ");
+            DRW_DBG(static_cast<unsigned int>(field.rawCode));
+            DRW_DBG(" target "); DRW_DBG(field.ref); DRW_DBG("\n");
+            return false;
+        }
+        DRW_DwgSubrecordRange span;
+        span.m_name = name;
+        span.m_startBit = startBit;
+        span.m_bitSize = endBit - startBit;
+        span.m_version = version;
+        span.m_parseComplete = true;
+        parsedHandleFieldSpans.push_back(std::move(span));
+        value = field;
+        return true;
+    };
+    dwgHandle parsedXrefBlock;
     dwgHandle parsedDimTextStyle;
     dwgHandle parsedDimLeaderBlock;
     dwgHandle parsedDimBlock;
@@ -4640,27 +4671,20 @@ bool DRW_Dimstyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
     dwgHandle parsedDimLType;
     dwgHandle parsedDimLTex1;
     dwgHandle parsedDimLTex2;
-    if (!readBoundedObjectHandle(*handleBuf, parsed.handle, false,
-                                 parsedDimTextStyle, handleEndBit))
+    if (!readBodyHandle("xrefBlock", parsedXrefBlock)
+        || !readBodyHandle("dimtxsty", parsedDimTextStyle))
         return fail();
     if (version >= DRW::AC1015) {
-        if (!readBoundedObjectHandle(*handleBuf, parsed.handle, false,
-                                     parsedDimLeaderBlock, handleEndBit)
-            || !readBoundedObjectHandle(*handleBuf, parsed.handle, false,
-                                        parsedDimBlock, handleEndBit)
-            || !readBoundedObjectHandle(*handleBuf, parsed.handle, false,
-                                        parsedDimBlock1, handleEndBit)
-            || !readBoundedObjectHandle(*handleBuf, parsed.handle, false,
-                                        parsedDimBlock2, handleEndBit))
+        if (!readBodyHandle("leaderBlock", parsedDimLeaderBlock)
+            || !readBodyHandle("dimblk", parsedDimBlock)
+            || !readBodyHandle("dimblk1", parsedDimBlock1)
+            || !readBodyHandle("dimblk2", parsedDimBlock2))
             return fail();
     }
     if (version >= DRW::AC1021) {
-        if (!readBoundedObjectHandle(*handleBuf, parsed.handle, false,
-                                     parsedDimLType, handleEndBit)
-            || !readBoundedObjectHandle(*handleBuf, parsed.handle, false,
-                                        parsedDimLTex1, handleEndBit)
-            || !readBoundedObjectHandle(*handleBuf, parsed.handle, false,
-                                        parsedDimLTex2, handleEndBit))
+        if (!readBodyHandle("dimltype", parsedDimLType)
+            || !readBodyHandle("dimltex1", parsedDimLTex1)
+            || !readBodyHandle("dimltex2", parsedDimLTex2))
             return fail();
     }
     if (!buf->isGood() || !handleBuf->isGood())
@@ -4669,6 +4693,7 @@ bool DRW_Dimstyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
     parsed.parentHandle = parsedParentHandle;
     parsed.reactorHandles = std::move(parsedReactors);
     parsed.xDictHandle = parsedXDictHandle;
+    parsed.xrefBlockHandle = parsedXrefBlock;
     parsed.dimtxstyH = parsedDimTextStyle;
     parsed.dimldrblkH = parsedDimLeaderBlock;
     parsed.dimblkH = parsedDimBlock;
@@ -4677,6 +4702,7 @@ bool DRW_Dimstyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
     parsed.dimltypeH = parsedDimLType;
     parsed.dimltex1H = parsedDimLTex1;
     parsed.dimltex2H = parsedDimLTex2;
+    parsed.m_dwgHandleFieldSpans = std::move(parsedHandleFieldSpans);
     parsed.syncStructToVars();
     *this = std::move(parsed);
     return true;
@@ -8875,7 +8901,7 @@ bool DRW_Dimstyle::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
             value.code = DRW::DwgHardPointer;
         return value;
     };
-    hb->putHandle(hardReference(0)); // external-reference block
+    hb->putHandle(hardReference(xrefBlockHandle.ref));
     hb->putHandle(hardReference(dimtxstyH.ref));
     if (version >= DRW::AC1015) {
         hb->putHandle(hardReference(dimldrblkH.ref));

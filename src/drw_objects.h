@@ -2028,8 +2028,10 @@ public:
     dimaltmzf = dimmzf = 1.0;
     dimaltmzs.clear();
     dimmzs.clear();
+    xrefBlockHandle = dwgHandle{};
     dimtxstyH = dimldrblkH = dimblkH = dimblk1H = dimblk2H = dwgHandle{};
     dimltypeH = dimltex1H = dimltex2H = dwgHandle{};
+    m_dwgHandleFieldSpans.clear();
     m_dxfRetainedTextBytes.fill(0u);
     clearVars();
     DRW_TableEntry::reset();
@@ -2127,7 +2129,12 @@ public:
   UTF8STRING dimaltmzs;   /*!< T   V2010+ */
   double dimmzf{1.0};     /*!< BD  V2010+ */
   UTF8STRING dimmzs;      /*!< T   V2010+ */
+  //! Exact DWG handle-stream spans for DIMSTYLE body references.
+  //! Common owner/reactor/xdictionary handles are recorded separately.
+  [[nodiscard]] const std::vector<DRW_DwgSubrecordRange>&
+  dwgHandleFieldSpans() const noexcept { return m_dwgHandleFieldSpans; }
   // Phase 3A.1: resolved handle-stream refs (mirror DRW_Layer::lTypeH).
+  dwgHandle xrefBlockHandle; /*!< external-reference block hard pointer */
   dwgHandle dimtxstyH;  /*!< code 340 */
   dwgHandle dimldrblkH; /*!< code 341 */
   dwgHandle dimblkH;    /*!< code 342 */
@@ -2166,6 +2173,9 @@ private:
   DRW::Version m_dxfDimensionSourceVersion {DRW::UNKNOWNV};
   // Live logical text bytes retained by the DIMSTYLE DXF parser fields.
   std::array<std::size_t, 7> m_dxfRetainedTextBytes{};
+  // Appended DIMSTYLE source metadata; consumers must rebuild after this
+  // public structure grows. Handle targets still require graph resolution.
+  std::vector<DRW_DwgSubrecordRange> m_dwgHandleFieldSpans;
 
   bool syncStructToVarsImpl(dxfReader* reader);
   bool syncStructToVarsForDxfRead(dxfReader& reader);
@@ -2213,6 +2223,8 @@ private:
     m_dxfDimensionPresence = o.m_dxfDimensionPresence;
     m_dxfDimensionSourceVersion = o.m_dxfDimensionSourceVersion;
     m_dxfRetainedTextBytes = o.m_dxfRetainedTextBytes;
+    if (copyStrings)
+      m_dwgHandleFieldSpans = o.m_dwgHandleFieldSpans;
     if (copyStrings) {
       dimpost = o.dimpost;
       dimapost = o.dimapost;
@@ -2318,6 +2330,7 @@ private:
     if (copyStrings)
       dimmzs = o.dimmzs;
     dimtxstyH = o.dimtxstyH;
+    xrefBlockHandle = o.xrefBlockHandle;
     dimldrblkH = o.dimldrblkH;
     dimblkH = o.dimblkH;
     dimblk1H = o.dimblk1H;
@@ -2336,6 +2349,7 @@ private:
     dimldrblk = std::move(o.dimldrblk);
     dimaltmzs = std::move(o.dimaltmzs);
     dimmzs = std::move(o.dimmzs);
+    m_dwgHandleFieldSpans = std::move(o.m_dwgHandleFieldSpans);
     dimtfillclrName = std::move(o.dimtfillclrName);
     dimtfillclrBookName = std::move(o.dimtfillclrBookName);
     for (std::size_t i = 0; i < dimColorCmc.size(); ++i) {

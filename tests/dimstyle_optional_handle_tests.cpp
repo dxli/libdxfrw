@@ -205,7 +205,7 @@ bool resourceRemap(const std::filesystem::path& directory) {
         std::vector<std::string> result;
         for (const auto& style : data.dimStyles) {
             result.insert(result.end(), {style.dimtxsty,style.dimldrblk,style.dimblk,style.dimblk1,style.dimblk2});
-            for (const auto* h : {&style.dimtxstyH,&style.dimldrblkH,&style.dimblkH,&style.dimblk1H,&style.dimblk2H,
+            for (const auto* h : {&style.xrefBlockHandle,&style.dimtxstyH,&style.dimldrblkH,&style.dimblkH,&style.dimblk1H,&style.dimblk2H,
                                   &style.dimltypeH,&style.dimltex1H,&style.dimltex2H})
                 result.push_back(std::to_string(h->code)+":"+std::to_string(h->ref)+":"+std::to_string(h->ref64));
             for (const auto& item : style.vars) if (item.second && item.second->type() == DRW_Variant::STRING)
@@ -223,6 +223,25 @@ bool resourceRemap(const std::filesystem::path& directory) {
         if (!write(source,sourceTags(version.second,modern),inputBinary) || !check(source,modern,false)) return fail("literal resource source is invalid");
         dx_data original; dx_iface importer;
         if (!importer.fileImport(source.string(),&original,false)) return fail("literal resource source import failed");
+        if (original.dimStyles.empty()) return fail("literal resource source has no DIMSTYLE");
+        auto& xrefStyle = original.dimStyles.front();
+        const DRW_Dimstyle savedXrefStyle(xrefStyle);
+        xrefStyle.xrefBlockHandle.code = DRW::DwgHardPointer;
+        xrefStyle.xrefBlockHandle.rawCode = DRW::DwgHardPointer;
+        xrefStyle.xrefBlockHandle.ref = 0xEF00u;
+        xrefStyle.xrefBlockHandle.ref64 = 0xEF00u;
+        const auto xrefGuardPath = directory / "unresolved-dimstyle-xref.dxf";
+        const std::string xrefSentinel = "PRESERVE_UNRESOLVED_DIMSTYLE_XREF\n";
+        { std::ofstream out(xrefGuardPath, std::ios::binary); out << xrefSentinel; }
+        dx_iface xrefGuardExporter;
+        const bool xrefGuardRefused = !xrefGuardExporter.fileExport(
+            xrefGuardPath.string(), DRW::AC1032, false, &original, false, true);
+        std::ifstream xrefGuardInput(xrefGuardPath, std::ios::binary);
+        const std::string xrefDestination(
+            std::istreambuf_iterator<char>(xrefGuardInput), {});
+        xrefStyle = savedXrefStyle;
+        if (!xrefGuardRefused || xrefDestination != xrefSentinel)
+            return fail("strict DIMSTYLE export published an unresolved xref-block target");
         const auto before = referenceState(original);
         for (bool binary : {false,true}) {
             const auto first = directory / "resource-first.dxf", second = directory / "resource-second.dxf", strict = directory / "resource-strict.dxf";

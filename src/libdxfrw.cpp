@@ -8297,6 +8297,11 @@ bool dxfRW::writeDimstyle(DRW_Dimstyle *ent){
             return value->second->c_str();
         };
 
+        if (ent->xrefBlockHandle.ref != 0u
+            && ent->xrefBlockHandle.ref != DRW::NoHandle)
+            return rejectResource("unresolved-dimstyle-xref-block",
+                "DIMSTYLE external-reference block has no emitted target identity");
+
         std::string_view textStyleName = ent->dimtxsty;
         if (resourceVars.count(340) != 0) {
             const std::string_view overrideName = dynamicName(340);

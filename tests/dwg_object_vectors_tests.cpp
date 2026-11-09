@@ -2627,6 +2627,7 @@ struct TableStyleFrame {
 struct DimstyleFrame {
     std::vector<std::uint8_t> bytes;
     std::uint32_t handleBits {0};
+    std::uint64_t handleStartBit {0};
 };
 
 bool makeMLeaderStyleFrame(DRW::Version version,
@@ -4326,32 +4327,41 @@ bool makeDimstyleFrame(DRW::Version version,
                        const dwgBufferW& bodyData,
                        const dwgBufferW& stringData,
                        const dwgBufferW& handleData,
-                       DimstyleFrame& frame) {
+                       DimstyleFrame& frame,
+                       bool handleDataIncludesCommonPrefix = true) {
     dwgBufferW object;
     object.putObjType(version, 69u); // ODA AcDbDimStyle table-record type
+    const bool explicitObjectSize =
+        version > DRW::AC1014 && version < DRW::AC1024;
+    const std::uint64_t objectSizeBit = object.bitCount();
+    if (explicitObjectSize)
+        object.putRawLong32(0u);
     dwgHandle ownHandle;
     ownHandle.ref = source.handle;
     object.putHandle(ownHandle);
     object.putBitShort(0u); // no EED
     object.putBitLong(static_cast<std::int32_t>(source.reactorHandles.size()));
-    object.putBit(source.extensionDictionaryFlag());
+    if (version > DRW::AC1015)
+        object.putBit(source.extensionDictionaryFlag());
     if (version > DRW::AC1024)
         object.putBit(0u); // no AcDs data
     appendBits(object, bodyData);
     object.alignToByte();
 
-    dwgBufferW strings = stringData;
-    strings.alignToByte();
-    if (!strings.data().empty())
-        object.putBytes(strings.data().data(), strings.size());
-    for (int bit = 0; bit < 7; ++bit)
-        object.putBit(0u);
-    const std::uint64_t stringBitSize = strings.size() * 8u + 7u;
-    if (stringBitSize > std::numeric_limits<std::uint16_t>::max())
-        return false;
-    object.putRawShort16(static_cast<std::uint16_t>(stringBitSize));
-    object.putBit(1u); // bounded R2007+ string stream
-    object.alignToByte();
+    if (version > DRW::AC1018) {
+        dwgBufferW strings = stringData;
+        strings.alignToByte();
+        if (!strings.data().empty())
+            object.putBytes(strings.data().data(), strings.size());
+        for (int bit = 0; bit < 7; ++bit)
+            object.putBit(0u);
+        const std::uint64_t stringBitSize = strings.size() * 8u + 7u;
+        if (stringBitSize > std::numeric_limits<std::uint16_t>::max())
+            return false;
+        object.putRawShort16(static_cast<std::uint16_t>(stringBitSize));
+        object.putBit(1u); // bounded R2007+ string stream
+        object.alignToByte();
+    }
 
     dwgBufferW handles;
     dwgHandle parent;
@@ -4361,7 +4371,30 @@ bool makeDimstyleFrame(DRW::Version version,
     handles.putHandle(parent);
     dwgHandle xdict;
     handles.putHandle(xdict);
-    appendBits(handles, handleData);
+    if (handleDataIncludesCommonPrefix) {
+        dwgBuffer commonPrefix(handleData.data().data(), handleData.size());
+        (void)commonPrefix.getHandle(); // encoded parent
+        for (std::size_t index = 0u;
+             index < source.reactorHandles.size(); ++index)
+            (void)commonPrefix.getHandle();
+        if (source.extensionDictionaryFlag() != 1u)
+            (void)commonPrefix.getHandle();
+        const std::uint64_t classHandleStart =
+            commonPrefix.getPosition() * 8u + commonPrefix.getBitPos();
+        if (!commonPrefix.isGood() || classHandleStart > handleData.bitCount())
+            return false;
+        dwgBufferW classHandles;
+        for (std::uint64_t bit = classHandleStart;
+             bit < handleData.bitCount(); ++bit) {
+            const std::uint8_t value = static_cast<std::uint8_t>(
+                (handleData.data()[static_cast<std::size_t>(bit / 8u)]
+                 >> (7u - static_cast<unsigned>(bit & 7u))) & 1u);
+            classHandles.putBit(value);
+        }
+        appendBits(handles, classHandles);
+    } else {
+        appendBits(handles, handleData);
+    }
     dwgHandle sentinel;
     sentinel.code = DRW::DwgHardPointer;
     sentinel.ref = 0xCAFEu;
@@ -4370,7 +4403,11 @@ bool makeDimstyleFrame(DRW::Version version,
     if (!object.isGood() || !handles.isGood()
         || handles.bitCount() > std::numeric_limits<std::uint32_t>::max())
         return false;
+    if (explicitObjectSize)
+        object.patchRawLong32AtBit(
+            objectSizeBit, static_cast<std::uint32_t>(object.bitCount()));
     frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
+    frame.handleStartBit = object.bitCount();
     object.putBytes(handles.data().data(), handles.size());
     if (!object.isGood())
         return false;
@@ -15561,6 +15598,289 @@ void testAc1018PlusLayerBodyHandleRoles(TestContext& t) {
     }
 }
 
+void testAc1015PlusDimstyleBodyHandleRoles(TestContext& t) {
+    const auto versionName = [](DRW::Version version) -> const char* {
+        switch (version) {
+        case DRW::AC1015: return "AC1015";
+        case DRW::AC1018: return "AC1018";
+        case DRW::AC1021: return "AC1021";
+        case DRW::AC1024: return "AC1024";
+        case DRW::AC1027: return "AC1027";
+        default: return "unexpected-version";
+        }
+    };
+    const auto fieldsFor = [](DRW::Version version) {
+        std::vector<std::pair<std::string, std::uint32_t>> fields{
+            {"xrefBlock", 0xA701u}, {"dimtxsty", 0xA702u}};
+        if (version >= DRW::AC1015) {
+            fields.emplace_back("leaderBlock", 0xA703u);
+            fields.emplace_back("dimblk", 0xA704u);
+            fields.emplace_back("dimblk1", 0xA705u);
+            fields.emplace_back("dimblk2", 0xA706u);
+        }
+        if (version >= DRW::AC1021) {
+            fields.emplace_back("dimltype", 0xA707u);
+            fields.emplace_back("dimltex1", 0xA708u);
+            fields.emplace_back("dimltex2", 0xA709u);
+        }
+        return fields;
+    };
+    const auto fieldFor = [](DRW_Dimstyle& style, const std::string& name)
+        -> dwgHandle& {
+        if (name == "xrefBlock") return style.xrefBlockHandle;
+        if (name == "dimtxsty") return style.dimtxstyH;
+        if (name == "leaderBlock") return style.dimldrblkH;
+        if (name == "dimblk") return style.dimblkH;
+        if (name == "dimblk1") return style.dimblk1H;
+        if (name == "dimblk2") return style.dimblk2H;
+        if (name == "dimltype") return style.dimltypeH;
+        if (name == "dimltex1") return style.dimltex1H;
+        return style.dimltex2H;
+    };
+    const auto makeHandleData = [](
+            const std::vector<std::pair<std::string, std::uint32_t>>& fields,
+            int wrongRoleIndex, bool canonicalNulls,
+            dwgBufferW& handles) {
+        for (std::size_t index = 0u; index < fields.size(); ++index) {
+            dwgHandle value;
+            value.code = canonicalNulls ? DRW::DwgNullReference
+                : (static_cast<int>(index) == wrongRoleIndex
+                    ? DRW::DwgSoftPointer : DRW::DwgHardPointer);
+            value.rawCode = value.code;
+            value.ref = canonicalNulls ? 0u : fields[index].second;
+            value.ref64 = value.ref;
+            handles.putHandle(value);
+        }
+        return handles.isGood();
+    };
+    const auto makeFrame = [&makeHandleData](DRW::Version version,
+                              DimstyleCodecProbe& source,
+                              const std::vector<std::pair<std::string,
+                                  std::uint32_t>>& fields,
+                              int wrongRoleIndex, bool canonicalNulls,
+                              DimstyleFrame& frame) {
+        DRW_TextCodec codec;
+        codec.setVersion(version, false);
+        dwgBufferW body(&codec), strings(&codec), unusedHandles(&codec);
+        if (!source.encodeDwg(version, &body, &strings, &unusedHandles))
+            return false;
+        dwgBufferW handles(&codec);
+        if (!makeHandleData(fields, wrongRoleIndex, canonicalNulls, handles))
+            return false;
+        return makeDimstyleFrame(version, source, body, strings, handles,
+                                 frame, false);
+    };
+    const auto parse = [](DRW::Version version, DimstyleCodecProbe& style,
+                          const DimstyleFrame& frame) {
+        DRW_TextCodec codec;
+        codec.setVersion(version, false);
+        dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+        return style.parseDwg(version, &input, frame.handleBits)
+            && input.isGood();
+    };
+
+    for (const DRW::Version version : {DRW::AC1015, DRW::AC1018,
+                                       DRW::AC1021,
+                                       DRW::AC1024, DRW::AC1027}) {
+        const auto fields = fieldsFor(version);
+        DimstyleCodecProbe source;
+        source.handle = 0xA500u + static_cast<std::uint32_t>(version);
+        source.parentHandle = 0xA600u;
+        source.setDwgCommonObjectState(0, 0, false);
+        source.name = "generated-standard";
+        source.xrefBlockHandle.ref = fields[0].second;
+        source.dimtxstyH.ref = fields[1].second;
+        if (version >= DRW::AC1015) {
+            source.dimldrblkH.ref = fields[2].second;
+            source.dimblkH.ref = fields[3].second;
+            source.dimblk1H.ref = fields[4].second;
+            source.dimblk2H.ref = fields[5].second;
+        }
+        if (version >= DRW::AC1021) {
+            source.dimltypeH.ref = fields[6].second;
+            source.dimltex1H.ref = fields[7].second;
+            source.dimltex2H.ref = fields[8].second;
+        }
+        DimstyleFrame frame;
+        const bool built = makeFrame(version, source, fields, -1, false,
+                                     frame);
+        t.expect(built, std::string("generated DIMSTYLE handle profile builds for ")
+                     + versionName(version));
+        if (!built)
+            continue;
+
+        DimstyleCodecProbe parsed;
+        const bool parsedValid = parse(version, parsed, frame);
+        t.expect(parsedValid && parsed.handle == source.handle
+                     && parsed.xrefBlockHandle.ref == fields[0].second
+                     && parsed.dimtxstyH.ref == fields[1].second,
+                 std::string("DIMSTYLE parser reads generated ")
+                     + versionName(version) + " hard-pointer fields");
+        if (parsedValid) {
+            const auto& spans = parsed.dwgHandleFieldSpans();
+            bool exactSpans = spans.size() == fields.size();
+            std::uint64_t nextBit = 0u;
+            dwgBuffer handleOracle(frame.bytes.data(), frame.bytes.size());
+            handleOracle.setPosition(frame.handleStartBit >> 3u);
+            handleOracle.setBitPos(static_cast<std::uint8_t>(
+                frame.handleStartBit & 7u));
+            const dwgHandle parent = handleOracle.getHandle();
+            const dwgHandle xdict = handleOracle.getHandle();
+            nextBit = handleOracle.getPosition() * 8u
+                + handleOracle.getBitPos();
+            exactSpans = exactSpans && parent.ref == source.parentHandle
+                && xdict.ref == 0u;
+            for (std::size_t index = 0u;
+                 index < fields.size() && index < spans.size(); ++index) {
+                const std::uint64_t startBit = handleOracle.getPosition() * 8u
+                    + handleOracle.getBitPos();
+                const dwgHandle wire = handleOracle.getHandle();
+                const std::uint64_t endBit = handleOracle.getPosition() * 8u
+                    + handleOracle.getBitPos();
+                exactSpans = exactSpans
+                    && spans[index].m_name == fields[index].first
+                    && spans[index].m_version == version
+                    && spans[index].m_parseComplete
+                    && spans[index].m_startBit == startBit
+                    && spans[index].m_bitSize == endBit - startBit
+                    && wire.rawCode == DRW::DwgHardPointer
+                    && wire.ref == fields[index].second
+                    && fieldFor(parsed, fields[index].first).ref
+                        == fields[index].second;
+                nextBit = endBit;
+            }
+            const std::uint64_t sentinelStartBit =
+                handleOracle.getPosition() * 8u + handleOracle.getBitPos();
+            const dwgHandle sentinel = handleOracle.getHandle();
+            exactSpans = exactSpans && handleOracle.isGood()
+                && nextBit == sentinelStartBit
+                && sentinel.rawCode == DRW::DwgHardPointer
+                && sentinel.ref == 0xCAFEu;
+            t.expect(exactSpans, std::string("DIMSTYLE ") + versionName(version)
+                         + " spans match independent handle walk and sentinel");
+
+            DimstyleCodecProbe copied(parsed);
+            DimstyleCodecProbe assigned;
+            assigned = parsed;
+            bool metadataCopied = copied.xrefBlockHandle.ref
+                    == parsed.xrefBlockHandle.ref
+                && assigned.xrefBlockHandle.ref == parsed.xrefBlockHandle.ref
+                && copied.dwgHandleFieldSpans().size() == fields.size()
+                && assigned.dwgHandleFieldSpans().size() == fields.size();
+            if (metadataCopied) {
+                for (std::size_t index = 0u; index < fields.size(); ++index) {
+                    const auto& original = parsed.dwgHandleFieldSpans()[index];
+                    const auto& copySpan = copied.dwgHandleFieldSpans()[index];
+                    const auto& assignedSpan =
+                        assigned.dwgHandleFieldSpans()[index];
+                    metadataCopied = metadataCopied
+                        && copySpan.m_name == original.m_name
+                        && copySpan.m_startBit == original.m_startBit
+                        && copySpan.m_bitSize == original.m_bitSize
+                        && assignedSpan.m_name == original.m_name
+                        && assignedSpan.m_startBit == original.m_startBit
+                        && assignedSpan.m_bitSize == original.m_bitSize;
+                }
+            }
+            assigned.reset();
+            t.expect(metadataCopied
+                         && assigned.xrefBlockHandle.ref == 0u
+                         && assigned.dwgHandleFieldSpans().empty(),
+                     std::string("DIMSTYLE ") + versionName(version)
+                         + " copies, assigns, and resets xref/span metadata");
+        }
+
+        DRW_TextCodec encodeCodec;
+        encodeCodec.setVersion(version, false);
+        dwgBufferW encodedBody(&encodeCodec), encodedStrings(&encodeCodec),
+            encodedHandleStream(&encodeCodec);
+        const bool encoded = source.encodeDwg(
+            version, &encodedBody, &encodedStrings, &encodedHandleStream);
+        dwgBuffer encodedHandleOracle(encodedHandleStream.data().data(),
+                                      encodedHandleStream.size(),
+                                      &encodeCodec);
+        const dwgHandle encodedParent = encodedHandleOracle.getHandle();
+        const dwgHandle encodedXdict = encodedHandleOracle.getHandle();
+        bool encodedFields = encoded && encodedParent.ref != 0u
+            && encodedXdict.ref == 0u;
+        for (const auto& field : fields) {
+            const dwgHandle wire = encodedHandleOracle.getHandle();
+            encodedFields = encodedFields
+                && wire.rawCode == DRW::DwgHardPointer
+                && wire.ref == field.second;
+        }
+        t.expect(encodedFields && encodedHandleOracle.isGood(),
+                 std::string("DIMSTYLE ") + versionName(version)
+                     + " encoder preserves ordered hard-pointer targets");
+
+        DimstyleFrame nullFrame;
+        DimstyleCodecProbe nullSource(source);
+        const bool nullBuilt = makeFrame(version, nullSource, fields, -1, true,
+                                         nullFrame);
+        DimstyleCodecProbe nullParsed;
+        const bool nullRead = nullBuilt && parse(version, nullParsed, nullFrame);
+        bool nullProfile = nullRead
+            && nullParsed.dwgHandleFieldSpans().size() == fields.size();
+        if (nullProfile) {
+            for (std::size_t index = 0u; index < fields.size(); ++index) {
+                const auto& span = nullParsed.dwgHandleFieldSpans()[index];
+                const dwgHandle& field = fieldFor(nullParsed,
+                                                   fields[index].first);
+                nullProfile = nullProfile
+                    && span.m_name == fields[index].first
+                    && span.m_parseComplete
+                    && span.m_version == version
+                    && field.rawCode == DRW::DwgNullReference
+                    && field.ref == 0u;
+            }
+        }
+        t.expect(nullProfile, std::string("DIMSTYLE ") + versionName(version)
+                     + " accepts canonical null hard-pointer fields");
+
+        for (std::size_t index = 0u; index < fields.size(); ++index) {
+            DimstyleFrame badFrame;
+            const bool badBuilt = makeFrame(
+                version, source, fields, static_cast<int>(index), false,
+                badFrame);
+            DimstyleCodecProbe retryable;
+            const bool rejected = badBuilt && !parse(version, retryable,
+                                                      badFrame);
+            t.expect(rejected && retryable.handle == DRW::NoHandle
+                         && retryable.dwgHandleFieldSpans().empty(),
+                     "wrong DIMSTYLE " + fields[index].first
+                         + " role rejects atomically in " + versionName(version));
+            t.expect(parse(version, retryable, frame)
+                         && retryable.handle == source.handle
+                         && retryable.dwgHandleFieldSpans().size()
+                             == fields.size(),
+                     "corrected DIMSTYLE " + fields[index].first
+                         + " retries on same " + versionName(version)
+                         + " parser");
+        }
+
+        DimstyleFrame truncatedFrame = frame;
+        const std::uint64_t finalFieldStart = parsedValid
+            ? parsed.dwgHandleFieldSpans().back().m_startBit
+            : frame.handleStartBit + frame.handleBits;
+        truncatedFrame.bytes.resize(static_cast<std::size_t>(
+            (finalFieldStart + 7u) / 8u));
+        truncatedFrame.handleBits = static_cast<std::uint32_t>(
+            finalFieldStart - frame.handleStartBit);
+        DimstyleCodecProbe truncated;
+        const bool truncatedRejected = !parse(version, truncated,
+                                                truncatedFrame);
+        t.expect(truncatedRejected && truncated.handle == DRW::NoHandle
+                     && truncated.dwgHandleFieldSpans().empty(),
+                 std::string("truncated DIMSTYLE final reference rejects atomically in ")
+                     + versionName(version));
+        t.expect(parse(version, truncated, frame)
+                     && truncated.handle == source.handle
+                     && truncated.dwgHandleFieldSpans().size() == fields.size(),
+                 std::string("complete DIMSTYLE retries after final-field truncation in ")
+                     + versionName(version));
+    }
+}
+
 void testAc1027ObjectCommonHandleRoles(TestContext& t) {
     struct Stream {
         std::vector<std::uint8_t> bytes;
@@ -20634,9 +20954,9 @@ void testDimstyleDimclrCmc(TestContext& t) {
                              &codec);
         const dwgHandle parent = handleWire.getHandle();
         const dwgHandle xdict = handleWire.getHandle();
-        // DIMSTYLE's encoder contributes 11 class-specific references for
-        // AC1024; the next value is a generated framing sentinel.
-        for (unsigned index = 0; index < 11u; ++index)
+        // AC1024 carries xref, DIMTXSTY, four block references, and three
+        // linetype references; the next value is a generated sentinel.
+        for (unsigned index = 0; index < 9u; ++index)
             (void)handleWire.getHandle();
         const dwgHandle sentinel = handleWire.getHandle();
         t.expect(handleWire.isGood() && parent.ref == source.parentHandle
@@ -23833,6 +24153,14 @@ int main(int argc, char** argv) {
         return context.failures == 0 ? 0 : 1;
     }
     if (argc == 2
+        && std::string(argv[1]) == "--ac1015plus-dimstyle-body-handle-roles") {
+        TestContext context;
+        testAc1015PlusDimstyleBodyHandleRoles(context);
+        std::cout << "AC1015+ DIMSTYLE body handle roles and spans: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--ac1027-object-common-handle-roles") {
         TestContext context;
         testAc1027ObjectCommonHandleRoles(context);
@@ -24598,6 +24926,7 @@ int main(int argc, char** argv) {
     }
     TestContext context;
     testAc1018PlusLayerBodyHandleRoles(context);
+    testAc1015PlusDimstyleBodyHandleRoles(context);
     testLegacyDictionaryGroupCommonLinkEvidence(context);
     testMeshDwgCreaseCountGuard(context);
     testScaleDwgPositiveUnitDomain(context);

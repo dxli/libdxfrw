@@ -23592,7 +23592,7 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
   }
   for (const DRW_Dimstyle &style : data.dimStyles) {
     std::cout << " typedBodyFrame type=DIMSTYLE handle=" << style.handle
-              << '\n';
+              << " name=" << style.name << '\n';
     reportHandle(style.handle, "textStyle", style.dimtxstyH.ref);
     reportHandle(style.handle, "leaderBlock", style.dimldrblkH.ref);
     reportHandle(style.handle, "arrowBlock", style.dimblkH.ref);
@@ -23601,6 +23601,51 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
     reportHandle(style.handle, "dimensionLtype", style.dimltypeH.ref);
     reportHandle(style.handle, "extension1Ltype", style.dimltex1H.ref);
     reportHandle(style.handle, "extension2Ltype", style.dimltex2H.ref);
+    std::vector<std::pair<const char*, const dwgHandle*>> fields{
+        {"xrefBlock", &style.xrefBlockHandle},
+        {"dimtxsty", &style.dimtxstyH},
+    };
+    if (data.sourceVersion >= DRW::AC1015) {
+      fields.emplace_back("leaderBlock", &style.dimldrblkH);
+      fields.emplace_back("dimblk", &style.dimblkH);
+      fields.emplace_back("dimblk1", &style.dimblk1H);
+      fields.emplace_back("dimblk2", &style.dimblk2H);
+    }
+    if (data.sourceVersion >= DRW::AC1021) {
+      fields.emplace_back("dimltype", &style.dimltypeH);
+      fields.emplace_back("dimltex1", &style.dimltex1H);
+      fields.emplace_back("dimltex2", &style.dimltex2H);
+    }
+    for (const DRW_DwgSubrecordRange &span : style.dwgHandleFieldSpans()) {
+      const auto field = std::find_if(
+          fields.begin(), fields.end(), [&span](const auto &item) {
+            return span.m_name == item.first;
+          });
+      if (field == fields.end() || !span.m_parseComplete
+          || span.m_version != data.sourceVersion || span.m_bitSize == 0u) {
+        std::cerr << "DIMSTYLE handle span inventory is incomplete for handle "
+                  << style.handle << '\n';
+        return false;
+      }
+      std::cout << " typedDimstyleHandleField owner=" << style.handle
+                << " role=" << field->first
+                << " code="
+                << static_cast<unsigned>(field->second->rawCode)
+                << " target=" << field->second->ref
+                << " startBit=" << span.m_startBit
+                << " bitSize=" << span.m_bitSize
+                << " complete=1\n";
+    }
+    std::size_t expectedSpanCount = 2u;
+    if (data.sourceVersion >= DRW::AC1015)
+      expectedSpanCount += 4u;
+    if (data.sourceVersion >= DRW::AC1021)
+      expectedSpanCount += 3u;
+    if (style.dwgHandleFieldSpans().size() != expectedSpanCount) {
+      std::cerr << "DIMSTYLE handle span count differs from its version profile for handle "
+                << style.handle << '\n';
+      return false;
+    }
   }
   for (const DRW_Vport &vport : data.VPorts) {
     std::cout << " typedBodyFrame type=VPORT handle=" << vport.handle << '\n';

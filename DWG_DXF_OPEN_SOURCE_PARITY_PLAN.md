@@ -132,38 +132,55 @@ No fixture was added. Strict output remains refused by the independent
 source-reference gate. See the [entity receipt](docs/research/p6-ac1018plus-common-entity-handle-role-validation-2026-11-09.json)
 and [OBJECTS receipt](docs/research/p6-ac1018plus-common-object-handle-role-validation-2026-11-09.json).
 
-**Next local implementation packet — DIMSTYLE body handle roles and spans:**
-use ODA v5.4.1 §20.4.68 and the hash-bound AC1027 Cover DIMSTYLE record at
-handle `0x27` (`STANDARD`). The local DWG parse and independent LibreDWG 0.14
-minJSON both resolve its DIMTXSTY to STYLE `0x11`; LibreDWG reports canonical
-nulls for the four arrow/block references and three R2007+ linetypes. Capture
-the physical field spans and targets from the handle stream before editing,
-including the preceding external-reference-block hard pointer, which the
-current DIMSTYLE model does not expose. Validate every non-null field as a
-hard pointer and only accept a raw null code when its resolved target is zero.
-Use ODA's version gates: DIMTXSTY is common, leader/arrow-block handles begin
-at R2000, and the three DIMSTYLE linetypes begin at R2007. Add generated
-AC1018/AC1021/AC1024/AC1027 parser controls only for these distinct boundaries;
-cover every field's wrong role, null, exact span, final-field truncation, and
-same-parser corrected retry. Reuse the transactional parser/span pattern and
-fast selector framework; add no drawing fixture. The completed LAYER role/span
-implementation, validation, source audit, and compatibility limits are in the
-[LAYER role/span receipt](docs/research/p6-ac1018plus-layer-body-handle-role-spans-2026-11-09.json).
-Keep unresolved DIMSTYLE targets and any unmodeled fields under the strict
-output refusal. AC1014 PERSUBENTMGR still needs a paired semantic projection
-before typed-prefix admission; AC1027 PERSUBENTMGR and AC1032's six-scalar body
-remain raw-only pending independent field reconciliation.
+**Completed P6 local implementation packet — DIMSTYLE body handle roles and
+spans:** ODA v5.4.1 §20.4.68 is implemented for the AC1015+ version gates.
+`DRW_Dimstyle::parseDwg` now transactionally validates the common DIMTXSTY
+pointer, R2000+ leader/arrow-block pointers, and R2007+ linetype pointers;
+only canonical null code/target pairs are accepted. It records ordered bit
+spans, exposes the external-reference-block handle, and resets cleanly on
+truncation before corrected same-object retry. Generated vectors cover
+AC1015/1018/1021/1024/1027 boundaries, wrong roles, nulls, span sentinels,
+copy/assignment/reset, and failure/retry. DXF and DWG strict output refuse a
+nonzero unresolved external-reference-block target. The hash-bound AC1027
+Cover record is DIMSTYLE `0x27` (`ISO-25`): nine spans from bit 1290 through
+1370; DIMTXSTY resolves to STYLE `0x11`. LibreDWG 0.14 independently matches
+all nine field roles and targets. The affected fast CTest cohort passes 8/8;
+no drawing fixture was added. This is one source profile plus generated codec
+evidence, not broad producer or native-app qualification. Receipt:
+[`p6-ac1015plus-dimstyle-body-handle-roles-spans-2026-11-09.json`](docs/research/p6-ac1015plus-dimstyle-body-handle-roles-spans-2026-11-09.json).
 
-**Resume checkpoint (2026-11-09 11:43 UTC, desktop access refresh):** after
-the user's latest “I’ll unlock it now” reply, a fresh native-app inventory
-still reports “The Mac is locked and automatic unlock could not unlock it” and
-lists no native apps. No ODA or FreeCAD process was launched. This is an
-access-state condition only; it supplies no format evidence and changes no
-support claim. Keep native ODA/FreeCAD qualification queued and do not retry
-the unchanged ODA File Converter 27.1 CLI route that aborts before processing.
-Continue with the DIMSTYLE implementation packet above. Retry native
-qualification only after a fresh inventory exposes an unlocked session or a
-materially different launch path is available.
+**Next local implementation packet — VPORT body handle roles and spans:**
+use ODA v5.4.1 §20.4.64 and the same hash-bound AC1027 Cover record, whose
+VPORT `0x29` already exposes `visualStyle → 0x2f` and `sun → 0x6d` in the
+local diagnostic. Before changing the parser, capture every VPORT handle
+field's source span and compare role/target observations with LibreDWG 0.14.
+Implement only the documented versioned handle stream: common control soft
+pointer, optional XDictionary hard owner, xref-block hard pointer; R2000+
+named/base UCS hard pointers; R2007+ background soft pointer, visual-style
+hard pointer, and SUN hard owner. Generated controls should cover AC1012/14,
+AC1015/18, and AC1021+ presence boundaries, each wrong role, canonical nulls,
+exact ordered spans, following-field sentinel, truncation/reset, and corrected
+same-object retry. Keep strict-output reference closure as a separate gate;
+the Cover source's VisualStyle and SUN observations do not establish their
+recursive graph or consumer semantics. Use an existing generated-vector
+builder, one focused selector, and no new drawing fixture. If the physical
+source lacks a versioned non-null field or peer agreement on role, stop that
+profile at evidence capture and choose the next already-supported local
+version boundary rather than broadening support claims. AC1014 PERSUBENTMGR
+still needs a paired semantic projection before typed-prefix admission;
+AC1027 PERSUBENTMGR and AC1032's six-scalar body remain raw-only pending
+independent field reconciliation.
+
+**Resume checkpoint (2026-11-09, latest desktop inventory):** after the
+user's unlock-in-progress reply, the native-app inventory still reports “The
+Mac is locked and automatic unlock could not unlock it” and lists no native
+apps. No ODA or FreeCAD process was launched. This is an access-state condition
+only; it supplies no format evidence and changes no support claim. Keep native
+ODA/FreeCAD qualification queued and do not retry the unchanged ODA File
+Converter 27.1 CLI route that aborts before processing. Continue with the VPORT
+implementation packet above. Retry native qualification only after a fresh
+inventory exposes an unlocked session or a materially different launch path is
+available.
 
 **Resume checkpoint (2026-11-09, AC1032 control-reactor slice):** the
 VPORT_CONTROL reader now consumes declared common reactor references before

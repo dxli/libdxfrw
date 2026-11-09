@@ -3565,6 +3565,12 @@ bool dwgWriter15::emitAppIdRecord(std::uint32_t handle, const DRW_AppId& ai) {
 }
 
 bool dwgWriter15::emitDimstyleRecord(std::uint32_t handle, const DRW_Dimstyle& ds) {
+    // DIMSTYLE's external-reference block handle is modeled but not yet
+    // resolved into the writer's target block-record graph. Do not publish a
+    // stale source handle into a newly assembled DWG.
+    if (ds.xrefBlockHandle.ref != 0u
+        && ds.xrefBlockHandle.ref != DRW::NoHandle)
+        return false;
     const bool synthetic = handle == DRW::DwgStandardDimstyleHandle
         && !m_haveStandardDimstyle && m_version >= DRW::AC1015;
     if (!synthetic)

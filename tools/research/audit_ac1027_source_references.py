@@ -109,6 +109,16 @@ LAYER_HANDLE_FIELD = re.compile(
     r"code=(\d+) target=(\d+) startBit=(\d+) bitSize=(\d+) complete=(\d+)$",
     re.MULTILINE,
 )
+DIMSTYLE_FRAME = re.compile(
+    r"^ typedBodyFrame type=DIMSTYLE handle=(\d+) name=(.*?)$", re.MULTILINE
+)
+DIMSTYLE_HANDLE_FIELD = re.compile(
+    r"^ typedDimstyleHandleField owner=(\d+) "
+    r"role=(xrefBlock|dimtxsty|leaderBlock|dimblk|dimblk1|dimblk2|"
+    r"dimltype|dimltex1|dimltex2) code=(\d+) target=(\d+) "
+    r"startBit=(\d+) bitSize=(\d+) complete=(\d+)$",
+    re.MULTILINE,
+)
 
 
 def sha256(path: Path) -> str:
@@ -133,6 +143,8 @@ def verify_peer_profiles(
     frames: list[dict[str, object]],
     layer_names: dict[int, str],
     layer_handle_fields: dict[int, list[dict[str, object]]],
+    dimstyle_names: dict[int, str],
+    dimstyle_handle_fields: dict[int, list[dict[str, object]]],
 ) -> dict[str, object]:
     peer_json = json.loads(peer_json_path.read_text())
     peer_objects = peer_json.get("OBJECTS")
@@ -144,7 +156,7 @@ def verify_peer_profiles(
             continue
         handle = peer_handle(obj.get("handle"))
         if handle is None or (
-            int(obj.get("type", -1)) not in (73, 80, 501, 502, 504, 506)
+            int(obj.get("type", -1)) not in (69, 73, 80, 501, 502, 504, 506)
             and obj.get("object") != "MLEADERSTYLE"
         ):
             continue
@@ -153,7 +165,7 @@ def verify_peer_profiles(
         peer_by_handle[handle] = obj
 
     names = {
-        73: "MLINESTYLE", 80: "ACDBPLACEHOLDER",
+        69: "DIMSTYLE", 73: "MLINESTYLE", 80: "ACDBPLACEHOLDER",
         501: "VISUALSTYLE", 502: "MATERIAL", 504: "TABLESTYLE",
         505: "MLEADERSTYLE", 506: "SUN",
     }
@@ -164,6 +176,7 @@ def verify_peer_profiles(
             continue
         obj = peer_by_handle.get(int(frame["handle"]))
         expected_object = {
+            69: "DIMSTYLE",
             73: "MLINESTYLE",
             80: "PLACEHOLDER",
             501: "VISUALSTYLE",
@@ -173,6 +186,7 @@ def verify_peer_profiles(
             506: "SUN",
         }[object_type]
         expected_dxf = {
+            69: None,
             73: None,
             80: "ACDBPLACEHOLDER",
             501: None,
@@ -296,6 +310,27 @@ def verify_peer_profiles(
         raise SystemExit("LibreDWG LAYER handle-role fields changed")
     schema_blocks["LAYER"] = hashlib.sha256(layer_block.encode()).hexdigest()
 
+    dimstyle_start = layer_schema_text.find("DWG_TABLE (DIMSTYLE)")
+    dimstyle_end = layer_schema_text.find("DWG_OBJECT_END", dimstyle_start)
+    if dimstyle_start < 0 or dimstyle_end < 0:
+        raise SystemExit("LibreDWG dwg.spec lacks the DIMSTYLE table profile")
+    dimstyle_block = layer_schema_text[dimstyle_start:dimstyle_end]
+    expected_dimstyle_fields = (
+        "FIELD_HANDLE (DIMTXSTY, 5, 340);",
+        "FIELD_HANDLE (DIMLDRBLK, 5, 341);",
+        "FIELD_HANDLE (DIMBLK, 5, 342);",
+        "FIELD_HANDLE (DIMBLK1, 5, 343);",
+        "FIELD_HANDLE (DIMBLK2, 5, 344);",
+        "FIELD_HANDLE (DIMLTYPE, 5, 345);",
+        "FIELD_HANDLE (DIMLTEX1, 5, 346);",
+        "FIELD_HANDLE (DIMLTEX2, 5, 347);",
+    )
+    if any(field not in dimstyle_block for field in expected_dimstyle_fields):
+        raise SystemExit("LibreDWG DIMSTYLE handle-role fields changed")
+    schema_blocks["DIMSTYLE"] = hashlib.sha256(
+        dimstyle_block.encode()
+    ).hexdigest()
+
     matched_layer = None
     if source_hash == COVER_AC1027_SHA256:
         peer_layers = [
@@ -344,6 +379,61 @@ def verify_peer_profiles(
             "unmatchedOdaField": "unknown trailing hard-pointer field",
         }
 
+    matched_dimstyle = None
+    if source_hash == COVER_AC1027_SHA256:
+        peer_dimstyles = [
+            obj for obj in peer_objects
+            if isinstance(obj, dict) and obj.get("object") == "DIMSTYLE"
+            and peer_handle(obj.get("handle")) == 0x27
+        ]
+        source_fields = dimstyle_handle_fields.get(0x27, [])
+        if len(peer_dimstyles) != 1 or dimstyle_names.get(0x27) != "ISO-25":
+            raise SystemExit(
+                "LibreDWG minJSON lacks the hash-bound Cover DIMSTYLE ISO-25"
+            )
+        peer_dimstyle = peer_dimstyles[0]
+        peer_field_names = {
+            "xrefBlock": "xref", "dimtxsty": "DIMTXSTY",
+            "leaderBlock": "DIMLDRBLK", "dimblk": "DIMBLK",
+            "dimblk1": "DIMBLK1", "dimblk2": "DIMBLK2",
+            "dimltype": "DIMLTYPE", "dimltex1": "DIMLTEX1",
+            "dimltex2": "DIMLTEX2",
+        }
+        expected_roles = ("xrefBlock", "dimtxsty", "leaderBlock", "dimblk",
+                          "dimblk1", "dimblk2", "dimltype", "dimltex1",
+                          "dimltex2")
+        matched_fields = []
+        for source_field in source_fields:
+            role = str(source_field["role"])
+            peer_name = peer_field_names[role]
+            wire = peer_dimstyle.get(peer_name)
+            target = peer_handle(wire)
+            raw_role = int(wire[0]) if isinstance(wire, list) and wire else -1
+            if (
+                target != int(source_field["targetHandle"])
+                or raw_role != int(source_field["code"])
+            ):
+                raise SystemExit(
+                    f"LibreDWG DIMSTYLE {role} role/target differs from source profile"
+                )
+            matched_fields.append({
+                "role": role,
+                "peerField": peer_name,
+                "peerRoleCode": raw_role,
+                "peerTargetHandle": target,
+                "matchesSource": True,
+            })
+        if tuple(str(field["role"]) for field in source_fields) != expected_roles:
+            raise SystemExit("Cover DIMSTYLE body handle field order/profile changed")
+        if len(matched_fields) != len(expected_roles):
+            raise SystemExit("LibreDWG did not independently expose all DIMSTYLE fields")
+        matched_dimstyle = {
+            "handle": 0x27,
+            "name": "ISO-25",
+            "sourceBoundFields": source_fields,
+            "matchedPeerFields": matched_fields,
+        }
+
     mleaderstyle_start = schema_text.find("DWG_OBJECT (MLEADERSTYLE)")
     mleaderstyle_end = schema_text.find("DWG_OBJECT_END", mleaderstyle_start)
     if mleaderstyle_start < 0 or mleaderstyle_end < 0:
@@ -376,7 +466,7 @@ def verify_peer_profiles(
         "createdBy": peer_json.get("created_by"),
         "objectCountsByEncodedType": {
             str(object_type): peer_types[object_type]
-            for object_type in (73, 80, 501, 502, 506)
+            for object_type in (69, 73, 80, 501, 502, 504, 506)
         },
         "matchedFrames": rows,
         "schemaPath": str(peer_schema_path),
@@ -387,6 +477,7 @@ def verify_peer_profiles(
         "schemaBodyHandleFieldsBeforeCommonStream": False,
         "sourceSha256": source_hash,
         "matchedLayer": matched_layer,
+        "matchedDimstyle": matched_dimstyle,
     }
 
 
@@ -558,7 +649,38 @@ def main() -> int:
             )
         ):
             raise SystemExit(f"LAYER {owner:#x} handle-field spans are incomplete or unordered")
+    dimstyle_names = {
+        int(handle): name
+        for handle, name in DIMSTYLE_FRAME.findall(combined)
+    }
+    dimstyle_handle_fields: dict[int, list[dict[str, object]]] = {}
+    for owner, role, code, target, start_bit, bit_size, complete in (
+        DIMSTYLE_HANDLE_FIELD.findall(combined)
+    ):
+        dimstyle_handle_fields.setdefault(int(owner), []).append({
+            "role": role,
+            "code": int(code),
+            "targetHandle": int(target),
+            "startBit": int(start_bit),
+            "bitSize": int(bit_size),
+            "complete": bool(int(complete)),
+        })
+    for owner, fields in dimstyle_handle_fields.items():
+        starts = [int(field["startBit"]) for field in fields]
+        if (
+            owner not in dimstyle_names
+            or len({str(field["role"]) for field in fields}) != len(fields)
+            or starts != sorted(starts)
+            or any(
+                not field["complete"] or int(field["bitSize"]) <= 0
+                for field in fields
+            )
+        ):
+            raise SystemExit(
+                f"DIMSTYLE {owner:#x} handle-field spans are incomplete or unordered"
+            )
     source_bound_modeler_history_handles: set[int] = set()
+    source_bound_dimstyle_handles: set[int] = set()
     if source_before == COVER_AC1027_SHA256:
         expected_history = modeler_history_profiles.get(0x6F)
         layer_edges = [
@@ -615,7 +737,37 @@ def main() -> int:
             raise SystemExit(
                 "hash-bound Cover LAYER 0 role/span/target source profile changed"
             )
+        dimstyle_fields = dimstyle_handle_fields.get(0x27, [])
+        expected_dimstyle_fields = [
+            ("xrefBlock", 5, 0, 1290, 8),
+            ("dimtxsty", 5, 17, 1298, 16),
+            ("leaderBlock", 5, 0, 1314, 8),
+            ("dimblk", 5, 0, 1322, 8),
+            ("dimblk1", 5, 0, 1330, 8),
+            ("dimblk2", 5, 0, 1338, 8),
+            ("dimltype", 5, 0, 1346, 8),
+            ("dimltex1", 5, 0, 1354, 8),
+            ("dimltex2", 5, 0, 1362, 8),
+        ]
+        observed_dimstyle_fields = [
+            (field["role"], field["code"], field["targetHandle"],
+             field["startBit"], field["bitSize"])
+            for field in dimstyle_fields
+        ]
+        dimstyle_reference_edges = [
+            (item["role"], item["targetHandle"])
+            for item in typed_references if item["ownerHandle"] == 0x27
+        ]
+        if (
+            dimstyle_names.get(0x27) != "ISO-25"
+            or observed_dimstyle_fields != expected_dimstyle_fields
+            or dimstyle_reference_edges != [("textStyle", 17)]
+        ):
+            raise SystemExit(
+                "hash-bound Cover DIMSTYLE ISO-25 role/span/target profile changed"
+            )
         source_bound_modeler_history_handles.add(0x6F)
+        source_bound_dimstyle_handles.add(0x27)
     reference_counts = Counter(item["ownerHandle"] for item in typed_references)
     retained_handles = {frame["handle"] for frame in frames}
     for frame in frames:
@@ -625,6 +777,8 @@ def main() -> int:
         frame["bodyReferenceDisposition"] = (
             "source-bound-modeler-history-profile"
             if frame["handle"] in source_bound_modeler_history_handles
+            else "source-bound-dimstyle-handle-profile"
+            if frame["handle"] in source_bound_dimstyle_handles
             else "peer-profile-no-body-handles"
             if no_body_rule is not None and no_body_rule.startswith("LIBREDWG-")
             else "spec-profile-no-body-handles"
@@ -667,6 +821,8 @@ def main() -> int:
             frames,
             layer_names,
             layer_handle_fields,
+            dimstyle_names,
+            dimstyle_handle_fields,
         )
     if version == "AC1027":
         mleader_styles = [
@@ -1015,6 +1171,17 @@ def main() -> int:
         "typedLayerHandleFields": [
             {"ownerHandle": owner, **field}
             for owner, fields in sorted(layer_handle_fields.items())
+            for field in fields
+        ],
+        "typedDimstyleHandleFieldRows": sum(
+            len(fields) for fields in dimstyle_handle_fields.values()
+        ),
+        "sourceBoundDimstyleHandleProfiles": (
+            1 if source_before == COVER_AC1027_SHA256 else 0
+        ),
+        "typedDimstyleHandleFields": [
+            {"ownerHandle": owner, **field}
+            for owner, fields in sorted(dimstyle_handle_fields.items())
             for field in fields
         ],
         "framesWithSelectedTypedBodyReport": sum(
