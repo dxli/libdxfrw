@@ -11,8 +11,9 @@ edge, OBJECTPTR identity, and the LINE/PVI graph. The focused control exposed
 that successful ENTITIES emission changed the caller's LINE handle before a
 later OBJECTS failure. `EntityRecordScope` now restores the original handle
 after committing the emitted record; the failure/retry control and entity
-reference-remapping selector pass. This verifies LINE handle preservation;
-other entity types still require their owning controls. No fixture was added.
+reference-remapping and polyline vertex-role controls pass. This verifies LINE
+handle preservation and nested polyline emission; other entity types still
+require their owning controls. No fixture was added.
 See the [allocation receipt](docs/research/p6-dxf-partial-viewing-index-objects-allocation-failure-retry-2026-11-09.json).
 
 The AC1024 online sample search also re-confirmed public candidates: Autodesk's
