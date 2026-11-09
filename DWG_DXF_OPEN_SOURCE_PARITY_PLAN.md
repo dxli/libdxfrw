@@ -9,15 +9,15 @@ matrix exposed and fixed malformed JSON in the test adapter's named-summary
 rows, which had blocked AC1015 and AC1018 comparisons. The controlled build,
 adapter self-test and differential-runner self-test pass. This remains one
 bounded POINT witness per pinned version and does not qualify other entities,
-general version support, DWG writing or native geometry. The online AC1024
-sample sweep still does not reproduce the AutoCAD 2010 RTM CLASSES high-bit
-size failure; the exact RTM input remains needed. Broader source search found
-the Autodesk 2010-era sample collection and LibreDWG's public `test/test-data/2010`
-corpus, but neither identifies per-file RTM producer builds. The immediate
-next step is to screen those candidate DWGs in scratch storage, hash and record
-their provenance, and stop short of parser changes unless one reproduces the
-reported class-stage failure. No downloaded DWG/DXF was added as a fixture.
-See the [six-version POINT matrix](docs/research/p6-autocad-point3d-six-version-read-matrix-2026-11-09.json),
+general version support, DWG writing or native geometry. The historical
+Autodesk sample collection and LibreDWG's public `test/test-data/2010` corpus
+were downloaded to scratch storage and screened: all 28 AC1024 DWGs reach
+`readDwgClasses END` without a CLASSES CRC mismatch. Their per-file producer
+builds are not established, so the exact AutoCAD 2010 RTM input or hash remains
+needed; keep the issue open and do not change the parser from this negative
+screen. No downloaded DWG/DXF was added as a fixture. See the
+[external AC1024 sample screen](docs/research/p6-ac1024-external-sample-classes-screen-2026-11-09.json),
+[six-version POINT matrix](docs/research/p6-autocad-point3d-six-version-read-matrix-2026-11-09.json),
 [AC1024 sample RTM recheck](docs/research/p6-ac1024-online-sample-rtm-nonreproduction-2026-11-09.json),
 [AC1024 sample downloads](docs/research/p6-ac1024-online-sample-download-check-2026-11-09.json),
 and [online sample source search](docs/research/p6-ac1024-online-sample-source-search-2026-11-09.json).
@@ -342,9 +342,14 @@ was promoted. See the
 [PERSUBENTMGR receipt](docs/research/p6-persubentmgr-common-handle-truncation-retry-2026-11-09.json).
 The preceding AC1024 CLASSES generated readback and corpus check remains
 recorded: its focused selector reads three 2048-character strings from a
-from-scratch file, while all nine available AC1024 sources pass the current
-reader; the reported six-of-ten RTM failure remains unverified because only
-nine source paths are available. See the
+from-scratch file, while all nine local AC1024 sources pass the current reader.
+The online Autodesk and LibreDWG candidate sweep adds 28 hashed AC1024 inputs;
+all 28 reach the CLASSES end marker without CRC mismatch. Exact AutoCAD 2010
+RTM producer provenance and the missing tenth source/hash remain unknown, so
+these results do not resolve the six-of-ten report. Do not alter the high-size
+path from these passing candidates; keep an exact failing input as the evidence
+needed to revisit it. See the [external sample screen](docs/research/p6-ac1024-external-sample-classes-screen-2026-11-09.json)
+and the
 [AC1024 CLASSES receipt](docs/research/p6-ac1024-classes-repository-corpus-recheck-2026-11-09.json).
 The online search found Autodesk's sample collection labeled "AutoCAD 2010
 and later" and the NextGIS AC1024 corpus, whose README identifies AutoCAD 2016
@@ -358,9 +363,11 @@ stays unresolved; do not infer an RTM defect from these later or ambiguously
 sourced samples. See the [AC1024 online sample receipt](docs/research/p6-ac1024-online-sample-rtm-nonreproduction-2026-11-09.json).
 The pinned NextGIS repository tree also exposes seven paired AC1024 DWG/DXF
 profiles (`arc`, `circle`, `ellipse`, `line`, `point2d`, `point3d`, and
-`polyline2d_line`). Only `arc_2010.dwg` has been downloaded and qualified in
-the local reader/ODA run; the rest are online candidate inputs, not yet tested.
-Exact tree/blob IDs and sizes are listed in the [online sample receipt](docs/research/p6-ac1024-online-sample-rtm-nonreproduction-2026-11-09.json).
+`polyline2d_line`). `arc_2010`, `circle_2010`, `line_2010`, `point3d_2010`,
+and `polyline2d_line_2010` have been downloaded and checked; the POINT matrix
+also covers `point3d_2010` across six versions. Their documented AutoCAD 2016
+producer does not qualify RTM. The remaining two profiles are not needed to
+settle that provenance question; see the [online sample receipt](docs/research/p6-ac1024-online-sample-rtm-nonreproduction-2026-11-09.json).
 The preceding P5 TABLE unknown-prefix profile remains recorded in
 [`p5-ac1024-table-unknown-prefix-default-gate-2026-11-09.json`](docs/research/p5-ac1024-table-unknown-prefix-default-gate-2026-11-09.json).
 
@@ -2135,21 +2142,22 @@ this source. See the
 [online-sample receipt](docs/research/p6-ac1024-online-sample-rtm-nonreproduction-2026-11-09.json)
 and the public [`nextgis/dwg_samples` source](https://github.com/nextgis/dwg_samples).
 
-**Historical Autodesk sample-set follow-up (2026-11-09):** the contemporaneous
-[2009 AutoCAD 2010 sample listing](https://blog.jtbworld.com/2009/06/where-are-the-sample-dwg-files-for-autocad.html)
-links directly to Autodesk-hosted DWGs. Six downloaded files have AC1024
-magic. All six complete `dwgReader24::readDwgClasses` with
-`operationSucceeded=true`, `legacyError=0`, and `classesCrcMismatch=0`; five
-are byte-identical to files already in the repository corpus, while
-`title_block-ansi.dwg` adds one unique public source. Their embedded product
-metadata says AutoCAD `D.40.0.200` / registry `18.0`, with AutoCAD 2009 and
-Gator Beta 2 metadata, so the files are beta/pre-RTM sources despite the
-catalog's AutoCAD 2010 title. They strengthen format-path coverage but do not
-qualify the reported RTM-specific failure. Five command exits occur after
-CLASSES parsing at later strict-output gates. No parser change or committed
-fixture is warranted; retain the RTM issue pending the exact failing hash or
-a source with verifiable RTM provenance. Full hashes and outcomes are in the
-[expanded online-sample receipt](docs/research/p6-ac1024-online-sample-rtm-nonreproduction-2026-11-09.json).
+**Expanded external AC1024 sample screen (2026-11-09):** downloaded 18 DWGs
+from LibreDWG's public `test/test-data/2010` directory and all 18 DWGs in
+Autodesk's historically indexed sample collection to `/private/tmp`. The
+LibreDWG directory yielded 18 AC1024 files; the Autodesk collection yielded
+10 AC1024 files and 8 AC1021 files. All 28 AC1024 files reach
+`dwgReader24::readDwgClasses END` with no CLASSES CRC mismatch under the
+current `build-gcc/dwg2dxf/dwg2dxf` binary. Nine Autodesk conversions and all
+18 LibreDWG-corpus conversions stop later at output or completeness gates;
+those outcomes are not CLASSES failures. The contemporaneous Autodesk listing
+calls its files AutoCAD 2010 samples, but selected embedded metadata identifies
+AutoCAD 2009/Gator Beta 2 (`D.40.0.200`, registry `18.0`); the other files
+lack per-file producer-build evidence. The LibreDWG directory label also does
+not establish an RTM producer. This screen neither reproduces nor disproves
+the report about six of ten RTM saves. Keep the issue open pending the exact
+failing hash or verifiable RTM provenance; do not change the parser or commit
+external fixtures. See the [external sample screen receipt](docs/research/p6-ac1024-external-sample-classes-screen-2026-11-09.json).
 
 **AC1015 LTYPE_CONTROL outlier:** the unauthenticated local `simple.dwg` still
 fails at the bounded count/boundary check on current code. LibreDWG 0.14 parses
