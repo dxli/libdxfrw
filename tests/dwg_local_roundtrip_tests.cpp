@@ -38090,6 +38090,17 @@ public:
             return;
         }
         table.blockRecH.ref = blockRecord;
+        if (m_useParsedBlockRecordMetadata) {
+            table.blockRecH.code = DRW::DwgHardPointer;
+            table.blockRecH.rawCode = DRW::DwgHardPointer;
+            table.blockRecH.ref64 = blockRecord;
+            std::uint32_t remaining = blockRecord;
+            table.blockRecH.size = 0u;
+            while (remaining != 0u) {
+                remaining >>= 8u;
+                ++table.blockRecH.size;
+            }
+        }
         const std::array<std::array<DRW_Coord, 2>, 8> lines {{
             {{{0, 0, 0}, {456, 0, 0}}},
             {{{0, -11, 0}, {456, -11, 0}}},
@@ -38174,6 +38185,9 @@ public:
     void setOmitTableStyleRoot(bool omit) noexcept {
         m_omitTableStyleRoot = omit;
     }
+    void useParsedBlockRecordMetadata(bool use) noexcept {
+        m_useParsedBlockRecordMetadata = use;
+    }
 
 private:
     void initializeTable() {
@@ -38225,6 +38239,7 @@ private:
 
     bool m_emitTable {false};
     bool m_omitTableStyleRoot {false};
+    bool m_useParsedBlockRecordMetadata {false};
 };
 
 bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
@@ -38273,6 +38288,7 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
             return false;
 
         producer.setOmitTableStyleRoot(false);
+        producer.useParsedBlockRecordMetadata(true);
     }
     if (!output.write(&producer, DRW::AC1018, true) || !producer.ready) {
         const DRW_OperationDiagnostic diagnostic = output.getLastDiagnostic();
@@ -38356,6 +38372,10 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
     }
     if (table == nullptr || table->handle != 0xA720u
         || table->name != "*T1"
+        || table->blockRecH.code != DRW::DwgHardPointer
+        || table->blockRecH.rawCode != DRW::DwgHardPointer
+        || table->blockRecH.ref64 != table->blockRecH.ref
+        || table->blockRecH.size == 0u
         || table->m_tableStyleHandle != emittedStyleHandle
         || table->m_content.m_rows.size() != 3u
         || table->m_content.m_columns.size() != 3u

@@ -53,6 +53,26 @@ namespace {
 constexpr std::uint32_t kMaxDwgBlockRecordPreviewBytes = 0xA00000u;
 constexpr int kDwgBlockRecordFlagsMask = 0x7Fu;
 
+bool validAc1018TableBlockRecordReference(const dwgHandle& handle) {
+    const bool normalized = handle.code == DRW::DwgNullReference
+        && handle.size == 0u && handle.rawCode == 0u && handle.ref64 == 0u;
+    if (normalized)
+        return true;
+    if (handle.code != DRW::DwgHardPointer
+        || handle.rawCode != DRW::DwgHardPointer || handle.ref == 0u
+        || handle.ref64 != handle.ref || handle.size == 0u
+        || handle.size > sizeof(handle.ref))
+        return false;
+
+    std::uint32_t remaining = handle.ref;
+    std::uint8_t minimalSize = 1u;
+    while (remaining > 0xFFu) {
+        remaining >>= 8u;
+        ++minimalSize;
+    }
+    return handle.size == minimalSize;
+}
+
 // ODA 24.2.2.7.1: AutoCAD needs the schema-search entries to find
 // DataStorage-backed entities. Validate the exact modeler associations while
 // keeping unrelated opaque records available for raw section replay.
@@ -1552,9 +1572,7 @@ bool dwgWriter15::hasClosedAc1018TableBlockGraph(
         || table.eType != DRW::TABLE || table.handle == 0u
         || table.handle == DRW::NoHandle
         || table.blockRecH.ref == 0u || table.blockRecH.ref == DRW::NoHandle
-        || table.blockRecH.code != DRW::DwgNullReference
-        || table.blockRecH.size != 0u || table.blockRecH.rawCode != 0u
-        || table.blockRecH.ref64 != 0u
+        || !validAc1018TableBlockRecordReference(table.blockRecH)
         || table.m_tableStyleHandle == 0u
         || table.m_tableStyleHandle == DRW::NoHandle
         || table.m_content.m_tableStyleHandle != table.m_tableStyleHandle
