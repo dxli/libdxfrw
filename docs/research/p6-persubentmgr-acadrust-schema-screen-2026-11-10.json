@@ -1,0 +1,38 @@
+{
+  "id": "p6-persubentmgr-acadrust-schema-screen-2026-11-10",
+  "date": "2026-11-10",
+  "scope": "Independent parser source screen for the unresolved PERSUBENTMGR body schema",
+  "sources": [
+    {
+      "name": "ACadRust class-object reader",
+      "url": "https://docs.rs/acadrust/latest/src/acadrust/io/dwg/dwg_stream_readers/object_reader/class_object.rs.html",
+      "lines": "987-1008",
+      "observation": "Reads class_version, reserved_zero, reserved_two, associated_step_count, associated_subentity_count, then a count-prefixed steps array, then a count-prefixed subentities array.",
+      "limitation": "The source listing is not bound here to a release commit or to a trace of the hash-bound source DWGs. Its candidate field order alone does not prove that either count or either array is present in every version/profile."
+    },
+    {
+      "name": "LibreDWG issue #1398",
+      "url": "https://github.com/LibreDWG/libredwg/issues/1398",
+      "observation": "An ACDBPERSSUBENTMANAGER example reports [2,0,2,0,0,0] before a huge candidate num_subents value overruns the object. The issue author explicitly says the actual field sequence is unknown and lists competing six-value interpretations.",
+      "limitation": "Issue trace is peer diagnostic output, not accepted schema or semantic evidence."
+    },
+    {
+      "name": "LibreDWG PERSUBENTMGR manual",
+      "url": "https://www.gnu.org/software/libredwg/manual/LibreDWG.pdf",
+      "section": "Objects, PERSUBENTMGR",
+      "observation": "Lists class_version, unknown_0, unknown_2, numassocsteps, numassocsubents, num_steps, steps[], num_subents, and subents[].",
+      "limitation": "A field inventory does not establish version-specific physical order, omission conditions, or semantics."
+    }
+  ],
+  "comparison": {
+    "existing_hash_bound_pairs": "AC1015/AC1021/AC1024 DXFs project eight group-90 values [2,0,2,4,0,2,3,4]; AC1027/AC1032 project six [2,0,2,0,0,0]. Physical boundaries and LibreDWG traces for AC1015/AC1021/AC1024 do not establish a valid trailing num_subents/subents sequence.",
+    "existing_receipts": [
+      "docs/research/p6-persubentmgr-acadsharp-cross-version-dxf-wire-conflict-2026-11-09.json",
+      "docs/research/p6-persubentmgr-libreDWG-v5-boundary-traces-2026-11-09.json",
+      "docs/research/p6-ac1032-persubentmgr-six-scalar-raw-only-profile-2026-11-09.json"
+    ]
+  },
+  "decision": "Keep PERSUBENTMGR raw-only/Partial at the existing exact profiles. Do not add the ACadRust array parser to production or promote typed completeness, graph closure, DXF output, or support claims. The newly screened source does not resolve the conflicting version/profile evidence.",
+  "next": "Resume unrelated implementation-ready work. Revisit PERSUBENTMGR only with a pinned ACadRust release run on the exact hash-bound sources, or a native producer/consumer capture that disambiguates body boundaries and array semantics.",
+  "fixturesAdded": 0
+}

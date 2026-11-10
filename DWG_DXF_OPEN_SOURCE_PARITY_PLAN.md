@@ -459,16 +459,21 @@ still carry the same eight group-90 values; this is insufficient to infer
 complete DWG grammar or semantics. Receipt:
 [`p6-persubentmgr-libreDWG-v5-boundary-traces-2026-11-09.json`](docs/research/p6-persubentmgr-libreDWG-v5-boundary-traces-2026-11-09.json).
 
-**Next local work — continue independent source qualification while leaving
-PERSUBENTMGR interpretation unchanged:** AC1014 has no paired DXF in the
-available corpus; AC1027/AC1032 semantic field meanings remain disputed. Look
-for an independently maintained parser or native producer/consumer result
-that can distinguish the body schema. If no such source exists locally, record
-that exact evidence gap and move to another implementation-ready local item;
-do not retry the same unstable peer tail decode or broaden the Partial profile.
-Any eventual parser change must retain truncation rollback, corrected-input
-retry, following-frame recovery, and byte-exact raw fallback. Add no drawing
-fixture and promote no support claim from transport-only agreement.
+**Next local work — continue implementation while leaving PERSUBENTMGR
+interpretation unchanged:** AC1014 has no paired DXF in the available corpus;
+AC1027/AC1032 semantic field meanings remain disputed. The ACadRust source
+screen lists a candidate sequence with separate count-prefixed `steps[]` and
+`subentities[]` arrays, but does not bind that parser revision to the physical
+source files. Its candidate conflicts with the paired DXF value projections
+and does not resolve the previously observed DWG body-boundary overruns; see
+the [ACadRust schema screen](docs/research/p6-persubentmgr-acadrust-schema-screen-2026-11-10.json).
+Keep existing raw-only/Partial profiles. Do not add the peer candidate to the
+production parser or retry the same unstable tail decode. Revisit only with a
+pinned parser run on the exact hash-bound inputs or a native producer/consumer
+capture that resolves body boundaries and array semantics. Any eventual parser
+change must retain truncation rollback, corrected-input retry,
+following-frame recovery, and byte-exact raw fallback. Add no drawing fixture
+and promote no support claim from transport-only agreement.
 
 **Resume checkpoint (2026-11-09, latest desktop inventory):** after the
 user's unlock-in-progress reply, the native-app inventory still reports “The
