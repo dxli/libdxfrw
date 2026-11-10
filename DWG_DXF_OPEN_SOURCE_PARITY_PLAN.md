@@ -181,9 +181,10 @@ fail-closed. See the [whole-file receipt](docs/research/p5-ac1018-table-nod-tabl
 now registers `AcDbTable` before freeze, emits the `*T1` BLOCK_RECORD and its
 8 LINE/7 MTEXT cache, writes the TABLE entity, and validates the TABLESTYLE/NOD
 path after OBJECTS before publishing. Late graph rejection preserves the old
-destination and restores TABLE caller class/handle state; a corrected same-
-facade retry succeeds. Fresh libdxfrw semantic readback and independent
-LibreDWG object/geometry checks pass; the latter leaves the TABLE cell body
+destination and restores TABLE caller class/handle state through a
+no-allocation snapshot swap; a corrected same-facade retry succeeds. Fresh
+libdxfrw semantic readback and independent LibreDWG object/geometry checks
+pass; the latter leaves the TABLE cell body
 opaque. Continue with the next distinct TABLE readiness item: obtain native
 AutoCAD/ODA acceptance and rendering for this profile or an independently
 decoded cell-semantic peer, then qualify additional physical profiles only

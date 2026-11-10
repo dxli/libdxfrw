@@ -974,6 +974,7 @@ private:
     [[nodiscard]] DwgTableWriteState captureTableWriteState(
         DRW_TableEntry *entry) const;
     void restoreEntityWriteState(const DwgEntityWriteState& state);
+    void restoreTableCallerWriteStatesNoAlloc() noexcept;
     void restoreTableWriteState(const DwgTableWriteState& state);
     void restoreEntityWriteStates(
         const std::vector<DwgEntityWriteState>& states);

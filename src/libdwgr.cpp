@@ -809,6 +809,54 @@ void dwgRW::restoreEntityWriteStates(
         restoreEntityWriteState(*it);
 }
 
+void dwgRW::restoreTableCallerWriteStatesNoAlloc() noexcept {
+    for (auto it = m_pendingTableCallerWriteStates.rbegin();
+         it != m_pendingTableCallerWriteStates.rend(); ++it) {
+        DwgEntityWriteState& state = *it;
+        DRW_Entity* entity = state.entity;
+        if (entity == nullptr)
+            continue;
+
+        entity->handle = state.handle;
+        entity->parentHandle = state.parentHandle;
+        entity->space = state.space;
+        entity->haveNextLinks = state.haveNextLinks;
+        entity->hasDsData = state.hasDsData;
+        entity->plotFlags = state.plotFlags;
+        entity->ltFlags = state.ltFlags;
+        entity->materialFlag = state.materialFlag;
+        entity->shadowFlag = state.shadowFlag;
+        entity->hasFullVisualStyle = state.hasFullVisualStyle;
+        entity->hasFaceVisualStyle = state.hasFaceVisualStyle;
+        entity->hasEdgeVisualStyle = state.hasEdgeVisualStyle;
+        entity->hasAcDbColorH = state.hasAcDbColorH;
+        entity->acDbColorHandle = state.acDbColorHandle;
+        entity->lTypeH = state.lTypeH;
+        entity->layerH = state.layerH;
+        entity->nextEntLink = state.nextEntLink;
+        entity->prevEntLink = state.prevEntLink;
+        entity->ownerHandle = state.ownerHandle;
+        entity->xDictFlag = state.xDictFlag;
+        entity->numReactors = state.numReactors;
+        entity->objSize = state.objSize;
+        entity->dwgDataEndBit = state.dwgDataEndBit;
+        entity->oType = state.oType;
+        entity->dwgEedAppIdWriteRefs.swap(state.eedAppIdRefs);
+        entity->dwgEedLayerWriteRefs.swap(state.eedLayerRefs);
+        entity->dwgEedCodePage = state.eedCodePage;
+
+        if (state.hasInsertState) {
+            auto* insert = dynamic_cast<DRW_Insert*>(entity);
+            if (insert != nullptr) {
+                insert->blockRecH = state.insertBlockRecordHandle;
+                insert->seqendH = state.insertSeqEndHandle;
+                insert->attribHandles.swap(state.insertAttributeHandles);
+            }
+        }
+    }
+    m_pendingTableCallerWriteStates.clear();
+}
+
 void dwgRW::restoreTableWriteStates(
     const std::vector<DwgTableWriteState>& states) {
     for (auto it = states.crbegin(); it != states.crend(); ++it)
@@ -1816,7 +1864,7 @@ bool dwgRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
         }
     } tableCallerStateRollback{
         [this] {
-            restoreEntityWriteStates(m_pendingTableCallerWriteStates);
+            restoreTableCallerWriteStatesNoAlloc();
         }};
     if (ver != DRW::AC1015 && ver != DRW::AC1018 && ver != DRW::AC1021 &&
         ver != DRW::AC1024 && ver != DRW::AC1027 &&

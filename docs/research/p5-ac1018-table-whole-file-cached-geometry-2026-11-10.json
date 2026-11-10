@@ -21,6 +21,11 @@
     "caller_state": "TABLE class number, cached BLOCK_RECORD reference, handle, and parent are restored after failure.",
     "retry": "The same dwgRW facade and adapter retry with the corrected NOD key and publish the finalized file."
   },
+  "caller_state_rollback": {
+    "implementation": "The top-level TABLE rollback restores scalar entity state and swaps EED and INSERT vectors from the retained snapshot without allocating.",
+    "verification": "The focused late-closure failure verifies TABLE class number, cached BLOCK_RECORD reference, handle, and parent restoration, then verifies corrected same-facade retry.",
+    "limitation": "The regression does not inject allocation failure specifically during rollback."
+  },
   "libdxfrw_check": {
     "command": "ctest --test-dir build-gcc -R '^libdxfrw_(table_ac1018_whole_file_roundtrip|tablestyle_nod_whole_file_roundtrip)$' --output-on-failure",
     "result": "2/2 passed",
