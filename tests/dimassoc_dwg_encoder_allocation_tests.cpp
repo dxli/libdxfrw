@@ -46,6 +46,11 @@ public:
     using DRW_UCS::encodeDwg;
 };
 
+class ViewProbe final : public DRW_View {
+public:
+    using DRW_View::encodeDwg;
+};
+
 class PlotSettingsProbe final : public DRW_PlotSettings {
 public:
     using DRW_PlotSettings::encodeDwg;
@@ -1033,6 +1038,93 @@ bool sweepUcs(ImageDefinitionStreams mode) {
         "separate-string-body-handles"
     };
     return sweepTransactionalEncoder("UCS", names[static_cast<std::size_t>(mode)],
+        version, encode, outputs);
+}
+
+ViewProbe makeView() {
+    ViewProbe view;
+    view.handle = 0xB000u;
+    view.parentHandle = 0x20u;
+    view.reactorHandles = {0x21u, 0x22u};
+    view.setDwgCommonObjectState(2, 1u, false);
+    view.xDictHandle = 0x23u;
+    view.name = "LOCAL_VIEW";
+    view.flags = 0u;
+    view.size = DRW_Coord(640.0, 480.0, 0.0);
+    view.center = DRW_Coord(3.0, 4.0, 0.0);
+    view.targetPoint = DRW_Coord(5.0, 6.0, 7.0);
+    view.viewDirectionFromTarget = DRW_Coord(0.0, 0.0, 1.0);
+    view.twistAngle = 15.0;
+    view.lensLen = 50.0;
+    view.frontClippingPlaneOffset = 1.0;
+    view.backClippingPlaneOffset = 100.0;
+    view.viewMode = 16;
+    view.renderMode = 2u;
+    view.hasUCS = true;
+    view.ucsOrigin = DRW_Coord(1.0, 2.0, 3.0);
+    view.ucsXAxis = DRW_Coord(1.0, 0.0, 0.0);
+    view.ucsYAxis = DRW_Coord(0.0, 1.0, 0.0);
+    view.ucsElevation = 4.0;
+    view.ucsOrthoType = 3;
+    view.baseUCS_ID = 0x24u;
+    view.namedUCS_ID = 0x25u;
+    view.xrefBlockHandle.ref = 0x26u;
+    view.m_backgroundHandle = 0x27u;
+    view.m_visualStyleHandle = 0x28u;
+    view.m_sunHandle = 0x29u;
+    view.m_liveSectionHandle = 0x2Au;
+    view.m_useDefaultLights = false;
+    view.m_defaultLightingType = 1u;
+    view.m_brightness = 0.75;
+    view.m_contrast = 0.25;
+    return view;
+}
+
+bool sweepView(ImageDefinitionStreams mode) {
+    const DRW::Version version =
+        mode == ImageDefinitionStreams::R13InlineSeparateArguments
+            ? DRW::AC1012
+            : mode == ImageDefinitionStreams::R2004DetachedHandles
+                ? DRW::AC1018 : DRW::AC1021;
+    const ViewProbe view = makeView();
+    const auto encode = [&view](DRW::Version v, dwgBufferW* body,
+                                dwgBufferW* strings, dwgBufferW* handles) {
+        return view.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [mode](dwgBufferW& body, dwgBufferW& strings,
+                                dwgBufferW& handles) {
+        dwgBufferW* stringOutput = nullptr;
+        dwgBufferW* handleOutput = nullptr;
+        switch (mode) {
+        case ImageDefinitionStreams::R13InlineSeparateArguments:
+        case ImageDefinitionStreams::R2004DetachedHandles:
+        case ImageDefinitionStreams::Separate:
+            stringOutput = &strings;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SharedStringAndHandle:
+            stringOutput = &strings;
+            handleOutput = &strings;
+            break;
+        case ImageDefinitionStreams::AllBody:
+            break;
+        case ImageDefinitionStreams::BodyStringDetachedHandles:
+            stringOutput = &body;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SeparateStringBodyHandles:
+            stringOutput = &strings;
+            handleOutput = &body;
+            break;
+        }
+        return EncoderOutputs{stringOutput, handleOutput};
+    };
+    static const char* const names[] = {
+        "AC1012-inline", "AC1018-detached-handles", "separate",
+        "shared-string-handle", "all-body", "body-string-detached-handles",
+        "separate-string-body-handles"
+    };
+    return sweepTransactionalEncoder("VIEW", names[static_cast<std::size_t>(mode)],
         version, encode, outputs);
 }
 
@@ -2263,6 +2355,13 @@ int main() {
         || !sweepUcs(ImageDefinitionStreams::AllBody)
         || !sweepUcs(ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepUcs(ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepView(ImageDefinitionStreams::R13InlineSeparateArguments)
+        || !sweepView(ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepView(ImageDefinitionStreams::Separate)
+        || !sweepView(ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepView(ImageDefinitionStreams::AllBody)
+        || !sweepView(ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepView(ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
         || !sweepGroup(ImageDefinitionStreams::Separate)

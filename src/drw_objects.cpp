@@ -10352,68 +10352,105 @@ bool DRW_View::encodeDwg(DRW::Version version, dwgBufferW *buf,
                    m_ambientColorName)) {
         return false;
     }
-    const std::int32_t reactorCount =
-        static_cast<std::int32_t>(reactorHandles.size());
-    dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
-    dwgBufferW *hb = (hdlBuf && version > DRW::AC1014) ? hdlBuf : buf;
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerStringDest =
+        (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+    dwgBufferW *const callerHandleDest =
+        (hdlBuf != nullptr && version > DRW::AC1014)
+            ? hdlBuf : callerBody;
+    const bool separateStrings = callerStringDest != callerBody;
+    const bool separateHandles = callerHandleDest != callerBody
+        && callerHandleDest != callerStringDest;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *callerBody;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
 
-    sb->putVariableText(version, name);
-    putTableEntryXrefFlags(version, *buf, flags);
-    buf->putBitDouble(size.y);
-    buf->putBitDouble(size.x);
-    buf->put2RawDouble(center);
-    buf->put3BitDouble(targetPoint);
-    buf->put3BitDouble(viewDirectionFromTarget);
-    buf->putBitDouble(twistAngle / ARAD);
-    buf->putBitDouble(lensLen);
-    buf->putBitDouble(frontClippingPlaneOffset);
-    buf->putBitDouble(backClippingPlaneOffset);
-    buf->putBit(static_cast<std::uint8_t>(viewMode & 1));
-    buf->putBit(static_cast<std::uint8_t>((viewMode >> 1) & 1));
-    buf->putBit(static_cast<std::uint8_t>((viewMode >> 2) & 1));
-    // DWG stores the fourth view-mode bit inverted from DXF group 71 bit 4.
-    buf->putBit(static_cast<std::uint8_t>((viewMode & 16) ? 0 : 1));
-    if (version > DRW::AC1014) {
-        buf->putRawChar8(static_cast<std::uint8_t>(renderMode));
+        buf = &stagedBody;
+        strBuf = separateStrings ? &stagedStrings : buf;
+        hdlBuf = separateHandles ? &stagedHandles
+            : callerHandleDest == callerStringDest && separateStrings
+                ? &stagedStrings : buf;
+        const std::int32_t reactorCount =
+            static_cast<std::int32_t>(reactorHandles.size());
+        dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
+        dwgBufferW *hb = (hdlBuf && version > DRW::AC1014) ? hdlBuf : buf;
+
+        sb->putVariableText(version, name);
+        putTableEntryXrefFlags(version, *buf, flags);
+        buf->putBitDouble(size.y);
+        buf->putBitDouble(size.x);
+        buf->put2RawDouble(center);
+        buf->put3BitDouble(targetPoint);
+        buf->put3BitDouble(viewDirectionFromTarget);
+        buf->putBitDouble(twistAngle / ARAD);
+        buf->putBitDouble(lensLen);
+        buf->putBitDouble(frontClippingPlaneOffset);
+        buf->putBitDouble(backClippingPlaneOffset);
+        buf->putBit(static_cast<std::uint8_t>(viewMode & 1));
+        buf->putBit(static_cast<std::uint8_t>((viewMode >> 1) & 1));
+        buf->putBit(static_cast<std::uint8_t>((viewMode >> 2) & 1));
+        // DWG stores the fourth view-mode bit inverted from DXF group 71 bit 4.
+        buf->putBit(static_cast<std::uint8_t>((viewMode & 16) ? 0 : 1));
+        if (version > DRW::AC1014) {
+            buf->putRawChar8(static_cast<std::uint8_t>(renderMode));
+            if (version > DRW::AC1018) {
+                buf->putBit(static_cast<std::uint8_t>(
+                    m_useDefaultLights ? 1 : 0));
+                buf->putRawChar8(m_defaultLightingType);
+                buf->putBitDouble(m_brightness);
+                buf->putBitDouble(m_contrast);
+                buf->putCmColorWithFlags(version, ambientMethod, ambientIndex,
+                                         m_ambientColorRgb, ambientColorNameEntry,
+                                         ambientColorBookName, ambientFlags, sb);
+            }
+        }
+        buf->putBit(static_cast<std::uint8_t>(flags & 1));  // paper-space flag
+        if (version > DRW::AC1014) {
+            buf->putBit(static_cast<std::uint8_t>(hasUCS ? 1 : 0));
+            if (hasUCS) {
+                buf->put3BitDouble(ucsOrigin);
+                buf->put3BitDouble(ucsXAxis);
+                buf->put3BitDouble(ucsYAxis);
+                buf->putBitDouble(ucsElevation);
+                buf->putBitShort(static_cast<std::uint16_t>(ucsOrthoType));
+            }
+        }
+        if (version > DRW::AC1018)
+            buf->putBit(static_cast<std::uint8_t>(
+                cameraPlottable ? 1 : 0));
+
+        putCommonObjectHandlePrefix(hb, kViewControl, reactorCount, xDictFlag,
+                                    &reactorHandles, xDictHandle);
+        hb->putHandle(makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer));
         if (version > DRW::AC1018) {
-            buf->putBit(static_cast<std::uint8_t>(m_useDefaultLights ? 1 : 0));
-            buf->putRawChar8(m_defaultLightingType);
-            buf->putBitDouble(m_brightness);
-            buf->putBitDouble(m_contrast);
-            buf->putCmColorWithFlags(version, ambientMethod, ambientIndex,
-                                     m_ambientColorRgb, ambientColorNameEntry,
-                                     ambientColorBookName, ambientFlags, sb);
+            hb->putHandle(makeRefW(m_backgroundHandle, DRW::DwgSoftPointer));
+            hb->putHandle(makeRefW(m_visualStyleHandle, DRW::DwgHardPointer));
+            hb->putHandle(makeRefW(m_sunHandle, DRW::DwgHardOwnership));
         }
-    }
-    buf->putBit(static_cast<std::uint8_t>(flags & 1));  // paper-space flag
-    if (version > DRW::AC1014) {
-        buf->putBit(static_cast<std::uint8_t>(hasUCS ? 1 : 0));
-        if (hasUCS) {
-            buf->put3BitDouble(ucsOrigin);
-            buf->put3BitDouble(ucsXAxis);
-            buf->put3BitDouble(ucsYAxis);
-            buf->putBitDouble(ucsElevation);
-            buf->putBitShort(static_cast<std::uint16_t>(ucsOrthoType));
+        if (version > DRW::AC1014) {
+            hb->putHandle(makeRefW(baseUCS_ID, DRW::DwgHardPointer));
+            hb->putHandle(makeRefW(namedUCS_ID, DRW::DwgHardPointer));
         }
-    }
-    if (version > DRW::AC1018)
-        buf->putBit(static_cast<std::uint8_t>(cameraPlottable ? 1 : 0));
+        if (version > DRW::AC1018)
+            hb->putHandle(makeRefW(m_liveSectionHandle, DRW::DwgSoftPointer));
 
-    putCommonObjectHandlePrefix(hb, kViewControl, reactorCount, xDictFlag,
-                                &reactorHandles, xDictHandle);
-    hb->putHandle(makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer));
-    if (version > DRW::AC1018) {
-        hb->putHandle(makeRefW(m_backgroundHandle, DRW::DwgSoftPointer));
-        hb->putHandle(makeRefW(m_visualStyleHandle, DRW::DwgHardPointer));
-        hb->putHandle(makeRefW(m_sunHandle, DRW::DwgHardOwnership));
+        if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    if (version > DRW::AC1014) {
-        hb->putHandle(makeRefW(baseUCS_ID, DRW::DwgHardPointer));
-        hb->putHandle(makeRefW(namedUCS_ID, DRW::DwgHardPointer));
-    }
-    if (version > DRW::AC1018)
-        hb->putHandle(makeRefW(m_liveSectionHandle, DRW::DwgSoftPointer));
-    return buf->isGood() && sb->isGood() && hb->isGood();
 }
 
 bool DRW_AppId::encodeDwg(DRW::Version version, dwgBufferW *buf,
