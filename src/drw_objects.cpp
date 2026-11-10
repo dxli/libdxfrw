@@ -22772,8 +22772,34 @@ bool DRW_GeoData::encodeDwg(DRW::Version version, dwgBufferW *buf,
         if (!finite(point.m_source) || !finite(point.m_destination))
             return false;
     }
-    dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018) ? strBuf : buf;
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerStringDest =
+        (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+    dwgBufferW *const callerHandleDest =
+        (handleBuf != nullptr && version > DRW::AC1014)
+            ? handleBuf : callerBody;
+    const bool separateStrings = callerStringDest != callerBody;
+    const bool separateHandles = callerHandleDest != callerBody
+        && callerHandleDest != callerStringDest;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+    stagedBody = *callerBody;
+    if (separateStrings)
+        stagedStrings = *callerStringDest;
+    if (separateHandles)
+        stagedHandles = *callerHandleDest;
+
+    buf = &stagedBody;
+    strBuf = separateStrings ? &stagedStrings : buf;
+    handleBuf = separateHandles ? &stagedHandles
+        : callerHandleDest == callerStringDest && separateStrings
+            ? &stagedStrings : buf;
+    dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018)
+        ? strBuf : buf;
+    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
+        ? handleBuf : buf;
     // GEODATA keeps its type-specific host-block handle in the body through
     // AC1018; only the common object-handle tail uses the staged buffer there.
     dwgBufferW *hostBuf = (handleBuf != nullptr && version > DRW::AC1018)
@@ -22880,7 +22906,18 @@ bool DRW_GeoData::encodeDwg(DRW::Version version, dwgBufferW *buf,
         effectiveXDictFlag, &reactorHandles, xDictHandle);
     if (version > DRW::AC1018)
         hb->putHandle(makeRefW(m_hostBlockHandle, DRW::DwgSoftPointer));
-    return buf->isGood() && sb->isGood() && hb->isGood();
+    if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+        return false;
+
+    callerBody->swap(stagedBody);
+    if (separateStrings)
+        callerStringDest->swap(stagedStrings);
+    if (separateHandles)
+        callerHandleDest->swap(stagedHandles);
+    return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 // DICTIONARYVAR (AcDbDictionaryVar) encoder — ODA §20.4.46.  Body: schema RC

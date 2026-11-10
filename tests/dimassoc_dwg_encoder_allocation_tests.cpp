@@ -101,6 +101,11 @@ public:
     using DRW_SpatialFilter::encodeDwg;
 };
 
+class GeoDataProbe final : public DRW_GeoData {
+public:
+    using DRW_GeoData::encodeDwg;
+};
+
 DimensionAssociationProbe makeAssociation() {
     DimensionAssociationProbe association;
     association.handle = 0xA100u;
@@ -816,6 +821,153 @@ enum class ImageDefinitionStreams {
     BodyStringDetachedHandles,
     SeparateStringBodyHandles
 };
+
+GeoDataProbe makeGeoData(DRW::Version targetVersion) {
+    GeoDataProbe geo;
+    geo.handle = 0xA900u;
+    geo.parentHandle = 0x20u;
+    geo.reactorHandles = {0x21u, 0x22u};
+    geo.setDwgCommonObjectState(2, 1u, false);
+    geo.xDictHandle = 0x23u;
+    geo.m_version = targetVersion >= DRW::AC1021 ? 2 : 1;
+    geo.m_hostBlockHandle = 0x30u;
+    geo.m_coordinatesType = 2;
+    geo.m_designPoint = DRW_Coord{100.0, 200.0, 300.0};
+    geo.m_referencePoint = DRW_Coord{10.0, 20.0, 30.0};
+    geo.m_upDirection = DRW_Coord{0.0, 0.0, 1.0};
+    geo.m_northDirection = DRW_Coord{0.0, 1.0, 0.0};
+    geo.m_horizontalUnitScale = 1.5;
+    geo.m_verticalUnitScale = 2.5;
+    geo.m_horizontalUnits = 2;
+    geo.m_verticalUnits = 3;
+    geo.m_scaleEstimationMethod = 1;
+    geo.m_userSpecifiedScaleFactor = 1.25;
+    geo.m_enableSeaLevelCorrection = true;
+    geo.m_seaLevelElevation = 4.5;
+    geo.m_coordinateProjectionRadius = 6.5;
+    geo.m_coordinateSystemDefinition = "local coordinate system";
+    geo.m_geoRssTag = "geo rss tag";
+    geo.m_observationFromTag = "observation source";
+    geo.m_observationToTag = "observation destination";
+    geo.m_observationCoverageTag = "observation coverage";
+    geo.m_points = {
+        {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}},
+        {{7.0, 8.0, 9.0}, {10.0, 11.0, 12.0}}
+    };
+    geo.m_faces = {{0, 1, 0}};
+    if (targetVersion == DRW::AC1021 || targetVersion == DRW::AC1024) {
+        geo.m_civilTail.m_northDirectionDegrees = 30.0;
+        geo.m_civilTail.m_northDirectionRadians = 0.5235987755982988;
+        geo.m_civilTail.m_scaleEstimationMethod = 2;
+        geo.m_civilTail.m_userSpecifiedScaleFactor = 2.0;
+        geo.m_civilTail.m_enableSeaLevelCorrection = true;
+        geo.m_civilTail.m_seaLevelElevation = 7.0;
+        geo.m_civilTail.m_coordinateProjectionRadius = 8.0;
+    }
+    return geo;
+}
+
+bool sweepGeoData(ImageDefinitionStreams mode) {
+    const DRW::Version version =
+        mode == ImageDefinitionStreams::R13InlineSeparateArguments
+            ? DRW::AC1012
+            : mode == ImageDefinitionStreams::R2004DetachedHandles
+                ? DRW::AC1018 : DRW::AC1021;
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    const GeoDataProbe geo = makeGeoData(version);
+    const auto outputs = [mode](dwgBufferW& body, dwgBufferW& strings,
+                                dwgBufferW& handles) {
+        dwgBufferW* stringOutput = nullptr;
+        dwgBufferW* handleOutput = nullptr;
+        switch (mode) {
+        case ImageDefinitionStreams::R13InlineSeparateArguments:
+        case ImageDefinitionStreams::R2004DetachedHandles:
+        case ImageDefinitionStreams::Separate:
+            stringOutput = &strings;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SharedStringAndHandle:
+            stringOutput = &strings;
+            handleOutput = &strings;
+            break;
+        case ImageDefinitionStreams::AllBody:
+            break;
+        case ImageDefinitionStreams::BodyStringDetachedHandles:
+            stringOutput = &body;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SeparateStringBodyHandles:
+            stringOutput = &strings;
+            handleOutput = &body;
+            break;
+        }
+        return std::pair<dwgBufferW*, dwgBufferW*>(stringOutput,
+                                                   handleOutput);
+    };
+    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
+    seed(cleanBody, cleanStrings, cleanHandles);
+    const auto cleanOutput = outputs(cleanBody, cleanStrings, cleanHandles);
+    if (!geo.encodeDwg(version, &cleanBody, cleanOutput.first,
+                       cleanOutput.second))
+        return false;
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    seed(body, strings, handles);
+    const auto output = outputs(body, strings, handles);
+    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
+    const unsigned long beforeCalibration =
+        failedAllocations.load(std::memory_order_relaxed);
+    const bool calibrated = geo.encodeDwg(version, &body, output.first,
+                                          output.second);
+    const long allocations = 1000000
+        - allocationsBeforeFailure.load(std::memory_order_relaxed);
+    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+    if (!calibrated || allocations <= 0
+        || failedAllocations.load(std::memory_order_relaxed)
+            != beforeCalibration)
+        return false;
+
+    for (long offset = 0; offset < allocations; ++offset) {
+        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
+        seed(failedBody, failedStrings, failedHandles);
+        const auto failedOutput = outputs(failedBody, failedStrings,
+                                          failedHandles);
+        const dwgBufferW originalBody = failedBody;
+        const dwgBufferW originalStrings = failedStrings;
+        const dwgBufferW originalHandles = failedHandles;
+        const unsigned long beforeFailure =
+            failedAllocations.load(std::memory_order_relaxed);
+        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
+        const bool encoded = geo.encodeDwg(version, &failedBody,
+                                           failedOutput.first,
+                                           failedOutput.second);
+        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+        if (encoded
+            || failedAllocations.load(std::memory_order_relaxed)
+                != beforeFailure + 1u
+            || !same(failedBody, originalBody)
+            || !same(failedStrings, originalStrings)
+            || !same(failedHandles, originalHandles))
+            return false;
+        if (!geo.encodeDwg(version, &failedBody, failedOutput.first,
+                           failedOutput.second)
+            || !same(failedBody, cleanBody)
+            || !same(failedStrings, cleanStrings)
+            || !same(failedHandles, cleanHandles))
+            return false;
+    }
+    static const char* const names[] = {
+        "AC1012-inline", "AC1018-detached-handles", "separate",
+        "shared-string-handle", "all-body", "body-string-detached-handles",
+        "separate-string-body-handles"
+    };
+    std::cout << "GEODATA DWG encoder version=" << static_cast<int>(version)
+              << ' ' << names[static_cast<std::size_t>(mode)]
+              << ": allocation offsets=" << allocations
+              << ", rollback/retry=PASS\n";
+    return true;
+}
 
 bool sweepImageDefinition(ImageDefinitionStreams mode) {
     const DRW::Version version = mode == ImageDefinitionStreams::R13InlineSeparateArguments
@@ -1904,6 +2056,13 @@ int main() {
         || !sweepSpatialFilter(DRW::AC1012, false)
         || !sweepSpatialFilter(DRW::AC1018, false)
         || !sweepSpatialFilter(DRW::AC1021, true)
+        || !sweepGeoData(ImageDefinitionStreams::R13InlineSeparateArguments)
+        || !sweepGeoData(ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepGeoData(ImageDefinitionStreams::Separate)
+        || !sweepGeoData(ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepGeoData(ImageDefinitionStreams::AllBody)
+        || !sweepGeoData(ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepGeoData(ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
         || !sweepGroup(ImageDefinitionStreams::Separate)

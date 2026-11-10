@@ -1386,6 +1386,18 @@ created locally from scratch for the specific control.
   [SPATIAL_FILTER allocation receipt](docs/research/p6-spatial-filter-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 1,615 offsets across 81 cases.
 
+- **GEODATA DWG encoder transaction safety:**
+  `DRW_GeoData::encodeDwg` now stages each distinct body, string, and handle
+  destination, preserving aliasing, legacy inline text/host handles, modern
+  deferred host handles, and the AC1021 CIVIL tail. Seven generated
+  AC1012/AC1018/AC1021 stream profiles sweep 268 allocation offsets; every
+  failure preserves caller streams/cursors/handle ledgers, and same-object
+  retry matches clean output. The combined allocation/object-vector control
+  and five version/domain tests pass 8/8. No fixture was added. This is local
+  transaction evidence only and does not broaden GEODATA semantic or producer
+  claims. See the [GEODATA allocation receipt](docs/research/p6-geodata-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 1,883 offsets across 88 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
