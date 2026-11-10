@@ -22,6 +22,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <string_view>
 #include <typeinfo>
@@ -7606,199 +7607,266 @@ bool DRW_MText::encodeDwg(DRW::Version version, dwgBufferW *buf,
                           std::uint32_t bs, dwgBufferW *strBuf,
                           dwgBufferW *handleBuf) {
   (void)bs;
-  if (version > DRW::AC1018 && !std::isfinite(m_definedHeight))
+  if (buf == nullptr)
     return false;
-  DRW_Coord outputXAxis = secPoint;
-  const auto orientation = dxfOrientationForOutput();
-  const bool hasDirection = secPoint.x != 0.0 || secPoint.y != 0.0
-      || secPoint.z != 0.0;
-  if (orientation == DxfOrientationMode::Rotation
-      || (orientation == DxfOrientationMode::LegacyApi && !hasDirection)) {
-    if (!std::isfinite(angle) || !std::isfinite(extPoint.x)
-        || !std::isfinite(extPoint.y) || !std::isfinite(extPoint.z)
-        || (extPoint.x == 0.0 && extPoint.y == 0.0 && extPoint.z == 0.0))
+
+  dwgBufferW *const bodyTarget = buf;
+  const bool hasStringBuffer = strBuf != nullptr;
+  const bool hasHandleBuffer = handleBuf != nullptr;
+  dwgBufferW *const stringTarget = strBuf != nullptr ? strBuf : bodyTarget;
+  dwgBufferW *const handleTarget =
+      handleBuf != nullptr ? handleBuf : bodyTarget;
+  try {
+    // Stage all output categories together. MTEXT can allocate in text/CMC
+    // encoding and in the R2018 context tail, so a late failure must not leave
+    // a partial entity or handle ledger in caller-owned buffers.
+    dwgBufferW bodyStage = *bodyTarget;
+    std::optional<dwgBufferW> stringStageStorage;
+    dwgBufferW *stringStage = &bodyStage;
+    if (stringTarget != bodyTarget) {
+      stringStageStorage.emplace(*stringTarget);
+      stringStage = &*stringStageStorage;
+    }
+    std::optional<dwgBufferW> handleStageStorage;
+    dwgBufferW *handleStage = &bodyStage;
+    if (handleTarget == bodyTarget) {
+      handleStage = &bodyStage;
+    } else if (handleTarget == stringTarget) {
+      handleStage = stringStage;
+    } else {
+      handleStageStorage.emplace(*handleTarget);
+      handleStage = &*handleStageStorage;
+    }
+
+    buf = &bodyStage;
+    strBuf = hasStringBuffer ? stringStage : nullptr;
+    handleBuf = hasHandleBuffer ? handleStage : nullptr;
+    struct ObjectTypeRollback {
+      decltype(oType) &value;
+      decltype(oType) original;
+      bool committed{false};
+      ~ObjectTypeRollback() {
+        if (!committed)
+          value = original;
+      }
+    } typeRollback{oType, oType};
+    oType = 44; // MTEXT class id — see dwgreader.cpp:1215
+    if (version > DRW::AC1018 && !std::isfinite(m_definedHeight))
       return false;
-    DRW_Coord axisX, axisY;
-    calculateOcsAxes(extPoint, axisX, axisY);
-    const double radians = angle / ARAD;
-    const double c = std::cos(radians), s = std::sin(radians);
-    outputXAxis = DRW_Coord(axisX.x*c + axisY.x*s,
-                            axisX.y*c + axisY.y*s,
-                            axisX.z*c + axisY.z*s);
-  }
-  const bool hasBackground =
-      version > DRW::AC1015 &&
-      ((m_backgroundFlags & 0x01) ||
-       (version >= DRW::AC1032 && (m_backgroundFlags & 0x10)));
-  MTextBackgroundCmc backgroundCmc;
-  if (hasBackground &&
-      !prepareMTextBackgroundCmc(version, buf, strBuf, m_backgroundColor,
-                                 m_backgroundColorTrue, m_backgroundScale,
-                                 m_backgroundColorName,
-                                 m_backgroundColorDwgMethod,
-                                 m_backgroundColorDwgFlags,
-                                 m_backgroundColorDwgIndex,
-                                 m_backgroundColorDwgMetadataPresent,
-                                 backgroundCmc))
+    DRW_Coord outputXAxis = secPoint;
+    const auto orientation = dxfOrientationForOutput();
+    const bool hasDirection =
+        secPoint.x != 0.0 || secPoint.y != 0.0 || secPoint.z != 0.0;
+    if (orientation == DxfOrientationMode::Rotation ||
+        (orientation == DxfOrientationMode::LegacyApi && !hasDirection)) {
+      if (!std::isfinite(angle) || !std::isfinite(extPoint.x) ||
+          !std::isfinite(extPoint.y) || !std::isfinite(extPoint.z) ||
+          (extPoint.x == 0.0 && extPoint.y == 0.0 && extPoint.z == 0.0))
+        return false;
+      DRW_Coord axisX, axisY;
+      calculateOcsAxes(extPoint, axisX, axisY);
+      const double radians = angle / ARAD;
+      const double c = std::cos(radians), s = std::sin(radians);
+      outputXAxis =
+          DRW_Coord(axisX.x * c + axisY.x * s, axisX.y * c + axisY.y * s,
+                    axisX.z * c + axisY.z * s);
+    }
+    const bool hasBackground =
+        version > DRW::AC1015 &&
+        ((m_backgroundFlags & 0x01) ||
+         (version >= DRW::AC1032 && (m_backgroundFlags & 0x10)));
+    MTextBackgroundCmc backgroundCmc;
+    if (hasBackground &&
+        !prepareMTextBackgroundCmc(
+            version, buf, strBuf, m_backgroundColor, m_backgroundColorTrue,
+            m_backgroundScale, m_backgroundColorName,
+            m_backgroundColorDwgMethod, m_backgroundColorDwgFlags,
+            m_backgroundColorDwgIndex, m_backgroundColorDwgMetadataPresent,
+            backgroundCmc))
+      return false;
+    if (!encodeDwgCommon(version, buf))
+      return false;
+
+    // R2000/R2004/R2010 MTEXT body — mirror of DRW_MText::parseDwg.
+    buf->put3BitDouble(basePoint);   // insertion
+    buf->put3BitDouble(extPoint);    // extrusion
+    buf->put3BitDouble(outputXAxis); // X-axis direction in WCS
+    buf->putBitDouble(widthscale);   // rect width
+    if (version > DRW::AC1018) {
+      buf->putBitDouble(m_definedHeight); // main reference rectangle height
+    }
+    buf->putBitDouble(height);                             // text height
+    buf->putBitShort(static_cast<std::uint16_t>(textgen)); // attachment
+    buf->putBitShort(static_cast<std::uint16_t>(alignH));  // drawing dir
+    buf->putBitDouble(0.0); // ext_ht (extents height; undocumented)
+    buf->putBitDouble(0.0); // ext_wid (extents width; undocumented)
+    // For AC1024: text goes to string buffer; for AC1015/AC1018: inline.
+    (strBuf ? strBuf : buf)->putVariableText(version, text);
+    // R2000+ extras:
+    buf->putBitShort(linespacingStyle); // linespacing style BS 73
+    buf->putBitDouble(interlin);        // linespacing factor BD
+    buf->putBit(0);                     // unknown bit
+    if (version > DRW::AC1015) {        // R2004+: background flags BL
+      buf->putBitLong(m_backgroundFlags);
+      if ((m_backgroundFlags & 0x01) ||
+          (version >= DRW::AC1032 && (m_backgroundFlags & 0x10))) {
+        buf->putBitDouble(
+            m_backgroundScale); // BitDouble (matches the read fix)
+        writeMTextBackgroundCmc(version, buf, strBuf, m_backgroundColor,
+                                m_backgroundColorTrue, backgroundCmc);
+        buf->putBitLong(m_backgroundTransparency);
+      }
+    }
+    if (version >= DRW::AC1032) {
+      if (!writeR2018MTextContext(*buf, *this))
+        return false;
+    }
+
+    if (!encodeDwgEntHandle(version, buf, handleBuf))
+      return false;
+
+    // styleH — hard pointer to STYLE table record (default STANDARD).
+    dwgBufferW *hb = handleBuf ? handleBuf : buf;
+    putHardPointerHandle(hb, (styleH.ref == 0) ? 0x13 : styleH.ref);
+    if (version >= DRW::AC1032 && m_r2018IsNotAnnotative) {
+      putHardPointerHandle(hb, (m_r2018AppIdHandle == 0) ? 0x14
+                                                         : m_r2018AppIdHandle);
+    }
+    if (!buf->isGood() || !stringStage->isGood() || !hb->isGood() ||
+        !handleStage->isGood())
+      return false;
+
+    bodyTarget->swap(bodyStage);
+    if (stringTarget != bodyTarget)
+      stringTarget->swap(*stringStageStorage);
+    if (handleTarget != bodyTarget && handleTarget != stringTarget)
+      handleTarget->swap(*handleStageStorage);
+    typeRollback.committed = true;
+    return true;
+  } catch (const std::bad_alloc &) {
     return false;
-  oType = 44; // MTEXT class id — see dwgreader.cpp:1215
+  }
+}
+
+bool DRW_Insert::encodeDwg(DRW::Version version, dwgBufferW *buf,
+                           std::uint32_t bs, dwgBufferW *strBuf,
+                           dwgBufferW *handleBuf) {
+  (void)bs;
+  (void)strBuf;
+  if (buf == nullptr)
+    return false;
+  const bool hasAttrib = !attribHandles.empty();
+  if (!hasAttrib) {
+    if (seqendH.ref != DRW::NoHandle)
+      return false;
+  } else {
+    if (seqendH.ref == DRW::NoHandle)
+      return false;
+    if (version < DRW::AC1018) {
+      if (attribHandles.size() != 2 ||
+          (attribHandles.front().ref == DRW::NoHandle) !=
+              (attribHandles.back().ref == DRW::NoHandle)) {
+        return false;
+      }
+    } else if (std::any_of(attribHandles.cbegin(), attribHandles.cend(),
+                           [](const dwgHandle &handle) {
+                             return handle.ref == DRW::NoHandle;
+                           })) {
+      return false;
+    }
+  }
+  if (attribHandles.size() >
+      static_cast<std::size_t>(std::numeric_limits<std::int32_t>::max()))
+    return false;
+
+  // 2b.6: emit MINSERT (oType 8) when a column/row grid is present;
+  // otherwise a plain INSERT (oType 7). The reader keys the grid block off
+  // oType==8 (parseDwg :3189).
+  oType = isMInsert() ? 8 : 7;
   if (!encodeDwgCommon(version, buf))
     return false;
 
-  // R2000/R2004/R2010 MTEXT body — mirror of DRW_MText::parseDwg.
-  buf->put3BitDouble(basePoint); // insertion
-  buf->put3BitDouble(extPoint);  // extrusion
-  buf->put3BitDouble(outputXAxis); // X-axis direction in WCS
-  buf->putBitDouble(widthscale); // rect width
-  if (version > DRW::AC1018) {
-    buf->putBitDouble(m_definedHeight); // main reference rectangle height
+  // INSERT body — mirror of DRW_Insert::parseDwg for R2000.
+  buf->putBitDouble(basePoint.x);
+  buf->putBitDouble(basePoint.y);
+  buf->putBitDouble(basePoint.z);
+
+  // dataFlags: pick the most compact form based on actual scales.
+  //   3 → all scales default to 1.0 (no emit)
+  //   2 → uniform scale (xscale RD only; yscale=zscale=xscale)
+  //   1 → xscale defaults to 1, yscale/zscale as DD against xscale
+  //   0 → xscale RD; yscale/zscale as DD against xscale
+  if (sameStoredDouble(xscale, 1.0) && sameStoredDouble(yscale, 1.0) &&
+      sameStoredDouble(zscale, 1.0)) {
+    buf->put2Bits(3);
+  } else if (sameStoredDouble(xscale, yscale) &&
+             sameStoredDouble(yscale, zscale)) {
+    buf->put2Bits(2);
+    buf->putRawDouble(xscale);
+  } else if (sameStoredDouble(xscale, 1.0)) {
+    // xscale is exactly 1.0 (parseDwg leaves it at its 1.0 default and
+    // never reads it in this branch), so it can be omitted; y and z are
+    // independent and go through the same DD-against-1.0 path parseDwg
+    // reads them with.
+    buf->put2Bits(1);
+    buf->putDefaultDouble(1.0, yscale);
+    buf->putDefaultDouble(1.0, zscale);
+  } else {
+    // Use dataFlags=0 (general case): RD x + DD y + DD z.
+    buf->put2Bits(0);
+    buf->putRawDouble(xscale);
+    buf->putDefaultDouble(xscale, yscale);
+    buf->putDefaultDouble(xscale, zscale);
   }
-  buf->putBitDouble(height);                             // text height
-  buf->putBitShort(static_cast<std::uint16_t>(textgen)); // attachment
-  buf->putBitShort(static_cast<std::uint16_t>(alignH));  // drawing dir
-  buf->putBitDouble(0.0); // ext_ht (extents height; undocumented)
-  buf->putBitDouble(0.0); // ext_wid (extents width; undocumented)
-  // For AC1024: text goes to string buffer; for AC1015/AC1018: inline.
-  (strBuf ? strBuf : buf)->putVariableText(version, text);
-  // R2000+ extras:
-  buf->putBitShort(linespacingStyle); // linespacing style BS 73
-  buf->putBitDouble(interlin);        // linespacing factor BD
-  buf->putBit(0);                     // unknown bit
-  if (version > DRW::AC1015) {        // R2004+: background flags BL
-    buf->putBitLong(m_backgroundFlags);
-    if ((m_backgroundFlags & 0x01) ||
-        (version >= DRW::AC1032 && (m_backgroundFlags & 0x10))) {
-      buf->putBitDouble(m_backgroundScale); // BitDouble (matches the read fix)
-      writeMTextBackgroundCmc(version, buf, strBuf, m_backgroundColor,
-                              m_backgroundColorTrue, backgroundCmc);
-      buf->putBitLong(m_backgroundTransparency);
-    }
-  }
-  if (version >= DRW::AC1032) {
-    if (!writeR2018MTextContext(*buf, *this))
-      return false;
+
+  buf->putBitDouble(angle); // radians
+  buf->putExtrusion(extPoint, /*b_R2000_style=*/false);
+  buf->putBit(hasAttrib ? 1 : 0);
+  if (hasAttrib && version > DRW::AC1015)
+    buf->putBitLong(static_cast<std::int32_t>(attribHandles.size()));
+  // hasAttrib==0 ⇒ the SINCE-R2004 num_owned BL is absent (parse :3184), so
+  // the MINSERT grid (oType==8) follows the hasAttrib bit directly. Field
+  // order mirrors parseDwg :3190-3193 (colcount BS, rowcount BS, colspace BD,
+  // rowspace BD) and libreDWG dwg.spec
+  // num_cols/num_rows/col_spacing/row_spacing.
+  if (oType == 8) { // MINSERT grid
+    buf->putBitShort(static_cast<std::uint16_t>(colcount));
+    buf->putBitShort(static_cast<std::uint16_t>(rowcount));
+    buf->putBitDouble(colspace);
+    buf->putBitDouble(rowspace);
   }
 
   if (!encodeDwgEntHandle(version, buf, handleBuf))
     return false;
 
-  // styleH — hard pointer to STYLE table record (default STANDARD).
-  dwgBufferW *hb = handleBuf ? handleBuf : buf;
-  putHardPointerHandle(hb, (styleH.ref == 0) ? 0x13 : styleH.ref);
-  if (version >= DRW::AC1032 && m_r2018IsNotAnnotative)
-    putHardPointerHandle(hb,
-                         (m_r2018AppIdHandle == 0) ? 0x14 : m_r2018AppIdHandle);
-  return buf->isGood() && hb->isGood();
-}
+  // BLOCK_RECORD hard pointer.
+  dwgHandle bhH;
+  bhH.code = (blockRecH.ref == 0) ? 0 : 5;
+  bhH.ref = blockRecH.ref;
+  bhH.size = 0;
+  if (bhH.ref != 0) {
+    std::uint32_t t = bhH.ref;
+    while (t != 0) {
+      t >>= 8;
+      ++bhH.size;
+    }
+  }
+  (handleBuf ? handleBuf : buf)->putHandle(bhH);
 
-bool DRW_Insert::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
-    (void)bs; (void)strBuf;
-    if (buf == nullptr)
-        return false;
-    const bool hasAttrib = !attribHandles.empty();
-    if (!hasAttrib) {
-        if (seqendH.ref != DRW::NoHandle)
-            return false;
+  if (hasAttrib) {
+    dwgBufferW *hb = handleBuf ? handleBuf : buf;
+    if (version < DRW::AC1018) {
+      for (const dwgHandle &attribHandle : attribHandles)
+        putDwgReference(hb, DRW::DwgSoftPointer, attribHandle.ref);
     } else {
-        if (seqendH.ref == DRW::NoHandle)
-            return false;
-        if (version < DRW::AC1018) {
-            if (attribHandles.size() != 2 ||
-                (attribHandles.front().ref == DRW::NoHandle) !=
-                    (attribHandles.back().ref == DRW::NoHandle)) {
-                return false;
-            }
-        } else if (std::any_of(attribHandles.cbegin(), attribHandles.cend(),
-                               [](const dwgHandle& handle) {
-                                   return handle.ref == DRW::NoHandle;
-                               })) {
-            return false;
-        }
+      const std::uint8_t attributeCode =
+          oType == 8 ? DRW::DwgSoftPointer : DRW::DwgHardOwnership;
+      for (const dwgHandle &attribHandle : attribHandles)
+        putDwgReference(hb, attributeCode, attribHandle.ref);
     }
-    if (attribHandles.size() > static_cast<std::size_t>(std::numeric_limits<std::int32_t>::max()))
-        return false;
-
-    // 2b.6: emit MINSERT (oType 8) when a column/row grid is present;
-    // otherwise a plain INSERT (oType 7). The reader keys the grid block off
-    // oType==8 (parseDwg :3189).
-    oType = isMInsert() ? 8 : 7;
-    if (!encodeDwgCommon(version, buf)) return false;
-
-    // INSERT body — mirror of DRW_Insert::parseDwg for R2000.
-    buf->putBitDouble(basePoint.x);
-    buf->putBitDouble(basePoint.y);
-    buf->putBitDouble(basePoint.z);
-
-    // dataFlags: pick the most compact form based on actual scales.
-    //   3 → all scales default to 1.0 (no emit)
-    //   2 → uniform scale (xscale RD only; yscale=zscale=xscale)
-    //   1 → xscale defaults to 1, yscale/zscale as DD against xscale
-    //   0 → xscale RD; yscale/zscale as DD against xscale
-    if (sameStoredDouble(xscale, 1.0) && sameStoredDouble(yscale, 1.0)
-        && sameStoredDouble(zscale, 1.0)) {
-        buf->put2Bits(3);
-    } else if (sameStoredDouble(xscale, yscale) && sameStoredDouble(yscale, zscale)) {
-        buf->put2Bits(2);
-        buf->putRawDouble(xscale);
-    } else if (sameStoredDouble(xscale, 1.0)) {
-        // xscale is exactly 1.0 (parseDwg leaves it at its 1.0 default and
-        // never reads it in this branch), so it can be omitted; y and z are
-        // independent and go through the same DD-against-1.0 path parseDwg
-        // reads them with.
-        buf->put2Bits(1);
-        buf->putDefaultDouble(1.0, yscale);
-        buf->putDefaultDouble(1.0, zscale);
-    } else {
-        // Use dataFlags=0 (general case): RD x + DD y + DD z.
-        buf->put2Bits(0);
-        buf->putRawDouble(xscale);
-        buf->putDefaultDouble(xscale, yscale);
-        buf->putDefaultDouble(xscale, zscale);
-    }
-
-    buf->putBitDouble(angle);                // radians
-    buf->putExtrusion(extPoint, /*b_R2000_style=*/false);
-    buf->putBit(hasAttrib ? 1 : 0);
-    if (hasAttrib && version > DRW::AC1015)
-        buf->putBitLong(static_cast<std::int32_t>(attribHandles.size()));
-    // hasAttrib==0 ⇒ the SINCE-R2004 num_owned BL is absent (parse :3184), so
-    // the MINSERT grid (oType==8) follows the hasAttrib bit directly. Field
-    // order mirrors parseDwg :3190-3193 (colcount BS, rowcount BS, colspace BD,
-    // rowspace BD) and libreDWG dwg.spec num_cols/num_rows/col_spacing/row_spacing.
-    if (oType == 8) {  // MINSERT grid
-        buf->putBitShort(static_cast<std::uint16_t>(colcount));
-        buf->putBitShort(static_cast<std::uint16_t>(rowcount));
-        buf->putBitDouble(colspace);
-        buf->putBitDouble(rowspace);
-    }
-
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
-
-    // BLOCK_RECORD hard pointer.
-    dwgHandle bhH;
-    bhH.code = (blockRecH.ref == 0) ? 0 : 5;
-    bhH.ref  = blockRecH.ref;
-    bhH.size = 0;
-    if (bhH.ref != 0) {
-        std::uint32_t t = bhH.ref;
-        while (t != 0) { t >>= 8; ++bhH.size; }
-    }
-    (handleBuf ? handleBuf : buf)->putHandle(bhH);
-
-    if (hasAttrib) {
-        dwgBufferW *hb = handleBuf ? handleBuf : buf;
-        if (version < DRW::AC1018) {
-            for (const dwgHandle& attribHandle : attribHandles)
-                putDwgReference(hb, DRW::DwgSoftPointer, attribHandle.ref);
-        } else {
-            const std::uint8_t attributeCode =
-                oType == 8 ? DRW::DwgSoftPointer : DRW::DwgHardOwnership;
-            for (const dwgHandle& attribHandle : attribHandles)
-                putDwgReference(hb, attributeCode, attribHandle.ref);
-        }
-        putDwgReference(hb, DRW::DwgHardOwnership, seqendH.ref);
-    }
-    return buf->isGood() && (handleBuf == nullptr || handleBuf->isGood());
+    putDwgReference(hb, DRW::DwgHardOwnership, seqendH.ref);
+  }
+  return buf->isGood() && (handleBuf == nullptr || handleBuf->isGood());
 }
 
 bool DRW_3Dface::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
