@@ -29433,41 +29433,72 @@ bool DRW_Sun::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || extensionDictionaryFlag() > 1)
         return false;
 
-    std::uint8_t colorMethod = 0u;
-    std::uint8_t colorFlags = 0u;
-    std::uint16_t colorIndex = 0u;
-    UTF8STRING colorName;
-    UTF8STRING colorBookName;
-    if (!prepareDwgCmcColor(m_colorCmc, m_color, m_color24,
-                            m_colorName, colorMethod, colorIndex,
-                            colorName, colorBookName, colorFlags))
+    try {
+        std::uint8_t colorMethod = 0u;
+        std::uint8_t colorFlags = 0u;
+        std::uint16_t colorIndex = 0u;
+        UTF8STRING colorName;
+        UTF8STRING colorBookName;
+        if (!prepareDwgCmcColor(m_colorCmc, m_color, m_color24,
+                                m_colorName, colorMethod, colorIndex,
+                                colorName, colorBookName, colorFlags))
+            return false;
+        dwgBufferW *const stringDest = strBuf ? strBuf : buf;
+        if (colorFlags != 0u && (version > DRW::AC1018)
+            && (strBuf == nullptr || stringDest == buf))
+            return false;
+
+        dwgBufferW *const handleDest =
+            (handleBuf != nullptr && version > DRW::AC1018)
+                ? handleBuf : buf;
+        const bool separateStrings = stringDest != buf;
+        const bool separateHandles =
+            handleDest != buf && handleDest != stringDest;
+        dwgBufferW stagedBody;
+        dwgBufferW stagedStrings;
+        dwgBufferW stagedHandles;
+        stagedBody = *buf;
+        if (separateStrings)
+            stagedStrings = *stringDest;
+        if (separateHandles)
+            stagedHandles = *handleDest;
+
+        dwgBufferW *const bodyOut = &stagedBody;
+        dwgBufferW *const stringOut = separateStrings
+            ? &stagedStrings : bodyOut;
+        dwgBufferW *const handleOut = handleDest == buf ? bodyOut
+            : handleDest == stringDest ? stringOut : &stagedHandles;
+        bodyOut->putBitLong(static_cast<std::int32_t>(m_classVersion));
+        bodyOut->putBit(m_isOn ? 1 : 0);
+        bodyOut->putCmColorWithFlags(
+            version, colorMethod, colorIndex, m_color24,
+            colorName, colorBookName, colorFlags, stringOut);
+        bodyOut->putBitDouble(m_intensity);
+        bodyOut->putBit(m_hasShadow ? 1 : 0);
+        bodyOut->putBitLong(m_julianDay);
+        bodyOut->putBitLong(m_milliseconds);
+        bodyOut->putBit(m_isDaylightSavings ? 1 : 0);
+        bodyOut->putBitLong(static_cast<std::int32_t>(m_shadowType));
+        bodyOut->putBitShort(static_cast<std::int16_t>(m_shadowMapSize));
+        bodyOut->putRawChar8(m_shadowSoftness);
+
+        putCommonObjectHandlePrefix(
+            handleOut, static_cast<std::uint32_t>(parentHandle),
+            reactorCount(), extensionDictionaryFlag(), &reactorHandles,
+            xDictHandle);
+        if (!bodyOut->isGood() || !stringOut->isGood()
+            || !handleOut->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (separateStrings)
+            stringDest->swap(stagedStrings);
+        if (separateHandles)
+            handleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
         return false;
-    dwgBufferW *sb = strBuf ? strBuf : buf;
-    if (colorFlags != 0u && (version > DRW::AC1018)
-        && (strBuf == nullptr || strBuf == buf))
-        return false;
-
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1018)
-        ? handleBuf
-        : buf;
-
-    buf->putBitLong(static_cast<std::int32_t>(m_classVersion));
-    buf->putBit(m_isOn ? 1 : 0);
-    buf->putCmColorWithFlags(version, colorMethod, colorIndex, m_color24,
-                             colorName, colorBookName, colorFlags, sb);
-    buf->putBitDouble(m_intensity);
-    buf->putBit(m_hasShadow ? 1 : 0);
-    buf->putBitLong(m_julianDay);
-    buf->putBitLong(m_milliseconds);
-    buf->putBit(m_isDaylightSavings ? 1 : 0);
-    buf->putBitLong(static_cast<std::int32_t>(m_shadowType));
-    buf->putBitShort(static_cast<std::int16_t>(m_shadowMapSize));
-    buf->putRawChar8(m_shadowSoftness);
-
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), reactorCount(),
-        extensionDictionaryFlag(), &reactorHandles, xDictHandle);
-    return buf->isGood() && hb->isGood();
+    }
 }
 
 void DRW_AssociativeObject::reset() {

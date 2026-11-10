@@ -81,6 +81,11 @@ public:
     using DRW_DbColor::encodeDwg;
 };
 
+class SunProbe final : public DRW_Sun {
+public:
+    using DRW_Sun::encodeDwg;
+};
+
 class PointCloudDefProbe final : public DRW_PointCloudDef {
 public:
     using DRW_PointCloudDef::encodeDwg;
@@ -384,6 +389,67 @@ bool sweepDbColor(DbColorStreamLayout layout) {
     };
     return sweepTransactionalEncoder(
         "DBCOLOR", names[static_cast<std::size_t>(layout)], version,
+        encode, outputs);
+}
+
+SunProbe makeSun() {
+    SunProbe sun;
+    sun.handle = 0xD8B0u;
+    sun.parentHandle = 0xD8AFu;
+    sun.reactorHandles = {0xD8A0u, 0xD8A1u};
+    sun.setDwgCommonObjectState(2, 1u, false);
+    sun.xDictHandle = 0xD8A2u;
+    sun.m_classVersion = 2u;
+    sun.m_isOn = true;
+    sun.m_color = 256u;
+    sun.m_color24 = 0x123456;
+    sun.m_colorCmc.present = true;
+    sun.m_colorCmc.method = 0xC2u;
+    sun.m_colorCmc.flags = 3u;
+    sun.m_colorCmc.colorName = "ENCODER_SUN_COLOR";
+    sun.m_colorCmc.bookName = "ENCODER_SUN_BOOK";
+    sun.m_colorName = "ENCODER_SUN_BOOK$ENCODER_SUN_COLOR";
+    sun.m_intensity = 1.25;
+    sun.m_hasShadow = true;
+    sun.m_julianDay = 2459999;
+    sun.m_milliseconds = 43210000;
+    sun.m_isDaylightSavings = true;
+    sun.m_shadowType = 1u;
+    sun.m_shadowMapSize = 2048u;
+    sun.m_shadowSoftness = 12u;
+    return sun;
+}
+
+enum class SunStreamLayout {
+    Separate,
+    SharedStringAndHandle,
+    SeparateStringBodyHandles
+};
+
+bool sweepSun(SunStreamLayout layout) {
+    const DRW::Version version = DRW::AC1024;
+    const SunProbe sun = makeSun();
+    const auto encode = [&sun](DRW::Version v, dwgBufferW* body,
+                               dwgBufferW* strings, dwgBufferW* handles) {
+        return sun.encodeDwg(v, body, handles, strings);
+    };
+    const auto outputs = [layout](dwgBufferW& body, dwgBufferW& strings,
+                                  dwgBufferW& handles) {
+        switch (layout) {
+        case SunStreamLayout::Separate:
+            return EncoderOutputs{&strings, &handles};
+        case SunStreamLayout::SharedStringAndHandle:
+            return EncoderOutputs{&strings, &strings};
+        case SunStreamLayout::SeparateStringBodyHandles:
+            return EncoderOutputs{&strings, &body};
+        }
+        return EncoderOutputs{&strings, &handles};
+    };
+    static const char* const names[] = {
+        "separate", "shared-string-handle", "separate-string-body-handles"
+    };
+    return sweepTransactionalEncoder(
+        "SUN", names[static_cast<std::size_t>(layout)], version,
         encode, outputs);
 }
 
@@ -3038,6 +3104,9 @@ int main() {
         || !sweepDbColor(DbColorStreamLayout::Ac1018DetachedHandles)
         || !sweepDbColor(DbColorStreamLayout::Ac1021Separate)
         || !sweepDbColor(DbColorStreamLayout::Ac1021SharedStringAndHandle)
+        || !sweepSun(SunStreamLayout::Separate)
+        || !sweepSun(SunStreamLayout::SharedStringAndHandle)
+        || !sweepSun(SunStreamLayout::SeparateStringBodyHandles)
         || !sweep(StreamAlias::Separate)
         || !sweep(StreamAlias::SharedStringAndHandle)
         || !sweep(StreamAlias::AllBody)

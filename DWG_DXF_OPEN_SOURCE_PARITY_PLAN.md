@@ -1198,6 +1198,15 @@ created locally from scratch for the specific control.
   generated profiles; no DBCOLOR support or producer claim is promoted. See
   the [rollback receipt](docs/research/p6-dbcolor-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **P6 SUN DWG encoder transaction safety:** `DRW_Sun::encodeDwg` now stages
+  body, CMC string and handle streams, catches allocation failure during CMC
+  preparation, checks every stream before publication, and preserves alias
+  routing. Three AC1024 layouts sweep 89 reached allocation offsets with full
+  rollback and same-object retry. The focused allocation and DWG object-vector
+  tests pass. This is generated local failure/retry evidence only; producer,
+  native semantics, graph closure and support claims remain open. See the
+  [rollback receipt](docs/research/p6-sun-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **P4 AC1027 Sweep embedded LWPOLYLINE field capture:** the bounded type-77
   decoder now retains the raw spans and captures modeled scalar, normal,
   vertex and optional-array fields, including valid polyline flags `0x100`,
