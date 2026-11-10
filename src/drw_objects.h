@@ -4763,10 +4763,14 @@ public:
   [[nodiscard]] bool hasDwgRawData() const noexcept { return m_rawDataValid; }
   //! True when the selected versioned nonprocedural MATERIAL profile was
   //! decoded completely into typed semantic fields. This does not imply that
-  //! a retained modern raw body/string tail can be written back.
+  //! every retained raw body can be written back.
   [[nodiscard]] bool hasCompleteDwgSemanticFields() const noexcept {
     return m_dwgSemanticFieldsParsed;
   }
+  //! True only for the source-bound AC1027 default-material body profile whose
+  //! body and detached strings can be replayed without interpreting or losing
+  //! unmodeled values.
+  [[nodiscard]] bool canReplayAc1027DefaultDwgBody() const noexcept;
   //! True when DXF tail fields were parsed after a complete nonprocedural map
   //! tuple, without the optional procedural-table group 292 marker.
   [[nodiscard]] bool hasDxfMaterialImplicitTail() const noexcept {

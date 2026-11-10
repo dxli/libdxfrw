@@ -1,5 +1,7 @@
 # DWG/DXF parity — remaining implementation plan
 
+**Latest implementation slice (2026-11-10, AC1027 MATERIAL default-body replay):** the DWG writer now replays the exact 516-bit retained body and the five detached empty map-name strings for the parsed `Global`/`ByBlock`/`ByLayer` default profile only. A strict predicate checks all decoded body selectors and raw-frame version/size before output. Generated tests verify identical body bits, bounded string order, seeded-buffer preservation on mutation refusal, corrected same-object retry, and full generated AC1027 dictionary→MATERIAL file readback. The existing physical `Cover.dwg` audit confirms its three default materials meet the replay predicate; that source was not written back to DWG. Focused CTest passes 1/1, with no fixture or support claim. Other modern MATERIAL profiles remain refused. See the [replay receipt](docs/research/p6-ac1027-material-default-body-replay-2026-11-10.json).
+
 **Latest implementation slice (2026-11-10, AC1024 associative-network action/handle-role binding):** the qualified AC1024 class-version-1 parser now requires each `isOwned` action flag to agree with its DWG handle role (hard ownership for owned actions, soft pointer otherwise). Generated mutations for both contradictory roles are withheld, and the same reader accepts the corrected frame on retry. The focused network/output/readback cohort passes 8/8; a rebuilt inventory reader accepts the existing hash-bound AC1024 architectural sample and parses all 28 action references across five networks. AC1032 handling is unchanged and remains a candidate-only parse with output refused. No drawing fixture or support claim was added. See the [role-binding receipt](docs/research/p4-ac1024-assocnetwork-action-handle-role-binding-2026-11-10.json).
 
 **Latest implementation slice (2026-11-10, AC1032 associative-network multi-action parser control):** added a locally generated class-version-2 dispatch test with three logical actions, mixed ownership flags, and a distinct owned-action handle list. It verifies the exact candidate fields and complete bounded prefix while requiring `m_networkFieldsParsed=false`. The targeted reader-matrix build and both associative-network CTests pass (2/2). The values are guided by LibreDWG's projection of an unqualified ACadSharp AEC sample that libdxfrw cannot reach before OBJECTS; they remain candidates only. No production parser or writer behavior changed, no drawing fixture was added, and no support claim is promoted. AC1032 network schema, source spans/roles, graph closure, and output remain refused. See the [generated control receipt](docs/research/p4-ac1032-assocnetwork-multi-action-generated-2026-11-10.json).
@@ -2407,8 +2409,9 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    The MATERIAL parser now recognizes the source-matched AC1027
    default values (inherited colors, scene-sourced refraction, channel flags
    127) and marks those three records semantically complete. This is a bounded
-   read profile; AC1027 DWG MATERIAL encoding remains refused while the modern
-   raw tail cannot be replayed. Keep normative ODA and peer-based dispositions separate: MLINESTYLE and the
+   read profile; the exact AC1027 default body and detached strings now replay
+   for the three parsed default records only. Other modern MATERIAL bodies and
+   values remain refused. Keep normative ODA and peer-based dispositions separate: MLINESTYLE and the
    R24 TABLESTYLE handle roles are directly specified by ODA §§20.4.73 and
    20.4.101.2–.4.
    `DRW_MLineStyle::parseDwg` consumes inline AC1027 element linetype indices;
@@ -2433,7 +2436,7 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    or native-consumer qualification. No fixture was added. See the
    [AC1032 MLINESTYLE receipt](docs/research/p6-ac1032-mlinestyle-linetype-handle-roles-2026-11-09.json).
 
-   **AC1027 MATERIAL default parser profile completed; DWG encoding remains open.**
+   **AC1027 MATERIAL default parser and exact-profile body replay completed.**
    The three type-502 MATERIAL frames (handles 68/69/70; keys
    ByLayer/ByBlock/Global) match LibreDWG minJSON from the same Cover source by
    identity, size, owner, reactor, and the decoded default semantic fields.
@@ -2445,11 +2448,19 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    flags. The versioned default builder now emits the observed AC1027 profile;
    AC1021/AC1024 exact profiles remain unchanged. This does not enable AC1027
    output: `DRW_Material::encodeDwg` continues to refuse retained modern raw
-   tails because body/string replay is not yet complete. The SUN,
-   DICTIONARYWDFLT, TABLESTYLE, and MLEADERSTYLE body-reference profiles are
-   complete. Only 3DSOLID remains partial in the physical body-reference
-   inventory; AC1027 DWG MATERIAL encoding and the global strict guard remain
-   open. Do not rescan the corpus.
+   tails outside the admitted exact profile. The writer replays the retained
+   516-bit AC1027 default body and its five explicit empty detached map strings
+   only for parsed `Global`/`ByBlock`/`ByLayer` records whose full decoded
+   selectors still match the source profile. A generated full-file
+   dictionary/MATERIAL graph finalizes and fresh libdxfrw readback confirms
+   the exact body and strings; the current physical Cover source records pass
+   the eligibility predicate but were not written back to DWG. AC1021/AC1024
+   raw bodies, other AC1027 bodies and newly authored modern MATERIAL values
+   remain refused. The SUN, DICTIONARYWDFLT, TABLESTYLE, and MLEADERSTYLE
+   body-reference profiles are complete. Only 3DSOLID remains partial in the
+   physical body-reference inventory; physical source-to-DWG output,
+   independent producer acceptance and the global strict guard remain open.
+   Do not rescan the corpus. See the [body replay receipt](docs/research/p6-ac1027-material-default-body-replay-2026-11-10.json).
 
    **Completed MATERIAL profile/retry slice (2026-11-08):** the AC1027 exact
    frame writer now validates its body and detached strings against the
@@ -2457,10 +2468,11 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    assumptions that rejected the AC1027 516-bit field body and 118/134-bit
    detached strings. Focused tests now pass for AC1024 defaults, AC1027 opt-in
    graph emission, injected dictionary failure with buffer/checkpoint rollback
-   and same-adapter retry, and retained-modern-tail replay refusal. The one
-   partial AC1027 report (3DSOLID), AC1027 DWG MATERIAL encoding, whole-source
-   DXF output, and aggregate strict guard remain open; this slice does not
-   promote broad support.
+   and same-adapter retry, and retained-modern-tail replay refusal. That
+   2026-11-08 slice predates the bounded 2026-11-10 AC1027 default-body replay
+   above. The one partial AC1027 report (3DSOLID), broader AC1027 MATERIAL
+   encoding, AC1021/AC1024 MATERIAL output, whole-source DXF output, and
+   aggregate strict guard remain open; neither slice promotes broad support.
    The refreshed source-reference audit independently passes with 88 retained
    identities, 40 normative no-body profiles, 18 normative handle profiles,
    29 peer no-body profiles, 43 dictionary edges, one selected typed report (3DSOLID),

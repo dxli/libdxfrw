@@ -17234,6 +17234,172 @@ bool DRW_Material::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
     }
 }
 
+bool DRW_Material::canReplayAc1027DefaultDwgBody() const noexcept {
+    static constexpr std::array<double, 16> identity{{
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0}};
+    const auto colorIsDefault = [](std::uint8_t method, double factor,
+                                   std::uint32_t value, bool hasMethod,
+                                   bool hasFactor, bool hasValue) {
+        return method == 0u && factor == 1.0 && value == 0u
+            && hasMethod && hasFactor && !hasValue;
+    };
+    const auto mapIsDefault = [](
+            double blend, std::uint8_t source, const UTF8STRING& fileName,
+            std::uint8_t projection, std::uint8_t tiling,
+            std::uint8_t autoTransform,
+            const std::array<double, 16>& transform,
+            bool hasBlend, bool hasSource, bool hasFileName,
+            bool hasProjection, bool hasTiling, bool hasAutoTransform,
+            bool hasTransform, std::size_t transformCount,
+            std::uint8_t expectedSource) {
+        return blend == 1.0 && source == expectedSource && fileName.empty()
+            && projection == 1u && tiling == 1u && autoTransform == 1u
+            && transform == identity && hasBlend && hasSource
+            && hasFileName == (expectedSource == 1u) && hasProjection
+            && hasTiling && hasAutoTransform && hasTransform
+            && transformCount == transform.size();
+    };
+    const auto defaultMapFields = [](
+            double blend, std::uint8_t source, const UTF8STRING& fileName,
+            std::uint8_t projection, std::uint8_t tiling,
+            std::uint8_t autoTransform,
+            const std::array<double, 16>& transform,
+            bool hasBlend, bool hasSource, bool hasFileName,
+            bool hasProjection, bool hasTiling, bool hasAutoTransform,
+            bool hasTransform, std::size_t transformCount) {
+        return blend == 1.0 && source == 1u && fileName.empty()
+            && projection == 1u && tiling == 1u && autoTransform == 1u
+            && transform == identity && !hasBlend && !hasSource
+            && !hasFileName && !hasProjection && !hasTiling
+            && !hasAutoTransform && !hasTransform && transformCount == 0u;
+    };
+    const bool knownName = m_name == "Global" || m_name == "ByBlock"
+        || m_name == "ByLayer";
+    return m_rawDataValid && m_rawDataVersion == DRW::AC1027
+        && m_rawDataBitSize == 516u && m_rawData.size() == 65u
+        && m_dwgSemanticFieldsParsed && knownName && m_description.empty()
+        && colorIsDefault(m_ambientColorMethod, m_ambientColorFactor,
+                          m_ambientColorValue, m_hasAmbientColorMethod,
+                          m_hasAmbientColorFactor, m_hasAmbientColorValue)
+        && colorIsDefault(m_diffuseColorMethod, m_diffuseColorFactor,
+                          m_diffuseColorValue, m_hasDiffuseColorMethod,
+                          m_hasDiffuseColorFactor, m_hasDiffuseColorValue)
+        && colorIsDefault(m_specularColorMethod, m_specularColorFactor,
+                          m_specularColorValue, m_hasSpecularColorMethod,
+                          m_hasSpecularColorFactor, m_hasSpecularColorValue)
+        && mapIsDefault(m_diffuseMapBlendFactor, m_diffuseMapSource,
+                        m_diffuseMapFileName, m_diffuseMapProjection,
+                        m_diffuseMapTiling, m_diffuseMapAutoTransform,
+                        m_diffuseMapTransform, m_hasDiffuseMapBlendFactor,
+                        m_hasDiffuseMapSource, m_hasDiffuseMapFileName,
+                        m_hasDiffuseMapProjection, m_hasDiffuseMapTiling,
+                        m_hasDiffuseMapAutoTransform,
+                        m_hasDiffuseMapTransform,
+                        m_dxfDiffuseMapTransformCount, 1u)
+        && mapIsDefault(m_specularMapBlendFactor, m_specularMapSource,
+                        m_specularMapFileName, m_specularMapProjection,
+                        m_specularMapTiling, m_specularMapAutoTransform,
+                        m_specularMapTransform, m_hasSpecularMapBlendFactor,
+                        m_hasSpecularMapSource, m_hasSpecularMapFileName,
+                        m_hasSpecularMapProjection, m_hasSpecularMapTiling,
+                        m_hasSpecularMapAutoTransform,
+                        m_hasSpecularMapTransform,
+                        m_dxfSpecularMapTransformCount, 1u)
+        && mapIsDefault(m_reflectionMapBlendFactor, m_reflectionMapSource,
+                        m_reflectionMapFileName, m_reflectionMapProjection,
+                        m_reflectionMapTiling,
+                        m_reflectionMapAutoTransform,
+                        m_reflectionMapTransform,
+                        m_hasReflectionMapBlendFactor,
+                        m_hasReflectionMapSource,
+                        m_hasReflectionMapFileName,
+                        m_hasReflectionMapProjection,
+                        m_hasReflectionMapTiling,
+                        m_hasReflectionMapAutoTransform,
+                        m_hasReflectionMapTransform,
+                        m_dxfReflectionMapTransformCount, 1u)
+        && mapIsDefault(m_opacityMapBlendFactor, m_opacityMapSource,
+                        m_opacityMapFileName, m_opacityMapProjection,
+                        m_opacityMapTiling, m_opacityMapAutoTransform,
+                        m_opacityMapTransform, m_hasOpacityMapBlendFactor,
+                        m_hasOpacityMapSource, m_hasOpacityMapFileName,
+                        m_hasOpacityMapProjection, m_hasOpacityMapTiling,
+                        m_hasOpacityMapAutoTransform,
+                        m_hasOpacityMapTransform,
+                        m_dxfOpacityMapTransformCount, 1u)
+        && mapIsDefault(m_bumpMapBlendFactor, m_bumpMapSource,
+                        m_bumpMapFileName, m_bumpMapProjection,
+                        m_bumpMapTiling, m_bumpMapAutoTransform,
+                        m_bumpMapTransform, m_hasBumpMapBlendFactor,
+                        m_hasBumpMapSource, m_hasBumpMapFileName,
+                        m_hasBumpMapProjection, m_hasBumpMapTiling,
+                        m_hasBumpMapAutoTransform,
+                        m_hasBumpMapTransform,
+                        m_dxfBumpMapTransformCount, 1u)
+        && mapIsDefault(m_refractionMapBlendFactor, m_refractionMapSource,
+                        m_refractionMapFileName, m_refractionMapProjection,
+                        m_refractionMapTiling,
+                        m_refractionMapAutoTransform,
+                        m_refractionMapTransform,
+                        m_hasRefractionMapBlendFactor,
+                        m_hasRefractionMapSource,
+                        m_hasRefractionMapFileName,
+                        m_hasRefractionMapProjection,
+                        m_hasRefractionMapTiling,
+                        m_hasRefractionMapAutoTransform,
+                        m_hasRefractionMapTransform,
+                        m_dxfRefractionMapTransformCount, 0u)
+        && m_specularGlossFactor == 0.5 && m_hasSpecularGlossFactor
+        && m_opacityPercent == 1.0 && m_hasOpacityPercent
+        && m_refractionIndex == 1.0 && m_hasRefractionIndex
+        && m_translucence == 0.0 && !m_hasTranslucence
+        && m_reflectivity == 0.0 && !m_hasReflectivity
+        && m_illuminationModel == 0 && !m_hasIlluminationModel
+        && m_channelFlags == 127 && m_hasChannelFlags
+        && defaultMapFields(m_normalMapBlendFactor, m_normalMapSource,
+                            m_normalMapFileName, m_normalMapProjection,
+                            m_normalMapTiling, m_normalMapAutoTransform,
+                            m_normalMapTransform, m_hasNormalMapBlendFactor,
+                            m_hasNormalMapSource, m_hasNormalMapFileName,
+                            m_hasNormalMapProjection, m_hasNormalMapTiling,
+                            m_hasNormalMapAutoTransform,
+                            m_hasNormalMapTransform,
+                            m_dxfNormalMapTransformCount)
+        && m_colorBleedScale == 0.0 && !m_hasColorBleedScale
+        && m_indirectDumpScale == 0.0 && !m_hasIndirectDumpScale
+        && m_reflectanceScale == 0.0 && !m_hasReflectanceScale
+        && m_transmittanceScale == 0.0 && !m_hasTransmittanceScale
+        && !m_twoSidedMaterial && !m_hasTwoSidedMaterial
+        && !m_materialsAnonymous && !m_hasMaterialsAnonymous
+        && m_luminance == 0.0 && !m_hasLuminance
+        && m_luminanceMode == 0 && !m_hasLuminanceMode
+        && m_normalMapMethod == 0 && !m_hasNormalMapMethod
+        && m_normalMapStrength == 0.0 && !m_hasNormalMapStrength
+        && m_globalIlluminationMode == 0 && !m_hasGlobalIlluminationMode
+        && m_finalGatherMode == 0 && !m_hasFinalGatherMode
+        && !m_genProcTableEnd && !m_hasGenProcTableEnd
+        && m_mapUTile == 0 && !m_hasMapUTile
+        && !m_dxfMaterialGenProcTableStarted
+        && !m_dxfMaterialGenProcTableEnded && !m_dxfMaterialImplicitTail
+        && !m_dxfPastPreNormalMapFields
+        && !m_dxfCompleteDiffuseBeforeRefraction
+        && !m_dxfInferredNormalMapBoundary
+        && !m_dxfRepeatedDiffuseMapField
+        && !m_dxfPreStrengthNormalMapMethod
+        && m_dxfRetainedNameBytes == 0u
+        && m_dxfRetainedDescriptionBytes == 0u
+        && m_dxfRetainedDiffuseMapFileNameBytes == 0u
+        && m_dxfRetainedSpecularMapFileNameBytes == 0u
+        && m_dxfRetainedReflectionMapFileNameBytes == 0u
+        && m_dxfRetainedOpacityMapFileNameBytes == 0u
+        && m_dxfRetainedBumpMapFileNameBytes == 0u
+        && m_dxfRetainedRefractionMapFileNameBytes == 0u
+        && m_dxfRetainedNormalMapFileNameBytes == 0u;
+}
+
 bool DRW_Material::encodeDwg(DRW::Version version, dwgBufferW *buf,
                              dwgBufferW *strBuf,
                              dwgBufferW *handleBuf) const {
@@ -17244,12 +17410,12 @@ bool DRW_Material::encodeDwg(DRW::Version version, dwgBufferW *buf,
     if (m_rawDataValid && m_rawDataVersion != DRW::UNKNOWNV
         && version != m_rawDataVersion)
         return false;
-    // The retained tail contains only object-body bits. R2007+ MATERIAL
-    // maps may also consume detached filename strings, including explicit
-    // empty strings. Their original slots and bytes are not retained, and
-    // mutable decoded fields cannot prove the unmodified raw-body selectors.
-    // Refuse before touching any output buffer rather than emit a partial tail.
-    if (m_rawDataValid && version > DRW::AC1018)
+    // Modern replay is limited to the exact AC1027 default profile. Its body
+    // is retained as raw bits and its five selected empty map strings are
+    // emitted in source order; all typed selectors are checked above before
+    // any destination buffer is touched.
+    if (version > DRW::AC1018
+        && (version != DRW::AC1027 || !canReplayAc1027DefaultDwgBody()))
         return false;
 
     dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018)
@@ -17261,6 +17427,12 @@ bool DRW_Material::encodeDwg(DRW::Version version, dwgBufferW *buf,
 
     sb->putVariableText(version, m_name);
     sb->putVariableText(version, m_description);
+    if (version == DRW::AC1027) {
+        // The five image-backed default maps have source=1 and carry an
+        // explicit empty detached string. Refraction is scene-backed (0).
+        for (unsigned i = 0u; i < 5u; ++i)
+            sb->putVariableText(version, "");
+    }
     if (m_rawDataValid
         && !appendRawBits(m_rawData, m_rawDataBitSize, buf))
         return false;

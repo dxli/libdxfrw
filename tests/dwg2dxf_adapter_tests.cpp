@@ -65369,6 +65369,8 @@ bool physicalMaterialOutputReadback(
         if (!material.hasCompleteDwgSemanticFields()
             || !material.hasDwgRawData()
             || material.dwgRawDataVersion() != outputVersion
+            || (outputVersion == DRW::AC1027
+                && !material.canReplayAc1027DefaultDwgBody())
             || material.parentHandle != sourceOwner.handle
             || material.reactorCount() != 1
             || material.reactorHandles.size() != 1u

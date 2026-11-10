@@ -4279,17 +4279,16 @@ bool dwgRW::writeMaterial(DRW_Material *object) {
         markDwgWriteFailure();
         return recordWriteResult(WriteSkipKind::Object, false);
     }
-    if (object->hasDwgRawData()
-        && (version > DRW::AC1018
-            || object->dwgRawDataVersion() > DRW::AC1018)) {
+    if (version > DRW::AC1018
+        && !object->canReplayAc1027DefaultDwgBody()) {
         // A caller that ignores this per-object refusal must not publish a
-        // drawing missing a retained MATERIAL or its detached string stream.
+        // drawing missing a modern MATERIAL body or detached map strings.
         markDwgWriteFailure();
         recordOperationDiagnostic(
             DRW::OperationPhase::Validation,
             DRW::OperationCause::WriteFailure,
-            "material-detached-string-replay",
-            "MATERIAL raw replay does not retain its detached strings",
+            "material-modern-profile",
+            "MATERIAL output is outside the exact AC1027 default replay profile",
             0, false, object->handle, object->handle != 0);
         return recordWriteResult(WriteSkipKind::Object, false);
     }

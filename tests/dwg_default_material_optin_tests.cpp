@@ -37,7 +37,13 @@ public:
     }
 };
 
-class MaterialSemanticProbe : public DRW_Material { public: using DRW_Material::parseDwg; };
+class MaterialSemanticProbe : public DRW_Material {
+public:
+    using DRW_Material::encodeDwg;
+    using DRW_Material::parseDwg;
+};
+
+bool ac1027DefaultMaterialReplayRoundtrip(const DRW_Material& source);
 
 class DwgBlockRecordXrefWireTestAccess {
 public:
@@ -93,7 +99,92 @@ public:
         auto selectedBytes=frame.body();dwgBuffer original(selectedBytes.data(),selectedBytes.size(),&codec);MaterialSemanticProbe selected;
         if(!selected.parseDwg(DRW::AC1027,&original,frame.bodyBitSize())
             || !selected.hasCompleteDwgSemanticFields() || !selected.hasDwgRawData()
-            || selected.dwgRawDataBitSize()!=516u || selected.m_name!="Global")return false;
+            || selected.dwgRawDataBitSize()!=516u || selected.m_name!="Global"
+            || !selected.canReplayAc1027DefaultDwgBody()) {
+            std::cerr << "AC1027 exact material replay profile rejected: bits="
+                      << selected.dwgRawDataBitSize() << " raw-bytes="
+                      << selected.dwgRawData().size() << " name="
+                      << selected.m_name << " semantic="
+                      << selected.hasCompleteDwgSemanticFields() << '\n';
+            return false;
+        }
+        dwgBufferW replayedBody(&codec), replayedStrings(&codec), replayedHandles(&codec);
+        if (!selected.encodeDwg(DRW::AC1027, &replayedBody, &replayedStrings,
+                                &replayedHandles)
+            || replayedBody.bitCount() != selected.dwgRawDataBitSize()
+            || replayedBody.data() != selected.dwgRawData()
+            || !replayedStrings.isGood() || !replayedHandles.isGood())
+        {
+            std::cerr << "AC1027 exact material replay body/string build failed\n";
+            return false;
+        }
+        dwgBuffer replayStringInput(replayedStrings.data().data(),
+                                    replayedStrings.data().size(), &codec);
+        const std::array<std::string, 7> expectedStrings{{
+            "Global", "", "", "", "", "", ""}};
+        for (const std::string& expected : expectedStrings)
+            if (replayStringInput.getVariableText(DRW::AC1027) != expected)
+            {
+                std::cerr << "AC1027 exact material replay string order mismatch\n";
+                return false;
+            }
+        std::uint64_t replayStringBit =
+            static_cast<std::uint64_t>(replayStringInput.getPosition()) * 8u
+            + replayStringInput.getBitPos();
+        const std::uint64_t replayStringEnd = replayedStrings.bitCount();
+        if (replayStringBit > replayStringEnd
+            || replayStringEnd - replayStringBit > 7u)
+        {
+            std::cerr << "AC1027 exact material replay string stream did not close\n";
+            return false;
+        }
+        while (replayStringBit < replayStringEnd) {
+            if (replayStringInput.getBit() != 0u)
+                return false;
+            ++replayStringBit;
+        }
+        if (!replayStringInput.isGood())
+            return false;
+        auto changedMaterial = selected;
+        changedMaterial.m_diffuseColorFactor = 0.75;
+        dwgBufferW rejectedBody(&codec), rejectedStrings(&codec), rejectedHandles(&codec);
+        rejectedBody.putRawChar8(0xA5u);
+        rejectedStrings.putRawChar8(0x5Au);
+        rejectedHandles.putRawChar8(0x3Cu);
+        if (changedMaterial.encodeDwg(DRW::AC1027, &rejectedBody,
+                                      &rejectedStrings, &rejectedHandles)
+            || rejectedBody.data() != std::vector<std::uint8_t>{0xA5u}
+            || rejectedStrings.data() != std::vector<std::uint8_t>{0x5Au}
+            || rejectedHandles.data() != std::vector<std::uint8_t>{0x3Cu})
+        {
+            std::cerr << "AC1027 changed material body did not refuse atomically\n";
+            return false;
+        }
+        MaterialSemanticProbe authoredMaterial;
+        dwgBufferW authoredBody(&codec), authoredStrings(&codec), authoredHandles(&codec);
+        authoredBody.putRawChar8(0xA5u);
+        authoredStrings.putRawChar8(0x5Au);
+        authoredHandles.putRawChar8(0x3Cu);
+        if (authoredMaterial.encodeDwg(DRW::AC1027, &authoredBody,
+                                      &authoredStrings, &authoredHandles)
+            || authoredBody.data() != std::vector<std::uint8_t>{0xA5u}
+            || authoredStrings.data() != std::vector<std::uint8_t>{0x5Au}
+            || authoredHandles.data() != std::vector<std::uint8_t>{0x3Cu})
+        {
+            std::cerr << "newly authored AC1027 MATERIAL escaped exact-profile refusal\n";
+            return false;
+        }
+        changedMaterial.m_diffuseColorFactor = selected.m_diffuseColorFactor;
+        dwgBufferW retryBody(&codec), retryStrings(&codec), retryHandles(&codec);
+        if (!changedMaterial.encodeDwg(DRW::AC1027, &retryBody, &retryStrings,
+                                       &retryHandles)
+            || retryBody.data() != selected.dwgRawData()
+            || retryBody.bitCount() != selected.dwgRawDataBitSize()) {
+            std::cerr << "AC1027 corrected MATERIAL retry failed\n";
+            return false;
+        }
+        if (!ac1027DefaultMaterialReplayRoundtrip(selected))
+            return false;
         // Change one character in the independently bounded detached name;
         // the frame remains parseable, but this is outside the exact default profile.
         const auto bit=expected-17u-118u+10u+7u;
@@ -302,7 +393,7 @@ bool directControls() {
 enum class Mode { Normal, EarlyRoot, SourceRoot, HeaderInvalid, HeaderGlobal, EarlyMaterialClass, LateMaterialClass,
                   EarlyRawSection, LateRawSection, LateRoot, NodAlias, GroupAlias, DictionaryOwner,
                   DictionaryChild, DictionaryHandle, XrecordOwner, RawObject, CallerMaterial,
-                  SuppliedLayer, SuppliedLayerGlobal, LateEntityHandle };
+                  ReplayMaterial, SuppliedLayer, SuppliedLayerGlobal, LateEntityHandle };
 struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultPlotStyleProvider {
     explicit Adapter(dwgRW& writer) : output(writer) {}
     bool wantsDwgDefaultMaterialGraph() const override { return enabled; }
@@ -335,6 +426,12 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
         if (mode == Mode::EarlyRoot || mode == Mode::SourceRoot)
             (void)output.registerDwgNamedObjectDictionaryEntry("acad_material", 0xB100u);
         if (mode == Mode::EarlyMaterialClass) {
+            DRW_Material material; material.handle=0xB101u;
+            (void)output.registerMaterialObjectClass(&material);
+        }
+        if (mode == Mode::ReplayMaterial) {
+            (void)output.registerDwgNamedObjectDictionaryEntry(
+                "ACAD_MATERIAL", 0xB100u);
             DRW_Material material; material.handle=0xB101u;
             (void)output.registerMaterialObjectClass(&material);
         }
@@ -380,6 +477,16 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
             source.parentHandle=DRW::DwgNamedObjectsDictionaryHandle;
             (void)output.writeDictionary(&source);
         }
+        if (mode == Mode::ReplayMaterial) {
+            DRW_Dictionary dictionary; dictionary.handle=0xB100u;
+            dictionary.parentHandle=DRW::DwgNamedObjectsDictionaryHandle;
+            dictionary.m_entries.push_back({"Global", 0xB101u});
+            if (!output.writeDictionary(&dictionary)) { rejected=true; return; }
+            DRW_Material material=replayMaterial;
+            material.handle=0xB101u; material.parentHandle=0xB100u;
+            material.reactorHandles={0xB100u};
+            if (!output.writeMaterial(&material)) rejected=true;
+        }
         if (mode == Mode::DictionaryOwner || mode == Mode::DictionaryChild || mode == Mode::DictionaryHandle) {
             DRW_Dictionary d; d.handle=0xC500; d.parentHandle=DRW::DwgNamedObjectsDictionaryHandle;
             if (mode == Mode::DictionaryOwner) d.parentHandle=handles[slot];
@@ -402,6 +509,7 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
     DRW::Version version=DRW::AC1024;
     bool enabled=true, plotEnabled=true, opaqueAbsent=true, rejected=false, supplied=false;
     Mode mode=Mode::Normal; std::size_t slot=0;
+    DRW_Material replayMaterial;
     std::array<std::uint32_t,4> handles{};
     std::uint32_t plotStylePlaceholder=0;
 };
@@ -558,6 +666,87 @@ bool inspect(const std::string& path,const std::array<std::uint32_t,4>& h,bool s
     }
     return read && matched;
 }
+
+bool ac1027DefaultMaterialReplayRoundtripImpl(const DRW_Material& source) {
+    if (!source.canReplayAc1027DefaultDwgBody())
+        return false;
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto path = std::filesystem::temp_directory_path()
+        / ("libdxfrw-ac1027-material-replay-" + std::to_string(nonce)
+           + ".dwg");
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() { std::error_code error; std::filesystem::remove(path, error); }
+    } cleanup{path};
+
+    dwgRW writer(path.string().c_str());
+    Adapter adapter(writer);
+    adapter.version = DRW::AC1027;
+    adapter.enabled = false;
+    adapter.plotEnabled = false;
+    adapter.mode = Mode::ReplayMaterial;
+    adapter.replayMaterial = source;
+    if (!writer.reserveHandle(0xB100u) || !writer.reserveHandle(0xB101u)
+        || !writer.write(&adapter, DRW::AC1027, true)) {
+        std::cerr << "AC1027 selected MATERIAL writer roundtrip could not finalize\n";
+        return false;
+    }
+
+    class ReplayCapture final : public LC3CompatCheck {
+    public:
+        void addNamedObjectDictionary(const DRW_Dictionary& value) override {
+            for (const DRW_Dictionary::Entry& entry : value.m_entries)
+                if (entry.m_name == "ACAD_MATERIAL")
+                    rootHandle = entry.m_handle;
+        }
+        void addDictionary(const DRW_Dictionary& value) override {
+            if (value.handle != 0xB100u)
+                return;
+            dictionarySeen = value.parentHandle
+                    == DRW::DwgNamedObjectsDictionaryHandle
+                && value.m_entries.size() == 1u
+                && value.m_entries[0].m_name == "Global"
+                && value.m_entries[0].m_handle == 0xB101u;
+        }
+        void addMaterial(const DRW_Material& value) override {
+            materialSeen = value.handle == 0xB101u
+                && value.parentHandle == 0xB100u
+                && value.reactorHandles == std::vector<std::uint32_t>{0xB100u}
+                && value.m_name == "Global"
+                && value.hasCompleteDwgSemanticFields()
+                && value.canReplayAc1027DefaultDwgBody()
+                && value.dwgRawDataBitSize() == expectedBits
+                && value.dwgRawData() == expectedBody
+                && value.m_diffuseMapFileName.empty()
+                && value.m_specularMapFileName.empty()
+                && value.m_reflectionMapFileName.empty()
+                && value.m_opacityMapFileName.empty()
+                && value.m_bumpMapFileName.empty()
+                && value.m_refractionMapFileName.empty();
+        }
+        std::uint32_t rootHandle{0u};
+        std::uint32_t expectedBits{0u};
+        std::vector<std::uint8_t> expectedBody;
+        bool dictionarySeen{false};
+        bool materialSeen{false};
+    } capture;
+    capture.expectedBits = source.dwgRawDataBitSize();
+    capture.expectedBody = source.dwgRawData();
+    dwgRW reader(path.string().c_str());
+    if (!reader.read(&capture, false) || capture.rootHandle != 0xB100u
+        || !capture.dictionarySeen || !capture.materialSeen) {
+        std::cerr << "AC1027 selected MATERIAL writer readback mismatch: root="
+                  << capture.rootHandle << " dictionary="
+                  << capture.dictionarySeen << " material="
+                  << capture.materialSeen << '\n';
+        return false;
+    }
+    return true;
+}
+}
+bool ac1027DefaultMaterialReplayRoundtrip(const DRW_Material& source) {
+    return ac1027DefaultMaterialReplayRoundtripImpl(source);
 }
 int main(int argc,char**argv) {
     if (argc==3 && std::string(argv[1])=="--physical-ac1021-semantic-probe") {
