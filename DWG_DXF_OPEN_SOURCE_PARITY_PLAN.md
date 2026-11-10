@@ -1188,6 +1188,14 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P6 VBA_PROJECT DWG encoder transaction safety:** `DRW_VbaProject::encodeDwg`
+  now stages the body and handle output, preserving inline/detached and
+  body-aliased handle layouts. Six generated AC1015/AC1018/AC1021 cases sweep
+  57 allocation offsets; failures preserve caller state and same-object retry
+  matches clean output. The focused allocation CTest passes. This does not
+  qualify VBA payload meaning, physical sources, graph closure or output
+  support. See the [rollback receipt](docs/research/p6-vbaproject-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **P6 UNDERLAYDEFINITION DWG encoder transaction safety:** the encoder now
   stages body, filename/sheet text and common handle streams, including alias
   routing. Five generated AC1021 layouts sweep 119 allocation offsets; each

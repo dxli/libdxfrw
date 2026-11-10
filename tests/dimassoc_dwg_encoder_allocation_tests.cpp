@@ -106,6 +106,11 @@ public:
     using DRW_UnderlayDefinition::encodeDwg;
 };
 
+class VbaProjectProbe final : public DRW_VbaProject {
+public:
+    using DRW_VbaProject::encodeDwg;
+};
+
 class PointCloudDefProbe final : public DRW_PointCloudDef {
 public:
     using DRW_PointCloudDef::encodeDwg;
@@ -713,6 +718,38 @@ bool sweepUnderlayDefinition(UnderlayStreamLayout layout) {
     };
     return sweepTransactionalEncoder(
         "UNDERLAYDEFINITION", names[static_cast<std::size_t>(layout)],
+        version, encode, outputs);
+}
+
+VbaProjectProbe makeVbaProject() {
+    VbaProjectProbe project;
+    project.handle = 0xDD00u;
+    project.parentHandle = 0xDD01u;
+    project.reactorHandles = {0xDD02u};
+    project.setDwgCommonObjectState(2, 1u, false);
+    project.xDictHandle = 0xDD03u;
+    project.m_data = {
+        0x00u, 0x01u, 0x7Fu, 0x80u, 0xA5u, 0xFEu,
+        0x00u, 0x42u, 0x10u, 0x20u, 0x30u, 0x40u
+    };
+    project.m_dataSize = static_cast<std::uint32_t>(project.m_data.size());
+    return project;
+}
+
+bool sweepVbaProject(DRW::Version version, bool aliasHandles) {
+    const VbaProjectProbe project = makeVbaProject();
+    const auto encode = [&project](DRW::Version v, dwgBufferW* body,
+                                   dwgBufferW* strings,
+                                   dwgBufferW* handles) {
+        return project.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [aliasHandles](dwgBufferW& body, dwgBufferW&,
+                                        dwgBufferW& handles) {
+        return EncoderOutputs{nullptr, aliasHandles ? &body : &handles};
+    };
+    return sweepTransactionalEncoder(
+        "VBAPROJECT", aliasHandles ? "body-aliased-handles"
+                                   : "separate-handles",
         version, encode, outputs);
 }
 
@@ -3391,6 +3428,12 @@ int main() {
         || !sweepUnderlayDefinition(UnderlayStreamLayout::BodyStringDetachedHandles)
         || !sweepUnderlayDefinition(UnderlayStreamLayout::SeparateStringBodyHandles)
         || !sweepUnderlayDefinition(UnderlayStreamLayout::AllBody)
+        || !sweepVbaProject(DRW::AC1015, false)
+        || !sweepVbaProject(DRW::AC1015, true)
+        || !sweepVbaProject(DRW::AC1018, false)
+        || !sweepVbaProject(DRW::AC1018, true)
+        || !sweepVbaProject(DRW::AC1021, false)
+        || !sweepVbaProject(DRW::AC1021, true)
         || !sweep(StreamAlias::Separate)
         || !sweep(StreamAlias::SharedStringAndHandle)
         || !sweep(StreamAlias::AllBody)

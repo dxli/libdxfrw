@@ -29162,15 +29162,34 @@ bool DRW_VbaProject::encodeDwg(DRW::Version version, dwgBufferW *buf,
     }
 
     DRW_UNUSED(strBuf);
-    dwgBufferW *hb = handleBuf != nullptr && version > DRW::AC1014
-        ? handleBuf : buf;
-    buf->putBitLong(static_cast<std::int32_t>(m_dataSize));
-    if (!m_data.empty())
-        buf->putBytes(m_data.data(), m_data.size());
-    putCommonObjectHandlePrefix(hb, static_cast<std::uint32_t>(parentHandle),
-                                numReactors, xDictFlag, &reactorHandles,
-                                xDictHandle);
-    return buf->isGood() && hb->isGood();
+    try {
+        dwgBufferW *const callerBody = buf;
+        dwgBufferW *const callerHandleDest =
+            handleBuf != nullptr && version > DRW::AC1014
+                ? handleBuf : callerBody;
+        const bool separateHandles = callerHandleDest != callerBody;
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedHandles;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+        buf = &stagedBody;
+        dwgBufferW *hb = separateHandles ? &stagedHandles : buf;
+        buf->putBitLong(static_cast<std::int32_t>(m_dataSize));
+        if (!m_data.empty())
+            buf->putBytes(m_data.data(), m_data.size());
+        putCommonObjectHandlePrefix(hb,
+                                    static_cast<std::uint32_t>(parentHandle),
+                                    numReactors, xDictFlag, &reactorHandles,
+                                    xDictHandle);
+        if (!buf->isGood() || !hb->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_ProxyObject::parseDwg(DRW::Version version, dwgBuffer *buf,
