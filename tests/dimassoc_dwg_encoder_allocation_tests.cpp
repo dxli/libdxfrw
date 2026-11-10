@@ -86,6 +86,11 @@ public:
     using DRW_Sun::encodeDwg;
 };
 
+class VisualStyleProbe final : public DRW_VisualStyle {
+public:
+    using DRW_VisualStyle::encodeDwg;
+};
+
 class PointCloudDefProbe final : public DRW_PointCloudDef {
 public:
     using DRW_PointCloudDef::encodeDwg;
@@ -305,9 +310,14 @@ bool sweepTransactionalEncoder(const char* recordName, const char* layoutName,
         const unsigned long beforeFailure =
             failedAllocations.load(std::memory_order_relaxed);
         allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
-        const bool encoded = encode(version, &failedBody,
-                                    failedOutput.stringStream,
-                                    failedOutput.handleStream);
+        bool encoded = false;
+        try {
+            encoded = encode(version, &failedBody,
+                             failedOutput.stringStream,
+                             failedOutput.handleStream);
+        } catch (...) {
+            allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+        }
         allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
         if (encoded
             || failedAllocations.load(std::memory_order_relaxed)
@@ -450,6 +460,64 @@ bool sweepSun(SunStreamLayout layout) {
     };
     return sweepTransactionalEncoder(
         "SUN", names[static_cast<std::size_t>(layout)], version,
+        encode, outputs);
+}
+
+VisualStyleProbe makeVisualStyle() {
+    VisualStyleProbe style;
+    style.handle = 0xD9B0u;
+    style.parentHandle = 0xD9AFu;
+    style.reactorHandles = {0xD9A0u, 0xD9A1u};
+    style.setDwgCommonObjectState(2, 1u, false);
+    style.xDictHandle = 0xD9A2u;
+    style.desc = "Generated visual-style transaction profile";
+    style.type = 3;
+    style.m_body.faceOpacity = 0.75;
+    style.m_body.faceSpecular = 0.25;
+    style.m_body.edgeOpacity = 0.5;
+    style.m_body.edgeCreaseAngle = 1.125;
+    style.m_body.displayBrightness = 1.5;
+    style.m_body.strokes = "Generated strokes";
+    return style;
+}
+
+enum class VisualStyleStreamLayout {
+    Separate,
+    SharedStringAndHandle,
+    BodyStringDetachedHandles,
+    SeparateStringBodyHandles,
+    AllBody
+};
+
+bool sweepVisualStyle(VisualStyleStreamLayout layout) {
+    const DRW::Version version = DRW::AC1027;
+    const VisualStyleProbe style = makeVisualStyle();
+    const auto encode = [&style](DRW::Version v, dwgBufferW* body,
+                                 dwgBufferW* strings, dwgBufferW* handles) {
+        return style.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [layout](dwgBufferW& body, dwgBufferW& strings,
+                                  dwgBufferW& handles) {
+        switch (layout) {
+        case VisualStyleStreamLayout::Separate:
+            return EncoderOutputs{&strings, &handles};
+        case VisualStyleStreamLayout::SharedStringAndHandle:
+            return EncoderOutputs{&strings, &strings};
+        case VisualStyleStreamLayout::BodyStringDetachedHandles:
+            return EncoderOutputs{&body, &handles};
+        case VisualStyleStreamLayout::SeparateStringBodyHandles:
+            return EncoderOutputs{&strings, &body};
+        case VisualStyleStreamLayout::AllBody:
+            return EncoderOutputs{};
+        }
+        return EncoderOutputs{&strings, &handles};
+    };
+    static const char* const names[] = {
+        "separate", "shared-string-handle", "body-string-detached-handles",
+        "separate-string-body-handles", "all-body"
+    };
+    return sweepTransactionalEncoder(
+        "VISUALSTYLE", names[static_cast<std::size_t>(layout)], version,
         encode, outputs);
 }
 
@@ -3107,6 +3175,11 @@ int main() {
         || !sweepSun(SunStreamLayout::Separate)
         || !sweepSun(SunStreamLayout::SharedStringAndHandle)
         || !sweepSun(SunStreamLayout::SeparateStringBodyHandles)
+        || !sweepVisualStyle(VisualStyleStreamLayout::Separate)
+        || !sweepVisualStyle(VisualStyleStreamLayout::SharedStringAndHandle)
+        || !sweepVisualStyle(VisualStyleStreamLayout::BodyStringDetachedHandles)
+        || !sweepVisualStyle(VisualStyleStreamLayout::SeparateStringBodyHandles)
+        || !sweepVisualStyle(VisualStyleStreamLayout::AllBody)
         || !sweep(StreamAlias::Separate)
         || !sweep(StreamAlias::SharedStringAndHandle)
         || !sweep(StreamAlias::AllBody)

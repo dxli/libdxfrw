@@ -1207,6 +1207,14 @@ created locally from scratch for the specific control.
   native semantics, graph closure and support claims remain open. See the
   [rollback receipt](docs/research/p6-sun-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **P6 VISUALSTYLE DWG encoder transaction safety:** `DRW_VisualStyle::encodeDwg`
+  now stages body, string and handle outputs and publishes only after all
+  streams succeed. Generated AC1027 controls sweep 147 allocation offsets in
+  five separate/aliased layouts; failures preserve caller state and same-object
+  retry matches clean output. The allocation and DWG object-vector tests pass.
+  This does not close the source graph, qualify native rendering or promote a
+  support claim. See the [rollback receipt](docs/research/p6-visualstyle-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **P4 AC1027 Sweep embedded LWPOLYLINE field capture:** the bounded type-77
   decoder now retains the raw spans and captures modeled scalar, normal,
   vertex and optional-array fields, including valid polyline flags `0x100`,

@@ -37964,10 +37964,28 @@ bool DRW_VisualStyle::encodeDwg(DRW::Version version, dwgBufferW *buf,
         && m_body.edgeIsolines == DRW_VisualStyleBody::kMaxEdgeIsolines)
         return false; // Do not silently emit the unchanged clamped view.
 
-    dwgBufferW *sb = strBuf != nullptr && version > DRW::AC1018
-        ? strBuf : buf;
-    dwgBufferW *hb = handleBuf != nullptr && version > DRW::AC1014
-        ? handleBuf : buf;
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const stringDest =
+        strBuf != nullptr && version > DRW::AC1018 ? strBuf : callerBody;
+    dwgBufferW *const handleDest =
+        handleBuf != nullptr && version > DRW::AC1014
+            ? handleBuf : callerBody;
+    const bool separateStrings = stringDest != callerBody;
+    const bool separateHandles =
+        handleDest != callerBody && handleDest != stringDest;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+    stagedBody = *callerBody;
+    if (separateStrings)
+        stagedStrings = *stringDest;
+    if (separateHandles)
+        stagedHandles = *handleDest;
+    buf = &stagedBody;
+    dwgBufferW *sb = separateStrings ? &stagedStrings : buf;
+    dwgBufferW *hb = handleDest == callerBody ? buf
+        : handleDest == stringDest ? sb : &stagedHandles;
     std::size_t nextColor = 0;
     const auto putColor = [&](dwgBufferW *target, int color) {
         const auto& source = encoding.colors[nextColor++];
@@ -38114,7 +38132,17 @@ bool DRW_VisualStyle::encodeDwg(DRW::Version version, dwgBufferW *buf,
     putCommonObjectHandlePrefix(
         hb, static_cast<std::uint32_t>(parentHandle), reactorCount(),
         extensionDictionaryFlag(), &reactorHandles, xDictHandle);
-    return buf->isGood() && sb->isGood() && hb->isGood();
+    if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+        return false;
+    callerBody->swap(stagedBody);
+    if (separateStrings)
+        stringDest->swap(stagedStrings);
+    if (separateHandles)
+        handleDest->swap(stagedHandles);
+    return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 // DBCOLOR (AcDbColor) per ODA spec §20.4 / libreDWG dwg2.spec:2404-2408.
