@@ -16,6 +16,7 @@
 #include <iterator>
 #include <new>
 #include <sstream>
+#include <unordered_map>
 
 static std::atomic<int> failAfter{-1};
 void* operator new(std::size_t n) {
@@ -518,8 +519,59 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
                 material.handle=static_cast<std::uint32_t>(0xB101u + i);
                 material.parentHandle=0xB100u;
                 material.reactorHandles={0xB100u};
+                const auto xdict = replayHandleMap.find(material.xDictHandle);
+                if (xdict != replayHandleMap.end())
+                    material.xDictHandle = xdict->second;
+                else if (material.xDictHandle != 0u && version == DRW::AC1024) {
+                    rejected = true;
+                    return;
+                }
                 if (!output.writeMaterial(&material)) {
                     rejected=true;
+                    return;
+                }
+            }
+            for (DRW_Dictionary dictionary : replayExtensionDictionaries) {
+                const auto own = replayHandleMap.find(dictionary.handle);
+                const auto parent = replayHandleMap.find(dictionary.parentHandle);
+                if (own == replayHandleMap.end() || parent == replayHandleMap.end()) {
+                    rejected = true;
+                    return;
+                }
+                dictionary.handle = own->second;
+                dictionary.parentHandle = parent->second;
+                for (auto& entry : dictionary.m_entries) {
+                    const auto target = replayHandleMap.find(entry.m_handle);
+                    if (target == replayHandleMap.end()) {
+                        rejected = true;
+                        return;
+                    }
+                    entry.m_handle = target->second;
+                }
+                if (!output.writeDictionary(&dictionary)) {
+                    rejected = true;
+                    return;
+                }
+            }
+            for (DRW_XRecord record : replayXRecords) {
+                const auto own = replayHandleMap.find(record.handle);
+                const auto parent = replayHandleMap.find(record.parentHandle);
+                if (own == replayHandleMap.end() || parent == replayHandleMap.end()) {
+                    rejected = true;
+                    return;
+                }
+                record.handle = own->second;
+                record.parentHandle = parent->second;
+                for (auto& reactor : record.reactorHandles) {
+                    const auto target = replayHandleMap.find(reactor);
+                    if (target == replayHandleMap.end()) {
+                        rejected = true;
+                        return;
+                    }
+                    reactor = target->second;
+                }
+                if (!output.writeXRecord(&record)) {
+                    rejected = true;
                     return;
                 }
             }
@@ -548,6 +600,9 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
     Mode mode=Mode::Normal; std::size_t slot=0;
     DRW_Material replayMaterial;
     std::vector<DRW_Material> replayMaterials;
+    std::vector<DRW_Dictionary> replayExtensionDictionaries;
+    std::vector<DRW_XRecord> replayXRecords;
+    std::unordered_map<std::uint32_t, std::uint32_t> replayHandleMap;
     int replayAllocationOffset{-1};
     bool replayAllocationTriggered{false};
     std::array<std::uint32_t,4> handles{};
@@ -559,6 +614,7 @@ struct Capture : LC3CompatCheck {
             if(e.m_name=="ACAD_MATERIAL" || e.m_name=="acad_material") root=e.m_handle;
     }
     void addDictionary(const DRW_Dictionary& value) override {
+        sourceDictionaries.push_back(value);
         if(value.m_entries.size()!=3u) return;
         const std::array<std::string, 3> names{{"ByBlock", "ByLayer", "Global"}};
         std::array<std::uint32_t, 3> handles{};
@@ -575,6 +631,7 @@ struct Capture : LC3CompatCheck {
     void addMaterial(const DRW_Material& m) override {
         parsedMaterials.push_back(m);
         const bool r2013Profile = rawVersion == DRW::AC1027;
+        const bool autoCad2016Profile = physicalAc1024AutoCadProfile;
         const auto close = [](double left, double right) {
             return std::abs(left - right) <= 1e-9;
         };
@@ -658,12 +715,17 @@ struct Capture : LC3CompatCheck {
                         || m.m_hasDiffuseColorValue == r2013Profile
                         || (!r2013Profile
                             && m.m_diffuseColorValue != 0xc2ffffffu)))
-                || m.m_channelFlags != (r2013Profile ? 127 : 63)))
+                || m.m_channelFlags != (r2013Profile || autoCad2016Profile
+                    ? 127 : 63)))
             || (!requireSemantic && m.hasCompleteDwgSemanticFields())
             || (requireRaw && (!m.hasDwgRawData() || m.dwgRawDataVersion()!=rawVersion
-                || m.dwgRawDataBitSize() != (r2013Profile ? 516u : 550u))))
+                || m.dwgRawDataBitSize() != (r2013Profile ? 516u
+                    : autoCad2016Profile ? 1284u : 550u))))
             valid=false;
         materials.push_back({m.m_name,m.handle});
+    }
+    void addXRecord(const DRW_XRecord& value) override {
+        sourceXRecords.push_back(value);
     }
     void addLayer(const DRW_Layer& layer) override {
         if(layer.name=="0") {
@@ -686,9 +748,12 @@ struct Capture : LC3CompatCheck {
     std::array<std::uint32_t,3> children{};
     std::vector<std::pair<std::string,std::uint32_t>> materials;
     std::vector<DRW_Material> parsedMaterials;
+    std::vector<DRW_Dictionary> sourceDictionaries;
+    std::vector<DRW_XRecord> sourceXRecords;
     bool valid=true, requireSemantic=true, requireRaw=false;
     bool expectDefaultBody=true;
     bool physicalAc1021Profile=false;
+    bool physicalAc1024AutoCadProfile=false;
     DRW::Version rawVersion=DRW::AC1021;
 };
 bool inspect(const std::string& path,const std::array<std::uint32_t,4>& h,bool supplied,
@@ -715,20 +780,29 @@ bool inspect(const std::string& path,const std::array<std::uint32_t,4>& h,bool s
     return read && matched;
 }
 
-bool ac1027DefaultMaterialReplayGraphRoundtripImpl(
+bool defaultMaterialReplayGraphRoundtripImpl(
+        DRW::Version version,
         const std::vector<DRW_Material>& sources,
-        const std::filesystem::path& requestedOutput = {}) {
+        const std::filesystem::path& requestedOutput = {},
+        const std::vector<DRW_Dictionary>& extensionDictionaries = {},
+        const std::vector<DRW_XRecord>& xrecords = {},
+        const std::unordered_map<std::uint32_t, std::uint32_t>& handleMap = {}) {
+    const auto replayable = [version](const DRW_Material& source) {
+        return version == DRW::AC1024
+            ? source.canReplayAc1024AutoCad2016DefaultDwgBody()
+            : version == DRW::AC1027
+                && source.canReplayAc1027DefaultDwgBody();
+    };
     if (sources.empty()
         || !std::all_of(sources.begin(), sources.end(),
-            [](const DRW_Material& source) {
-                return source.canReplayAc1027DefaultDwgBody();
-            }))
+            replayable))
         return false;
     const auto nonce = std::chrono::steady_clock::now()
         .time_since_epoch().count();
     const auto path = requestedOutput.empty()
         ? std::filesystem::temp_directory_path()
-            / ("libdxfrw-ac1027-material-replay-" + std::to_string(nonce)
+            / ("libdxfrw-material-replay-" + std::to_string(
+                   static_cast<unsigned>(version)) + "-" + std::to_string(nonce)
                + ".dwg")
         : requestedOutput;
     if (!requestedOutput.empty() && std::filesystem::exists(path))
@@ -746,11 +820,14 @@ bool ac1027DefaultMaterialReplayGraphRoundtripImpl(
 
     dwgRW writer(path.string().c_str());
     Adapter adapter(writer);
-    adapter.version = DRW::AC1027;
+    adapter.version = version;
     adapter.enabled = false;
     adapter.plotEnabled = false;
     adapter.mode = Mode::ReplayMaterial;
     adapter.replayMaterials = sources;
+    adapter.replayExtensionDictionaries = extensionDictionaries;
+    adapter.replayXRecords = xrecords;
+    adapter.replayHandleMap = handleMap;
     if (!writer.reserveHandle(0xB100u)) {
         return false;
     }
@@ -758,44 +835,124 @@ bool ac1027DefaultMaterialReplayGraphRoundtripImpl(
         if (!writer.reserveHandle(static_cast<std::uint32_t>(0xB101u + i)))
             return false;
     }
-    if (!writer.write(&adapter, DRW::AC1027, true)) {
-        std::cerr << "AC1027 selected MATERIAL writer roundtrip could not finalize\n";
+    for (const auto& mapping : handleMap) {
+        if (mapping.second <= 0xB103u)
+            continue;
+        if (!writer.reserveHandle(mapping.second))
+            return false;
+    }
+    if (!writer.write(&adapter, version, true)) {
+        std::cerr << "selected MATERIAL writer roundtrip could not finalize for version "
+                  << static_cast<unsigned>(version) << " error="
+                  << writer.getError();
+        const auto diagnostic = writer.getLastDiagnostic();
+        std::cerr << " diagnostic=" << diagnostic.code << ':'
+                  << diagnostic.message << '\n';
         return false;
     }
 
     class ReplayCapture final : public LC3CompatCheck {
     public:
-        explicit ReplayCapture(const std::vector<DRW_Material>& values)
-            : expected(values), materialSeen(values.size(), false) {}
+        ReplayCapture(DRW::Version fileVersion,
+                      const std::vector<DRW_Material>& values,
+                      const std::vector<DRW_Dictionary>& dictionaries,
+                      const std::vector<DRW_XRecord>& records)
+            : version(fileVersion), expected(values),
+              expectedDictionaries(dictionaries), expectedXRecords(records),
+              materialSeen(values.size(), false),
+              dictionarySeenByHandle(dictionaries.size(), false),
+              xrecordSeenByHandle(records.size(), false) {}
         void addNamedObjectDictionary(const DRW_Dictionary& value) override {
             for (const DRW_Dictionary::Entry& entry : value.m_entries)
                 if (entry.m_name == "ACAD_MATERIAL")
                     rootHandle = entry.m_handle;
         }
         void addDictionary(const DRW_Dictionary& value) override {
-            if (value.handle != 0xB100u)
+            if (value.handle == 0xB100u) {
+                dictionarySeen = value.parentHandle
+                        == DRW::DwgNamedObjectsDictionaryHandle
+                    && value.m_entries.size() == expected.size();
+                for (std::size_t i = 0; dictionarySeen && i < expected.size(); ++i)
+                    dictionarySeen = value.m_entries[i].m_name == expected[i].m_name
+                        && value.m_entries[i].m_handle
+                            == static_cast<std::uint32_t>(0xB101u + i);
                 return;
-            dictionarySeen = value.parentHandle
-                    == DRW::DwgNamedObjectsDictionaryHandle
-                && value.m_entries.size() == expected.size();
-            for (std::size_t i = 0; dictionarySeen && i < expected.size(); ++i)
-                dictionarySeen = value.m_entries[i].m_name == expected[i].m_name
-                    && value.m_entries[i].m_handle
-                        == static_cast<std::uint32_t>(0xB101u + i);
+            }
+            for (std::size_t i = 0; i < expectedDictionaries.size(); ++i) {
+                const DRW_Dictionary& want = expectedDictionaries[i];
+                if (value.handle != want.handle)
+                    continue;
+                bool matches = value.parentHandle == want.parentHandle
+                    && value.cloning == want.cloning
+                    && value.hardOwner == want.hardOwner
+                    && value.m_entries.size() == want.m_entries.size()
+                    && value.reactorHandles == want.reactorHandles;
+                for (std::size_t entry = 0; matches && entry < want.m_entries.size(); ++entry)
+                    matches = value.m_entries[entry].m_name == want.m_entries[entry].m_name
+                        && value.m_entries[entry].m_handle == want.m_entries[entry].m_handle
+                        && value.m_entries[entry].m_dxfHandleCode
+                            == want.m_entries[entry].m_dxfHandleCode;
+                dictionarySeenByHandle[i] = matches;
+                return;
+            }
+        }
+        void addXRecord(const DRW_XRecord& value) override {
+            for (std::size_t i = 0; i < expectedXRecords.size(); ++i) {
+                const DRW_XRecord& want = expectedXRecords[i];
+                if (value.handle != want.handle)
+                    continue;
+                xrecordSeenByHandle[i] = value.parentHandle == want.parentHandle
+                    && value.reactorHandles == want.reactorHandles
+                    && value.m_cloning == want.m_cloning
+                    && value.m_dataEntries.size() == want.m_dataEntries.size();
+                for (std::size_t entry = 0;
+                     xrecordSeenByHandle[i] && entry < want.m_dataEntries.size(); ++entry) {
+                    const DRW_Variant& actual = value.m_dataEntries[entry];
+                    const DRW_Variant& expectedEntry = want.m_dataEntries[entry];
+                    xrecordSeenByHandle[i] = actual.code() == expectedEntry.code()
+                        && actual.type() == expectedEntry.type()
+                        && (actual.type() != DRW_Variant::INTEGER
+                            || actual.content.i == expectedEntry.content.i);
+                }
+                return;
+            }
         }
         void addMaterial(const DRW_Material& value) override {
             if (value.handle < 0xB101u
                 || value.handle >= 0xB101u + expected.size())
                 return;
             const std::size_t index = value.handle - 0xB101u;
+            const bool profile = version == DRW::AC1024
+                ? value.canReplayAc1024AutoCad2016DefaultDwgBody()
+                : value.canReplayAc1027DefaultDwgBody();
+            const auto& sourceRaw = expected[index].dwgRawData();
+            const auto& outputRaw = value.dwgRawData();
+            bool sameRawBits = value.dwgRawDataBitSize()
+                    == expected[index].dwgRawDataBitSize()
+                && sourceRaw.size() * 8u >= value.dwgRawDataBitSize()
+                && outputRaw.size() * 8u >= value.dwgRawDataBitSize();
+            for (std::uint32_t bit = 0u;
+                 sameRawBits && bit < value.dwgRawDataBitSize(); ++bit) {
+                const unsigned sourceBit = (sourceRaw[bit / 8u]
+                    >> (7u - bit % 8u)) & 1u;
+                const unsigned outputBit = (outputRaw[bit / 8u]
+                    >> (7u - bit % 8u)) & 1u;
+                sameRawBits = sourceBit == outputBit;
+            }
+            if (!profile)
+                std::cerr << "replay readback profile failed: version="
+                          << static_cast<unsigned>(version) << " name="
+                          << value.m_name << " raw=" << value.dwgRawDataBitSize()
+                          << " semantic=" << value.hasCompleteDwgSemanticFields()
+                          << " owner=" << value.parentHandle << " react="
+                          << value.reactorHandles.size() << '\n';
             materialSeen[index] = value.parentHandle == 0xB100u
+                && value.xDictHandle == expected[index].xDictHandle
                 && value.reactorHandles == std::vector<std::uint32_t>{0xB100u}
                 && value.m_name == expected[index].m_name
                 && value.hasCompleteDwgSemanticFields()
-                && value.canReplayAc1027DefaultDwgBody()
-                && value.dwgRawDataBitSize()
-                    == expected[index].dwgRawDataBitSize()
-                && value.dwgRawData() == expected[index].dwgRawData()
+                && profile
+                && sameRawBits
                 && value.m_diffuseMapFileName.empty()
                 && value.m_specularMapFileName.empty()
                 && value.m_reflectionMapFileName.empty()
@@ -804,16 +961,48 @@ bool ac1027DefaultMaterialReplayGraphRoundtripImpl(
                 && value.m_refractionMapFileName.empty();
         }
         std::uint32_t rootHandle{0u};
+        DRW::Version version;
         std::vector<DRW_Material> expected;
+        std::vector<DRW_Dictionary> expectedDictionaries;
+        std::vector<DRW_XRecord> expectedXRecords;
         std::vector<bool> materialSeen;
+        std::vector<bool> dictionarySeenByHandle;
+        std::vector<bool> xrecordSeenByHandle;
         bool dictionarySeen{false};
-    } capture(sources);
+    };
+    std::vector<DRW_Dictionary> expectedDictionaries = extensionDictionaries;
+    std::vector<DRW_XRecord> expectedXRecords = xrecords;
+    for (DRW_Dictionary& dictionary : expectedDictionaries) {
+        dictionary.handle = handleMap.at(dictionary.handle);
+        dictionary.parentHandle = handleMap.at(dictionary.parentHandle);
+        for (auto& entry : dictionary.m_entries)
+            entry.m_handle = handleMap.at(entry.m_handle);
+    }
+    for (DRW_XRecord& record : expectedXRecords) {
+        record.handle = handleMap.at(record.handle);
+        record.parentHandle = handleMap.at(record.parentHandle);
+        for (auto& reactor : record.reactorHandles)
+            reactor = handleMap.at(reactor);
+    }
+    std::vector<DRW_Material> expectedMaterials = sources;
+    for (DRW_Material& material : expectedMaterials)
+        if (material.xDictHandle != 0u)
+            material.xDictHandle = handleMap.at(material.xDictHandle);
+    ReplayCapture capture(version, expectedMaterials, expectedDictionaries,
+                          expectedXRecords);
     dwgRW reader(path.string().c_str());
     if (!reader.read(&capture, false) || capture.rootHandle != 0xB100u
         || !capture.dictionarySeen
         || std::find(capture.materialSeen.begin(), capture.materialSeen.end(),
-                     false) != capture.materialSeen.end()) {
-        std::cerr << "AC1027 selected MATERIAL writer readback mismatch: root="
+                     false) != capture.materialSeen.end()
+        || std::find(capture.dictionarySeenByHandle.begin(),
+                     capture.dictionarySeenByHandle.end(), false)
+            != capture.dictionarySeenByHandle.end()
+        || std::find(capture.xrecordSeenByHandle.begin(),
+                     capture.xrecordSeenByHandle.end(), false)
+            != capture.xrecordSeenByHandle.end()) {
+        std::cerr << "selected MATERIAL writer readback mismatch for version "
+                  << static_cast<unsigned>(version) << ": root="
                   << capture.rootHandle << " dictionary="
                   << capture.dictionarySeen << " materials="
                   << std::count(capture.materialSeen.begin(),
@@ -825,12 +1014,23 @@ bool ac1027DefaultMaterialReplayGraphRoundtripImpl(
 }
 }
 bool ac1027DefaultMaterialReplayRoundtrip(const DRW_Material& source) {
-    return ac1027DefaultMaterialReplayGraphRoundtripImpl({source});
+    return defaultMaterialReplayGraphRoundtripImpl(DRW::AC1027, {source});
 }
 bool ac1027DefaultMaterialReplayGraphRoundtrip(
         const std::vector<DRW_Material>& sources,
         const std::filesystem::path& output) {
-    return ac1027DefaultMaterialReplayGraphRoundtripImpl(sources, output);
+    return defaultMaterialReplayGraphRoundtripImpl(
+        DRW::AC1027, sources, output);
+}
+bool ac1024AutoCad2016DefaultMaterialReplayGraphRoundtrip(
+        const std::vector<DRW_Material>& sources,
+        const std::filesystem::path& output,
+        const std::vector<DRW_Dictionary>& extensionDictionaries,
+        const std::vector<DRW_XRecord>& xrecords,
+        const std::unordered_map<std::uint32_t, std::uint32_t>& handleMap) {
+    return defaultMaterialReplayGraphRoundtripImpl(
+        DRW::AC1024, sources, output, extensionDictionaries, xrecords,
+        handleMap);
 }
 bool ac1027DefaultMaterialReplayAllocationSweep(
         const std::vector<DRW_Material>& sources) {
@@ -928,6 +1128,105 @@ bool ac1027DefaultMaterialReplayAllocationSweep(
     return true;
 }
 int main(int argc,char**argv) {
+    if (argc == 3
+        && std::string(argv[1]) == "--physical-ac1024-autocad-material-replay") {
+        dwgRW reader(argv[2]);
+        Capture capture;
+        capture.requireSemantic = true;
+        capture.requireRaw = true;
+        capture.expectDefaultBody = false;
+        capture.physicalAc1024AutoCadProfile = true;
+        capture.rawVersion = DRW::AC1024;
+        const std::array<std::uint32_t, 4> handles{{0x10u, 0x19u, 0x11u, 0x21u}};
+        if (!reader.read(&capture, false)
+            || !capture.matches(handles, false)
+            || capture.parsedMaterials.size() != 3u) {
+            std::cerr << "physical AutoCAD AC1024 MATERIAL source audit failed: "
+                      << "valid=" << capture.valid << " materials="
+                      << capture.parsedMaterials.size() << '\n';
+            for (const auto& item : capture.parsedMaterials)
+                std::cerr << item.m_name << " raw=" << item.dwgRawDataBitSize()
+                          << '/' << item.dwgRawData().size() * 8u
+                          << " semantic=" << item.hasCompleteDwgSemanticFields()
+                          << " owner=" << item.parentHandle << " reactors="
+                          << item.reactorHandles.size() << '\n';
+            return 1;
+        }
+        std::vector<DRW_Material> selected;
+        const std::array<std::string, 3> names{{"ByBlock", "ByLayer", "Global"}};
+        for (const auto& name : names) {
+            const auto material = std::find_if(
+                capture.parsedMaterials.begin(), capture.parsedMaterials.end(),
+                [&name](const DRW_Material& item) { return item.m_name == name; });
+            if (material == capture.parsedMaterials.end()
+                || !material->canReplayAc1024AutoCad2016DefaultDwgBody()) {
+                std::cerr << "AutoCAD AC1024 MATERIAL profile refused for "
+                          << name << '\n';
+                return 1;
+            }
+            selected.push_back(*material);
+        }
+        std::unordered_map<std::uint32_t, std::uint32_t> remap;
+        std::vector<DRW_Dictionary> extensionDictionaries;
+        std::vector<DRW_XRecord> xrecords;
+        std::uint32_t nextExtensionDictionary = 0xB200u;
+        std::uint32_t nextXRecord = 0xB210u;
+        for (std::size_t i = 0; i < selected.size(); ++i) {
+            const DRW_Material& material = selected[i];
+            remap.emplace(material.handle,
+                          static_cast<std::uint32_t>(0xB101u + i));
+            if (material.xDictHandle == 0u
+                || !remap.emplace(material.xDictHandle,
+                                  nextExtensionDictionary).second) {
+                std::cerr << "AutoCAD AC1024 MATERIAL extension dictionary identity is absent or aliased\n";
+                return 1;
+            }
+            const auto dictionary = std::find_if(
+                capture.sourceDictionaries.begin(), capture.sourceDictionaries.end(),
+                [&material](const DRW_Dictionary& candidate) {
+                    return candidate.handle == material.xDictHandle;
+                });
+            if (dictionary == capture.sourceDictionaries.end()
+                || dictionary->m_entries.size() != 6u) {
+                std::cerr << "AutoCAD AC1024 MATERIAL tile dictionary is incomplete\n";
+                return 1;
+            }
+            extensionDictionaries.push_back(*dictionary);
+            ++nextExtensionDictionary;
+            for (const auto& entry : dictionary->m_entries) {
+                if (!remap.emplace(entry.m_handle, nextXRecord).second) {
+                    std::cerr << "AutoCAD AC1024 MATERIAL XRECORD handle is aliased\n";
+                    return 1;
+                }
+                ++nextXRecord;
+            }
+        }
+        for (const DRW_Dictionary& dictionary : extensionDictionaries) {
+            for (const auto& entry : dictionary.m_entries) {
+                const auto record = std::find_if(
+                    capture.sourceXRecords.begin(), capture.sourceXRecords.end(),
+                    [&entry](const DRW_XRecord& candidate) {
+                        return candidate.handle == entry.m_handle;
+                    });
+                if (record == capture.sourceXRecords.end()) {
+                    std::cerr << "AutoCAD AC1024 MATERIAL tile XRECORD is missing\n";
+                    return 1;
+                }
+                xrecords.push_back(*record);
+            }
+        }
+        const std::filesystem::path output(argv[2]);
+        const auto replayOutput = output.parent_path()
+            / (output.stem().string() + "-libdxfrw-replay.dwg");
+        if (std::filesystem::exists(replayOutput)
+            || !ac1024AutoCad2016DefaultMaterialReplayGraphRoundtrip(
+                selected, replayOutput, extensionDictionaries, xrecords,
+                remap))
+            return 1;
+        std::cout << "AutoCAD AC1024 MATERIAL source-fed graph replay/readback PASS: "
+                  << replayOutput << '\n';
+        return 0;
+    }
     if ((argc == 3 || argc == 4)
         && std::string(argv[1]) == "--physical-ac1027-material-dwg-replay") {
         dwgRW reader(argv[2]);

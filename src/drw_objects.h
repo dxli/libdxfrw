@@ -4771,6 +4771,9 @@ public:
   //! body and detached strings can be replayed without interpreting or losing
   //! unmodeled values.
   [[nodiscard]] bool canReplayAc1027DefaultDwgBody() const noexcept;
+  //! True only for the AutoCAD 2016 AC1024 default-material body profile
+  //! observed in the public NextGIS sample corpus.
+  [[nodiscard]] bool canReplayAc1024AutoCad2016DefaultDwgBody() const noexcept;
   //! True when DXF tail fields were parsed after a complete nonprocedural map
   //! tuple, without the optional procedural-table group 292 marker.
   [[nodiscard]] bool hasDxfMaterialImplicitTail() const noexcept {

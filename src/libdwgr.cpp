@@ -4280,7 +4280,10 @@ bool dwgRW::writeMaterial(DRW_Material *object) {
         return recordWriteResult(WriteSkipKind::Object, false);
     }
     if (version > DRW::AC1018
-        && !object->canReplayAc1027DefaultDwgBody()) {
+        && !((version == DRW::AC1024
+              && object->canReplayAc1024AutoCad2016DefaultDwgBody())
+             || (version == DRW::AC1027
+                 && object->canReplayAc1027DefaultDwgBody()))) {
         // A caller that ignores this per-object refusal must not publish a
         // drawing missing a modern MATERIAL body or detached map strings.
         markDwgWriteFailure();
@@ -4288,7 +4291,7 @@ bool dwgRW::writeMaterial(DRW_Material *object) {
             DRW::OperationPhase::Validation,
             DRW::OperationCause::WriteFailure,
             "material-modern-profile",
-            "MATERIAL output is outside the exact AC1027 default replay profile",
+            "MATERIAL output is outside the exact source-bound replay profiles",
             0, false, object->handle, object->handle != 0);
         return recordWriteResult(WriteSkipKind::Object, false);
     }

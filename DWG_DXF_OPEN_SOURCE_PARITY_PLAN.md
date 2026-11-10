@@ -1163,7 +1163,16 @@ generated controls should cover the ordinary edit/retry loop. Keep test DWG/DXF
 fixtures out of commits unless they already exist in LibreCAD/libdxfrw or were
 created locally from scratch for the specific control.
 
-### Current execution checkpoint (2026-11-09)
+### Current execution checkpoint (2026-11-10)
+
+- **AC1024 AutoCAD 2016 MATERIAL replay:** commit `77bb08a7` admits only the
+  exact 1284-bit default profile from the public NextGIS AC1024 sample and
+  remaps its three MATERIALs, three extension dictionaries and 18 tile
+  XRECORDs. Fresh libdxfrw readback and LibreDWG 0.14 peer comparison verify
+  semantic fields and graph references. The same source exposed and fixed
+  detached-string bit-padding in the shared R2007+ stream writer. The focused
+  MATERIAL CTest passes 1/1. The sample/output stay in `/private/tmp`; this is
+  not whole-source or broad AC1024 qualification. See the [profile receipt](docs/research/p6-ac1024-autocad2016-material-replay-2026-11-10.json).
 
 - **Clean LibreCAD_3 master compatibility patch:** a fresh archive of
   `origin/master` (`5cf435f4a5a57d8dba1599c720917b902e74b25b`) was populated
@@ -2450,7 +2459,8 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    reflectivity, channel flags 127, and nonprocedural mode. The focused source
    audit asserts these values and confirms all three semantic-completeness
    flags. The versioned default builder now emits the observed AC1027 profile;
-   AC1021/AC1024 exact profiles remain unchanged. This does not enable AC1027
+   AC1021 remains unchanged, and AC1024 remains bounded to its separately
+   witnessed AutoCAD 2016 profile below. This does not enable AC1027
    output: `DRW_Material::encodeDwg` continues to refuse retained modern raw
    tails outside the admitted exact profile. The writer replays the retained
    516-bit AC1027 default body and its five explicit empty detached map strings
@@ -2461,13 +2471,36 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    records from the physical Cover source through one selected DWG write with
    a shared ACAD_MATERIAL dictionary, then checks exact raw bodies, typed
    fields, names, detached strings and remapped graph roles on fresh readback.
-   This is not whole-source rewrite or producer/native acceptance. AC1021/AC1024
-   raw bodies, other AC1027 bodies and newly authored modern MATERIAL values
+   This is not whole-source rewrite or producer/native acceptance. AC1021 and
+   other AC1024 raw bodies, other AC1027 bodies and newly authored modern MATERIAL values
    remain refused. The SUN, DICTIONARYWDFLT, TABLESTYLE, and MLEADERSTYLE
    body-reference profiles are complete. Only 3DSOLID remains partial in the
    physical body-reference inventory; independent producer acceptance, broader
    graph closure and the global strict guard remain open.
    Do not rescan the corpus. See the [body replay receipt](docs/research/p6-ac1027-material-default-body-replay-2026-11-10.json).
+
+   **Completed source-bounded AC1024 AutoCAD 2016 MATERIAL replay (2026-11-10).**
+   The public `nextgis/dwg_samples/arc_2010.dwg` source (AC1024; README
+   producer claim AutoCAD 2016 M.49.0.0) supplies `ByBlock`, `ByLayer`, and
+   `Global` MATERIALs with 1284-bit bodies, six empty source-0 maps using
+   projection 2/tiling 1/auto-transform 1, scale matrix diag(1/48, 1/48, 1, 1),
+   and channel flags 127. The exact profile predicate rejects any other
+   semantic/body shape. A selected writer replay remaps the three materials,
+   their three six-entry extension dictionaries, and all 18 TILE XRECORDs;
+   fresh libdxfrw readback verifies material bodies/fields, xDictionary links,
+   dictionary keys/owners and all XRECORD owners/reactors/payloads. LibreDWG
+   0.14 independently reads the generated AC1024 output and confirms those
+   semantics, graph targets, the 23/14 AcDbMaterial capability metadata, and
+   all 18 `{270:1,271:1}` tile records. Detached-string replay also exposed a
+   writer bug: the R2007+ stream assembler copied byte padding as logical string
+   bits. It now appends only the string buffer's logical bits and pads the
+   combined stream at its trailer boundary. The generated 51-object output
+   peer-parses successfully. The focused MATERIAL CTest passes 1/1. The input
+   and output remain in `/private/tmp`; no downloaded drawing is committed.
+   This is a selected source-fed writer/readback profile, not whole-source
+   conversion, AutoCAD acceptance, or broad AC1024 support. Other AC1024
+   MATERIAL bodies and unsourced output graphs remain refused. See the
+   [AutoCAD 2016 MATERIAL receipt](docs/research/p6-ac1024-autocad2016-material-replay-2026-11-10.json).
 
    **Completed MATERIAL profile/retry slice (2026-11-08):** the AC1027 exact
    frame writer now validates its body and detached strings against the
@@ -2478,7 +2511,7 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    and same-adapter retry, and retained-modern-tail replay refusal. That
    2026-11-08 slice predates the bounded 2026-11-10 AC1027 default-body replay
    above. The one partial AC1027 report (3DSOLID), broader AC1027 MATERIAL
-   encoding, AC1021/AC1024 MATERIAL output, whole-source DXF output, and
+   encoding, other AC1021/AC1024 MATERIAL output, whole-source DXF output, and
    aggregate strict guard remain open; neither slice promotes broad support.
    The refreshed source-reference audit independently passes with 88 retained
    identities, 40 normative no-body profiles, 18 normative handle profiles,

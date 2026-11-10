@@ -32,15 +32,16 @@ static std::string toUpperCase(const std::string& s) {
 bool dwgWriter24::appendR2007StringStream(dwgBufferW& data,
                                           const dwgBufferW& strings,
                                           bool writeAbsentFooter) {
-    const std::size_t stringSize = strings.data().size();
-    if (stringSize > std::numeric_limits<std::uint32_t>::max())
+    const std::uint64_t stringBits = strings.bitCount();
+    if (stringBits > std::numeric_limits<std::uint32_t>::max()
+        || stringBits > std::numeric_limits<std::uint64_t>::max()
+                            - data.bitCount())
         return false;
 
-    const auto stringBytes = static_cast<std::uint32_t>(stringSize);
-    if (stringBytes == 0 && !writeAbsentFooter)
+    if (stringBits == 0 && !writeAbsentFooter)
         return true;
 
-    if (stringBytes == 0) {
+    if (stringBits == 0) {
         for (int bit = 0; bit < 7; ++bit)
             data.putBit(0);
         data.putRawShort16(0);
@@ -48,18 +49,21 @@ bool dwgWriter24::appendR2007StringStream(dwgBufferW& data,
         return true;
     }
 
-    // Keep the string start at the exact data bit boundary. Only the tail
-    // before the size/presence trailer is padded to align the handle stream.
-    // The extended trailer stores a 31-bit bit count split as 16 + 15 bits.
+    // Keep the string start at the exact data bit boundary and copy only the
+    // logical string bits. The backing vector's last byte may contain up to
+    // seven buffer padding bits, which are not part of the string stream.
+    // Pad the combined data/string stream before its size/presence trailer.
     const unsigned int paddingBits =
-        static_cast<unsigned int>((7u - (data.bitCount() & 7u)) & 7u);
+        static_cast<unsigned int>((7u - ((data.bitCount() + stringBits) & 7u)) & 7u);
     const std::uint64_t stringBitSize =
-        static_cast<std::uint64_t>(stringBytes) * 8u + paddingBits;
+        stringBits + paddingBits;
     if (stringBitSize > 0x7FFFFFFFULL)
         return false;
 
-    if (stringBytes != 0)
-        data.putBytes(strings.data().data(), stringBytes);
+    for (std::uint64_t bit = 0; bit < stringBits; ++bit)
+        data.putBit(static_cast<std::uint8_t>(
+            (strings.data()[static_cast<std::size_t>(bit / 8u)]
+             >> (7u - bit % 8u)) & 1u));
     for (unsigned int bit = 0; bit < paddingBits; ++bit)
         data.putBit(0);
     if (stringBitSize <= 0x7FFFU) {
@@ -69,8 +73,8 @@ bool dwgWriter24::appendR2007StringStream(dwgBufferW& data,
         data.putRawShort16(static_cast<std::uint16_t>(
             0x8000U | (stringBitSize & 0x7FFFU)));
     }
-    data.putBit(stringBytes != 0 ? 1 : 0);
-    return true;
+    data.putBit(1);
+    return data.isGood();
 }
 
 // --- dwgWriter24::writeDwgHeader --------------------------------------------
