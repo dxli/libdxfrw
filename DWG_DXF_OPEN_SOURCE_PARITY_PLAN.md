@@ -1188,6 +1188,14 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P6 BACKGROUND DWG encoder transaction safety:** `DRW_Background::encodeDwg`
+  now stages body, string and handle streams with alias-aware publication. All
+  six kinds (Solid, Gradient, GroundPlane, Image, IBL and Skylight) pass three
+  stream layouts each, sweeping 217 allocation offsets total. The focused
+  allocation CTest passes; this does not qualify physical layouts, linked
+  object graphs, native rendering or output support. See the [rollback
+  receipt](docs/research/p6-background-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **P6 MLINESTYLE DWG encoder transaction safety:** the encoder now stages
   body, string and handle destinations, including CMC palette strings and
   AC1032 per-element linetype handles. Eleven generated AC1027/AC1032 layouts

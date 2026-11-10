@@ -17535,65 +17535,97 @@ bool DRW_Background::encodeDwg(DRW::Version version, dwgBufferW *buf,
         break;
     }
 
-    dwgBufferW *sb = strBuf != nullptr && version > DRW::AC1018
-        ? strBuf : buf;
-    dwgBufferW *hb = handleBuf != nullptr && version > DRW::AC1014
-        ? handleBuf : buf;
-    buf->putBitLong(m_classVersion);
-    switch (m_kind) {
-    case Solid:
-        buf->putBitLong(m_solidColor);
-        break;
-    case Gradient:
-        buf->putBitLong(m_colorTop);
-        buf->putBitLong(m_colorMiddle);
-        buf->putBitLong(m_colorBottom);
-        buf->putBitDouble(m_horizon);
-        buf->putBitDouble(m_height);
-        buf->putBitDouble(m_rotation);
-        break;
-    case GroundPlane:
-        buf->putBitLong(m_colorSkyZenith);
-        buf->putBitLong(m_colorSkyHorizon);
-        buf->putBitLong(m_colorUndergroundHorizon);
-        buf->putBitLong(m_colorUndergroundAzimuth);
-        buf->putBitLong(m_colorNear);
-        buf->putBitLong(m_colorFar);
-        break;
-    case Image:
-        sb->putVariableText(version, m_fileName);
-        buf->putBit(m_fitToScreen ? 1 : 0);
-        buf->putBit(m_maintainAspect ? 1 : 0);
-        buf->putBit(m_useTiling ? 1 : 0);
-        buf->putBitDouble(m_offset.x);
-        buf->putBitDouble(m_offset.y);
-        buf->putBitDouble(m_scale.x);
-        buf->putBitDouble(m_scale.y);
-        break;
-    case Ibl: {
-        buf->putBit(m_enabled ? 1 : 0);
-        sb->putVariableText(version, m_iblName);
-        buf->putBitDouble(m_rotation);
-        buf->putBit(m_displayImage ? 1 : 0);
-        break;
+    try {
+        dwgBufferW *const callerBody = buf;
+        dwgBufferW *const callerStringDest =
+            (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+        dwgBufferW *const callerHandleDest =
+            (handleBuf != nullptr && version > DRW::AC1014)
+                ? handleBuf : callerBody;
+        const bool separateStrings = callerStringDest != callerBody;
+        const bool separateHandles = callerHandleDest != callerBody
+            && callerHandleDest != callerStringDest;
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedStrings;
+        dwgBufferW stagedHandles;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+        buf = &stagedBody;
+        strBuf = separateStrings ? &stagedStrings : buf;
+        handleBuf = separateHandles ? &stagedHandles
+            : callerHandleDest == callerStringDest && separateStrings
+                ? &stagedStrings : buf;
+        dwgBufferW *sb = strBuf != nullptr && version > DRW::AC1018
+            ? strBuf : buf;
+        dwgBufferW *hb = handleBuf != nullptr && version > DRW::AC1014
+            ? handleBuf : buf;
+        buf->putBitLong(m_classVersion);
+        switch (m_kind) {
+        case Solid:
+            buf->putBitLong(m_solidColor);
+            break;
+        case Gradient:
+            buf->putBitLong(m_colorTop);
+            buf->putBitLong(m_colorMiddle);
+            buf->putBitLong(m_colorBottom);
+            buf->putBitDouble(m_horizon);
+            buf->putBitDouble(m_height);
+            buf->putBitDouble(m_rotation);
+            break;
+        case GroundPlane:
+            buf->putBitLong(m_colorSkyZenith);
+            buf->putBitLong(m_colorSkyHorizon);
+            buf->putBitLong(m_colorUndergroundHorizon);
+            buf->putBitLong(m_colorUndergroundAzimuth);
+            buf->putBitLong(m_colorNear);
+            buf->putBitLong(m_colorFar);
+            break;
+        case Image:
+            sb->putVariableText(version, m_fileName);
+            buf->putBit(m_fitToScreen ? 1 : 0);
+            buf->putBit(m_maintainAspect ? 1 : 0);
+            buf->putBit(m_useTiling ? 1 : 0);
+            buf->putBitDouble(m_offset.x);
+            buf->putBitDouble(m_offset.y);
+            buf->putBitDouble(m_scale.x);
+            buf->putBitDouble(m_scale.y);
+            break;
+        case Ibl: {
+            buf->putBit(m_enabled ? 1 : 0);
+            sb->putVariableText(version, m_iblName);
+            buf->putBitDouble(m_rotation);
+            buf->putBit(m_displayImage ? 1 : 0);
+            break;
+        }
+        case Skylight: {
+            break;
+        }
+        }
+        const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
+            ? extensionDictionaryFlag() : 0;
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()),
+            effectiveXDictFlag, &reactorHandles, xDictHandle);
+        if (m_kind == Ibl) {
+            hb->putHandle(makeRefW(m_secondaryBackgroundHandle,
+                                   DRW::DwgHardPointer));
+        } else if (m_kind == Skylight) {
+            hb->putHandle(makeRefW(m_sunHandle, DRW::DwgHardPointer));
+        }
+        if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    case Skylight: {
-        break;
-    }
-    }
-    const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
-        ? extensionDictionaryFlag() : 0;
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()),
-        effectiveXDictFlag, &reactorHandles, xDictHandle);
-    if (m_kind == Ibl) {
-        hb->putHandle(makeRefW(m_secondaryBackgroundHandle,
-                               DRW::DwgHardPointer));
-    } else if (m_kind == Skylight) {
-        hb->putHandle(makeRefW(m_sunHandle, DRW::DwgHardPointer));
-    }
-    return buf->isGood() && sb->isGood() && hb->isGood();
 }
 
 bool DRW_Material::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){

@@ -121,6 +121,11 @@ public:
     using DRW_MLineStyle::encodeDwg;
 };
 
+class BackgroundProbe final : public DRW_Background {
+public:
+    using DRW_Background::encodeDwg;
+};
+
 class PointCloudDefProbe final : public DRW_PointCloudDef {
 public:
     using DRW_PointCloudDef::encodeDwg;
@@ -860,6 +865,82 @@ bool sweepMLineStyle(DRW::Version version, MLineStyleStreamLayout layout,
     return sweepTransactionalEncoder(
         paletteNames ? "MLINESTYLE-PALETTE-CMC" : "MLINESTYLE",
         names[static_cast<std::size_t>(layout)], version, encode, outputs);
+}
+
+BackgroundProbe makeBackground(DRW_Background::Kind kind) {
+    BackgroundProbe background;
+    background.handle = 0xE000u + static_cast<std::uint32_t>(kind);
+    background.parentHandle = 0xE010u;
+    background.reactorHandles = {0xE011u};
+    background.setDwgCommonObjectState(2, 1u, false);
+    background.xDictHandle = 0xE012u;
+    background.m_kind = kind;
+    background.m_classVersion = 1;
+    background.m_solidColor = 7;
+    background.m_colorTop = 10;
+    background.m_colorMiddle = 11;
+    background.m_colorBottom = 12;
+    background.m_horizon = 0.25;
+    background.m_height = 0.5;
+    background.m_rotation = 0.75;
+    background.m_colorSkyZenith = 20;
+    background.m_colorSkyHorizon = 21;
+    background.m_colorUndergroundHorizon = 22;
+    background.m_colorUndergroundAzimuth = 23;
+    background.m_colorNear = 24;
+    background.m_colorFar = 25;
+    background.m_fileName = "Generated/background/image.png";
+    background.m_fitToScreen = true;
+    background.m_maintainAspect = true;
+    background.m_useTiling = false;
+    background.m_offset = DRW_Coord{0.125, -0.25, 0.0};
+    background.m_scale = DRW_Coord{2.0, 3.0, 0.0};
+    background.m_iblName = "Generated/environment/ibl.hdr";
+    background.m_enabled = true;
+    background.m_displayImage = true;
+    background.m_secondaryBackgroundHandle = 0xE020u;
+    background.m_sunHandle = 0xE021u;
+    return background;
+}
+
+enum class BackgroundStreamLayout {
+    Separate,
+    BodyStringDetachedHandles,
+    AllBody
+};
+
+bool sweepBackground(DRW_Background::Kind kind,
+                     BackgroundStreamLayout layout) {
+    const DRW::Version version = DRW::AC1021;
+    const BackgroundProbe background = makeBackground(kind);
+    const auto encode = [&background](DRW::Version v, dwgBufferW* body,
+                                      dwgBufferW* strings,
+                                      dwgBufferW* handles) {
+        return background.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [layout](dwgBufferW& body, dwgBufferW& strings,
+                                  dwgBufferW& handles) {
+        switch (layout) {
+        case BackgroundStreamLayout::Separate:
+            return EncoderOutputs{&strings, &handles};
+        case BackgroundStreamLayout::BodyStringDetachedHandles:
+            return EncoderOutputs{&body, &handles};
+        case BackgroundStreamLayout::AllBody:
+            return EncoderOutputs{};
+        }
+        return EncoderOutputs{&strings, &handles};
+    };
+    static const char* const layouts[] = {
+        "separate", "body-string-detached-handles", "all-body"
+    };
+    static const char* const kinds[] = {
+        "solid", "gradient", "ground-plane", "image", "ibl", "skylight"
+    };
+    const std::string layoutName =
+        std::string(kinds[static_cast<std::size_t>(kind)]) + "/"
+        + layouts[static_cast<std::size_t>(layout)];
+    return sweepTransactionalEncoder(
+        "BACKGROUND", layoutName.c_str(), version, encode, outputs);
 }
 
 RasterVariablesProbe makeRasterVariables() {
@@ -3509,6 +3590,16 @@ void operator delete(void* memory, std::size_t) noexcept { std::free(memory); }
 void operator delete[](void* memory, std::size_t) noexcept { std::free(memory); }
 
 int main() {
+    for (int kind = static_cast<int>(DRW_Background::Solid);
+         kind <= static_cast<int>(DRW_Background::Skylight); ++kind) {
+        for (int layout = static_cast<int>(BackgroundStreamLayout::Separate);
+             layout <= static_cast<int>(BackgroundStreamLayout::AllBody);
+             ++layout) {
+            if (!sweepBackground(static_cast<DRW_Background::Kind>(kind),
+                                 static_cast<BackgroundStreamLayout>(layout)))
+                return 1;
+        }
+    }
     if (!sweepDbColor(DbColorStreamLayout::Ac1018Inline)
         || !sweepDbColor(DbColorStreamLayout::Ac1018DetachedHandles)
         || !sweepDbColor(DbColorStreamLayout::Ac1021Separate)
