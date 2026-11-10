@@ -2340,9 +2340,13 @@ for AutoCAD 2010 and later, but it gives no per-file originating release; the
 `nextgis/dwg_samples` corpus explicitly says AutoCAD 2016 M.49.0.0. Neither is
 an AutoCAD 2010 RTM provenance witness. The receipts cover the online Autodesk
 and LibreDWG AC1024 corpus screens; do not repeat broad downloads or screens
-without a new source or producer lead. The missing tenth input, an exact failing
-hash, or an independently verified AutoCAD 2010 RTM witness is still required
-before changing the parser. Do not promote support from version code alone. See the
+without a new source or producer lead. A retrieval through the contemporaneous
+2009 Autodesk sample URL was screened on 2026-11-09: its metric DWG is AC1021
+and its SHA-256 exactly duplicates the already screened local sample, so it is
+not an AC1024/RTM witness ([receipt](docs/research/p6-ac1024-2009-autodesk-mirror-sample-screen-2026-11-09.json)).
+The missing tenth input, an exact failing hash, or an independently verified
+AutoCAD 2010 RTM witness is still required before changing the parser. Do not
+promote support from version code alone. See the
 [online sample receipt](docs/research/p6-ac1024-online-sample-rtm-nonreproduction-2026-11-09.json). The
 DWG and paired DXF remain in `/private/tmp` and are not committed. Keep the RTM
 discrepancy open and preserve strict refusal; no parser change is justified by
