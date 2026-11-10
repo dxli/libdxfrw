@@ -766,6 +766,38 @@ bool sweepViewportEntityHeader(ImageDefinitionStreams mode) {
         names[static_cast<std::size_t>(mode)], version, encode, outputs);
 }
 
+DRW_VxControl makeVxControl(DRW::Version version) {
+    DRW_VxControl control;
+    control.handle = 0xAB00u;
+    control.parentHandle = 0x20u;
+    control.reactorHandles = {0x21u, 0x22u};
+    control.setDwgCommonObjectState(2, 1u, false);
+    control.xDictHandle = 0x23u;
+    control.classVersion = 2u;
+    control.flags = 3u;
+    control.recordHandles = {0x31u, 0x32u, 0x33u};
+    if (version > DRW::AC1018
+        && !control.setDwgRawData({0xA5u, 0x5Au}, 13u, version))
+        control.flags = 0xFFFFFFFFu;
+    return control;
+}
+
+bool sweepVxControl(DRW::Version version, bool aliasHandles) {
+    const DRW_VxControl control = makeVxControl(version);
+    const auto encode = [&control](DRW::Version v, dwgBufferW* body,
+                                   dwgBufferW* strings, dwgBufferW* handles) {
+        return control.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [aliasHandles](dwgBufferW& body,
+                                        dwgBufferW& strings,
+                                        dwgBufferW& handles) {
+        return EncoderOutputs{&strings, aliasHandles ? &body : &handles};
+    };
+    return sweepTransactionalEncoder("VXCONTROL",
+        aliasHandles ? "body-aliased" : "separate-handles", version,
+        encode, outputs);
+}
+
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
     GeoDataProbe geo;
     geo.handle = 0xA900u;
@@ -1963,6 +1995,10 @@ int main() {
             ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepViewportEntityHeader(
             ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepVxControl(DRW::AC1015, false)
+        || !sweepVxControl(DRW::AC1018, false)
+        || !sweepVxControl(DRW::AC1021, false)
+        || !sweepVxControl(DRW::AC1021, true)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
         || !sweepGroup(ImageDefinitionStreams::Separate)

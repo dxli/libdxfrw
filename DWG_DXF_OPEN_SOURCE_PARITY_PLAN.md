@@ -1415,6 +1415,17 @@ created locally from scratch for the specific control.
   allocation receipt](docs/research/p6-vport-entity-header-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 1,990 offsets across 94 cases.
 
+- **VXCONTROL DWG encoder transaction safety:** `DRW_VxControl::encodeDwg`
+  now stages its body and detached handle stream, including same-version raw
+  payload bits and record soft-ownership references. Four AC1015/AC1018/AC1021
+  profiles sweep 42 allocation offsets; all preserve caller state on failure
+  and retry to clean output. The allocation and object-vector tests pass 2/2.
+  A broader local roundtrip run fails at an earlier out-of-profile MATERIAL
+  writer refusal and cascades into 357 assertions; no baseline comparison was
+  made, so that failure remains untriaged. No fixture was added. See the
+  [VXCONTROL allocation receipt](docs/research/p6-vxcontrol-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 2,032 offsets across 98 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
