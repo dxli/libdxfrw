@@ -7116,10 +7116,51 @@ bool DRW_Line::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     return true;
 }
 
-bool DRW_Line::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
-    (void)bs; (void)strBuf;
-    oType = 19;  // LINE class id — see dwgreader.cpp:1105
-    if (!encodeDwgCommon(version, buf)) return false;
+bool DRW_Line::encodeDwg(DRW::Version version, dwgBufferW *buf,
+                         std::uint32_t bs, dwgBufferW *strBuf,
+                         dwgBufferW *handleBuf) {
+  (void)bs;
+  (void)strBuf;
+  if (buf == nullptr)
+    return false;
+
+  dwgBufferW *const bodyTarget = buf;
+  dwgBufferW *const stringTarget = strBuf != nullptr ? strBuf : bodyTarget;
+  dwgBufferW *const handleTarget =
+      handleBuf != nullptr ? handleBuf : bodyTarget;
+  try {
+    dwgBufferW bodyStage = *bodyTarget;
+    std::optional<dwgBufferW> stringStageStorage;
+    dwgBufferW *stringStage = &bodyStage;
+    if (stringTarget != bodyTarget) {
+      stringStageStorage.emplace(*stringTarget);
+      stringStage = &*stringStageStorage;
+    }
+    std::optional<dwgBufferW> handleStageStorage;
+    dwgBufferW *handleStage = &bodyStage;
+    if (handleTarget == bodyTarget) {
+      handleStage = &bodyStage;
+    } else if (handleTarget == stringTarget) {
+      handleStage = stringStage;
+    } else {
+      handleStageStorage.emplace(*handleTarget);
+      handleStage = &*handleStageStorage;
+    }
+
+    buf = &bodyStage;
+    handleBuf = handleBuf != nullptr ? handleStage : nullptr;
+    struct ObjectTypeRollback {
+      decltype(oType) &value;
+      decltype(oType) original;
+      bool committed{false};
+      ~ObjectTypeRollback() {
+        if (!committed)
+          value = original;
+      }
+    } typeRollback{oType, oType};
+    oType = 19; // LINE class id — see dwgreader.cpp:1105
+    if (!encodeDwgCommon(version, buf))
+      return false;
 
     // R2000+ Line body — zIsZero shortcut: if both z's are 0, omit the
     // z fields entirely.  Reader reads `zIsZero` first, then RD x +
@@ -7134,13 +7175,26 @@ bool DRW_Line::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs
     buf->putRawDouble(basePoint.y);
     buf->putDefaultDouble(basePoint.y, secPoint.y);
     if (!zIsZero) {
-        buf->putRawDouble(basePoint.z);
-        buf->putDefaultDouble(basePoint.z, secPoint.z);
+      buf->putRawDouble(basePoint.z);
+      buf->putDefaultDouble(basePoint.z, secPoint.z);
     }
     buf->putThickness(thickness, /*b_R2000_style=*/true);
     buf->putExtrusion(extPoint, /*b_R2000_style=*/true);
 
-    return encodeDwgEntHandle(version, buf, handleBuf);
+    if (!encodeDwgEntHandle(version, buf, handleBuf) || !buf->isGood() ||
+        !stringStage->isGood() || !handleStage->isGood())
+      return false;
+
+    bodyTarget->swap(bodyStage);
+    if (stringTarget != bodyTarget)
+      stringTarget->swap(*stringStageStorage);
+    if (handleTarget != bodyTarget && handleTarget != stringTarget)
+      handleTarget->swap(*handleStageStorage);
+    typeRollback.committed = true;
+    return true;
+  } catch (const std::bad_alloc &) {
+    return false;
+  }
 }
 
 bool DRW_3DLine::parseDwg(DRW::Version version, dwgBuffer *buf,

@@ -3229,6 +3229,15 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
   TEXT semantics, physical producer coverage, native rendering or output
   support. See the [allocation receipt](docs/research/p6-text-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **P6 LINE DWG encoder transaction safety:** `DRW_Line::encodeDwg` now stages
+  body/string/handle output, retains alias routing, and restores the previous
+  `oType` on failure. Generated AC1021 and AC1024 controls sweep 15 reached
+  allocation failures per version, check seeded buffer bytes/positions and
+  handle occurrences, retry the same record, and inject an all-streams-alias
+  failure. The focused CTest passes. This is local transaction evidence only;
+  it does not qualify LINE wire semantics, producer coverage, native consumer
+  behavior, or output support. See the [allocation receipt](docs/research/p6-line-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 After every slice: run its focused fast checks; update this queue and the
 relevant receipt; commit code, plan and receipt together; report the commit and
 next eligible slice, then continue. Keep fixtures out of commits unless already

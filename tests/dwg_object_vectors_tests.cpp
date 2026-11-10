@@ -336,6 +336,14 @@ public:
   std::uint16_t dwgType() const { return oType; }
 };
 
+class LineCodecProbe final : public DRW_Line {
+public:
+  using DRW_Line::encodeDwg;
+
+  void setDwgType(std::uint16_t value) { oType = value; }
+  std::uint16_t dwgType() const { return oType; }
+};
+
 class ViewportCodecProbe final : public DRW_Viewport {
 public:
   using DRW_Viewport::encodeDwg;
@@ -24489,27 +24497,30 @@ void testMTextDwgEncodeAllocationRollback(TestContext& t) {
     bool aliasThrew = false;
     bool aliasEncoded = false;
     try {
-      aliasEncoded = retryAliased.encodeDwg(
-          version, &actualAlias, 0u, &actualAlias, &actualAlias);
-    } catch (const std::bad_alloc&) {
+      aliasEncoded = retryAliased.encodeDwg(version, &actualAlias, 0u,
+                                            &actualAlias, &actualAlias);
+    } catch (const std::bad_alloc &) {
       aliasThrew = true;
     }
     allocationFailureCountdown = -1;
-    const bool aliasRolledBack = !aliasEncoded && !aliasThrew
-        && actualAlias.data().empty() && actualAlias.bitCount() == 0u
-        && actualAlias.handleOccurrences().empty();
-    const bool aliasRetried = retryAliased.encodeDwg(
-            version, &actualAlias, 0u, &actualAlias, &actualAlias)
-        && actualAlias.data() == expectedAlias.data()
-        && actualAlias.handleOccurrences().size()
-            == expectedAlias.handleOccurrences().size()
-        && actualAlias.bitCount() == expectedAlias.bitCount();
+    const bool aliasRolledBack =
+        !aliasEncoded && !aliasThrew && actualAlias.data().empty() &&
+        actualAlias.bitCount() == 0u && actualAlias.handleOccurrences().empty();
+    const bool aliasRetried =
+        retryAliased.encodeDwg(version, &actualAlias, 0u, &actualAlias,
+                               &actualAlias) &&
+        actualAlias.data() == expectedAlias.data() &&
+        actualAlias.handleOccurrences().size() ==
+            expectedAlias.handleOccurrences().size() &&
+        actualAlias.bitCount() == expectedAlias.bitCount();
     t.expect(expectedAliasOk && aliasRolledBack && aliasRetried,
              label + " preserves all-stream alias state on failure and retry");
     std::cout << label << " allocation failures=" << failures
               << " rollback/retry="
-              << (rollbackAndRetry && reachedFailureFreeOffset
-                      && aliasRolledBack && aliasRetried ? "PASS" : "FAIL")
+              << (rollbackAndRetry && reachedFailureFreeOffset &&
+                          aliasRolledBack && aliasRetried
+                      ? "PASS"
+                      : "FAIL")
               << '\n';
   }
 }
@@ -24647,6 +24658,144 @@ void testTextDwgEncodeAllocationRollback(TestContext &t) {
         actualAlias.handleOccurrences().size() ==
             expectedAlias.handleOccurrences().size() &&
         retryAliased.dwgType() == 1u &&
+        actualAlias.bitCount() == expectedAlias.bitCount();
+    t.expect(expectedAliasOk && aliasRolledBack && aliasRetried,
+             label + " preserves all-stream alias state on failure and retry");
+    std::cout << label << " allocation failures=" << failures
+              << " rollback/retry="
+              << (rollbackAndRetry && reachedFailureFreeOffset &&
+                          aliasRolledBack && aliasRetried
+                      ? "PASS"
+                      : "FAIL")
+              << '\n';
+  }
+}
+
+void testLineDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    LineCodecProbe source;
+    source.handle = version == DRW::AC1021 ? 0xAD10u : 0xAD20u;
+    source.parentHandle = 0xAD30u;
+    source.reactorHandles = {0xAD40u};
+    source.xDictHandle = 0xAD50u;
+    source.setDwgType(0x777u);
+    source.basePoint = DRW_Coord(1.25, 2.5, 0.0);
+    source.secPoint = DRW_Coord(4.5, 5.75, 0.0);
+    source.extPoint = DRW_Coord(0.0, 0.0, 1.0);
+    source.thickness = 0.5;
+
+    dwgBufferW expectedBody(&codec), expectedStrings(&codec),
+        expectedHandles(&codec);
+    expectedBody.putBitLong(0x5A17u);
+    expectedStrings.putVariableText(version, "retry-string-sentinel");
+    dwgHandle seedHandle;
+    seedHandle.code = DRW::DwgSoftPointer;
+    seedHandle.size = 1u;
+    seedHandle.ref = 0xAAu;
+    seedHandle.ref64 = 0xAAu;
+    expectedHandles.putHandle(seedHandle);
+    LineCodecProbe expectedSource = source;
+    const bool expectedEncoded = expectedSource.encodeDwg(
+        version, &expectedBody, 0u, &expectedStrings, &expectedHandles);
+
+    unsigned failures = 0u;
+    bool reachedFailureFreeOffset = false;
+    bool rollbackAndRetry = true;
+    for (long failAt = 0; failAt < 512; ++failAt) {
+      LineCodecProbe attempt = source;
+      dwgBufferW body(&codec), strings(&codec), handles(&codec);
+      body.putBitLong(0x5A17u);
+      strings.putVariableText(version, "retry-string-sentinel");
+      handles.putHandle(seedHandle);
+      const auto bodyBefore = body.data();
+      const auto stringsBefore = strings.data();
+      const auto handlesBefore = handles.data();
+      const auto bodyBitsBefore = body.bitCount();
+      const auto stringBitsBefore = strings.bitCount();
+      const auto handleBitsBefore = handles.bitCount();
+      const auto handleCountBefore = handles.handleOccurrences().size();
+
+      allocationFailureCountdown = failAt;
+      bool encoded = false;
+      bool threw = false;
+      try {
+        encoded = attempt.encodeDwg(version, &body, 0u, &strings, &handles);
+      } catch (const std::bad_alloc &) {
+        threw = true;
+      }
+      const long countdownAfter = allocationFailureCountdown.exchange(-1);
+      if (countdownAfter >= 0) {
+        reachedFailureFreeOffset =
+            encoded && !threw && body.data() == expectedBody.data() &&
+            strings.data() == expectedStrings.data() &&
+            handles.data() == expectedHandles.data() &&
+            handles.handleOccurrences().size() ==
+                expectedHandles.handleOccurrences().size() &&
+            attempt.dwgType() == 19u &&
+            body.bitCount() == expectedBody.bitCount() &&
+            strings.bitCount() == expectedStrings.bitCount() &&
+            handles.bitCount() == expectedHandles.bitCount();
+        break;
+      }
+
+      ++failures;
+      const bool rolledBack =
+          !encoded && !threw && body.data() == bodyBefore &&
+          strings.data() == stringsBefore && handles.data() == handlesBefore &&
+          body.bitCount() == bodyBitsBefore &&
+          strings.bitCount() == stringBitsBefore &&
+          handles.bitCount() == handleBitsBefore &&
+          handles.handleOccurrences().size() == handleCountBefore &&
+          attempt.dwgType() == source.dwgType();
+      const bool retried =
+          attempt.encodeDwg(version, &body, 0u, &strings, &handles) &&
+          body.data() == expectedBody.data() &&
+          strings.data() == expectedStrings.data() &&
+          handles.data() == expectedHandles.data() &&
+          handles.handleOccurrences().size() ==
+              expectedHandles.handleOccurrences().size() &&
+          attempt.dwgType() == 19u &&
+          body.bitCount() == expectedBody.bitCount() &&
+          strings.bitCount() == expectedStrings.bitCount() &&
+          handles.bitCount() == expectedHandles.bitCount();
+      rollbackAndRetry = rollbackAndRetry && rolledBack && retried;
+      if (!rolledBack || !retried)
+        break;
+    }
+    const std::string label =
+        version == DRW::AC1021 ? "AC1021 LINE" : "AC1024 LINE";
+    t.expect(expectedEncoded && failures > 0u && reachedFailureFreeOffset &&
+                 rollbackAndRetry,
+             label + " encoder rolls back allocation failures and retries exactly");
+
+    LineCodecProbe cleanAliased = source;
+    LineCodecProbe retryAliased = source;
+    dwgBufferW expectedAlias(&codec), actualAlias(&codec);
+    const bool expectedAliasOk = cleanAliased.encodeDwg(
+        version, &expectedAlias, 0u, &expectedAlias, &expectedAlias);
+    allocationFailureCountdown = 0;
+    bool aliasThrew = false;
+    bool aliasEncoded = false;
+    try {
+      aliasEncoded = retryAliased.encodeDwg(version, &actualAlias, 0u,
+                                            &actualAlias, &actualAlias);
+    } catch (const std::bad_alloc &) {
+      aliasThrew = true;
+    }
+    allocationFailureCountdown = -1;
+    const bool aliasRolledBack = !aliasEncoded && !aliasThrew &&
+        actualAlias.data().empty() && actualAlias.bitCount() == 0u &&
+        actualAlias.handleOccurrences().empty() &&
+        retryAliased.dwgType() == source.dwgType();
+    const bool aliasRetried =
+        retryAliased.encodeDwg(version, &actualAlias, 0u, &actualAlias,
+                               &actualAlias) &&
+        actualAlias.data() == expectedAlias.data() &&
+        actualAlias.handleOccurrences().size() ==
+            expectedAlias.handleOccurrences().size() &&
+        retryAliased.dwgType() == 19u &&
         actualAlias.bitCount() == expectedAlias.bitCount();
     t.expect(expectedAliasOk && aliasRolledBack && aliasRetried,
              label + " preserves all-stream alias state on failure and retry");
@@ -27583,6 +27732,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testTextDwgEncodeAllocationRollback(context);
       std::cout << "TEXT DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--line-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testLineDwgEncodeAllocationRollback(context);
+      std::cout << "LINE DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }
