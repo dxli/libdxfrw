@@ -1,5 +1,7 @@
 # DWG/DXF parity — remaining implementation plan
 
+**Latest implementation slice (2026-11-10, AC1018 TABLE→DBCOLOR whole-file readback):** the generated AC1018 TABLE writer route now emits its AcDbColor target as a DBCOLOR object in the same whole-file write. Fresh libdxfrw readback verifies the TABLE's AcDbColor hard-pointer handle and captures the DBCOLOR public callback with exact handle, RGB, method, and name. The focused CTest passes 1/1. The first test draft incorrectly asserted dx_iface's bounded importer-retention map without establishing the read-outcome contract; tracing showed the object parsed and its callback fired, so the harness now checks the callback directly. This closes generated transport/readback for the positive graph edge only; it does not establish source-producer prevalence or native color/rendering semantics. The generated DWG remains in `/tmp`, not in the repository. See the [whole-file receipt](docs/research/p5-ac1018-table-dbcolor-whole-file-readback-2026-11-10.json).
+
 **Latest implementation slice (2026-11-10, AC1018 TABLE layer/linetype identity closure):** the compound TABLE gate now resolves the layer and any explicit linetype handle against the writer's normalized name→handle maps, and requires each matching table record to be emitted once deferred records are complete. Generated graph controls reject mismatched layer handles and unresolved named linetypes; the focused TABLE selector passes. This closes only reference identity/record-existence checks for the bounded TABLE route; it does not qualify physical-source semantics or native rendering. No fixture was added. See the [layer/linetype closure receipt](docs/research/p5-ac1018-table-layer-linetype-graph-closure-2026-11-10.json).
 
 **Latest implementation slice (2026-11-10, AC1018 TABLE AcDbColor graph closure):** the compound TABLE gate now requires a flagged AcDbColor target to have an emitted object frame and class registration matching `AcDbColor`/`DBCOLOR`; an inconsistent flag/handle pair also refuses. The generated graph vector mutates the TABLE to a dangling AcDbColor handle and confirms refusal, while the focused TABLE selector passes. This retains the existing typed DBCOLOR writer route but does not yet prove successful TABLE→DBCOLOR full-file readback or native color semantics. No fixture was added. See the [AcDbColor graph receipt](docs/research/p5-ac1018-table-dbcolor-graph-closure-2026-11-10.json).
@@ -232,8 +234,10 @@ extension-dictionary references until that graph is explicitly closed; the
 compound TABLE gate admits only a non-default plot-style handle bound to the
 emitted provider placeholder graph, resolves AcDbColor references only to an
 emitted DBCOLOR-class frame, and matches layer/explicit-linetype references to
-normalized names and emitted table records. Successful TABLE→DBCOLOR full-file
-readback and native meaning remain outstanding.
+normalized names and emitted table records. A generated positive
+TABLE→DBCOLOR full-file write/readback now confirms the exact reference and
+typed callback payload; this does not establish native meaning or a physical
+producer profile.
 Do not infer cell semantics from cached geometry or class/graph closure alone. See the
 [whole-file TABLE
 receipt](docs/research/p5-ac1018-table-whole-file-cached-geometry-2026-11-10.json).

@@ -1238,6 +1238,12 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_table_ac1018_whole_file_roundtrip PROPERTIES
         LABELS "fast;dwg;generated;tables;graph;geometry;writer;readback"
         TIMEOUT 30)
+    add_test(NAME libdxfrw_table_ac1018_dbcolor_whole_file_roundtrip
+        COMMAND libdxfrw_dwg_local_roundtrip
+            --table-ac1018-dbcolor-whole-file-roundtrip)
+    set_tests_properties(libdxfrw_table_ac1018_dbcolor_whole_file_roundtrip
+        PROPERTIES LABELS "fast;dwg;generated;tables;graph;dbcolor;writer;readback"
+        TIMEOUT 30)
     add_test(NAME libdxfrw_dwg_builtin_block_owner_modes
         COMMAND libdxfrw_dwg_local_roundtrip --built-in-block-owner-modes)
     set_tests_properties(libdxfrw_dwg_builtin_block_owner_modes

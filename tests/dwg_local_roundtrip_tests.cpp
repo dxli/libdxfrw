@@ -38061,9 +38061,11 @@ class TableStyleNodWholeFileAdapter final : public dx_iface {
 public:
     explicit TableStyleNodWholeFileAdapter(dwgRW* writer, dx_data* data,
                                            bool emitTable = false,
-                                           bool omitTableStyleRoot = false)
+                                           bool omitTableStyleRoot = false,
+                                           bool emitDbColor = false)
         : m_writer(writer), m_data(data), m_emitTable(emitTable),
-          m_omitTableStyleRoot(omitTableStyleRoot) {
+          m_omitTableStyleRoot(omitTableStyleRoot),
+          m_emitDbColor(emitDbColor) {
         cData = data;
         dictionary.handle = kDictionaryHandle;
         dictionary.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
@@ -38093,6 +38095,10 @@ public:
             }
             style.m_rowStyles.push_back(row);
         }
+        dbColor.handle = kDbColorHandle;
+        dbColor.rgb = 0x123456;
+        dbColor.colorMethod = dwgColor::RGB;
+        dbColor.name = "LOCAL_TABLE_COLOR";
         initializeTable();
     }
 
@@ -38106,6 +38112,8 @@ public:
             ready = m_writer->registerTableEntityClass(&table);
         if (ready)
             ready = m_writer->registerTableStyleObjectClass(&style);
+        if (ready && m_emitDbColor)
+            ready = m_writer->registerDbColorObjectClass(&dbColor);
     }
     void writeBlocks() override {
         if (!m_emitTable)
@@ -38207,14 +38215,18 @@ public:
             || !m_writer->writeTableStyle(&style)) {
             ready = false;
         }
+        if (ready && m_emitDbColor && !m_writer->writeDbColor(&dbColor))
+            ready = false;
     }
 
     static constexpr std::uint32_t kDictionaryHandle = 0xA6FFu;
     static constexpr std::uint32_t kStyleHandle = 0xA700u;
+    static constexpr std::uint32_t kDbColorHandle = 0xA730u;
     dwgRW* m_writer {nullptr};
     dx_data* m_data {nullptr};
     DRW_Dictionary dictionary;
     DRW_TableStyle style;
+    DRW_DbColor dbColor;
     DRW_Table table;
     bool ready {false};
 
@@ -38244,6 +38256,8 @@ private:
         table.m_semanticContentComplete = true;
         table.m_tableStyleHandle = kStyleHandle;
         table.m_content.m_tableStyleHandle = kStyleHandle;
+        if (m_emitDbColor)
+            table.setDwgAcDbColorHandle(true, kDbColorHandle);
         for (int column = 0; column < 3; ++column) {
             DRW_TableColumn item;
             item.m_width = 152.0;
@@ -38278,12 +38292,24 @@ private:
 
     bool m_emitTable {false};
     bool m_omitTableStyleRoot {false};
+    bool m_emitDbColor {false};
     bool m_useParsedBlockRecordMetadata {false};
     bool m_useParsedProxyCache {false};
 };
 
+class TableDbColorWholeFileReadback final : public dx_iface {
+public:
+    void addDbColor(const DRW_DbColor& data) override {
+        dbColors.push_back(data);
+        dx_iface::addDbColor(data);
+    }
+
+    std::vector<DRW_DbColor> dbColors;
+};
+
 bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
-                                         bool emitTable = false) {
+                                         bool emitTable = false,
+                                         bool emitDbColor = false) {
     const auto nonce = std::chrono::steady_clock::now()
                            .time_since_epoch().count();
     const auto path = retainedOutput != nullptr
@@ -38305,7 +38331,7 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
     dx_data writerData;
     dwgRW output(path.string().c_str());
     TableStyleNodWholeFileAdapter producer(
-        &output, &writerData, emitTable, emitTable);
+        &output, &writerData, emitTable, emitTable, emitDbColor);
     DRW_TableStyle missingOpaqueColor = producer.style;
     missingOpaqueColor.m_rowStyles[0].m_textColorCmc.m_method =
         dwgColor::NONE;
@@ -38336,8 +38362,14 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
             || producer.table.getDwgClassNum() != 0u
             || producer.table.blockRecH.ref != 0u
             || producer.table.handle != 0xA720u
-            || producer.table.parentHandle != DRW::NoHandle)
+            || producer.table.parentHandle != DRW::NoHandle) {
+            std::cerr << "TABLE+DBCOLOR rejection/rollback mismatch rejected="
+                      << rejected << " destination=" << (after == sentinel)
+                      << " class=" << producer.table.getDwgClassNum()
+                      << " block=" << producer.table.blockRecH.ref
+                      << " handle=" << producer.table.handle << '\n';
             return false;
+        }
 
         producer.setOmitTableStyleRoot(false);
         producer.useParsedBlockRecordMetadata(true);
@@ -38345,11 +38377,13 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
     }
     if (!output.write(&producer, DRW::AC1018, true) || !producer.ready) {
         const DRW_OperationDiagnostic diagnostic = output.getLastDiagnostic();
+        std::cerr << "TABLE+DBCOLOR write failed code="
+                  << diagnostic.code << '\n';
         return false;
     }
 
     dx_data readData;
-    dx_iface freshReader;
+    TableDbColorWholeFileReadback freshReader;
     freshReader.cData = &readData;
     dwgRW input(path.string().c_str());
     if (!input.read(&freshReader, false)
@@ -38445,6 +38479,31 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
         || !table->m_content.m_rows[0].m_cells[1].m_isMerged
         || !table->m_content.m_rows[0].m_cells[2].m_isMerged) {
         return false;
+    }
+    if (emitDbColor) {
+        if (!table->hasDwgAcDbColorHandle()
+            || table->dwgAcDbColorHandle()
+                != TableStyleNodWholeFileAdapter::kDbColorHandle
+            || freshReader.dbColors.size() != 1u) {
+            std::cerr << "TABLE+DBCOLOR link readback mismatch present="
+                      << table->hasDwgAcDbColorHandle() << " ref="
+                      << table->dwgAcDbColorHandle() << " callbacks="
+                      << freshReader.dbColors.size() << '\n';
+            return false;
+        }
+        const DRW_DbColor& retainedColor = freshReader.dbColors.front();
+        if (retainedColor.handle
+                != TableStyleNodWholeFileAdapter::kDbColorHandle
+            || retainedColor.rgb != 0x123456
+            || retainedColor.colorMethod != dwgColor::RGB
+            || retainedColor.name != "LOCAL_TABLE_COLOR") {
+            std::cerr << "TABLE+DBCOLOR payload readback mismatch handle="
+                      << retainedColor.handle << " rgb="
+                      << retainedColor.rgb << " method="
+                      << static_cast<unsigned>(retainedColor.colorMethod)
+                      << " name=" << retainedColor.name << '\n';
+            return false;
+        }
     }
     const dx_ifaceBlock* tableBlock = nullptr;
     for (const dx_ifaceBlock* block : readData.blocks) {
@@ -38544,6 +38603,14 @@ int main(int argc, char** argv) {
         const bool passed = testTableStyleNodWholeFileRoundTrip(
             argc == 3 ? argv[2] : nullptr, true);
         std::cout << "AC1018 TABLE cached-geometry whole-file round-trip: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    }
+    if ((argc == 2 || argc == 3)
+        && std::string(argv[1]) == "--table-ac1018-dbcolor-whole-file-roundtrip") {
+        const bool passed = testTableStyleNodWholeFileRoundTrip(
+            argc == 3 ? argv[2] : nullptr, true, true);
+        std::cout << "AC1018 TABLE with DBCOLOR whole-file round-trip: "
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     }
