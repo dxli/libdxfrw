@@ -37427,6 +37427,32 @@ bool tableDwgProxyGraphicsRoundTrip(bool binary, std::uint64_t nonce) {
         || !data.mBlock->ent.back()->proxyGraphics.empty())
         return fail("TABLE proxy was not retained once on the typed record");
 
+    dx_data importedTableData;
+    dx_iface importedTableWriter;
+    importedTableWriter.cData = &importedTableData;
+    importedTableWriter.currentBlock = importedTableData.mBlock;
+    DRW_Table incompleteImportedTable = table;
+    incompleteImportedTable.handle = 0x531u;
+    incompleteImportedTable.m_semanticContentComplete = false;
+    DrwEntityEncodeTestAccess::setParsedDwgProxy(
+        incompleteImportedTable, DRW::AC1021);
+    if (incompleteImportedTable.proxyGraphicsProvenance().replayAuthorized)
+        return fail("generated incomplete TABLE cache unexpectedly starts authorized");
+    importedTableWriter.addTable(incompleteImportedTable);
+    const auto importedFallback = std::find_if(
+        importedTableData.mBlock->ent.cbegin(),
+        importedTableData.mBlock->ent.cend(),
+        [](const DRW_Entity* entity) {
+            return dynamic_cast<const DRW_Insert*>(entity) != nullptr;
+        });
+    if (importedFallback == importedTableData.mBlock->ent.cend()
+        || (*importedFallback)->proxyGraphics != expected
+        || !(*importedFallback)->proxyGraphicsProvenance().replayAuthorized
+        || importedTableData.tables.size() != 1u
+        || !importedTableData.tables.front().proxyGraphicsProvenance()
+                .replayAuthorized)
+        return fail("same-version imported TABLE cache was not authorized on its INSERT fallback copy");
+
     const auto output = directory / "same-version.dxf";
     const auto exportCurrent = [&]() {
         return writer.fileExport(

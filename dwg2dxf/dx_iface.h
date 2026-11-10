@@ -872,6 +872,21 @@ public:
             retainTypedEntity<DRW_Insert>(projection);
             return;
         }
+        if (m_entitiesTableProjection && table != nullptr
+            && !table->m_semanticContentComplete
+            && (data.numProxyGraph != 0 || !data.proxyGraphics.empty())) {
+            // An incomplete TABLE is delivered to legacy 2D consumers as an
+            // INSERT-shaped projection. Its source-version metadata is
+            // populated only after DWG callbacks finish, so use the parser's
+            // provenance on this unchanged copy; the writer still enforces
+            // same-revision output and exact framing.
+            DRW_Insert projection(data);
+            if (projection.proxyGraphicsProvenance().origin
+                == DRW_ProxyGraphicsOrigin::ParsedDwg)
+                (void)projection.authorizeParsedDwgProxyGraphicsReplay();
+            retainTypedEntity<DRW_Insert>(projection);
+            return;
+        }
         retainTypedEntity<DRW_Insert>(data);
     }
     void addMLine(const DRW_MLine* data) override {
