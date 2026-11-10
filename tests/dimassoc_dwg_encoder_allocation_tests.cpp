@@ -111,6 +111,11 @@ public:
     using DRW_VbaProject::encodeDwg;
 };
 
+class AcDbPlaceholderProbe final : public DRW_AcDbPlaceholder {
+public:
+    using DRW_AcDbPlaceholder::encodeDwg;
+};
+
 class PointCloudDefProbe final : public DRW_PointCloudDef {
 public:
     using DRW_PointCloudDef::encodeDwg;
@@ -750,6 +755,34 @@ bool sweepVbaProject(DRW::Version version, bool aliasHandles) {
     return sweepTransactionalEncoder(
         "VBAPROJECT", aliasHandles ? "body-aliased-handles"
                                    : "separate-handles",
+        version, encode, outputs);
+}
+
+AcDbPlaceholderProbe makeAcDbPlaceholder() {
+    AcDbPlaceholderProbe placeholder;
+    placeholder.handle = 0xDE00u;
+    placeholder.parentHandle = 0xDE01u;
+    placeholder.reactorHandles = {0xDE02u};
+    placeholder.setDwgCommonObjectState(2, 1u, false);
+    placeholder.xDictHandle = 0xDE03u;
+    return placeholder;
+}
+
+bool sweepAcDbPlaceholder(DRW::Version version, bool aliasHandles) {
+    const AcDbPlaceholderProbe placeholder = makeAcDbPlaceholder();
+    const auto encode = [&placeholder](DRW::Version v, dwgBufferW* body,
+                                       dwgBufferW* strings,
+                                       dwgBufferW* handles) {
+        DRW_UNUSED(strings);
+        return placeholder.encodeDwg(v, body, handles);
+    };
+    const auto outputs = [aliasHandles](dwgBufferW& body, dwgBufferW&,
+                                        dwgBufferW& handles) {
+        return EncoderOutputs{nullptr, aliasHandles ? &body : &handles};
+    };
+    return sweepTransactionalEncoder(
+        "ACDBPLACEHOLDER", aliasHandles ? "body-aliased-handles"
+                                        : "separate-handles",
         version, encode, outputs);
 }
 
@@ -3434,6 +3467,14 @@ int main() {
         || !sweepVbaProject(DRW::AC1018, true)
         || !sweepVbaProject(DRW::AC1021, false)
         || !sweepVbaProject(DRW::AC1021, true)
+        || !sweepAcDbPlaceholder(DRW::AC1012, false)
+        || !sweepAcDbPlaceholder(DRW::AC1012, true)
+        || !sweepAcDbPlaceholder(DRW::AC1015, false)
+        || !sweepAcDbPlaceholder(DRW::AC1015, true)
+        || !sweepAcDbPlaceholder(DRW::AC1018, false)
+        || !sweepAcDbPlaceholder(DRW::AC1018, true)
+        || !sweepAcDbPlaceholder(DRW::AC1021, false)
+        || !sweepAcDbPlaceholder(DRW::AC1021, true)
         || !sweep(StreamAlias::Separate)
         || !sweep(StreamAlias::SharedStringAndHandle)
         || !sweep(StreamAlias::AllBody)
