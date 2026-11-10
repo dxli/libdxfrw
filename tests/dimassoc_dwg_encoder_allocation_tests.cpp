@@ -51,6 +51,21 @@ public:
     using DRW_View::encodeDwg;
 };
 
+class IdBufferProbe final : public DRW_IDBuffer {
+public:
+    using DRW_IDBuffer::encodeDwg;
+};
+
+class LayerIndexProbe final : public DRW_LayerIndex {
+public:
+    using DRW_LayerIndex::encodeDwg;
+};
+
+class SpatialIndexProbe final : public DRW_SpatialIndex {
+public:
+    using DRW_SpatialIndex::encodeDwg;
+};
+
 class PlotSettingsProbe final : public DRW_PlotSettings {
 public:
     using DRW_PlotSettings::encodeDwg;
@@ -1486,6 +1501,95 @@ bool sweepLtype(ImageDefinitionStreams mode) {
         names[static_cast<std::size_t>(mode)], version, encode, outputs);
 }
 
+IdBufferProbe makeIdBuffer() {
+    IdBufferProbe object;
+    object.handle = 0xB600u;
+    object.parentHandle = 0x20u;
+    object.reactorHandles = {0x21u, 0x22u};
+    object.setDwgCommonObjectState(2, 1u, false);
+    object.xDictHandle = 0x23u;
+    object.classVersion = 1;
+    object.objIds = {0x31u, 0x32u, 0x33u};
+    return object;
+}
+
+LayerIndexProbe makeLayerIndex() {
+    LayerIndexProbe object;
+    object.handle = 0xB700u;
+    object.parentHandle = 0x20u;
+    object.reactorHandles = {0x21u, 0x22u};
+    object.setDwgCommonObjectState(2, 1u, false);
+    object.xDictHandle = 0x23u;
+    object.timestamp1 = 2461000u;
+    object.timestamp2 = 43210u;
+    object.entries = {
+        {0, "0", 0x31u},
+        {1, "LOCAL_LAYER", 0x32u}
+    };
+    return object;
+}
+
+SpatialIndexProbe makeSpatialIndex() {
+    SpatialIndexProbe object;
+    object.handle = 0xB800u;
+    object.parentHandle = 0x20u;
+    object.reactorHandles = {0x21u, 0x22u};
+    object.setDwgCommonObjectState(2, 1u, false);
+    object.xDictHandle = 0x23u;
+    object.timestamp1 = 2461000u;
+    object.timestamp2 = 43210u;
+    return object;
+}
+
+template <typename Probe>
+bool sweepIndexObject(const char* name, const Probe& object,
+                      ImageDefinitionStreams mode) {
+    const DRW::Version version =
+        mode == ImageDefinitionStreams::R13InlineSeparateArguments
+            ? DRW::AC1012
+            : mode == ImageDefinitionStreams::R2004DetachedHandles
+                ? DRW::AC1018 : DRW::AC1021;
+    const auto encode = [&object](DRW::Version v, dwgBufferW* body,
+                                  dwgBufferW* strings, dwgBufferW* handles) {
+        return object.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [mode](dwgBufferW& body, dwgBufferW& strings,
+                                dwgBufferW& handles) {
+        dwgBufferW* stringOutput = nullptr;
+        dwgBufferW* handleOutput = nullptr;
+        switch (mode) {
+        case ImageDefinitionStreams::R13InlineSeparateArguments:
+        case ImageDefinitionStreams::R2004DetachedHandles:
+        case ImageDefinitionStreams::Separate:
+            stringOutput = &strings;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SharedStringAndHandle:
+            stringOutput = &strings;
+            handleOutput = &strings;
+            break;
+        case ImageDefinitionStreams::AllBody:
+            break;
+        case ImageDefinitionStreams::BodyStringDetachedHandles:
+            stringOutput = &body;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SeparateStringBodyHandles:
+            stringOutput = &strings;
+            handleOutput = &body;
+            break;
+        }
+        return EncoderOutputs{stringOutput, handleOutput};
+    };
+    static const char* const names[] = {
+        "AC1012-inline", "AC1018-detached-handles", "separate",
+        "shared-string-handle", "all-body", "body-string-detached-handles",
+        "separate-string-body-handles"
+    };
+    return sweepTransactionalEncoder(name,
+        names[static_cast<std::size_t>(mode)], version, encode, outputs);
+}
+
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
     GeoDataProbe geo;
     geo.handle = 0xA900u;
@@ -2756,6 +2860,48 @@ int main() {
         || !sweepLtype(ImageDefinitionStreams::AllBody)
         || !sweepLtype(ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepLtype(
+            ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepIndexObject("IDBUFFER", makeIdBuffer(),
+            ImageDefinitionStreams::R13InlineSeparateArguments)
+        || !sweepIndexObject("IDBUFFER", makeIdBuffer(),
+            ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepIndexObject("IDBUFFER", makeIdBuffer(),
+            ImageDefinitionStreams::Separate)
+        || !sweepIndexObject("IDBUFFER", makeIdBuffer(),
+            ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepIndexObject("IDBUFFER", makeIdBuffer(),
+            ImageDefinitionStreams::AllBody)
+        || !sweepIndexObject("IDBUFFER", makeIdBuffer(),
+            ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepIndexObject("IDBUFFER", makeIdBuffer(),
+            ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepIndexObject("LAYER_INDEX", makeLayerIndex(),
+            ImageDefinitionStreams::R13InlineSeparateArguments)
+        || !sweepIndexObject("LAYER_INDEX", makeLayerIndex(),
+            ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepIndexObject("LAYER_INDEX", makeLayerIndex(),
+            ImageDefinitionStreams::Separate)
+        || !sweepIndexObject("LAYER_INDEX", makeLayerIndex(),
+            ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepIndexObject("LAYER_INDEX", makeLayerIndex(),
+            ImageDefinitionStreams::AllBody)
+        || !sweepIndexObject("LAYER_INDEX", makeLayerIndex(),
+            ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepIndexObject("LAYER_INDEX", makeLayerIndex(),
+            ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepIndexObject("SPATIAL_INDEX", makeSpatialIndex(),
+            ImageDefinitionStreams::R13InlineSeparateArguments)
+        || !sweepIndexObject("SPATIAL_INDEX", makeSpatialIndex(),
+            ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepIndexObject("SPATIAL_INDEX", makeSpatialIndex(),
+            ImageDefinitionStreams::Separate)
+        || !sweepIndexObject("SPATIAL_INDEX", makeSpatialIndex(),
+            ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepIndexObject("SPATIAL_INDEX", makeSpatialIndex(),
+            ImageDefinitionStreams::AllBody)
+        || !sweepIndexObject("SPATIAL_INDEX", makeSpatialIndex(),
+            ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepIndexObject("SPATIAL_INDEX", makeSpatialIndex(),
             ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)

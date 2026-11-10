@@ -1519,6 +1519,17 @@ created locally from scratch for the specific control.
   receipt](docs/research/p6-ltype-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 3,438 offsets across 162 cases.
 
+- **DWG index OBJECTS encoder transaction safety:**
+  `DRW_IDBuffer`, `DRW_LayerIndex`, and `DRW_SpatialIndex` now stage their
+  effective body/string/handle outputs and publish only after complete writes.
+  The SPATIAL_INDEX route keeps its version-bound raw bits in the staged body.
+  Twenty-one generated layouts sweep 253 allocation offsets with rollback
+  and same-object retry; the allocation and object-vector CTests pass 2/2.
+  No fixture was added. The broader local-roundtrip test remains unrun here
+  because its known earlier MATERIAL refusal masks these record-specific
+  checks. See the [index encoder receipt](docs/research/p6-dwg-index-objects-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 3,691 offsets across 183 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

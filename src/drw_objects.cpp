@@ -23441,18 +23441,38 @@ bool DRW_IDBuffer::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || xDictFlag > 1)
         return false;
     DRW_UNUSED(strBuf);
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
+    try {
+        dwgBufferW *const callerBody = buf;
+        dwgBufferW *const callerHandleDest =
+            (handleBuf != nullptr && version > DRW::AC1014)
+                ? handleBuf : callerBody;
+        const bool separateHandles = callerHandleDest != callerBody;
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedHandles;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+        buf = &stagedBody;
+        handleBuf = separateHandles ? &stagedHandles : buf;
+        dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
+            ? handleBuf : buf;
 
-    buf->putRawChar8(static_cast<std::uint8_t>(classVersion));
-    buf->putBitLong(static_cast<std::int32_t>(objIds.size()));
+        buf->putRawChar8(static_cast<std::uint8_t>(classVersion));
+        buf->putBitLong(static_cast<std::int32_t>(objIds.size()));
 
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), numReactors, xDictFlag,
-        &reactorHandles, xDictHandle);
-    for (std::uint32_t ref : objIds) {
-        hb->putHandle(makeRefW(ref, DRW::DwgSoftPointer));
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle), numReactors,
+            xDictFlag, &reactorHandles, xDictHandle);
+        for (std::uint32_t ref : objIds)
+            hb->putHandle(makeRefW(ref, DRW::DwgSoftPointer));
+        if (!buf->isGood() || !hb->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    return buf->isGood() && hb->isGood();
 }
 
 // LAYER_INDEX (AcDbLayerIndex) encoder — ODA §20.4.83.  Body: timestamp1 BL +
@@ -23467,24 +23487,57 @@ bool DRW_LayerIndex::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || reactorHandles.size() > dwgSafety::MaxReactorCount
         || xDictFlag > 1)
         return false;
-    dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018) ? strBuf : buf;
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
+    try {
+        dwgBufferW *const callerBody = buf;
+        dwgBufferW *const callerStringDest =
+            (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+        dwgBufferW *const callerHandleDest =
+            (handleBuf != nullptr && version > DRW::AC1014)
+                ? handleBuf : callerBody;
+        const bool separateStrings = callerStringDest != callerBody;
+        const bool separateHandles = callerHandleDest != callerBody
+            && callerHandleDest != callerStringDest;
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedStrings;
+        dwgBufferW stagedHandles;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+        buf = &stagedBody;
+        strBuf = separateStrings ? &stagedStrings : buf;
+        handleBuf = separateHandles ? &stagedHandles
+            : callerHandleDest == callerStringDest && separateStrings
+                ? &stagedStrings : buf;
+        dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018)
+            ? strBuf : buf;
+        dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
+            ? handleBuf : buf;
 
-    buf->putBitLong(static_cast<std::int32_t>(timestamp1));
-    buf->putBitLong(static_cast<std::int32_t>(timestamp2));
-    buf->putBitLong(static_cast<std::int32_t>(entries.size()));
-    for (const auto& e : entries) {
-        buf->putBitLong(e.indexLong);
-        sb->putVariableText(version, e.name);
-    }
+        buf->putBitLong(static_cast<std::int32_t>(timestamp1));
+        buf->putBitLong(static_cast<std::int32_t>(timestamp2));
+        buf->putBitLong(static_cast<std::int32_t>(entries.size()));
+        for (const auto& e : entries) {
+            buf->putBitLong(e.indexLong);
+            sb->putVariableText(version, e.name);
+        }
 
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), numReactors, xDictFlag,
-        &reactorHandles, xDictHandle);
-    for (const auto& e : entries) {
-        hb->putHandle(makeRefW(e.entryHandle, DRW::DwgHardPointer));
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle), numReactors,
+            xDictFlag, &reactorHandles, xDictHandle);
+        for (const auto& e : entries)
+            hb->putHandle(makeRefW(e.entryHandle, DRW::DwgHardPointer));
+        if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    return buf->isGood() && sb->isGood() && hb->isGood();
 }
 
 // SPATIAL_INDEX (AcDbSpatialIndex) encoder — ODA §20.4.95.  Replay the
@@ -23500,22 +23553,42 @@ bool DRW_SpatialIndex::encodeDwg(DRW::Version version, dwgBufferW *buf,
     if (m_rawDataValid && m_rawDataVersion != DRW::UNKNOWNV
         && version != m_rawDataVersion)
         return false;
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
-        ? handleBuf : buf;
+    try {
+        dwgBufferW *const callerBody = buf;
+        dwgBufferW *const callerHandleDest =
+            (handleBuf != nullptr && version > DRW::AC1014)
+                ? handleBuf : callerBody;
+        const bool separateHandles = callerHandleDest != callerBody;
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedHandles;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+        buf = &stagedBody;
+        handleBuf = separateHandles ? &stagedHandles : buf;
+        dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
+            ? handleBuf : buf;
 
-    buf->putBitLong(static_cast<std::int32_t>(timestamp1));
-    buf->putBitLong(static_cast<std::int32_t>(timestamp2));
-    if (m_rawDataValid
-        && !appendRawBits(m_rawData, m_rawDataBitSize, buf))
+        buf->putBitLong(static_cast<std::int32_t>(timestamp1));
+        buf->putBitLong(static_cast<std::int32_t>(timestamp2));
+        if (m_rawDataValid
+            && !appendRawBits(m_rawData, m_rawDataBitSize, buf))
+            return false;
+
+        const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
+            ? extensionDictionaryFlag() : 0;
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()),
+            effectiveXDictFlag, &reactorHandles, xDictHandle);
+        if (!buf->isGood() || !hb->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
         return false;
-
-    const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
-        ? extensionDictionaryFlag() : 0;
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()),
-        effectiveXDictFlag, &reactorHandles, xDictHandle);
-    return buf->isGood() && hb->isGood();
+    }
 }
 
 bool isValidCadValue(const DRW_CadValue& value) {
