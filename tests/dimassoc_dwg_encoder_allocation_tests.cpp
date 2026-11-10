@@ -1339,6 +1339,79 @@ bool sweepDimstyle(ImageDefinitionStreams mode) {
         names[static_cast<std::size_t>(mode)], version, encode, outputs);
 }
 
+DRW_Vport makeVport() {
+    DRW_Vport vport;
+    vport.handle = 0xB400u;
+    vport.parentHandle = 0x20u;
+    vport.reactorHandles = {0x21u, 0x22u};
+    vport.setDwgCommonObjectState(2, 1u, false);
+    vport.xDictHandle = 0x23u;
+    vport.name = "LOCAL_VPORT";
+    vport.flags = 0;
+    vport.height = 12.0;
+    vport.ratio = 1.5;
+    vport.center = DRW_Coord(2.0, 3.0, 0.0);
+    vport.viewTarget = DRW_Coord(4.0, 5.0, 6.0);
+    vport.viewDir = DRW_Coord(0.0, 0.0, 1.0);
+    vport.twistAngle = 15.0;
+    vport.snapAngle = 5.0;
+    vport.xrefBlockHandle.ref = 0x24u;
+    vport.namedUcsHandle = 0x25u;
+    vport.baseUcsHandle = 0x26u;
+    vport.backgroundHandle = 0x27u;
+    vport.visualStyleHandle = 0x28u;
+    vport.m_sunHandle = 0x29u;
+    return vport;
+}
+
+bool sweepVport(ImageDefinitionStreams mode) {
+    const DRW::Version version =
+        mode == ImageDefinitionStreams::R13InlineSeparateArguments
+            ? DRW::AC1012
+            : mode == ImageDefinitionStreams::R2004DetachedHandles
+                ? DRW::AC1018 : DRW::AC1021;
+    const DRW_Vport vport = makeVport();
+    const auto encode = [&vport](DRW::Version v, dwgBufferW* body,
+                                 dwgBufferW* strings, dwgBufferW* handles) {
+        return vport.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [mode](dwgBufferW& body, dwgBufferW& strings,
+                                dwgBufferW& handles) {
+        dwgBufferW* stringOutput = nullptr;
+        dwgBufferW* handleOutput = nullptr;
+        switch (mode) {
+        case ImageDefinitionStreams::R13InlineSeparateArguments:
+        case ImageDefinitionStreams::R2004DetachedHandles:
+        case ImageDefinitionStreams::Separate:
+            stringOutput = &strings;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SharedStringAndHandle:
+            stringOutput = &strings;
+            handleOutput = &strings;
+            break;
+        case ImageDefinitionStreams::AllBody:
+            break;
+        case ImageDefinitionStreams::BodyStringDetachedHandles:
+            stringOutput = &body;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SeparateStringBodyHandles:
+            stringOutput = &strings;
+            handleOutput = &body;
+            break;
+        }
+        return EncoderOutputs{stringOutput, handleOutput};
+    };
+    static const char* const names[] = {
+        "AC1012-inline", "AC1018-detached-handles", "separate",
+        "shared-string-handle", "all-body", "body-string-detached-handles",
+        "separate-string-body-handles"
+    };
+    return sweepTransactionalEncoder("VPORT",
+        names[static_cast<std::size_t>(mode)], version, encode, outputs);
+}
+
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
     GeoDataProbe geo;
     geo.handle = 0xA900u;
@@ -2593,6 +2666,14 @@ int main() {
         || !sweepDimstyle(ImageDefinitionStreams::AllBody)
         || !sweepDimstyle(ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepDimstyle(
+            ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepVport(ImageDefinitionStreams::R13InlineSeparateArguments)
+        || !sweepVport(ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepVport(ImageDefinitionStreams::Separate)
+        || !sweepVport(ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepVport(ImageDefinitionStreams::AllBody)
+        || !sweepVport(ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepVport(
             ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)

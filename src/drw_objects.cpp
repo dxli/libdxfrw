@@ -9383,6 +9383,7 @@ bool DRW_Vport::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
         || !drwHasEncodableDwgVportAngles(*this)
         || !std::isfinite(encodeVportAspectRatio(version, height, ratio)))
         return false;
+    try {
     std::uint8_t ambientMethod = 0u;
     std::uint8_t ambientFlags = 0u;
     std::uint16_t ambientIndex = 0u;
@@ -9400,6 +9401,29 @@ bool DRW_Vport::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
                    ambientColorName)) {
         return false;
     }
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerStringDest =
+        (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+    dwgBufferW *const callerHandleDest =
+        (hdlBuf != nullptr && version > DRW::AC1014)
+            ? hdlBuf : callerBody;
+    const bool separateStrings = callerStringDest != callerBody;
+    const bool separateHandles = callerHandleDest != callerBody
+        && callerHandleDest != callerStringDest;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    stagedBody = *callerBody;
+    if (separateStrings)
+        stagedStrings = *callerStringDest;
+    if (separateHandles)
+        stagedHandles = *callerHandleDest;
+
+    buf = &stagedBody;
+    strBuf = separateStrings ? &stagedStrings : buf;
+    hdlBuf = separateHandles ? &stagedHandles
+        : callerHandleDest == callerStringDest && separateStrings
+            ? &stagedStrings : buf;
     const std::int32_t reactorCount =
         static_cast<std::int32_t>(reactorHandles.size());
     dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
@@ -9496,7 +9520,17 @@ bool DRW_Vport::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
         hb->putHandle(hardReference(namedUcsHandle));
         hb->putHandle(hardReference(baseUcsHandle));
     }
-    return buf->isGood() && sb->isGood() && hb->isGood();
+    if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+        return false;
+    callerBody->swap(stagedBody);
+    if (separateStrings)
+        callerStringDest->swap(stagedStrings);
+    if (separateHandles)
+        callerHandleDest->swap(stagedHandles);
+    return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_ViewportEntityHeader::parseDwg(DRW::Version version,

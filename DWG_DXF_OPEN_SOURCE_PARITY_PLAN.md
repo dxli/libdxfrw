@@ -1499,6 +1499,15 @@ created locally from scratch for the specific control.
   See the [DIMSTYLE allocation receipt](docs/research/p6-dimstyle-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 3,038 offsets across 148 cases.
 
+- **VPORT DWG encoder transaction safety:**
+  `DRW_Vport::encodeDwgForWriter` now catches ambient CMC/preflight allocation
+  failures and stages body, strings, and handles before publication. Seven
+  AC1012/AC1018/AC1021 generated layouts sweep 144 offsets with rollback and
+  same-object retry. The allocation, object-vector, handle-role, ambient-CMC,
+  angle, and AC1027 peer tests pass 6/6. No fixture was added. See the [VPORT
+  allocation receipt](docs/research/p6-vport-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 3,182 offsets across 155 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
