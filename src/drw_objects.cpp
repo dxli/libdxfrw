@@ -25985,15 +25985,32 @@ bool DRW_ImageDefinitionReactor::encodeDwg(DRW::Version version, dwgBufferW *buf
         || extensionDictionaryFlag() > 1)
         return false;
     DRW_UNUSED(strBuf);
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
-    buf->putBitLong(m_classVersion);
     const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
         ? extensionDictionaryFlag() : 0;
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()),
-        effectiveXDictFlag, &reactorHandles, xDictHandle);
-    return buf->isGood() && hb->isGood();
+    dwgBufferW stagedBody;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *buf;
+        const bool separateHandles = handleBuf != nullptr && handleBuf != buf
+            && version > DRW::AC1014;
+        if (separateHandles)
+            stagedHandles = *handleBuf;
+        dwgBufferW *hb = separateHandles ? &stagedHandles : &stagedBody;
+        stagedBody.putBitLong(m_classVersion);
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()),
+            effectiveXDictFlag, &reactorHandles, xDictHandle);
+        if (!stagedBody.isGood() || !hb->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (separateHandles)
+            handleBuf->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_SpatialFilter::parseCode(int code, const std::unique_ptr<dxfReader>& reader){

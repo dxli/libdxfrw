@@ -1221,6 +1221,17 @@ created locally from scratch for the specific control.
   the record's opaque binary payload or qualify its producer semantics. No
   DWG/DXF fixture was added. See the [allocation rollback receipt](docs/research/p6-block-representation-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **IMAGEDEF_REACTOR DWG encoder transaction safety:**
+  `DRW_ImageDefinitionReactor::encodeDwg` now stages its body and effective
+  handle stream while retaining the version-specific inline/detached handle
+  layout. Generated controls sweep seven AC1012 inline-handle offsets, nine
+  AC1024 separate-stream offsets and seven AC1024 body-aliased offsets; every
+  injected failure preserves caller state and same-record retry matches clean
+  output. The focused allocation, object-vector and DIMASSOC readback tests
+  pass. This does not resolve the IMAGEDEF parent-role conflict or qualify
+  output. No DWG/DXF fixture was added. See the [allocation rollback
+  receipt](docs/research/p6-imagedef-reactor-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
