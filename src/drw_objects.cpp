@@ -22888,12 +22888,47 @@ bool DRW_DictionaryWithDefault::encodeDwgForWriter(
         DRW::Version version, dwgBufferW *buf, dwgBufferW *strBuf,
         dwgBufferW *handleBuf, bool typedLegacyNulls) const {
     if (buf == nullptr || !isDwgPayloadValid(version)) return false;
-    if (!DRW_Dictionary::encodeDwgImpl(version, buf, strBuf, handleBuf, true,
-                                       typedLegacyNulls))
+    dwgBufferW *const stringDest =
+        (strBuf != nullptr && version > DRW::AC1018) ? strBuf : buf;
+    dwgBufferW *const handleDest =
+        (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
+    const bool separateStrings = stringDest != buf;
+    const bool separateHandles = handleDest != buf && handleDest != stringDest;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *buf;
+        if (separateStrings)
+            stagedStrings = *stringDest;
+        if (separateHandles)
+            stagedHandles = *handleDest;
+
+        dwgBufferW *const bodyOut = &stagedBody;
+        dwgBufferW *const stringOut = separateStrings
+            ? &stagedStrings : bodyOut;
+        dwgBufferW *const handleOut = handleDest == buf ? bodyOut
+            : handleDest == stringDest ? stringOut : &stagedHandles;
+        if (!DRW_Dictionary::encodeDwgImpl(
+                version, bodyOut, stringOut, handleOut, true,
+                typedLegacyNulls))
+            return false;
+
+        handleOut->putHandle(
+            makeRefW(m_defaultEntryHandle, DRW::DwgHardPointer));
+        if (!bodyOut->isGood() || !stringOut->isGood()
+            || !handleOut->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (separateStrings)
+            stringDest->swap(stagedStrings);
+        if (separateHandles)
+            handleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
         return false;
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
-    hb->putHandle(makeRefW(m_defaultEntryHandle, DRW::DwgHardPointer));
-    return buf->isGood() && hb->isGood();
+    }
 }
 
 bool DRW_DictionaryWithDefault::isDwgPayloadValid(

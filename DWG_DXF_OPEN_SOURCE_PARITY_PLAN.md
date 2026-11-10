@@ -1328,6 +1328,18 @@ created locally from scratch for the specific control.
   do not weaken its source/reference gate or use this generated transaction
   control to promote output claims.
 
+- **DICTIONARYWDFLT compound DWG transaction:** `encodeDwgForWriter` now stages
+  the inherited dictionary and its appended default-entry hard pointer as one
+  publication unit. Previously the base DICTIONARY could be committed before
+  allocation failed while appending the required default reference. Generated
+  AC1012/AC1015/AC1018/AC1021 controls sweep 181 allocation offsets across
+  eight stream/version cases with rollback and corrected same-object retry.
+  The combined allocation, object-vector, default-writer, adapter round-trip,
+  and default-handle-role tests pass 5/5. The private typed-writer route shares
+  this implementation but was not separately fault-injected. No fixture was
+  added. See the [DICTIONARYWDFLT receipt](docs/research/p6-dictionarywdefault-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 1,498 offsets across 69 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
