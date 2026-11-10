@@ -61,6 +61,11 @@ public:
     using DRW_DictionaryVar::encodeDwg;
 };
 
+class XRecordProbe final : public DRW_XRecord {
+public:
+    using DRW_XRecord::encodeDwg;
+};
+
 class ScaleProbe final : public DRW_Scale {
 public:
     using DRW_Scale::encodeDwg;
@@ -1069,6 +1074,80 @@ bool sweepDictionaryVar(DRW::Version version, ImageDefinitionStreams mode) {
     return true;
 }
 
+bool sweepXRecord(DRW::Version version, bool separateHandles) {
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    XRecordProbe record;
+    record.handle = 0xF1C0u;
+    record.parentHandle = 0x20u;
+    record.reactorHandles = {0x21u, 0x22u};
+    record.xDictHandle = 0x23u;
+    record.m_cloning = 2;
+    record.m_values.emplace_back(1, UTF8STRING(
+        "A long XRECORD string value that allocates while being encoded"));
+    record.m_values.emplace_back(40, 1.25);
+    record.m_values.emplace_back(10, DRW_Coord{1.0, 2.0, 3.0});
+    record.m_values.emplace_back(310, std::vector<std::uint8_t>(300, 0xA5u));
+    record.m_handleValues.emplace_back(0, 0x41u);
+    record.m_handleValues.emplace_back(331, 0x42u);
+
+    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
+    seed(cleanBody, cleanStrings, cleanHandles);
+    if (!record.encodeDwg(version, &cleanBody, &cleanStrings,
+                          separateHandles ? &cleanHandles : nullptr))
+        return false;
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    seed(body, strings, handles);
+    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
+    const unsigned long beforeCalibration =
+        failedAllocations.load(std::memory_order_relaxed);
+    const bool calibrated = record.encodeDwg(
+        version, &body, &strings,
+        separateHandles ? &handles : nullptr);
+    const long allocations = 1000000
+        - allocationsBeforeFailure.load(std::memory_order_relaxed);
+    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+    if (!calibrated || allocations <= 0
+        || failedAllocations.load(std::memory_order_relaxed)
+            != beforeCalibration)
+        return false;
+
+    for (long offset = 0; offset < allocations; ++offset) {
+        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
+        seed(failedBody, failedStrings, failedHandles);
+        const dwgBufferW originalBody = failedBody;
+        const dwgBufferW originalStrings = failedStrings;
+        const dwgBufferW originalHandles = failedHandles;
+        const unsigned long beforeFailure =
+            failedAllocations.load(std::memory_order_relaxed);
+        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
+        const bool encoded = record.encodeDwg(
+            version, &failedBody, &failedStrings,
+            separateHandles ? &failedHandles : nullptr);
+        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+        if (encoded
+            || failedAllocations.load(std::memory_order_relaxed)
+                != beforeFailure + 1u
+            || !same(failedBody, originalBody)
+            || !same(failedStrings, originalStrings)
+            || !same(failedHandles, originalHandles))
+            return false;
+        if (!record.encodeDwg(version, &failedBody, &failedStrings,
+                              separateHandles ? &failedHandles : nullptr)
+            || !same(failedBody, cleanBody)
+            || !same(failedStrings, cleanStrings)
+            || !same(failedHandles, cleanHandles))
+            return false;
+    }
+    std::cout << "XRECORD DWG encoder version="
+              << static_cast<int>(version) << ' '
+              << (separateHandles ? "detached" : "body-aliased")
+              << " handles: allocation offsets=" << allocations
+              << ", rollback/retry=PASS\n";
+    return true;
+}
+
 ScaleProbe makeScale() {
     ScaleProbe scale;
     scale.handle = 0xF200u;
@@ -1337,6 +1416,10 @@ int main() {
                 ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepDictionaryVar(DRW::AC1021,
                 ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepXRecord(DRW::AC1012, false)
+        || !sweepXRecord(DRW::AC1018, true)
+        || !sweepXRecord(DRW::AC1021, true)
+        || !sweepXRecord(DRW::AC1021, false)
         || !sweepScale(DRW::AC1012, false, false)
         || !sweepScale(DRW::AC1021, true, false)
         || !sweepScale(DRW::AC1021, false, true)

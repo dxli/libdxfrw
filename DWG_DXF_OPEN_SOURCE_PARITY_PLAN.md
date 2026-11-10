@@ -1312,6 +1312,22 @@ created locally from scratch for the specific control.
   The combined allocation target now covers 1,211 offsets across 57
   stream/version cases.
 
+- **XRECORD DWG encoder transaction safety:** `DRW_XRecord::encodeDwg` now
+  stages its encoded data body and effective handle stream before publication,
+  including string encoding, cloned-record metadata, common links, and trailing
+  handle references. Generated AC1012/AC1018/AC1021 controls sweep 106
+  allocation offsets across four stream/version cases; every failure rolls
+  back caller bytes/cursors/handle ledgers and same-object retry matches clean
+  output. The allocation, object-vector, DWG compatibility-code, and codepage
+  tests pass 4/4. The combined allocation target now covers 1,317 offsets
+  across 61 cases. No fixture was added. See the [XRECORD allocation
+  receipt](docs/research/p6-xrecord-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  A separate `libdxfrw_rooted_standard_dwg_xrecord_eed` CTest still fails its
+  source/output-count and strict-composition expectations; it fails the same
+  way with the pre-XRECORD source from `HEAD~2`. Keep that test unresolved and
+  do not weaken its source/reference gate or use this generated transaction
+  control to promote output claims.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

@@ -11347,131 +11347,151 @@ bool DRW_XRecord::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || (version > DRW::AC1014 && !validUnsignedBitShort(m_cloning)))
         return false;
     (void)strBuf;                                // XRECORD uses inline strings
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
-        ? handleBuf : buf;
+    dwgBufferW *const handleDest =
+        (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
+    const bool separateHandles = handleDest != buf;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *buf;
+        if (separateHandles)
+            stagedHandles = *handleDest;
+        dwgBufferW *const bodyOut = &stagedBody;
+        dwgBufferW *const handleOut = separateHandles
+            ? &stagedHandles : bodyOut;
 
-    // Build the data block into a scratch buffer first so we can prefix
-    // it with its size in bytes (a BL count).  The scratch buffer starts
-    // byte-aligned; emitting bit-bound primitives into it would skew the
-    // byte count, but XRECORD's data section uses raw* primitives only,
-    // so the scratch byte size is exactly what the parser's dataEnd
-    // arithmetic expects.
-    dwgBufferW data;
+        // Build the data block into a scratch buffer first so we can prefix
+        // it with its size in bytes (a BL count).  The scratch buffer starts
+        // byte-aligned; emitting bit-bound primitives into it would skew the
+        // byte count, but XRECORD's data section uses raw* primitives only,
+        // so the scratch byte size is exactly what the parser's dataEnd
+        // arithmetic expects.
+        dwgBufferW data;
 
-    auto emitValue = [&](const DRW_Variant& v) -> bool {
-        const int code = v.code();
-        const bool supportedCode = xRecordCodeIsHandle(code)
-            || xRecordCodeIsString(code) || xRecordCodeIsPoint3D(code)
-            || xRecordCodeIsDouble(code) || xRecordCodeIsByte(code)
-            || xRecordCodeIsBool(code) || xRecordCodeIsInt16(code)
-            || xRecordCodeIsInt32(code) || (code >= 160 && code <= 169)
-            || xRecordCodeIsBinary(code);
-        if (!supportedCode)
-            return false;
-        if (xRecordCodeIsBinary(code)) {
-            const std::vector<std::uint8_t>* raw = v.binary();
-            if (raw == nullptr || raw->empty()) {
-                data.putRawShort16(static_cast<std::uint16_t>(code));
-                data.putRawChar8(0);
+        auto emitValue = [&](const DRW_Variant& v) -> bool {
+            const int code = v.code();
+            const bool supportedCode = xRecordCodeIsHandle(code)
+                || xRecordCodeIsString(code) || xRecordCodeIsPoint3D(code)
+                || xRecordCodeIsDouble(code) || xRecordCodeIsByte(code)
+                || xRecordCodeIsBool(code) || xRecordCodeIsInt16(code)
+                || xRecordCodeIsInt32(code) || (code >= 160 && code <= 169)
+                || xRecordCodeIsBinary(code);
+            if (!supportedCode)
+                return false;
+            if (xRecordCodeIsBinary(code)) {
+                const std::vector<std::uint8_t>* raw = v.binary();
+                if (raw == nullptr || raw->empty()) {
+                    data.putRawShort16(static_cast<std::uint16_t>(code));
+                    data.putRawChar8(0);
+                    return true;
+                }
+                // XRECORD binary values use one-byte lengths. Preserve a larger
+                // logical value as consecutive pairs instead of truncating it.
+                for (std::size_t offset = 0; offset < raw->size();) {
+                    const std::size_t chunk = std::min<std::size_t>(
+                        raw->size() - offset, 255u);
+                    data.putRawShort16(static_cast<std::uint16_t>(code));
+                    data.putRawChar8(static_cast<std::uint8_t>(chunk));
+                    data.putBytes(raw->data() + offset, chunk);
+                    offset += chunk;
+                }
                 return true;
             }
-            // XRECORD binary values use one-byte lengths. Preserve a larger
-            // logical value as consecutive pairs instead of truncating it.
-            for (std::size_t offset = 0; offset < raw->size();) {
-                const std::size_t chunk = std::min<std::size_t>(
-                    raw->size() - offset, 255u);
-                data.putRawShort16(static_cast<std::uint16_t>(code));
-                data.putRawChar8(static_cast<std::uint8_t>(chunk));
-                data.putBytes(raw->data() + offset, chunk);
-                offset += chunk;
+            data.putRawShort16(static_cast<std::uint16_t>(code));
+            if (xRecordCodeIsHandle(code)) {
+                data.putRawLong64(static_cast<std::uint64_t>(v.i64_val()));
+            } else if (xRecordCodeIsString(code)) {
+                if (v.type() != DRW_Variant::STRING || v.content.s == nullptr)
+                    return false;
+                return writeXRecordText(version, &data, *v.content.s, *buf);
+            } else if (xRecordCodeIsPoint3D(code)) {
+                DRW_Coord *c = v.coord();
+                if (c == nullptr || !std::isfinite(c->x)
+                    || !std::isfinite(c->y) || !std::isfinite(c->z))
+                    return false;
+                data.putRawDouble(c->x);
+                data.putRawDouble(c->y);
+                data.putRawDouble(c->z);
+            } else if (xRecordCodeIsDouble(code)) {
+                const double value = v.d_val();
+                if (!std::isfinite(value))
+                    return false;
+                data.putRawDouble(value);
+            } else if (xRecordCodeIsByte(code)) {
+                data.putRawChar8(static_cast<std::uint8_t>(v.i_val() & 0xFF));
+            } else if (xRecordCodeIsBool(code)) {
+                data.putRawChar8(v.i_val() ? 1 : 0);
+            } else if (xRecordCodeIsInt16(code)) {
+                data.putRawShort16(static_cast<std::uint16_t>(v.i_val() & 0xFFFF));
+            } else if (xRecordCodeIsInt32(code)) {
+                data.putRawLong32(static_cast<std::uint32_t>(v.i_val()));
+            } else if (code >= 160 && code <= 169) {
+                data.putRawLong64(static_cast<std::uint64_t>(v.i64_val()));
+            } else {
+                // Unhandled — emit zero bytes so the size still matches.  The
+                // parser logs the same case and bails out.
             }
             return true;
-        }
-        data.putRawShort16(static_cast<std::uint16_t>(code));
-        if (xRecordCodeIsHandle(code)) {
-            data.putRawLong64(static_cast<std::uint64_t>(v.i64_val()));
-        } else if (xRecordCodeIsString(code)) {
-            if (v.type() != DRW_Variant::STRING || v.content.s == nullptr)
-                return false;
-            return writeXRecordText(version, &data, *v.content.s, *buf);
-        } else if (xRecordCodeIsPoint3D(code)) {
-            DRW_Coord *c = v.coord();
-            if (c == nullptr || !std::isfinite(c->x)
-                || !std::isfinite(c->y) || !std::isfinite(c->z))
-                return false;
-            data.putRawDouble(c->x);
-            data.putRawDouble(c->y);
-            data.putRawDouble(c->z);
-        } else if (xRecordCodeIsDouble(code)) {
-            const double value = v.d_val();
-            if (!std::isfinite(value))
-                return false;
-            data.putRawDouble(value);
-        } else if (xRecordCodeIsByte(code)) {
-            data.putRawChar8(static_cast<std::uint8_t>(v.i_val() & 0xFF));
-        } else if (xRecordCodeIsBool(code)) {
-            data.putRawChar8(v.i_val() ? 1 : 0);
-        } else if (xRecordCodeIsInt16(code)) {
-            data.putRawShort16(static_cast<std::uint16_t>(v.i_val() & 0xFFFF));
-        } else if (xRecordCodeIsInt32(code)) {
-            data.putRawLong32(static_cast<std::uint32_t>(v.i_val()));
-        } else if (code >= 160 && code <= 169) {
-            data.putRawLong64(static_cast<std::uint64_t>(v.i64_val()));
+        };
+
+        if (m_rawDataValid) {
+            if (!m_rawData.empty())
+                data.putBytes(m_rawData.data(), m_rawData.size());
+        } else if (!m_dataEntries.empty()) {
+            for (const auto& entry : m_dataEntries) {
+                if (!emitValue(entry))
+                    return false;
+            }
         } else {
-            // Unhandled — emit zero bytes so the size still matches.  The
-            // parser logs the same case and bails out.
-        }
-        return true;
-    };
+            for (const auto& v : m_values) {
+                if (!emitValue(v))
+                    return false;
+            }
 
-    if (m_rawDataValid) {
-        if (!m_rawData.empty())
-            data.putBytes(m_rawData.data(), m_rawData.size());
-    } else if (!m_dataEntries.empty()) {
-        for (const auto& entry : m_dataEntries) {
-            if (!emitValue(entry))
-                return false;
-        }
-    } else {
-        for (const auto& v : m_values) {
-            if (!emitValue(v))
-                return false;
+            // Data-block handles — entries in m_handleValues with non-zero code.
+            for (const auto& hv : m_handleValues) {
+                if (hv.first == 0)
+                    continue;                        // belongs to handle stream
+                data.putRawShort16(static_cast<std::uint16_t>(hv.first));
+                data.putRawLong64(static_cast<std::uint64_t>(hv.second));
+            }
         }
 
-        // Data-block handles — entries in m_handleValues with non-zero code.
+        // Emit numDataBytes then the accumulated data section.
+        if (data.size() > static_cast<std::size_t>(std::numeric_limits<std::int32_t>::max()))
+            return false;
+        bodyOut->putBitLong(static_cast<std::int32_t>(data.size()));
+        if (data.size() > 0)
+            bodyOut->putBytes(data.data().data(), data.size());
+
+        // Cloning short (R2000+).
+        if (version > DRW::AC1014)
+            bodyOut->putBitShort(static_cast<std::uint16_t>(m_cloning));
+
+        // Common handle prefix per object base spec.
+        putCommonObjectHandlePrefix(
+            handleOut, static_cast<std::uint32_t>(parentHandle), numReactors,
+            xDictFlag,
+            &reactorHandles, xDictHandle);
+
+        // Trailing handle refs — those m_handleValues entries the parser
+        // tagged with code 0 (handle-stream origin).  Emit as soft pointers
+        // so getOffsetHandle in the parser resolves to the same ref.
         for (const auto& hv : m_handleValues) {
-            if (hv.first == 0)
-                continue;                        // belongs to handle stream
-            data.putRawShort16(static_cast<std::uint16_t>(hv.first));
-            data.putRawLong64(static_cast<std::uint64_t>(hv.second));
+            if (hv.first != 0)
+                continue;
+            handleOut->putHandle(makeRefW(hv.second, DRW::DwgSoftPointer));
         }
-    }
+        if (!bodyOut->isGood() || !handleOut->isGood())
+            return false;
 
-    // Emit numDataBytes then the accumulated data section.
-    if (data.size() > static_cast<std::size_t>(std::numeric_limits<std::int32_t>::max()))
+        buf->swap(stagedBody);
+        if (separateHandles)
+            handleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
         return false;
-    buf->putBitLong(static_cast<std::int32_t>(data.size()));
-    if (data.size() > 0)
-        buf->putBytes(data.data().data(), data.size());
-
-    // Cloning short (R2000+).
-    if (version > DRW::AC1014)
-        buf->putBitShort(static_cast<std::uint16_t>(m_cloning));
-
-    // Common handle prefix per object base spec.
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), numReactors, xDictFlag,
-        &reactorHandles, xDictHandle);
-
-    // Trailing handle refs — those m_handleValues entries the parser
-    // tagged with code 0 (handle-stream origin).  Emit as soft pointers
-    // so getOffsetHandle in the parser resolves to the same ref.
-    for (const auto& hv : m_handleValues) {
-        if (hv.first != 0)
-            continue;
-        hb->putHandle(makeRefW(hv.second, DRW::DwgSoftPointer));
     }
-    return buf->isGood() && hb->isGood();
 }
 
 bool DRW_Field::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
