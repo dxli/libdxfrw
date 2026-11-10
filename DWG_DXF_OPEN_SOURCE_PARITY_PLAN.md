@@ -3364,6 +3364,25 @@ output gates are met.
 
 ## P5 — rendering and TABLE
 
+### AC1018 TABLESTYLE CMC method `0xC8` replay (2026-11-10)
+
+An ODA-converted AC1018 TABLE sample has `0xC8` CMC fill colors in all three
+legacy TABLESTYLE rows. The bounded TABLESTYLE parser now retains the complete
+packed 32-bit color word for this method, and the DWG writer replays it only
+when the retained method byte, scalar fallback, reserved index, flags, and
+color-book strings are consistent. The low 24 bits reuse the existing
+`DRW_TableStyleCmcColor::m_rgb` storage only while `m_method == 0xC8`; no public
+struct field was added, preserving its layout. The value remains opaque:
+ODA v5.4.1 §2.11 specifies the CMC slots but does not assign `0xC8` semantics.
+DXF output continues to use the existing no-color sentinel and omits group 420
+for this method, so the retained opaque payload is not mis-emitted as RGB.
+Generated AC1018 TABLESTYLE whole-file readback exercises method/payload
+retention and refuses absent or mismatched opaque payloads; the paired focused
+TABLESTYLE/TABLE tests pass. This closes only the bounded CMC carrier gap. It
+does not qualify the physical source's reactor/extension-dictionary graph,
+native rendering, other producer profiles, or TABLE support claims. See the
+[CMC replay receipt](docs/research/p5-ac1018-tablestyle-cmc-none-opaque-replay-2026-11-10.json).
+
 **R2010+ TABLE unknown-prefix admission:** `DRW_Table::parseDwg` now keeps
 the entity frame readable but withholds semantic completeness when the
 ODA v5.4.1 §20.4.96.2 unknown preamble differs from its documented defaults:

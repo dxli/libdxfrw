@@ -38078,6 +38078,14 @@ public:
             row.m_textHeight = 1.0 + rowIndex;
             row.m_textAlignment = 5;
             row.m_textStyleHandle = DRW::DwgStandardTextStyleHandle;
+            if (rowIndex == 2) {
+                // The ODA-converted physical AC1018 TABLESTYLE uses CMC
+                // method 0xC8 for its fill color. The byte is retained as an
+                // opaque packed value; this control does not assign meaning.
+                row.m_fillColor = 256;
+                row.m_fillColorCmc.m_method = dwgColor::NONE;
+                row.m_fillColorCmc.setRawDwgPackedValue(0xC8000000u);
+            }
             for (int edgeIndex = 0; edgeIndex < 6; ++edgeIndex) {
                 DRW_TableStyleBorder border;
                 border.m_edgeFlags = 1 << edgeIndex;
@@ -38298,6 +38306,18 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
     dwgRW output(path.string().c_str());
     TableStyleNodWholeFileAdapter producer(
         &output, &writerData, emitTable, emitTable);
+    DRW_TableStyle missingOpaqueColor = producer.style;
+    missingOpaqueColor.m_rowStyles[0].m_textColorCmc.m_method =
+        dwgColor::NONE;
+    DRW_TableStyle mismatchedOpaqueColor = producer.style;
+    mismatchedOpaqueColor.m_rowStyles[2].m_fillColorCmc
+        .setRawDwgPackedValue(0xC7000000u);
+    DRW_TableStyle crossVersionOpaqueColor = producer.style;
+    if (!producer.style.validateDwgPayload(DRW::AC1018)
+        || missingOpaqueColor.validateDwgPayload(DRW::AC1018)
+        || mismatchedOpaqueColor.validateDwgPayload(DRW::AC1018)
+        || crossVersionOpaqueColor.validateDwgPayload(DRW::AC1015))
+        return false;
     if (emitTable) {
         const std::string sentinel =
             "preserve destination when TABLE graph is incomplete\n";
@@ -38385,7 +38405,12 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
             || style.m_name != "Standard" || style.m_rowStyles.size() != 3u
             || style.m_rowStyles[0].m_textHeight != 1.0
             || style.m_rowStyles[1].m_textHeight != 2.0
-            || style.m_rowStyles[2].m_textHeight != 3.0)
+            || style.m_rowStyles[2].m_textHeight != 3.0
+            || style.m_rowStyles[2].m_fillColor != 256
+            || style.m_rowStyles[2].m_fillColorCmc.m_method != dwgColor::NONE
+            || !style.m_rowStyles[2].m_fillColorCmc.hasRawDwgPackedValue()
+            || style.m_rowStyles[2].m_fillColorCmc.rawDwgPackedValue()
+                != 0xC8000000u)
             return false;
     }
     if (styleMatches != 1u

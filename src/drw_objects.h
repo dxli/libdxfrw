@@ -5815,12 +5815,34 @@ private:
 //! DWG CMC companions for the scalar TABLESTYLE color fields.
 //! A zero method denotes caller-authored/DXF-origin data that may be inferred.
 struct DRW_TableStyleCmcColor {
+  // m_rgb is meaningful as RGB only when m_method == 0xC2. For TABLESTYLE
+  // CMC method 0xC8, nonnegative m_rgb stores the opaque low 24 bits of the
+  // packed DWG color word so the original value can be replayed exactly.
   std::int32_t m_rgb = -1;
   UTF8STRING m_name;
   UTF8STRING m_bookName;
   std::uint8_t m_method = 0;
   std::uint8_t m_flags = 0;
   std::uint16_t m_reservedIndex = 0;
+
+  //! Retain an otherwise unmodeled R2004+ CMC packed word for exact
+  //! same-version replay. This is currently used only for TABLESTYLE's
+  //! observed 0xC8 method; it carries no color semantics. This reuses m_rgb
+  //! so the public struct layout remains unchanged.
+  bool hasRawDwgPackedValue() const noexcept {
+    return m_method == 0xC8u && m_rgb >= 0
+        && m_rgb <= 0x00FFFFFF;
+  }
+  std::uint32_t rawDwgPackedValue() const noexcept {
+    return (static_cast<std::uint32_t>(m_method) << 24u)
+        | static_cast<std::uint32_t>(m_rgb);
+  }
+  void setRawDwgPackedValue(std::uint32_t value) noexcept {
+    if ((value >> 24u) == 0xC8u)
+        m_rgb = static_cast<std::int32_t>(value & 0x00FFFFFFu);
+    else
+        m_rgb = -1;
+  }
 
 private:
   friend class DRW_TableStyle;

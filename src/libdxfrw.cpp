@@ -12811,7 +12811,9 @@ bool dxfRW::writeTableStyle(
     const auto validR24BackgroundColor = [&validR24Color](
             int value, const DRW_TableStyleCmcColor& cmc) {
         return validR24Color(value, cmc)
-            || (value == 256 && cmc.m_rgb < 0 && cmc.m_name.empty()
+            || (value == 256
+                && (cmc.m_rgb < 0 || cmc.hasRawDwgPackedValue())
+                && cmc.m_name.empty()
                 && cmc.m_bookName.empty() && cmc.m_method == 0xC8u
                 && cmc.m_flags == 0u && cmc.m_reservedIndex == 0u);
     };
@@ -12819,9 +12821,12 @@ bool dxfRW::writeTableStyle(
             int color, const DRW_TableStyleCmcColor& cmc) {
         const std::uint8_t canonical = color == 0 ? 0xC1u
             : color >= 1 && color <= 255 ? 0xC3u : 0u;
-        return cmc.m_rgb == -1 && cmc.m_name.empty()
-            && cmc.m_bookName.empty() && cmc.m_reservedIndex == 0
-            && cmc.m_flags == 0
+        const bool common = cmc.m_name.empty() && cmc.m_bookName.empty()
+            && cmc.m_reservedIndex == 0 && cmc.m_flags == 0;
+        if (cmc.m_method == 0xC8u)
+            return color == 256 && common
+                && (cmc.m_rgb < 0 || cmc.hasRawDwgPackedValue());
+        return cmc.m_rgb == -1 && common
             && (cmc.m_method == 0 || cmc.m_method == canonical);
     };
     const auto contentFormatColorIsDxfRepresentable =
@@ -13065,7 +13070,7 @@ bool dxfRW::writeTableStyle(
             const int dxfColor = cmc.m_method == 0xC8u ? 257 : color;
             if (!writer->writeInt16(62,
                     static_cast<std::int16_t>(dxfColor))
-                || (cmc.m_rgb >= 0
+                || (cmc.m_method != 0xC8u && cmc.m_rgb >= 0
                     && !writer->writeInt32(420, cmc.m_rgb)))
                 return false;
             if (cmc.m_name.empty())
@@ -13462,7 +13467,9 @@ bool dxfRW::writeCellStyleMap(DRW_CellStyleMap *ent) {
     const auto validBackgroundColor = [&validColor](
             int index, const DRW_TableStyleCmcColor& cmc) {
         return validColor(index, cmc)
-            || (index == 256 && cmc.m_rgb < 0 && cmc.m_name.empty()
+            || (index == 256
+                && (cmc.m_rgb < 0 || cmc.hasRawDwgPackedValue())
+                && cmc.m_name.empty()
                 && cmc.m_bookName.empty() && cmc.m_method == 0xC8u
                 && cmc.m_flags == 0u && cmc.m_reservedIndex == 0u);
     };
@@ -13670,7 +13677,8 @@ bool dxfRW::writeCellStyleMap(DRW_CellStyleMap *ent) {
         const int dxfIndex = cmc.m_method == 0xC8u ? 257 : index;
         if (!writer->writeInt16(62, static_cast<std::int16_t>(dxfIndex)))
             return false;
-        if (cmc.m_rgb >= 0 && !writer->writeInt32(420, cmc.m_rgb))
+        if (cmc.m_method != 0xC8u && cmc.m_rgb >= 0
+            && !writer->writeInt32(420, cmc.m_rgb))
             return false;
         if (cmc.m_name.empty())
             return cmc.m_bookName.empty();
@@ -34037,7 +34045,8 @@ bool dxfRW::writeTableContent(DRW_TableContentObject *ent) {
                     static_cast<std::int32_t>(style->m_mergeFlags))
                 || !writer->writeInt16(62,
                     static_cast<std::int16_t>(style->m_backgroundColor))
-                || (style->m_backgroundColorCmc.m_rgb >= 0
+                || (style->m_backgroundColorCmc.m_method != 0xC8u
+                    && style->m_backgroundColorCmc.m_rgb >= 0
                     && !writer->writeInt32(420,
                         style->m_backgroundColorCmc.m_rgb))
                 || !writer->writeInt32(93,
@@ -34096,7 +34105,8 @@ bool dxfRW::writeTableContent(DRW_TableContentObject *ent) {
                     || !writer->writeInt32(91, border.m_borderType)
                     || !writer->writeInt16(62,
                         static_cast<std::int16_t>(border.m_color))
-                    || (border.m_colorCmc.m_rgb >= 0
+                    || (border.m_colorCmc.m_method != 0xC8u
+                        && border.m_colorCmc.m_rgb >= 0
                         && !writer->writeInt32(420,
                             border.m_colorCmc.m_rgb))
                     || (!dxfColorName.empty()

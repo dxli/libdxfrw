@@ -39002,7 +39002,7 @@ bool typedDwgR24TableStyleDxfRoundTrip(bool binary, std::uint64_t nonce,
         const auto appendCmc = [&expectedColorTrueColors,
                 &expectedColorBookNames](
                 const DRW_TableStyleCmcColor& cmc) {
-            if (cmc.m_rgb >= 0)
+            if (cmc.m_method != 0xC8u && cmc.m_rgb >= 0)
                 expectedColorTrueColors.push_back(cmc.m_rgb);
             if (!cmc.m_name.empty()) {
                 expectedColorBookNames.push_back(cmc.m_bookName.empty()

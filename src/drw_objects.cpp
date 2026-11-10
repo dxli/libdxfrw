@@ -1297,7 +1297,8 @@ bool readCmColorWithinBounds(dwgBuffer *buf, dwgBuffer *stringBuf,
                              bool *hasRgbColor = nullptr,
                              std::uint8_t *outMethod = nullptr,
                              std::uint8_t *outFlags = nullptr,
-                             std::uint16_t *outIndex = nullptr) {
+                             std::uint16_t *outIndex = nullptr,
+                             std::uint32_t *outPackedDwgColor = nullptr) {
     if (buf == nullptr || stringBuf == nullptr
         || !dictionaryBitRangeAvailable(buf, version, bodySize, 2)
         || !buf->isGood() || !stringBuf->isGood())
@@ -1306,6 +1307,15 @@ bool readCmColorWithinBounds(dwgBuffer *buf, dwgBuffer *stringBuf,
     const bool sharedBuffer = stringBuf == buf;
     dwgBuffer bodyProbe = buf->forkIndependent();
     dwgBuffer stringProbe = stringBuf->forkIndependent();
+    std::uint32_t packedDwgColor = 0u;
+    if (outPackedDwgColor != nullptr && version >= DRW::AC1018) {
+        dwgBuffer packedProbe = buf->forkIndependent();
+        (void)packedProbe.getBitShort(); // ODA §2.11: reserved index, zero.
+        packedDwgColor = static_cast<std::uint32_t>(
+            packedProbe.getBitLong());
+        if (!packedProbe.isGood())
+            return false;
+    }
     dwgBuffer *colorStringProbe = sharedBuffer ? &bodyProbe : &stringProbe;
     std::int32_t parsedRgb = -1;
     bool parsedHasRgbColor = false;
@@ -1339,6 +1349,8 @@ bool readCmColorWithinBounds(dwgBuffer *buf, dwgBuffer *stringBuf,
         *outFlags = parsedFlags;
     if (outIndex != nullptr)
         *outIndex = parsedIndex;
+    if (outPackedDwgColor != nullptr && version >= DRW::AC1018)
+        *outPackedDwgColor = packedDwgColor;
     *buf = bodyProbe;
     if (!sharedBuffer)
         *stringBuf = stringProbe;
@@ -2281,10 +2293,11 @@ bool readTableStyleContentFormat(DRW::Version version, dwgBuffer *buf,
         UTF8STRING name, bookName;
         std::uint8_t method = 0, flags = 0;
         std::uint16_t reservedIndex = 0;
+        std::uint32_t packedDwgColor = 0u;
         if (!readCmColorWithinBounds(buf, textBuf, colorVersion, bodySize,
                                      stringSize, parsed, &rgb, &name,
                                      &bookName, &hasRgb, &method, &flags,
-                                     &reservedIndex))
+                                     &reservedIndex, &packedDwgColor))
             return false;
         value = static_cast<int>(parsed);
         cmc.m_rgb = hasRgb ? rgb : -1;
@@ -2293,6 +2306,8 @@ bool readTableStyleContentFormat(DRW::Version version, dwgBuffer *buf,
         cmc.m_method = method;
         cmc.m_flags = flags;
         cmc.m_reservedIndex = reservedIndex;
+        if (method == dwgColor::NONE)
+            cmc.setRawDwgPackedValue(packedDwgColor);
         return true;
     };
     if (!readLong(format.m_propertyOverrideFlags)
@@ -2386,10 +2401,12 @@ bool readTableStyleCellStyle(DRW::Version version, dwgBuffer *buf,
         UTF8STRING name, bookName;
         std::uint8_t method = 0, flags = 0;
         std::uint16_t reservedIndex = 0;
+        std::uint32_t packedDwgColor = 0u;
         if (!readCmColorWithinBounds(buf, strBuf ? strBuf : buf, version,
                                      bodySize, stringSize, parsed, &rgb,
                                      &name, &bookName, &hasRgb, &method,
-                                     &flags, &reservedIndex))
+                                     &flags, &reservedIndex,
+                                     &packedDwgColor))
             return false;
         value = static_cast<int>(parsed);
         cmc.m_rgb = hasRgb ? rgb : -1;
@@ -2398,6 +2415,8 @@ bool readTableStyleCellStyle(DRW::Version version, dwgBuffer *buf,
         cmc.m_method = method;
         cmc.m_flags = flags;
         cmc.m_reservedIndex = reservedIndex;
+        if (method == dwgColor::NONE)
+            cmc.setRawDwgPackedValue(packedDwgColor);
         return true;
     };
     std::int32_t parsedType = 0;
@@ -2582,10 +2601,11 @@ bool readLegacyTableStyleRowStyle(DRW::Version version, dwgBuffer *buf,
         UTF8STRING name, bookName;
         std::uint8_t method = 0, flags = 0;
         std::uint16_t reservedIndex = 0;
+        std::uint32_t packedDwgColor = 0u;
         if (!readCmColorWithinBounds(buf, textBuf, colorVersion, bodySize,
                                      stringSize, parsed, &rgb, &name,
                                      &bookName, &hasRgb, &method, &flags,
-                                     &reservedIndex))
+                                     &reservedIndex, &packedDwgColor))
             return false;
         value = static_cast<int>(parsed);
         cmc.m_rgb = hasRgb ? rgb : -1;
@@ -2594,6 +2614,8 @@ bool readLegacyTableStyleRowStyle(DRW::Version version, dwgBuffer *buf,
         cmc.m_method = method;
         cmc.m_flags = flags;
         cmc.m_reservedIndex = reservedIndex;
+        if (method == dwgColor::NONE)
+            cmc.setRawDwgPackedValue(packedDwgColor);
         return true;
     };
     if (hdlBuf != nullptr
@@ -18444,6 +18466,11 @@ bool tableStyleCmcValid(int color,
     const std::uint8_t nameFlags = static_cast<std::uint8_t>(
         (cmc.m_name.empty() ? 0u : 1u)
         | (cmc.m_bookName.empty() ? 0u : 2u));
+    if (cmc.m_method == dwgColor::NONE) {
+        return color == 256 && cmc.m_flags == nameFlags
+            && cmc.hasRawDwgPackedValue()
+            && (cmc.rawDwgPackedValue() >> 24u) == dwgColor::NONE;
+    }
     if (cmc.m_method == 0)
         return cmc.m_flags == 0;
     return cmc.m_method == canonical && cmc.m_flags == nameFlags;
@@ -18454,6 +18481,23 @@ void putTableStyleCmcColor(DRW::Version version, dwgBufferW& body,
                            const DRW_TableStyleCmcColor& cmc) {
     const DRW::Version colorVersion =
         version < DRW::AC1018 ? DRW::AC1018 : version;
+    if (cmc.m_method == dwgColor::NONE) {
+        // Preserve the complete method-tagged word. ODA §2.11 describes the
+        // CMC slots but does not define 0xC8 semantics; do not reinterpret it.
+        const std::uint32_t packed = cmc.rawDwgPackedValue();
+        std::int32_t packedAsSigned = 0;
+        static_assert(sizeof(packedAsSigned) == sizeof(packed));
+        std::memcpy(&packedAsSigned, &packed, sizeof(packedAsSigned));
+        body.putBitShort(cmc.m_reservedIndex);
+        body.putBitLong(packedAsSigned);
+        body.putRawChar8(cmc.m_flags);
+        dwgBufferW* names = stringBuffer ? stringBuffer : &body;
+        if ((cmc.m_flags & 1u) != 0u)
+            names->putVariableText(colorVersion, cmc.m_name);
+        if ((cmc.m_flags & 2u) != 0u)
+            names->putVariableText(colorVersion, cmc.m_bookName);
+        return;
+    }
     const std::uint8_t method = cmc.m_method != 0
         ? cmc.m_method : tableStyleCmcCanonicalMethod(color, cmc);
     body.putCmColor(colorVersion, method,
@@ -18646,9 +18690,12 @@ bool DRW_TableStyle::validateDwgPayload(DRW::Version version) const {
     const auto validFinite = [](double value) {
         return std::isfinite(value);
     };
-    const auto validColor = [&validBitShort](
+    const auto validColor = [&validBitShort, version](
             int value, const DRW_TableStyleCmcColor& cmc) {
-        return validBitShort(value) && tableStyleCmcValid(value, cmc);
+        return validBitShort(value)
+            && !(version < DRW::AC1018
+                 && cmc.m_method == dwgColor::NONE)
+            && tableStyleCmcValid(value, cmc);
     };
     for (const DRW_TableStyleRowStyle& row : m_rowStyles) {
         if (!validFinite(row.m_textHeight)
