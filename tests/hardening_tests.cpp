@@ -20333,7 +20333,10 @@ void testAcshActionBodyExactSpan(TestContext& t) {
 
     const auto makeBody = [](bool suffix, std::int32_t profileBits,
                              std::int32_t declaredProfileBits = 5,
-                             std::int32_t profileType = 77) {
+                             std::int32_t profileType = 77,
+                             bool useEmbeddedPolyline = false,
+                             const std::vector<std::uint8_t>& polylineBytes = {},
+                             std::uint32_t polylineBitSize = 0) {
         dwgBufferW writer;
         writer.putBitLong(33);
         writer.putBitLong(29);
@@ -20367,9 +20370,20 @@ void testAcshActionBodyExactSpan(TestContext& t) {
             writer.putBitShort(2);
             writer.putRawChar8(0xA5u);
         } else {
-            writer.putBitLong(declaredProfileBits);
-            for (std::int32_t i = 0; i < profileBits; ++i)
-                writer.putBoolBit((i % 2) == 0);
+            writer.putBitLong(useEmbeddedPolyline
+                ? static_cast<std::int32_t>(polylineBitSize)
+                : declaredProfileBits);
+            if (useEmbeddedPolyline) {
+                for (std::uint32_t i = 0; i < polylineBitSize; ++i) {
+                    const bool value =
+                        (polylineBytes[i / 8u]
+                            & (1u << (7u - i % 8u))) != 0u;
+                    writer.putBoolBit(value);
+                }
+            } else {
+                for (std::int32_t i = 0; i < profileBits; ++i)
+                    writer.putBoolBit((i % 2) == 0);
+            }
             writer.putBitLong(0);
             if (suffix)
                 writer.putBoolBit(false);
@@ -20408,6 +20422,61 @@ void testAcshActionBodyExactSpan(TestContext& t) {
                  && !capture.m_structuralFieldsComplete
                  && !capture.m_exactBodyEnd,
              "ACSH Sweep candidate fields parse transactionally and retain the opaque one-bit suffix");
+
+    dwgBufferW embeddedWriter;
+    embeddedWriter.putBitShort(0x073Fu);
+    embeddedWriter.putBitDouble(0.5);
+    embeddedWriter.putBitDouble(2.0);
+    embeddedWriter.putBitDouble(0.0);
+    embeddedWriter.put3BitDouble(DRW_Coord(0.0, 0.0, 1.0));
+    embeddedWriter.putBitLong(2);
+    embeddedWriter.putBitLong(1);
+    embeddedWriter.putBitLong(2);
+    embeddedWriter.putBitLong(1);
+    embeddedWriter.putRawDouble(1.0);
+    embeddedWriter.putRawDouble(2.0);
+    embeddedWriter.putRawDouble(3.0);
+    embeddedWriter.putRawDouble(4.0);
+    embeddedWriter.putBitDouble(0.25);
+    embeddedWriter.putBitLong(101);
+    embeddedWriter.putBitLong(102);
+    embeddedWriter.putBitDouble(0.75);
+    embeddedWriter.putBitDouble(1.25);
+    const std::uint32_t embeddedPolylineBits = static_cast<std::uint32_t>(
+        embeddedWriter.size() * 8u - (embeddedWriter.bitPos() == 0u
+            ? 0u : 8u - embeddedWriter.bitPos()));
+    const auto embeddedPolylineBody = makeBody(
+        false, 0, 0, 77, true, embeddedWriter.data(), embeddedPolylineBits);
+    dwgBuffer embeddedPolylineBuffer(embeddedPolylineBody.first.data(),
+                                     embeddedPolylineBody.first.size());
+    DRW_AcShHistoryObject::SweepActionBodyCapture embeddedPolylineCapture;
+    std::uint64_t embeddedPolylineEnd = 0;
+    const bool embeddedPolylineRead =
+        DRW_AcShHistoryTestAccess::parseSweepActionBody(
+            DRW::AC1027, embeddedPolylineBuffer, embeddedPolylineBody.second,
+            embeddedPolylineCapture, embeddedPolylineEnd);
+    const auto& embeddedPolyline =
+        embeddedPolylineCapture.m_profilePolyline;
+    t.expect(embeddedPolylineRead
+                 && embeddedPolylineEnd == embeddedPolylineBody.second
+                 && embeddedPolyline.m_fieldsParsed
+                 && embeddedPolyline.m_spanCaptured
+                 && embeddedPolyline.m_flags == 0x073Fu
+                 && embeddedPolyline.m_constantWidth == 0.5
+                 && embeddedPolyline.m_elevation == 2.0
+                 && embeddedPolyline.m_thickness == 0.0
+                 && embeddedPolyline.m_normal.z == 1.0
+                 && embeddedPolyline.m_vertices.size() == 2u
+                 && embeddedPolyline.m_vertices[0].m_x == 1.0
+                 && embeddedPolyline.m_vertices[0].m_y == 2.0
+                 && embeddedPolyline.m_vertices[0].m_bulge == 0.25
+                 && embeddedPolyline.m_vertices[0].m_vertexId == 101
+                 && embeddedPolyline.m_vertices[0].m_startWidth == 0.75
+                 && embeddedPolyline.m_vertices[0].m_endWidth == 1.25
+                 && embeddedPolyline.m_vertices[1].m_x == 3.0
+                 && embeddedPolyline.m_vertices[1].m_y == 4.0
+                 && embeddedPolyline.m_vertices[1].m_vertexId == 102,
+             "type-77 embedded LWPOLYLINE fields decode within the declared bit span");
 
     const auto specialProfileBody = makeBody(false, 0, 0, 15);
     dwgBuffer specialProfileBuffer(specialProfileBody.first.data(),

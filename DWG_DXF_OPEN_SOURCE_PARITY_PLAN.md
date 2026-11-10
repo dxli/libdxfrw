@@ -1188,6 +1188,16 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P4 AC1027 Sweep embedded LWPOLYLINE field capture:** the bounded type-77
+  decoder now retains the raw spans and captures modeled scalar, normal,
+  vertex and optional-array fields, including valid polyline flags `0x100`,
+  `0x200` and `0x400`. The hash-bound source probe captures both profile/path
+  payloads while preserving their 4-bit/2-bit opaque suffixes. The focused
+  generated control passes. This is one-source parser evidence only; Sweep
+  output, graph closure and semantic support remain refused. Next, continue
+  with the unresolved source/profile and dependency gates or another ready
+  source-backed slice. See the [receipt](docs/research/p4-ac1027-sweep-embedded-lwpolyline-capture-2026-11-10.json).
+
 - **DIMASSOC DWG encoder transaction safety:** `DRW_DimensionAssociation::encodeDwg`
   now stages its body, detached strings and handle-occurrence ledger, preserving
   stream aliasing and publishing only after all staged writes succeed. A
@@ -2284,7 +2294,15 @@ do not repeat this TABLESTYLE codec work.
    [field-span trace receipt](docs/research/p4-ac1027-sweep-acadrust-field-span-trace-2026-11-08.json).
    Production readback retains the full 2,343-bit action-body span, including
    both type-77 bodies (744/480 bits), and preserves the zero bit at 2570 as a
-   one-bit opaque suffix while reporting Partial. A complete candidate-field
+   one-bit opaque suffix while reporting Partial. The bounded type-77 parser
+   now decodes the modeled LWPOLYLINE fields while retaining each original
+   payload and its suffix. On this source it captures four profile vertices
+   and three path vertices; 4 profile bits and 2 path bits remain opaque. The
+   generated control includes the known `0x100` plinegen and `0x200` closed
+   flags. This fixes a local mask omission and establishes only a bounded
+   field-span capture for this source. See the [embedded-polyline
+   receipt](docs/research/p4-ac1027-sweep-embedded-lwpolyline-capture-2026-11-10.json).
+   A complete candidate-field
    differential against the hash-pinned same-handle `ACSH_SWEEP_CLASS` DXF
    record matches operation version, direction, six scalars, group-70
    alignment option, documented groups 290/292–296, and matrices 46/47 within
@@ -2312,8 +2330,9 @@ do not repeat this TABLESTYLE codec work.
    an AutoCAD/ODA producer, so the DXF does not establish independent DWG
    semantics. Do not consume the suffix bit or extra `0xCC` bytes as padding,
    and do not reorder fields from this conflict. Next pursue a native or
-   independently authored producer witness. Keep Sweep output refused and support claims unchanged
-   until graph dependencies, roles, output/readback and independent consumer
+   independently authored producer witness. Keep Sweep output refused and
+   support claims unchanged until graph dependencies, roles, output/readback
+   and independent consumer
    semantics close. See the [candidate-field differential receipt](docs/research/p4-ac1027-sweep-dxf-candidate-field-differential-2026-11-08.json),
    [peer-conflict receipt](docs/research/p4-ac1027-sweep-libredwg-peer-conflict-2026-11-08.json),
    [competing-order diagnostic](docs/research/p4-ac1027-sweep-competing-order-diagnostic-2026-11-08.json),

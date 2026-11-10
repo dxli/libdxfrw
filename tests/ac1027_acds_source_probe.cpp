@@ -542,6 +542,33 @@ int main(int argc, char** argv) {
             diagnoseEmbeddedLwPolyline("PATH", sweep.m_pathType,
                                        sweep.m_pathBitSize,
                                        sweep.m_pathBits);
+            const auto printTypedPolyline = [](const char* label,
+                    const DRW_AcShHistoryObject::SweepPolylineCapture& value) {
+                std::cout << std::setprecision(17) << "SWEEP_" << label
+                          << "_TYPED_LWPOLYLINE fields="
+                          << value.m_fieldsParsed << " spanCaptured="
+                          << value.m_spanCaptured << " flags=" << value.m_flags
+                          << " width=" << value.m_constantWidth
+                          << " elevation=" << value.m_elevation
+                          << " thickness=" << value.m_thickness
+                          << " normal=" << value.m_normal.x << ','
+                          << value.m_normal.y << ',' << value.m_normal.z
+                          << " vertices=";
+                for (std::size_t i = 0; i < value.m_vertices.size(); ++i) {
+                    if (i != 0u) std::cout << ';';
+                    const auto& vertex = value.m_vertices[i];
+                    std::cout << vertex.m_x << ',' << vertex.m_y << ','
+                              << vertex.m_bulge << ',' << vertex.m_vertexId
+                              << ',' << vertex.m_startWidth << ','
+                              << vertex.m_endWidth;
+                }
+                std::cout << " suffix=" << value.m_opaqueSuffixBitSize
+                          << ':';
+                hexBytes(value.m_opaqueSuffixBits);
+                std::cout << '\n';
+            };
+            printTypedPolyline("PROFILE", sweep.m_profilePolyline);
+            printTypedPolyline("PATH", sweep.m_pathPolyline);
             diagnoseLibreDwgSweepOrder(sweep);
             diagnoseSweepOptionWidths(sweep);
         }

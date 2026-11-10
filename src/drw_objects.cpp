@@ -33976,6 +33976,187 @@ bool DRW_AcShHistoryObject::parseSweepActionBody(
                          parsed.m_pathBits))
         return false;
 
+    const auto decodeEmbeddedPolyline = [version](
+            std::int32_t typeCode, std::uint32_t bitSize,
+            const std::vector<std::uint8_t>& bytes,
+            SweepPolylineCapture& output) {
+        if (typeCode != 77 || bitSize == 0
+            || bitSize > static_cast<std::uint64_t>(kMaxAcShBlobBytes) * 8u
+            || bytes.size() < (static_cast<std::size_t>(bitSize) + 7u) / 8u)
+            return false;
+        try {
+            dwgBuffer entity(bytes.data(), bytes.size());
+            SweepPolylineCapture decoded;
+            std::int32_t flags = 0;
+            if (!readBitShortWithinBody(&entity, version, bitSize, flags)
+                || flags < 0 || flags > std::numeric_limits<std::uint16_t>::max())
+                return false;
+            decoded.m_flags = static_cast<std::uint16_t>(flags);
+            const bool hasConstantWidth = (flags & 0x04) != 0;
+            const bool hasElevation = (flags & 0x08) != 0;
+            const bool hasThickness = (flags & 0x02) != 0;
+            const bool hasNormal = (flags & 0x01) != 0;
+            const bool hasBulges = (flags & 0x10) != 0;
+            const bool hasWidths = (flags & 0x20) != 0;
+            const bool hasVertexIds = (flags & 0x400) != 0;
+            if ((flags & ~0x73fu) != 0)
+                return false;
+            if (hasConstantWidth
+                && !readBitDoubleWithinBody(
+                    &entity, version, bitSize, decoded.m_constantWidth))
+                return false;
+            if (hasElevation
+                && !readBitDoubleWithinBody(
+                    &entity, version, bitSize, decoded.m_elevation))
+                return false;
+            if (hasThickness
+                && !readBitDoubleWithinBody(
+                    &entity, version, bitSize, decoded.m_thickness))
+                return false;
+            if (hasNormal
+                && !read3BitDoubleWithinBody(
+                    &entity, version, bitSize, decoded.m_normal))
+                return false;
+
+            std::int32_t rawVertexCount = 0;
+            if (!readBitLongWithinBody(
+                    &entity, version, bitSize, rawVertexCount)
+                || rawVertexCount < 0 || rawVertexCount > 1000000)
+                return false;
+            const std::uint32_t vertexCount =
+                static_cast<std::uint32_t>(rawVertexCount);
+            const auto readOptionalCount = [&](bool present,
+                                               std::uint32_t maximum,
+                                               std::uint32_t minimumBits,
+                                               std::uint32_t& count) {
+                if (!present) {
+                    count = 0;
+                    return true;
+                }
+                std::int32_t rawCount = 0;
+                if (!readBitLongWithinBody(
+                        &entity, version, bitSize, rawCount)
+                    || rawCount < 0
+                    || static_cast<std::uint32_t>(rawCount) > maximum)
+                    return false;
+                const std::uint64_t cursor = currentObjectDwgBit(&entity);
+                if (cursor > bitSize
+                    || (minimumBits != 0
+                        && static_cast<std::uint64_t>(rawCount)
+                            > (bitSize - cursor) / minimumBits))
+                    return false;
+                count = static_cast<std::uint32_t>(rawCount);
+                return true;
+            };
+            std::uint32_t bulgeCount = 0;
+            std::uint32_t vertexIdCount = 0;
+            std::uint32_t widthCount = 0;
+            if (!readOptionalCount(hasBulges, vertexCount, 2u, bulgeCount)
+                || !readOptionalCount(
+                    hasVertexIds && version > DRW::AC1021,
+                    vertexCount, 2u, vertexIdCount)
+                || !readOptionalCount(hasWidths, vertexCount, 4u, widthCount)
+                || bulgeCount > vertexCount || vertexIdCount > vertexCount
+                || widthCount > vertexCount)
+                return false;
+
+            std::uint64_t pointBits = 0;
+            std::uint64_t optionalBits = 0;
+            std::uint64_t valueBits = 0;
+            if (!dwgSafety::multiply(vertexCount, 128u, pointBits)
+                || !dwgSafety::multiply(bulgeCount, 2u, optionalBits)
+                || !dwgSafety::multiply(vertexIdCount, 2u, valueBits)
+                || !dwgSafety::add(optionalBits, valueBits, optionalBits)
+                || !dwgSafety::multiply(widthCount, 4u, valueBits)
+                || !dwgSafety::add(optionalBits, valueBits, optionalBits))
+                return false;
+            const std::uint64_t cursor = currentObjectDwgBit(&entity);
+            std::uint64_t requiredBits = 0;
+            if (!dwgSafety::add(pointBits, optionalBits, requiredBits)
+                || cursor > bitSize || requiredBits > bitSize - cursor
+                || !DRW::reserve(decoded.m_vertices, vertexCount))
+                return false;
+            for (std::uint32_t i = 0; i < vertexCount; ++i) {
+                SweepPolylineVertex vertex;
+                if (!readRawDoubleWithinBody(
+                        &entity, version, bitSize, vertex.m_x)
+                    || !readRawDoubleWithinBody(
+                        &entity, version, bitSize, vertex.m_y))
+                    return false;
+                decoded.m_vertices.push_back(vertex);
+            }
+            for (std::uint32_t i = 0; i < bulgeCount; ++i) {
+                double value = 0.0;
+                if (!readBitDoubleWithinBody(
+                        &entity, version, bitSize, value))
+                    return false;
+                decoded.m_vertices[i].m_bulge = value;
+            }
+            for (std::uint32_t i = 0; i < vertexIdCount; ++i) {
+                std::int32_t value = 0;
+                if (!readBitLongWithinBody(
+                        &entity, version, bitSize, value))
+                    return false;
+                decoded.m_vertices[i].m_vertexId = value;
+            }
+            for (std::uint32_t i = 0; i < widthCount; ++i) {
+                if (!readBitDoubleWithinBody(
+                        &entity, version, bitSize,
+                        decoded.m_vertices[i].m_startWidth)
+                    || !readBitDoubleWithinBody(
+                        &entity, version, bitSize,
+                        decoded.m_vertices[i].m_endWidth))
+                    return false;
+            }
+            const auto finite = [](double value) {
+                return std::isfinite(value);
+            };
+            if (!finite(decoded.m_constantWidth)
+                || !finite(decoded.m_elevation)
+                || !finite(decoded.m_thickness)
+                || !finite(decoded.m_normal.x) || !finite(decoded.m_normal.y)
+                || !finite(decoded.m_normal.z)
+                || !std::all_of(
+                    decoded.m_vertices.begin(), decoded.m_vertices.end(),
+                    [&finite](const SweepPolylineVertex& vertex) {
+                        return finite(vertex.m_x) && finite(vertex.m_y)
+                            && finite(vertex.m_bulge)
+                            && finite(vertex.m_startWidth)
+                            && finite(vertex.m_endWidth);
+                    }))
+                return false;
+            const std::uint64_t consumedBits = currentObjectDwgBit(&entity);
+            if (consumedBits > bitSize)
+                return false;
+            decoded.m_fieldsParsed = true;
+            if (consumedBits < bitSize) {
+                const std::uint64_t suffixBits = bitSize - consumedBits;
+                if (suffixBits > std::numeric_limits<std::uint32_t>::max())
+                    return false;
+                decoded.m_opaqueSuffixStartBit = consumedBits;
+                decoded.m_opaqueSuffixBitSize =
+                    static_cast<std::uint32_t>(suffixBits);
+                if (!readBitStringWithinBody(
+                        &entity, version, bitSize,
+                        decoded.m_opaqueSuffixBitSize,
+                        decoded.m_opaqueSuffixBits))
+                    return false;
+            }
+            decoded.m_spanCaptured = currentObjectDwgBit(&entity) == bitSize;
+            output = std::move(decoded);
+            return true;
+        } catch (...) {
+            return false;
+        }
+    };
+    if (parsed.m_profileType == 77)
+        decodeEmbeddedPolyline(parsed.m_profileType, parsed.m_profileBitSize,
+                               parsed.m_profileBits,
+                               parsed.m_profilePolyline);
+    if (parsed.m_pathType == 77)
+        decodeEmbeddedPolyline(parsed.m_pathType, parsed.m_pathBitSize,
+                               parsed.m_pathBits, parsed.m_pathPolyline);
+
     const std::uint64_t cursor = currentObjectDwgBit(&probe);
     if (cursor > bodyEndBit)
         return false;

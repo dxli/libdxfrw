@@ -7924,9 +7924,34 @@ public:
     bool m_hasColorCmcMetadata = false;
   };
 
+  //! Typed fields from a type-77 embedded LWPOLYLINE body. The original bit
+  //! span remains available on SweepActionBodyCapture for exact preservation.
+  struct SweepPolylineVertex {
+    double m_x = 0.0;
+    double m_y = 0.0;
+    double m_bulge = 0.0;
+    double m_startWidth = 0.0;
+    double m_endWidth = 0.0;
+    std::int32_t m_vertexId = 0;
+  };
+
+  struct SweepPolylineCapture {
+    std::uint16_t m_flags = 0;
+    double m_constantWidth = 0.0;
+    double m_elevation = 0.0;
+    double m_thickness = 0.0;
+    DRW_Coord m_normal{0.0, 0.0, 1.0};
+    std::vector<SweepPolylineVertex> m_vertices;
+    std::uint64_t m_opaqueSuffixStartBit = 0;
+    std::uint32_t m_opaqueSuffixBitSize = 0;
+    std::vector<std::uint8_t> m_opaqueSuffixBits;
+    bool m_fieldsParsed = false;
+    bool m_spanCaptured = false;
+  };
+
   //! Bounded structural capture of the AcDbShSweepBase DWG body. Embedded
-  //! construction entities remain raw bit strings until their own semantic
-  //! codec is qualified; opaque suffix bits never imply a complete parse.
+  //! type-77 construction entities retain raw bits alongside bounded field
+  //! captures; opaque suffix bits never imply a complete parse.
   struct SweepActionBodyCapture {
     std::int32_t m_operationMajor = 0;
     std::int32_t m_operationMinor = 0;
@@ -7943,9 +7968,11 @@ public:
     std::int32_t m_profileType = 0;
     std::uint32_t m_profileBitSize = 0;
     std::vector<std::uint8_t> m_profileBits;
+    SweepPolylineCapture m_profilePolyline;
     std::int32_t m_pathType = 0;
     std::uint32_t m_pathBitSize = 0;
     std::vector<std::uint8_t> m_pathBits;
+    SweepPolylineCapture m_pathPolyline;
     std::uint64_t m_opaqueTailStartBit = 0;
     std::uint32_t m_opaqueTailBitSize = 0;
     std::vector<std::uint8_t> m_opaqueTailBits;
