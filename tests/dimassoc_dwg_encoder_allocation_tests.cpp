@@ -897,6 +897,68 @@ bool sweepTvDeviceProperties(DRW::Version version, bool aliasHandles) {
         encode, outputs);
 }
 
+DRW_AppId makeAppId() {
+    DRW_AppId appId;
+    appId.handle = 0xAE00u;
+    appId.parentHandle = 0x20u;
+    appId.reactorHandles = {0x21u, 0x22u};
+    appId.setDwgCommonObjectState(2, 1u, false);
+    appId.xDictHandle = 0x23u;
+    appId.name = "APPLICATION_ID";
+    appId.flags = 0u;
+    appId.unknown71 = 7u;
+    return appId;
+}
+
+bool sweepAppId(ImageDefinitionStreams mode) {
+    const DRW::Version version =
+        mode == ImageDefinitionStreams::R13InlineSeparateArguments
+            ? DRW::AC1012
+            : mode == ImageDefinitionStreams::R2004DetachedHandles
+                ? DRW::AC1018 : DRW::AC1021;
+    const DRW_AppId appId = makeAppId();
+    const auto encode = [&appId](DRW::Version v, dwgBufferW* body,
+                                 dwgBufferW* strings,
+                                 dwgBufferW* handles) {
+        return appId.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [mode](dwgBufferW& body, dwgBufferW& strings,
+                                dwgBufferW& handles) {
+        dwgBufferW* stringOutput = nullptr;
+        dwgBufferW* handleOutput = nullptr;
+        switch (mode) {
+        case ImageDefinitionStreams::R13InlineSeparateArguments:
+        case ImageDefinitionStreams::R2004DetachedHandles:
+        case ImageDefinitionStreams::Separate:
+            stringOutput = &strings;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SharedStringAndHandle:
+            stringOutput = &strings;
+            handleOutput = &strings;
+            break;
+        case ImageDefinitionStreams::AllBody:
+            break;
+        case ImageDefinitionStreams::BodyStringDetachedHandles:
+            stringOutput = &body;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SeparateStringBodyHandles:
+            stringOutput = &strings;
+            handleOutput = &body;
+            break;
+        }
+        return EncoderOutputs{stringOutput, handleOutput};
+    };
+    static const char* const names[] = {
+        "AC1012-inline", "AC1018-detached-handles", "separate",
+        "shared-string-handle", "all-body", "body-string-detached-handles",
+        "separate-string-body-handles"
+    };
+    return sweepTransactionalEncoder("APPID",
+        names[static_cast<std::size_t>(mode)], version, encode, outputs);
+}
+
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
     GeoDataProbe geo;
     geo.handle = 0xA900u;
@@ -2110,6 +2172,13 @@ int main() {
         || !sweepTvDeviceProperties(DRW::AC1018, false)
         || !sweepTvDeviceProperties(DRW::AC1021, false)
         || !sweepTvDeviceProperties(DRW::AC1021, true)
+        || !sweepAppId(ImageDefinitionStreams::R13InlineSeparateArguments)
+        || !sweepAppId(ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepAppId(ImageDefinitionStreams::Separate)
+        || !sweepAppId(ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepAppId(ImageDefinitionStreams::AllBody)
+        || !sweepAppId(ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepAppId(ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
         || !sweepGroup(ImageDefinitionStreams::Separate)

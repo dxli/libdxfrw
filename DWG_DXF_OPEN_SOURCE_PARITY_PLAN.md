@@ -1443,6 +1443,16 @@ created locally from scratch for the specific control.
   [TVDEVICEPROPERTIES allocation receipt](docs/research/p6-tvdeviceproperties-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 2,177 offsets across 108 cases.
 
+- **APPID DWG encoder transaction safety:**
+  `DRW_AppId::encodeDwgForWriter` now stages the body, detached strings, and
+  detached handles while preserving aliased stream layouts and the legacy
+  trailing reference. Seven generated AC1012/AC1018/AC1021 layouts sweep 106
+  allocation offsets; each failure preserves caller state and retries to clean
+  output. The allocation, object-vector, APPID name, MLINE XDATA, APPID flag,
+  budget, and standard dependency tests pass 7/7. No fixture was added. See
+  the [APPID allocation receipt](docs/research/p6-appid-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 2,283 offsets across 115 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

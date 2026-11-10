@@ -10389,23 +10389,60 @@ bool DRW_AppId::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
                                     bool typedNullReference) const {
     if (buf == nullptr || !validatePayloadFields())
         return false;
-    dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
-    dwgBufferW *hb = (hdlBuf && version > DRW::AC1014) ? hdlBuf : buf;
-    const auto reactorCount = static_cast<std::int32_t>(reactorHandles.size());
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerStringDest =
+        (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+    dwgBufferW *const callerHandleDest =
+        (hdlBuf != nullptr && version > DRW::AC1014)
+            ? hdlBuf : callerBody;
+    const bool separateStrings = callerStringDest != callerBody;
+    const bool separateHandles = callerHandleDest != callerBody
+        && callerHandleDest != callerStringDest;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *callerBody;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
 
-    sb->putVariableText(version, name);
-    putTableEntryXrefFlags(version, *buf, flags);
-    buf->putRawChar8(unknown71);
+        buf = &stagedBody;
+        strBuf = separateStrings ? &stagedStrings : buf;
+        hdlBuf = separateHandles ? &stagedHandles
+            : callerHandleDest == callerStringDest && separateStrings
+                ? &stagedStrings : buf;
+        dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
+        dwgBufferW *hb = (hdlBuf && version > DRW::AC1014) ? hdlBuf : buf;
+        const auto reactorCount =
+            static_cast<std::int32_t>(reactorHandles.size());
 
-    putCommonObjectHandlePrefix(hb, kAppIdControl, reactorCount,
-                                xDictFlag, &reactorHandles, xDictHandle,
-                                DRW::DwgSoftPointer, false,
-                                version == DRW::AC1015 && typedNullReference);
-    dwgHandle xref = makeNullHandleW();
-    if (typedNullReference)
-        xref.code = DRW::DwgHardPointer;
-    hb->putHandle(xref);
-    return buf->isGood() && sb->isGood() && hb->isGood();
+        sb->putVariableText(version, name);
+        putTableEntryXrefFlags(version, *buf, flags);
+        buf->putRawChar8(unknown71);
+
+        putCommonObjectHandlePrefix(hb, kAppIdControl, reactorCount,
+                                    xDictFlag, &reactorHandles, xDictHandle,
+                                    DRW::DwgSoftPointer, false,
+                                    version == DRW::AC1015
+                                        && typedNullReference);
+        dwgHandle xref = makeNullHandleW();
+        if (typedNullReference)
+            xref.code = DRW::DwgHardPointer;
+        hb->putHandle(xref);
+        if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 //Early OBJECTS support: keep DWG import from failing on common non-graphical
