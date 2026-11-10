@@ -36996,79 +36996,115 @@ bool DRW_DimensionAssociation::encodeDwg(
             return false;
     }
 
-    dwgBufferW *stringBuf = strBuf != nullptr ? strBuf : buf;
-    dwgBufferW *handles = handleBuf != nullptr ? handleBuf : buf;
-    buf->putBitLong(static_cast<std::int32_t>(m_associativityFlags));
-    buf->putBit(m_isTransSpace ? 1 : 0);
-    buf->putRawChar8(m_rotatedDimensionType);
+    // Encode into private copies and publish all distinct destinations only
+    // after the body, detached strings, and handle ledger are complete. Keep
+    // intentional buffer aliases routed to one staged stream.
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *buf;
+        const bool separateStrings = strBuf != nullptr && strBuf != buf;
+        const bool separateHandles = handleBuf != nullptr
+            && handleBuf != buf && handleBuf != strBuf;
+        if (separateStrings)
+            stagedStrings = *strBuf;
+        if (separateHandles)
+            stagedHandles = *handleBuf;
 
-    std::size_t refIndex = 0;
-    for (std::uint32_t flag = 1; flag <= 8; flag <<= 1) {
-        if ((m_associativityFlags & flag) == 0)
-            continue;
-        const DRW_DimensionAssociationOsnapRef& ref = m_osnapRefs[refIndex++];
-        const bool intersectionType = ref.m_objectOsnapType == 6u
-            || ref.m_objectOsnapType == 11u;
-        const bool hasMainPath = ref.m_hasXrefObjectHandleString
-            || !ref.m_xrefObjectHandleString.empty();
-        const bool hasIntersectionPath =
-            ref.m_hasIntersectionXrefObjectHandleString
-            || !ref.m_intersectionXrefObjectHandleString.empty();
-        const std::size_t xrefCount = ref.m_objectHandles.empty()
-            ? (ref.m_objectHandle != 0 ? 1u : 0u)
-            : ref.m_objectHandles.size();
+        dwgBufferW *stringBuf = separateStrings ? &stagedStrings
+                                                : &stagedBody;
+        dwgBufferW *handles = handleBuf == nullptr || handleBuf == buf
+            ? &stagedBody
+            : (strBuf != nullptr && handleBuf == strBuf
+                ? stringBuf : &stagedHandles);
+        stagedBody.putBitLong(
+            static_cast<std::int32_t>(m_associativityFlags));
+        stagedBody.putBit(m_isTransSpace ? 1 : 0);
+        stagedBody.putRawChar8(m_rotatedDimensionType);
 
-        stringBuf->putVariableText(version, ref.m_className);
-        buf->putRawChar8(ref.m_objectOsnapType);
-        buf->putBitLong(static_cast<std::int32_t>(xrefCount));
-        if (ref.m_objectOsnapType != 0u) {
-            buf->putBitLong(ref.m_subentType);
-            buf->putBitLong(ref.m_gsMarker);
-            buf->putBitLong(hasMainPath ? 1 : 0);
-            if (hasMainPath)
-                stringBuf->putVariableText(
-                    version, ref.m_xrefObjectHandleString);
+        std::size_t refIndex = 0;
+        for (std::uint32_t flag = 1; flag <= 8; flag <<= 1) {
+            if ((m_associativityFlags & flag) == 0)
+                continue;
+            const DRW_DimensionAssociationOsnapRef& ref =
+                m_osnapRefs[refIndex++];
+            const bool intersectionType = ref.m_objectOsnapType == 6u
+                || ref.m_objectOsnapType == 11u;
+            const bool hasMainPath = ref.m_hasXrefObjectHandleString
+                || !ref.m_xrefObjectHandleString.empty();
+            const bool hasIntersectionPath =
+                ref.m_hasIntersectionXrefObjectHandleString
+                || !ref.m_intersectionXrefObjectHandleString.empty();
+            const std::size_t xrefCount = ref.m_objectHandles.empty()
+                ? (ref.m_objectHandle != 0 ? 1u : 0u)
+                : ref.m_objectHandles.size();
+
+            stringBuf->putVariableText(version, ref.m_className);
+            stagedBody.putRawChar8(ref.m_objectOsnapType);
+            stagedBody.putBitLong(static_cast<std::int32_t>(xrefCount));
+            if (ref.m_objectOsnapType != 0u) {
+                stagedBody.putBitLong(ref.m_subentType);
+                stagedBody.putBitLong(ref.m_gsMarker);
+                stagedBody.putBitLong(hasMainPath ? 1 : 0);
+                if (hasMainPath)
+                    stringBuf->putVariableText(
+                        version, ref.m_xrefObjectHandleString);
+            }
+            stagedBody.putBitDouble(ref.m_hasNearParameter
+                ? ref.m_nearParameter : 0.0);
+            stagedBody.put3BitDouble(ref.m_hasOsnapPoint
+                ? ref.m_osnapPoint : DRW_Coord{});
+            if (intersectionType) {
+                stagedBody.putBitLong(1); // one modeled intersection handle
+                stagedBody.putBitLong(ref.m_intersectionSubentType);
+                stagedBody.putBitLong(ref.m_intersectionGsMarker);
+                stagedBody.putBitLong(hasIntersectionPath ? 1 : 0);
+                if (hasIntersectionPath)
+                    stringBuf->putVariableText(
+                        version, ref.m_intersectionXrefObjectHandleString);
+            }
+            stagedBody.putBit(
+                ref.m_hasLastPointRef && ref.m_lastPointRef != 0 ? 1 : 0);
         }
-        buf->putBitDouble(ref.m_hasNearParameter
-            ? ref.m_nearParameter : 0.0);
-        buf->put3BitDouble(ref.m_hasOsnapPoint
-            ? ref.m_osnapPoint : DRW_Coord{});
-        if (intersectionType) {
-            buf->putBitLong(1); // one modeled intersection handle
-            buf->putBitLong(ref.m_intersectionSubentType);
-            buf->putBitLong(ref.m_intersectionGsMarker);
-            buf->putBitLong(hasIntersectionPath ? 1 : 0);
-            if (hasIntersectionPath)
-                stringBuf->putVariableText(
-                    version, ref.m_intersectionXrefObjectHandleString);
-        }
-        buf->putBit(ref.m_hasLastPointRef && ref.m_lastPointRef != 0 ? 1 : 0);
-    }
 
-    putCommonObjectHandlePrefix(
-        handles, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()),
-        extensionDictionaryFlag(), &reactorHandles, xDictHandle);
-    handles->putHandle(makeRefW(m_dimensionHandle, DRW::DwgSoftPointer));
-    refIndex = 0;
-    for (std::uint32_t flag = 1; flag <= 8; flag <<= 1) {
-        if ((m_associativityFlags & flag) == 0)
-            continue;
-        const DRW_DimensionAssociationOsnapRef& ref = m_osnapRefs[refIndex++];
-        if (ref.m_objectHandles.empty()) {
-            if (ref.m_objectHandle != 0)
+        putCommonObjectHandlePrefix(
+            handles, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()),
+            extensionDictionaryFlag(), &reactorHandles, xDictHandle);
+        handles->putHandle(makeRefW(m_dimensionHandle, DRW::DwgSoftPointer));
+        refIndex = 0;
+        for (std::uint32_t flag = 1; flag <= 8; flag <<= 1) {
+            if ((m_associativityFlags & flag) == 0)
+                continue;
+            const DRW_DimensionAssociationOsnapRef& ref =
+                m_osnapRefs[refIndex++];
+            if (ref.m_objectHandles.empty()) {
+                if (ref.m_objectHandle != 0)
+                    handles->putHandle(makeRefW(
+                        ref.m_objectHandle, DRW::DwgSoftPointer));
+            } else {
+                for (std::uint32_t objectHandle : ref.m_objectHandles)
+                    handles->putHandle(makeRefW(
+                        objectHandle, DRW::DwgSoftPointer));
+            }
+            if (ref.m_objectOsnapType == 6u || ref.m_objectOsnapType == 11u)
                 handles->putHandle(makeRefW(
-                    ref.m_objectHandle, DRW::DwgSoftPointer));
-        } else {
-            for (std::uint32_t objectHandle : ref.m_objectHandles)
-                handles->putHandle(makeRefW(
-                    objectHandle, DRW::DwgSoftPointer));
+                    ref.m_intersectionObjectHandle, DRW::DwgSoftPointer));
         }
-        if (ref.m_objectOsnapType == 6u || ref.m_objectOsnapType == 11u)
-            handles->putHandle(makeRefW(
-                ref.m_intersectionObjectHandle, DRW::DwgSoftPointer));
+        if (!stagedBody.isGood() || !stringBuf->isGood() || !handles->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (strBuf != nullptr && strBuf != buf)
+            strBuf->swap(stagedStrings);
+        if (handleBuf != nullptr && handleBuf != buf
+            && handleBuf != strBuf)
+            handleBuf->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    return buf->isGood() && stringBuf->isGood() && handles->isGood();
 }
 
 bool DRW_EvaluationGraph::encodeDwg(

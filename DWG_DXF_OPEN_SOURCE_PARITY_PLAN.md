@@ -1188,6 +1188,18 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **DIMASSOC DWG encoder transaction safety:** `DRW_DimensionAssociation::encodeDwg`
+  now stages its body, detached strings and handle-occurrence ledger, preserving
+  stream aliasing and publishing only after all staged writes succeed. A
+  generated AC1024 `AcDbOsnapPointRef` control injects a one-shot allocation
+  failure at all 85 reached offsets across separate streams, shared
+  string/handle streams and all-streams-aliased mode. Every failure preserves
+  caller bytes, cursor and handle ledger; retrying the same association and
+  buffers matches clean output. The two focused DIMASSOC CTests pass. This is
+  codec-level transaction evidence only; other record encoders, OBJECTS
+  builders and whole-drawing failure paths remain open. No DWG/DXF fixture was
+  added. See the [allocation rollback receipt](docs/research/p6-dimassoc-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
