@@ -1611,6 +1611,17 @@ created locally from scratch for the specific control.
   receipt](docs/research/p6-section-manager-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 4,878 offsets across 240 cases.
 
+- **SECTION_SETTINGS DWG encoder transaction safety:**
+  The same staged publication path now also has direct `Settings`-kind
+  coverage, including nested geometry strings, color, layer/linetype, hatch
+  fields, source references, and destination-block handle. Six generated
+  AC1021 stream layouts sweep 249 allocation offsets with rollback and
+  same-object retry. The focused encoder-allocation test passes 1/1. Together,
+  Manager and Settings now cover 12 layouts and 308 offsets; no fixture was
+  added. Native section meaning and broader producer profiles remain open.
+  See the [SECTION_SETTINGS allocation receipt](docs/research/p6-section-settings-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 5,350 offsets across 267 cases.
+
 - **MOTIONPATH/CURVEPATH/POINTPATH DWG encoder transaction safety:**
   The three path record encoders now stage their typed body handles and common
   owner/reactor/extension tail before publishing. Twenty-one generated

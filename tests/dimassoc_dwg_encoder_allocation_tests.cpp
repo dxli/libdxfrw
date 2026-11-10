@@ -1791,6 +1791,46 @@ SectionProbe makeSectionManager() {
     return object;
 }
 
+SectionProbe makeSectionSettings() {
+    SectionProbe object;
+    object.handle = 0xC010u;
+    object.parentHandle = 0x20u;
+    object.reactorHandles = {0x21u, 0x22u};
+    object.setDwgCommonObjectState(2, 1u, false);
+    object.xDictHandle = 0x23u;
+    object.m_kind = DRW_Section::Settings;
+    object.m_classVersion = 2;
+    object.m_sectionType = 1;
+    object.m_generationOptions = 3;
+    object.m_currentType = 1;
+    object.m_typeCount = 1;
+    DRW_SectionTypeSettings type;
+    type.m_type = 1;
+    type.m_generation = 2;
+    type.m_numSources = 1;
+    type.m_sourceHandles = {0x31u};
+    type.m_destinationBlockHandle = 0x32u;
+    type.m_destinationFile = "section-output.dwg";
+    type.m_numGeometrySettings = 1;
+    DRW_SectionGeometrySettings geometry;
+    geometry.m_numGeometries = 2;
+    geometry.m_hexIndex = 4;
+    geometry.m_flags = 3;
+    geometry.m_color = 5;
+    geometry.m_layer = "SECTION_LAYER";
+    geometry.m_lineType = "Continuous";
+    geometry.m_lineTypeScale = 1.25;
+    geometry.m_plotStyle = "Normal";
+    geometry.m_lineWeight = 25;
+    geometry.m_hatchPattern = "SOLID";
+    geometry.m_hatchAngle = 0.25;
+    geometry.m_hatchSpacing = 0.5;
+    geometry.m_hatchScale = 1.0;
+    type.m_geometry.push_back(geometry);
+    object.m_types.push_back(type);
+    return object;
+}
+
 MotionPathProbe makeMotionPath() {
     MotionPathProbe object;
     object.handle = 0xC100u;
@@ -3298,6 +3338,19 @@ int main() {
         || !sweepIndexObject("SECTION_MANAGER", makeSectionManager(),
             ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepIndexObject("SECTION_MANAGER", makeSectionManager(),
+            ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepIndexObject("SECTION_SETTINGS", makeSectionSettings(),
+            ImageDefinitionStreams::R13InlineSeparateArguments,
+            DRW::AC1021)
+        || !sweepIndexObject("SECTION_SETTINGS", makeSectionSettings(),
+            ImageDefinitionStreams::Separate)
+        || !sweepIndexObject("SECTION_SETTINGS", makeSectionSettings(),
+            ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepIndexObject("SECTION_SETTINGS", makeSectionSettings(),
+            ImageDefinitionStreams::AllBody)
+        || !sweepIndexObject("SECTION_SETTINGS", makeSectionSettings(),
+            ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepIndexObject("SECTION_SETTINGS", makeSectionSettings(),
             ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepIndexObject("MOTIONPATH", makeMotionPath(),
             ImageDefinitionStreams::R13InlineSeparateArguments,
