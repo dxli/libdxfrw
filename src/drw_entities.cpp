@@ -2617,6 +2617,7 @@ bool validAc1018TableEmptyOverrideRanges(
         const DRW_DwgSubrecordRange& range = ranges[i];
         if (range.m_name != "r2007-table-cell-overrides"
             || range.m_version != DRW::AC1018 || range.m_count != 0u
+            || range.m_rawHandleCode != 0u
             || range.m_bitSize != 10u || !range.m_parseComplete
             || range.m_startBit < previousEndBit
             || range.m_bitSize
@@ -2629,7 +2630,8 @@ bool validAc1018TableEmptyOverrideRanges(
     const DRW_DwgSubrecordRange& tableRange = ranges.back();
     return tableRange.m_name == "r2007-table-overrides"
         && tableRange.m_version == DRW::AC1018
-        && tableRange.m_count == 0u && tableRange.m_bitSize == 4u
+        && tableRange.m_count == 0u && tableRange.m_rawHandleCode == 0u
+        && tableRange.m_bitSize == 4u
         && tableRange.m_parseComplete
         && tableRange.m_startBit >= previousEndBit
         && tableRange.m_bitSize

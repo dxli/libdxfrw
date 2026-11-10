@@ -9464,6 +9464,8 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                 retainedRangeModel;
             malformedRetainedRanges.m_content.m_subrecordRanges.front()
                 .m_bitSize = 9u;
+            malformedRetainedRanges.m_content.m_subrecordRanges.front()
+                .m_rawHandleCode = 1u;
             dwgBufferW malformedRangeBody;
             dwgBufferW malformedRangeHandles;
             malformedRangeBody.putRawChar8(0xA6u);
@@ -9472,23 +9474,36 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                 malformedRangeBody.data();
             const auto malformedRangeHandlesBefore =
                 malformedRangeHandles.data();
-            const bool malformedRangeRefused =
+            const bool malformedRangeAndHandleRefused =
                 !malformedRetainedRanges.encodeAsTableClass(
                     DRW::AC1018, malformedRangeBody,
                     malformedRangeHandles);
-            const bool malformedRangePreserved =
+            const bool malformedSpanPreserved =
                 malformedRangeBody.data() == malformedRangeBodyBefore
                 && malformedRangeHandles.data()
                     == malformedRangeHandlesBefore;
             malformedRetainedRanges.m_content.m_subrecordRanges.front()
                 .m_bitSize = 10u;
+            const bool nonzeroRawHandleRefused =
+                !malformedRetainedRanges.encodeAsTableClass(
+                    DRW::AC1018, malformedRangeBody,
+                    malformedRangeHandles);
+            const bool nonzeroRawHandlePreserved =
+                malformedRangeBody.data() == malformedRangeBodyBefore
+                && malformedRangeHandles.data()
+                    == malformedRangeHandlesBefore;
+            malformedRetainedRanges.m_content.m_subrecordRanges.front()
+                .m_rawHandleCode = 0u;
             const bool correctedRangeRetry =
                 malformedRetainedRanges.encodeAsTableClass(
                     DRW::AC1018, malformedRangeBody,
                     malformedRangeHandles);
-            t.expect(malformedRangeRefused && malformedRangePreserved
+            t.expect(malformedRangeAndHandleRefused
+                         && malformedSpanPreserved
+                         && nonzeroRawHandleRefused
+                         && nonzeroRawHandlePreserved
                          && correctedRangeRetry,
-                     "AC1018 TABLE refuses a malformed retained subrecord span atomically and accepts corrected same-object retry");
+                     "AC1018 TABLE refuses malformed span and handle metadata atomically, then accepts corrected same-object retry");
         }
 
         TableDwgCodecProbe invalidMergedTable = mergedAc1018Table;

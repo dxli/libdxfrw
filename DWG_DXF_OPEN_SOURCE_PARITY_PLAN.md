@@ -6,7 +6,8 @@ zero-mask span signature observed in the physical peer: a 10-bit cell override
 record per populated text cell and a 4-bit absent TABLE/border-mask tail. The
 generated vector re-encodes parser-produced spans, checks typed readback and a
 following-body sentinel, then verifies 9-bit truncation refusal, destination
-preservation and same-object corrected retry. The focused vector and the
+preservation, nonzero raw-handle-code refusal and same-object corrected retry.
+The focused vector and the
 TABLE cell-override plus whole-file TABLE CTests pass. This adds no drawing
 fixture and does not qualify physical-source conversion, native TABLE
 semantics, rendering, or broader producer support. See the
