@@ -1625,6 +1625,21 @@ resolve the missing normative/source-producer schema, qualify graph closure,
 or enable AC1032 output. No DWG/DXF fixture was added. See the [generated
 control receipt](docs/research/p4-ac1032-assocnetwork-generated-candidate-control-2026-11-09.json).
 
+**P4 AC1032 associative-network output-mapping screen (2026-11-10):** the
+LibreDWG `dwg2.spec` marks `ASSOCNETWORK` stable and defines the network
+subclass sequence and owned-dependent DXF handle roles. A successful LibreDWG
+0.14 DXF projection of the existing hash-bound `example_2018.dwg` makes root
+`0x390` action `0x38E` a group-330 soft pointer and child `0x38E` action
+`0x391` a group-360 hard owner; it also emits their distinct base/network
+action indexes. The schema and projection come from the same peer
+implementation, the DWG producer is not established, and native acceptance
+was not obtained. This clarifies a candidate mapping only: retain
+`m_networkFieldsParsed=false`, keep the AC1032 writer refused, and require
+eligible producer/native acceptance plus full graph/dependency closure before
+promoting output. The unchanged ODA CLI attempt aborted at Pasteboard/XPC
+initialization before reading the file; do not repeat it until desktop session
+state changes. See the [LibreDWG DXF projection receipt](docs/research/p4-ac1032-assocnetwork-libredwg-dxf-projection-2026-11-10.json).
+
 The generated R24 TABLESTYLE
 border LTYPE, value-domain, scalar format, margin, text-height, merge-flag,
 content-layout, alignment, property-flag, border-override, indexed-color,
