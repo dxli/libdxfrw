@@ -10196,7 +10196,9 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         tableStyleDictionary.hardOwner = 1;
         tableStyleDictionary.cloning = 1;
         tableStyleDictionary.m_entries.push_back(
-            {"LIBDXFRW_TABLE_GRAPH_TEST", tableFacadeStyleHandle});
+            {rollback ? "LIBDXFRW_TABLE_GRAPH_WRONG_KEY"
+                      : "LIBDXFRW_TABLE_GRAPH_TEST",
+             tableFacadeStyleHandle});
         const bool tableStyleDictionaryWritten = tableStyleRootRegistered
             && tableFacade.writeDictionary(&tableStyleDictionary);
         DRW_TableStyle tableStyle;
@@ -10303,6 +10305,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             const bool graphScopeClosed = tableFacade.endBlockContent();
             const bool closedTableGraph = graphScopeClosed
                 && tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
+            const bool styleKeyMismatchRefused = !closedTableGraph;
             const UTF8STRING savedTableName = table.name;
             table.name = "*T_MISMATCHED";
             const bool mismatchedNameRefused =
@@ -10326,7 +10329,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                 tableFacadeWriter->encodedBufferSize()
                     > tableFacadeInitialBytes;
             if (!earlierGeometryWritten || !injectedFailureOccurred
-                || !graphScopeClosed || !closedTableGraph
+                || !graphScopeClosed || !styleKeyMismatchRefused
                 || !mismatchedNameRefused || !nonStyleObjectRefused
                 || !failedGeometryCallerRestored
                 || !tableFrameStillStaged

@@ -1602,6 +1602,14 @@ bool dwgWriter15::hasClosedAc1018TableBlockGraph(
     if (styleDictionaryRootCount != 1u
         || styleDictionaryHandle == DRW::NoHandle)
         return false;
+    const std::size_t styleDictionaryFrameCount =
+        static_cast<std::size_t>(std::count_if(
+            m_emittedDwgDictionaries.cbegin(), m_emittedDwgDictionaries.cend(),
+            [styleDictionaryHandle](const EmittedDwgDictionary& dictionary) {
+                return dictionary.handle == styleDictionaryHandle;
+            }));
+    if (styleDictionaryFrameCount != 1u)
+        return false;
     const auto styleDictionary = std::find_if(
         m_emittedDwgDictionaries.cbegin(), m_emittedDwgDictionaries.cend(),
         [styleDictionaryHandle](const EmittedDwgDictionary& dictionary) {
@@ -1612,6 +1620,21 @@ bool dwgWriter15::hasClosedAc1018TableBlockGraph(
         });
     if (styleDictionary == m_emittedDwgDictionaries.cend())
         return false;
+    const std::size_t emittedTableStyleCount =
+        static_cast<std::size_t>(std::count_if(
+            m_emittedDwgTableStyles.cbegin(), m_emittedDwgTableStyles.cend(),
+            [&table](const EmittedDwgTableStyle& emitted) {
+                return emitted.handle == table.m_tableStyleHandle;
+            }));
+    if (emittedTableStyleCount != 1u)
+        return false;
+    const auto emittedTableStyle = std::find_if(
+        m_emittedDwgTableStyles.cbegin(), m_emittedDwgTableStyles.cend(),
+        [&table](const EmittedDwgTableStyle& emitted) {
+            return emitted.handle == table.m_tableStyleHandle;
+        });
+    if (emittedTableStyle == m_emittedDwgTableStyles.cend())
+        return false;
     const std::size_t styleDictionaryMemberCount =
         static_cast<std::size_t>(std::count_if(
             styleDictionary->entries.cbegin(), styleDictionary->entries.cend(),
@@ -1619,7 +1642,17 @@ bool dwgWriter15::hasClosedAc1018TableBlockGraph(
                 return !entry.name.empty()
                     && entry.childHandle == table.m_tableStyleHandle;
             }));
-    if (styleDictionaryMemberCount != 1u)
+    const std::size_t styleDictionaryNameMatchCount =
+        static_cast<std::size_t>(std::count_if(
+            styleDictionary->entries.cbegin(), styleDictionary->entries.cend(),
+            [&table, &emittedTableStyle, &equalsAsciiNoCase](
+                const DRW::DwgNamedObjectDictionaryEntry& entry) {
+                return entry.childHandle == table.m_tableStyleHandle
+                    && equalsAsciiNoCase(entry.name,
+                                         emittedTableStyle->name.c_str());
+            }));
+    if (styleDictionaryMemberCount != 1u
+        || styleDictionaryNameMatchCount != 1u)
         return false;
 
     const PendingUserBlock* block = findUserBlock(table.blockRecH.ref);
@@ -1870,6 +1903,7 @@ dwgWriter::CompoundWriteCheckpoint dwgWriter15::checkpointCompoundWrite() const 
     checkpoint.emittedLayoutDictionaryCount =
         m_emittedLayoutDictionaries.size();
     checkpoint.emittedDwgDictionaryCount = m_emittedDwgDictionaries.size();
+    checkpoint.emittedDwgTableStyleCount = m_emittedDwgTableStyles.size();
     checkpoint.userBlockEntityCounts.reserve(m_userBlocks.size());
     checkpoint.userBlockInsertCounts.reserve(m_userBlocks.size());
     for (const PendingUserBlock& block : m_userBlocks)
@@ -1986,6 +2020,11 @@ void dwgWriter15::rollbackCompoundWrite(
         <= m_emittedDwgDictionaries.size()) {
         m_emittedDwgDictionaries.resize(
             checkpoint.emittedDwgDictionaryCount);
+    }
+    if (checkpoint.emittedDwgTableStyleCount
+        <= m_emittedDwgTableStyles.size()) {
+        m_emittedDwgTableStyles.resize(
+            checkpoint.emittedDwgTableStyleCount);
     }
     const auto eraseRolledBackEntityHandles =
         [this](std::uint32_t ownerHandle,
@@ -4383,10 +4422,21 @@ bool dwgWriter15::writeTableStyle(const DRW_TableStyle& style) {
     if (!registerTableStyleObjectClass(object.handle))
         return false;
 
+    EmittedDwgTableStyle emittedStyle;
+    try {
+        emittedStyle.handle = object.handle;
+        emittedStyle.name = object.m_name;
+        m_emittedDwgTableStyles.reserve(
+            m_emittedDwgTableStyles.size() + 1u);
+    } catch (...) {
+        return false;
+    }
+
     if (!emitTableStyleObject(object.handle, object, appIdRefs, layerRefs)) {
         m_objectEedWriteFailure = !object.extData.empty();
         return false;
     }
+    m_emittedDwgTableStyles.push_back(std::move(emittedStyle));
     return true;
 }
 

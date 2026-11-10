@@ -475,6 +475,7 @@ public:
         std::size_t emittedLayoutAssociationCount {0};
         std::size_t emittedLayoutDictionaryCount {0};
         std::size_t emittedDwgDictionaryCount {0};
+        std::size_t emittedDwgTableStyleCount {0};
         std::vector<std::size_t> userBlockEntityCounts;
         std::vector<std::size_t> userBlockInsertCounts;
 

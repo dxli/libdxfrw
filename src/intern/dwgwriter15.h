@@ -886,6 +886,11 @@ private:
         std::vector<DRW::DwgNamedObjectDictionaryEntry> entries;
     };
 
+    struct EmittedDwgTableStyle {
+        std::uint32_t handle {0};
+        UTF8STRING name;
+    };
+
     bool ensureUserBlockIndex() const;
     PendingUserBlock* findUserBlock(std::uint32_t blockRecordHandle);
     const PendingUserBlock* findUserBlock(
@@ -914,6 +919,7 @@ private:
     std::vector<EmittedLayoutAssociation> m_emittedLayoutAssociations;
     std::vector<EmittedLayoutDictionary> m_emittedLayoutDictionaries;
     std::vector<EmittedDwgDictionary> m_emittedDwgDictionaries;
+    std::vector<EmittedDwgTableStyle> m_emittedDwgTableStyles;
     std::unordered_map<std::string, std::uint32_t> m_userBlockHandles;
     // Lazily sorted handle-to-vector-index view for repeated owner lookups.
     // It is derived state and invalidated whenever the block vector changes.
