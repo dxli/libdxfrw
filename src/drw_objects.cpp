@@ -14595,25 +14595,60 @@ bool DRW_PointCloudDef::encodeDwg(DRW::Version version, dwgBufferW *buf,
             && (!finiteCoord(m_extentsMin) || !finiteCoord(m_extentsMax))))
         return false;
 
-    dwgBufferW *stringBuf = version > DRW::AC1018 && strBuf != nullptr
-                                ? strBuf : buf;
-    dwgBufferW *handles = version > DRW::AC1014 && handleBuf != nullptr
-                              ? handleBuf : buf;
-    buf->putBitLong(m_classVersion);
-    if (m_kind == Definition || m_kind == DefinitionEx) {
-        stringBuf->putVariableText(version, m_sourceFilename);
-        buf->putBit(m_isLoaded ? 1 : 0);
-        buf->putRawLong64(m_pointCount);
-        buf->put3BitDouble(m_extentsMin);
-        buf->put3BitDouble(m_extentsMax);
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerStringDest =
+        version > DRW::AC1018 && strBuf != nullptr ? strBuf : callerBody;
+    dwgBufferW *const callerHandleDest =
+        version > DRW::AC1014 && handleBuf != nullptr
+            ? handleBuf : callerBody;
+    const bool separateStrings = callerStringDest != callerBody;
+    const bool separateHandles = callerHandleDest != callerBody
+        && callerHandleDest != callerStringDest;
+    try {
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedStrings;
+        dwgBufferW stagedHandles;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+
+        buf = &stagedBody;
+        strBuf = separateStrings ? &stagedStrings
+            : callerStringDest == callerBody ? buf : &stagedBody;
+        handleBuf = separateHandles ? &stagedHandles
+            : callerHandleDest == callerStringDest && separateStrings
+                ? &stagedStrings : buf;
+        dwgBufferW *stringBuf = version > DRW::AC1018 && strBuf != nullptr
+                                    ? strBuf : buf;
+        dwgBufferW *handles = version > DRW::AC1014 && handleBuf != nullptr
+                                  ? handleBuf : buf;
+        buf->putBitLong(m_classVersion);
+        if (m_kind == Definition || m_kind == DefinitionEx) {
+            stringBuf->putVariableText(version, m_sourceFilename);
+            buf->putBit(m_isLoaded ? 1 : 0);
+            buf->putRawLong64(m_pointCount);
+            buf->put3BitDouble(m_extentsMin);
+            buf->put3BitDouble(m_extentsMax);
+        }
+        const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
+            ? extensionDictionaryFlag() : 0;
+        putCommonObjectHandlePrefix(
+            handles, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()),
+            effectiveXDictFlag, &reactorHandles, xDictHandle);
+        if (!buf->isGood() || !stringBuf->isGood() || !handles->isGood())
+            return false;
+
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
-        ? extensionDictionaryFlag() : 0;
-    putCommonObjectHandlePrefix(
-        handles, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()), effectiveXDictFlag,
-        &reactorHandles, xDictHandle);
-    return buf->isGood() && stringBuf->isGood() && handles->isGood();
 }
 
 bool DRW_NavisworksModelDef::parseCode(int code,

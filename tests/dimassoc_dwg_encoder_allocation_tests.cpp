@@ -76,6 +76,11 @@ public:
     using DRW_PartialViewingIndex::encodeDwg;
 };
 
+class PointCloudDefProbe final : public DRW_PointCloudDef {
+public:
+    using DRW_PointCloudDef::encodeDwg;
+};
+
 class PlotSettingsProbe final : public DRW_PlotSettings {
 public:
     using DRW_PlotSettings::encodeDwg;
@@ -793,7 +798,7 @@ bool sweepViewportEntityHeader(ImageDefinitionStreams mode) {
         return EncoderOutputs{stringOutput, handleOutput};
     };
     static const char* const names[] = {
-        "AC1012-inline", "AC1018-detached-handles", "separate",
+        "inline-separate-arguments", "AC1018-detached-handles", "separate",
         "shared-string-handle", "all-body", "body-string-detached-handles",
         "separate-string-body-handles"
     };
@@ -1622,6 +1627,23 @@ PartialViewingIndexProbe makePartialViewingIndex() {
         {{0.0, 1.0, 2.0}, {3.0, 4.0, 5.0}, 0x31u},
         {{6.0, 7.0, 8.0}, {9.0, 10.0, 11.0}, 0x32u}
     };
+    return object;
+}
+
+PointCloudDefProbe makePointCloudDefinition(DRW_PointCloudDef::Kind kind) {
+    PointCloudDefProbe object;
+    object.handle = 0xBB00u;
+    object.parentHandle = 0x20u;
+    object.reactorHandles = {0x21u, 0x22u};
+    object.setDwgCommonObjectState(2, 1u, false);
+    object.xDictHandle = 0x23u;
+    object.m_kind = kind;
+    object.m_classVersion = 3;
+    object.m_sourceFilename = "point-cloud-transaction-source.rcs";
+    object.m_isLoaded = true;
+    object.m_pointCount = 0x123456789u;
+    object.m_extentsMin = DRW_Coord{-10.0, -20.0, -30.0};
+    object.m_extentsMax = DRW_Coord{10.0, 20.0, 30.0};
     return object;
 }
 
@@ -2981,6 +3003,34 @@ int main() {
             makePartialViewingIndex(),
             ImageDefinitionStreams::SeparateStringBodyHandles,
             DRW::AC1021)
+        || !sweepIndexObject("POINTCLOUD_DEFINITION",
+            makePointCloudDefinition(DRW_PointCloudDef::Definition),
+            ImageDefinitionStreams::R13InlineSeparateArguments,
+            DRW::AC1015)
+        || !sweepIndexObject("POINTCLOUD_DEFINITION_EX",
+            makePointCloudDefinition(DRW_PointCloudDef::DefinitionEx),
+            ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepIndexObject("POINTCLOUD_DEFINITION_EX",
+            makePointCloudDefinition(DRW_PointCloudDef::DefinitionEx),
+            ImageDefinitionStreams::Separate)
+        || !sweepIndexObject("POINTCLOUD_DEFINITION_EX",
+            makePointCloudDefinition(DRW_PointCloudDef::DefinitionEx),
+            ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepIndexObject("POINTCLOUD_DEFINITION_EX",
+            makePointCloudDefinition(DRW_PointCloudDef::DefinitionEx),
+            ImageDefinitionStreams::AllBody)
+        || !sweepIndexObject("POINTCLOUD_DEFINITION_EX",
+            makePointCloudDefinition(DRW_PointCloudDef::DefinitionEx),
+            ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepIndexObject("POINTCLOUD_DEFINITION_EX",
+            makePointCloudDefinition(DRW_PointCloudDef::DefinitionEx),
+            ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepIndexObject("POINTCLOUD_REACTOR",
+            makePointCloudDefinition(DRW_PointCloudDef::Reactor),
+            ImageDefinitionStreams::Separate)
+        || !sweepIndexObject("POINTCLOUD_REACTOR_EX",
+            makePointCloudDefinition(DRW_PointCloudDef::ReactorEx),
+            ImageDefinitionStreams::SharedStringAndHandle)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
         || !sweepGroup(ImageDefinitionStreams::Separate)

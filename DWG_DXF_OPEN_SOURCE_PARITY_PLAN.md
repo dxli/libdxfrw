@@ -1547,6 +1547,17 @@ created locally from scratch for the specific control.
   allocation receipt](docs/research/p6-partial-viewing-index-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 3,835 offsets across 197 cases.
 
+- **POINTCLOUDDEF DWG encoder transaction safety:**
+  `DRW_PointCloudDef::encodeDwg` stages body, detached filename, and common
+  handle destinations while preserving inline and aliased layouts. Nine
+  generated AC1015/AC1018/AC1021 definition, extended-definition, reactor, and
+  reactor-extended layouts sweep 158 allocation offsets with rollback and
+  same-object retry. The focused encoder allocation and DWG object-vector
+  tests pass 2/2. No fixture was added. This is transaction evidence only;
+  point-cloud asset loading and native consumer semantics remain open. See
+  the [POINTCLOUDDEF allocation receipt](docs/research/p6-pointclouddef-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 3,993 offsets across 206 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
