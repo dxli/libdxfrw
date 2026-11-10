@@ -86,6 +86,11 @@ public:
     using DRW_NavisworksModelDef::encodeDwg;
 };
 
+class PointCloudColorMapProbe final : public DRW_PointCloudColorMap {
+public:
+    using DRW_PointCloudColorMap::encodeDwg;
+};
+
 class PlotSettingsProbe final : public DRW_PlotSettings {
 public:
     using DRW_PlotSettings::encodeDwg;
@@ -1668,6 +1673,27 @@ NavisworksModelDefProbe makeNavisworksModelDef() {
     return object;
 }
 
+PointCloudColorMapProbe makePointCloudColorMap() {
+    PointCloudColorMapProbe object;
+    object.handle = 0xBD00u;
+    object.parentHandle = 0x20u;
+    object.reactorHandles = {0x21u, 0x22u};
+    object.setDwgCommonObjectState(2, 1u, false);
+    object.xDictHandle = 0x23u;
+    object.m_classVersion = 4;
+    object.m_defaultIntensityColorScheme = "intensity-spectrum";
+    object.m_defaultElevationColorScheme = "elevation-gradient";
+    object.m_defaultClassificationColorScheme = "classification-palette";
+    object.m_colorRampCount = 2u;
+    object.m_colorRamps = {
+        {2, 2u, {"ground", "canopy"}},
+        {5, 1u, {"water"}}
+    };
+    object.m_classificationColorRampCount = 1u;
+    object.m_classificationColorRamps = {{3, 2u, {"road", "rail"}}};
+    return object;
+}
+
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
     GeoDataProbe geo;
     geo.handle = 0xA900u;
@@ -3071,6 +3097,26 @@ int main() {
             ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepIndexObject("NAVISWORKSMODELDEF",
             makeNavisworksModelDef(),
+            ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepIndexObject("POINTCLOUDCOLORMAP",
+            makePointCloudColorMap(),
+            ImageDefinitionStreams::R13InlineSeparateArguments,
+            DRW::AC1015)
+        || !sweepIndexObject("POINTCLOUDCOLORMAP",
+            makePointCloudColorMap(),
+            ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepIndexObject("POINTCLOUDCOLORMAP",
+            makePointCloudColorMap(), ImageDefinitionStreams::Separate)
+        || !sweepIndexObject("POINTCLOUDCOLORMAP",
+            makePointCloudColorMap(),
+            ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepIndexObject("POINTCLOUDCOLORMAP",
+            makePointCloudColorMap(), ImageDefinitionStreams::AllBody)
+        || !sweepIndexObject("POINTCLOUDCOLORMAP",
+            makePointCloudColorMap(),
+            ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepIndexObject("POINTCLOUDCOLORMAP",
+            makePointCloudColorMap(),
             ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)

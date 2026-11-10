@@ -1569,6 +1569,16 @@ created locally from scratch for the specific control.
   receipt](docs/research/p6-navisworksmodeldef-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 4,124 offsets across 213 cases.
 
+- **POINTCLOUDCOLORMAP DWG encoder transaction safety:**
+  `DRW_PointCloudColorMap::encodeDwg` stages body, all default/ramp strings,
+  and common handle outputs before publication. Seven generated AC1015/AC1018/
+  AC1021 profiles sweep 293 allocation offsets with rollback and same-object
+  retry. The focused encoder-allocation and DWG object-vector tests pass 2/2.
+  No fixture was added. This is writer transaction evidence only; native
+  point-cloud color visualization remains unqualified. See the
+  [POINTCLOUDCOLORMAP allocation receipt](docs/research/p6-pointcloudcolormap-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 4,417 offsets across 220 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

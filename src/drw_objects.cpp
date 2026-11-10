@@ -15116,10 +15116,6 @@ bool DRW_PointCloudColorMap::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || reactorHandles.size() > dwgSafety::MaxReactorCount
         || extensionDictionaryFlag() > 1)
         return false;
-    dwgBufferW *stringBuf = version > DRW::AC1018 && strBuf != nullptr
-                                ? strBuf : buf;
-    dwgBufferW *handles = version > DRW::AC1014 && handleBuf != nullptr
-                              ? handleBuf : buf;
     const auto validScheme = [](const UTF8STRING& scheme) {
         return scheme.size() <= kMaxColorSchemeLength;
     };
@@ -15143,30 +15139,70 @@ bool DRW_PointCloudColorMap::encodeDwg(DRW::Version version, dwgBufferW *buf,
     if (!validRamps(m_colorRamps)
         || !validRamps(m_classificationColorRamps))
         return false;
-    buf->putBitShort(static_cast<std::uint16_t>(m_classVersion));
-    stringBuf->putVariableText(version, m_defaultIntensityColorScheme);
-    stringBuf->putVariableText(version, m_defaultElevationColorScheme);
-    stringBuf->putVariableText(version, m_defaultClassificationColorScheme);
-    const auto writeRamps = [&](const std::vector<DRW_PointCloudColorMapRamp>& ramps) {
-        buf->putBitLong(static_cast<std::int32_t>(ramps.size()));
-        for (const auto& ramp : ramps) {
-            buf->putBitShort(static_cast<std::uint16_t>(ramp.m_classVersion));
-            buf->putBitLong(static_cast<std::int32_t>(ramp.m_rampCount));
-            for (const UTF8STRING& scheme : ramp.m_colorSchemes) {
-                stringBuf->putVariableText(version, scheme);
+
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerStringDest =
+        version > DRW::AC1018 && strBuf != nullptr ? strBuf : callerBody;
+    dwgBufferW *const callerHandleDest =
+        version > DRW::AC1014 && handleBuf != nullptr
+            ? handleBuf : callerBody;
+    const bool separateStrings = callerStringDest != callerBody;
+    const bool separateHandles = callerHandleDest != callerBody
+        && callerHandleDest != callerStringDest;
+    try {
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedStrings;
+        dwgBufferW stagedHandles;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+
+        buf = &stagedBody;
+        strBuf = separateStrings ? &stagedStrings : buf;
+        handleBuf = separateHandles ? &stagedHandles
+            : callerHandleDest == callerStringDest && separateStrings
+                ? &stagedStrings : buf;
+        dwgBufferW *stringBuf = version > DRW::AC1018 && strBuf != nullptr
+                                    ? strBuf : buf;
+        dwgBufferW *handles = version > DRW::AC1014 && handleBuf != nullptr
+                                  ? handleBuf : buf;
+        buf->putBitShort(static_cast<std::uint16_t>(m_classVersion));
+        stringBuf->putVariableText(version, m_defaultIntensityColorScheme);
+        stringBuf->putVariableText(version, m_defaultElevationColorScheme);
+        stringBuf->putVariableText(version, m_defaultClassificationColorScheme);
+        const auto writeRamps = [&](const std::vector<DRW_PointCloudColorMapRamp>& ramps) {
+            buf->putBitLong(static_cast<std::int32_t>(ramps.size()));
+            for (const auto& ramp : ramps) {
+                buf->putBitShort(static_cast<std::uint16_t>(ramp.m_classVersion));
+                buf->putBitLong(static_cast<std::int32_t>(ramp.m_rampCount));
+                for (const UTF8STRING& scheme : ramp.m_colorSchemes) {
+                    stringBuf->putVariableText(version, scheme);
+                }
             }
-        }
+            return true;
+        };
+        if (!writeRamps(m_colorRamps)
+            || !writeRamps(m_classificationColorRamps))
+            return false;
+        const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
+            ? extensionDictionaryFlag() : 0;
+        putCommonObjectHandlePrefix(
+            handles, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()),
+            effectiveXDictFlag, &reactorHandles, xDictHandle);
+        if (!buf->isGood() || !stringBuf->isGood() || !handles->isGood())
+            return false;
+
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
         return true;
-    };
-    if (!writeRamps(m_colorRamps) || !writeRamps(m_classificationColorRamps))
+    } catch (...) {
         return false;
-    const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
-        ? extensionDictionaryFlag() : 0;
-    putCommonObjectHandlePrefix(
-        handles, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()), effectiveXDictFlag,
-        &reactorHandles, xDictHandle);
-    return buf->isGood() && stringBuf->isGood() && handles->isGood();
+    }
 }
 
 bool DRW_Material::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
