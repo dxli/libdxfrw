@@ -22495,18 +22495,34 @@ bool DRW_RasterVariables::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || m_units < 0 || m_units > 8)
         return false;
     DRW_UNUSED(strBuf);
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
+    try {
+        dwgBufferW stagedBody = *buf;
+        const bool separateHandles = handleBuf != nullptr
+            && handleBuf != buf && version > DRW::AC1014;
+        dwgBufferW stagedHandles;
+        if (separateHandles)
+            stagedHandles = *handleBuf;
+        dwgBufferW *hb = separateHandles ? &stagedHandles : &stagedBody;
 
-    buf->putBitLong(static_cast<std::int32_t>(m_classVersion));
-    buf->putBitShort(static_cast<std::uint16_t>(m_imageFrame));
-    buf->putBitShort(static_cast<std::uint16_t>(m_imageQuality));
-    buf->putBitShort(static_cast<std::uint16_t>(m_units));
+        stagedBody.putBitLong(static_cast<std::int32_t>(m_classVersion));
+        stagedBody.putBitShort(static_cast<std::uint16_t>(m_imageFrame));
+        stagedBody.putBitShort(static_cast<std::uint16_t>(m_imageQuality));
+        stagedBody.putBitShort(static_cast<std::uint16_t>(m_units));
 
-    // Common handle prefix (parentHandle + reactors + xdic).
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), numReactors, xDictFlag,
-        &reactorHandles, xDictHandle);
-    return buf->isGood() && hb->isGood();
+        // Common handle prefix (parentHandle + reactors + xdic).
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle), numReactors,
+            xDictFlag, &reactorHandles, xDictHandle);
+        if (!stagedBody.isGood() || !hb->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (separateHandles)
+            handleBuf->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 // SORTENTSTABLE (AcDbSortentsTable) encoder — ODA §20.4.93.  Inverts

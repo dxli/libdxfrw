@@ -1340,6 +1340,19 @@ created locally from scratch for the specific control.
   added. See the [DICTIONARYWDFLT receipt](docs/research/p6-dictionarywdefault-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 1,498 offsets across 69 cases.
 
+- **RASTERVARIABLES DWG encoder transaction safety:**
+  `DRW_RasterVariables::encodeDwg` now stages its effective body and detached
+  handle stream, preserving AC1012 inline handles and later-version aliasing.
+  Generated AC1012, AC1018, and AC1021 controls sweep 23 allocation offsets;
+  every injected failure preserves caller streams/cursors/handle ledgers, and
+  same-object retry matches clean output. The combined encoder allocation,
+  object-vector, scalar-domain, and OBJECTS allocation tests pass 4/4. The
+  broader DXF fixture test was also run and failed 827 unrelated fixture
+  assertions; no baseline comparison was performed, so that failure remains
+  untriaged and is not attributed to this DWG-only change. No DWG/DXF fixture
+  was added. See the [RASTERVARIABLES allocation receipt](docs/research/p6-rastervariables-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 1,521 offsets across 72 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
