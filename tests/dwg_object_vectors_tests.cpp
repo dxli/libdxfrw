@@ -153,6 +153,12 @@ public:
     using DRW_Field::parseDwg;
 };
 
+class FieldListCodecProbe final : public DRW_FieldList {
+public:
+    using DRW_FieldList::encodeDwg;
+    using DRW_FieldList::parseDwg;
+};
+
 class DbColorCodecProbe final : public DRW_DbColor {
 public:
     using DRW_DbColor::encodeDwg;
@@ -6622,6 +6628,206 @@ bool makeFieldFrame(bool oversizedChildValueCount, bool omitChildValueCount,
     object.putBytes(handles.data().data(), handles.size());
     frame.bytes = object.data();
     return object.isGood();
+}
+
+void testFieldObjectEncoderAllocationRollback(TestContext& t) {
+    constexpr DRW::Version version = DRW::AC1021;
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    FieldFrame frame;
+    const bool built = makeFieldFrame(false, false, frame);
+    t.expect(built, "generated FIELD allocation profile builds");
+    if (built) {
+        dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+        FieldCodecProbe parsed;
+        const bool read = parsed.parseDwg(version, &input, frame.handleBits);
+        t.expect(read && input.isGood() && parsed.hasCompleteDwgPayload(),
+                 "generated FIELD allocation profile parses");
+        if (read && input.isGood() && parsed.hasCompleteDwgPayload()) {
+            const auto encode = [](const FieldCodecProbe& value,
+                                   dwgBufferW* body, dwgBufferW* strings,
+                                   dwgBufferW* handles) {
+                return value.encodeDwg(version, body, strings, handles);
+            };
+            const auto sweep = [&t, &codec, version](
+                    const auto& source, const char* label, auto encodeValue) {
+                dwgHandle seedHandle;
+                seedHandle.code = DRW::DwgSoftPointer;
+                seedHandle.size = 1u;
+                seedHandle.ref = 0xAAu;
+                seedHandle.ref64 = 0xAAu;
+                dwgBufferW expectedBody(&codec), expectedStrings(&codec),
+                    expectedHandles(&codec);
+                expectedBody.putRawChar8(0x5Au);
+                expectedStrings.putVariableText(version, "field-seed");
+                expectedHandles.putHandle(seedHandle);
+                auto clean = source;
+                const bool expected = encodeValue(
+                    clean, &expectedBody, &expectedStrings, &expectedHandles);
+                unsigned failures = 0u;
+                bool allRetries = true;
+                bool exactFinal = false;
+                for (long failAt = 0; failAt < 512; ++failAt) {
+                    auto attempt = source;
+                    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+                    body.putRawChar8(0x5Au);
+                    strings.putVariableText(version, "field-seed");
+                    handles.putHandle(seedHandle);
+                    const auto bodyBefore = body.data();
+                    const auto stringsBefore = strings.data();
+                    const auto handlesBefore = handles.data();
+                    const auto handleCountBefore =
+                        handles.handleOccurrences().size();
+                    const auto bodyBitsBefore = body.bitCount();
+                    const auto stringBitsBefore = strings.bitCount();
+                    const auto handleBitsBefore = handles.bitCount();
+                    allocationFailureCountdown = failAt;
+                    bool encoded = false;
+                    bool threw = false;
+                    try {
+                        encoded = encodeValue(
+                            attempt, &body, &strings, &handles);
+                    } catch (const std::bad_alloc&) {
+                        threw = true;
+                    }
+                    const long countdownAfter =
+                        allocationFailureCountdown.exchange(-1);
+                    if (countdownAfter >= 0) {
+                        exactFinal = encoded && !threw
+                            && body.data() == expectedBody.data()
+                            && strings.data() == expectedStrings.data()
+                            && handles.data() == expectedHandles.data()
+                            && handles.handleOccurrences().size()
+                                == expectedHandles.handleOccurrences().size()
+                            && body.bitCount() == expectedBody.bitCount()
+                            && strings.bitCount() == expectedStrings.bitCount()
+                            && handles.bitCount() == expectedHandles.bitCount();
+                        break;
+                    }
+                    ++failures;
+                    const bool rollback = !encoded && !threw
+                        && body.data() == bodyBefore
+                        && strings.data() == stringsBefore
+                        && handles.data() == handlesBefore
+                        && handles.handleOccurrences().size()
+                            == handleCountBefore
+                        && body.bitCount() == bodyBitsBefore
+                        && strings.bitCount() == stringBitsBefore
+                        && handles.bitCount() == handleBitsBefore;
+                    const bool retry = encodeValue(
+                            attempt, &body, &strings, &handles)
+                        && body.data() == expectedBody.data()
+                        && strings.data() == expectedStrings.data()
+                        && handles.data() == expectedHandles.data()
+                        && handles.handleOccurrences().size()
+                            == expectedHandles.handleOccurrences().size()
+                        && body.bitCount() == expectedBody.bitCount()
+                        && strings.bitCount() == expectedStrings.bitCount()
+                        && handles.bitCount() == expectedHandles.bitCount();
+                    allRetries = allRetries && rollback && retry;
+                    if (!rollback || !retry)
+                        break;
+                }
+                t.expect(expected && failures > 0u && allRetries && exactFinal,
+                         std::string(label)
+                             + " writer rolls back allocation faults and retries exactly");
+                std::cout << label << " allocation failures=" << failures
+                          << " rollback/retry="
+                          << (allRetries && exactFinal ? "PASS" : "FAIL")
+                          << '\n';
+            };
+            sweep(parsed, "FIELD", encode);
+        }
+    }
+
+    FieldListCodecProbe fieldList;
+    fieldList.handle = 0xA101u;
+    fieldList.parentHandle = 0xA200u;
+    fieldList.setDwgCommonObjectState(0, 1, false);
+    fieldList.m_unknown = 1;
+    fieldList.m_fieldHandles = {0xA300u, DRW::NoHandle, 0xA400u};
+    const auto sweepList = [&t, &codec](const FieldListCodecProbe& source) {
+        const auto version = DRW::AC1021;
+        dwgHandle seed;
+        seed.code = DRW::DwgSoftPointer;
+        seed.size = 1u;
+        seed.ref = 0xAAu;
+        seed.ref64 = 0xAAu;
+        dwgBufferW expectedBody(&codec), expectedStrings(&codec),
+            expectedHandles(&codec);
+        expectedBody.putRawChar8(0x5Au);
+        expectedStrings.putVariableText(version, "fieldlist-seed");
+        expectedHandles.putHandle(seed);
+        auto clean = source;
+        const bool expected = clean.encodeDwg(
+            version, &expectedBody, &expectedStrings, &expectedHandles);
+        const auto expectedBodyBits = expectedBody.bitCount();
+        const auto expectedStringBits = expectedStrings.bitCount();
+        const auto expectedHandleBits = expectedHandles.bitCount();
+        unsigned failures = 0u;
+        bool exact = false;
+        bool retries = true;
+        for (long failAt = 0; failAt < 128; ++failAt) {
+            auto attempt = source;
+            dwgBufferW body(&codec), strings(&codec), handles(&codec);
+            body.putRawChar8(0x5Au);
+            strings.putVariableText(version, "fieldlist-seed");
+            handles.putHandle(seed);
+            const auto bodyBefore = body.data();
+            const auto stringsBefore = strings.data();
+            const auto handlesBefore = handles.data();
+            const auto handleCountBefore = handles.handleOccurrences().size();
+            const auto bodyBitsBefore = body.bitCount();
+            const auto stringBitsBefore = strings.bitCount();
+            const auto handleBitsBefore = handles.bitCount();
+            allocationFailureCountdown = failAt;
+            bool encoded = false;
+            bool threw = false;
+            try {
+                encoded = attempt.encodeDwg(
+                    version, &body, &strings, &handles);
+            } catch (const std::bad_alloc&) {
+                threw = true;
+            }
+            const long countdownAfter = allocationFailureCountdown.exchange(-1);
+            if (countdownAfter >= 0) {
+                exact = encoded && !threw && body.data() == expectedBody.data()
+                    && strings.data() == expectedStrings.data()
+                    && handles.data() == expectedHandles.data()
+                    && handles.handleOccurrences().size()
+                        == expectedHandles.handleOccurrences().size()
+                    && body.bitCount() == expectedBodyBits
+                    && strings.bitCount() == expectedStringBits
+                    && handles.bitCount() == expectedHandleBits;
+                break;
+            }
+            ++failures;
+            const bool rollback = !encoded && !threw
+                && body.data() == bodyBefore && strings.data() == stringsBefore
+                && handles.data() == handlesBefore
+                && handles.handleOccurrences().size() == handleCountBefore
+                && body.bitCount() == bodyBitsBefore
+                && strings.bitCount() == stringBitsBefore
+                && handles.bitCount() == handleBitsBefore;
+            const bool retry = attempt.encodeDwg(
+                    version, &body, &strings, &handles)
+                && body.data() == expectedBody.data()
+                && strings.data() == expectedStrings.data()
+                && handles.data() == expectedHandles.data()
+                && body.bitCount() == expectedBodyBits
+                && strings.bitCount() == expectedStringBits
+                && handles.bitCount() == expectedHandleBits;
+            retries = retries && rollback && retry;
+            if (!rollback || !retry)
+                break;
+        }
+        t.expect(expected && failures > 0u && exact && retries,
+                 "FIELDLIST writer rolls back allocation faults and retries exactly");
+        std::cout << "FIELDLIST allocation failures=" << failures
+                  << " rollback/retry="
+                  << (exact && retries ? "PASS" : "FAIL") << '\n';
+    };
+    sweepList(fieldList);
 }
 
 void testFieldUnit12DwgStringFraming(TestContext& t) {
@@ -26660,6 +26866,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testFieldUnit12DwgStringFraming(context);
         std::cout << "FIELD unit-12 DWG text framing: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--field-object-encoder-allocation-rollback") {
+        TestContext context;
+        testFieldObjectEncoderAllocationRollback(context);
+        std::cout << "FIELD/FIELDLIST DWG encoder allocation rollback: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

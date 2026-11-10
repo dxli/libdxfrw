@@ -23369,67 +23369,88 @@ bool DRW_Field::encodeDwg(DRW::Version version, dwgBufferW *buf,
   dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018) ? strBuf : buf;
   dwgBufferW *hb =
       (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
+  try {
+    dwgBufferW bodyStage = *buf;
+    std::optional<dwgBufferW> stringStageStorage;
+    dwgBufferW *stringStage = &bodyStage;
+    if (sb != buf) {
+      stringStageStorage.emplace(*sb);
+      stringStage = &*stringStageStorage;
+    }
+    std::optional<dwgBufferW> handleStageStorage;
+    dwgBufferW *handleStage = &bodyStage;
+    if (hb == buf) {
+      handleStage = &bodyStage;
+    } else if (hb == sb) {
+      handleStage = stringStage;
+    } else {
+      handleStageStorage.emplace(*hb);
+      handleStage = &*handleStageStorage;
+    }
 
-  sb->putVariableText(version, m_evaluatorId);
-  sb->putVariableText(version, m_fieldCode);
-
-  buf->putBitLong(static_cast<std::int32_t>(m_childHandles.size()));
-  buf->putBitLong(static_cast<std::int32_t>(m_objectHandles.size()));
-
-  if (version < DRW::AC1021)
-    sb->putVariableText(version, m_formatString);
-
-  buf->putBitLong(m_evaluationOptionFlags);
-  buf->putBitLong(m_filingOptionFlags);
-  buf->putBitLong(m_fieldStateFlags);
-  buf->putBitLong(m_evaluationStatusFlags);
-  buf->putBitLong(m_evaluationErrorCode);
-  sb->putVariableText(version, m_evaluationErrorMessage);
-
-  if (!writeCadValue(version, buf, sb, m_value,
-                      CadValueWireContext::Field, true))
-    return false;
-
-  sb->putVariableText(version, m_valueString);
-  buf->putBitLong(m_valueStringLength);
-
-  buf->putBitLong(static_cast<std::int32_t>(m_childValues.size()));
-  for (const auto &cv : m_childValues) {
-    sb->putVariableText(version, cv.m_key);
-    if (!writeCadValue(version, buf, sb, cv.m_value,
-                       CadValueWireContext::Field))
+    stringStage->putVariableText(version, m_evaluatorId);
+    stringStage->putVariableText(version, m_fieldCode);
+    bodyStage.putBitLong(static_cast<std::int32_t>(m_childHandles.size()));
+    bodyStage.putBitLong(static_cast<std::int32_t>(m_objectHandles.size()));
+    if (version < DRW::AC1021)
+      stringStage->putVariableText(version, m_formatString);
+    bodyStage.putBitLong(m_evaluationOptionFlags);
+    bodyStage.putBitLong(m_filingOptionFlags);
+    bodyStage.putBitLong(m_fieldStateFlags);
+    bodyStage.putBitLong(m_evaluationStatusFlags);
+    bodyStage.putBitLong(m_evaluationErrorCode);
+    stringStage->putVariableText(version, m_evaluationErrorMessage);
+    if (!writeCadValue(version, &bodyStage, stringStage, m_value,
+                       CadValueWireContext::Field, true))
       return false;
-  }
+    stringStage->putVariableText(version, m_valueString);
+    bodyStage.putBitLong(m_valueStringLength);
+    bodyStage.putBitLong(static_cast<std::int32_t>(m_childValues.size()));
+    for (const auto &cv : m_childValues) {
+      stringStage->putVariableText(version, cv.m_key);
+      if (!writeCadValue(version, &bodyStage, stringStage, cv.m_value,
+                         CadValueWireContext::Field))
+        return false;
+    }
 
-  // Common handle prefix + child handles + object handles.  Note: parser
-  // reads child + object handles via `buf->getOffsetHandle(handle)` after
-  // `readCommonObjectHandles(buf, ...)`, i.e. all inline at AC1018.
-  putCommonObjectHandlePrefix(hb, static_cast<std::uint32_t>(parentHandle),
-                              numReactors, xDictFlag, &reactorHandles,
-                              xDictHandle);
-  if (cadValueHasDwgObjectHandle(version, m_value) &&
-      !writeCadValueHandle(version, hb, m_value,
-                           CadValueWireContext::Field))
-    return false;
-  for (const auto &cv : m_childValues) {
-    if (cadValueHasDwgObjectHandle(version, cv.m_value) &&
-        !writeCadValueHandle(version, hb, cv.m_value,
-                             CadValueWireContext::Field))
+    // Common handle prefix + child handles + object handles. Note: parser
+    // reads child + object handles inline after the common prefix at AC1018.
+    putCommonObjectHandlePrefix(
+        handleStage, static_cast<std::uint32_t>(parentHandle), numReactors,
+        xDictFlag, &reactorHandles, xDictHandle);
+    if (cadValueHasDwgObjectHandle(version, m_value)
+        && !writeCadValueHandle(version, handleStage, m_value,
+                                CadValueWireContext::Field))
       return false;
-  }
-  const DwgReferencePolicy childPolicy =
-      dwgReferencePolicy(version, DwgReferenceKind::ChildField);
-  const DwgReferencePolicy objectPolicy =
-      dwgReferencePolicy(version, DwgReferenceKind::Object);
-  if (!childPolicy.hasHandleStreamSlot || !objectPolicy.hasHandleStreamSlot)
+    for (const auto &cv : m_childValues) {
+      if (cadValueHasDwgObjectHandle(version, cv.m_value)
+          && !writeCadValueHandle(version, handleStage, cv.m_value,
+                                  CadValueWireContext::Field))
+        return false;
+    }
+    const DwgReferencePolicy childPolicy =
+        dwgReferencePolicy(version, DwgReferenceKind::ChildField);
+    const DwgReferencePolicy objectPolicy =
+        dwgReferencePolicy(version, DwgReferenceKind::Object);
+    if (!childPolicy.hasHandleStreamSlot || !objectPolicy.hasHandleStreamSlot)
+      return false;
+    for (std::uint32_t ref : m_childHandles)
+      handleStage->putHandle(makeRefW(ref, childPolicy.wireHandleCode));
+    for (std::uint32_t ref : m_objectHandles)
+      handleStage->putHandle(makeRefW(ref, objectPolicy.wireHandleCode));
+
+    if (!bodyStage.isGood() || !stringStage->isGood()
+        || !handleStage->isGood())
+      return false;
+    buf->swap(bodyStage);
+    if (sb != buf)
+      sb->swap(*stringStageStorage);
+    if (hb != buf && hb != sb)
+      hb->swap(*handleStageStorage);
+    return true;
+  } catch (const std::bad_alloc &) {
     return false;
-  for (std::uint32_t ref : m_childHandles) {
-    hb->putHandle(makeRefW(ref, childPolicy.wireHandleCode));
   }
-  for (std::uint32_t ref : m_objectHandles) {
-    hb->putHandle(makeRefW(ref, objectPolicy.wireHandleCode));
-  }
-  return buf->isGood() && sb->isGood() && hb->isGood();
 }
 
 bool DRW_FieldList::isDwgPayloadValid(DRW::Version version) const noexcept {
@@ -23454,23 +23475,39 @@ bool DRW_FieldList::encodeDwg(DRW::Version version, dwgBufferW *buf,
     DRW_UNUSED(strBuf);
     dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
 
-    buf->putBitLong(static_cast<std::int32_t>(m_fieldHandles.size()));
-    buf->putBit(m_unknown ? 1 : 0);
+    try {
+        dwgBufferW bodyStage = *buf;
+        std::optional<dwgBufferW> handleStageStorage;
+        dwgBufferW *handleStage = &bodyStage;
+        if (hb != buf) {
+            handleStageStorage.emplace(*hb);
+            handleStage = &*handleStageStorage;
+        }
+        bodyStage.putBitLong(static_cast<std::int32_t>(m_fieldHandles.size()));
+        bodyStage.putBit(m_unknown ? 1 : 0);
 
     putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), numReactors, xDictFlag,
-        &reactorHandles, xDictHandle);
+        handleStage, static_cast<std::uint32_t>(parentHandle), numReactors,
+        xDictFlag, &reactorHandles, xDictHandle);
     const DRW_Field::DwgReferencePolicy fieldPolicy =
         DRW_Field::dwgReferencePolicy(
             version, DRW_Field::DwgReferenceKind::FieldListMember);
     if (!fieldPolicy.hasHandleStreamSlot)
         return false;
     for (std::uint32_t ref : m_fieldHandles) {
-        hb->putHandle(makeRefW(
+        handleStage->putHandle(makeRefW(
             ref, ref == DRW::NoHandle ? DRW::DwgNullReference
                                        : fieldPolicy.wireHandleCode));
     }
-    return buf->isGood() && hb->isGood();
+        if (!bodyStage.isGood() || !handleStage->isGood())
+            return false;
+        buf->swap(bodyStage);
+        if (hb != buf)
+            hb->swap(*handleStageStorage);
+        return true;
+    } catch (const std::bad_alloc &) {
+        return false;
+    }
 }
 
 bool DRW_MLeaderStyle::validateDwgPayload(DRW::Version version) const {

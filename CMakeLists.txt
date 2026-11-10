@@ -2105,6 +2105,12 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dwg_object_vectors_tests --field-unit12-dwg-strings)
     set_tests_properties(libdxfrw_field_unit12_dwg_strings PROPERTIES
         LABELS "fast;dwg;field;generated")
+    add_test(NAME libdxfrw_field_object_encoder_allocation_rollback
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --field-object-encoder-allocation-rollback)
+    set_tests_properties(libdxfrw_field_object_encoder_allocation_rollback
+        PROPERTIES LABELS "fast;dwg;object-vectors;field;generated;transaction"
+            TIMEOUT 20)
     add_test(NAME libdxfrw_field_cadvalue_general_format_flag
         COMMAND libdxfrw_dwg_object_vectors_tests
             --field-cadvalue-general-format-flag)
