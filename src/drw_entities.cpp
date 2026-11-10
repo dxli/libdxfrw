@@ -2590,6 +2590,53 @@ bool appendDwgSubrecordRange(
     return true;
 }
 
+bool validAc1018TableEmptyOverrideRanges(
+        DRW::Version version, const DRW_TableContent& content) {
+    const std::vector<DRW_DwgSubrecordRange>& ranges =
+        content.m_subrecordRanges;
+    if (ranges.empty())
+        return true;
+    if (version != DRW::AC1018)
+        return false;
+
+    std::size_t cellRangeCount = 0u;
+    for (const DRW_TableRow& row : content.m_rows) {
+        for (const DRW_TableCell& cell : row.m_cells) {
+            if (cell.m_overrideFlags != 0u || cell.m_virtualEdgeFlags != 0u)
+                return false;
+            if (cell.m_contents.size() == 1u
+                && !cell.m_contents.front().m_text.empty())
+                ++cellRangeCount;
+        }
+    }
+    if (cellRangeCount == 0u || ranges.size() != cellRangeCount + 1u)
+        return false;
+
+    std::uint64_t previousEndBit = 0u;
+    for (std::size_t i = 0u; i < cellRangeCount; ++i) {
+        const DRW_DwgSubrecordRange& range = ranges[i];
+        if (range.m_name != "r2007-table-cell-overrides"
+            || range.m_version != DRW::AC1018 || range.m_count != 0u
+            || range.m_bitSize != 10u || !range.m_parseComplete
+            || range.m_startBit < previousEndBit
+            || range.m_bitSize
+                > std::numeric_limits<std::uint64_t>::max()
+                    - range.m_startBit)
+            return false;
+        previousEndBit = range.m_startBit + range.m_bitSize;
+    }
+
+    const DRW_DwgSubrecordRange& tableRange = ranges.back();
+    return tableRange.m_name == "r2007-table-overrides"
+        && tableRange.m_version == DRW::AC1018
+        && tableRange.m_count == 0u && tableRange.m_bitSize == 4u
+        && tableRange.m_parseComplete
+        && tableRange.m_startBit >= previousEndBit
+        && tableRange.m_bitSize
+            <= std::numeric_limits<std::uint64_t>::max()
+                - tableRange.m_startBit;
+}
+
 bool isValidSplineDegree(int degree) {
     return degree >= 1 && degree <= kMaxSplineDegree;
 }
@@ -14172,7 +14219,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || !validAc1018TableCellMergeLayout(m_content.m_rows, true)
         || !m_content.m_fieldHandles.empty()
         || !m_content.m_mergedRanges.empty()
-        || !m_content.m_subrecordRanges.empty()
+        || !validAc1018TableEmptyOverrideRanges(version, m_content)
         || !m_content.m_name.empty() || !m_content.m_description.empty()
         || m_content.m_overrideStyleType != 4
         || (m_content.m_tableStyleHandle != 0u

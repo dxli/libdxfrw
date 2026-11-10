@@ -1,5 +1,17 @@
 # DWG/DXF parity — remaining implementation plan
 
+**Latest implementation slice (2026-11-10, AC1018 TABLE retained no-op spans):**
+the direct TABLE body encoder now admits only the complete ordered AC1018
+zero-mask span signature observed in the physical peer: a 10-bit cell override
+record per populated text cell and a 4-bit absent TABLE/border-mask tail. The
+generated vector re-encodes parser-produced spans, checks typed readback and a
+following-body sentinel, then verifies 9-bit truncation refusal, destination
+preservation and same-object corrected retry. The focused vector and the
+TABLE cell-override plus whole-file TABLE CTests pass. This adds no drawing
+fixture and does not qualify physical-source conversion, native TABLE
+semantics, rendering, or broader producer support. See the
+[retained-range receipt](docs/research/p5-ac1018-table-retained-zero-override-range-writer-2026-11-10.json).
+
 **Latest evidence checkpoint (2026-11-10, generated AC1018 TABLE whole-file writer):**
 the exact bounded plain-text TABLE profile now writes through DWG finalization.
 The writer requires `AcDbTable` class registration before manifest freeze,
@@ -3969,10 +3981,13 @@ Speed-oriented implementation sequence:
    of cells in each row, and one value-content item of type 1 per cell. Allow
    only the already validated table-scalar/per-cell override subset and the
    bounded AC1018 merge-role layouts accepted by the direct codec. Keep data
-   links, fields, block content, attributes, retained raw subrecords, and
-   unexplained geometry/cache state refused. Match every gate to the actual
-   public model fields and reject anything outside that profile before
-   emitting bytes.
+   links, fields, block content, attributes, unknown retained raw subrecords,
+   and unexplained geometry/cache state refused. The one admitted retained
+   subrecord signature is AC1018-only: complete ordered 10-bit zero-mask cell
+   override spans for populated text cells followed by the complete 4-bit
+   zero-mask TABLE override tail. Validate every range and the matching model
+   fields; reject anything outside this profile before emitting bytes. See the
+   [retained-range codec receipt](docs/research/p5-ac1018-table-retained-zero-override-range-writer-2026-11-10.json).
 2. **Physical profile evidence remains partial.** The peer-converted AC1018
    TABLE body is independently readable and agrees on the 3-by-3 text values,
    dimensions, anonymous-block name, and 15-entity geometry census. The direct
@@ -3981,17 +3996,20 @@ Speed-oriented implementation sequence:
    bits. Instrumented ACadSharp independently reproduces their source-bound
    cursor spans under a constant 35,888-bit origin bias. The peer is ODA
    converted from AC1027 DXF, has a HEADER integrity warning, and does not
-   qualify native acceptance or text/line geometry generation. Keep the direct
-   encoder restricted to generated models with no retained source subrecords.
-   The graph-reference/ownership/retry bookkeeping slice is complete (see the
-   generated graph-closure receipt above). Next verify the finalized NOD and
-   dictionary graph with a fresh independent reader, bind dictionary keys to
-   TABLESTYLE names/values, and derive geometry from the admitted TABLE model
-   without guessing. Then implement atomic
-   BLOCK/BLOCK_RECORD/TABLE publication and verify a locally authored DWG with
-   fresh independent readback. Do not promote
-   support from the single ODA-converted source or the generated bookkeeping
-   control.
+   qualify native acceptance or text/line geometry generation. The direct
+   encoder now accepts only the bounded retained zero-mask range signature
+   described above; the focused control re-encodes a generated model carrying
+   parser-produced spans, rejects a shortened span atomically, and retries the
+   corrected object. It does not establish source-document conversion. The
+   generated whole-file AC1018 route already finalizes TABLE, `*T1` geometry,
+   TABLESTYLE, and NOD closure, preserves destination/caller state on failure,
+   retries, and passes fresh libdxfrw readback; LibreDWG independently confirms
+   the graph and cached geometry while leaving TABLE cell semantics opaque.
+   Remaining work is native AutoCAD/ODA acceptance/rendering or independent
+   cell-semantic decoding, additional physical producer profiles, broader
+   content/field/block cases, and R24 TABLECONTENT. Do not repeat the completed
+   generated graph bookkeeping or promote support from the single
+   ODA-converted source.
 3. Keep AC1021+ and AC1024+ refused until their source-bound stream/handle
    profiles and the R24 TABLECONTENT/TABLEGEOMETRY graph are established. Add
    one version at a time with separate body, dependency, rollback/retry, and

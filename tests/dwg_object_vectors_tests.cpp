@@ -9421,6 +9421,74 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             t.expect(mergedTableInput.getBitLong() == mergedTableSentinel
                          && mergedTableInput.isGood(),
                      "AC1018 TABLE merged-cell encoding preserves the following-body sentinel");
+
+            TableDwgCodecProbe retainedRangeModel = mergedAc1018Table;
+            retainedRangeModel.m_content.m_subrecordRanges = parsedRanges;
+            dwgBufferW retainedRangeBody;
+            dwgBufferW retainedRangeHandles;
+            const bool retainedRangeEncode =
+                retainedRangeModel.encodeAsTableClass(
+                    DRW::AC1018, retainedRangeBody, retainedRangeHandles);
+            t.expect(retainedRangeEncode,
+                     "AC1018 TABLE writer admits only the parsed zero-mask cell and table override ranges");
+            if (retainedRangeEncode) {
+                const std::uint64_t retainedRangeEndBit =
+                    retainedRangeBody.bitCount();
+                retainedRangeBody.putBitLong(mergedTableSentinel);
+                retainedRangeBody.patchRawLong32AtBit(
+                    mergedTableObjectSizeBit, retainedRangeBody.bitCount());
+                appendBits(retainedRangeBody, retainedRangeHandles);
+                dwgBuffer retainedRangeInput(
+                    retainedRangeBody.data().data(),
+                    retainedRangeBody.data().size());
+                TableDwgCodecProbe retainedRangeReadback;
+                const bool retainedRangeRead =
+                    retainedRangeReadback.parseDwg(
+                        DRW::AC1018, &retainedRangeInput);
+                t.expect(retainedRangeRead && retainedRangeInput.isGood()
+                             && retainedRangeReadback.m_semanticContentComplete
+                             && retainedRangeReadback.m_content.m_rows.size()
+                                 == 2u
+                             && retainedRangeReadback.m_content.m_rows[0]
+                                    .m_cells[0].m_contents.front().m_text
+                                 == "merged AC1018 anchor"
+                             && cursorBit(retainedRangeInput)
+                                 == retainedRangeEndBit
+                             && retainedRangeInput.getBitLong()
+                                 == mergedTableSentinel
+                             && retainedRangeInput.isGood(),
+                         "retained zero-mask TABLE subrecords re-encode with field readback and following-body sentinel");
+            }
+
+            TableDwgCodecProbe malformedRetainedRanges =
+                retainedRangeModel;
+            malformedRetainedRanges.m_content.m_subrecordRanges.front()
+                .m_bitSize = 9u;
+            dwgBufferW malformedRangeBody;
+            dwgBufferW malformedRangeHandles;
+            malformedRangeBody.putRawChar8(0xA6u);
+            malformedRangeHandles.putRawChar8(0x6Au);
+            const auto malformedRangeBodyBefore =
+                malformedRangeBody.data();
+            const auto malformedRangeHandlesBefore =
+                malformedRangeHandles.data();
+            const bool malformedRangeRefused =
+                !malformedRetainedRanges.encodeAsTableClass(
+                    DRW::AC1018, malformedRangeBody,
+                    malformedRangeHandles);
+            const bool malformedRangePreserved =
+                malformedRangeBody.data() == malformedRangeBodyBefore
+                && malformedRangeHandles.data()
+                    == malformedRangeHandlesBefore;
+            malformedRetainedRanges.m_content.m_subrecordRanges.front()
+                .m_bitSize = 10u;
+            const bool correctedRangeRetry =
+                malformedRetainedRanges.encodeAsTableClass(
+                    DRW::AC1018, malformedRangeBody,
+                    malformedRangeHandles);
+            t.expect(malformedRangeRefused && malformedRangePreserved
+                         && correctedRangeRetry,
+                     "AC1018 TABLE refuses a malformed retained subrecord span atomically and accepts corrected same-object retry");
         }
 
         TableDwgCodecProbe invalidMergedTable = mergedAc1018Table;
