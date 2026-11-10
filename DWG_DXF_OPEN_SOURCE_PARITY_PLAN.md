@@ -5132,6 +5132,18 @@ FreeCAD 1.1.4 converter subprocess contract in build-tree and installed CLI
 tests. Native application execution, binary ABI and Linux/Windows remain
 open; see the [consumer receipt](docs/research/p6-default-plotstyle-consumer-compatibility-2026-11-04.json).
 
+**Native FreeCAD consumer observation (2026-11-10):** FreeCAD 1.1.4 on
+macOS arm64 ran its Draft DWG import route against the existing hash-bound
+AC1021 tablet sample, invoking this build's `dwg2dxf` and then FreeCAD's C++
+DXF importer. Conversion returned success; FreeCAD created 4,875 document
+objects, reported 4,867 valid non-null shapes and no invalid shapes, and
+completed the C++ import in 3.67 seconds. Its importer explicitly reports
+38 3DFACE, 22 HATCH, 69 SOLID, one OLE2FRAME and two VIEWPORT records
+unsupported. Treat this as execution-route/consumer-boundary evidence only:
+it does not qualify those entity types, semantic preservation, producer-wide
+support, native DWG opening, or Linux/Windows behavior. The source was not
+added to the repository. See the [FreeCAD import observation receipt](docs/research/p8-freecad-ac1021-tablet-import-observation-2026-11-10.json).
+
 The SAB minimum-header helper is included in the canonical CMake and generated
 source-release inventories; the inventory check and refusal self-tests pass.
 Native source-release builds and platform qualification remain open.
