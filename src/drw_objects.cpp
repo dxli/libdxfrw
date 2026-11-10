@@ -19049,90 +19049,126 @@ bool DRW_TableStyle::encodeDwg(DRW::Version version, dwgBufferW *buf,
     if (buf == nullptr || !validateDwgPayload(version))
         return false;
 
-    if (isR24TableStyleVersion(version)) {
-        dwgBufferW *stringBuf = strBuf != nullptr ? strBuf : buf;
-        dwgBufferW *hBuf = handleBuf != nullptr ? handleBuf : buf;
-        buf->putRawChar8(m_r24ClassVersion);
-        stringBuf->putVariableText(version, m_name);
-        buf->putBitLong(m_r24UnknownValue1);
-        buf->putBitLong(m_r24UnknownValue2);
-        putCellStyleMapCellStyle(version, *buf, *stringBuf,
-                                 m_tableCellStyle);
-        buf->putBitLong(static_cast<std::int32_t>(m_cellStyles.size()));
-        for (const DRW_TableStyleCellStyle& style : m_cellStyles) {
-            buf->putBitLong(style.m_id);
-            putCellStyleMapCellStyle(version, *buf, *stringBuf, style);
+    dwgBufferW *stringBuffer = isR24TableStyleVersion(version)
+        ? (strBuf != nullptr ? strBuf : buf)
+        : (version > DRW::AC1018 && strBuf != nullptr ? strBuf : buf);
+    dwgBufferW *handleBuffer = isR24TableStyleVersion(version)
+        ? (handleBuf != nullptr ? handleBuf : buf)
+        : (version > DRW::AC1014 && handleBuf != nullptr ? handleBuf : buf);
+
+    try {
+        // Preserve intentional stream aliases while keeping allocation
+        // failures from publishing a partial TABLESTYLE body or handle list.
+        dwgBufferW bodyStage = *buf;
+        std::optional<dwgBufferW> stringStageStorage;
+        dwgBufferW *stringStage = &bodyStage;
+        if (stringBuffer != buf) {
+            stringStageStorage.emplace(*stringBuffer);
+            stringStage = &*stringStageStorage;
         }
-        putCommonObjectHandlePrefix(
-            hBuf, static_cast<std::uint32_t>(parentHandle),
-            static_cast<std::int32_t>(reactorHandles.size()),
-            extensionDictionaryFlag(), &reactorHandles, xDictHandle);
-        hBuf->putHandle(makeRefW(m_unknownHandle, DRW::DwgHardOwnership));
-        const auto writeCellStyleHandles = [hBuf](
-                const DRW_TableStyleCellStyle& style) {
-            if (!style.m_hasData)
-                return;
-            hBuf->putHandle(makeRefW(
-                style.m_contentFormat.m_textStyleHandle,
-                DRW::DwgHardPointer));
-            for (const DRW_TableStyleBorder& border : style.m_borders) {
-                if (border.m_edgeFlags != 0)
-                    hBuf->putHandle(makeRefW(
-                        border.m_lineTypeHandle, DRW::DwgHardPointer));
+        std::optional<dwgBufferW> handleStageStorage;
+        dwgBufferW *handleStage = &bodyStage;
+        if (handleBuffer == buf) {
+            handleStage = &bodyStage;
+        } else if (handleBuffer == stringBuffer) {
+            handleStage = stringStage;
+        } else {
+            handleStageStorage.emplace(*handleBuffer);
+            handleStage = &*handleStageStorage;
+        }
+
+        if (isR24TableStyleVersion(version)) {
+            bodyStage.putRawChar8(m_r24ClassVersion);
+            stringStage->putVariableText(version, m_name);
+            bodyStage.putBitLong(m_r24UnknownValue1);
+            bodyStage.putBitLong(m_r24UnknownValue2);
+            putCellStyleMapCellStyle(version, bodyStage, *stringStage,
+                                     m_tableCellStyle);
+            bodyStage.putBitLong(static_cast<std::int32_t>(m_cellStyles.size()));
+            for (const DRW_TableStyleCellStyle& style : m_cellStyles) {
+                bodyStage.putBitLong(style.m_id);
+                putCellStyleMapCellStyle(version, bodyStage, *stringStage,
+                                         style);
             }
-        };
-        writeCellStyleHandles(m_tableCellStyle);
-        for (const DRW_TableStyleCellStyle& style : m_cellStyles)
-            writeCellStyleHandles(style);
-        return buf->isGood() && stringBuf->isGood() && hBuf->isGood();
-    }
+            putCommonObjectHandlePrefix(
+                handleStage, static_cast<std::uint32_t>(parentHandle),
+                static_cast<std::int32_t>(reactorHandles.size()),
+                extensionDictionaryFlag(), &reactorHandles, xDictHandle);
+            handleStage->putHandle(makeRefW(
+                m_unknownHandle, DRW::DwgHardOwnership));
+            const auto writeCellStyleHandles = [handleStage](
+                    const DRW_TableStyleCellStyle& style) {
+                if (!style.m_hasData)
+                    return;
+                handleStage->putHandle(makeRefW(
+                    style.m_contentFormat.m_textStyleHandle,
+                    DRW::DwgHardPointer));
+                for (const DRW_TableStyleBorder& border : style.m_borders) {
+                    if (border.m_edgeFlags != 0)
+                        handleStage->putHandle(makeRefW(
+                            border.m_lineTypeHandle, DRW::DwgHardPointer));
+                }
+            };
+            writeCellStyleHandles(m_tableCellStyle);
+            for (const DRW_TableStyleCellStyle& style : m_cellStyles)
+                writeCellStyleHandles(style);
+        } else {
+            stringStage->putVariableText(version, m_name);
+            bodyStage.putBitShort(static_cast<std::uint16_t>(m_flowDirection));
+            bodyStage.putBitShort(static_cast<std::uint16_t>(m_flags));
+            bodyStage.putBitDouble(m_horizontalCellMargin);
+            bodyStage.putBitDouble(m_verticalCellMargin);
+            bodyStage.putBit(m_titleSuppressed ? 1 : 0);
+            bodyStage.putBit(m_headerSuppressed ? 1 : 0);
 
-    dwgBufferW *stringBuf = version > DRW::AC1018 && strBuf != nullptr
-        ? strBuf : buf;
-    dwgBufferW *hBuf = version > DRW::AC1014 && handleBuf != nullptr
-        ? handleBuf : buf;
+            for (const DRW_TableStyleRowStyle& row : m_rowStyles) {
+                bodyStage.putBitDouble(row.m_textHeight);
+                bodyStage.putBitShort(
+                    static_cast<std::uint16_t>(row.m_textAlignment));
+                // TABLESTYLE row colors use the full CMC form even in AC1015.
+                putTableStyleCmcColor(version, bodyStage, stringStage,
+                                      row.m_textColor, row.m_textColorCmc);
+                putTableStyleCmcColor(version, bodyStage, stringStage,
+                                      row.m_fillColor, row.m_fillColorCmc);
+                bodyStage.putBit(row.m_hasBackgroundColor ? 1 : 0);
+                for (const DRW_TableStyleBorder& border : row.m_borders) {
+                    bodyStage.putSBitShort(
+                        static_cast<std::int16_t>(border.m_lineWeight));
+                    bodyStage.putBit(border.m_visible != 0 ? 1 : 0);
+                    putTableStyleCmcColor(version, bodyStage, stringStage,
+                                          border.m_color, border.m_colorCmc);
+                }
+                if (version > DRW::AC1018) {
+                    bodyStage.putBitLong(row.m_valueDataType);
+                    bodyStage.putBitLong(row.m_valueUnitType);
+                    stringStage->putVariableText(
+                        version, row.m_valueFormatString);
+                }
+            }
 
-    stringBuf->putVariableText(version, m_name);
-    buf->putBitShort(static_cast<std::uint16_t>(m_flowDirection));
-    buf->putBitShort(static_cast<std::uint16_t>(m_flags));
-    buf->putBitDouble(m_horizontalCellMargin);
-    buf->putBitDouble(m_verticalCellMargin);
-    buf->putBit(m_titleSuppressed ? 1 : 0);
-    buf->putBit(m_headerSuppressed ? 1 : 0);
-
-    for (const DRW_TableStyleRowStyle& row : m_rowStyles) {
-        buf->putBitDouble(row.m_textHeight);
-        buf->putBitShort(static_cast<std::uint16_t>(row.m_textAlignment));
-        // TABLESTYLE row colors use the full CMC form even in AC1015.
-        putTableStyleCmcColor(version, *buf, stringBuf,
-                              row.m_textColor, row.m_textColorCmc);
-        putTableStyleCmcColor(version, *buf, stringBuf,
-                              row.m_fillColor, row.m_fillColorCmc);
-        buf->putBit(row.m_hasBackgroundColor ? 1 : 0);
-        for (const DRW_TableStyleBorder& border : row.m_borders) {
-            buf->putSBitShort(static_cast<std::int16_t>(border.m_lineWeight));
-            buf->putBit(border.m_visible != 0 ? 1 : 0);
-            putTableStyleCmcColor(version, *buf, stringBuf,
-                                  border.m_color, border.m_colorCmc);
+            // AC1015/AC1018 keep this handle stream physically adjacent to
+            // the body; AC1021 uses the shared R2007+ scratch stream.
+            putCommonObjectHandlePrefix(
+                handleStage, static_cast<std::uint32_t>(parentHandle),
+                static_cast<std::int32_t>(reactorHandles.size()),
+                extensionDictionaryFlag(), &reactorHandles, xDictHandle);
+            for (const DRW_TableStyleRowStyle& row : m_rowStyles)
+                handleStage->putHandle(makeRefW(
+                    row.m_textStyleHandle, DRW::DwgHardPointer));
         }
-        if (version > DRW::AC1018) {
-            buf->putBitLong(row.m_valueDataType);
-            buf->putBitLong(row.m_valueUnitType);
-            stringBuf->putVariableText(version, row.m_valueFormatString);
-        }
+
+        if (!bodyStage.isGood() || !stringStage->isGood()
+            || !handleStage->isGood())
+            return false;
+        buf->swap(bodyStage);
+        if (stringBuffer != buf)
+            stringBuffer->swap(*stringStageStorage);
+        if (handleBuffer != buf && handleBuffer != stringBuffer)
+            handleBuffer->swap(*handleStageStorage);
+        return true;
+    } catch (const std::bad_alloc&) {
+        return false;
     }
-
-    // AC1015/AC1018 keep this handle stream physically adjacent to the body;
-    // AC1021 uses the same writer scratch stream as other R2007 objects.
-    putCommonObjectHandlePrefix(
-        hBuf, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()),
-        extensionDictionaryFlag(), &reactorHandles, xDictHandle);
-    for (const DRW_TableStyleRowStyle& row : m_rowStyles)
-        hBuf->putHandle(makeRefW(
-            row.m_textStyleHandle, DRW::DwgHardPointer));
-
-    return buf->isGood() && stringBuf->isGood() && hBuf->isGood();
 }
 
 bool DRW_CellStyleMap::parseCode(

@@ -1970,6 +1970,12 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_cellstylemap_dwg_encode_roundtrip
         PROPERTIES LABELS "fast;dwg;object-vectors;tablestyle;generated"
             TIMEOUT 10)
+    add_test(NAME libdxfrw_tablestyle_dwg_encode_allocation_rollback
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --tablestyle-dwg-encode-allocation-rollback)
+    set_tests_properties(libdxfrw_tablestyle_dwg_encode_allocation_rollback
+        PROPERTIES LABELS "fast;dwg;object-vectors;tablestyle;generated;transaction"
+            TIMEOUT 20)
     add_test(NAME libdxfrw_tablestyle_merge_flag_domain
         COMMAND libdxfrw_dwg_object_vectors_tests
             --tablestyle-merge-flag-domain)

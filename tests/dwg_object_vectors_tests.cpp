@@ -188,6 +188,26 @@ class TableStyleCodecProbe final : public DRW_TableStyle {
 public:
     using DRW_TableStyle::encodeDwg;
     using DRW_TableStyle::parseDwg;
+    void setR24AllocationProfile() {
+        reset();
+        m_r24PrefixPresent = true;
+        m_r24ClassVersion = 1u;
+        handle = 0xA100u;
+        parentHandle = 0xA200u;
+        m_name = "Generated TABLESTYLE rollback profile";
+        m_tableCellStyle.m_type = 5;
+        m_tableCellStyle.m_id = 4;
+        m_tableCellStyle.m_styleClass = 0;
+        m_tableCellStyle.m_name = "Table";
+        for (std::int32_t id = 1; id <= 3; ++id) {
+            DRW_TableStyleCellStyle style;
+            style.m_type = 5;
+            style.m_id = id;
+            style.m_styleClass = 0;
+            style.m_name = "Generated style " + std::to_string(id);
+            m_cellStyles.push_back(std::move(style));
+        }
+    }
 };
 
 class CellStyleMapCodecProbe final : public DRW_CellStyleMap {
@@ -4304,6 +4324,135 @@ void testCellStyleMapDwgEncodeRoundTrip(TestContext& t) {
                  && strings.bitCount() == stringBitsBefore
                  && handles.bitCount() == handleBitsBefore,
              "AC1021 CELLSTYLEMAP rejects an AutoScale value without its override bit before mutating output buffers");
+}
+
+void testTableStyleDwgEncodeAllocationRollback(TestContext& t) {
+    const auto runProfile = [&t](DRW::Version version) {
+        TableStyleFrame frame;
+        std::array<std::uint64_t, 3> unitOffsets{};
+        const std::string label = version == DRW::AC1021
+            ? "AC1021 legacy TABLESTYLE" : "AC1032 R24 TABLESTYLE";
+        DRW_TextCodec codec;
+        codec.setVersion(version, false);
+        TableStyleCodecProbe source;
+        if (version == DRW::AC1021) {
+            const bool built = makeLegacyTableStyleFrame(
+                {{1, 2, 4}}, frame, unitOffsets);
+            t.expect(built, label + " allocation profile builds");
+            if (!built)
+                return;
+            dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+            const bool parsed = source.parseDwg(
+                version, &input, frame.handleBits);
+            t.expect(parsed && input.isGood(), label + " profile parses");
+            if (!parsed || !input.isGood())
+                return;
+        } else {
+            source.setR24AllocationProfile();
+        }
+
+        dwgBufferW expectedBody(&codec), expectedStrings(&codec),
+            expectedHandles(&codec);
+        dwgHandle seedHandle;
+        seedHandle.code = DRW::DwgSoftPointer;
+        seedHandle.size = 1u;
+        seedHandle.ref = 0xAAu;
+        seedHandle.ref64 = 0xAAu;
+        expectedBody.putRawChar8(0x5Au);
+        expectedStrings.putVariableText(version, "retry-string-sentinel");
+        expectedHandles.putHandle(seedHandle);
+        TableStyleCodecProbe cleanSource = source;
+        const bool expectedEncoded = cleanSource.encodeDwg(
+            version, &expectedBody, &expectedStrings, &expectedHandles);
+
+        unsigned failures = 0u;
+        bool reachedFailureFreeOffset = false;
+        bool rollbackAndRetry = true;
+        for (long failAt = 0; failAt < 512; ++failAt) {
+            TableStyleCodecProbe attempt = source;
+            dwgBufferW body(&codec), strings(&codec), handles(&codec);
+            body.putRawChar8(0x5Au);
+            strings.putVariableText(version, "retry-string-sentinel");
+            handles.putHandle(seedHandle);
+            const auto bodyBefore = body.data();
+            const auto stringsBefore = strings.data();
+            const auto handlesBefore = handles.data();
+            const std::size_t handleCountBefore =
+                handles.handleOccurrences().size();
+            const std::uint64_t bodyBitsBefore = body.bitCount();
+            const std::uint64_t stringBitsBefore = strings.bitCount();
+            const std::uint64_t handleBitsBefore = handles.bitCount();
+
+            allocationFailureCountdown = failAt;
+            bool encoded = false;
+            bool threw = false;
+            try {
+                encoded = attempt.encodeDwg(
+                    version, &body, &strings, &handles);
+            } catch (const std::bad_alloc&) {
+                threw = true;
+            }
+            const long countdownAfter = allocationFailureCountdown.exchange(-1);
+            if (countdownAfter >= 0) {
+                reachedFailureFreeOffset = encoded && !threw
+                    && body.data() == expectedBody.data()
+                    && strings.data() == expectedStrings.data()
+                    && handles.data() == expectedHandles.data()
+                    && handles.handleOccurrences().size()
+                        == expectedHandles.handleOccurrences().size()
+                    && body.bitCount() == expectedBody.bitCount()
+                    && strings.bitCount() == expectedStrings.bitCount()
+                    && handles.bitCount() == expectedHandles.bitCount();
+                break;
+            }
+
+            ++failures;
+            const bool rolledBack = !encoded && !threw
+                && body.data() == bodyBefore
+                && strings.data() == stringsBefore
+                && handles.data() == handlesBefore
+                && handles.handleOccurrences().size() == handleCountBefore
+                && body.bitCount() == bodyBitsBefore
+                && strings.bitCount() == stringBitsBefore
+                && handles.bitCount() == handleBitsBefore;
+            const bool retried = attempt.encodeDwg(
+                    version, &body, &strings, &handles)
+                && body.data() == expectedBody.data()
+                && strings.data() == expectedStrings.data()
+                && handles.data() == expectedHandles.data()
+                && handles.handleOccurrences().size()
+                    == expectedHandles.handleOccurrences().size()
+                && body.bitCount() == expectedBody.bitCount()
+                && strings.bitCount() == expectedStrings.bitCount()
+                && handles.bitCount() == expectedHandles.bitCount();
+            rollbackAndRetry = rollbackAndRetry && rolledBack && retried;
+            if (!rolledBack || !retried)
+                break;
+        }
+        t.expect(expectedEncoded && failures > 0u && reachedFailureFreeOffset
+                     && rollbackAndRetry,
+                 label + " encoder rolls back allocation failures and retries exactly");
+        dwgBufferW aliasedExpected(&codec), aliasedActual(&codec);
+        TableStyleCodecProbe cleanAliased = source;
+        TableStyleCodecProbe attemptAliased = source;
+        const bool aliasExpected = cleanAliased.encodeDwg(
+            version, &aliasedExpected, &aliasedExpected, &aliasedExpected);
+        const bool aliasActual = attemptAliased.encodeDwg(
+            version, &aliasedActual, &aliasedActual, &aliasedActual);
+        t.expect(aliasExpected && aliasActual
+                     && aliasedActual.data() == aliasedExpected.data()
+                     && aliasedActual.handleOccurrences().size()
+                         == aliasedExpected.handleOccurrences().size()
+                     && aliasedActual.bitCount() == aliasedExpected.bitCount(),
+                 label + " preserves all-stream alias routing");
+        std::cout << label << " allocation failures=" << failures
+                  << " rollback/retry="
+                  << (rollbackAndRetry && reachedFailureFreeOffset
+                          ? "PASS" : "FAIL") << '\n';
+    };
+
+    runProfile(DRW::AC1021);
+    runProfile(DRW::AC1032);
 }
 
 void testTableStyleContentFormatEnumDomains(TestContext& t) {
@@ -27148,6 +27297,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testCellStyleMapDwgEncodeRoundTrip(context);
         std::cout << "AC1021 CELLSTYLEMAP DWG encoder round-trip: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--tablestyle-dwg-encode-allocation-rollback") {
+        TestContext context;
+        testTableStyleDwgEncodeAllocationRollback(context);
+        std::cout << "TABLESTYLE DWG encoder allocation rollback: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
