@@ -8926,41 +8926,76 @@ bool DRW_Textstyle::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
                                        bool typedLegacyNulls) const {
     if (buf == nullptr || !validatePayloadFields())
         return false;
-    dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
-    dwgBufferW *hb = (hdlBuf && version > DRW::AC1014) ? hdlBuf : buf;
-    const auto reactorCount = static_cast<std::int32_t>(reactorHandles.size());
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerStringDest =
+        (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+    dwgBufferW *const callerHandleDest =
+        (hdlBuf != nullptr && version > DRW::AC1014) ? hdlBuf : callerBody;
+    const bool separateStrings = callerStringDest != callerBody;
+    const bool separateHandles =
+        callerHandleDest != callerBody && callerHandleDest != callerStringDest;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *callerBody;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
 
-    sb->putVariableText(version, name);
-    putTableEntryXrefFlags(version, *buf, flags);
-    if (version > DRW::AC1018) {
-        buf->putBit(static_cast<std::uint8_t>(flags & 1));
-        buf->putBit(static_cast<std::uint8_t>((flags >> 2) & 1));
-    } else {
-        buf->putBit(static_cast<std::uint8_t>((flags >> 2) & 1));  // vertical
-        buf->putBit(static_cast<std::uint8_t>(flags & 1));          // shape file
+        buf = &stagedBody;
+        strBuf = separateStrings ? &stagedStrings : buf;
+        hdlBuf = separateHandles ? &stagedHandles
+            : callerHandleDest == callerStringDest && separateStrings
+                ? &stagedStrings : buf;
+        dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
+        dwgBufferW *hb = (hdlBuf && version > DRW::AC1014) ? hdlBuf : buf;
+        const auto reactorCount =
+            static_cast<std::int32_t>(reactorHandles.size());
+
+        sb->putVariableText(version, name);
+        putTableEntryXrefFlags(version, *buf, flags);
+        if (version > DRW::AC1018) {
+            buf->putBit(static_cast<std::uint8_t>(flags & 1));
+            buf->putBit(static_cast<std::uint8_t>((flags >> 2) & 1));
+        } else {
+            buf->putBit(static_cast<std::uint8_t>((flags >> 2) & 1));
+            buf->putBit(static_cast<std::uint8_t>(flags & 1));
+        }
+        buf->putBitDouble(height);
+        buf->putBitDouble(width);
+        buf->putBitDouble(oblique / ARAD);
+        buf->putRawChar8(static_cast<std::uint8_t>(genFlag));
+        buf->putBitDouble(lastHeight);
+        sb->putVariableText(version, font);
+        sb->putVariableText(version, bigFont);
+
+        putCommonObjectHandlePrefix(
+            hb, kStyleControl, reactorCount, xDictFlag, &reactorHandles,
+            xDictHandle, DRW::DwgSoftPointer, false,
+            version == DRW::AC1015 && typedLegacyNulls);
+        dwgHandle xref = makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer);
+        if (version == DRW::AC1015 && typedLegacyNulls && xref.ref == 0u)
+            xref.code = DRW::DwgHardPointer;
+        // Preserve an explicitly supplied typed null. ODA §20.4.56 defines
+        // this field as a hard pointer; legacy untyped nulls stay unchanged.
+        if (version >= DRW::AC1018 && xrefBlockHandle.ref == 0u
+            && xrefBlockHandle.code == DRW::DwgHardPointer)
+            xref.code = DRW::DwgHardPointer;
+        hb->putHandle(xref);
+
+        if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    buf->putBitDouble(height);
-    buf->putBitDouble(width);
-    buf->putBitDouble(oblique / ARAD); // ODA20.4.56 stores radians
-    buf->putRawChar8(static_cast<std::uint8_t>(genFlag));
-    buf->putBitDouble(lastHeight);
-    sb->putVariableText(version, font);
-    sb->putVariableText(version, bigFont);
-
-    putCommonObjectHandlePrefix(hb, kStyleControl, reactorCount,
-                                xDictFlag, &reactorHandles, xDictHandle,
-                                DRW::DwgSoftPointer, false,
-                                version == DRW::AC1015 && typedLegacyNulls);
-    dwgHandle xref = makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer);
-    if (version == DRW::AC1015 && typedLegacyNulls && xref.ref == 0u)
-        xref.code = DRW::DwgHardPointer;
-    // Preserve a typed null when explicitly supplied; ODA §20.4.56 gives
-    // this field a hard-pointer role. Legacy untyped nulls stay unchanged.
-    if (version >= DRW::AC1018 && xrefBlockHandle.ref == 0u
-        && xrefBlockHandle.code == DRW::DwgHardPointer)
-        xref.code = DRW::DwgHardPointer;
-    hb->putHandle(xref);
-    return buf->isGood() && sb->isGood() && hb->isGood();
 }
 
 bool DRW_Dimstyle::encodeDwg(DRW::Version version, dwgBufferW *buf,

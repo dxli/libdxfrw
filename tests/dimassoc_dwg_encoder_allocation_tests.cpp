@@ -1198,6 +1198,74 @@ bool sweepLayer(ImageDefinitionStreams mode) {
         names[static_cast<std::size_t>(mode)], version, encode, outputs);
 }
 
+DRW_Textstyle makeTextstyle() {
+    DRW_Textstyle style;
+    style.handle = 0xB200u;
+    style.parentHandle = 0x20u;
+    style.reactorHandles = {0x21u, 0x22u};
+    style.setDwgCommonObjectState(2, 1u, false);
+    style.xDictHandle = 0x23u;
+    style.name = "LOCAL_TEXTSTYLE";
+    style.flags = 0;
+    style.height = 2.5;
+    style.width = 0.8;
+    style.oblique = 12.0;
+    style.genFlag = 2;
+    style.lastHeight = 3.5;
+    style.font = "local-font.shx";
+    style.bigFont = "local-bigfont.shx";
+    style.xrefBlockHandle.ref = 0x24u;
+    return style;
+}
+
+bool sweepTextstyle(ImageDefinitionStreams mode) {
+    const DRW::Version version =
+        mode == ImageDefinitionStreams::R13InlineSeparateArguments
+            ? DRW::AC1012
+            : mode == ImageDefinitionStreams::R2004DetachedHandles
+                ? DRW::AC1018 : DRW::AC1021;
+    const DRW_Textstyle style = makeTextstyle();
+    const auto encode = [&style](DRW::Version v, dwgBufferW* body,
+                                 dwgBufferW* strings, dwgBufferW* handles) {
+        return style.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [mode](dwgBufferW& body, dwgBufferW& strings,
+                                dwgBufferW& handles) {
+        dwgBufferW* stringOutput = nullptr;
+        dwgBufferW* handleOutput = nullptr;
+        switch (mode) {
+        case ImageDefinitionStreams::R13InlineSeparateArguments:
+        case ImageDefinitionStreams::R2004DetachedHandles:
+        case ImageDefinitionStreams::Separate:
+            stringOutput = &strings;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SharedStringAndHandle:
+            stringOutput = &strings;
+            handleOutput = &strings;
+            break;
+        case ImageDefinitionStreams::AllBody:
+            break;
+        case ImageDefinitionStreams::BodyStringDetachedHandles:
+            stringOutput = &body;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SeparateStringBodyHandles:
+            stringOutput = &strings;
+            handleOutput = &body;
+            break;
+        }
+        return EncoderOutputs{stringOutput, handleOutput};
+    };
+    static const char* const names[] = {
+        "AC1012-inline", "AC1018-detached-handles", "separate",
+        "shared-string-handle", "all-body", "body-string-detached-handles",
+        "separate-string-body-handles"
+    };
+    return sweepTransactionalEncoder("TEXTSTYLE",
+        names[static_cast<std::size_t>(mode)], version, encode, outputs);
+}
+
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
     GeoDataProbe geo;
     geo.handle = 0xA900u;
@@ -2437,6 +2505,14 @@ int main() {
         || !sweepLayer(ImageDefinitionStreams::Separate)
         || !sweepLayer(ImageDefinitionStreams::SharedStringAndHandle)
         || !sweepLayer(ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepTextstyle(ImageDefinitionStreams::R13InlineSeparateArguments)
+        || !sweepTextstyle(ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepTextstyle(ImageDefinitionStreams::Separate)
+        || !sweepTextstyle(ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepTextstyle(ImageDefinitionStreams::AllBody)
+        || !sweepTextstyle(ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepTextstyle(
+            ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
         || !sweepGroup(ImageDefinitionStreams::Separate)

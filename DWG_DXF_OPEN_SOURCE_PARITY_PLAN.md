@@ -1481,6 +1481,15 @@ created locally from scratch for the specific control.
   receipt](docs/research/p6-layer-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 2,664 offsets across 134 cases.
 
+- **TEXTSTYLE DWG encoder transaction safety:**
+  `DRW_Textstyle::encodeDwgForWriter` now stages body, font/name strings, and
+  handles while preserving revision-specific fields and the legacy typed-null
+  route. Seven AC1012/AC1018/AC1021 generated layouts sweep 182 allocation
+  offsets with rollback and same-object retry. The allocation, object-vector,
+  and DWG text-style resolution tests pass 3/3. No fixture was added. See the
+  [TEXTSTYLE allocation receipt](docs/research/p6-textstyle-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 2,846 offsets across 141 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
