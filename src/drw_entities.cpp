@@ -3553,10 +3553,11 @@ bool parseR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
         bool fillNone = false;
         if (!readBoundedBit(*buf, bounds.bodyEndBit, fillNone))
             return false;
-        // Preserve the existing group-283 boolean representation verbatim;
-        // its native fill/suppression meaning is not established here.
+        // ODA §20.4.96.1 stores "background fill none" in DWG, while
+        // DRW_TableCell::m_backgroundEnabled follows DXF group 283's
+        // background-enabled polarity. Translate between the two meanings.
         if (legacyAc1018CellOverrideProfile)
-            cell.m_backgroundEnabled = fillNone;
+            cell.m_backgroundEnabled = !fillNone;
     }
     const auto readIndexedCellColor = [&](int& destination) {
         std::uint32_t color = 0;
@@ -14570,8 +14571,9 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
                         stagedBody.putRawShort16(
                             static_cast<std::uint16_t>(cell.m_textAlignment));
                     if ((cell.m_overrideFlags & backgroundFillNoneFlag) != 0u)
-                        // The public model stores the group-283 wire boolean directly.
-                        stagedBody.putBit(cell.m_backgroundEnabled);
+                        // ODA §20.4.96.1 calls this DWG value "fill none";
+                        // the public model stores DXF's enabled polarity.
+                        stagedBody.putBit(!cell.m_backgroundEnabled);
                     if ((cell.m_overrideFlags & backgroundColorFlag) != 0u)
                         stagedBody.putCmColor(
                             version,

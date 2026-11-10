@@ -1,5 +1,7 @@
 # DWG/DXF parity — remaining implementation plan
 
+**Latest implementation slice (2026-11-10, AC1018 TABLE fill-state polarity):** corrected the ACAD_TABLE cell override bit named “Background fill none” in ODA v5.4.1 §20.4.96.1 to the public model’s DXF group-283 “background color enabled” meaning. DWG parse and encode now invert the bit; DXF parse/write continue to use enabled polarity, and the existing table-level row mapping already performs the inverse. A generated paired-state wire test proves enabled→DWG 0 and disabled→DWG 1, then checks parser readback and the following body sentinel. The focused DWG cell-override and DXF appearance tests pass 1/1 each. No fixtures were added; no physical-source, native rendering, whole-table, or support claim is promoted. See [the polarity receipt](docs/research/p5-ac1018-table-fill-none-polarity-2026-11-10.json).
+
 **Latest implementation slice (2026-11-10, AC1027 MATERIAL class-metadata parity):** an independent LibreDWG readback caught the typed MATERIAL registrar dropping class capability bit `0x80` and emitting class version/maintenance fields `0/0`. The typed row now emits the source-matched AC1027 class metadata `proxyflag=0x481`, version `23`, maintenance `14`; ODA §5.8 defines `0x80` as “cloning allowed.” The minJSON verifier now checks CLASSES metadata as well as graph and body fields, passes on both source Cover and source-fed output, and rejects flag/version mutations. The focused writer/reader cohort still passes, including all 219 same-writer rollback/retry offsets. This restores the selected AC1027 class contract; it does not qualify clone behavior, other producer profiles, native acceptance, or general MATERIAL support. No fixture or support claim was added. See the [source replay receipt](docs/research/p6-ac1027-material-source-fed-dwg-replay-2026-11-10.json).
 
 **Completed implementation slice (2026-11-10, physical-source AC1027 MATERIAL graph replay):** the three exact-profile `ByBlock`, `ByLayer`, and `Global` records parsed from physical `Cover.dwg` now pass together through one selected AC1027 DWG write, preserving their retained bodies in the single `ACAD_MATERIAL` dictionary graph. Fresh libdxfrw readback verifies all three keys, remapped handles, common owner/reactor edges, complete typed fields, detached strings, and exact raw body bits. Dictionary admission is keyed by entry name and does not assume source ordering. The focused CTest and physical selector pass; this is source-fed graph transport, not a full-source rewrite or producer/native acceptance. No drawing fixture or support claim was added. See the [source replay receipt](docs/research/p6-ac1027-material-source-fed-dwg-replay-2026-11-10.json).
@@ -789,8 +791,8 @@ producer-backed physical witness, semantic graph
 closure, public `dwgRW::writeTable` enablement, or support-claim promotion.
 See [the scalar override receipt](docs/research/p5-ac1018-table-scalar-override-dwg-writer-2026-11-08.json).
 
-The direct AC1018 writer admits text-cell alignment (`0x01`), the raw group-283
-fill-state boolean (`0x02`), indexed background/content colors (`0x04`/`0x08`),
+The direct AC1018 writer admits text-cell alignment (`0x01`), the group-283
+background-enabled model value with inverse DWG fill-none polarity (`0x02`), indexed background/content colors (`0x04`/`0x08`),
 the cell text-style hard pointer (`0x10`), text height (`0x20`), and the four
 physical edge color, lineweight, and visibility families (`0x0003ffc0`) for
 plain-text cells. It emits selected
@@ -2211,8 +2213,11 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    not producer ordering, native precedence, or rendering qualification.
    AC1018 cell-level fill-state, indexed background/content colors, and
    uniquely resolved text-style handles/names now map through groups 283/63/64/7
-   with generated ASCII/Binary readback and refusal/retry controls. Group 283's
-   stored boolean remains uninterpreted. See the [cell-appearance receipt](docs/research/p5-ac1018-table-cell-appearance-dxf-write-readback-2026-11-08.json).
+   with generated ASCII/Binary readback and refusal/retry controls. ODA's DWG
+   fill-none bit is inverted to Autodesk DXF's group-283 background-enabled
+   value; the generated DWG wire-polarity vector now proves both Boolean states.
+   See the [cell-appearance receipt](docs/research/p5-ac1018-table-cell-appearance-dxf-write-readback-2026-11-08.json)
+   and [polarity receipt](docs/research/p5-ac1018-table-fill-none-polarity-2026-11-10.json).
    This closes the selected codec slice only; physical ordering, native
    precedence, and rendering remain unqualified.
    The metric and imperial AC1021 TABLE traces now identify the cursor issue:

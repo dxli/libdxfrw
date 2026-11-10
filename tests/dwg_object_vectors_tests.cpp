@@ -10222,6 +10222,81 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     const bool cellAppearanceRead = cellAppearanceEncoded
         && cellAppearanceReadback.parseDwg(DRW::AC1018,
                                            &cellAppearanceInput);
+    TableDwgCodecProbe cellAppearanceDisabledTable = cellAppearanceTable;
+    cellAppearanceDisabledTable.m_content.m_rows.front().m_cells.front()
+        .m_backgroundEnabled = false;
+    dwgBufferW cellAppearanceDisabledBody;
+    dwgBufferW cellAppearanceDisabledHandles;
+    dwgBufferW cellAppearanceDisabledTypePrefix;
+    cellAppearanceDisabledTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t cellAppearanceDisabledObjectSizeBit =
+        cellAppearanceDisabledTypePrefix.bitCount();
+    const bool cellAppearanceDisabledEncoded =
+        cellAppearanceDisabledTable.encodeAsTableClass(
+            DRW::AC1018, cellAppearanceDisabledBody,
+            cellAppearanceDisabledHandles);
+    const std::uint64_t cellAppearanceDisabledBodyEndBit =
+        cellAppearanceDisabledBody.bitCount();
+    cellAppearanceDisabledBody.putBitLong(cellAppearanceSentinel);
+    cellAppearanceDisabledBody.patchRawLong32AtBit(
+        cellAppearanceDisabledObjectSizeBit,
+        static_cast<std::uint32_t>(
+            cellAppearanceDisabledBody.bitCount()));
+    appendBits(cellAppearanceDisabledBody, cellAppearanceDisabledHandles);
+    dwgBuffer cellAppearanceDisabledInput(
+        cellAppearanceDisabledBody.data().data(),
+        cellAppearanceDisabledBody.data().size());
+    TableDwgCodecProbe cellAppearanceDisabledReadback;
+    const bool cellAppearanceDisabledRead = cellAppearanceDisabledEncoded
+        && cellAppearanceDisabledReadback.parseDwg(
+            DRW::AC1018, &cellAppearanceDisabledInput);
+    const DRW_TableCell* cellAppearanceDisabledActual =
+        cellAppearanceDisabledRead
+            && !cellAppearanceDisabledReadback.m_content.m_rows.empty()
+            && !cellAppearanceDisabledReadback.m_content.m_rows.front()
+                .m_cells.empty()
+        ? &cellAppearanceDisabledReadback.m_content.m_rows.front()
+            .m_cells.front()
+        : nullptr;
+    const bool cellAppearanceDisabledMatches =
+        cellAppearanceDisabledActual != nullptr
+        && cellAppearanceDisabledInput.isGood()
+        && cellAppearanceDisabledReadback.m_semanticContentComplete
+        && cellAppearanceDisabledActual->m_overrideFlags == 0x0Eu
+        && !cellAppearanceDisabledActual->m_backgroundEnabled
+        && cursorBit(cellAppearanceDisabledInput)
+            == cellAppearanceDisabledBodyEndBit;
+    const auto cellAppearanceBitAt = [](const dwgBufferW& buffer,
+                                        std::uint64_t bit) {
+        return ((buffer.data()[static_cast<std::size_t>(bit / 8u)]
+                 >> (7u - static_cast<unsigned>(bit & 7u))) & 1u) != 0u;
+    };
+    std::uint64_t cellAppearancePolarityBit = 0u;
+    unsigned cellAppearanceDifferingBits = 0u;
+    if (cellAppearanceEncoded && cellAppearanceDisabledEncoded
+        && cellAppearanceBodyEndBit == cellAppearanceDisabledBodyEndBit) {
+        for (std::uint64_t bit = 0u; bit < cellAppearanceBodyEndBit; ++bit) {
+            if (cellAppearanceBitAt(cellAppearanceBody, bit)
+                != cellAppearanceBitAt(cellAppearanceDisabledBody, bit)) {
+                cellAppearancePolarityBit = bit;
+                ++cellAppearanceDifferingBits;
+            }
+        }
+    }
+    const bool cellAppearanceWirePolarity =
+        cellAppearanceDifferingBits == 1u
+        && !cellAppearanceBitAt(cellAppearanceBody,
+                                cellAppearancePolarityBit)
+        && cellAppearanceBitAt(cellAppearanceDisabledBody,
+                               cellAppearancePolarityBit);
+    t.expect(cellAppearanceWirePolarity && cellAppearanceDisabledMatches,
+             "AC1018 TABLE DWG stores fill-none opposite to DXF background-enabled state");
+    if (cellAppearanceDisabledMatches) {
+        const std::int32_t sentinel = cellAppearanceDisabledInput.getBitLong();
+        t.expect(cellAppearanceDisabledInput.isGood()
+                     && sentinel == cellAppearanceSentinel,
+                 "AC1018 TABLE disabled background state preserves following sentinel");
+    }
     const bool cellAppearanceMatches = cellAppearanceRead
         && cellAppearanceInput.isGood()
         && cellAppearanceReadback.m_semanticContentComplete

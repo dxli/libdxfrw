@@ -1988,6 +1988,8 @@ struct DRW_TableCell {
     std::uint8_t m_textColorMethod = 0;
     int m_fillColorRgb = -1;
     std::uint8_t m_fillColorMethod = 0;
+    // Background enabled state (DXF group 283 polarity). ACAD_TABLE DWG
+    // cell overrides store the inverse "background fill none" flag.
     bool m_backgroundEnabled = false;
     int m_textAlignment = 0;
     double m_textHeight = 0.0;
