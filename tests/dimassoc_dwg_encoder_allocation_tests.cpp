@@ -106,6 +106,21 @@ public:
     using DRW_Section::encodeDwg;
 };
 
+class MotionPathProbe final : public DRW_MotionPath {
+public:
+    using DRW_MotionPath::encodeDwg;
+};
+
+class CurvePathProbe final : public DRW_CurvePath {
+public:
+    using DRW_CurvePath::encodeDwg;
+};
+
+class PointPathProbe final : public DRW_PointPath {
+public:
+    using DRW_PointPath::encodeDwg;
+};
+
 class PlotSettingsProbe final : public DRW_PlotSettings {
 public:
     using DRW_PlotSettings::encodeDwg;
@@ -1776,6 +1791,47 @@ SectionProbe makeSectionManager() {
     return object;
 }
 
+MotionPathProbe makeMotionPath() {
+    MotionPathProbe object;
+    object.handle = 0xC100u;
+    object.parentHandle = 0x20u;
+    object.reactorHandles = {0x21u, 0x22u};
+    object.setDwgCommonObjectState(2, 1u, false);
+    object.xDictHandle = 0x23u;
+    object.m_classVersion = 3;
+    object.m_cameraPathHandle = 0x31u;
+    object.m_targetPathHandle = 0x32u;
+    object.m_viewTableHandle = 0x33u;
+    object.m_frames = 120;
+    object.m_frameRate = 24;
+    object.m_cornerDeceleration = true;
+    return object;
+}
+
+CurvePathProbe makeCurvePath() {
+    CurvePathProbe object;
+    object.handle = 0xC200u;
+    object.parentHandle = 0x20u;
+    object.reactorHandles = {0x21u, 0x22u};
+    object.setDwgCommonObjectState(2, 1u, false);
+    object.xDictHandle = 0x23u;
+    object.m_classVersion = 4;
+    object.m_entityHandle = 0x31u;
+    return object;
+}
+
+PointPathProbe makePointPath() {
+    PointPathProbe object;
+    object.handle = 0xC300u;
+    object.parentHandle = 0x20u;
+    object.reactorHandles = {0x21u, 0x22u};
+    object.setDwgCommonObjectState(2, 1u, false);
+    object.xDictHandle = 0x23u;
+    object.m_classVersion = 5;
+    object.m_point = DRW_Coord{1.25, -2.5, 3.75};
+    return object;
+}
+
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
     GeoDataProbe geo;
     geo.handle = 0xA900u;
@@ -3242,6 +3298,51 @@ int main() {
         || !sweepIndexObject("SECTION_MANAGER", makeSectionManager(),
             ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepIndexObject("SECTION_MANAGER", makeSectionManager(),
+            ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepIndexObject("MOTIONPATH", makeMotionPath(),
+            ImageDefinitionStreams::R13InlineSeparateArguments,
+            DRW::AC1015)
+        || !sweepIndexObject("MOTIONPATH", makeMotionPath(),
+            ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepIndexObject("MOTIONPATH", makeMotionPath(),
+            ImageDefinitionStreams::Separate)
+        || !sweepIndexObject("MOTIONPATH", makeMotionPath(),
+            ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepIndexObject("MOTIONPATH", makeMotionPath(),
+            ImageDefinitionStreams::AllBody)
+        || !sweepIndexObject("MOTIONPATH", makeMotionPath(),
+            ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepIndexObject("MOTIONPATH", makeMotionPath(),
+            ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepIndexObject("CURVEPATH", makeCurvePath(),
+            ImageDefinitionStreams::R13InlineSeparateArguments,
+            DRW::AC1015)
+        || !sweepIndexObject("CURVEPATH", makeCurvePath(),
+            ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepIndexObject("CURVEPATH", makeCurvePath(),
+            ImageDefinitionStreams::Separate)
+        || !sweepIndexObject("CURVEPATH", makeCurvePath(),
+            ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepIndexObject("CURVEPATH", makeCurvePath(),
+            ImageDefinitionStreams::AllBody)
+        || !sweepIndexObject("CURVEPATH", makeCurvePath(),
+            ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepIndexObject("CURVEPATH", makeCurvePath(),
+            ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepIndexObject("POINTPATH", makePointPath(),
+            ImageDefinitionStreams::R13InlineSeparateArguments,
+            DRW::AC1015)
+        || !sweepIndexObject("POINTPATH", makePointPath(),
+            ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepIndexObject("POINTPATH", makePointPath(),
+            ImageDefinitionStreams::Separate)
+        || !sweepIndexObject("POINTPATH", makePointPath(),
+            ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepIndexObject("POINTPATH", makePointPath(),
+            ImageDefinitionStreams::AllBody)
+        || !sweepIndexObject("POINTPATH", makePointPath(),
+            ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepIndexObject("POINTPATH", makePointPath(),
             ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)

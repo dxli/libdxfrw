@@ -1611,6 +1611,17 @@ created locally from scratch for the specific control.
   receipt](docs/research/p6-section-manager-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 4,878 offsets across 240 cases.
 
+- **MOTIONPATH/CURVEPATH/POINTPATH DWG encoder transaction safety:**
+  The three path record encoders now stage their typed body handles and common
+  owner/reactor/extension tail before publishing. Twenty-one generated
+  AC1015/AC1018/AC1021 layouts sweep 223 allocation offsets with rollback and
+  same-object retry. The focused encoder-allocation and DWG object-vector
+  tests pass 2/2. No fixture was added. This strengthens failure behavior for
+  path records only; source-profile, target graph closure, evaluation and
+  native motion semantics remain open. See the [path encoder allocation
+  receipt](docs/research/p6-path-object-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 5,101 offsets across 261 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

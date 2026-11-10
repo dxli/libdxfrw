@@ -16562,22 +16562,42 @@ bool DRW_MotionPath::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || extensionDictionaryFlag() > 1)
         return false;
 
-    dwgBufferW *hb = handleBuf != nullptr && version > DRW::AC1014
-        ? handleBuf : buf;
-    buf->putBitShort(static_cast<std::uint16_t>(m_classVersion));
-    buf->putHandle(makeRefW(m_cameraPathHandle, DRW::DwgHardPointer));
-    buf->putHandle(makeRefW(m_targetPathHandle, DRW::DwgHardPointer));
-    buf->putHandle(makeRefW(m_viewTableHandle, DRW::DwgHardPointer));
-    buf->putBitShort(static_cast<std::uint16_t>(m_frames));
-    buf->putBitShort(static_cast<std::uint16_t>(m_frameRate));
-    buf->putBit(m_cornerDeceleration ? 1 : 0);
-    const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
-        ? extensionDictionaryFlag() : 0;
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()),
-        effectiveXDictFlag, &reactorHandles, xDictHandle);
-    return buf->isGood() && hb->isGood();
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerHandleDest =
+        handleBuf != nullptr && version > DRW::AC1014
+            ? handleBuf : callerBody;
+    const bool separateHandles = callerHandleDest != callerBody;
+    try {
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedHandles;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+        buf = &stagedBody;
+        handleBuf = separateHandles ? &stagedHandles : buf;
+        dwgBufferW *hb = handleBuf != nullptr && version > DRW::AC1014
+            ? handleBuf : buf;
+        buf->putBitShort(static_cast<std::uint16_t>(m_classVersion));
+        buf->putHandle(makeRefW(m_cameraPathHandle, DRW::DwgHardPointer));
+        buf->putHandle(makeRefW(m_targetPathHandle, DRW::DwgHardPointer));
+        buf->putHandle(makeRefW(m_viewTableHandle, DRW::DwgHardPointer));
+        buf->putBitShort(static_cast<std::uint16_t>(m_frames));
+        buf->putBitShort(static_cast<std::uint16_t>(m_frameRate));
+        buf->putBit(m_cornerDeceleration ? 1 : 0);
+        const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
+            ? extensionDictionaryFlag() : 0;
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()),
+            effectiveXDictFlag, &reactorHandles, xDictHandle);
+        if (!buf->isGood() || !hb->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_CurvePath::parseCode(int code,
@@ -16672,17 +16692,37 @@ bool DRW_CurvePath::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || extensionDictionaryFlag() > 1)
         return false;
 
-    dwgBufferW *hb = handleBuf != nullptr && version > DRW::AC1014
-        ? handleBuf : buf;
-    buf->putBitLong(m_classVersion);
-    buf->putHandle(makeRefW(m_entityHandle, DRW::DwgHardPointer));
-    const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
-        ? extensionDictionaryFlag() : 0;
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()),
-        effectiveXDictFlag, &reactorHandles, xDictHandle);
-    return buf->isGood() && hb->isGood();
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerHandleDest =
+        handleBuf != nullptr && version > DRW::AC1014
+            ? handleBuf : callerBody;
+    const bool separateHandles = callerHandleDest != callerBody;
+    try {
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedHandles;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+        buf = &stagedBody;
+        handleBuf = separateHandles ? &stagedHandles : buf;
+        dwgBufferW *hb = handleBuf != nullptr && version > DRW::AC1014
+            ? handleBuf : buf;
+        buf->putBitLong(m_classVersion);
+        buf->putHandle(makeRefW(m_entityHandle, DRW::DwgHardPointer));
+        const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
+            ? extensionDictionaryFlag() : 0;
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()),
+            effectiveXDictFlag, &reactorHandles, xDictHandle);
+        if (!buf->isGood() || !hb->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_PointPath::parseCode(int code,
@@ -16796,17 +16836,37 @@ bool DRW_PointPath::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || extensionDictionaryFlag() > 1)
         return false;
 
-    dwgBufferW *hb = handleBuf != nullptr && version > DRW::AC1014
-        ? handleBuf : buf;
-    buf->putBitShort(static_cast<std::uint16_t>(m_classVersion));
-    buf->put3BitDouble(m_point);
-    const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
-        ? extensionDictionaryFlag() : 0;
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()),
-        effectiveXDictFlag, &reactorHandles, xDictHandle);
-    return buf->isGood() && hb->isGood();
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerHandleDest =
+        handleBuf != nullptr && version > DRW::AC1014
+            ? handleBuf : callerBody;
+    const bool separateHandles = callerHandleDest != callerBody;
+    try {
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedHandles;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+        buf = &stagedBody;
+        handleBuf = separateHandles ? &stagedHandles : buf;
+        dwgBufferW *hb = handleBuf != nullptr && version > DRW::AC1014
+            ? handleBuf : buf;
+        buf->putBitShort(static_cast<std::uint16_t>(m_classVersion));
+        buf->put3BitDouble(m_point);
+        const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
+            ? extensionDictionaryFlag() : 0;
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()),
+            effectiveXDictFlag, &reactorHandles, xDictHandle);
+        if (!buf->isGood() || !hb->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_ObjectPtr::parseCode(int code,
