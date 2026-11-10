@@ -13074,7 +13074,7 @@ void testAc1032AssociativeNetworkMultiActionGenerated(TestContext& t) {
             ? DRW::DwgHardOwnership : DRW::DwgSoftPointer;
         handles.putHandle(reference(role, actionHandles[i]));
     }
-    handles.putHandle(reference(DRW::DwgHardOwnership,
+    handles.putHandle(reference(DRW::DwgSoftPointer,
                                 ownedActionListHandle));
     object.putBytes(handles.data().data(), handles.data().size());
     const bool frameBuilt = object.isGood() && handles.isGood()
@@ -13131,6 +13131,116 @@ void testAc1032AssociativeNetworkMultiActionGenerated(TestContext& t) {
         std::cerr << "AC1032 multi-action generated read=" << read
                   << " failures=" << reader.objectFailures()
                   << " typed=" << sink.typed.size() << '\n';
+}
+
+void testAc1032AssociativeNetworkHandleRoleGuard(TestContext& t) {
+    using namespace associative_constraint_group_test;
+    constexpr std::uint16_t classNumber = 0x301u;
+    constexpr std::uint32_t sourceHandle = 0xA530u;
+    constexpr std::uint32_t parentHandle = 0xA009u;
+    constexpr std::uint32_t actionHandle = 0xA031u;
+    constexpr std::int32_t baseActionIndex = 7;
+    constexpr std::int32_t networkActionIndex = 3;
+
+    const auto buildFrame = [&](bool owned, std::uint8_t actionHandleCode,
+                                std::uint8_t ownedListHandleCode,
+                                std::vector<std::uint8_t>& bytes) {
+        dwgBufferW object;
+        dwgBufferW handles;
+        dwgBufferW strings;
+        object.putObjType(DRW::AC1032, classNumber);
+        object.putHandle(reference(DRW::DwgNullReference, sourceHandle));
+        object.putBitShort(0); // no EED
+        object.putBitLong(0); // no persistent reactors
+        object.putBit(1u); // no extension dictionary
+        object.putBit(0u); // no DataStorage payload
+        object.putBitShort(2); // AcDbAssocAction class version
+        object.putBitLong(0); // geometry status
+        object.putBitLong(baseActionIndex);
+        object.putBitLong(0); // maximum dependency index
+        object.putBitLong(0); // no action dependencies
+        object.putBitShort(0); // owned-parameter version
+        object.putBitLong(0); // no owned parameters
+        object.putBitShort(0); // value-parameter version
+        object.putBitLong(0); // no value parameters
+        object.putBitShort(0); // candidate network version
+        object.putBitLong(networkActionIndex);
+        object.putBitLong(1); // one action
+        object.putBit(owned ? 1u : 0u);
+        object.putBitLong(1); // one separately listed owned action
+
+        Frame frame;
+        if (!appendStringStream(object, strings))
+            return false;
+        object.alignToByte();
+        frame.objectEndBit = object.bitCount();
+        handles.putHandle(reference(DRW::DwgSoftPointer, parentHandle));
+        handles.putHandle(reference(DRW::DwgSoftPointer, 0u));
+        handles.putHandle(reference(DRW::DwgHardOwnership, 0u));
+        handles.putHandle(reference(actionHandleCode, actionHandle));
+        handles.putHandle(reference(ownedListHandleCode, actionHandle + 1u));
+        object.putBytes(handles.data().data(), handles.data().size());
+        if (!object.isGood() || !handles.isGood()
+            || object.bitCount() < frame.objectEndBit
+            || handles.bitCount() > std::numeric_limits<std::uint32_t>::max())
+            return false;
+        frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
+        frame.payload = object.data();
+        return wrapFrame(frame, bytes);
+    };
+
+    const auto rejectsThenRetries = [&](bool owned, std::uint8_t wrongCode,
+                                        std::uint8_t correctCode,
+                                        std::uint8_t wrongOwnedListCode,
+                                        std::uint8_t correctOwnedListCode,
+                                        const char* description) {
+        std::vector<std::uint8_t> wrongBytes;
+        std::vector<std::uint8_t> correctBytes;
+        const bool built = buildFrame(owned, wrongCode, wrongOwnedListCode,
+                                      wrongBytes)
+            && buildFrame(owned, correctCode, correctOwnedListCode,
+                          correctBytes);
+        t.expect(built, description);
+        if (!built)
+            return false;
+        Ac1032AssociativeNetworkDispatchReader reader(wrongBytes, classNumber);
+        PersistentManagerDispatchSink sink;
+        reader.readObjects(wrongBytes, {{sourceHandle, 0u, 0u}}, sink);
+        const bool refused = reader.objectFailures() != 0u
+            && sink.typed.empty();
+        t.expect(refused, description);
+        sink.typed.clear();
+        sink.raw.clear();
+        sink.publications.clear();
+        const bool read = reader.readObjects(
+            correctBytes, {{sourceHandle, 0u, 0u}}, sink);
+        const bool parsed = read && reader.objectFailures() == 0u
+            && sink.typed.size() == 1u
+            && sink.typed.front().m_classVersion == 2u
+            && sink.typed.front().m_actions.size() == 1u
+            && sink.typed.front().m_actions.front().m_isOwned == owned
+            && sink.typed.front().m_actions.front().m_handle == actionHandle
+            && sink.typed.front().m_ownedActions.size() == 1u
+            && sink.typed.front().m_ownedActions.front() == actionHandle + 1u
+            && !sink.typed.front().m_networkFieldsParsed;
+        t.expect(parsed, description);
+        return refused && parsed;
+    };
+
+    const bool softMismatch = rejectsThenRetries(
+        false, DRW::DwgHardOwnership, DRW::DwgSoftPointer,
+        DRW::DwgSoftPointer, DRW::DwgSoftPointer,
+        "AC1032 class-version-2 non-owned network action requires soft-pointer role and retries");
+    const bool ownedMismatch = rejectsThenRetries(
+        true, DRW::DwgSoftPointer, DRW::DwgHardOwnership,
+        DRW::DwgSoftPointer, DRW::DwgSoftPointer,
+        "AC1032 class-version-2 owned network action requires hard-owner role and retries");
+    const bool ownedListMismatch = rejectsThenRetries(
+        false, DRW::DwgSoftPointer, DRW::DwgSoftPointer,
+        DRW::DwgHardOwnership, DRW::DwgSoftPointer,
+        "AC1032 class-version-2 owned-action list requires soft-pointer role and retries");
+    t.expect(softMismatch && ownedMismatch && ownedListMismatch,
+             "AC1032 associative-network action flags and owned-action vector bind to handle roles");
 }
 
 void testAssociativeVariableGenerated(TestContext& t) {
@@ -22240,6 +22350,7 @@ int main(int argc, char** argv) {
         && std::string(argv[1]) == "--assocnetwork-ac1032-multi-action-generated") {
         TestContext focused;
         testAc1032AssociativeNetworkMultiActionGenerated(focused);
+        testAc1032AssociativeNetworkHandleRoleGuard(focused);
         std::cout << "Generated AC1032 associative-network multi-action profile: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;

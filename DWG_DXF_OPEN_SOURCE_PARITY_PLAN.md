@@ -1188,6 +1188,18 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P4 AC1032 associative-network action-role guard:** LibreDWG revision
+  `6d6a33987a1a97095b069c799c3d8a793320f812`'s stable `src/dwg2.spec` binds
+  each `is_owned` bit to a hard-owner or soft-pointer action reference. The
+  bounded AC1032 class-version-2 parser now checks that role and requires the
+  separate `owned_actions` vector to use soft-pointer references. Generated
+  controls prove both action-role mismatches and a hard-owned vector entry are
+  rejected, then accept corrected inputs on the same reader. Focused CTests
+  pass. This is a peer-grammar-backed parser guard only:
+  `m_networkFieldsParsed` remains
+  false, the ACadSharp candidate still fails before OBJECTS, and AC1032 output
+  remains refused. See the [role-guard receipt](docs/research/p4-ac1032-assocnetwork-action-handle-role-guard-2026-11-10.json).
+
 - **P6 BACKGROUND DWG encoder transaction safety:** `DRW_Background::encodeDwg`
   now stages body, string and handle streams with alias-aware publication. All
   six kinds (Solid, Gradient, GroundPlane, Image, IBL and Skylight) pass three
@@ -2213,9 +2225,12 @@ NOD/dictionary path, network action list, action owning-network edge, physical
 hard owner, and dependency targets as separate graph roles ([ownership
 semantics receipt](docs/research/p4-ac1032-assocnetwork-autodesk-ownership-semantics-2026-11-09.json)).
 These API semantics do not resolve the AC1032 class-version-2 byte layout.
+LibreDWG's stable `src/dwg2.spec` now independently supports the per-action
+owned-flag/handle-role rule, which the bounded parser enforces, but this
+implementation grammar is not the ODA specification or producer proof.
 Current graph/writer admission remains AC1024-only and physical output stays
-refused. Next identify authoritative producer/schema evidence for class version
-2, then close the exact owner/action dependencies before enabling any AC1032
+refused. Next obtain eligible producer/schema evidence for class version 2,
+then close the exact owner/action dependencies before enabling any AC1032
 writer route. Do not prune `ACAD_ASSOCNETWORK` or DIMASSOC edges to
 claim MLINESTYLE output. Once qualified, run exact physical
 DIMASSOC→MLINESTYLE output, staged identity inspection, and fresh
