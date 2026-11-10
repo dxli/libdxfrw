@@ -1581,6 +1581,16 @@ bool dwgWriter15::hasClosedAc1018TableBlockGraph(
         || std::toupper(static_cast<unsigned char>(table.name[1])) != 'T')
         return false;
 
+    if (table.plotStyle != DRW::DefaultPlotStyle) {
+        if (table.plotStyle <= 0
+            || static_cast<std::uint32_t>(table.plotStyle)
+                != m_defaultPlotStylePlaceholderHandle
+            || !m_defaultPlotStyleGraphEmitted
+            || !hasEmittedDwgObjectHandle(
+                m_defaultPlotStylePlaceholderHandle))
+            return false;
+    }
+
     std::uint16_t styleClassNumber = 0u;
     if (!getDwgClassInstanceClass(table.m_tableStyleHandle,
                                  styleClassNumber))

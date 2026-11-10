@@ -10624,6 +10624,11 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                 !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
             table.m_tableStyleHandle = savedTableStyleHandle;
             table.m_content.m_tableStyleHandle = savedContentStyleHandle;
+            const int savedPlotStyle = table.plotStyle;
+            table.plotStyle = 0xA910;
+            const bool danglingPlotStyleRefused =
+                !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
+            table.plotStyle = savedPlotStyle;
             const bool failedGeometryCallerRestored =
                 failedGeometryLine.handle == 0xA812u
                 && failedGeometryLine.parentHandle == DRW::NoHandle;
@@ -10633,6 +10638,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             if (!earlierGeometryWritten || !injectedFailureOccurred
                 || !graphScopeClosed || !expectedGraphMismatchRefused
                 || !mismatchedNameRefused || !nonStyleObjectRefused
+                || !danglingPlotStyleRefused
                 || !failedGeometryCallerRestored
                 || !tableFrameStillStaged
                 || tableFacade.m_successfulEntityWrites
@@ -10661,8 +10667,14 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                 !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
             table.m_tableStyleHandle = savedTableStyleHandle;
             table.m_content.m_tableStyleHandle = savedContentStyleHandle;
+            const int savedPlotStyle = table.plotStyle;
+            table.plotStyle = 0xA910;
+            const bool danglingPlotStyleRefused =
+                !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
+            table.plotStyle = savedPlotStyle;
             if (!geometryWritten || !graphScopeClosed || !closedTableGraph
-                || !mismatchedNameRefused || !nonStyleObjectRefused) {
+                || !mismatchedNameRefused || !nonStyleObjectRefused
+                || !danglingPlotStyleRefused) {
                 (void)tableFacade.rollbackDwgWriteTransaction(transaction);
                 return false;
             }
@@ -10947,10 +10959,6 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         "AC1018 TABLE encoder rejects an unclosed extension-dictionary reference without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) { table.xDictHandle = 0xA90Fu; });
-    expectAtomicPreflightRefusal(
-        "AC1018 TABLE encoder rejects an unclosed plot-style reference without writing",
-        DRW::AC1018,
-        [](TableDwgCodecProbe& table) { table.plotStyle = 0xA910; });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects a null layer reference without writing",
         DRW::AC1018,
@@ -11757,24 +11765,15 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     t.expect(extensionDictionaryRefused && extensionDictionaryCorrectedRetry,
              "AC1018 TABLE refuses an unclosed extension-dictionary handle atomically and accepts corrected same-object retry");
 
-    TableDwgCodecProbe plotStyleRetry = makeEncodableAc1018Table();
-    plotStyleRetry.plotStyle = 0xA910;
-    dwgBufferW plotStyleBody;
-    dwgBufferW plotStyleHandles;
-    plotStyleBody.putRawChar8(0xA5u);
-    plotStyleHandles.putRawChar8(0x5Au);
-    const bool plotStyleRefused =
-        !plotStyleRetry.encodeAsTableClass(
-            DRW::AC1018, plotStyleBody, plotStyleHandles)
-        && plotStyleBody.bitCount() == 8u
-        && plotStyleBody.data().front() == 0xA5u
-        && plotStyleHandles.bitCount() == 8u
-        && plotStyleHandles.data().front() == 0x5Au;
-    plotStyleRetry.plotStyle = DRW::DefaultPlotStyle;
-    const bool plotStyleCorrectedRetry = plotStyleRetry.encodeAsTableClass(
-        DRW::AC1018, plotStyleBody, plotStyleHandles);
-    t.expect(plotStyleRefused && plotStyleCorrectedRetry,
-             "AC1018 TABLE refuses an unclosed plot-style hard pointer atomically and accepts corrected same-object retry");
+    TableDwgCodecProbe directPlotStyle = makeEncodableAc1018Table();
+    directPlotStyle.plotStyle = 0xA910;
+    dwgBufferW directPlotStyleBody;
+    dwgBufferW directPlotStyleHandles;
+    const bool directPlotStyleEncoded = directPlotStyle.encodeAsTableClass(
+        DRW::AC1018, directPlotStyleBody, directPlotStyleHandles);
+    t.expect(directPlotStyleEncoded && directPlotStyleBody.bitCount() > 0u
+                 && directPlotStyleHandles.bitCount() > 0u,
+             "AC1018 TABLE direct codec serializes the selected plot-style handle for an outer graph gate to resolve");
 
     TableDwgCodecProbe appendAc1018Table = makeEncodableAc1018Table();
     dwgBufferW appendTableBody;
