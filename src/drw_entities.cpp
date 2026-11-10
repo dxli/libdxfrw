@@ -14201,6 +14201,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || (!hasAcDbColorH && !colorName.empty())
         || m_tableStyleHandle == 0 || !attribHandles.empty()
         || !attlist.empty()
+        || xDictHandle != 0u
         || seqendH.code != 0u || seqendH.size != 0u
         || seqendH.rawCode != 0u || seqendH.ref != DRW::NoHandle
         || seqendH.ref64 != DRW::NoHandle || seqEndEntity != nullptr

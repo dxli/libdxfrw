@@ -10944,6 +10944,10 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1018,
         [](TableDwgCodecProbe& table) { table.m_tableStyleHandle = 0u; });
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects an unclosed extension-dictionary reference without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.xDictHandle = 0xA90Fu; });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects a null layer reference without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) { table.setDwgLayerHandle(0u); });
@@ -11725,6 +11729,29 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             invalidTableBlockNameHandles);
     t.expect(invalidTableBlockNameRefused && validTableBlockNameRetry,
              "AC1018 TABLE refuses an unrepresentable display name atomically and accepts a corrected anonymous block name on retry");
+
+    TableDwgCodecProbe extensionDictionaryRetry =
+        makeEncodableAc1018Table();
+    extensionDictionaryRetry.xDictHandle = 0xA90Fu;
+    dwgBufferW extensionDictionaryBody;
+    dwgBufferW extensionDictionaryHandles;
+    extensionDictionaryBody.putRawChar8(0xA5u);
+    extensionDictionaryHandles.putRawChar8(0x5Au);
+    const bool extensionDictionaryRefused =
+        !extensionDictionaryRetry.encodeAsTableClass(
+            DRW::AC1018, extensionDictionaryBody,
+            extensionDictionaryHandles)
+        && extensionDictionaryBody.bitCount() == 8u
+        && extensionDictionaryBody.data().front() == 0xA5u
+        && extensionDictionaryHandles.bitCount() == 8u
+        && extensionDictionaryHandles.data().front() == 0x5Au;
+    extensionDictionaryRetry.xDictHandle = 0u;
+    const bool extensionDictionaryCorrectedRetry =
+        extensionDictionaryRetry.encodeAsTableClass(
+            DRW::AC1018, extensionDictionaryBody,
+            extensionDictionaryHandles);
+    t.expect(extensionDictionaryRefused && extensionDictionaryCorrectedRetry,
+             "AC1018 TABLE refuses an unclosed extension-dictionary handle atomically and accepts corrected same-object retry");
 
     TableDwgCodecProbe appendAc1018Table = makeEncodableAc1018Table();
     dwgBufferW appendTableBody;
