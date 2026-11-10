@@ -156,6 +156,32 @@ interoperability result only: it emits no TABLE entity, does not qualify cell
 semantics or `*T` geometry/rendering, and leaves `dwgRW::writeTable`
 fail-closed. See the [whole-file receipt](docs/research/p5-ac1018-table-nod-tablestyle-whole-file-2026-11-10.json).
 
+**AC1018 TABLE implementation ordering (verified against current writer callbacks):**
+`dwgRW::write()` invokes `writeDwgClasses()` and freezes the class manifest
+before emitting TABLES, then invokes `writeBlocks()`, `writeEntities()`, and
+`writeObjects()` in that order. A TABLE class must therefore be registered
+before class freeze; its anonymous `*T` BLOCK_RECORD and owned LINE/MTEXT
+frames must be staged during the block callback; and the TABLE entity can only
+be emitted after those block children exist. The TABLESTYLE/NOD graph currently
+lands in `writeObjects()`, after TABLE entity encoding, so the complete graph
+check in `dwgWriter15::hasClosedAc1018TableBlockGraph()` cannot be used as a
+pre-encode check. Keep the TABLE route refused until it can record the emitted
+TABLE's handle/block/style identity and validate the full closure after object
+emission, before output publication. The outer file transaction must discard
+both the TABLE entity and cached block graph if any later style/ownership check
+fails; caller TABLE state must be restored on that failure. Implement in this
+order: (1) prove and encode the bounded plain-text `*T` child geometry from the
+ODA-converted AC1018 profile, including exact child owner handles, coordinates,
+text extents/heights/attachments, and merge-induced edge suppression; (2) add
+an attempt-local pending TABLE graph ledger and final closure validation after
+`writeObjects()`; (3) enable only the exact representable profile in
+`writeTable()`, with destination-preserving failure and same-writer retry; (4)
+verify fresh libdxfrw and independent LibreDWG whole-file readback. The current
+peer receipt has an unrelated HEADER warning and is not native AutoCAD
+rendering evidence, so keep rendering/producer claims closed. Do not register
+the custom class late from `writeTable()`, validate TABLESTYLE before it is
+emitted, or treat block-ownership closure alone as cell-geometry proof.
+
 **Completed P5 guard slice (2026-11-09, exact cached TABLE string match):**
 the AC1018 direct codec previously compared the cached `DRW_Variant` string
 through `c_str()`. A public value containing an embedded NUL followed by extra

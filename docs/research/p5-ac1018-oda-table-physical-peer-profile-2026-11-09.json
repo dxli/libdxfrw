@@ -40,6 +40,39 @@
         "columnWidths": [152, 152, 152],
         "rowHeights": [11, 9, 9]
       },
+      "peerReadbackGeometry": {
+        "observer": "GNU LibreDWG dwgread 0.14 JSON, scratch output",
+        "jsonSha256": "1e53974f83286b46a595c191543c21ff4cdce6dc7c2c00b4ab5090fc4e7a7cd0",
+        "blockRecordHandle": "0x9d",
+        "ownedEntityCount": 15,
+        "childHandlesByType": {
+          "mtext": ["0x9e", "0x9f", "0xa0", "0xa1", "0xa2", "0xa3", "0xa4"],
+          "line": ["0xa5", "0xa8", "0xa9", "0xaa", "0xab", "0xac", "0xad", "0xae"],
+          "block": "0xa6",
+          "endBlock": "0xa7"
+        },
+        "lineSegments": [
+          [[0, 0, 0], [456, 0, 0]],
+          [[0, -11, 0], [456, -11, 0]],
+          [[0, -20, 0], [456, -20, 0]],
+          [[0, -29, 0], [456, -29, 0]],
+          [[0, 0, 0], [0, -29, 0]],
+          [[456, 0, 0], [456, -29, 0]],
+          [[152, -11, 0], [152, -29, 0]],
+          [[304, -11, 0], [304, -29, 0]]
+        ],
+        "mtext": [
+          {"insert": [228, -5.5, 0], "width": 453, "height": 6, "attachment": 5, "text": "Title", "styleHandle": "0x11"},
+          {"insert": [76, -15.5, 0], "width": 149, "height": 4.5, "attachment": 5, "text": "1", "styleHandle": "0x11"},
+          {"insert": [228, -15.5, 0], "width": 149, "height": 4.5, "attachment": 5, "text": "2", "styleHandle": "0x11"},
+          {"insert": [380, -15.5, 0], "width": 149, "height": 4.5, "attachment": 5, "text": "3", "styleHandle": "0x11"},
+          {"insert": [76, -21.5, 0], "width": 149, "height": 4.5, "attachment": 2, "text": "4", "styleHandle": "0x11"},
+          {"insert": [228, -21.5, 0], "width": 149, "height": 4.5, "attachment": 2, "text": "5", "styleHandle": "0x11"},
+          {"insert": [380, -21.5, 0], "width": 149, "height": 4.5, "attachment": 2, "text": "6", "styleHandle": "0x11"}
+        ],
+        "ownership": "Every listed LINE and MTEXT has owner BLOCK_RECORD 0x9d; handles, insertion points, extents, text, and style handles are direct JSON fields.",
+        "limits": "This is one ODA-converted AC1018 source profile. The observed last-row MTEXT attachment differs from the first two rows and must be preserved by a bounded profile; it is not a general alignment rule or native-rendering proof."
+      },
       "rowMajorText": ["Title", "", "", "1", "2", "3", "4", "5", "6"],
       "tableValueFlag": 22,
       "cellMergeEncodingObserved": {
