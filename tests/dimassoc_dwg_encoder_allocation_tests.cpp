@@ -46,6 +46,11 @@ public:
     using DRW_PlotSettings::encodeDwg;
 };
 
+class ScaleProbe final : public DRW_Scale {
+public:
+    using DRW_Scale::encodeDwg;
+};
+
 DimensionAssociationProbe makeAssociation() {
     DimensionAssociationProbe association;
     association.handle = 0xA100u;
@@ -679,6 +684,81 @@ bool sweepPlotSettings(ImageDefinitionStreams mode) {
               << ", rollback/retry=PASS\n";
     return true;
 }
+
+ScaleProbe makeScale() {
+    ScaleProbe scale;
+    scale.handle = 0xF200u;
+    scale.name = "detail scale";
+    scale.flag = 1u;
+    scale.paperUnits = 1.0;
+    scale.drawingUnits = 24.0;
+    scale.isUnitScale = false;
+    return scale;
+}
+
+bool sweepScale(DRW::Version version, bool separateStringStream,
+                bool passBodyAsStringStream) {
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    const ScaleProbe scale = makeScale();
+    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
+    seed(cleanBody, cleanStrings, cleanHandles);
+    dwgBufferW* cleanStringOutput = separateStringStream
+        ? &cleanStrings : (passBodyAsStringStream ? &cleanBody : nullptr);
+    if (!scale.encodeDwg(version, &cleanBody, cleanStringOutput))
+        return false;
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    seed(body, strings, handles);
+    dwgBufferW* stringOutput = separateStringStream
+        ? &strings : (passBodyAsStringStream ? &body : nullptr);
+    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
+    const unsigned long beforeCalibration =
+        failedAllocations.load(std::memory_order_relaxed);
+    const bool calibrated = scale.encodeDwg(version, &body, stringOutput);
+    const long allocations = 1000000
+        - allocationsBeforeFailure.load(std::memory_order_relaxed);
+    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+    if (!calibrated || allocations <= 0
+        || failedAllocations.load(std::memory_order_relaxed)
+            != beforeCalibration)
+        return false;
+
+    for (long offset = 0; offset < allocations; ++offset) {
+        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
+        seed(failedBody, failedStrings, failedHandles);
+        dwgBufferW* failedStringOutput = separateStringStream
+            ? &failedStrings
+            : (passBodyAsStringStream ? &failedBody : nullptr);
+        const dwgBufferW originalBody = failedBody;
+        const dwgBufferW originalStrings = failedStrings;
+        const dwgBufferW originalHandles = failedHandles;
+        const unsigned long beforeFailure =
+            failedAllocations.load(std::memory_order_relaxed);
+        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
+        const bool encoded = scale.encodeDwg(
+            version, &failedBody, failedStringOutput);
+        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+        if (encoded
+            || failedAllocations.load(std::memory_order_relaxed)
+                != beforeFailure + 1u
+            || !same(failedBody, originalBody)
+            || !same(failedStrings, originalStrings)
+            || !same(failedHandles, originalHandles))
+            return false;
+        if (!scale.encodeDwg(version, &failedBody, failedStringOutput)
+            || !same(failedBody, cleanBody)
+            || !same(failedStrings, cleanStrings)
+            || !same(failedHandles, cleanHandles))
+            return false;
+    }
+    const char* const mode = separateStringStream ? "separate-string"
+        : passBodyAsStringStream ? "explicit-body-alias" : "inline-string";
+    std::cout << "SCALE DWG encoder version=" << static_cast<int>(version)
+              << ' ' << mode << ": allocation offsets=" << allocations
+              << ", rollback/retry=PASS\n";
+    return true;
+}
 } // namespace
 
 void* operator new(std::size_t size) {
@@ -725,7 +805,10 @@ int main() {
         || !sweepPlotSettings(ImageDefinitionStreams::SharedStringAndHandle)
         || !sweepPlotSettings(ImageDefinitionStreams::AllBody)
         || !sweepPlotSettings(ImageDefinitionStreams::BodyStringDetachedHandles)
-        || !sweepPlotSettings(ImageDefinitionStreams::SeparateStringBodyHandles)) {
+        || !sweepPlotSettings(ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepScale(DRW::AC1012, false, false)
+        || !sweepScale(DRW::AC1021, true, false)
+        || !sweepScale(DRW::AC1021, false, true)) {
         allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
         std::cerr << "DIMASSOC DWG encoder allocation transaction failed\n";
         return 1;

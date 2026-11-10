@@ -1253,6 +1253,15 @@ created locally from scratch for the specific control.
   local codec/transaction evidence, not native plotting qualification. No
   fixture was added. See the [allocation rollback receipt](docs/research/p6-plotsettings-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **SCALE DWG encoder transaction safety:** `DRW_Scale::encodeDwg` now stages
+  its body and effective text destination while preserving AC1012 inline and
+  AC1021 detached-string behavior. Generated controls sweep 30 allocation
+  offsets across inline, detached and explicit body-alias cases, with caller
+  rollback and same-object retry. The focused SCALE/PlotSettings graph,
+  object-vector and combined allocation tests pass 3/3. This does not close
+  general SCALE graph or producer semantics. No fixture was added. See the
+  [allocation rollback receipt](docs/research/p6-scale-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

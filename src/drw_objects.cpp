@@ -22072,13 +22072,30 @@ bool DRW_Scale::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || !std::isfinite(drawingUnits) || paperUnits <= 0.0
         || drawingUnits <= 0.0)
         return false;
-    dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018) ? strBuf : buf;
-    buf->putBitShort(flag);
-    sb->putVariableText(version, name);
-    buf->putBitDouble(paperUnits);
-    buf->putBitDouble(drawingUnits);
-    buf->putBit(isUnitScale ? 1 : 0);
-    return buf->isGood() && sb->isGood();
+    const bool separateStrings = strBuf != nullptr && strBuf != buf
+        && version > DRW::AC1018;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    try {
+        stagedBody = *buf;
+        if (separateStrings)
+            stagedStrings = *strBuf;
+        dwgBufferW *sb = separateStrings ? &stagedStrings : &stagedBody;
+        stagedBody.putBitShort(flag);
+        sb->putVariableText(version, name);
+        stagedBody.putBitDouble(paperUnits);
+        stagedBody.putBitDouble(drawingUnits);
+        stagedBody.putBit(isUnitScale ? 1 : 0);
+        if (!stagedBody.isGood() || !sb->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (separateStrings)
+            strBuf->swap(stagedStrings);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 // GROUP encoder — ODA §20.4.72. Body: one text value
