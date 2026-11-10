@@ -22397,33 +22397,67 @@ bool DRW_Dictionary::encodeDwgImpl(DRW::Version version, dwgBufferW *buf,
                                    bool typedLegacyNulls) const {
     if (buf == nullptr || !isDwgPayloadValidImpl(version, withDefaultHandle))
         return false;
-    dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018) ? strBuf : buf;
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
+    dwgBufferW *const stringDest =
+        (strBuf != nullptr && version > DRW::AC1018) ? strBuf : buf;
+    dwgBufferW *const handleDest =
+        (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
 
-    const std::int32_t numItems = static_cast<std::int32_t>(m_entries.size());
-    buf->putBitLong(numItems);
-    if ((version <= DRW::AC1014 && withDefaultHandle)
-        || version > DRW::AC1014) {
-        buf->putBitShort(static_cast<std::uint16_t>(cloning));
-        buf->putRawChar8(static_cast<std::uint8_t>(hardOwner));
-    } else if (version == DRW::AC1014) {
-        buf->putRawChar8(static_cast<std::uint8_t>(hardOwner));
-    }
-    for (const auto& e : m_entries) {
-        sb->putVariableText(version, e.m_name);
-    }
+    const bool separateStrings = stringDest != buf;
+    const bool separateHandles = handleDest != buf && handleDest != stringDest;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *buf;
+        if (separateStrings)
+            stagedStrings = *stringDest;
+        if (separateHandles)
+            stagedHandles = *handleDest;
 
-    // Object handle prefix (owner offset + absolute reactors/xdictionary) must
-    // precede per-entry handles per ODA §20.4.44.
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), numReactors, xDictFlag,
-        &reactorHandles, xDictHandle, DRW::DwgSoftPointer,
-        version >= DRW::AC1018 || (version == DRW::AC1015 && typedLegacyNulls),
-        version == DRW::AC1015 && typedLegacyNulls);
-    for (const auto& e : m_entries) {
-        hb->putHandle(makeRefW(e.m_handle, dwgItemHandleCode()));
+        dwgBufferW *const bodyOut = &stagedBody;
+        dwgBufferW *const stringOut = separateStrings
+            ? &stagedStrings : bodyOut;
+        dwgBufferW *const handleOut = handleDest == buf ? bodyOut
+            : handleDest == stringDest ? stringOut : &stagedHandles;
+
+        const std::int32_t numItems =
+            static_cast<std::int32_t>(m_entries.size());
+        bodyOut->putBitLong(numItems);
+        if ((version <= DRW::AC1014 && withDefaultHandle)
+            || version > DRW::AC1014) {
+            bodyOut->putBitShort(static_cast<std::uint16_t>(cloning));
+            bodyOut->putRawChar8(static_cast<std::uint8_t>(hardOwner));
+        } else if (version == DRW::AC1014) {
+            bodyOut->putRawChar8(static_cast<std::uint8_t>(hardOwner));
+        }
+        for (const auto& e : m_entries) {
+            stringOut->putVariableText(version, e.m_name);
+        }
+
+        // Object handle prefix (owner offset + absolute reactors/xdictionary)
+        // must precede per-entry handles per ODA §20.4.44.
+        putCommonObjectHandlePrefix(
+            handleOut, static_cast<std::uint32_t>(parentHandle), numReactors,
+            xDictFlag, &reactorHandles, xDictHandle, DRW::DwgSoftPointer,
+            version >= DRW::AC1018
+                || (version == DRW::AC1015 && typedLegacyNulls),
+            version == DRW::AC1015 && typedLegacyNulls);
+        for (const auto& e : m_entries) {
+            handleOut->putHandle(makeRefW(e.m_handle, dwgItemHandleCode()));
+        }
+        if (!bodyOut->isGood() || !stringOut->isGood()
+            || !handleOut->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (separateStrings)
+            stringDest->swap(stagedStrings);
+        if (separateHandles)
+            handleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    return buf->isGood() && sb->isGood() && hb->isGood();
 }
 
 // RASTERVARIABLES (AcDbRasterVariables) encoder — ODA §20.4.91.  Inverts

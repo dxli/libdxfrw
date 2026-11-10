@@ -51,6 +51,11 @@ public:
     using DRW_Layout::encodeDwg;
 };
 
+class DictionaryProbe final : public DRW_Dictionary {
+public:
+    using DRW_Dictionary::encodeDwg;
+};
+
 class ScaleProbe final : public DRW_Scale {
 public:
     using DRW_Scale::encodeDwg;
@@ -853,6 +858,114 @@ bool sweepLayout(ImageDefinitionStreams mode) {
     return true;
 }
 
+DictionaryProbe makeDictionary() {
+    DictionaryProbe dictionary;
+    dictionary.handle = 0xF1A0u;
+    dictionary.parentHandle = 0x20u;
+    dictionary.reactorHandles = {0x21u, 0x22u};
+    dictionary.xDictHandle = 0x23u;
+    dictionary.cloning = 2;
+    dictionary.hardOwner = 1;
+    dictionary.m_entries = {
+        {"ACAD_GROUP", 0x31u},
+        {"ACAD_MLINESTYLE", 0x32u},
+        {"ACAD_PLOTSETTINGS", 0x33u}
+    };
+    return dictionary;
+}
+
+bool sweepDictionary(DRW::Version version, ImageDefinitionStreams mode) {
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    const DictionaryProbe dictionary = makeDictionary();
+    const auto outputs = [mode](dwgBufferW& body, dwgBufferW& strings,
+                                dwgBufferW& handles) {
+        dwgBufferW* stringOutput = nullptr;
+        dwgBufferW* handleOutput = nullptr;
+        switch (mode) {
+        case ImageDefinitionStreams::R13InlineSeparateArguments:
+        case ImageDefinitionStreams::R2004DetachedHandles:
+        case ImageDefinitionStreams::Separate:
+            stringOutput = &strings;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SharedStringAndHandle:
+            stringOutput = &strings;
+            handleOutput = &strings;
+            break;
+        case ImageDefinitionStreams::AllBody:
+            break;
+        case ImageDefinitionStreams::BodyStringDetachedHandles:
+            stringOutput = &body;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SeparateStringBodyHandles:
+            stringOutput = &strings;
+            handleOutput = &body;
+            break;
+        }
+        return std::pair<dwgBufferW*, dwgBufferW*>(stringOutput, handleOutput);
+    };
+
+    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
+    seed(cleanBody, cleanStrings, cleanHandles);
+    const auto cleanOutput = outputs(cleanBody, cleanStrings, cleanHandles);
+    if (!dictionary.encodeDwg(version, &cleanBody, cleanOutput.first,
+                              cleanOutput.second))
+        return false;
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    seed(body, strings, handles);
+    const auto output = outputs(body, strings, handles);
+    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
+    const unsigned long beforeCalibration =
+        failedAllocations.load(std::memory_order_relaxed);
+    const bool calibrated = dictionary.encodeDwg(
+        version, &body, output.first, output.second);
+    const long allocations = 1000000
+        - allocationsBeforeFailure.load(std::memory_order_relaxed);
+    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+    if (!calibrated || allocations <= 0
+        || failedAllocations.load(std::memory_order_relaxed)
+            != beforeCalibration)
+        return false;
+
+    for (long offset = 0; offset < allocations; ++offset) {
+        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
+        seed(failedBody, failedStrings, failedHandles);
+        const auto failedOutput = outputs(
+            failedBody, failedStrings, failedHandles);
+        const dwgBufferW originalBody = failedBody;
+        const dwgBufferW originalStrings = failedStrings;
+        const dwgBufferW originalHandles = failedHandles;
+        const unsigned long beforeFailure =
+            failedAllocations.load(std::memory_order_relaxed);
+        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
+        const bool encoded = dictionary.encodeDwg(
+            version, &failedBody, failedOutput.first, failedOutput.second);
+        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+        if (encoded
+            || failedAllocations.load(std::memory_order_relaxed)
+                != beforeFailure + 1u
+            || !same(failedBody, originalBody)
+            || !same(failedStrings, originalStrings)
+            || !same(failedHandles, originalHandles))
+            return false;
+        if (!dictionary.encodeDwg(version, &failedBody, failedOutput.first,
+                                  failedOutput.second)
+            || !same(failedBody, cleanBody)
+            || !same(failedStrings, cleanStrings)
+            || !same(failedHandles, cleanHandles))
+            return false;
+    }
+    std::cout << "DICTIONARY DWG encoder version="
+              << static_cast<int>(version)
+              << " stream mode=" << static_cast<int>(mode)
+              << ": allocation offsets=" << allocations
+              << ", rollback/retry=PASS\n";
+    return true;
+}
+
 ScaleProbe makeScale() {
     ScaleProbe scale;
     scale.handle = 0xF200u;
@@ -1093,6 +1206,22 @@ int main() {
         || !sweepLayout(ImageDefinitionStreams::AllBody)
         || !sweepLayout(ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepLayout(ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepDictionary(DRW::AC1012,
+                ImageDefinitionStreams::R13InlineSeparateArguments)
+        || !sweepDictionary(DRW::AC1014,
+                ImageDefinitionStreams::R13InlineSeparateArguments)
+        || !sweepDictionary(DRW::AC1015,
+                ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepDictionary(DRW::AC1018,
+                ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepDictionary(DRW::AC1021, ImageDefinitionStreams::Separate)
+        || !sweepDictionary(DRW::AC1021,
+                ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepDictionary(DRW::AC1021, ImageDefinitionStreams::AllBody)
+        || !sweepDictionary(DRW::AC1021,
+                ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepDictionary(DRW::AC1021,
+                ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepScale(DRW::AC1012, false, false)
         || !sweepScale(DRW::AC1021, true, false)
         || !sweepScale(DRW::AC1021, false, true)

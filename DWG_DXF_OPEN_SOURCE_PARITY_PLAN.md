@@ -1286,6 +1286,20 @@ created locally from scratch for the specific control.
   graph/output claims. No fixture was added. See the [LAYOUT allocation
   receipt](docs/research/p6-layout-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **DICTIONARY DWG encoder transaction safety:** `DRW_Dictionary::encodeDwgImpl`
+  now stages each distinct effective body, string, and handle destination. The
+  private typed-writer route shares this implementation. Generated public
+  `encodeDwg` AC1012/AC1014/AC1015/AC1018/AC1021 controls sweep 201 allocation
+  offsets across nine version/alias cases; failures preserve caller bytes,
+  cursors and handle ledgers, and the same dictionary retries to clean output.
+  The combined encoder allocation,
+  DWG object-vector, group/dictionary, legacy-link and handle-role tests pass.
+  Across the current combined allocation target, the covered encoder families
+  now sweep 1,097 offsets across 50 stream/version cases.
+  This closes only local transaction behavior, not dictionary graph closure or
+  broad source/output support. No fixture was added. See the [DICTIONARY
+  allocation receipt](docs/research/p6-dictionary-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
