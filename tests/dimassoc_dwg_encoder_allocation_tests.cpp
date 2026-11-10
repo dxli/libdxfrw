@@ -1412,6 +1412,80 @@ bool sweepVport(ImageDefinitionStreams mode) {
         names[static_cast<std::size_t>(mode)], version, encode, outputs);
 }
 
+DRW_LType makeLtype() {
+    DRW_LType ltype;
+    ltype.handle = 0xB500u;
+    ltype.parentHandle = 0x20u;
+    ltype.reactorHandles = {0x21u, 0x22u};
+    ltype.setDwgCommonObjectState(2, 1u, false);
+    ltype.xDictHandle = 0x23u;
+    ltype.name = "LOCAL_LTYPE";
+    ltype.desc = "generated complex pattern";
+    ltype.flags = 0;
+    ltype.size = 2;
+    ltype.length = 0.75;
+    ltype.path = {0.5, -0.25};
+    DRW_LTypeSegment dash;
+    dash.length = 0.5;
+    DRW_LTypeSegment shape;
+    shape.length = -0.25;
+    shape.complexShapeCode = 3;
+    shape.shapeFlags = 2;
+    shape.text = "SHAPE";
+    shape.styleHandle.ref = 0x24u;
+    ltype.segments = {dash, shape};
+    ltype.xrefBlockHandle.ref = 0x25u;
+    return ltype;
+}
+
+bool sweepLtype(ImageDefinitionStreams mode) {
+    const DRW::Version version =
+        mode == ImageDefinitionStreams::R13InlineSeparateArguments
+            ? DRW::AC1012
+            : mode == ImageDefinitionStreams::R2004DetachedHandles
+                ? DRW::AC1018 : DRW::AC1021;
+    const DRW_LType ltype = makeLtype();
+    const auto encode = [&ltype](DRW::Version v, dwgBufferW* body,
+                                 dwgBufferW* strings, dwgBufferW* handles) {
+        return ltype.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [mode](dwgBufferW& body, dwgBufferW& strings,
+                                dwgBufferW& handles) {
+        dwgBufferW* stringOutput = nullptr;
+        dwgBufferW* handleOutput = nullptr;
+        switch (mode) {
+        case ImageDefinitionStreams::R13InlineSeparateArguments:
+        case ImageDefinitionStreams::R2004DetachedHandles:
+        case ImageDefinitionStreams::Separate:
+            stringOutput = &strings;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SharedStringAndHandle:
+            stringOutput = &strings;
+            handleOutput = &strings;
+            break;
+        case ImageDefinitionStreams::AllBody:
+            break;
+        case ImageDefinitionStreams::BodyStringDetachedHandles:
+            stringOutput = &body;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SeparateStringBodyHandles:
+            stringOutput = &strings;
+            handleOutput = &body;
+            break;
+        }
+        return EncoderOutputs{stringOutput, handleOutput};
+    };
+    static const char* const names[] = {
+        "AC1012-inline", "AC1018-detached-handles", "separate",
+        "shared-string-handle", "all-body", "body-string-detached-handles",
+        "separate-string-body-handles"
+    };
+    return sweepTransactionalEncoder("LTYPE",
+        names[static_cast<std::size_t>(mode)], version, encode, outputs);
+}
+
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
     GeoDataProbe geo;
     geo.handle = 0xA900u;
@@ -2674,6 +2748,14 @@ int main() {
         || !sweepVport(ImageDefinitionStreams::AllBody)
         || !sweepVport(ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepVport(
+            ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepLtype(ImageDefinitionStreams::R13InlineSeparateArguments)
+        || !sweepLtype(ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepLtype(ImageDefinitionStreams::Separate)
+        || !sweepLtype(ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepLtype(ImageDefinitionStreams::AllBody)
+        || !sweepLtype(ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepLtype(
             ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)

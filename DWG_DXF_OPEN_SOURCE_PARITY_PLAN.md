@@ -1508,6 +1508,17 @@ created locally from scratch for the specific control.
   allocation receipt](docs/research/p6-vport-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 3,182 offsets across 155 cases.
 
+- **LTYPE DWG encoder transaction safety:**
+  `DRW_LType::encodeDwgForWriter` and `encodeDwgResolved` now catch failures
+  during resolved-copy/update and pattern text-area planning, stage body,
+  strings, and handles, and publish only after the fixed text area and ordered
+  handle tail succeed. Seven AC1012/AC1018/AC1021 generated layouts sweep 256
+  allocation offsets with rollback and same-source retry. The allocation,
+  object-vector, version-count, mirror-authority, extension-graph, and table-
+  membership tests pass 8/8. No fixture was added. See the [LTYPE allocation
+  receipt](docs/research/p6-ltype-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 3,438 offsets across 162 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

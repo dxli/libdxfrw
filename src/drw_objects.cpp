@@ -8525,19 +8525,24 @@ bool DRW_LType::encodeDwg(DRW::Version version, dwgBufferW *buf,
 }
 
 bool DRW_LType::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
-                                    dwgBufferW *strBuf, dwgBufferW *hdlBuf,
-                                    bool typedLegacyNulls) const {
+                                   dwgBufferW *strBuf, dwgBufferW *hdlBuf,
+                                   bool typedLegacyNulls) const {
     if (buf == nullptr)
         return false;
-    DRW_LType resolved = *this;
-    if (!resolved.update() || !resolved.validatePayloadFields())
+    try {
+        DRW_LType resolved = *this;
+        if (!resolved.update() || !resolved.validatePayloadFields())
+            return false;
+        return resolved.encodeDwgResolved(version, buf, strBuf, hdlBuf,
+                                          typedLegacyNulls);
+    } catch (...) {
         return false;
-    return resolved.encodeDwgResolved(version, buf, strBuf, hdlBuf,
-                                      typedLegacyNulls);
+    }
 }
 
 bool DRW_LType::encodeDwgResolved(DRW::Version version, dwgBufferW *buf,
-                                  dwgBufferW *strBuf, dwgBufferW *hdlBuf) const {
+                                  dwgBufferW *strBuf,
+                                  dwgBufferW *hdlBuf) const {
     return encodeDwgResolved(version, buf, strBuf, hdlBuf, false);
 }
 
@@ -8546,110 +8551,153 @@ bool DRW_LType::encodeDwgResolved(DRW::Version version, dwgBufferW *buf,
                                   bool typedLegacyNulls) const {
     if (buf == nullptr || !validatePayloadFields())
         return false;
-    dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
-    dwgBufferW *hb = (hdlBuf && version > DRW::AC1014) ? hdlBuf : buf;
+    try {
+        dwgBufferW *const callerBody = buf;
+        dwgBufferW *const callerStringDest =
+            (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+        dwgBufferW *const callerHandleDest =
+            (hdlBuf != nullptr && version > DRW::AC1014) ? hdlBuf : callerBody;
+        const bool separateStrings = callerStringDest != callerBody;
+        const bool separateHandles = callerHandleDest != callerBody &&
+                                     callerHandleDest != callerStringDest;
+        dwgBufferW stagedBody;
+        dwgBufferW stagedStrings;
+        dwgBufferW stagedHandles;
+        stagedBody = *callerBody;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
 
-    const bool useSegments = !segments.empty();
-    std::vector<std::uint8_t> stringArea;
-    bool haveStrArea = false;
-    for (const auto& segment : segments)
-        haveStrArea |= (segment.shapeFlags & 0x02) != 0;
-    const bool unicodeStringArea = version >= DRW::AC1021;
-    const std::size_t stringAreaSize = unicodeStringArea ? 512u : 256u;
-    if (version < DRW::AC1021 || haveStrArea) {
-        stringArea.assign(stringAreaSize, 0);
-    }
-    // ODA 20.4.58 fixes this area at 256/512 bytes. Plan every text offset
-    // before touching any output stream: offset zero is valid content, not
-    // a fallback when a later string does not fit. Empty strings also occupy
-    // a terminator so they cannot alias an earlier non-empty string.
-    std::vector<std::uint16_t> shapeCodes;
-    shapeCodes.reserve(static_cast<std::size_t>(size));
-    std::size_t textOffset = version <= DRW::AC1014 ? 1u : 0u;
-    const DRW_LTypeSegment simpleSegment;
-    for (int i = 0; i < size; ++i) {
-        const DRW_LTypeSegment& segment = useSegments
-            ? segments[static_cast<std::size_t>(i)] : simpleSegment;
-        std::uint16_t shapeCode = static_cast<std::uint16_t>(
-            segment.complexShapeCode);
-        if ((segment.shapeFlags & 0x02) != 0) {
-            const std::size_t terminatorSize = unicodeStringArea ? 2u : 1u;
-            if (textOffset > stringArea.size()
-                || terminatorSize > stringArea.size() - textOffset)
-                return false;
-            const std::size_t remaining = stringArea.size() - textOffset - terminatorSize;
-            // A valid UTF-8 scalar consumes at most four input bytes and at
-            // least one target byte. This conservative bound limits temporary
-            // conversion storage; the actual budget below is encoded bytes.
-            if (segment.text.size() > remaining * 4u)
-                return false;
-            const std::string encoded =
-                sb->encodeTextAreaString(segment.text, unicodeStringArea);
-            if (encoded.size() > remaining
-                || encoded.size() % terminatorSize != 0)
-                return false;
-            // A NUL inside the encoded payload cannot be distinguished from
-            // its terminator. Reject it rather than silently truncating text.
-            for (std::size_t pos = 0; pos < encoded.size(); pos += terminatorSize) {
-                if (encoded[pos] == '\0'
-                    && (!unicodeStringArea || encoded[pos + 1u] == '\0'))
-                    return false;
-            }
-            shapeCode = static_cast<std::uint16_t>(textOffset);
-            std::copy(encoded.begin(), encoded.end(),
-                      stringArea.begin() +
-                          static_cast<std::vector<std::uint8_t>::difference_type>(textOffset));
-            textOffset += encoded.size() + terminatorSize;
+        buf = &stagedBody;
+        strBuf = separateStrings ? &stagedStrings : buf;
+        hdlBuf = separateHandles ? &stagedHandles
+                 : callerHandleDest == callerStringDest && separateStrings
+                     ? &stagedStrings
+                     : buf;
+        dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
+        dwgBufferW *hb = (hdlBuf && version > DRW::AC1014) ? hdlBuf : buf;
+
+        const bool useSegments = !segments.empty();
+        std::vector<std::uint8_t> stringArea;
+        bool haveStrArea = false;
+        for (const auto &segment : segments)
+            haveStrArea |= (segment.shapeFlags & 0x02) != 0;
+        const bool unicodeStringArea = version >= DRW::AC1021;
+        const std::size_t stringAreaSize = unicodeStringArea ? 512u : 256u;
+        if (version < DRW::AC1021 || haveStrArea) {
+            stringArea.assign(stringAreaSize, 0);
         }
-        shapeCodes.push_back(shapeCode);
-    }
+        // ODA 20.4.58 fixes this area at 256/512 bytes. Plan every text offset
+        // before touching any output stream: offset zero is valid content, not
+        // a fallback when a later string does not fit. Empty strings also
+        // occupy a terminator so they cannot alias an earlier non-empty string.
+        std::vector<std::uint16_t> shapeCodes;
+        shapeCodes.reserve(static_cast<std::size_t>(size));
+        std::size_t textOffset = version <= DRW::AC1014 ? 1u : 0u;
+        const DRW_LTypeSegment simpleSegment;
+        for (int i = 0; i < size; ++i) {
+            const DRW_LTypeSegment &segment =
+                useSegments ? segments[static_cast<std::size_t>(i)]
+                            : simpleSegment;
+            std::uint16_t shapeCode =
+                static_cast<std::uint16_t>(segment.complexShapeCode);
+            if ((segment.shapeFlags & 0x02) != 0) {
+                const std::size_t terminatorSize = unicodeStringArea ? 2u : 1u;
+                if (textOffset > stringArea.size() ||
+                    terminatorSize > stringArea.size() - textOffset)
+                    return false;
+                const std::size_t remaining =
+                    stringArea.size() - textOffset - terminatorSize;
+                // A valid UTF-8 scalar consumes at most four input bytes and at
+                // least one target byte. This conservative bound limits
+                // temporary conversion storage; the actual budget below is
+                // encoded bytes.
+                if (segment.text.size() > remaining * 4u)
+                    return false;
+                const std::string encoded =
+                    sb->encodeTextAreaString(segment.text, unicodeStringArea);
+                if (encoded.size() > remaining ||
+                    encoded.size() % terminatorSize != 0)
+                    return false;
+                // A NUL inside the encoded payload cannot be distinguished from
+                // its terminator. Reject it rather than silently truncating
+                // text.
+                for (std::size_t pos = 0; pos < encoded.size();
+                     pos += terminatorSize) {
+                    if (encoded[pos] == '\0' &&
+                        (!unicodeStringArea || encoded[pos + 1u] == '\0'))
+                        return false;
+                }
+                shapeCode = static_cast<std::uint16_t>(textOffset);
+                std::copy(
+                    encoded.begin(), encoded.end(),
+                    stringArea.begin() +
+                        static_cast<std::vector<std::uint8_t>::difference_type>(
+                            textOffset));
+                textOffset += encoded.size() + terminatorSize;
+            }
+            shapeCodes.push_back(shapeCode);
+        }
 
-    sb->putVariableText(version, name);
-    putTableEntryXrefFlags(version, *buf, flags);
-    sb->putVariableText(version, desc);
-    buf->putBitDouble(length);
-    buf->putRawChar8(static_cast<std::uint8_t>(alignment));
-    buf->putRawChar8(static_cast<std::uint8_t>(size));
-    for (int i = 0; i < size; ++i) {
-        const DRW_LTypeSegment& segment = useSegments
-            ? segments[static_cast<std::size_t>(i)] : simpleSegment;
-        buf->putBitDouble(useSegments ? segment.length
-                         : path[static_cast<std::size_t>(i)]);
-        buf->putBitShort(shapeCodes[static_cast<std::size_t>(i)]);
-        buf->putRawDouble(segment.xOffset);
-        buf->putRawDouble(segment.yOffset);
-        buf->putBitDouble(segment.scale);
-        buf->putBitDouble(segment.rotation);
-        buf->putBitShort(static_cast<std::uint16_t>(segment.shapeFlags));
-    }
+        sb->putVariableText(version, name);
+        putTableEntryXrefFlags(version, *buf, flags);
+        sb->putVariableText(version, desc);
+        buf->putBitDouble(length);
+        buf->putRawChar8(static_cast<std::uint8_t>(alignment));
+        buf->putRawChar8(static_cast<std::uint8_t>(size));
+        for (int i = 0; i < size; ++i) {
+            const DRW_LTypeSegment &segment =
+                useSegments ? segments[static_cast<std::size_t>(i)]
+                            : simpleSegment;
+            buf->putBitDouble(useSegments ? segment.length
+                                          : path[static_cast<std::size_t>(i)]);
+            buf->putBitShort(shapeCodes[static_cast<std::size_t>(i)]);
+            buf->putRawDouble(segment.xOffset);
+            buf->putRawDouble(segment.yOffset);
+            buf->putBitDouble(segment.scale);
+            buf->putBitDouble(segment.rotation);
+            buf->putBitShort(static_cast<std::uint16_t>(segment.shapeFlags));
+        }
 
-    if (!stringArea.empty())
-        buf->putBytes(stringArea.data(), stringArea.size());
+        if (!stringArea.empty())
+            buf->putBytes(stringArea.data(), stringArea.size());
 
-    // ODA 20.4.58: control, reactors, xdictionary, external-reference block,
-    // then one hard-pointer shapefile handle per dash.
-    putCommonObjectHandlePrefix(
-        hb, kLtypeControl,
-        static_cast<std::int32_t>(reactorHandles.size()), xDictFlag,
-        &reactorHandles, xDictHandle, DRW::DwgSoftPointer, false,
-        version == DRW::AC1015 && typedLegacyNulls);
-    dwgHandle xref = makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer);
-    // Preserve an explicitly typed null; legacy untyped nulls stay unchanged.
-    if (xrefBlockHandle.ref == 0u
-        && ((version >= DRW::AC1018 && xrefBlockHandle.code == DRW::DwgHardPointer)
-            || (version == DRW::AC1015 && typedLegacyNulls)))
-        xref.code = DRW::DwgHardPointer;
-    hb->putHandle(xref);
-    for (int i = 0; i < size; ++i) {
-        const std::size_t index = static_cast<std::size_t>(i);
-        std::uint32_t ref = 0;
-        if (useSegments)
-            ref = segments[index].styleHandle.ref;
-        if (ref == 0 && !shapeHandles.empty())
-            ref = shapeHandles[index];
-        hb->putHandle(makeRefW(ref, DRW::DwgHardPointer));
+        // ODA 20.4.58: control, reactors, xdictionary, external-reference
+        // block, then one hard-pointer shapefile handle per dash.
+        putCommonObjectHandlePrefix(
+            hb, kLtypeControl, static_cast<std::int32_t>(reactorHandles.size()),
+            xDictFlag, &reactorHandles, xDictHandle, DRW::DwgSoftPointer, false,
+            version == DRW::AC1015 && typedLegacyNulls);
+        dwgHandle xref = makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer);
+        // Preserve an explicitly typed null; legacy untyped nulls stay
+        // unchanged.
+        if (xrefBlockHandle.ref == 0u &&
+            ((version >= DRW::AC1018 &&
+              xrefBlockHandle.code == DRW::DwgHardPointer) ||
+             (version == DRW::AC1015 && typedLegacyNulls)))
+            xref.code = DRW::DwgHardPointer;
+        hb->putHandle(xref);
+        for (int i = 0; i < size; ++i) {
+            const std::size_t index = static_cast<std::size_t>(i);
+            std::uint32_t ref = 0;
+            if (useSegments)
+                ref = segments[index].styleHandle.ref;
+            if (ref == 0 && !shapeHandles.empty())
+                ref = shapeHandles[index];
+            hb->putHandle(makeRefW(ref, DRW::DwgHardPointer));
+        }
+        if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    return buf->isGood() && sb->isGood() && hb->isGood();
 }
 
 bool DRW_LType::validatePayloadFields() const {
