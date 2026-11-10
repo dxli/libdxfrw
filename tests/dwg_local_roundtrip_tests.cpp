@@ -13899,7 +13899,7 @@ bool runDwgTableWriterRefusal(const std::filesystem::path& directory) {
             && skips.entityWrites == 1u && after == sentinel
             && diagnostic.phase == DRW::OperationPhase::Validation
             && diagnostic.cause == DRW::OperationCause::ValidationFailure
-            && diagnostic.code == "unsupported-table-dwg-encoding"
+            && diagnostic.code == "unsupported-table-dwg-profile"
             && diagnostic.hasHandle && diagnostic.handle == 0xF703u;
         previous.close();
         std::error_code ec;
@@ -37845,8 +37845,11 @@ namespace {
 
 class TableStyleNodWholeFileAdapter final : public dx_iface {
 public:
-    explicit TableStyleNodWholeFileAdapter(dwgRW* writer, dx_data* data)
-        : m_writer(writer), m_data(data) {
+    explicit TableStyleNodWholeFileAdapter(dwgRW* writer, dx_data* data,
+                                           bool emitTable = false,
+                                           bool omitTableStyleRoot = false)
+        : m_writer(writer), m_data(data), m_emitTable(emitTable),
+          m_omitTableStyleRoot(omitTableStyleRoot) {
         cData = data;
         dictionary.handle = kDictionaryHandle;
         dictionary.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
@@ -37868,17 +37871,89 @@ public:
             }
             style.m_rowStyles.push_back(row);
         }
+        initializeTable();
     }
 
     void writeDwgClasses() override {
         ready = m_writer != nullptr && m_data != nullptr
             && m_writer->registerDwgNamedObjectDictionaryEntry(
-                "ACAD_TABLESTYLE", kDictionaryHandle)
-            && m_writer->registerTableStyleObjectClass(&style);
+                m_omitTableStyleRoot ? "ACAD_TABLESTYLE_WRONG"
+                                     : "ACAD_TABLESTYLE",
+                kDictionaryHandle);
+        if (ready && m_emitTable)
+            ready = m_writer->registerTableEntityClass(&table);
+        if (ready)
+            ready = m_writer->registerTableStyleObjectClass(&style);
     }
-    void writeBlocks() override {}
+    void writeBlocks() override {
+        if (!m_emitTable)
+            return;
+        const std::uint32_t blockRecord = m_writer->defineBlock(
+            "*T1", DRW_Coord(0.0, 0.0, 0.0));
+        if (blockRecord == 0u || !m_writer->beginBlockContent(blockRecord)) {
+            ready = false;
+            return;
+        }
+        table.blockRecH.ref = blockRecord;
+        const std::array<std::array<DRW_Coord, 2>, 8> lines {{
+            {{{0, 0, 0}, {456, 0, 0}}},
+            {{{0, -11, 0}, {456, -11, 0}}},
+            {{{0, -20, 0}, {456, -20, 0}}},
+            {{{0, -29, 0}, {456, -29, 0}}},
+            {{{0, 0, 0}, {0, -29, 0}}},
+            {{{456, 0, 0}, {456, -29, 0}}},
+            {{{152, -11, 0}, {152, -29, 0}}},
+            {{{304, -11, 0}, {304, -29, 0}}}
+        }};
+        for (const auto& points : lines) {
+            DRW_Line line;
+            line.basePoint = points[0];
+            line.secPoint = points[1];
+            line.lineType = "ByBlock";
+            line.color = 0;
+            if (!m_writer->writeLine(&line)) {
+                ready = false;
+                break;
+            }
+        }
+        struct CachedText {
+            DRW_Coord insert;
+            double width;
+            double height;
+            int attachment;
+            const char* text;
+        };
+        const std::array<CachedText, 7> texts {{
+            {DRW_Coord(228, -5.5, 0), 453, 6, 5, "Title"},
+            {DRW_Coord(76, -15.5, 0), 149, 4.5, 5, "1"},
+            {DRW_Coord(228, -15.5, 0), 149, 4.5, 5, "2"},
+            {DRW_Coord(380, -15.5, 0), 149, 4.5, 5, "3"},
+            {DRW_Coord(76, -21.5, 0), 149, 4.5, 2, "4"},
+            {DRW_Coord(228, -21.5, 0), 149, 4.5, 2, "5"},
+            {DRW_Coord(380, -21.5, 0), 149, 4.5, 2, "6"}
+        }};
+        for (const CachedText& cached : texts) {
+            DRW_MText text;
+            text.basePoint = cached.insert;
+            text.widthscale = cached.width;
+            text.height = cached.height;
+            text.textgen = cached.attachment;
+            text.alignH = DRW_Text::HFit;
+            text.text = cached.text;
+            text.style = "STANDARD";
+            if (!m_writer->writeMText(&text)) {
+                ready = false;
+                break;
+            }
+        }
+        if (!m_writer->endBlockContent())
+            ready = false;
+    }
     void writeBlockRecords() override {}
-    void writeEntities() override {}
+    void writeEntities() override {
+        if (m_emitTable && (!ready || !m_writer->writeTable(&table)))
+            ready = false;
+    }
     void writeLTypes() override {}
     void writeLayers() override {}
     void writeTextstyles() override {}
@@ -37898,10 +37973,67 @@ public:
     dx_data* m_data {nullptr};
     DRW_Dictionary dictionary;
     DRW_TableStyle style;
+    DRW_Table table;
     bool ready {false};
+
+    void setOmitTableStyleRoot(bool omit) noexcept {
+        m_omitTableStyleRoot = omit;
+    }
+
+private:
+    void initializeTable() {
+        if (!m_emitTable)
+            return;
+        table.handle = 0xA720u;
+        table.parentHandle = DRW::NoHandle;
+        table.name = "*T1";
+        table.basePoint = DRW_Coord(105.0, 145.0, 0.0);
+        table.extPoint = DRW_Coord(0.0, 0.0, 1.0);
+        table.m_horizontalDirection = DRW_Coord(0.0, 1.0, 0.0);
+        table.colcount = 3;
+        table.rowcount = 3;
+        table.m_hasSemanticContent = true;
+        table.m_semanticContentComplete = true;
+        table.m_tableStyleHandle = kStyleHandle;
+        table.m_content.m_tableStyleHandle = kStyleHandle;
+        for (int column = 0; column < 3; ++column) {
+            DRW_TableColumn item;
+            item.m_width = 152.0;
+            table.m_content.m_columns.push_back(item);
+        }
+        const std::array<double, 3> heights {{11.0, 9.0, 9.0}};
+        const std::array<std::array<const char*, 3>, 3> values {{
+            {{"Title", "", ""}}, {{"1", "2", "3"}},
+            {{"4", "5", "6"}}
+        }};
+        for (std::size_t rowIndex = 0; rowIndex < 3u; ++rowIndex) {
+            DRW_TableRow row;
+            row.m_height = heights[rowIndex];
+            for (std::size_t column = 0; column < 3u; ++column) {
+                DRW_TableCell cell;
+                cell.m_type = 1;
+                cell.m_mergedWidth = 1;
+                cell.m_mergedHeight = 1;
+                if (rowIndex == 0u && column == 0u)
+                    cell.m_mergedWidth = 3;
+                else if (rowIndex == 0u && column != 0u)
+                    cell.m_isMerged = true;
+                DRW_TableCellContent content;
+                content.m_type = 1;
+                content.m_text = values[rowIndex][column];
+                cell.m_contents.push_back(content);
+                row.m_cells.push_back(cell);
+            }
+            table.m_content.m_rows.push_back(row);
+        }
+    }
+
+    bool m_emitTable {false};
+    bool m_omitTableStyleRoot {false};
 };
 
-bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr) {
+bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
+                                         bool emitTable = false) {
     const auto nonce = std::chrono::steady_clock::now()
                            .time_since_epoch().count();
     const auto path = retainedOutput != nullptr
@@ -37922,17 +38054,46 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr) {
 
     dx_data writerData;
     dwgRW output(path.string().c_str());
-    TableStyleNodWholeFileAdapter producer(&output, &writerData);
-    if (!output.write(&producer, DRW::AC1018, true) || !producer.ready)
+    TableStyleNodWholeFileAdapter producer(
+        &output, &writerData, emitTable, emitTable);
+    if (emitTable) {
+        const std::string sentinel =
+            "preserve destination when TABLE graph is incomplete\n";
+        {
+            std::ofstream previous(path, std::ios::binary | std::ios::trunc);
+            previous << sentinel;
+            if (!previous)
+                return false;
+        }
+        const bool rejected = !output.write(&producer, DRW::AC1018, true)
+            && producer.ready;
+        std::ifstream previous(path, std::ios::binary);
+        const std::string after((std::istreambuf_iterator<char>(previous)),
+                                std::istreambuf_iterator<char>());
+        if (!rejected || after != sentinel
+            || producer.table.getDwgClassNum() != 0u
+            || producer.table.blockRecH.ref != 0u
+            || producer.table.handle != 0xA720u
+            || producer.table.parentHandle != DRW::NoHandle)
+            return false;
+
+        producer.setOmitTableStyleRoot(false);
+    }
+    if (!output.write(&producer, DRW::AC1018, true) || !producer.ready) {
+        const DRW_OperationDiagnostic diagnostic = output.getLastDiagnostic();
         return false;
+    }
 
     dx_data readData;
     dx_iface freshReader;
     freshReader.cData = &readData;
     dwgRW input(path.string().c_str());
     if (!input.read(&freshReader, false)
-        || !readData.hasNamedObjectDictionary)
+        || !readData.hasNamedObjectDictionary) {
+        std::cerr << "TABLE readback failed diagnostic="
+                  << input.getLastDiagnostic().code << '\n';
         return false;
+    }
 
     const auto sameAsciiSymbol = [](const std::string& lhs,
                                     const std::string& rhs) {
@@ -37983,8 +38144,108 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr) {
             || style.m_rowStyles[2].m_textHeight != 3.0)
             return false;
     }
-    return styleMatches == 1u
-        && emittedStyleHandle == TableStyleNodWholeFileAdapter::kStyleHandle;
+    if (styleMatches != 1u
+        || emittedStyleHandle != TableStyleNodWholeFileAdapter::kStyleHandle) {
+        std::cerr << "TABLE style readback mismatch matches=" << styleMatches
+                  << " handle=" << emittedStyleHandle << '\n';
+        return false;
+    }
+    if (!emitTable)
+        return true;
+
+    const DRW_Table* table = nullptr;
+    for (const DRW_Table& candidate : readData.tables) {
+        if (table != nullptr)
+            return false;
+        table = &candidate;
+    }
+    if (table == nullptr || table->handle != 0xA720u
+        || table->name != "*T1"
+        || table->m_tableStyleHandle != emittedStyleHandle
+        || table->m_content.m_rows.size() != 3u
+        || table->m_content.m_columns.size() != 3u
+        || table->m_content.m_rows[0].m_cells.size() != 3u
+        || table->m_content.m_rows[0].m_cells[0].m_mergedWidth != 3
+        || !table->m_content.m_rows[0].m_cells[1].m_isMerged
+        || !table->m_content.m_rows[0].m_cells[2].m_isMerged) {
+        return false;
+    }
+    const dx_ifaceBlock* tableBlock = nullptr;
+    for (const dx_ifaceBlock* block : readData.blocks) {
+        if (block == nullptr || block->name != "*T1")
+            continue;
+        if (tableBlock != nullptr)
+            return false;
+        tableBlock = block;
+    }
+    if (tableBlock == nullptr || tableBlock->ent.size() != 15u) {
+        std::cerr << "TABLE geometry block mismatch found=" << (tableBlock != nullptr)
+                  << " entities=" << (tableBlock == nullptr ? 0u : tableBlock->ent.size())
+                  << '\n';
+        return false;
+    }
+
+    std::vector<std::array<double, 6>> observedLines;
+    std::vector<std::array<double, 7>> observedTexts;
+    std::vector<std::string> observedTextValues;
+    for (const DRW_Entity* entity : tableBlock->ent) {
+        if (const auto* text = dynamic_cast<const DRW_MText*>(entity)) {
+            observedTexts.push_back({text->basePoint.x, text->basePoint.y,
+                text->basePoint.z, text->widthscale, text->height,
+                static_cast<double>(text->textgen),
+                static_cast<double>(text->text.size())});
+            observedTextValues.push_back(text->text);
+        } else if (const auto* line = dynamic_cast<const DRW_Line*>(entity)) {
+            observedLines.push_back({line->basePoint.x, line->basePoint.y,
+                line->basePoint.z, line->secPoint.x, line->secPoint.y,
+                line->secPoint.z});
+        } else {
+            return false;
+        }
+    }
+    const std::vector<std::array<double, 6>> expectedLines {
+        {0, 0, 0, 456, 0, 0}, {0, -11, 0, 456, -11, 0},
+        {0, -20, 0, 456, -20, 0}, {0, -29, 0, 456, -29, 0},
+        {0, 0, 0, 0, -29, 0}, {456, 0, 0, 456, -29, 0},
+        {152, -11, 0, 152, -29, 0}, {304, -11, 0, 304, -29, 0}
+    };
+    if (observedLines != expectedLines || observedTexts.size() != 7u) {
+        std::cerr << "TABLE child family mismatch lines=" << observedLines.size()
+                  << " texts=" << observedTexts.size() << '\n';
+        return false;
+    }
+    const std::array<std::array<double, 6>, 7> expectedTexts {{
+        {{228, -5.5, 0, 453, 6, 5}},
+        {{76, -15.5, 0, 149, 4.5, 5}},
+        {{228, -15.5, 0, 149, 4.5, 5}},
+        {{380, -15.5, 0, 149, 4.5, 5}},
+        {{76, -21.5, 0, 149, 4.5, 2}},
+        {{228, -21.5, 0, 149, 4.5, 2}},
+        {{380, -21.5, 0, 149, 4.5, 2}}
+    }};
+    const std::array<const char*, 7> expectedTextValues {{
+        "Title", "1", "2", "3", "4", "5", "6"
+    }};
+    for (std::size_t i = 0; i < expectedTexts.size(); ++i) {
+        const auto& actual = observedTexts[i];
+        const auto& expected = expectedTexts[i];
+        for (std::size_t field = 0; field < expected.size(); ++field) {
+            if (actual[field] != expected[field])
+            {
+                std::cerr << "TABLE text geometry mismatch index=" << i
+                          << " field=" << field << " got=" << actual[field]
+                          << " expected=" << expected[field] << '\n';
+                return false;
+            }
+        }
+        if (observedTextValues[i] != expectedTextValues[i]) {
+            std::cerr << "TABLE text mismatch index=" << i << " got='"
+                      << observedTextValues[i] << "' expected='"
+                      << expectedTextValues[i] << "'\\n";
+            return false;
+        }
+    }
+    return true;
 }
 
 } // namespace
@@ -37995,6 +38256,14 @@ int main(int argc, char** argv) {
         const bool passed = testTableStyleNodWholeFileRoundTrip(
             argc == 3 ? argv[2] : nullptr);
         std::cout << "AC1018 TABLESTYLE NOD whole-file round-trip: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    }
+    if ((argc == 2 || argc == 3)
+        && std::string(argv[1]) == "--table-ac1018-whole-file-roundtrip") {
+        const bool passed = testTableStyleNodWholeFileRoundTrip(
+            argc == 3 ? argv[2] : nullptr, true);
+        std::cout << "AC1018 TABLE cached-geometry whole-file round-trip: "
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     }

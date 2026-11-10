@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cstring>
 #include <exception>
+#include <functional>
 #include <limits>
 #include <sstream>
 #include <set>
@@ -1271,6 +1272,8 @@ void dwgRW::resetWriteSkipCounters() {
     m_lastDwgCompoundEntityWriteReceipt = {};
     m_lastWriteTransaction.reset();
     m_dwgWriteTransactions.clear();
+    m_pendingTableGraphValidation.clear();
+    m_pendingTableCallerWriteStates.clear();
 }
 
 std::uint32_t dwgRW::allocNextHandle() {
@@ -1797,6 +1800,24 @@ bool dwgRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
     (void)bin;
     beginOperationDiagnostic(DRW::OperationKind::Write);
     resetWriteSkipCounters();
+    struct TableCallerStateRollback final {
+        std::function<void()> rollback;
+        bool committed {false};
+        ~TableCallerStateRollback() noexcept {
+            if (!committed && rollback) {
+                try {
+                    rollback();
+                } catch (...) {
+                    // The stored states are bounded to TABLE common/handle
+                    // fields; a rollback allocation failure must not escape
+                    // while unwinding a failed file operation.
+                }
+            }
+        }
+    } tableCallerStateRollback{
+        [this] {
+            restoreEntityWriteStates(m_pendingTableCallerWriteStates);
+        }};
     if (ver != DRW::AC1015 && ver != DRW::AC1018 && ver != DRW::AC1021 &&
         ver != DRW::AC1024 && ver != DRW::AC1027 &&
         ver != DRW::AC1032) {
@@ -2046,6 +2067,22 @@ bool dwgRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
                 "dwg-deferred-objects",
                 "DWG deferred object graph completion failed");
         }
+        if (ok && !m_pendingTableGraphValidation.empty()) {
+            const auto* native = dynamic_cast<const dwgWriter15*>(writer.get());
+            const bool tableGraphsClosed = native != nullptr
+                && std::all_of(
+                    m_pendingTableGraphValidation.cbegin(),
+                    m_pendingTableGraphValidation.cend(),
+                    [native](const DRW_Table& table) {
+                        return native->hasClosedAc1018TableBlockGraph(table);
+                    });
+            if (!tableGraphsClosed) {
+                ok = false;
+                recordEmitStageFailure(
+                    "dwg-table-graph-closure",
+                    "TABLE output is missing its closed *T block or TABLESTYLE dictionary graph");
+            }
+        }
         if (ok) {
             const bool filterFinalized = iface->finalizeDwgWrite();
             if (!filterFinalized || m_requiredWriteFailure) {
@@ -2184,6 +2221,7 @@ bool dwgRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
                 "emit-failure", "DWG output generation failed");
         error = DRW::BAD_OPEN;
     }
+    tableCallerStateRollback.committed = ok;
     return ok;
 }
 catch (const std::exception&) {
@@ -2705,21 +2743,79 @@ bool dwgRW::registerTableEntityClassForWrite(DRW_Table *table) {
     }
 }
 
+bool dwgRW::registerTableEntityClass(DRW_Table *table) {
+    if (writer == nullptr || table == nullptr || version != DRW::AC1018)
+        return false;
+    const auto callerState = std::find_if(
+        m_pendingTableCallerWriteStates.cbegin(),
+        m_pendingTableCallerWriteStates.cend(),
+        [table](const DwgEntityWriteState& state) {
+            return state.entity == table;
+        });
+    if (callerState == m_pendingTableCallerWriteStates.cend()) {
+        try {
+            m_pendingTableCallerWriteStates.push_back(
+                captureEntityWriteState(table));
+        } catch (...) {
+            return false;
+        }
+    }
+    const std::uint64_t transaction = beginDwgWriteTransaction(
+        true, true, true);
+    if (transaction == 0u)
+        return false;
+    try {
+        if (!registerTableEntityClassForWrite(table)) {
+            (void)rollbackDwgWriteTransaction(transaction);
+            return false;
+        }
+        if (!commitDwgWriteTransaction(transaction)) {
+            (void)rollbackDwgWriteTransaction(transaction);
+            return false;
+        }
+        return true;
+    } catch (...) {
+        if (!m_dwgWriteTransactions.empty()
+            && m_dwgWriteTransactions.back()->token == transaction)
+            (void)rollbackDwgWriteTransaction(transaction);
+        throw;
+    }
+}
+
 bool dwgRW::writeTable(DRW_Table *ent) {
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::Entity, false);
+    auto* native = dynamic_cast<dwgWriter15*>(writer.get());
+    if (native == nullptr || version != DRW::AC1018
+        || !ent->m_hasSemanticContent || !ent->m_semanticContentComplete
+        || ent->getDwgClassNum() < 500u
+        || !writer->hasDwgClassDefinition(ent->getDwgClassNum())) {
+        markDwgWriteFailure();
+        recordOperationDiagnostic(
+            DRW::OperationPhase::Validation,
+            DRW::OperationCause::ValidationFailure,
+            "unsupported-table-dwg-profile",
+            "DWG TABLE output requires a complete AC1018 table and a class registered before manifest freeze",
+            0, false, ent->handle, ent->handle != 0);
+        return recordWriteResult(WriteSkipKind::Entity, false);
+    }
 
-    // The direct entity codec covers only a generated AC1018 plain-text cell.
-    // Production output also needs resolved class registration and the linked
-    // *T block graph staged with this entity in one transaction.
-    markDwgWriteFailure();
-    recordOperationDiagnostic(
-        DRW::OperationPhase::Validation,
-        DRW::OperationCause::ValidationFailure,
-        "unsupported-table-dwg-encoding",
-        "DWG TABLE encoding is not implemented; refusing INSERT-shaped output",
-        0, false, ent->handle, ent->handle != 0);
-    return recordWriteResult(WriteSkipKind::Entity, false);
+    if (!encodeEntityForWrite(ent))
+        return false;
+    try {
+        m_pendingTableGraphValidation.push_back(*ent);
+    } catch (...) {
+        (void)rollbackLastDwgObjectWrite(true);
+        markDwgWriteFailure();
+        recordOperationDiagnostic(
+            DRW::OperationPhase::Validation,
+            DRW::OperationCause::ResourceLimit,
+            "table-graph-validation-staging",
+            "TABLE graph closure could not be retained for final validation",
+            0, false, ent->handle, ent->handle != 0);
+        return recordWriteResult(WriteSkipKind::Entity, false);
+    }
+    return true;
 }
 
 bool dwgRW::writeMText(DRW_MText *ent) {

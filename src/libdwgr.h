@@ -569,6 +569,11 @@ public:
     bool write3dface(DRW_3Dface *ent);
     bool writeInsert(DRW_Insert *ent);
     bool writeTable(DRW_Table *ent);
+    /// Register the AC1018 AcDbTable entity class before DWG class-manifest
+    /// freeze. Call from DRW_Interface::writeDwgClasses() for each TABLE that
+    /// will be emitted by writeTable(). The TABLE body remains fail-closed
+    /// unless its *T block and TABLESTYLE graph close at finalization.
+    bool registerTableEntityClass(DRW_Table *table);
     bool writeMText(DRW_MText *ent);
     bool writeSpline(DRW_Spline *ent);
     bool writeHelix(DRW_Helix *ent);
@@ -1057,6 +1062,13 @@ private:
     std::unique_ptr<DwgWriteTransaction> m_lastWriteTransaction;
     std::vector<std::unique_ptr<DwgWriteTransaction>>
         m_dwgWriteTransactions;
+    /// TABLE entities are emitted before TABLESTYLE/DICTIONARY objects. Keep
+    /// value snapshots until OBJECTS emission completes, then validate graph
+    /// closure before the output transaction is published.
+    std::vector<DRW_Table> m_pendingTableGraphValidation;
+    /// Restore caller TABLE state if later graph closure/finalization rejects
+    /// the whole-file output attempt.
+    std::vector<DwgEntityWriteState> m_pendingTableCallerWriteStates;
     std::uint64_t m_nextDwgWriteTransaction { 1 };
     bool m_requiredWriteFailure { false };
     bool m_failNextCompoundSeqEndForTest { false };

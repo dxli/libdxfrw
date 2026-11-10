@@ -1,5 +1,21 @@
 # DWG/DXF parity — remaining implementation plan
 
+**Latest evidence checkpoint (2026-11-10, generated AC1018 TABLE whole-file writer):**
+the exact bounded plain-text TABLE profile now writes through DWG finalization.
+The writer requires `AcDbTable` class registration before manifest freeze,
+stages the TABLE entity and `*T1` cached geometry, then checks the complete
+TABLE → BLOCK_RECORD / TABLESTYLE → NOD dictionary graph after OBJECTS
+emission and before publishing output. A deliberately wrong NOD key proves
+final-closure refusal, destination preservation, restoration of caller TABLE
+class/handle state, and corrected retry on the same facade. Fresh libdxfrw
+readback verifies cell values, merge roles and all 15 cached children.
+Independent LibreDWG 0.14 resolves the TABLE class, block/style handles, all
+eight LINE endpoints, and seven MTEXT strings/placements/extents/attachments;
+it leaves the TABLE cell body opaque, so this is graph/display-geometry
+evidence only. No fixture was added. Native AutoCAD/ODA acceptance/rendering,
+producer breadth and independent cell-semantic decoding remain open. See the
+[whole-file TABLE receipt](docs/research/p5-ac1018-table-whole-file-cached-geometry-2026-11-10.json).
+
 **Latest evidence checkpoint (2026-11-09, TABLEGEOMETRY AC1027/AC1032 source spans):**
 the pinned ACadSharp samples each contain two standalone TABLEGEOMETRY objects.
 For all four objects, a new independent Python bit walk and a separately
@@ -120,9 +136,12 @@ failure points using a one-row/one-column plain-text cell with alignment and
 text-style overrides. Every failure preserves the exact seeded body and handle
 buffers; the same TABLE object succeeds after each failure. The focused
 `--table-cell-overrides` selector passes. This hardens only direct codec
-transaction behavior; `dwgRW::writeTable` remains refused pending the physical
-TABLE-to-`*T` geometry graph, caller transaction integration, and independent
-readback. See the [TABLE readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
+transaction behavior. **Historical status, superseded 2026-11-10:** that direct
+codec checkpoint preceded the bounded generated AC1018 whole-file TABLE →
+`*T1` writer, caller rollback, and independent graph/cached-geometry readback.
+Physical source profiles, native rendering, and independent cell-semantic
+decoding remain open. See the [TABLE readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json)
+and [whole-file TABLE receipt](docs/research/p5-ac1018-table-whole-file-cached-geometry-2026-11-10.json).
 
 **Completed P5 graph-identity guard (2026-11-10, AC1018 TABLESTYLE/NOD key):**
 the generated AC1018 TABLE graph ledger now retains the emitted TABLESTYLE
@@ -156,31 +175,24 @@ interoperability result only: it emits no TABLE entity, does not qualify cell
 semantics or `*T` geometry/rendering, and leaves `dwgRW::writeTable`
 fail-closed. See the [whole-file receipt](docs/research/p5-ac1018-table-nod-tablestyle-whole-file-2026-11-10.json).
 
-**AC1018 TABLE implementation ordering (verified against current writer callbacks):**
-`dwgRW::write()` invokes `writeDwgClasses()` and freezes the class manifest
-before emitting TABLES, then invokes `writeBlocks()`, `writeEntities()`, and
-`writeObjects()` in that order. A TABLE class must therefore be registered
-before class freeze; its anonymous `*T` BLOCK_RECORD and owned LINE/MTEXT
-frames must be staged during the block callback; and the TABLE entity can only
-be emitted after those block children exist. The TABLESTYLE/NOD graph currently
-lands in `writeObjects()`, after TABLE entity encoding, so the complete graph
-check in `dwgWriter15::hasClosedAc1018TableBlockGraph()` cannot be used as a
-pre-encode check. Keep the TABLE route refused until it can record the emitted
-TABLE's handle/block/style identity and validate the full closure after object
-emission, before output publication. The outer file transaction must discard
-both the TABLE entity and cached block graph if any later style/ownership check
-fails; caller TABLE state must be restored on that failure. Implement in this
-order: (1) prove and encode the bounded plain-text `*T` child geometry from the
-ODA-converted AC1018 profile, including exact child owner handles, coordinates,
-text extents/heights/attachments, and merge-induced edge suppression; (2) add
-an attempt-local pending TABLE graph ledger and final closure validation after
-`writeObjects()`; (3) enable only the exact representable profile in
-`writeTable()`, with destination-preserving failure and same-writer retry; (4)
-verify fresh libdxfrw and independent LibreDWG whole-file readback. The current
-peer receipt has an unrelated HEADER warning and is not native AutoCAD
-rendering evidence, so keep rendering/producer claims closed. Do not register
-the custom class late from `writeTable()`, validate TABLESTYLE before it is
-emitted, or treat block-ownership closure alone as cell-geometry proof.
+**AC1018 TABLE implementation ordering and status (updated 2026-11-10):**
+`dwgRW::write()` freezes classes before TABLES, then calls `writeBlocks()`,
+`writeEntities()`, and `writeObjects()`. The exact generated plain-text profile
+now registers `AcDbTable` before freeze, emits the `*T1` BLOCK_RECORD and its
+8 LINE/7 MTEXT cache, writes the TABLE entity, and validates the TABLESTYLE/NOD
+path after OBJECTS before publishing. Late graph rejection preserves the old
+destination and restores TABLE caller class/handle state; a corrected same-
+facade retry succeeds. Fresh libdxfrw semantic readback and independent
+LibreDWG object/geometry checks pass; the latter leaves the TABLE cell body
+opaque. Continue with the next distinct TABLE readiness item: obtain native
+AutoCAD/ODA acceptance and rendering for this profile or an independently
+decoded cell-semantic peer, then qualify additional physical profiles only
+when their body and reference closure are exact. The ODA-converted peer has an
+unrelated HEADER warning, so it does not establish native acceptance. Keep
+FIELD/BLOCK content, retained source subrecord replay, R24 TABLECONTENT,
+producer breadth and native rendering gated. Do not infer cell semantics from
+cached geometry or class/graph closure alone. See the [whole-file TABLE
+receipt](docs/research/p5-ac1018-table-whole-file-cached-geometry-2026-11-10.json).
 
 **Completed P5 guard slice (2026-11-09, exact cached TABLE string match):**
 the AC1018 direct codec previously compared the cached `DRW_Variant` string
@@ -1249,8 +1261,13 @@ behavior independently. Local macOS checks do not satisfy those platform gates.
   BLOCK_RECORD `0x9d`,
   and libdxfrw's entry graph resolves through `*T1`. This one peer-converted
   drawing also has an unrelated HEADER integrity warning, so it cannot qualify
-  strict whole-source output. Keep `dwgRW::writeTable` refused. The parser
-  records seven complete 10-bit cell override spans (zero override and
+  strict whole-source output. **Superseded for the bounded generated AC1018
+  profile:** `dwgRW::writeTable` now emits the exact generated plain-text cell
+  and `*T1` cache graph through whole-file finalization, with fresh libdxfrw
+  readback and independent LibreDWG graph/cached-geometry checks. The peer
+  leaves the TABLE cell body opaque, so native acceptance/rendering and
+  independent cell-semantic decoding remain open. Broader source profiles
+  remain gated. The parser records seven complete 10-bit cell override spans (zero override and
   virtual-edge flags) and one complete 4-bit TABLE override span (zero enabled
   masks). Instrumented ACadSharp cursor positions independently reproduce all
   eight spans under a constant 35,888-bit cursor-origin bias; these are bits in
@@ -2403,7 +2420,7 @@ integration/release checkpoints.
 | ID | State | Remaining work | Dependency |
 | --- | --- | --- | --- |
 | P4 | OPEN — source and graph closure | Continue with the next distinct physically evidenced OBJECTS subgraph; bind source identities, owner/target roles, recursive dependencies, and exact emitted records. Pool_Detail MLEADERSTYLE passes selected ASCII/Binary transport under the exact bounded AC1021 one-style/one-BYBLOCK projection; malformed LTYPE_CONTROL, BLOCK_CONTROL, and HEADER current-layer integrity observations remain excluded, and strict whole-source output remains refused. The AC1021 truetype whole source passes `RequireComplete` ASCII/Binary output and fresh whole-DXF import readback at 173/173 published frames; its group-330 LAYER/group-331 LTYPE references and exact LayerStates DXF-origin group-370 replay now pass under source snapshots and the complete dictionary path, with mutation refusal/retry. Other group-370 XRECORDs remain refused. Do not infer producer-wide support or generalize either source-specific gate. Resolve the tracked ENC dangling-reference profile only with eligible producer evidence. Keep unresolved null members, orphan owners, unsupported frames, and non-model/paper SORTENTSTABLE owner profiles (named or anonymous) refused; the bounded counted BLOCK_CONTROL tombstone warning documented in the AC1024 source profile below does not qualify a broader null-member profile. Broaden beyond individual local sources only with independent producer and native output evidence. **AC1032 MLINESTYLE `0x18` remains a bounded source-only profile:** its snapshot binds both element handles to unique LTYPE `0x15` (`ByLayer`) and rejects changed handles/names. This implementation slice adds a typed DIMASSOC graph node, NOD/contained-dictionary target indexing, exact source-frame/owner checks, refusal when modeled body details are unrepresentable, and a generated same-adapter retry control. The AC1032 parser now preserves separate class-version-2 base/network action-index candidates for the existing sample's root `0x390` and child `0x38E`, with complete bounded prefixes matching LibreDWG 0.14 values; `m_networkFieldsParsed` remains false. The supplied ODA v5.4.1 PDF has no class-specific ACDBASSOCNETWORK schema section, so the candidate is not output-eligible. Physical export remains blocked by the AC1024-only associative graph/writer policy. The independent DIMASSOC leaf is physically confirmed at dictionary `0x3A8`, key `ACAD_DIMASSOC`, target `0x3B4`; it is not reached until its owning route is qualified. Next obtain authoritative class-version-2 schema/producer evidence and close all owner/action dependencies before considering output; then rerun exact DIMASSOC output, staged-record inspection, and fresh readback. See the [AC1032 network candidate receipt](docs/research/p4-ac1032-assocnetwork-candidate-fields-2026-11-09.json). Keep strict whole-source refusal. See the [AC1032 MLINESTYLE source receipt](docs/research/p6-ac1032-mlinestyle-libredwg-source-profile-2026-11-09.json).** **The AC1027 Cover 3DSOLID history field/span and the public-source `0x2e1` → `0x2e4` → `0x2e3` → `0x2e2` identity/edge path are captured and match LibreDWG 0.14 (receipt `p4-ac1027-cover-3dsolid-history-wire-span-2026-11-08`). The production helper has null/non-null/alternate-role and truncation/reset/retry controls. `ACSH_HISTORY_CLASS` direct fields are complete; the graph targets `ACSH_SWEEP_CLASS`, whose EvalExpr/HistoryNode prefixes parse. The production parser now uses the pinned ACadRust candidate order and transactionally captures the hash-bound 2,571-bit AC1027 action body through the exact object bound. The local probe retains type-77 profile/path bit strings (744/480 bits) and the final zero bit as an opaque one-bit suffix; the body status correctly remains `Partial` ([field-span receipt](docs/research/p4-ac1027-sweep-acadrust-field-span-trace-2026-11-08.json), [bounded-capture receipt](docs/research/p4-ac1027-sweep-bounded-capture-2026-11-08.json)). Generated focused controls cover exact-end capture, suffix retention, opaque special profiles, truncation, oversized counts and retry. The suffix identity and embedded geometry semantics remain open; do not treat the bit as padding or map unqualified fields to DXF. Next resolve the suffix and decode supported embedded-entity profiles transactionally. ACadRust's claimed reference-output checks are an implementation lead, not normative/semantic support evidence. The typed BOX-history writer has no Sweep route, and raw-DXF preservation applies only to DXF input; the opaque proxy writer is AC1024-only. Keep output and strict conversion refused. The DWG code-3 to DXF group-350 role mapping remains unqualified; do not alter writer roles from converter output alone.** | Existing Cover inventory, ODA v5.4.1 §§2.13 and 20.4.41, hash-bound source probes, production-helper controls, LibreDWG 0.14 graph view, pinned ACadRust source and hash-bound field trace, output-route code audit, and Autodesk DXF group-code authority. |
-| P5 | OPEN — dynamic-block semantics, rendering and TABLE profiles | Find a complete FIELD/FIELDLIST source graph with a visible root; for TABLEGEOMETRY, the 177-file local corpus scan is now exhausted and found no non-null cell soft pointers or nonzero standalone unknown BD. A new traceable producer sample is required for external semantic evidence; a generated-from-scratch control may cover code paths but cannot promote producer support claims. The four pinned AC1027/AC1032 objects now have exact independent body/string/handle spans; Python and C++ walks agree, and all decoded fields match typed libdxfrw plus LibreDWG 0.14. They contain only null cell refs and zero unknown BD values, so they do not authorize a broader output profile. Current-code AC1027 and AC1032 reads publish both standalone records with zero entity/object failures, while whole-source DXF exports remain refused by unrelated source-reference / OBJECTCONTEXTDATA gates. The bounded AC1021+ planar/null-cell-reference DXF writer already exists; its focused generated projection control passes 1/1. See the [physical-span receipt](docs/research/p5-acadsharp-tablegeometry-ac1027-ac1032-physical-spans-2026-11-09.json), [local corpus receipt](docs/research/p5-tablegeometry-local-nonnull-reference-corpus-scan-2026-11-09.json), and [current reader recheck](docs/research/p5-acadsharp-tablegeometry-current-reader-recheck-2026-11-09.json). **The generated AC1018 TABLESTYLE graph now passes full DWG finalization, fresh libdxfrw readback, and independent LibreDWG 0.14 parsing; its NOD/dictionary/style owners, names, and row values agree.** This does not include a TABLE entity: remaining TABLE gates are a source-backed cell-content and `*T` geometry profile, whole-file output/readback for that graph, and native rendering. See the [whole-file TABLESTYLE receipt](docs/research/p5-ac1018-table-nod-tablestyle-whole-file-2026-11-10.json); the public TABLE writer remains refused. Also qualify remaining CONTENTFORMAT/CELLSTYLEMAP combinations; obtain a native ASCII/Binary VIEWPORT group-91 witness to resolve its conflict. The 2026-11-09 screen found Autodesk's 2008/2020/2021 entity-specific references consistently call group 91 a soft pointer, while ezdxf says its override storage is undocumented. A from-scratch ezdxf 1.4.4 R2010 color-override drawing stores the value in a LAYER extension-dictionary XRECORD (`102 {ADSK_LYR_COLOR_OVERRIDE`, `335` viewport handle, `420` color) and emits no group 91 in the VIEWPORT; this peer-specific result still is not a native witness. Keep parser refusal and the generic Int32 conflict until native ASCII/Binary evidence is available ([source screen receipt](docs/research/p5-viewport-group91-source-screen-2026-11-09.json)). Also qualify native layer-override activation/rendering and establish native dynamic constraint evaluation. For pre-R24 TABLE, groups 7/140/170/63/64/283 and border lineweight/visibility groups 274–279/284–289 have bounded parser/writer/readback mappings using ODA title/header/data order and the exact 27-value AcDb::LineWeight domain; Autodesk documents repeats but not their order, so retain physical DXF order evidence for broad producer/native claims. Keep group 141 as physical row height. General per-row border CMC is output-refused because four border categories have one DXF entity-level value across three independent DWG row values; see the representability audit. | P4 closure where needed; ODA §§20.4.96.1, 20.4.103, and 2.13; source-bound spans/roles plus native semantic evidence for promotion. |
+| P5 | OPEN — dynamic-block semantics, rendering and TABLE profiles | Find a complete FIELD/FIELDLIST source graph with a visible root; for TABLEGEOMETRY, the 177-file local corpus scan is now exhausted and found no non-null cell soft pointers or nonzero standalone unknown BD. A new traceable producer sample is required for external semantic evidence; a generated-from-scratch control may cover code paths but cannot promote producer support claims. The four pinned AC1027/AC1032 objects now have exact independent body/string/handle spans; Python and C++ walks agree, and all decoded fields match typed libdxfrw plus LibreDWG 0.14. They contain only null cell refs and zero unknown BD values, so they do not authorize a broader output profile. Current-code AC1027 and AC1032 reads publish both standalone records with zero entity/object failures, while whole-source DXF exports remain refused by unrelated source-reference / OBJECTCONTEXTDATA gates. The bounded AC1021+ planar/null-cell-reference DXF writer already exists; its focused generated projection control passes 1/1. See the [physical-span receipt](docs/research/p5-acadsharp-tablegeometry-ac1027-ac1032-physical-spans-2026-11-09.json), [local corpus receipt](docs/research/p5-tablegeometry-local-nonnull-reference-corpus-scan-2026-11-09.json), and [current reader recheck](docs/research/p5-acadsharp-tablegeometry-current-reader-recheck-2026-11-09.json). **Generated AC1018 TABLESTYLE and the bounded plain-text TABLE plus `*T1` cache now pass whole-file finalization and fresh libdxfrw readback; LibreDWG 0.14 independently confirms the TABLE graph and cached geometry but leaves the TABLE cell body opaque.** Remaining TABLE gates: native AutoCAD/ODA acceptance/rendering or independently decoded cell semantics; additional physical producer/profile qualification; R24 TABLECONTENT; retained source subrecords; FIELD/BLOCK contents; and remaining CONTENTFORMAT/CELLSTYLEMAP combinations. See the [TABLESTYLE receipt](docs/research/p5-ac1018-table-nod-tablestyle-whole-file-2026-11-10.json) and [TABLE receipt](docs/research/p5-ac1018-table-whole-file-cached-geometry-2026-11-10.json). Also qualify remaining CONTENTFORMAT/CELLSTYLEMAP combinations; obtain a native ASCII/Binary VIEWPORT group-91 witness to resolve its conflict. The 2026-11-09 screen found Autodesk's 2008/2020/2021 entity-specific references consistently call group 91 a soft pointer, while ezdxf says its override storage is undocumented. A from-scratch ezdxf 1.4.4 R2010 color-override drawing stores the value in a LAYER extension-dictionary XRECORD (`102 {ADSK_LYR_COLOR_OVERRIDE`, `335` viewport handle, `420` color) and emits no group 91 in the VIEWPORT; this peer-specific result still is not a native witness. Keep parser refusal and the generic Int32 conflict until native ASCII/Binary evidence is available ([source screen receipt](docs/research/p5-viewport-group91-source-screen-2026-11-09.json)). Also qualify native layer-override activation/rendering and establish native dynamic constraint evaluation. For pre-R24 TABLE, groups 7/140/170/63/64/283 and border lineweight/visibility groups 274–279/284–289 have bounded parser/writer/readback mappings using ODA title/header/data order and the exact 27-value AcDb::LineWeight domain; Autodesk documents repeats but not their order, so retain physical DXF order evidence for broad producer/native claims. Keep group 141 as physical row height. General per-row border CMC is output-refused because four border categories have one DXF entity-level value across three independent DWG row values; see the representability audit. | P4 closure where needed; ODA §§20.4.96.1, 20.4.103, and 2.13; source-bound spans/roles plus native semantic evidence for promotion. |
 | P6 | OPEN — version, schema and semantic residuals | Resolve only evidence-backed source gaps: AC1021/24/27/32 IMAGEDEF parent-role conflict (source capture now retained as unqualified; DXF output still refused); raw-only TABLECONTENT recovery covers AC1018 and AC1021/24/27/32; AC1018 TABLEGEOMETRY and DATATABLE out-of-version/unknown-body occurrences retain raw-only; PERSUBENTMGR across AC1024/27/32; These preserve exact frames/common shells only and do not close typed semantics or output. AC1032 TextObjectContextData is no longer queued as an implementation task: current-source readback confirms its bounded raw fallback contributes to 842/842 published frames with zero entity/object parse failures; typed text semantics and strict replay remain open ([queue recheck](docs/research/p6-ac1032-text-context-data-queue-recheck-2026-11-09.json)). The ACadSharp AC1018 sample now publishes 1014/1014 frames with zero entity/object parse failures after six TABLECONTENT/TABLEGEOMETRY/DATATABLE occurrences were retained raw-only; focused controls also keep a one-bit-short common shell failed, recover the next valid frame, and pass corrected-input retry. Strict output remains refused by the independent IMAGEDEF/reactor source-correlation gate. See receipts [`p6-ac1018-tablecontent-tablegeometry-raw-only-shell-recovery-2026-11-09`](docs/research/p6-ac1018-tablecontent-tablegeometry-raw-only-shell-recovery-2026-11-09.json) and [`p6-ac1018-datatable-raw-only-shell-recovery-2026-11-09`](docs/research/p6-ac1018-datatable-raw-only-shell-recovery-2026-11-09.json). AC1024 PERSUBENTMGR handle 0xD63 also recovers raw-only after independent shell validation (receipt [`p6-ac1024-persubentmgr-raw-only-shell-recovery-2026-11-09`](docs/research/p6-ac1024-persubentmgr-raw-only-shell-recovery-2026-11-09.json)); its source reaches 923/923 frames with zero entity/object parse failures, while strict output remains refused by standalone OBJECTCONTEXTDATA. Keep manager body semantics/graph/output unresolved. `DRW_Block_Record::parseDwg` validates and records the ODA §20.4.52 BLOCK_HEADER body-handle roles and exact ordered spans for AC1015 first/last entity, AC1018 owned-entity, and the shared block/insert/layout references; generated wrong-role and truncation controls prove reset and retry. A hash-bound source scan now compares all 208 body-handle fields in selected AC1015 and AC1018 ACadSharp samples against LibreDWG 0.14: legacy first/last, a 163-entry owned list, two-entry paper space, and ten-INSERT lists match exact bit positions, widths, role codes, and references. A narrow AC1018 `*Paper_Space` graph (the physical-span-selected handle `0x58`) is closed across BLOCK_CONTROL membership, BLOCK/ENDBLK ownership, both owned-entity backlinks, and LAYOUT reciprocity; this does not close `my_block`, whose ten-INSERT list contains six unresolved peer handles (`0xD17`, `0xD18`, `0xD40`, `0xD41`, `0xD95`, `0xD96`). Keep that row physical-span-only. A source-backed XREF writer gap is now closed for the generated AC1015+ profile: bounded unique `insertHandles` are checked against emitted INSERT callbacks before deferred BLOCK_HEADER publication; ODA §20.4.52 places the counted INSERT list in R2000+ records alongside AC1015 legacy first/last entity references. Generated loaded/unloaded reference and overlay cases verify exact readback, mismatch refusal with destination preservation, and same-facade corrected retry across AC1015/18/21/24/27/32. LibreDWG 0.14 independently reads generated AC1015 and AC1018 witnesses; its AC1015 JSON reports `GENERATED_XREF` inserts `[0xA123]` and an INSERT with handle `0xA123` targeting BLOCK_HEADER `0x30`. These remain generated interoperability checks, not native source-producer qualification. This does not qualify native/imported source XREF graphs or general XREF support; no DWG/DXF fixtures were committed ([receipt](docs/research/p6-dwg-block-record-xref-insert-membership-2026-11-09.json)). Producer release provenance is uncertified, the peer/production name mismatch (`*Paper_Space` vs `*Paper_Space0`) remains unresolved, and strict output remains open ([generated receipt](docs/research/p6-ac1015plus-block-header-handle-roles-spans-2026-11-09.json), [physical peer receipt](docs/research/p6-ac1015plus-block-header-physical-peer-spans-2026-11-09.json), [selected graph receipt](docs/research/p6-ac1018-paper-space-block-header-graph-closure-2026-11-09.json)). Other gaps: unclaimed AC1027/AC1032 HEADER suffixes; remaining version boundaries, geometry/no-loss, HEADER/CLI, parser disposition and caller-state contracts. The minimal generated AC1021 ODA matrix passes only when both default-layer graph opt-ins are enabled; the AC1021/24/27 fast material control now checks both output layer-0 references against planned targets. This is bounded writer evidence, not a broad support claim. Preserve strict refusal for unsupported or unclaimed bytes. | ODA v5.4.1 plus AutoCAD DWG/DXF source pairs; focused fast controls. Owner-semantic promotion still needs independent native rewrite or normative resolution. Suffix work requires a materially changed converter route. See the [IMAGEDEF role receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json) and [AC1021 writer probe receipt](docs/research/p6-ac1021-minimal-writer-oda-gui-rejection-2026-11-07.json). |
 | P7 | OPEN — ACIS/ACDS and independent 3D meaning | Complete entity/owner/key/AcDs/SAT-SAB association, versioned framing/index/suffix/prototype assembly and exact output binding; qualify transforms, units, topology, trims, periodicity and spline meaning with an independent kernel. The pinned ACadRust 0.6.8 screen of the original SAT 21500 payload still reports an unresolved pointer and its accessor uses the wrong torus token offset for that modified profile; do not use that result as semantic evidence. A distinct ODA-produced ACAD2007/2010 route for the same source 3DSOLID `0x452` yields recoverable SAT 21200: pinned ACadRust validates 13 records with zero errors and its torus center, axis, radii and U direction exactly match the source-derived SAT. Native FreeCAD/OpenCASCADE reconstructs the same valid solid and matches bounds, area, volume and centroid to the source-derived route and analytic torus formulas. This resolves a bounded external semantic cross-check for the selected torus only. ACadRust is not a B-rep kernel, and InventorLoader and FreeCAD Part share OpenCASCADE; independent-kernel, native modeler, broader ACDS graph, other-profile, and whole-source gates remain open. The 2026-11-09 open-source kernel screen found no eligible independent SAT-to-B-rep route: cq-acis converts through OpenCASCADE, ACadRust parses SAT without constructing a B-rep, and opencadkernel describes its ACIS/B-rep path as early with most operations unwritten. The prior FreeCAD sandbox startup failure is superseded for the CLI route: the exact selected torus was reconstructed successfully with native FreeCAD 1.1.4 Part/OpenCASCADE outside the sandbox (see the native B-rep receipt below). This establishes neither an independent kernel nor GUI/native-source or Linux/Windows qualification. Keep those gates open; the independent-kernel next action is to identify a genuinely independent SAT-to-B-rep implementation or a materially different runtime ([screen receipt](docs/research/p7-independent-sat-brep-kernel-open-source-screen-2026-11-09.json)). See the [ACadRust screen](docs/research/p7-acadrust-pinned-exact-sat-torus-screen-2026-11-09.json), [ODA conversion](docs/research/p7-oda-ac1021-dwg-to-dxf-opaque-solid-2026-11-09.json), and [semantic cross-check receipt](docs/research/p7-oda-ac1021-torus-semantic-crosscheck-2026-11-09.json). The reusable `tools/research/decode_dxf_sat1.py` now extracts one exact-handle SAT v1 carrier from ASCII DXF, joins group 1/3 chunks, reverses the evidenced SAT1 transform and caret escape, and rejects malformed or ambiguous selection. In-memory and CLI checks cover transform, chunking, exact header/end marker, malformed continuation and trailing-garbage refusal, and overwrite refusal; no drawing fixtures were added. It is a research aid only and closes no P7 graph, geometry, or support gate ([receipt](docs/research/p7-dxf-sat1-recovery-tool-2026-11-09.json)). | P4 graph/output bindings and independent semantic/kernel evidence. |
 | P8 | OPEN — consumers, platforms and release | The isolated LibreCAD `origin/master` adapter bridge and its generated import/re-export checks remain implemented. A focused runtime contract now confirms `DRW_Interface::addTable` still reaches an insert-only consumer through `addInsert`, including for a semantically incomplete TABLE prefix, and that its proxy-graphics bytes remain attached as a preserved carrier; this callback check does not qualify native rendering or broaden support ([receipt](docs/research/p8-insert-only-table-callback-compat-2026-11-09.json)). LibreCAD_3 PR #456 is open on `codex/libdxfrw-upstream-compat`, based on `5cf435f4`; code head `762a0f1e` passes the focused 64/64 export/round-trip cohort. Follow-up `fd5af0b8` raises the temporary Windows package-layout CMake timeout after a hosted timeout; its smoke suite passes 19/19 locally on macOS. PR head `7e81275b71038d4a42fa580842e661ddcee7adbf` adds the Homebrew metadata refresh fix; isolated local candidate `83f36931` adds the Mach-O-based provenance repair and passes focused local checks, but has no hosted CI result and is not published. Automatic review rejected uploading the candidate plan file through the alternate route; do not publish this candidate through another route. Homebrew now officially classifies Intel x86_64 as Tier 3 and has stopped building new bottles; MacPorts is suggested but its Intel Tahoe binary set is explicitly incomplete. Do not treat the current Intel force-bottle job as a sustainable provider. Keep hosted qualification open. Remaining: authorize and publish the arm64 provenance repair, pass hosted arm64 CI, decide whether Intel remains a release target and either qualify a complete maintained binary provider or retire that job/target explicitly, clean-consumer reproducibility/ABI, LibreCAD and LibreCAD_3 2D behavior across supported builds, native Linux/Windows FreeCAD open/insert checks, and 3D consumer/package/release qualification. These checks do not change DWG/DXF support claims. | Stable candidate plus native platform access and reproducible consumer build receipts; preserve existing 2D behavior and refuse unresolved references. |
@@ -3668,13 +3685,18 @@ Strict output still fails, and no support claim is promoted.
 
 **TABLE:**
 
-**DWG `ACAD_TABLE` writer gap — implementation packet added 2026-11-08:**
-`DRW_Table::encodeDwg` now has a narrowly gated AC1018 plain-text grid body
-codec, while `dwgRW::writeTable` still refuses the entity
-so it cannot fall through to INSERT-shaped bytes. This is a
-real DWG write-coverage gap; do not remove the refusal until the entity body,
-anonymous `*T` block relationship, cell payloads, owned ATTRIB chain, and
-version-specific handles are committed transactionally together. ODA v5.4.1
+**DWG `ACAD_TABLE` writer gap — bounded generated profile enabled 2026-11-10:**
+`DRW_Table::encodeDwg` and `dwgRW::writeTable` now emit one generated AC1018
+plain-text grid profile through full file finalization. The route requires
+pre-freeze `AcDbTable` class registration, stages the TABLE frame and `*T1`
+cached 8 LINE/7 MTEXT graph, then checks TABLE → BLOCK_RECORD and TABLESTYLE →
+NOD closure before publishing. Late closure failure preserves the destination,
+restores caller TABLE state, and allows a corrected same-facade retry. Fresh
+libdxfrw readback validates cell semantics and cached children; LibreDWG 0.14
+validates graph and cached geometry but does not decode the cell body. This is
+not broad TABLE support. FIELD/BLOCK cell payloads, owned ATTRIB chains,
+retained source subrecords, R24 TABLECONTENT, producer breadth, and native
+rendering remain gated. ODA v5.4.1
 §20.4.96.1 documents the pre-R24 body, but marks the AutoCAD 2008 cell changes
 as TODO; §20.4.96.2 says R24 moves data into TABLECONTENT and the specification
 does not document the round-trip connection. The local authoritative PDF is
@@ -3686,9 +3708,9 @@ The direct generated AC1018 body codec now also sweeps 18 allocation-failure
 positions for a one-row/one-column text cell with alignment and text-style
 handle overrides. Each failure preserves seeded body and handle buffers, and
 the same object retries successfully; the focused `--table-cell-overrides`
-selector passes. This is a direct-codec transaction prerequisite only. The
-production compound writer remains disabled until `*T` geometry generation,
-caller-state rollback, source graph roles, and independent readback are closed.
+selector passes. This is a direct-codec transaction check narrower than the whole-file writer.
+The generated whole-file profile is recorded in the [AC1018 TABLE receipt](docs/research/p5-ac1018-table-whole-file-cached-geometry-2026-11-10.json);
+native acceptance/rendering and independent cell-body semantics remain open.
 The inspected code paths, exact authority section, candidate exclusions, and
 compound-output acceptance gates are recorded in the
 [encoder-readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
@@ -3711,9 +3733,10 @@ class 528, while `/Users/dli/doc/dwg6/sample_AC1018.dwg` resolves it to class
 and `0x40020`) and stop typed semantic parsing there; the second source also
 has unrelated IMAGEDEF/reactor and other object parse failures. These are
 source-specific observations, not stable AC1018 class IDs. Do not hardcode
-either value or skip the unknown override payload. Keep `writeTable` refused
-until the parser can identify the exact physical body span and the output
-profile has independent source-to-output evidence. The speed-first
+either value or skip the unknown override payload. Keep these physical source
+profiles refused: the writer admits only the separate generated AC1018
+plain-text profile, and no source-to-output proof exists for these parsed
+overrides. The speed-first
 unknown-override slice preserves the consumed flag word and virtual-edge byte
 as an exact, explicitly incomplete range; generated `0x40020` control confirms
 bounded cursor position, incomplete semantics, and same-object recovery on a
@@ -3844,10 +3867,14 @@ class/frame and late-failure transaction proof, but its hand-authored geometry
 is not a semantically complete TABLE `*T` graph. A focused CTest is registered
 as `libdxfrw_dwg_table_cell_overrides`; see the [transaction
 receipt](docs/research/p5-table-dwgrw-class-frame-transaction-2026-11-08.json).
-The registration helper remains disconnected from public `writeTable`. Next
-work must establish a complete physical AC1018 TABLE body profile and then
-implement/read back the semantic `*T` geometry graph without weakening the
-public refusal.
+**Superseded by the 2026-11-10 generated whole-file slice:** public
+`writeTable` now admits exactly the generated plain-text AC1018 profile after
+pre-freeze class registration and final TABLE/BLOCK_RECORD/TABLESTYLE/NOD
+closure. The physical ODA-converted candidate still carries an unrelated
+HEADER warning, and independent LibreDWG leaves its cell body opaque. Next
+work is native acceptance/rendering or an independent cell-semantic decoder;
+then qualify additional physical profiles without broadening the guarded
+writer from cached geometry alone.
 
 **Independent writer caution:** ACadSharp merged TABLE DWG write support in
 PR #1040, but a later ACadSharp 3.8.0 report reproduced a TABLE-containing
