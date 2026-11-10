@@ -3863,6 +3863,30 @@ int selfTest() {
         return fail(__LINE__);
     if (!runOpaqueDwgReadbackControl())
         return fail(__LINE__);
+    // Older consumers implement addInsert but do not override the newer
+    // addTable callback. Keep the default TABLE-to-INSERT projection intact,
+    // including for a useful but semantically incomplete TABLE prefix.
+    SemanticSink legacyTableSink("DRW_Interface", "read");
+    DRW_Table partialTable;
+    partialTable.handle = 0x715u;
+    partialTable.parentHandle = 0x30u;
+    partialTable.name = "PARTIAL_TABLE_BLOCK";
+    partialTable.basePoint = DRW_Coord{12.0, 34.0, 5.0};
+    partialTable.angle = 0.25;
+    partialTable.m_hasSemanticContent = true;
+    partialTable.m_semanticContentComplete = false;
+    DRW_Interface& legacyCallbacks = legacyTableSink;
+    legacyCallbacks.DRW_Interface::addTable(partialTable);
+    if (legacyTableSink.records.size() != 1u
+        || legacyTableSink.callbacks.size() != 1u
+        || legacyTableSink.callbacks.front().kind != "addInsert"
+        || legacyTableSink.records.front().entity != "INSERT"
+        || !fieldEquals(legacyTableSink, "INSERT", "handle", jsonString("715"))
+        || !fieldEquals(legacyTableSink, "INSERT", "blockName",
+                        jsonString("PARTIAL_TABLE_BLOCK"))
+        || !fieldEquals(legacyTableSink, "INSERT", "insertionPoint",
+                        "{\"x\":12,\"y\":34,\"z\":5}"))
+        return fail(__LINE__);
     SemanticSink dimensionSink("dxfRW", "read");
     DRW_DimAligned dimension;
     dimension.setDefPoint({-3, -4, 8});

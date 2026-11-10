@@ -1,0 +1,32 @@
+{
+  "schema": "libdxfrw.research-receipt-v1",
+  "id": "p8-insert-only-table-callback-compat-2026-11-09",
+  "date": "2026-11-09",
+  "scope": "Protect the DRW_Interface default ACAD_TABLE callback bridge used by existing consumers that implement addInsert but do not override addTable.",
+  "supportClaimEffect": "none; callback compatibility only, not native TABLE rendering or file-format qualification",
+  "source": {
+    "file": "tests/semantic_differential_adapter.cpp",
+    "sha256": "ec9eae456ea7f2115c72b563ec8918cf2af32a603b0ea6ddc019c47d8b8baba2"
+  },
+  "contract": {
+    "defaultMethod": "DRW_Interface::addTable(const DRW_Table&)",
+    "delegatesTo": "virtual addInsert(const DRW_Insert&)",
+    "profile": "DRW_Table with m_hasSemanticContent=true and m_semanticContentComplete=false",
+    "assertions": [
+      "exactly one addInsert callback is observed",
+      "the callback retains INSERT-compatible handle, block name, and insertion point"
+    ]
+  },
+  "validation": {
+    "build": "cmake --build build-gcc --target libdxfrw_3d_consumer_probe -j4",
+    "test": "ctest --test-dir build-gcc -R ^libdxfrw_3d_consumer_probe$ --output-on-failure",
+    "result": "passed 1/1",
+    "executableSha256": "523a8bba513c38fee2034d8aaf8cf18c620205e0ef98575f508adf56d20d5681",
+    "diffCheck": "git diff --check passed",
+    "fixtureFilesAdded": false
+  },
+  "remaining": [
+    "This generated callback control does not prove LibreCAD or LibreCAD_3 native rendering.",
+    "Platform, ABI, clean-consumer, and 3D consumer qualification remain open under P8."
+  ]
+}
