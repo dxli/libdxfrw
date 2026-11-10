@@ -1,0 +1,35 @@
+{
+  "id": "p5-viewport-group91-source-screen-2026-11-09",
+  "date": "2026-11-09",
+  "question": "Do available references resolve whether VIEWPORT DXF group 91 is a soft-pointer handle or a 32-bit integer?",
+  "sources": [
+    {
+      "name": "Autodesk AutoCAD 2008 DXF Reference",
+      "url": "https://damassets.autodesk.net/content/dam/autodesk/www/developer-network/platform-technologies/autocad-dxf-archive/acad_dxf_2008.pdf",
+      "finding": "The VIEWPORT entity table calls group 91 a soft-pointer reference to a viewport object for layer VP property override.",
+      "limitation": "Documentation only; no native ASCII or Binary DXF bytes were inspected."
+    },
+    {
+      "name": "Autodesk VIEWPORT DXF Reference, 2020",
+      "url": "https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-2602B0FB-02E4-4B9A-B03C-B1D904753D34.htm",
+      "finding": "The VIEWPORT entity table again calls group 91 a soft-pointer reference for layer VP property override.",
+      "limitation": "Documentation only; does not resolve the generic 90-99 Int32 classification against physical encoding."
+    },
+    {
+      "name": "Autodesk VIEWPORT DXF Reference, 2021",
+      "url": "https://help.autodesk.com/cloudhelp/2021/ENU/AutoCAD-DXF/files/GUID-2602B0FB-02E4-4B9A-B03C-B1D904753D34.htm",
+      "finding": "The VIEWPORT entity table repeats the soft-pointer description for group 91.",
+      "limitation": "Documentation only; no producer output was inspected."
+    },
+    {
+      "name": "ezdxf LayerOverrides documentation",
+      "url": "https://ezdxf.mozman.at/docs/tables/layer_table_entry.html",
+      "finding": "The implementation documents viewport-specific layer override values on LAYER entries and explicitly says this DXF storage implementation is not documented by the DXF reference.",
+      "limitation": "Independent implementation documentation, not a native producer witness and not evidence for the physical type of VIEWPORT group 91."
+    }
+  ],
+  "result": "Not resolved. The Autodesk entity-specific description is consistent across the screened versions, but available open-source implementation documentation does not provide byte-level corroboration and describes a different storage location. The generic Int32 classification remains in conflict.",
+  "implementation_disposition": "Keep DRW_Viewport::parseCode refusal for group 91 and keep output closed pending a native ASCII/Binary witness or stronger authoritative byte-format evidence.",
+  "support_claim_effect": "None. This screen does not promote VIEWPORT layer override support.",
+  "fixture_policy": "No DXF/DWG fixture downloaded or added."
+}
