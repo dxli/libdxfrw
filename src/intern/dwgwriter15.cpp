@@ -1555,8 +1555,26 @@ bool dwgWriter15::hasClosedAc1018TableBlockGraph(
         || table.blockRecH.code != DRW::DwgNullReference
         || table.blockRecH.size != 0u || table.blockRecH.rawCode != 0u
         || table.blockRecH.ref64 != 0u
+        || table.m_tableStyleHandle == 0u
+        || table.m_tableStyleHandle == DRW::NoHandle
+        || table.m_content.m_tableStyleHandle != table.m_tableStyleHandle
+        || !hasEmittedDwgObjectHandle(table.m_tableStyleHandle)
         || table.name.size() < 3u || table.name[0] != '*'
         || std::toupper(static_cast<unsigned char>(table.name[1])) != 'T')
+        return false;
+
+    std::uint16_t styleClassNumber = 0u;
+    if (!getDwgClassInstanceClass(table.m_tableStyleHandle,
+                                 styleClassNumber))
+        return false;
+    const auto styleClass = std::find_if(
+        m_dwgClassDefinitions.cbegin(), m_dwgClassDefinitions.cend(),
+        [styleClassNumber](const DwgClassDefinition& definition) {
+            return definition.m_classNum == styleClassNumber
+                && definition.m_className == "AcDbTableStyle"
+                && definition.m_recordName == "TABLESTYLE";
+        });
+    if (styleClass == m_dwgClassDefinitions.cend())
         return false;
 
     const PendingUserBlock* block = findUserBlock(table.blockRecH.ref);

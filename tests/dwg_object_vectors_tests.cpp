@@ -10167,6 +10167,38 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     tableFacade.version = DRW::AC1018;
     auto* tableFacadeWriter = dynamic_cast<TableClassSerializationProbe*>(
         tableFacade.writer.get());
+    constexpr std::uint32_t tableFacadeStyleDictionaryHandle = 0xA6FFu;
+    constexpr std::uint32_t tableFacadeStyleHandle = 0xA700u;
+    DRW_Dictionary tableFacadeStyleDictionary;
+    tableFacadeStyleDictionary.handle = tableFacadeStyleDictionaryHandle;
+    tableFacadeStyleDictionary.parentHandle =
+        DRW::DwgNamedObjectsDictionaryHandle;
+    tableFacadeStyleDictionary.hardOwner = 1;
+    tableFacadeStyleDictionary.cloning = 1;
+    tableFacadeStyleDictionary.m_entries.push_back(
+        {"TABLE_STYLE", tableFacadeStyleHandle});
+    const bool tableFacadeStyleDictionaryWritten =
+        tableFacade.writeDictionary(&tableFacadeStyleDictionary);
+    DRW_TableStyle tableFacadeStyle;
+    tableFacadeStyle.handle = tableFacadeStyleHandle;
+    tableFacadeStyle.parentHandle = tableFacadeStyleDictionaryHandle;
+    tableFacadeStyle.m_name = "LIBDXFRW_TABLE_GRAPH_TEST";
+    for (int rowIndex = 0; rowIndex < 3; ++rowIndex) {
+        DRW_TableStyleRowStyle rowStyle;
+        rowStyle.m_textHeight = static_cast<double>(rowIndex + 1);
+        rowStyle.m_textAlignment = 5;
+        rowStyle.m_textStyleHandle = DRW::DwgStandardTextStyleHandle;
+        for (int edgeIndex = 0; edgeIndex < 6; ++edgeIndex) {
+            DRW_TableStyleBorder border;
+            border.m_edgeFlags = 1 << edgeIndex;
+            rowStyle.m_borders.push_back(border);
+        }
+        tableFacadeStyle.m_rowStyles.push_back(rowStyle);
+    }
+    const bool tableFacadeStyleWritten = tableFacade.writeTableStyle(
+        &tableFacadeStyle);
+    t.expect(tableFacadeStyleDictionaryWritten && tableFacadeStyleWritten,
+             "AC1018 TABLE graph control emits its named TABLESTYLE dependency before closure validation");
     const std::size_t tableFacadeInitialBytes =
         tableFacadeWriter == nullptr ? 0u : tableFacadeWriter->encodedBufferSize();
     const std::size_t tableFacadeInitialObjects =
@@ -10188,6 +10220,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         table.handle = 0xA810u;
         table.name = blockName;
         table.blockRecH = handle(blockRecord);
+        table.m_content.m_tableStyleHandle = table.m_tableStyleHandle;
         const std::int16_t originalObjectType = table.encodedObjectType();
         const std::uint32_t originalObjectSize = table.encodedObjectSize();
         const bool classReady = blockRecord != 0u
@@ -10214,8 +10247,18 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                         && occurrence.token.code == DRW::DwgHardPointer
                         && occurrence.token.reference == blockRecord;
                 }));
-        const bool tableBlockReferenceExact = tableOccurrencesCaptured
-            && tableBlockReferenceCount == 1u;
+        const std::size_t tableStyleReferenceCount =
+            static_cast<std::size_t>(std::count_if(
+                tableOccurrences.cbegin(), tableOccurrences.cend(),
+                [&](const DRW::DwgObjectHandleOccurrence& occurrence) {
+                    return occurrence.objectHandle == table.handle
+                        && occurrence.token.code == DRW::DwgHardPointer
+                        && occurrence.token.reference
+                            == table.m_tableStyleHandle;
+                }));
+        const bool tableReferencesExact = tableOccurrencesCaptured
+            && tableBlockReferenceCount == 1u
+            && tableStyleReferenceCount == 1u;
         if (!receiptMatches) {
             (void)tableFacade.rollbackDwgWriteTransaction(transaction);
             return false;
@@ -10250,6 +10293,17 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             const bool mismatchedNameRefused =
                 !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
             table.name = savedTableName;
+            const std::uint32_t savedTableStyleHandle =
+                table.m_tableStyleHandle;
+            const std::uint32_t savedContentStyleHandle =
+                table.m_content.m_tableStyleHandle;
+            table.m_tableStyleHandle = tableFacadeStyleDictionaryHandle;
+            table.m_content.m_tableStyleHandle =
+                tableFacadeStyleDictionaryHandle;
+            const bool nonStyleObjectRefused =
+                !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
+            table.m_tableStyleHandle = savedTableStyleHandle;
+            table.m_content.m_tableStyleHandle = savedContentStyleHandle;
             const bool failedGeometryCallerRestored =
                 failedGeometryLine.handle == 0xA812u
                 && failedGeometryLine.parentHandle == DRW::NoHandle;
@@ -10258,7 +10312,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                     > tableFacadeInitialBytes;
             if (!earlierGeometryWritten || !injectedFailureOccurred
                 || !graphScopeClosed || !closedTableGraph
-                || !mismatchedNameRefused
+                || !mismatchedNameRefused || !nonStyleObjectRefused
                 || !failedGeometryCallerRestored
                 || !tableFrameStillStaged
                 || tableFacade.m_successfulEntityWrites
@@ -10276,8 +10330,19 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             const bool mismatchedNameRefused =
                 !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
             table.name = savedTableName;
+            const std::uint32_t savedTableStyleHandle =
+                table.m_tableStyleHandle;
+            const std::uint32_t savedContentStyleHandle =
+                table.m_content.m_tableStyleHandle;
+            table.m_tableStyleHandle = tableFacadeStyleDictionaryHandle;
+            table.m_content.m_tableStyleHandle =
+                tableFacadeStyleDictionaryHandle;
+            const bool nonStyleObjectRefused =
+                !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
+            table.m_tableStyleHandle = savedTableStyleHandle;
+            table.m_content.m_tableStyleHandle = savedContentStyleHandle;
             if (!geometryWritten || !graphScopeClosed || !closedTableGraph
-                || !mismatchedNameRefused) {
+                || !mismatchedNameRefused || !nonStyleObjectRefused) {
                 (void)tableFacade.rollbackDwgWriteTransaction(transaction);
                 return false;
             }
@@ -10324,7 +10389,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             transaction);
         const bool passed = classLedgerValid && committed
             && tableFacadeWriter->emittedHandle(table.handle)
-            && tableBlockReferenceExact
+            && tableReferencesExact
             && tableFacade.m_successfulEntityWrites
                 == tableFacadeInitialSuccesses + 2u;
         return passed;
@@ -10332,7 +10397,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     const bool facadeRollbackAndRetry = tableFacadeAttempt(true)
         && tableFacadeAttempt(false);
     t.expect(facadeRollbackAndRetry,
-             "AC1018 TABLE frame references its *T block exactly once, closes owned-entity/reverse-INSERT edges, then rolls back and retries atomically");
+             "AC1018 TABLE frame references its TABLESTYLE and *T block exactly once, closes owned-entity/reverse-INSERT edges, then rolls back and retries atomically");
 
     const auto expectAtomicPreflightRefusal =
         [&](const char* message, DRW::Version version, auto mutate) {

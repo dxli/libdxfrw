@@ -3851,10 +3851,13 @@ Speed-oriented implementation sequence:
    hard-pointer edge to its matching anonymous `*T` BLOCK_RECORD, every
    `*T` child is indexed under that record, and the BLOCK_RECORD's reverse
    INSERT list and writer index point back to the TABLE exactly once. Mismatched
-   names are refused; outer rollback removes the block/entity edge and a
-   same-writer retry restores it. This closes only generated graph-bookkeeping
+   names and non-TABLESTYLE targets are refused. The TABLE and TABLECONTENT
+   style handles must agree and resolve to an emitted `AcDbTableStyle` class
+   instance. Outer rollback removes the block/entity edge and a same-writer
+   retry restores it. This closes only generated graph-bookkeeping
    and retry evidence: the control uses one synthetic LINE, does not establish
-   that geometry matches cells, and has no fresh independent readback. See the
+   that geometry matches cells or that the style is reachable from NOD, and has
+   no fresh independent readback. See the
    [graph-closure receipt](docs/research/p5-ac1018-table-block-graph-closure-2026-11-09.json).
    Public `dwgRW::writeTable` remains fail-closed. The
    existing AC1018 traces disagree on class number (528 versus
@@ -3882,10 +3885,11 @@ Speed-oriented implementation sequence:
    qualify native acceptance or text/line geometry generation. Keep the direct
    encoder restricted to generated models with no retained source subrecords.
    The graph-reference/ownership/retry bookkeeping slice is complete (see the
-   generated graph-closure receipt above). Next resolve the TABLESTYLE record
-   and derive geometry from the admitted TABLE model without guessing base
-   style values; then implement atomic BLOCK/BLOCK_RECORD/TABLE publication and
-   verify a locally authored DWG with fresh independent readback. Do not promote
+   generated graph-closure receipt above). Next close NOD-to-dictionary-to-
+   TABLESTYLE ownership, resolve the base style values, and derive geometry
+   from the admitted TABLE model without guessing. Then implement atomic
+   BLOCK/BLOCK_RECORD/TABLE publication and verify a locally authored DWG with
+   fresh independent readback. Do not promote
    support from the single ODA-converted source or the generated bookkeeping
    control.
 3. Keep AC1021+ and AC1024+ refused until their source-bound stream/handle
