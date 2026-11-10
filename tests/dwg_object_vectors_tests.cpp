@@ -10608,6 +10608,12 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             const bool closedTableGraph = graphScopeClosed
                 && tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
             const bool expectedGraphMismatchRefused = !closedTableGraph;
+            const bool savedHasAcDbColor = table.hasDwgAcDbColorHandle();
+            const std::uint32_t savedAcDbColor = table.dwgAcDbColorHandle();
+            table.setDwgAcDbColorHandle(true, 0xA911u);
+            const bool danglingAcDbColorRefused =
+                !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
+            table.setDwgAcDbColorHandle(savedHasAcDbColor, savedAcDbColor);
             const UTF8STRING savedTableName = table.name;
             table.name = "*T_MISMATCHED";
             const bool mismatchedNameRefused =
@@ -10637,6 +10643,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                     > tableFacadeInitialBytes;
             if (!earlierGeometryWritten || !injectedFailureOccurred
                 || !graphScopeClosed || !expectedGraphMismatchRefused
+                || !danglingAcDbColorRefused
                 || !mismatchedNameRefused || !nonStyleObjectRefused
                 || !danglingPlotStyleRefused
                 || !failedGeometryCallerRestored
@@ -10651,6 +10658,13 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             const bool graphScopeClosed = tableFacade.endBlockContent();
             const bool closedTableGraph = graphScopeClosed
                 && tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
+            const bool expectedTableGraphClosure = true;
+            const bool savedHasAcDbColor = table.hasDwgAcDbColorHandle();
+            const std::uint32_t savedAcDbColor = table.dwgAcDbColorHandle();
+            table.setDwgAcDbColorHandle(true, 0xA911u);
+            const bool danglingAcDbColorRefused =
+                !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
+            table.setDwgAcDbColorHandle(savedHasAcDbColor, savedAcDbColor);
             const UTF8STRING savedTableName = table.name;
             table.name = "*T_MISMATCHED";
             const bool mismatchedNameRefused =
@@ -10672,7 +10686,9 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             const bool danglingPlotStyleRefused =
                 !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
             table.plotStyle = savedPlotStyle;
-            if (!geometryWritten || !graphScopeClosed || !closedTableGraph
+            if (!geometryWritten || !graphScopeClosed
+                || closedTableGraph != expectedTableGraphClosure
+                || !danglingAcDbColorRefused
                 || !mismatchedNameRefused || !nonStyleObjectRefused
                 || !danglingPlotStyleRefused) {
                 (void)tableFacade.rollbackDwgWriteTransaction(transaction);
@@ -10737,11 +10753,23 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                 == tableFacadeInitialSuccesses + 2u;
         return passed;
     };
-    const bool facadeRollbackAndRetry = tableFacadeAttempt(true)
-        && tableFacadeAttempt(true, true)
-        && tableFacadeAttempt(true, false, true)
-        && tableFacadeAttempt(true, false, false, true)
-        && tableFacadeAttempt(false);
+    const bool tableRollback = tableFacadeAttempt(true);
+    const bool tableWrongStyleParent = tableFacadeAttempt(true, true);
+    const bool tableEmbeddedNulStyle = tableFacadeAttempt(true, false, true);
+    const bool tableDuplicateStyleTarget =
+        tableFacadeAttempt(true, false, false, true);
+    const bool tableCommit = tableFacadeAttempt(false);
+    t.expect(tableRollback, "AC1018 TABLE graph transaction rolls back");
+    t.expect(tableWrongStyleParent,
+             "AC1018 TABLE graph rejects wrong TABLESTYLE parent and rolls back");
+    t.expect(tableEmbeddedNulStyle,
+             "AC1018 TABLE graph rejects embedded-NUL TABLESTYLE name and rolls back");
+    t.expect(tableDuplicateStyleTarget,
+             "AC1018 TABLE graph rejects duplicate TABLESTYLE target and rolls back");
+    t.expect(tableCommit, "AC1018 TABLE graph commits a closed profile");
+    const bool facadeRollbackAndRetry = tableRollback
+        && tableWrongStyleParent && tableEmbeddedNulStyle
+        && tableDuplicateStyleTarget && tableCommit;
     t.expect(facadeRollbackAndRetry,
              "AC1018 TABLE frame references its TABLESTYLE and *T block exactly once, closes owned-entity/reverse-INSERT edges, then rolls back and retries atomically");
 

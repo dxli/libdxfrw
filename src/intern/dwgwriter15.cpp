@@ -1590,6 +1590,25 @@ bool dwgWriter15::hasClosedAc1018TableBlockGraph(
                 m_defaultPlotStylePlaceholderHandle))
             return false;
     }
+    if (table.hasAcDbColorH != (table.acDbColorHandle != 0u))
+        return false;
+    if (table.hasAcDbColorH) {
+        if (!hasEmittedDwgObjectHandle(table.acDbColorHandle))
+            return false;
+        std::uint16_t colorClassNumber = 0u;
+        if (!getDwgClassInstanceClass(table.acDbColorHandle,
+                                     colorClassNumber))
+            return false;
+        const auto colorClass = std::find_if(
+            m_dwgClassDefinitions.cbegin(), m_dwgClassDefinitions.cend(),
+            [colorClassNumber](const DwgClassDefinition& definition) {
+                return definition.m_classNum == colorClassNumber
+                    && definition.m_className == "AcDbColor"
+                    && definition.m_recordName == "DBCOLOR";
+            });
+        if (colorClass == m_dwgClassDefinitions.cend())
+            return false;
+    }
 
     std::uint16_t styleClassNumber = 0u;
     if (!getDwgClassInstanceClass(table.m_tableStyleHandle,
