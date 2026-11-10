@@ -1229,6 +1229,10 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dwg_local_roundtrip --table-content-dwg-object-roundtrip)
     set_tests_properties(libdxfrw_table_content_dwg_object_roundtrip PROPERTIES
         LABELS "fast;dwg;generated;tables;graph;writer" TIMEOUT 30)
+    add_test(NAME libdxfrw_tablestyle_nod_whole_file_roundtrip
+        COMMAND libdxfrw_dwg_local_roundtrip --tablestyle-nod-whole-file-roundtrip)
+    set_tests_properties(libdxfrw_tablestyle_nod_whole_file_roundtrip PROPERTIES
+        LABELS "fast;dwg;generated;tables;graph;writer;readback" TIMEOUT 30)
     add_test(NAME libdxfrw_dwg_builtin_block_owner_modes
         COMMAND libdxfrw_dwg_local_roundtrip --built-in-block-owner-modes)
     set_tests_properties(libdxfrw_dwg_builtin_block_owner_modes

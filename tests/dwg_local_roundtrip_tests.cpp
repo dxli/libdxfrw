@@ -37841,7 +37841,163 @@ bool runBlockRecordXrefMetadataRoundTrip(
 
 #include "dwg_ellipse_wcs_test.h"
 
+namespace {
+
+class TableStyleNodWholeFileAdapter final : public dx_iface {
+public:
+    explicit TableStyleNodWholeFileAdapter(dwgRW* writer, dx_data* data)
+        : m_writer(writer), m_data(data) {
+        cData = data;
+        dictionary.handle = kDictionaryHandle;
+        dictionary.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
+        dictionary.cloning = 1;
+        dictionary.hardOwner = 1;
+        dictionary.m_entries.push_back({"Standard", kStyleHandle});
+        style.handle = kStyleHandle;
+        style.parentHandle = kDictionaryHandle;
+        style.m_name = "Standard";
+        for (int rowIndex = 0; rowIndex < 3; ++rowIndex) {
+            DRW_TableStyleRowStyle row;
+            row.m_textHeight = 1.0 + rowIndex;
+            row.m_textAlignment = 5;
+            row.m_textStyleHandle = DRW::DwgStandardTextStyleHandle;
+            for (int edgeIndex = 0; edgeIndex < 6; ++edgeIndex) {
+                DRW_TableStyleBorder border;
+                border.m_edgeFlags = 1 << edgeIndex;
+                row.m_borders.push_back(border);
+            }
+            style.m_rowStyles.push_back(row);
+        }
+    }
+
+    void writeDwgClasses() override {
+        ready = m_writer != nullptr && m_data != nullptr
+            && m_writer->registerDwgNamedObjectDictionaryEntry(
+                "ACAD_TABLESTYLE", kDictionaryHandle)
+            && m_writer->registerTableStyleObjectClass(&style);
+    }
+    void writeBlocks() override {}
+    void writeBlockRecords() override {}
+    void writeEntities() override {}
+    void writeLTypes() override {}
+    void writeLayers() override {}
+    void writeTextstyles() override {}
+    void writeVports() override {}
+    void writeDimstyles() override {}
+    void writeAppId() override {}
+    void writeObjects() override {
+        if (!ready || !m_writer->writeDictionary(&dictionary)
+            || !m_writer->writeTableStyle(&style)) {
+            ready = false;
+        }
+    }
+
+    static constexpr std::uint32_t kDictionaryHandle = 0xA6FFu;
+    static constexpr std::uint32_t kStyleHandle = 0xA700u;
+    dwgRW* m_writer {nullptr};
+    dx_data* m_data {nullptr};
+    DRW_Dictionary dictionary;
+    DRW_TableStyle style;
+    bool ready {false};
+};
+
+bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr) {
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch().count();
+    const auto path = retainedOutput != nullptr
+        ? std::filesystem::path(retainedOutput)
+        : std::filesystem::temp_directory_path()
+            / ("libdxfrw-ac1018-tablestyle-nod-"
+               + std::to_string(nonce) + ".dwg");
+    struct Cleanup {
+        std::filesystem::path path;
+        bool removeOutput;
+        ~Cleanup() {
+            if (removeOutput) {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        }
+    } cleanup{path, retainedOutput == nullptr};
+
+    dx_data writerData;
+    dwgRW output(path.string().c_str());
+    TableStyleNodWholeFileAdapter producer(&output, &writerData);
+    if (!output.write(&producer, DRW::AC1018, true) || !producer.ready)
+        return false;
+
+    dx_data readData;
+    dx_iface freshReader;
+    freshReader.cData = &readData;
+    dwgRW input(path.string().c_str());
+    if (!input.read(&freshReader, false)
+        || !readData.hasNamedObjectDictionary)
+        return false;
+
+    const auto sameAsciiSymbol = [](const std::string& lhs,
+                                    const std::string& rhs) {
+        return lhs.size() == rhs.size()
+            && std::equal(lhs.begin(), lhs.end(), rhs.begin(),
+                [](unsigned char a, unsigned char b) {
+                    const auto fold = [](unsigned char value) {
+                        return value >= 'a' && value <= 'z'
+                            ? static_cast<unsigned char>(value - 'a' + 'A')
+                            : value;
+                    };
+                    return fold(a) == fold(b);
+                });
+    };
+    const DRW_Dictionary* styleDictionary = nullptr;
+    std::size_t rootMatches = 0u;
+    for (const DRW_Dictionary::Entry& entry :
+         readData.namedObjectDictionary.m_entries) {
+        if (!sameAsciiSymbol(entry.m_name, "ACAD_TABLESTYLE"))
+            continue;
+        ++rootMatches;
+        for (const DRW_Dictionary& dictionary : readData.dictionaries) {
+            if (dictionary.handle != entry.m_handle)
+                continue;
+            if (styleDictionary != nullptr)
+                return false;
+            styleDictionary = &dictionary;
+        }
+    }
+    if (rootMatches != 1u || styleDictionary == nullptr
+        || styleDictionary->parentHandle
+            != readData.namedObjectDictionary.handle
+        || styleDictionary->hardOwner != 1
+        || styleDictionary->m_entries.size() != 1u
+        || styleDictionary->m_entries.front().m_name != "Standard")
+        return false;
+    const std::uint32_t emittedStyleHandle =
+        styleDictionary->m_entries.front().m_handle;
+    std::size_t styleMatches = 0u;
+    for (const DRW_TableStyle& style : readData.tableStyles) {
+        if (style.handle != emittedStyleHandle)
+            continue;
+        ++styleMatches;
+        if (style.parentHandle != styleDictionary->handle
+            || style.m_name != "Standard" || style.m_rowStyles.size() != 3u
+            || style.m_rowStyles[0].m_textHeight != 1.0
+            || style.m_rowStyles[1].m_textHeight != 2.0
+            || style.m_rowStyles[2].m_textHeight != 3.0)
+            return false;
+    }
+    return styleMatches == 1u
+        && emittedStyleHandle == TableStyleNodWholeFileAdapter::kStyleHandle;
+}
+
+} // namespace
+
 int main(int argc, char** argv) {
+    if ((argc == 2 || argc == 3)
+        && std::string(argv[1]) == "--tablestyle-nod-whole-file-roundtrip") {
+        const bool passed = testTableStyleNodWholeFileRoundTrip(
+            argc == 3 ? argv[2] : nullptr);
+        std::cout << "AC1018 TABLESTYLE NOD whole-file round-trip: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    }
     if (argc == 2
         && std::string(argv[1]) == "--sab21200-sat-v1-controls") {
         const bool passed = runAcisSab21200SatV1Controls();
