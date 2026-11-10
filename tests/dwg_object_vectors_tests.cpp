@@ -392,6 +392,14 @@ public:
   std::uint16_t dwgType() const { return oType; }
 };
 
+class TraceCodecProbe final : public DRW_Trace {
+public:
+  using DRW_Trace::encodeDwg;
+
+  void setDwgType(std::uint16_t value) { oType = value; }
+  std::uint16_t dwgType() const { return oType; }
+};
+
 class ViewportCodecProbe final : public DRW_Viewport {
 public:
   using DRW_Viewport::encodeDwg;
@@ -25078,6 +25086,26 @@ void testRayXlineDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testTraceDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+    TraceCodecProbe trace;
+    trace.handle = version == DRW::AC1021 ? 0xAE10u : 0xAE20u;
+    trace.parentHandle = 0xAE30u;
+    trace.reactorHandles = {0xAE40u};
+    trace.xDictHandle = 0xAE50u;
+    trace.setDwgType(0x777u);
+    trace.basePoint = DRW_Coord(1.25, 2.5, 3.75);
+    trace.secPoint = DRW_Coord(4.0, 2.5, 3.75);
+    trace.thirdPoint = DRW_Coord(4.0, 5.0, 0.0);
+    trace.fourPoint = DRW_Coord(1.25, 5.0, 3.75);
+    trace.thickness = 0.5;
+    trace.extPoint = DRW_Coord(0.0, 0.0, 1.0);
+    checkEntityDwgEncodeAllocationRollback(
+        t, trace, version, 32u,
+        version == DRW::AC1021 ? "AC1021 TRACE" : "AC1024 TRACE");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -28209,6 +28237,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testRayXlineDwgEncodeAllocationRollback(context);
       std::cout << "RAY/XLINE DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 &&
+        std::string(argv[1]) == "--trace-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testTraceDwgEncodeAllocationRollback(context);
+      std::cout << "TRACE DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }
