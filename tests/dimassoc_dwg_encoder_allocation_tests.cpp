@@ -86,6 +86,11 @@ public:
     using DRW_RasterVariables::encodeDwg;
 };
 
+class WipeoutVariablesProbe final : public DRW_WipeoutVariables {
+public:
+    using DRW_WipeoutVariables::encodeDwg;
+};
+
 DimensionAssociationProbe makeAssociation() {
     DimensionAssociationProbe association;
     association.handle = 0xA100u;
@@ -211,6 +216,82 @@ bool sweepRasterVariables(DRW::Version version, bool aliasHandles) {
             return false;
     }
     std::cout << "RASTERVARIABLES DWG encoder version="
+              << static_cast<int>(version)
+              << (aliasHandles ? " body-aliased" : " separate-handles")
+              << ": allocation offsets=" << allocations
+              << ", rollback/retry=PASS\n";
+    return true;
+}
+
+WipeoutVariablesProbe makeWipeoutVariables() {
+    WipeoutVariablesProbe variables;
+    variables.handle = 0xA600u;
+    variables.parentHandle = 0x20u;
+    variables.reactorHandles = {0x21u, 0x22u};
+    variables.setDwgCommonObjectState(2, 1u, false);
+    variables.xDictHandle = 0x23u;
+    variables.m_classVersion = 0;
+    variables.m_displayFrame = 1u;
+    return variables;
+}
+
+bool sweepWipeoutVariables(DRW::Version version, bool aliasHandles) {
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    const WipeoutVariablesProbe variables = makeWipeoutVariables();
+    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
+    seed(cleanBody, cleanStrings, cleanHandles);
+    dwgBufferW* const cleanHandleOutput = aliasHandles ? &cleanBody
+                                                       : &cleanHandles;
+    if (!variables.encodeDwg(version, &cleanBody, &cleanStrings,
+                             cleanHandleOutput))
+        return false;
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    seed(body, strings, handles);
+    dwgBufferW* const handleOutput = aliasHandles ? &body : &handles;
+    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
+    const unsigned long beforeCalibration =
+        failedAllocations.load(std::memory_order_relaxed);
+    const bool calibrated = variables.encodeDwg(version, &body, &strings,
+                                                handleOutput);
+    const long allocations = 1000000
+        - allocationsBeforeFailure.load(std::memory_order_relaxed);
+    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+    if (!calibrated || allocations <= 0
+        || failedAllocations.load(std::memory_order_relaxed)
+            != beforeCalibration)
+        return false;
+
+    for (long offset = 0; offset < allocations; ++offset) {
+        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
+        seed(failedBody, failedStrings, failedHandles);
+        dwgBufferW* const failedHandleOutput = aliasHandles ? &failedBody
+                                                            : &failedHandles;
+        const dwgBufferW originalBody = failedBody;
+        const dwgBufferW originalStrings = failedStrings;
+        const dwgBufferW originalHandles = failedHandles;
+        const unsigned long beforeFailure =
+            failedAllocations.load(std::memory_order_relaxed);
+        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
+        const bool encoded = variables.encodeDwg(
+            version, &failedBody, &failedStrings, failedHandleOutput);
+        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+        if (encoded
+            || failedAllocations.load(std::memory_order_relaxed)
+                != beforeFailure + 1u
+            || !same(failedBody, originalBody)
+            || !same(failedStrings, originalStrings)
+            || !same(failedHandles, originalHandles))
+            return false;
+        if (!variables.encodeDwg(version, &failedBody, &failedStrings,
+                                 failedHandleOutput)
+            || !same(failedBody, cleanBody)
+            || !same(failedStrings, cleanStrings)
+            || !same(failedHandles, cleanHandles))
+            return false;
+    }
+    std::cout << "WIPEOUTVARIABLES DWG encoder version="
               << static_cast<int>(version)
               << (aliasHandles ? " body-aliased" : " separate-handles")
               << ": allocation offsets=" << allocations
@@ -1634,6 +1715,9 @@ int main() {
         || !sweepRasterVariables(DRW::AC1012, false)
         || !sweepRasterVariables(DRW::AC1018, false)
         || !sweepRasterVariables(DRW::AC1021, true)
+        || !sweepWipeoutVariables(DRW::AC1012, false)
+        || !sweepWipeoutVariables(DRW::AC1018, false)
+        || !sweepWipeoutVariables(DRW::AC1021, true)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
         || !sweepGroup(ImageDefinitionStreams::Separate)

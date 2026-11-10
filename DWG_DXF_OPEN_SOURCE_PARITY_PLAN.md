@@ -1353,6 +1353,16 @@ created locally from scratch for the specific control.
   was added. See the [RASTERVARIABLES allocation receipt](docs/research/p6-rastervariables-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 1,521 offsets across 72 cases.
 
+- **WIPEOUTVARIABLES DWG encoder transaction safety:**
+  `DRW_WipeoutVariables::encodeDwg` now stages its effective body and detached
+  handle stream, preserving AC1012 inline handles and later-version aliasing.
+  Generated AC1012, AC1018, and AC1021 controls sweep 22 allocation offsets;
+  every injected failure preserves caller streams/cursors/handle ledgers, and
+  same-object retry matches clean output. The combined allocation, object-
+  vector, and WIPEOUTVARIABLES OBJECTS allocation tests pass 3/3. No DWG/DXF
+  fixture was added. See the [WIPEOUTVARIABLES allocation receipt](docs/research/p6-wipeoutvariables-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 1,543 offsets across 75 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

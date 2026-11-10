@@ -12217,15 +12217,29 @@ bool DRW_WipeoutVariables::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || xDictFlag > 1 || m_displayFrame > 1u)
         return false;
     DRW_UNUSED(strBuf);
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
-        ? handleBuf
-        : buf;
+    try {
+        dwgBufferW stagedBody = *buf;
+        const bool separateHandles = handleBuf != nullptr
+            && handleBuf != buf && version > DRW::AC1014;
+        dwgBufferW stagedHandles;
+        if (separateHandles)
+            stagedHandles = *handleBuf;
+        dwgBufferW *hb = separateHandles ? &stagedHandles : &stagedBody;
 
-    buf->putBitShort(m_displayFrame);
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), numReactors, xDictFlag,
-        &reactorHandles, xDictHandle);
-    return buf->isGood() && hb->isGood();
+        stagedBody.putBitShort(m_displayFrame);
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle), numReactors,
+            xDictFlag, &reactorHandles, xDictHandle);
+        if (!stagedBody.isGood() || !hb->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (separateHandles)
+            handleBuf->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_SortEntsTable::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
