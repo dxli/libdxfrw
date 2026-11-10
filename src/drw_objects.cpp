@@ -38242,16 +38242,45 @@ bool DRW_DbColor::encodeDwg(DRW::Version version, dwgBufferW *buf,
         && (strBuf == nullptr || strBuf == buf))
         return false;
 
-    dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018)
-        ? strBuf : buf;
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
-        ? handleBuf : buf;
-    buf->putCmColorWithFlags(version, method, index, rgb24, name, bookName,
-                             flags, sb);
-    putCommonObjectHandlePrefix(hb, static_cast<std::uint32_t>(parentHandle),
-                                numReactors, xDictFlag, &reactorHandles,
-                                xDictHandle);
-    return buf->isGood() && sb->isGood() && hb->isGood();
+    dwgBufferW *const stringDest =
+        (strBuf != nullptr && version > DRW::AC1018) ? strBuf : buf;
+    dwgBufferW *const handleDest =
+        (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
+    const bool separateStrings = stringDest != buf;
+    const bool separateHandles = handleDest != buf && handleDest != stringDest;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *buf;
+        if (separateStrings)
+            stagedStrings = *stringDest;
+        if (separateHandles)
+            stagedHandles = *handleDest;
+
+        dwgBufferW *const bodyOut = &stagedBody;
+        dwgBufferW *const stringOut = separateStrings
+            ? &stagedStrings : bodyOut;
+        dwgBufferW *const handleOut = handleDest == buf ? bodyOut
+            : handleDest == stringDest ? stringOut : &stagedHandles;
+        bodyOut->putCmColorWithFlags(version, method, index, rgb24, name,
+                                     bookName, flags, stringOut);
+        putCommonObjectHandlePrefix(
+            handleOut, static_cast<std::uint32_t>(parentHandle), numReactors,
+            xDictFlag, &reactorHandles, xDictHandle);
+        if (!bodyOut->isGood() || !stringOut->isGood()
+            || !handleOut->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (separateStrings)
+            stringDest->swap(stagedStrings);
+        if (separateHandles)
+            handleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_DimensionAssociation::encodeDwg(

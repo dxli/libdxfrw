@@ -1188,6 +1188,16 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P6 DBCOLOR DWG encoder transaction safety:** `DRW_DbColor::encodeDwg`
+  now stages body/string/handle writes with alias-aware publication. Generated
+  AC1018 inline and detached-handle layouts plus AC1021 separate and shared
+  string/handle layouts sweep 76 reached allocation offsets; every failure
+  preserves caller buffers, and same-object retry matches clean output. The
+  focused allocation sweep, DWG object-vector test, and unsupported-method
+  refusal test pass. This closes only local transaction safety for those
+  generated profiles; no DBCOLOR support or producer claim is promoted. See
+  the [rollback receipt](docs/research/p6-dbcolor-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **P4 AC1027 Sweep embedded LWPOLYLINE field capture:** the bounded type-77
   decoder now retains the raw spans and captures modeled scalar, normal,
   vertex and optional-array fields, including valid polyline flags `0x100`,

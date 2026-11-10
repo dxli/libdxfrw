@@ -76,6 +76,11 @@ public:
     using DRW_PartialViewingIndex::encodeDwg;
 };
 
+class DbColorProbe final : public DRW_DbColor {
+public:
+    using DRW_DbColor::encodeDwg;
+};
+
 class PointCloudDefProbe final : public DRW_PointCloudDef {
 public:
     using DRW_PointCloudDef::encodeDwg;
@@ -256,8 +261,13 @@ bool sweepTransactionalEncoder(const char* recordName, const char* layoutName,
     const EncoderOutputs cleanOutput =
         selectOutputs(cleanBody, cleanStrings, cleanHandles);
     if (!encode(version, &cleanBody, cleanOutput.stringStream,
-                cleanOutput.handleStream))
+                cleanOutput.handleStream)) {
+        std::cerr << recordName << " " << layoutName
+                  << ": clean encoding failed; body=" << cleanBody.isGood()
+                  << " strings=" << cleanStrings.isGood()
+                  << " handles=" << cleanHandles.isGood() << '\n';
         return false;
+    }
 
     dwgBufferW body(&codec), strings(&codec), handles(&codec);
     seed(body, strings, handles);
@@ -272,8 +282,12 @@ bool sweepTransactionalEncoder(const char* recordName, const char* layoutName,
     allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
     if (!calibrated || allocations <= 0
         || failedAllocations.load(std::memory_order_relaxed)
-            != beforeCalibration)
+            != beforeCalibration) {
+        std::cerr << recordName << " " << layoutName
+                  << ": allocation calibration failed; encoded="
+                  << calibrated << " allocations=" << allocations << '\n';
         return false;
+    }
 
     for (long offset = 0; offset < allocations; ++offset) {
         dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
@@ -295,20 +309,82 @@ bool sweepTransactionalEncoder(const char* recordName, const char* layoutName,
                 != beforeFailure + 1u
             || !same(failedBody, originalBody)
             || !same(failedStrings, originalStrings)
-            || !same(failedHandles, originalHandles))
+            || !same(failedHandles, originalHandles)) {
+            std::cerr << recordName << " " << layoutName
+                      << ": rollback failed at allocation " << offset
+                      << " encoded=" << encoded << '\n';
             return false;
+        }
         if (!encode(version, &failedBody, failedOutput.stringStream,
                     failedOutput.handleStream)
             || !same(failedBody, cleanBody)
             || !same(failedStrings, cleanStrings)
-            || !same(failedHandles, cleanHandles))
+            || !same(failedHandles, cleanHandles)) {
+            std::cerr << recordName << " " << layoutName
+                      << ": retry failed at allocation " << offset << '\n';
             return false;
+        }
     }
     std::cout << recordName << " DWG encoder version="
               << static_cast<int>(version) << ' ' << layoutName
               << ": allocation offsets=" << allocations
               << ", rollback/retry=PASS\n";
     return true;
+}
+
+DbColorProbe makeDbColor() {
+    DbColorProbe color;
+    color.handle = 0xD7B0u;
+    color.parentHandle = 0xD7AFu;
+    color.reactorHandles = {0xD7A0u, 0xD7A1u};
+    color.setDwgCommonObjectState(2, 1u, false);
+    color.xDictHandle = 0xD7A2u;
+    color.rgb = 0x345678;
+    color.colorIndex = 256u;
+    color.name = "ENCODER_COLOR_NAME";
+    color.bookName = "ENCODER_COLOR_BOOK";
+    return color;
+}
+
+enum class DbColorStreamLayout {
+    Ac1018Inline,
+    Ac1018DetachedHandles,
+    Ac1021Separate,
+    Ac1021SharedStringAndHandle
+};
+
+bool sweepDbColor(DbColorStreamLayout layout) {
+    const DRW::Version version =
+        layout == DbColorStreamLayout::Ac1018Inline
+            || layout == DbColorStreamLayout::Ac1018DetachedHandles
+            ? DRW::AC1018
+        : DRW::AC1021;
+    const DbColorProbe color = makeDbColor();
+    const auto encode = [&color](DRW::Version v, dwgBufferW* body,
+                                 dwgBufferW* strings, dwgBufferW* handles) {
+        return color.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [layout](dwgBufferW& body, dwgBufferW& strings,
+                                  dwgBufferW& handles) {
+        switch (layout) {
+        case DbColorStreamLayout::Ac1018Inline:
+            return EncoderOutputs{};
+        case DbColorStreamLayout::Ac1018DetachedHandles:
+            return EncoderOutputs{nullptr, &handles};
+        case DbColorStreamLayout::Ac1021Separate:
+            return EncoderOutputs{&strings, &handles};
+        case DbColorStreamLayout::Ac1021SharedStringAndHandle:
+            return EncoderOutputs{&strings, &strings};
+        }
+        return EncoderOutputs{&body, &handles};
+    };
+    static const char* const names[] = {
+        "AC1018-inline", "AC1018-detached-handles", "separate",
+        "shared-string-handle"
+    };
+    return sweepTransactionalEncoder(
+        "DBCOLOR", names[static_cast<std::size_t>(layout)], version,
+        encode, outputs);
 }
 
 RasterVariablesProbe makeRasterVariables() {
@@ -2958,7 +3034,11 @@ void operator delete(void* memory, std::size_t) noexcept { std::free(memory); }
 void operator delete[](void* memory, std::size_t) noexcept { std::free(memory); }
 
 int main() {
-    if (!sweep(StreamAlias::Separate)
+    if (!sweepDbColor(DbColorStreamLayout::Ac1018Inline)
+        || !sweepDbColor(DbColorStreamLayout::Ac1018DetachedHandles)
+        || !sweepDbColor(DbColorStreamLayout::Ac1021Separate)
+        || !sweepDbColor(DbColorStreamLayout::Ac1021SharedStringAndHandle)
+        || !sweep(StreamAlias::Separate)
         || !sweep(StreamAlias::SharedStringAndHandle)
         || !sweep(StreamAlias::AllBody)
         || !sweepEvaluationGraph(false)
