@@ -24958,16 +24958,46 @@ bool DRW_UnderlayDefinition::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || reactorHandles.size() > dwgSafety::MaxReactorCount
         || extensionDictionaryFlag() > 1)
         return false;
-    dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018) ? strBuf : buf;
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
+    try {
+        dwgBufferW *const callerBody = buf;
+        dwgBufferW *const callerStringDest =
+            (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+        dwgBufferW *const callerHandleDest =
+            (handleBuf != nullptr && version > DRW::AC1014)
+                ? handleBuf : callerBody;
+        const bool separateStrings = callerStringDest != callerBody;
+        const bool separateHandles = callerHandleDest != callerBody
+            && callerHandleDest != callerStringDest;
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedStrings;
+        dwgBufferW stagedHandles;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+        buf = &stagedBody;
+        dwgBufferW *sb = separateStrings ? &stagedStrings : buf;
+        dwgBufferW *hb = separateHandles ? &stagedHandles
+            : callerHandleDest == callerStringDest && separateStrings
+                ? &stagedStrings : buf;
 
-    sb->putVariableText(version, filename);
-    sb->putVariableText(version, sheetName);
+        sb->putVariableText(version, filename);
+        sb->putVariableText(version, sheetName);
 
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), reactorCount(),
-        extensionDictionaryFlag(), &reactorHandles, xDictHandle);
-    return buf->isGood() && sb->isGood() && hb->isGood();
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle), reactorCount(),
+            extensionDictionaryFlag(), &reactorHandles, xDictHandle);
+        if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 // SCALE (AcDbScale) — annotation-scale entry, ODA §20.4.92,

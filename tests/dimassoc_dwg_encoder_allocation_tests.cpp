@@ -101,6 +101,11 @@ public:
     using DRW_LightList::encodeDwg;
 };
 
+class UnderlayDefinitionProbe final : public DRW_UnderlayDefinition {
+public:
+    using DRW_UnderlayDefinition::encodeDwg;
+};
+
 class PointCloudDefProbe final : public DRW_PointCloudDef {
 public:
     using DRW_PointCloudDef::encodeDwg;
@@ -654,6 +659,60 @@ bool sweepLightList(LightListStreamLayout layout) {
     };
     return sweepTransactionalEncoder(
         "LIGHTLIST", names[static_cast<std::size_t>(layout)],
+        version, encode, outputs);
+}
+
+UnderlayDefinitionProbe makeUnderlayDefinition() {
+    UnderlayDefinitionProbe definition;
+    definition.handle = 0xDC00u;
+    definition.parentHandle = 0xDC01u;
+    definition.reactorHandles = {0xDC02u};
+    definition.setDwgCommonObjectState(2, 1u, false);
+    definition.xDictHandle = 0xDC03u;
+    definition.kind = DRW_UnderlayDefinition::PDF;
+    definition.filename = "Generated/underlay/transaction.pdf";
+    definition.sheetName = "Sheet 7";
+    return definition;
+}
+
+enum class UnderlayStreamLayout {
+    Separate,
+    SharedStringAndHandle,
+    BodyStringDetachedHandles,
+    SeparateStringBodyHandles,
+    AllBody
+};
+
+bool sweepUnderlayDefinition(UnderlayStreamLayout layout) {
+    const DRW::Version version = DRW::AC1021;
+    const UnderlayDefinitionProbe definition = makeUnderlayDefinition();
+    const auto encode = [&definition](DRW::Version v, dwgBufferW* body,
+                                      dwgBufferW* strings,
+                                      dwgBufferW* handles) {
+        return definition.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [layout](dwgBufferW& body, dwgBufferW& strings,
+                                  dwgBufferW& handles) {
+        switch (layout) {
+        case UnderlayStreamLayout::Separate:
+            return EncoderOutputs{&strings, &handles};
+        case UnderlayStreamLayout::SharedStringAndHandle:
+            return EncoderOutputs{&strings, &strings};
+        case UnderlayStreamLayout::BodyStringDetachedHandles:
+            return EncoderOutputs{&body, &handles};
+        case UnderlayStreamLayout::SeparateStringBodyHandles:
+            return EncoderOutputs{&strings, &body};
+        case UnderlayStreamLayout::AllBody:
+            return EncoderOutputs{};
+        }
+        return EncoderOutputs{&strings, &handles};
+    };
+    static const char* const names[] = {
+        "separate", "shared-string-handle", "body-string-detached-handles",
+        "separate-string-body-handles", "all-body"
+    };
+    return sweepTransactionalEncoder(
+        "UNDERLAYDEFINITION", names[static_cast<std::size_t>(layout)],
         version, encode, outputs);
 }
 
@@ -3327,6 +3386,11 @@ int main() {
         || !sweepLightList(LightListStreamLayout::BodyStringDetachedHandles)
         || !sweepLightList(LightListStreamLayout::SeparateStringBodyHandles)
         || !sweepLightList(LightListStreamLayout::AllBody)
+        || !sweepUnderlayDefinition(UnderlayStreamLayout::Separate)
+        || !sweepUnderlayDefinition(UnderlayStreamLayout::SharedStringAndHandle)
+        || !sweepUnderlayDefinition(UnderlayStreamLayout::BodyStringDetachedHandles)
+        || !sweepUnderlayDefinition(UnderlayStreamLayout::SeparateStringBodyHandles)
+        || !sweepUnderlayDefinition(UnderlayStreamLayout::AllBody)
         || !sweep(StreamAlias::Separate)
         || !sweep(StreamAlias::SharedStringAndHandle)
         || !sweep(StreamAlias::AllBody)

@@ -1188,6 +1188,14 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P6 UNDERLAYDEFINITION DWG encoder transaction safety:** the encoder now
+  stages body, filename/sheet text and common handle streams, including alias
+  routing. Five generated AC1021 layouts sweep 119 allocation offsets; each
+  failure preserves caller state and same-object retry matches clean output.
+  The focused allocation CTest passes. This does not qualify underlay graph
+  semantics, physical producers, native consumers or output support. See the
+  [rollback receipt](docs/research/p6-underlaydefinition-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **P6 LIGHTLIST DWG encoder transaction safety:** `DRW_LightList::encodeDwg`
   now stages the body, string and handle destinations while preserving
   body-resident child-light hard pointers and alias routing. The generated
