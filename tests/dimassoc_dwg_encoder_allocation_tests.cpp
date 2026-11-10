@@ -160,6 +160,77 @@ void seed(dwgBufferW& body, dwgBufferW& strings, dwgBufferW& handles) {
     handles.putBit(1u);
 }
 
+struct EncoderOutputs {
+    dwgBufferW* stringStream = nullptr;
+    dwgBufferW* handleStream = nullptr;
+};
+
+template <typename Encode, typename OutputSelector>
+bool sweepTransactionalEncoder(const char* recordName, const char* layoutName,
+                               DRW::Version version, const Encode& encode,
+                               const OutputSelector& selectOutputs) {
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
+    seed(cleanBody, cleanStrings, cleanHandles);
+    const EncoderOutputs cleanOutput =
+        selectOutputs(cleanBody, cleanStrings, cleanHandles);
+    if (!encode(version, &cleanBody, cleanOutput.stringStream,
+                cleanOutput.handleStream))
+        return false;
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    seed(body, strings, handles);
+    const EncoderOutputs output = selectOutputs(body, strings, handles);
+    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
+    const unsigned long beforeCalibration =
+        failedAllocations.load(std::memory_order_relaxed);
+    const bool calibrated = encode(version, &body, output.stringStream,
+                                    output.handleStream);
+    const long allocations = 1000000
+        - allocationsBeforeFailure.load(std::memory_order_relaxed);
+    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+    if (!calibrated || allocations <= 0
+        || failedAllocations.load(std::memory_order_relaxed)
+            != beforeCalibration)
+        return false;
+
+    for (long offset = 0; offset < allocations; ++offset) {
+        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
+        seed(failedBody, failedStrings, failedHandles);
+        const EncoderOutputs failedOutput =
+            selectOutputs(failedBody, failedStrings, failedHandles);
+        const dwgBufferW originalBody = failedBody;
+        const dwgBufferW originalStrings = failedStrings;
+        const dwgBufferW originalHandles = failedHandles;
+        const unsigned long beforeFailure =
+            failedAllocations.load(std::memory_order_relaxed);
+        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
+        const bool encoded = encode(version, &failedBody,
+                                    failedOutput.stringStream,
+                                    failedOutput.handleStream);
+        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+        if (encoded
+            || failedAllocations.load(std::memory_order_relaxed)
+                != beforeFailure + 1u
+            || !same(failedBody, originalBody)
+            || !same(failedStrings, originalStrings)
+            || !same(failedHandles, originalHandles))
+            return false;
+        if (!encode(version, &failedBody, failedOutput.stringStream,
+                    failedOutput.handleStream)
+            || !same(failedBody, cleanBody)
+            || !same(failedStrings, cleanStrings)
+            || !same(failedHandles, cleanHandles))
+            return false;
+    }
+    std::cout << recordName << " DWG encoder version="
+              << static_cast<int>(version) << ' ' << layoutName
+              << ": allocation offsets=" << allocations
+              << ", rollback/retry=PASS\n";
+    return true;
+}
+
 RasterVariablesProbe makeRasterVariables() {
     RasterVariablesProbe variables;
     variables.handle = 0xA500u;
@@ -175,67 +246,20 @@ RasterVariablesProbe makeRasterVariables() {
 }
 
 bool sweepRasterVariables(DRW::Version version, bool aliasHandles) {
-    DRW_TextCodec codec;
-    codec.setVersion(version, false);
     const RasterVariablesProbe variables = makeRasterVariables();
-    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
-    seed(cleanBody, cleanStrings, cleanHandles);
-    dwgBufferW* const cleanHandleOutput = aliasHandles ? &cleanBody
-                                                       : &cleanHandles;
-    if (!variables.encodeDwg(version, &cleanBody, &cleanStrings,
-                             cleanHandleOutput))
-        return false;
-
-    dwgBufferW body(&codec), strings(&codec), handles(&codec);
-    seed(body, strings, handles);
-    dwgBufferW* const handleOutput = aliasHandles ? &body : &handles;
-    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
-    const unsigned long beforeCalibration =
-        failedAllocations.load(std::memory_order_relaxed);
-    const bool calibrated = variables.encodeDwg(version, &body, &strings,
-                                                handleOutput);
-    const long allocations = 1000000
-        - allocationsBeforeFailure.load(std::memory_order_relaxed);
-    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
-    if (!calibrated || allocations <= 0
-        || failedAllocations.load(std::memory_order_relaxed)
-            != beforeCalibration)
-        return false;
-
-    for (long offset = 0; offset < allocations; ++offset) {
-        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
-        seed(failedBody, failedStrings, failedHandles);
-        dwgBufferW* const failedHandleOutput = aliasHandles ? &failedBody
-                                                            : &failedHandles;
-        const dwgBufferW originalBody = failedBody;
-        const dwgBufferW originalStrings = failedStrings;
-        const dwgBufferW originalHandles = failedHandles;
-        const unsigned long beforeFailure =
-            failedAllocations.load(std::memory_order_relaxed);
-        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
-        const bool encoded = variables.encodeDwg(
-            version, &failedBody, &failedStrings, failedHandleOutput);
-        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
-        if (encoded
-            || failedAllocations.load(std::memory_order_relaxed)
-                != beforeFailure + 1u
-            || !same(failedBody, originalBody)
-            || !same(failedStrings, originalStrings)
-            || !same(failedHandles, originalHandles))
-            return false;
-        if (!variables.encodeDwg(version, &failedBody, &failedStrings,
-                                 failedHandleOutput)
-            || !same(failedBody, cleanBody)
-            || !same(failedStrings, cleanStrings)
-            || !same(failedHandles, cleanHandles))
-            return false;
-    }
-    std::cout << "RASTERVARIABLES DWG encoder version="
-              << static_cast<int>(version)
-              << (aliasHandles ? " body-aliased" : " separate-handles")
-              << ": allocation offsets=" << allocations
-              << ", rollback/retry=PASS\n";
-    return true;
+    const auto encode = [&variables](DRW::Version v, dwgBufferW* body,
+                                     dwgBufferW* strings,
+                                     dwgBufferW* handles) {
+        return variables.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [aliasHandles](dwgBufferW& body,
+                                        dwgBufferW& strings,
+                                        dwgBufferW& handles) {
+        return EncoderOutputs{&strings, aliasHandles ? &body : &handles};
+    };
+    return sweepTransactionalEncoder("RASTERVARIABLES",
+        aliasHandles ? "body-aliased" : "separate-handles", version,
+        encode, outputs);
 }
 
 WipeoutVariablesProbe makeWipeoutVariables() {
@@ -251,67 +275,20 @@ WipeoutVariablesProbe makeWipeoutVariables() {
 }
 
 bool sweepWipeoutVariables(DRW::Version version, bool aliasHandles) {
-    DRW_TextCodec codec;
-    codec.setVersion(version, false);
     const WipeoutVariablesProbe variables = makeWipeoutVariables();
-    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
-    seed(cleanBody, cleanStrings, cleanHandles);
-    dwgBufferW* const cleanHandleOutput = aliasHandles ? &cleanBody
-                                                       : &cleanHandles;
-    if (!variables.encodeDwg(version, &cleanBody, &cleanStrings,
-                             cleanHandleOutput))
-        return false;
-
-    dwgBufferW body(&codec), strings(&codec), handles(&codec);
-    seed(body, strings, handles);
-    dwgBufferW* const handleOutput = aliasHandles ? &body : &handles;
-    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
-    const unsigned long beforeCalibration =
-        failedAllocations.load(std::memory_order_relaxed);
-    const bool calibrated = variables.encodeDwg(version, &body, &strings,
-                                                handleOutput);
-    const long allocations = 1000000
-        - allocationsBeforeFailure.load(std::memory_order_relaxed);
-    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
-    if (!calibrated || allocations <= 0
-        || failedAllocations.load(std::memory_order_relaxed)
-            != beforeCalibration)
-        return false;
-
-    for (long offset = 0; offset < allocations; ++offset) {
-        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
-        seed(failedBody, failedStrings, failedHandles);
-        dwgBufferW* const failedHandleOutput = aliasHandles ? &failedBody
-                                                            : &failedHandles;
-        const dwgBufferW originalBody = failedBody;
-        const dwgBufferW originalStrings = failedStrings;
-        const dwgBufferW originalHandles = failedHandles;
-        const unsigned long beforeFailure =
-            failedAllocations.load(std::memory_order_relaxed);
-        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
-        const bool encoded = variables.encodeDwg(
-            version, &failedBody, &failedStrings, failedHandleOutput);
-        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
-        if (encoded
-            || failedAllocations.load(std::memory_order_relaxed)
-                != beforeFailure + 1u
-            || !same(failedBody, originalBody)
-            || !same(failedStrings, originalStrings)
-            || !same(failedHandles, originalHandles))
-            return false;
-        if (!variables.encodeDwg(version, &failedBody, &failedStrings,
-                                 failedHandleOutput)
-            || !same(failedBody, cleanBody)
-            || !same(failedStrings, cleanStrings)
-            || !same(failedHandles, cleanHandles))
-            return false;
-    }
-    std::cout << "WIPEOUTVARIABLES DWG encoder version="
-              << static_cast<int>(version)
-              << (aliasHandles ? " body-aliased" : " separate-handles")
-              << ": allocation offsets=" << allocations
-              << ", rollback/retry=PASS\n";
-    return true;
+    const auto encode = [&variables](DRW::Version v, dwgBufferW* body,
+                                     dwgBufferW* strings,
+                                     dwgBufferW* handles) {
+        return variables.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [aliasHandles](dwgBufferW& body,
+                                        dwgBufferW& strings,
+                                        dwgBufferW& handles) {
+        return EncoderOutputs{&strings, aliasHandles ? &body : &handles};
+    };
+    return sweepTransactionalEncoder("WIPEOUTVARIABLES",
+        aliasHandles ? "body-aliased" : "separate-handles", version,
+        encode, outputs);
 }
 
 SortEntsTableProbe makeSortEntsTable() {
@@ -328,67 +305,19 @@ SortEntsTableProbe makeSortEntsTable() {
 }
 
 bool sweepSortEntsTable(DRW::Version version, bool aliasHandles) {
-    DRW_TextCodec codec;
-    codec.setVersion(version, false);
     const SortEntsTableProbe table = makeSortEntsTable();
-    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
-    seed(cleanBody, cleanStrings, cleanHandles);
-    dwgBufferW* const cleanHandleOutput = aliasHandles ? &cleanBody
-                                                       : &cleanHandles;
-    if (!table.encodeDwg(version, &cleanBody, &cleanStrings,
-                         cleanHandleOutput))
-        return false;
-
-    dwgBufferW body(&codec), strings(&codec), handles(&codec);
-    seed(body, strings, handles);
-    dwgBufferW* const handleOutput = aliasHandles ? &body : &handles;
-    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
-    const unsigned long beforeCalibration =
-        failedAllocations.load(std::memory_order_relaxed);
-    const bool calibrated = table.encodeDwg(version, &body, &strings,
-                                            handleOutput);
-    const long allocations = 1000000
-        - allocationsBeforeFailure.load(std::memory_order_relaxed);
-    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
-    if (!calibrated || allocations <= 0
-        || failedAllocations.load(std::memory_order_relaxed)
-            != beforeCalibration)
-        return false;
-
-    for (long offset = 0; offset < allocations; ++offset) {
-        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
-        seed(failedBody, failedStrings, failedHandles);
-        dwgBufferW* const failedHandleOutput = aliasHandles ? &failedBody
-                                                            : &failedHandles;
-        const dwgBufferW originalBody = failedBody;
-        const dwgBufferW originalStrings = failedStrings;
-        const dwgBufferW originalHandles = failedHandles;
-        const unsigned long beforeFailure =
-            failedAllocations.load(std::memory_order_relaxed);
-        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
-        const bool encoded = table.encodeDwg(
-            version, &failedBody, &failedStrings, failedHandleOutput);
-        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
-        if (encoded
-            || failedAllocations.load(std::memory_order_relaxed)
-                != beforeFailure + 1u
-            || !same(failedBody, originalBody)
-            || !same(failedStrings, originalStrings)
-            || !same(failedHandles, originalHandles))
-            return false;
-        if (!table.encodeDwg(version, &failedBody, &failedStrings,
-                             failedHandleOutput)
-            || !same(failedBody, cleanBody)
-            || !same(failedStrings, cleanStrings)
-            || !same(failedHandles, cleanHandles))
-            return false;
-    }
-    std::cout << "SORTENTSTABLE DWG encoder version="
-              << static_cast<int>(version)
-              << (aliasHandles ? " body-aliased" : " separate-handles")
-              << ": allocation offsets=" << allocations
-              << ", rollback/retry=PASS\n";
-    return true;
+    const auto encode = [&table](DRW::Version v, dwgBufferW* body,
+                                 dwgBufferW* strings, dwgBufferW* handles) {
+        return table.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [aliasHandles](dwgBufferW& body,
+                                        dwgBufferW& strings,
+                                        dwgBufferW& handles) {
+        return EncoderOutputs{&strings, aliasHandles ? &body : &handles};
+    };
+    return sweepTransactionalEncoder("SORTENTSTABLE",
+        aliasHandles ? "body-aliased" : "separate-handles", version,
+        encode, outputs);
 }
 
 SpatialFilterProbe makeSpatialFilter() {
@@ -421,67 +350,19 @@ SpatialFilterProbe makeSpatialFilter() {
 }
 
 bool sweepSpatialFilter(DRW::Version version, bool aliasHandles) {
-    DRW_TextCodec codec;
-    codec.setVersion(version, false);
     const SpatialFilterProbe filter = makeSpatialFilter();
-    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
-    seed(cleanBody, cleanStrings, cleanHandles);
-    dwgBufferW* const cleanHandleOutput = aliasHandles ? &cleanBody
-                                                       : &cleanHandles;
-    if (!filter.encodeDwg(version, &cleanBody, &cleanStrings,
-                          cleanHandleOutput))
-        return false;
-
-    dwgBufferW body(&codec), strings(&codec), handles(&codec);
-    seed(body, strings, handles);
-    dwgBufferW* const handleOutput = aliasHandles ? &body : &handles;
-    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
-    const unsigned long beforeCalibration =
-        failedAllocations.load(std::memory_order_relaxed);
-    const bool calibrated = filter.encodeDwg(version, &body, &strings,
-                                             handleOutput);
-    const long allocations = 1000000
-        - allocationsBeforeFailure.load(std::memory_order_relaxed);
-    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
-    if (!calibrated || allocations <= 0
-        || failedAllocations.load(std::memory_order_relaxed)
-            != beforeCalibration)
-        return false;
-
-    for (long offset = 0; offset < allocations; ++offset) {
-        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
-        seed(failedBody, failedStrings, failedHandles);
-        dwgBufferW* const failedHandleOutput = aliasHandles ? &failedBody
-                                                            : &failedHandles;
-        const dwgBufferW originalBody = failedBody;
-        const dwgBufferW originalStrings = failedStrings;
-        const dwgBufferW originalHandles = failedHandles;
-        const unsigned long beforeFailure =
-            failedAllocations.load(std::memory_order_relaxed);
-        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
-        const bool encoded = filter.encodeDwg(
-            version, &failedBody, &failedStrings, failedHandleOutput);
-        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
-        if (encoded
-            || failedAllocations.load(std::memory_order_relaxed)
-                != beforeFailure + 1u
-            || !same(failedBody, originalBody)
-            || !same(failedStrings, originalStrings)
-            || !same(failedHandles, originalHandles))
-            return false;
-        if (!filter.encodeDwg(version, &failedBody, &failedStrings,
-                              failedHandleOutput)
-            || !same(failedBody, cleanBody)
-            || !same(failedStrings, cleanStrings)
-            || !same(failedHandles, cleanHandles))
-            return false;
-    }
-    std::cout << "SPATIAL_FILTER DWG encoder version="
-              << static_cast<int>(version)
-              << (aliasHandles ? " body-aliased" : " separate-handles")
-              << ": allocation offsets=" << allocations
-              << ", rollback/retry=PASS\n";
-    return true;
+    const auto encode = [&filter](DRW::Version v, dwgBufferW* body,
+                                  dwgBufferW* strings, dwgBufferW* handles) {
+        return filter.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [aliasHandles](dwgBufferW& body,
+                                        dwgBufferW& strings,
+                                        dwgBufferW& handles) {
+        return EncoderOutputs{&strings, aliasHandles ? &body : &handles};
+    };
+    return sweepTransactionalEncoder("SPATIAL_FILTER",
+        aliasHandles ? "body-aliased" : "separate-handles", version,
+        encode, outputs);
 }
 
 enum class StreamAlias {
@@ -873,9 +754,11 @@ bool sweepGeoData(ImageDefinitionStreams mode) {
             ? DRW::AC1012
             : mode == ImageDefinitionStreams::R2004DetachedHandles
                 ? DRW::AC1018 : DRW::AC1021;
-    DRW_TextCodec codec;
-    codec.setVersion(version, false);
     const GeoDataProbe geo = makeGeoData(version);
+    const auto encode = [&geo](DRW::Version v, dwgBufferW* body,
+                               dwgBufferW* strings, dwgBufferW* handles) {
+        return geo.encodeDwg(v, body, strings, handles);
+    };
     const auto outputs = [mode](dwgBufferW& body, dwgBufferW& strings,
                                 dwgBufferW& handles) {
         dwgBufferW* stringOutput = nullptr;
@@ -902,71 +785,15 @@ bool sweepGeoData(ImageDefinitionStreams mode) {
             handleOutput = &body;
             break;
         }
-        return std::pair<dwgBufferW*, dwgBufferW*>(stringOutput,
-                                                   handleOutput);
+        return EncoderOutputs{stringOutput, handleOutput};
     };
-    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
-    seed(cleanBody, cleanStrings, cleanHandles);
-    const auto cleanOutput = outputs(cleanBody, cleanStrings, cleanHandles);
-    if (!geo.encodeDwg(version, &cleanBody, cleanOutput.first,
-                       cleanOutput.second))
-        return false;
-
-    dwgBufferW body(&codec), strings(&codec), handles(&codec);
-    seed(body, strings, handles);
-    const auto output = outputs(body, strings, handles);
-    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
-    const unsigned long beforeCalibration =
-        failedAllocations.load(std::memory_order_relaxed);
-    const bool calibrated = geo.encodeDwg(version, &body, output.first,
-                                          output.second);
-    const long allocations = 1000000
-        - allocationsBeforeFailure.load(std::memory_order_relaxed);
-    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
-    if (!calibrated || allocations <= 0
-        || failedAllocations.load(std::memory_order_relaxed)
-            != beforeCalibration)
-        return false;
-
-    for (long offset = 0; offset < allocations; ++offset) {
-        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
-        seed(failedBody, failedStrings, failedHandles);
-        const auto failedOutput = outputs(failedBody, failedStrings,
-                                          failedHandles);
-        const dwgBufferW originalBody = failedBody;
-        const dwgBufferW originalStrings = failedStrings;
-        const dwgBufferW originalHandles = failedHandles;
-        const unsigned long beforeFailure =
-            failedAllocations.load(std::memory_order_relaxed);
-        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
-        const bool encoded = geo.encodeDwg(version, &failedBody,
-                                           failedOutput.first,
-                                           failedOutput.second);
-        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
-        if (encoded
-            || failedAllocations.load(std::memory_order_relaxed)
-                != beforeFailure + 1u
-            || !same(failedBody, originalBody)
-            || !same(failedStrings, originalStrings)
-            || !same(failedHandles, originalHandles))
-            return false;
-        if (!geo.encodeDwg(version, &failedBody, failedOutput.first,
-                           failedOutput.second)
-            || !same(failedBody, cleanBody)
-            || !same(failedStrings, cleanStrings)
-            || !same(failedHandles, cleanHandles))
-            return false;
-    }
     static const char* const names[] = {
         "AC1012-inline", "AC1018-detached-handles", "separate",
         "shared-string-handle", "all-body", "body-string-detached-handles",
         "separate-string-body-handles"
     };
-    std::cout << "GEODATA DWG encoder version=" << static_cast<int>(version)
-              << ' ' << names[static_cast<std::size_t>(mode)]
-              << ": allocation offsets=" << allocations
-              << ", rollback/retry=PASS\n";
-    return true;
+    return sweepTransactionalEncoder("GEODATA",
+        names[static_cast<std::size_t>(mode)], version, encode, outputs);
 }
 
 bool sweepImageDefinition(ImageDefinitionStreams mode) {

@@ -1397,6 +1397,11 @@ created locally from scratch for the specific control.
   transaction evidence only and does not broaden GEODATA semantic or producer
   claims. See the [GEODATA allocation receipt](docs/research/p6-geodata-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 1,883 offsets across 88 cases.
+  The five new encoder families above now use one shared templated allocation
+  sweep for clean calibration, one-shot faults, full stream/ledger snapshots,
+  and corrected same-object retry. After the test-only consolidation, the 14
+  focused RasterVariables, WipeoutVariables, SortEntsTable, SpatialFilter,
+  and GeoData CTests passed again; no assertion scope changed.
 
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
