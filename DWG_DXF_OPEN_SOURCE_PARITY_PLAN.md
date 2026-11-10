@@ -4767,10 +4767,20 @@ actual RawCarrier kind, and avoids treating reservation-only typed identities
 as selected outputs. Generated AC1021/AC1024/AC1027 import → LibreCAD export →
 readback now passes with exactly one plot-style dictionary/placeholder and
 three MATERIAL records, plus the LINE. This closes only the generated
-same-version graph round-trip. The broad hatch microtarget remains 7/9 due to
-an absent `support/library/misc/a3.dxf` and a legacy version-comment expectation;
-the three relevant focused cases pass. See the [P8 adapter bridge
-receipt](docs/research/p8-upstream-librecad-default-graph-adapter-bridge-2026-11-08.json).
+same-version graph round-trip. Review of the linked-upstream hatch tests found
+that the adapter reserved `dxfrw 2.0.0` for raw-radian legacy files even though
+current upstream also emitted that marker for degree-valued output. The
+upstream project and new DXF writer comment are now versioned 2.0.1 so new
+degree-valued files are distinguishable; the root writer-primitives check
+passes and the built archive contains the new marker. Existing 2.0.0 files
+remain ambiguous and are not newly qualified. The consumer hatch microtarget
+was 7/9 before this fix: the other failure was its missing
+`support/library/misc/a3.dxf` asset. Its rebuild against the updated header
+would trigger a full LibreCAD library rebuild and was stopped below 5%; the
+consumer version test and relevant focused hatch cases still need rerun against
+the committed 2.0.1 upstream revision. See the [P8 adapter bridge
+receipt](docs/research/p8-upstream-librecad-default-graph-adapter-bridge-2026-11-08.json)
+and [version-comment compatibility receipt](docs/research/p8-upstream-hatch-version-comment-2026-11-09.json).
 
 The plot-style provider passes the LibreCAD_3 facade compile guard and the
 FreeCAD 1.1.4 converter subprocess contract in build-tree and installed CLI

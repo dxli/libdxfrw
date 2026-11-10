@@ -6,6 +6,10 @@ DXF, with DWG reader/writer and raw-carrier preservation paths. The 2.0.0
 release is an ABI boundary: it keeps the historical callback surface usable,
 but consumers should rebuild against the installed package.
 
+New DXF files identify this degree-valued hatch-angle writer as version 2.0.1,
+so consumers can distinguish its group-52 units from legacy writers that may
+use the same 2.0.0 version comment for raw-radian values.
+
 The project is GPL-2.0-or-later. It was created by [LibreCAD](https://github.com/LibreCAD/LibreCAD)
 contributors; historical project information remains at
 [SourceForge](https://sourceforge.net/projects/libdxfrw).
@@ -65,7 +69,7 @@ python3 tools/check_staged_package.py --prefix /absolute/runtime-prefix \
 
 For Conan 2, create the package directly from a checkout:
 
-`conan create . --name libdxfrw --version 2.0.0 -s compiler.cppstd=17 -o '&:shared=False'`
+`conan create . --name libdxfrw --version 2.0.1 -s compiler.cppstd=17 -o '&:shared=False'`
 
 The package requires an explicit C++17-or-newer compiler profile. `conan create`
 also builds and, when runnable, executes the fixture-free `test_package`

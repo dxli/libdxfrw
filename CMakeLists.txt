@@ -1,7 +1,7 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.28)
 
 cmake_policy(SET CMP0048 NEW)
-project(DXFRW VERSION 2.0.0)
+project(DXFRW VERSION 2.0.1)
 
 # set preferred cache variables
 option(LIBDXFRW_BUILD_LIBRARY "Build the libdxfrw library" ON)
