@@ -33,7 +33,7 @@
     "test": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
     "ctest": "libdxfrw_dwg_table_cell_overrides",
     "generated_graph": "ACAD_TABLESTYLE registration -> NOD-owned dictionary -> TABLESTYLE -> TABLE, plus TABLE -> *T BLOCK_RECORD and owned LINE",
-    "negative_cases": ["a dictionary key differs from the TABLESTYLE name", "the emitted TABLESTYLE has a different parent handle", "the emitted TABLESTYLE name contains an embedded NUL and suffix while the dictionary key matches only the prefix"],
+    "negative_cases": ["a dictionary key differs from the TABLESTYLE name", "the emitted TABLESTYLE has a different parent handle", "the emitted TABLESTYLE name contains an embedded NUL and suffix while the dictionary key matches only the prefix", "the dictionary has a second named entry aliasing the same TABLESTYLE handle"],
     "rollback_retry": "each negative outer transaction is rolled back; the same writer retries with a matching key and parent",
     "result": "PASS"
   },

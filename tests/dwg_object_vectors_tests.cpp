@@ -10180,7 +10180,8 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         tableFacade.m_successfulEntityWrites;
     const auto tableFacadeAttempt = [&](bool rollback,
                                         bool wrongStyleParent = false,
-                                        bool embeddedNulStyleName = false) {
+                                        bool embeddedNulStyleName = false,
+                                        bool duplicateStyleTarget = false) {
         if (tableFacadeWriter == nullptr)
             return false;
         const std::uint64_t transaction =
@@ -10199,9 +10200,13 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         tableStyleDictionary.cloning = 1;
         tableStyleDictionary.m_entries.push_back(
             {rollback && !wrongStyleParent && !embeddedNulStyleName
+                     && !duplicateStyleTarget
                  ? "LIBDXFRW_TABLE_GRAPH_WRONG_KEY"
                  : "LIBDXFRW_TABLE_GRAPH_TEST",
              tableFacadeStyleHandle});
+        if (duplicateStyleTarget)
+            tableStyleDictionary.m_entries.push_back(
+                {"LIBDXFRW_TABLE_GRAPH_ALIAS", tableFacadeStyleHandle});
         const bool tableStyleDictionaryWritten = tableStyleRootRegistered
             && tableFacade.writeDictionary(&tableStyleDictionary);
         DRW_TableStyle tableStyle;
@@ -10435,6 +10440,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     const bool facadeRollbackAndRetry = tableFacadeAttempt(true)
         && tableFacadeAttempt(true, true)
         && tableFacadeAttempt(true, false, true)
+        && tableFacadeAttempt(true, false, false, true)
         && tableFacadeAttempt(false);
     t.expect(facadeRollbackAndRetry,
              "AC1018 TABLE frame references its TABLESTYLE and *T block exactly once, closes owned-entity/reverse-INSERT edges, then rolls back and retries atomically");

@@ -1646,8 +1646,7 @@ bool dwgWriter15::hasClosedAc1018TableBlockGraph(
         static_cast<std::size_t>(std::count_if(
             styleDictionary->entries.cbegin(), styleDictionary->entries.cend(),
             [&table](const DRW::DwgNamedObjectDictionaryEntry& entry) {
-                return !entry.name.empty()
-                    && entry.childHandle == table.m_tableStyleHandle;
+                return entry.childHandle == table.m_tableStyleHandle;
             }));
     const std::size_t styleDictionaryNameMatchCount =
         static_cast<std::size_t>(std::count_if(
