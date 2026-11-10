@@ -1,0 +1,91 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "date": "2026-11-10",
+  "id": "p7-opencadkernel-independent-torus-2026-11-10",
+  "purpose": "Screen a non-OCCT B-rep kernel against the source-bound AC1021 torus profile and determine whether the project's ACIS bridge reconstructs topology from the exact SAT carrier.",
+  "dwgSource": {
+    "repository": "dwg-writer public committed LibreDWG fixture",
+    "path": "tests/fixtures/committed/libredwg/atmos_dc22s_2007.dwg",
+    "sha256": "0e3eccc70ea6b82120c77449bb1d1d27ee280a1ed1c0f2e88e31b1db503ca66f",
+    "version": "AC1021",
+    "selectedHandles": {
+      "solid": "0x452",
+      "history": "0x453",
+      "evaluationGraph": "0x454",
+      "torus": "0x455"
+    }
+  },
+  "satInput": {
+    "producer": "ODA File Converter 27.1.0.0; ACAD2010 DXF projection",
+    "path": "/private/tmp/p7-oda-452-acad2010.sat",
+    "sha256": "361c3aa8c919ff46cacea791d0464878ba8821ef193c79296b9e5ab87730dcfe",
+    "bytes": 1071,
+    "header": "21200 13 2 26"
+  },
+  "candidate": {
+    "application": "HakanSeven12/OpenCADStudio",
+    "applicationRevision": "36981c6abe76e4b69d0a8ac5e210c35a0e8f681c",
+    "bridge": "crates/ocs_acis",
+    "bridgeDependencyRevisions": {
+      "opencaddocument": "559490991bf6b8e9331021c40aa1b5b62453266d",
+      "acadrust": "ce8a148568e7a80a80f50797bf287a651d1259c7"
+    },
+    "kernel": "HakanSeven12/opencadkernel",
+    "kernelRevision": "802f75134a5606d34bd34dac0d3508565537b067",
+    "kernelManifest": "MPL-2.0; B-rep implementation has no OCCT/OpenCASCADE dependency",
+    "sourceProbe": {
+      "path": "/private/tmp/opencadstudio-independent-kernel/crates/ocs_acis/tests/libdxfrw_torus_probe.rs",
+      "sha256": "b78feec7df2f1bad70371904c162583e997d3d1692afc2e5eef621118dc86351",
+      "committed": false
+    }
+  },
+  "buildAndTests": {
+    "command": "cargo test -p ocs_acis --tests",
+    "result": "PASS: five unit tests and one existing integration test",
+    "focusedCommand": "cargo test -p ocs_acis --test libdxfrw_torus_probe -- --nocapture",
+    "focusedResult": "PASS: one exact-input independent-kernel probe",
+    "warnings": "The upstream bridge emitted unexpected-cfg(offset) and unused-variable warnings; no build failure."
+  },
+  "directSatLift": {
+    "result": "The pinned ACIS bridge parses and lifts the SAT to one body, but creates only one shell and one face with zero loops, coedges, edges and vertices. Kernel mass properties are unavailable.",
+    "loss": {
+      "surfaces": [],
+      "curves": [],
+      "broken": []
+    },
+    "disposition": "Do not treat the empty Loss list or valid container topology as a complete solid reconstruction; this exact SAT carrier lacks the boundary topology required by this bridge."
+  },
+  "independentKernelGeometry": {
+    "operation": "Construct opencadkernel::brep::make::torus from the source-bound center/radii, then place it using the source-bound U direction and normal. This operation does not use the ACIS parser or OCCT.",
+    "inputFields": {
+      "center": [1383.6151200595348, 418.50000000000074, 1158.755189492682],
+      "axis": [-0.5014237824134797, -1.6431677767887314e-16, -0.8652018206350235],
+      "uDirection": [-0.8652018206350235, -3.8945365021134883e-17, 0.5014237824134797],
+      "majorRadius": 19.0,
+      "minorRadius": 2.7899834596164137
+    },
+    "topology": {
+      "valid": true,
+      "shells": 1,
+      "faces": 1,
+      "edges": 2,
+      "vertices": 1
+    },
+    "massProperties": {
+      "method": "opencadkernel::brep::mass_properties; mesh-integrated volume",
+      "volume": 2919.3521093059953,
+      "exactTorusFormulaVolume": 2919.352914703433,
+      "relativeVolumeError": 2.7588217698259396e-7,
+      "centroid": [1383.6151200595348, 418.5000000000007, 1158.755189492682]
+    },
+    "bounds": {
+      "method": "opencadkernel body_bounds compared with the analytic full-torus extent formula from the source axis and radii",
+      "min": [1364.386302007853, 396.71001654038434, 1146.4381541672094],
+      "max": [1402.8439381112166, 440.28998345961713, 1171.0722248181544],
+      "comparisonToPriorFreeCADBounds": "The prior OCCT/FreeCAD bounds differ by up to 0.006589 units. The selected SAT carrier has no boundary loops, and the source of this bound discrepancy is unresolved; neither result is used to weaken or overwrite the other."
+    },
+    "surfaceArea": "Not independently measured by this probe."
+  },
+  "claimEffect": "A separate non-OCCT kernel now validates a closed torus B-rep built from the selected source-bound scalar fields, with matching centroid, analytic bounds and volume error below 3e-7. This is bounded independent geometry evidence for the scalar torus profile only. The exact SAT-to-B-rep bridge did not recover topology, the bounds differ slightly from the earlier FreeCAD result, and no native OpenCADStudio acceptance or source graph qualification was performed. No general ACIS/ACDS or DWG support claim is promoted.",
+  "fixturePolicy": "All downloaded/converted drawing files and the probe remain outside the repository; no DWG/DXF fixture was added."
+}
