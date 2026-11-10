@@ -24730,104 +24730,130 @@ bool DRW_MLeaderStyle::encodeDwg(DRW::Version version, dwgBufferW *buf,
         && (strBuf == nullptr || strBuf == buf))
         return false;
 
-    dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018)
-        ? strBuf
-        : buf;
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
-        ? handleBuf
-        : buf;
-    const auto writeColor = [version, buf, sb](
-            int color, std::int32_t rgb24, std::uint8_t sourceMethod,
-            const UTF8STRING& name, const UTF8STRING& bookName,
-            bool metadataPresent, std::uint8_t flags) {
-        if (version < DRW::AC1018) {
-            buf->putCmColor(version, static_cast<std::uint16_t>(color));
-            return;
-        }
-        const std::uint8_t method = sourceMethod != 0 ? sourceMethod
-            : rgb24 >= 0 ? static_cast<std::uint8_t>(dwgColor::RGB)
-            : color == 256 ? static_cast<std::uint8_t>(dwgColor::BYLAYER)
-            : color == 0 ? static_cast<std::uint8_t>(dwgColor::BYBLOCK)
-                         : static_cast<std::uint8_t>(dwgColor::ACIS);
-        if (metadataPresent) {
-            buf->putCmColorWithFlags(version, method,
-                static_cast<std::uint16_t>(color), rgb24,
-                name, bookName, flags, sb);
-        } else {
-            buf->putCmColor(version, method,
-                static_cast<std::uint16_t>(color), rgb24,
-                name, bookName, sb);
-        }
-    };
+    try {
+        dwgBufferW *const callerBody = buf;
+        dwgBufferW *const callerStringDest =
+            (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+        dwgBufferW *const callerHandleDest =
+            (handleBuf != nullptr && version > DRW::AC1014)
+                ? handleBuf : callerBody;
+        const bool separateStrings = callerStringDest != callerBody;
+        const bool separateHandles = callerHandleDest != callerBody
+            && callerHandleDest != callerStringDest;
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedStrings;
+        dwgBufferW stagedHandles;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+        buf = &stagedBody;
+        dwgBufferW *sb = separateStrings ? &stagedStrings : buf;
+        dwgBufferW *hb = separateHandles ? &stagedHandles
+            : callerHandleDest == callerStringDest && separateStrings
+                ? &stagedStrings : buf;
+        const auto writeColor = [version, buf, sb](
+                int color, std::int32_t rgb24, std::uint8_t sourceMethod,
+                const UTF8STRING& name, const UTF8STRING& bookName,
+                bool metadataPresent, std::uint8_t flags) {
+            if (version < DRW::AC1018) {
+                buf->putCmColor(version, static_cast<std::uint16_t>(color));
+                return;
+            }
+            const std::uint8_t method = sourceMethod != 0 ? sourceMethod
+                : rgb24 >= 0 ? static_cast<std::uint8_t>(dwgColor::RGB)
+                : color == 256 ? static_cast<std::uint8_t>(dwgColor::BYLAYER)
+                : color == 0 ? static_cast<std::uint8_t>(dwgColor::BYBLOCK)
+                             : static_cast<std::uint8_t>(dwgColor::ACIS);
+            if (metadataPresent) {
+                buf->putCmColorWithFlags(version, method,
+                    static_cast<std::uint16_t>(color), rgb24,
+                    name, bookName, flags, sb);
+            } else {
+                buf->putCmColor(version, method,
+                    static_cast<std::uint16_t>(color), rgb24,
+                    name, bookName, sb);
+            }
+        };
 
-    if (version >= DRW::AC1024)
-        buf->putBitShort(styleVersion);
-    buf->putBitShort(contentType);
-    buf->putBitShort(drawMLeaderOrder);
-    buf->putBitShort(drawLeaderOrder);
-    buf->putBitLong(maxLeaderPoints);
-    buf->putBitDouble(firstSegmentAngle);
-    buf->putBitDouble(secondSegmentAngle);
-    buf->putBitShort(leaderType);
-    writeColor(leaderColor, leaderColorRgb, leaderColorDwgMethod,
-               leaderColorName, leaderColorBookName,
-               leaderColorDwgMetadataPresent, leaderColorDwgFlags);
-    buf->putBitLong(leaderLineWeight);
-    buf->putBit(landingEnabled ? 1 : 0);
-    buf->putBitDouble(landingGap);
-    buf->putBit(autoIncludeLanding ? 1 : 0);
-    buf->putBitDouble(landingDistance);
-    sb->putVariableText(version, description);
-    buf->putBitDouble(arrowHeadSize);
-    sb->putVariableText(version, textDefault);
-    buf->putBitShort(leftAttachment);
-    buf->putBitShort(rightAttachment);
-    // Gate on class_version>=2 (styleVersion), not file version — see parseDwg.
-    // styleVersion defaults to 2 so AC1021 emits these too (libreDWG parity).
-    if (styleVersion >= 2)
-        buf->putBitShort(textAngleType);
-    buf->putBitShort(textAlignmentType);
-    writeColor(textColor, textColorRgb, textColorDwgMethod,
-               textColorName, textColorBookName,
-               textColorDwgMetadataPresent, textColorDwgFlags);
-    buf->putBitDouble(textHeight);
-    buf->putBit(textFrameEnabled ? 1 : 0);
-    if (styleVersion >= 2)
-        buf->putBit(alwaysAlignTextLeft ? 1 : 0);
-    buf->putBitDouble(alignSpace);
-    writeColor(blockColor, blockColorRgb, blockColorDwgMethod,
-               blockColorName, blockColorBookName,
-               blockColorDwgMetadataPresent, blockColorDwgFlags);
-    buf->putBitDouble(blockScale.x);
-    buf->putBitDouble(blockScale.y);
-    buf->putBitDouble(blockScale.z);
-    buf->putBit(blockScaleEnabled ? 1 : 0);
-    buf->putBitDouble(blockRotation);
-    buf->putBit(blockRotationEnabled ? 1 : 0);
-    buf->putBitShort(blockConnectionType);
-    buf->putBitDouble(scaleFactor);
-    buf->putBit(propertyChanged ? 1 : 0);
-    buf->putBit(isAnnotative ? 1 : 0);
-    buf->putBitDouble(breakSize);
-    if (version >= DRW::AC1024) {
-        buf->putBitShort(attachmentDirection);
-        buf->putBitShort(topAttachment);
-        buf->putBitShort(bottomAttachment);
+        if (version >= DRW::AC1024)
+            buf->putBitShort(styleVersion);
+        buf->putBitShort(contentType);
+        buf->putBitShort(drawMLeaderOrder);
+        buf->putBitShort(drawLeaderOrder);
+        buf->putBitLong(maxLeaderPoints);
+        buf->putBitDouble(firstSegmentAngle);
+        buf->putBitDouble(secondSegmentAngle);
+        buf->putBitShort(leaderType);
+        writeColor(leaderColor, leaderColorRgb, leaderColorDwgMethod,
+                   leaderColorName, leaderColorBookName,
+                   leaderColorDwgMetadataPresent, leaderColorDwgFlags);
+        buf->putBitLong(leaderLineWeight);
+        buf->putBit(landingEnabled ? 1 : 0);
+        buf->putBitDouble(landingGap);
+        buf->putBit(autoIncludeLanding ? 1 : 0);
+        buf->putBitDouble(landingDistance);
+        sb->putVariableText(version, description);
+        buf->putBitDouble(arrowHeadSize);
+        sb->putVariableText(version, textDefault);
+        buf->putBitShort(leftAttachment);
+        buf->putBitShort(rightAttachment);
+        // Gate on class_version>=2 (styleVersion), not file version — see parseDwg.
+        // styleVersion defaults to 2 so AC1021 emits these too (libreDWG parity).
+        if (styleVersion >= 2)
+            buf->putBitShort(textAngleType);
+        buf->putBitShort(textAlignmentType);
+        writeColor(textColor, textColorRgb, textColorDwgMethod,
+                   textColorName, textColorBookName,
+                   textColorDwgMetadataPresent, textColorDwgFlags);
+        buf->putBitDouble(textHeight);
+        buf->putBit(textFrameEnabled ? 1 : 0);
+        if (styleVersion >= 2)
+            buf->putBit(alwaysAlignTextLeft ? 1 : 0);
+        buf->putBitDouble(alignSpace);
+        writeColor(blockColor, blockColorRgb, blockColorDwgMethod,
+                   blockColorName, blockColorBookName,
+                   blockColorDwgMetadataPresent, blockColorDwgFlags);
+        buf->putBitDouble(blockScale.x);
+        buf->putBitDouble(blockScale.y);
+        buf->putBitDouble(blockScale.z);
+        buf->putBit(blockScaleEnabled ? 1 : 0);
+        buf->putBitDouble(blockRotation);
+        buf->putBit(blockRotationEnabled ? 1 : 0);
+        buf->putBitShort(blockConnectionType);
+        buf->putBitDouble(scaleFactor);
+        buf->putBit(propertyChanged ? 1 : 0);
+        buf->putBit(isAnnotative ? 1 : 0);
+        buf->putBitDouble(breakSize);
+        if (version >= DRW::AC1024) {
+            buf->putBitShort(attachmentDirection);
+            buf->putBitShort(topAttachment);
+            buf->putBitShort(bottomAttachment);
+        }
+        if (version >= DRW::AC1027)
+            buf->putBit(textExtended ? 1 : 0);
+
+        const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
+            ? extensionDictionaryFlag() : 0;
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()),
+            effectiveXDictFlag, &reactorHandles, xDictHandle);
+        hb->putHandle(makeRefW(leaderLineTypeHandle.ref, DRW::DwgHardPointer));
+        hb->putHandle(makeRefW(arrowHeadBlockHandle.ref, DRW::DwgHardPointer));
+        hb->putHandle(makeRefW(textStyleHandle.ref, DRW::DwgHardPointer));
+        hb->putHandle(makeRefW(blockHandle.ref, DRW::DwgHardPointer));
+        if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    if (version >= DRW::AC1027)
-        buf->putBit(textExtended ? 1 : 0);
-
-    const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
-        ? extensionDictionaryFlag() : 0;
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()),
-        effectiveXDictFlag, &reactorHandles, xDictHandle);
-    hb->putHandle(makeRefW(leaderLineTypeHandle.ref, DRW::DwgHardPointer));
-    hb->putHandle(makeRefW(arrowHeadBlockHandle.ref, DRW::DwgHardPointer));
-    hb->putHandle(makeRefW(textStyleHandle.ref, DRW::DwgHardPointer));
-    hb->putHandle(makeRefW(blockHandle.ref, DRW::DwgHardPointer));
-    return buf->isGood() && sb->isGood() && hb->isGood();
 }
 
 // UNDERLAYDEFINITION (AcDb{Pdf,Dgn,Dwf}Definition) — custom-class object.

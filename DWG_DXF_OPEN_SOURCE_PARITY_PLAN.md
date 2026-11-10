@@ -1188,6 +1188,18 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P6 MLEADERSTYLE DWG encoder transaction safety:** a review of the live
+  encoder list found `DRW_MLeaderStyle::encodeDwg` still wrote directly to
+  caller buffers. It now stages body, string and handle destinations, preserves
+  intentional aliasing, and publishes only after every stream succeeds. The
+  generated AC1027 profile sweeps 233 allocation offsets across five stream
+  layouts plus a separate named-CMC palette profile; every injected failure
+  preserves caller state and same-object retry matches clean output. The
+  focused allocation CTest passes. This is local
+  transaction evidence only; it does not establish MLeaderStyle semantics,
+  physical-source coverage, graph closure, native acceptance or output support.
+  See the [rollback receipt](docs/research/p6-mleaderstyle-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **P6 DBCOLOR DWG encoder transaction safety:** `DRW_DbColor::encodeDwg`
   now stages body/string/handle writes with alias-aware publication. Generated
   AC1018 inline and detached-handle layouts plus AC1021 separate and shared

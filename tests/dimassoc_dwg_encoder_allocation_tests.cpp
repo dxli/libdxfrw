@@ -91,6 +91,11 @@ public:
     using DRW_VisualStyle::encodeDwg;
 };
 
+class MLeaderStyleProbe final : public DRW_MLeaderStyle {
+public:
+    using DRW_MLeaderStyle::encodeDwg;
+};
+
 class PointCloudDefProbe final : public DRW_PointCloudDef {
 public:
     using DRW_PointCloudDef::encodeDwg;
@@ -519,6 +524,75 @@ bool sweepVisualStyle(VisualStyleStreamLayout layout) {
     return sweepTransactionalEncoder(
         "VISUALSTYLE", names[static_cast<std::size_t>(layout)], version,
         encode, outputs);
+}
+
+MLeaderStyleProbe makeMLeaderStyle(bool colorNames = false) {
+    MLeaderStyleProbe style;
+    style.handle = 0xDA00u;
+    style.parentHandle = 0xDA01u;
+    style.reactorHandles = {0xDA02u};
+    style.setDwgCommonObjectState(2, 1u, false);
+    style.xDictHandle = 0xDA03u;
+    style.description = "Generated multileader style description";
+    style.textDefault = "Generated multileader default text";
+    style.leaderLineTypeHandle.ref = 0xDA10u;
+    style.arrowHeadBlockHandle.ref = 0xDA11u;
+    style.textStyleHandle.ref = 0xDA12u;
+    style.blockHandle.ref = 0xDA13u;
+    if (colorNames) {
+        style.leaderColorName = "Leader palette color";
+        style.leaderColorBookName = "Generated palette";
+        style.textColorName = "Text palette color";
+        style.textColorBookName = "Generated palette";
+        style.blockColorName = "Block palette color";
+        style.blockColorBookName = "Generated palette";
+    }
+    style.landingGap = 0.125;
+    style.arrowHeadSize = 0.25;
+    style.textHeight = 0.75;
+    style.breakSize = 0.0625;
+    return style;
+}
+
+enum class MLeaderStyleStreamLayout {
+    Separate,
+    SharedStringAndHandle,
+    BodyStringDetachedHandles,
+    SeparateStringBodyHandles,
+    AllBody
+};
+
+bool sweepMLeaderStyle(MLeaderStyleStreamLayout layout,
+                       bool colorNames = false) {
+    const DRW::Version version = DRW::AC1027;
+    const MLeaderStyleProbe style = makeMLeaderStyle(colorNames);
+    const auto encode = [&style](DRW::Version v, dwgBufferW* body,
+                                 dwgBufferW* strings, dwgBufferW* handles) {
+        return style.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [layout](dwgBufferW& body, dwgBufferW& strings,
+                                  dwgBufferW& handles) {
+        switch (layout) {
+        case MLeaderStyleStreamLayout::Separate:
+            return EncoderOutputs{&strings, &handles};
+        case MLeaderStyleStreamLayout::SharedStringAndHandle:
+            return EncoderOutputs{&strings, &strings};
+        case MLeaderStyleStreamLayout::BodyStringDetachedHandles:
+            return EncoderOutputs{&body, &handles};
+        case MLeaderStyleStreamLayout::SeparateStringBodyHandles:
+            return EncoderOutputs{&strings, &body};
+        case MLeaderStyleStreamLayout::AllBody:
+            return EncoderOutputs{};
+        }
+        return EncoderOutputs{&strings, &handles};
+    };
+    static const char* const names[] = {
+        "separate", "shared-string-handle", "body-string-detached-handles",
+        "separate-string-body-handles", "all-body"
+    };
+    return sweepTransactionalEncoder(
+        colorNames ? "MLEADERSTYLE-NAMED-CMC" : "MLEADERSTYLE",
+        names[static_cast<std::size_t>(layout)], version, encode, outputs);
 }
 
 RasterVariablesProbe makeRasterVariables() {
@@ -3180,6 +3254,12 @@ int main() {
         || !sweepVisualStyle(VisualStyleStreamLayout::BodyStringDetachedHandles)
         || !sweepVisualStyle(VisualStyleStreamLayout::SeparateStringBodyHandles)
         || !sweepVisualStyle(VisualStyleStreamLayout::AllBody)
+        || !sweepMLeaderStyle(MLeaderStyleStreamLayout::Separate)
+        || !sweepMLeaderStyle(MLeaderStyleStreamLayout::SharedStringAndHandle)
+        || !sweepMLeaderStyle(MLeaderStyleStreamLayout::BodyStringDetachedHandles)
+        || !sweepMLeaderStyle(MLeaderStyleStreamLayout::SeparateStringBodyHandles)
+        || !sweepMLeaderStyle(MLeaderStyleStreamLayout::AllBody)
+        || !sweepMLeaderStyle(MLeaderStyleStreamLayout::Separate, true)
         || !sweep(StreamAlias::Separate)
         || !sweep(StreamAlias::SharedStringAndHandle)
         || !sweep(StreamAlias::AllBody)
