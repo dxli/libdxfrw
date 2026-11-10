@@ -1255,21 +1255,24 @@ behavior independently. Local macOS checks do not satisfy those platform gates.
   Generated AC1021 boundary/alignment controls and ASCII/Binary DXF
   readback/refusal/retry controls pass. This is bounded schema/codec evidence,
   not producer or whole-drawing qualification. A current hash-bound trace of
-  the local metric TABLE observes candidate CadValue type 48 at two offsets,
-  with large adjacent format-flag values; this is not a valid ODA §20.4.99 type
-  and may indicate earlier cursor misalignment. Type 16 is handled by the
-  current reader. Keep the TABLE content partial until source spans are
-  reconciled; the imperial census has no TABLECONTENT evidence. See the
+  the AC1021 metric and imperial TABLEs found alignment override mask `0x01`.
+  ODA raw-RS decoding yields 42049, outside the defined domain; a bounded
+  BitShort candidate yields a valid alignment and lets all 171 CadValues in
+  each source parse. The reader keeps these TABLE views semantically partial
+  because this candidate conflicts with ODA's RS declaration. Type 16 remains
+  supported. The imperial census has no TABLECONTENT evidence. See the
   [current type-48 recheck](docs/research/p5-ac1021-metric-table-current-type48-cursor-recheck-2026-11-09.json)
-  and [scalar override receipt](docs/research/p5-ac1018-ac1021-table-scalar-overrides-2026-11-08.json).
-  A temporary cursor trace now localizes the first unsupported candidate to
-  row 8/column 0 of TABLE `0x2856e` and row 9/column 0 of TABLE `0x2a974`;
-  all preceding cells complete under the current sequence. ODA §20.4.96.1/.99
-  and ACadSharp use the same candidate field order, while LibreDWG retains both
-  bodies as unknown bits. This does not identify the source of displacement or
-  establish type 48 as valid. The diagnostic edit was reverted; keep both
-  bodies partial until exact spans or an independent producer decode resolve
-  the candidate. See the [first-failure cell trace receipt](docs/research/p5-ac1021-metric-table-first-failure-cell-trace-2026-11-09.json).
+  and [scalar override receipt](docs/research/p5-ac1018-ac1021-table-scalar-overrides-2026-11-08.json),
+  plus the [bounded compatibility-profile receipt](docs/research/p5-ac1021-metric-table-bitshort-fallback-2026-11-09.json).
+  The earlier type-48 candidates were caused by the disputed alignment width,
+  not valid CadValue type 48 data. The fallback is read-only and partial; it
+  does not authorize strict output or a format-support claim. LibreDWG still
+  retains these bodies as unknown bits, and ACadSharp's successful decode is
+  not independent semantic proof because it uses BitShort for the RS field.
+  Resolve the producer-specific alignment encoding and independently verify
+  the visible cell meanings before promoting this profile. See the
+  [first-failure cell trace receipt](docs/research/p5-ac1021-metric-table-first-failure-cell-trace-2026-11-09.json)
+  and [bounded compatibility-profile receipt](docs/research/p5-ac1021-metric-table-bitshort-fallback-2026-11-09.json).
   The current AC1021 metric read publishes all 4,408 frames with zero entity
   or object parse failures. TABLE handles `0x2856e` and `0x2a974` now retain
   their complete raw entity bodies alongside the existing typed, semantically
@@ -1963,22 +1966,16 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    stored boolean remains uninterpreted. See the [cell-appearance receipt](docs/research/p5-ac1018-table-cell-appearance-dxf-write-readback-2026-11-08.json).
    This closes the selected codec slice only; physical ordering, native
    precedence, and rendering remain unqualified.
-   Physical-source coverage remains open: the current metric TABLE trace reads
-   candidate type 48 at two offsets, with suspicious large format flags; type
-   16 is already supported. A peer-source recheck found that pinned ACadSharp
-   reads cell alignment with `ReadBitShort`, while ODA §20.4.96.1 defines the
-   field as raw `RS`; its successful semantic decode therefore does not prove
-   the physical cursor span for these cells. A new from-scratch AC1021 vector
-   covers the documented raw-RS field followed by the CadValue and checks the
-   table sentinel boundary. The reader now retains alignment values 1–9 for
-   the exact AC1021 text-cell profile with override mask `0x01`; other AC1021
-   cell-override combinations remain semantically incomplete. The physical
-   metric source still reaches the same type-48 candidates after this change,
-   so the bounded parser improvement does not resolve its producer profile or
-   qualify TABLE output. Next compare exact per-cell body spans with an
-   independent wire walk and resolve the remaining cursor difference. See the
-   [current type-48 recheck](docs/research/p5-ac1021-metric-table-current-type48-cursor-recheck-2026-11-09.json),
-   [peer field-order review](docs/research/p5-ac1021-metric-table-peer-alignment-field-review-2026-11-09.json),
+   The metric and imperial AC1021 TABLE traces now identify the cursor issue:
+   both sample cells select override mask `0x01`; raw-RS reads `42049`, while
+   the bounded BitShort compatibility candidate produces 171/171 CadValue
+   reads per source. The reader retains the valid alignment but keeps each
+   TABLE semantically partial because the candidate conflicts with ODA's raw-RS
+   field definition. A from-scratch vector covers both the normative raw-RS
+   path and the partial BitShort fallback, including the following CadValue
+   and table sentinel boundaries. Next obtain authoritative producer/schema
+   confirmation and independent semantic evidence for this cell profile; keep
+   strict output refused. See the [bounded compatibility-profile receipt](docs/research/p5-ac1021-metric-table-bitshort-fallback-2026-11-09.json)
    and [generated alignment boundary control](docs/research/p5-ac1021-table-alignment-raw-rs-boundary-2026-11-09.json).
 4. **P6 / source-backed parser and no-loss gaps.** The
    raster wire observer now recognizes the witnessed IMAGEDEF code-`0xC`
@@ -3577,15 +3574,16 @@ The inspected code paths, exact authority section, candidate exclusions, and
 compound-output acceptance gates are recorded in the
 [encoder-readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 
-The trace of the existing AC1021
+The existing AC1021
 `tests/samples/AC1021/blocks_and_tables_-_imperial.dwg` captures two
-`AcDbTable` entities with encoded/resolved class number 506. This is empirical
-for that AC1021 source only. Both typed TABLE bodies stop at undocumented
-CadValue type 48; strict output stops earlier at the unrelated FIELD/FIELDLIST
-gate. It is therefore not a complete writer witness and does not provide an
-AC1018 class number. Before registering a TABLE encoder, capture its class
-number from a real DWG of the exact target version; never copy 506 across
-versions or use a peer's numeric class value.
+`AcDbTable` entities with encoded/resolved class number 506. The bounded
+BitShort alignment candidate now reads all 171 cell CadValues across the
+metric and imperial sources, but deliberately leaves the TABLE views partial
+because the field conflicts with ODA's RS declaration; strict output stops at
+the unrelated FIELD/FIELDLIST gate. This is not a complete writer witness and
+does not provide an AC1018 class number. Before registering a TABLE encoder,
+capture its class number from a real DWG of the exact target version; never
+copy 506 across versions or use a peer's numeric class value.
 
 An AC1018 source screen is now available, but neither candidate is a complete
 TABLE witness. `/Users/dli/doc/dwg6/example_2004.dwg` resolves `AcDbTable` to
@@ -3920,12 +3918,12 @@ Speed-oriented implementation sequence:
    open. The parser validates cell soft-pointer roles and resolves relative
    handles; physical nonzero target closure remains open. See the [cell-reference
    receipt](docs/research/p5-tablegeometry-cell-soft-pointer-dwg-role-2026-11-03.json).
-   A local AC1021 metric TABLE candidate is screened out: the trace encounters
-   unsupported TABLE CadValue data type 48 (payload bits 278726 and 312907),
-   which is outside the ODA §20.4.99 documented flag set; the peer JSON exposes
-   TABLE entities but no direct TABLEGEOMETRY record. This source cannot establish
-   TABLEGEOMETRY source spans or graph closure. Do not broaden the type parser
-   from this candidate; reopen only with a complete, source-bound TABLE graph.
+   A local AC1021 metric TABLE candidate has no direct TABLEGEOMETRY evidence:
+   its two ACAD_TABLE entities now parse their 171 CadValues under a bounded,
+   semantically partial alignment-width candidate, while the peer JSON exposes
+   no TABLEGEOMETRY record. This source cannot establish TABLEGEOMETRY source
+   spans or graph closure. Keep that gate separate from the TABLE alignment
+   candidate and reopen it only with a complete, source-bound TABLEGEOMETRY graph.
    See the [candidate screen receipt](docs/research/p5-ac1021-metric-tablegeometry-candidate-screen-2026-11-06.json).
 4. Use the existing `p5-ac1027-*` receipts as the exclusion inventory. The
    generated R24 TABLESTYLE and CELLSTYLEMAP group-62/420/430 CMC profile is
@@ -3942,8 +3940,8 @@ Speed-oriented implementation sequence:
    excluded from TABLECONTENT evidence. See the
    [AC1021 edge-census screen](docs/research/p5-ac1021-blocks-and-tables-edge-census-screen-2026-11-08.json).
    **Saved-evidence inventory screen complete:** the AC1021 imperial candidate
-   has no TABLECONTENT frames; the AC1021 metric candidate remains partial at
-   candidate type 48 pending cursor/span reconciliation; AC1027 object `0xC94` has
+   has no TABLECONTENT frames; the AC1021 metric TABLE remains semantically
+   partial under the alignment-width compatibility candidate; AC1027 object `0xC94` has
    unresolved body/string/handle alignment and no typed/raw callback; and
    AC1032 objects `0xE5F`/`0x747` remain raw-only with semantic completeness
    false. The alternate parses and peer observations do not establish an

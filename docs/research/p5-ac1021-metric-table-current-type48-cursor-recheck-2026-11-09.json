@@ -24,10 +24,23 @@
     "strictOutput": "Preflight later refuses at the unrelated FIELD/FIELDLIST serializer gate; no DXF is published."
   },
   "authority": {
-    "specification": "ODA Open Design Specification v5.4.1 §20.4.99, pp. 241–242",
-    "documentedTypes": [0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512],
+    "specification": "ODA Open Design Specification v5.4.1 \u00a720.4.99, pp. 241\u2013242",
+    "documentedTypes": [
+      0,
+      1,
+      2,
+      4,
+      8,
+      16,
+      32,
+      64,
+      128,
+      256,
+      512
+    ],
     "interpretation": "48 is not a documented CadValue data type. The very large adjacent format-flags values and absent source-matched payload spans mean these observations may result from an earlier cursor misalignment; they do not establish that the producer stores a valid type 48."
   },
-  "decision": "The old plan statement that this current metric source stops on types 16/92 is stale: type 16 is handled by the current parser, and the current pinned trace instead observes candidate type 48 at two offsets. Do not add a type-48 decoder or claim the source contains malformed values until the preceding TABLE cell cursor and exact physical spans are reconciled. Keep the TABLE content partial and output/support claims unchanged.",
-  "fixturePolicy": "No DWG/DXF fixture was added or changed. The trace and all outputs remain in /private/tmp."
+  "decision": "This receipt is the pre-fallback diagnostic. The raw-RS parse saw candidate type 48 at two offsets. A bounded AC1021 text-cell mask-0x01 BitShort fallback now parses all 171 CadValues in both existing metric and imperial sources while marking the TABLE semantics incomplete. The candidate is not a support/output claim; resolve the ODA RS conflict independently. See docs/research/p5-ac1021-metric-table-bitshort-fallback-2026-11-09.json.",
+  "fixturePolicy": "No DWG/DXF fixture was added or changed. The trace and all outputs remain in /private/tmp.",
+  "supersededBy": "docs/research/p5-ac1021-metric-table-bitshort-fallback-2026-11-09.json"
 }

@@ -3294,8 +3294,28 @@ bool parseR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
 
     if (cell.m_overrideFlags & cellAlignmentFlag) {
         std::uint16_t alignment = 0;
-        if (!readBoundedRawShort16(*buf, bounds.bodyEndBit, alignment))
+        if (ac1021TextAlignmentProfile) {
+            dwgBuffer rawAlignmentProbe = buf->forkIndependent();
+            if (!readBoundedRawShort16(rawAlignmentProbe,
+                                       bounds.bodyEndBit, alignment))
+                return false;
+            if (alignment >= 1u && alignment <= 9u) {
+                *buf = rawAlignmentProbe;
+            } else {
+                // ODA §20.4.96.1 specifies RS, but marks AutoCAD 2008 cell
+                // changes TODO. Preserve this bounded compatibility candidate
+                // only when RS is outside the defined alignment domain and
+                // BitShort yields a defined 1..9 value. It remains partial
+                // until the producer-specific schema is independently proven.
+                if (!readBoundedBitShort(*buf, bounds.bodyEndBit, alignment)
+                    || alignment < 1u || alignment > 9u)
+                    return false;
+                semanticComplete = false;
+            }
+        } else if (!readBoundedRawShort16(*buf, bounds.bodyEndBit,
+                                          alignment)) {
             return false;
+        }
         if (legacyAc1018CellOverrideProfile
             || ac1021TextAlignmentProfile) {
             cell.m_textAlignment = static_cast<int>(alignment);

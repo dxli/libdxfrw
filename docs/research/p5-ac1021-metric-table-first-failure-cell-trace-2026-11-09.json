@@ -52,7 +52,9 @@
     "peer_limit": "ACadSharp at commit 3a52a52047e84670759c1f9ad3916ec3ce85ff56 successfully decodes the table values but reads the alignment override differently from ODA. LibreDWG 0.14 retains these ACAD_TABLE bodies as unknown bits. Neither peer supplies independent source spans for the candidate type-48 positions.",
     "interpretation": "The first unsupported candidate is localized to row 8/column 0 in handle 0x2856e and row 9/column 0 in handle 0x2a974. Both cells carry alignment override flag 0x01 in the local cursor trace. A generated raw-RS boundary control now covers the normative alignment field and following CadValue/sentinel, but does not resolve the physical candidate. The exact preceding cursor difference remains open; do not add a type-48 decoder or claim malformed source data until an independent source-span walk resolves it.",
     "disposition": "No production parser change. Keep both TABLE bodies semantically incomplete and output-gated until exact source spans or an independent producer decode resolve the preceding fields. No support claim is promoted.",
-    "generated_control": "docs/research/p5-ac1021-table-alignment-raw-rs-boundary-2026-11-09.json"
+    "generated_control": "docs/research/p5-ac1021-table-alignment-raw-rs-boundary-2026-11-09.json",
+    "decision": "Historical raw-RS trace localized candidate type 48 at two cells. Follow-up shows the AC1021 alignment override at the same source position is read as raw RS 42049, outside the defined domain; the bounded BitShort compatibility candidate parses all 171 CadValues in the metric and imperial sources. Do not add a type-48 decoder. Current code keeps the alternative candidate semantically incomplete pending producer/schema and semantic qualification; see docs/research/p5-ac1021-metric-table-bitshort-fallback-2026-11-09.json."
   },
-  "fixture_policy": "The external DWG is existing local sample material; no fixture was added or committed."
+  "fixture_policy": "The external DWG is existing local sample material; no fixture was added or committed.",
+  "supersededBy": "docs/research/p5-ac1021-metric-table-bitshort-fallback-2026-11-09.json"
 }

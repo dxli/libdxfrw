@@ -8524,7 +8524,9 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
                              DRW::DwgHardPointer,
                          std::uint32_t borderColorOverrideFlags = 0u,
                          std::uint32_t borderLineweightOverrideFlags = 0u,
-                         std::uint32_t borderVisibilityOverrideFlags = 0u) {
+                         std::uint32_t borderVisibilityOverrideFlags = 0u,
+                         std::uint16_t cellAlignmentValue = 5u,
+                         bool cellAlignmentBitShort = false) {
     constexpr std::uint32_t ac1018CellOverrideFlags = 0x0003FFE0u;
     const bool knownCellOverrideProfile = cellOverrideFlags == 0u
         || (version == DRW::AC1018 && cellOverrideFlags != 0u
@@ -8616,8 +8618,13 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
             frame.cellOverridePrefixEndBit = body.bitCount();
             if (version == DRW::AC1021
                 && cellOverrideFlags == 0x00000001u) {
-                // ODA v5.4.1 §20.4.96.1 declares cell alignment as raw RS.
-                body.putRawShort16(5);
+                // ODA v5.4.1 §20.4.96.1 declares cell alignment as raw RS;
+                // the alternative generator exercises the unresolved R21
+                // BitShort compatibility candidate without a DWG fixture.
+                if (cellAlignmentBitShort)
+                    body.putBitShort(cellAlignmentValue);
+                else
+                    body.putRawShort16(cellAlignmentValue);
             } else if (version == DRW::AC1021
                        && cellOverrideFlags == 0x00000004u) {
                 // ODA v5.4.1 §20.4.96.1: bit 0x04 selects Background color
@@ -11333,6 +11340,33 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  && cursorBit(ac1021CellAlignmentInput)
                      == ac1021CellAlignmentFrame.tableDataEndBit,
              "AC1021 TABLE cell-alignment RS field decodes its value and preserves the following CadValue/table sentinel boundaries");
+
+    R2007TableFrame ac1021BitShortAlignmentFrame;
+    const bool ac1021BitShortAlignmentBuilt = makeR2007TableFrame(
+        1u, ac1021BitShortAlignmentFrame, TablePlacement{}, 0x00000001u,
+        0u, DRW::AC1021, 0u, 0u, 1u, DRW::DwgHardPointer,
+        0u, 0u, 0u, 6u, true);
+    t.expect(ac1021BitShortAlignmentBuilt,
+             "AC1021 TABLE BitShort alignment candidate vector builds from scratch");
+    if (!ac1021BitShortAlignmentBuilt)
+        return;
+    dwgBuffer ac1021BitShortAlignmentInput(
+        ac1021BitShortAlignmentFrame.bytes.data(),
+        ac1021BitShortAlignmentFrame.bytes.size());
+    const bool ac1021BitShortAlignmentRead = table.parseDwg(
+        DRW::AC1021, &ac1021BitShortAlignmentInput);
+    const DRW_TableCell* ac1021BitShortAlignmentCell =
+        table.m_content.m_rows.size() == 1u
+            && table.m_content.m_rows.front().m_cells.size() == 1u
+        ? &table.m_content.m_rows.front().m_cells.front() : nullptr;
+    t.expect(ac1021BitShortAlignmentRead
+                 && ac1021BitShortAlignmentInput.isGood()
+                 && !table.m_semanticContentComplete
+                 && ac1021BitShortAlignmentCell != nullptr
+                 && ac1021BitShortAlignmentCell->m_textAlignment == 6
+                 && cursorBit(ac1021BitShortAlignmentInput)
+                     == ac1021BitShortAlignmentFrame.tableDataEndBit,
+             "AC1021 TABLE BitShort compatibility candidate retains typed alignment but remains semantically incomplete");
 
     R2007TableFrame blockFrame;
     const bool blockBuilt = makeR2007TableFrame(2, blockFrame);
