@@ -9006,6 +9006,7 @@ bool DRW_Dimstyle::encodeDwg(DRW::Version version, dwgBufferW *buf,
 bool DRW_Dimstyle::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
                                        dwgBufferW *strBuf, dwgBufferW *hdlBuf,
                                        bool typedNullReferences) const {
+    try {
     if (buf == nullptr || version < DRW::AC1015
         || !dwgSafety::validReactorCount(numReactors)
         || reactorHandles.size() > dwgSafety::MaxReactorCount
@@ -9130,6 +9131,29 @@ bool DRW_Dimstyle::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
         || (version >= DRW::AC1024
             && (!finite(dimaltmzf) || !finite(dimmzf))))
         return false;
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerStringDest =
+        (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+    dwgBufferW *const callerHandleDest =
+        (hdlBuf != nullptr && version > DRW::AC1014)
+            ? hdlBuf : callerBody;
+    const bool separateStrings = callerStringDest != callerBody;
+    const bool separateHandles = callerHandleDest != callerBody
+        && callerHandleDest != callerStringDest;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    stagedBody = *callerBody;
+    if (separateStrings)
+        stagedStrings = *callerStringDest;
+    if (separateHandles)
+        stagedHandles = *callerHandleDest;
+
+    buf = &stagedBody;
+    strBuf = separateStrings ? &stagedStrings : buf;
+    hdlBuf = separateHandles ? &stagedHandles
+        : callerHandleDest == callerStringDest && separateStrings
+            ? &stagedStrings : buf;
     dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
     dwgBufferW *hb = (hdlBuf && version > DRW::AC1014) ? hdlBuf : buf;
 
@@ -9252,7 +9276,17 @@ bool DRW_Dimstyle::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
         hb->putHandle(hardReference(dimltex1H.ref));
         hb->putHandle(hardReference(dimltex2H.ref));
     }
-    return buf->isGood() && sb->isGood() && hb->isGood();
+    if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+        return false;
+    callerBody->swap(stagedBody);
+    if (separateStrings)
+        callerStringDest->swap(stagedStrings);
+    if (separateHandles)
+        callerHandleDest->swap(stagedHandles);
+    return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_UCS::encodeDwg(DRW::Version version, dwgBufferW *buf,

@@ -1490,6 +1490,15 @@ created locally from scratch for the specific control.
   [TEXTSTYLE allocation receipt](docs/research/p6-textstyle-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 2,846 offsets across 141 cases.
 
+- **DIMSTYLE DWG encoder transaction safety:**
+  `DRW_Dimstyle::encodeDwgForWriter` now catches preflight/allocation failures
+  and stages the body, detached strings, and handles before publication. Seven
+  AC1015/AC1018/AC1021 generated layouts sweep 192 offsets with rollback and
+  same-object retry. The allocation, object-vector, body-handle, CMC, wire,
+  resource-remap, and ASCII/Binary CLI tests pass 10/10. No fixture was added.
+  See the [DIMSTYLE allocation receipt](docs/research/p6-dimstyle-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 3,038 offsets across 148 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

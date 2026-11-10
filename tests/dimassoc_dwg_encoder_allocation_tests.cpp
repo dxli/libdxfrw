@@ -1266,6 +1266,79 @@ bool sweepTextstyle(ImageDefinitionStreams mode) {
         names[static_cast<std::size_t>(mode)], version, encode, outputs);
 }
 
+DRW_Dimstyle makeDimstyle() {
+    DRW_Dimstyle style;
+    style.handle = 0xB300u;
+    style.parentHandle = 0x20u;
+    style.reactorHandles = {0x21u, 0x22u};
+    style.setDwgCommonObjectState(2, 1u, false);
+    style.xDictHandle = 0x23u;
+    style.name = "LOCAL_DIMSTYLE";
+    style.flags = 0;
+    style.dimpost = "<> mm";
+    style.dimapost = "[<>]";
+    style.dimaltmzs = "ALT";
+    style.dimmzs = "PRIMARY";
+    style.xrefBlockHandle.ref = 0x24u;
+    style.dimtxstyH.ref = 0x25u;
+    style.dimldrblkH.ref = 0x26u;
+    style.dimblkH.ref = 0x27u;
+    style.dimblk1H.ref = 0x28u;
+    style.dimblk2H.ref = 0x29u;
+    style.dimltypeH.ref = 0x2Au;
+    style.dimltex1H.ref = 0x2Bu;
+    style.dimltex2H.ref = 0x2Cu;
+    return style;
+}
+
+bool sweepDimstyle(ImageDefinitionStreams mode) {
+    const DRW::Version version =
+        mode == ImageDefinitionStreams::R13InlineSeparateArguments
+            ? DRW::AC1015
+            : mode == ImageDefinitionStreams::R2004DetachedHandles
+                ? DRW::AC1018 : DRW::AC1021;
+    const DRW_Dimstyle style = makeDimstyle();
+    const auto encode = [&style](DRW::Version v, dwgBufferW* body,
+                                 dwgBufferW* strings, dwgBufferW* handles) {
+        return style.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [mode](dwgBufferW& body, dwgBufferW& strings,
+                                dwgBufferW& handles) {
+        dwgBufferW* stringOutput = nullptr;
+        dwgBufferW* handleOutput = nullptr;
+        switch (mode) {
+        case ImageDefinitionStreams::R13InlineSeparateArguments:
+        case ImageDefinitionStreams::R2004DetachedHandles:
+        case ImageDefinitionStreams::Separate:
+            stringOutput = &strings;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SharedStringAndHandle:
+            stringOutput = &strings;
+            handleOutput = &strings;
+            break;
+        case ImageDefinitionStreams::AllBody:
+            break;
+        case ImageDefinitionStreams::BodyStringDetachedHandles:
+            stringOutput = &body;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SeparateStringBodyHandles:
+            stringOutput = &strings;
+            handleOutput = &body;
+            break;
+        }
+        return EncoderOutputs{stringOutput, handleOutput};
+    };
+    static const char* const names[] = {
+        "AC1015-inline", "AC1018-detached-handles", "separate",
+        "shared-string-handle", "all-body", "body-string-detached-handles",
+        "separate-string-body-handles"
+    };
+    return sweepTransactionalEncoder("DIMSTYLE",
+        names[static_cast<std::size_t>(mode)], version, encode, outputs);
+}
+
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
     GeoDataProbe geo;
     geo.handle = 0xA900u;
@@ -2512,6 +2585,14 @@ int main() {
         || !sweepTextstyle(ImageDefinitionStreams::AllBody)
         || !sweepTextstyle(ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepTextstyle(
+            ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepDimstyle(ImageDefinitionStreams::R13InlineSeparateArguments)
+        || !sweepDimstyle(ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepDimstyle(ImageDefinitionStreams::Separate)
+        || !sweepDimstyle(ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepDimstyle(ImageDefinitionStreams::AllBody)
+        || !sweepDimstyle(ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepDimstyle(
             ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
