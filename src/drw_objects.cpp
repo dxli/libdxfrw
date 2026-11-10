@@ -18388,28 +18388,58 @@ bool DRW_Material::encodeDwg(DRW::Version version, dwgBufferW *buf,
                  && canReplayAc1027DefaultDwgBody())))
         return false;
 
-    dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018)
-        ? strBuf
-        : buf;
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
-        ? handleBuf
-        : buf;
+    try {
+        dwgBufferW *const callerBody = buf;
+        dwgBufferW *const callerStringDest =
+            (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+        dwgBufferW *const callerHandleDest =
+            (handleBuf != nullptr && version > DRW::AC1014)
+                ? handleBuf : callerBody;
+        const bool separateStrings = callerStringDest != callerBody;
+        const bool separateHandles = callerHandleDest != callerBody
+            && callerHandleDest != callerStringDest;
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedStrings;
+        dwgBufferW stagedHandles;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+        buf = &stagedBody;
+        strBuf = separateStrings ? &stagedStrings : buf;
+        handleBuf = separateHandles ? &stagedHandles
+            : callerHandleDest == callerStringDest && separateStrings
+                ? &stagedStrings : buf;
+        dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018)
+            ? strBuf : buf;
+        dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
+            ? handleBuf : buf;
 
-    sb->putVariableText(version, m_name);
-    sb->putVariableText(version, m_description);
-    if (version == DRW::AC1027) {
-        // The five image-backed default maps have source=1 and carry an
-        // explicit empty detached string. Refraction is scene-backed (0).
-        for (unsigned i = 0u; i < 5u; ++i)
-            sb->putVariableText(version, "");
-    }
-    if (m_rawDataValid
-        && !appendRawBits(m_rawData, m_rawDataBitSize, buf))
+        sb->putVariableText(version, m_name);
+        sb->putVariableText(version, m_description);
+        if (version == DRW::AC1027) {
+            // The five image-backed default maps have source=1 and carry an
+            // explicit empty detached string. Refraction is scene-backed (0).
+            for (unsigned i = 0u; i < 5u; ++i)
+                sb->putVariableText(version, "");
+        }
+        if (m_rawDataValid
+            && !appendRawBits(m_rawData, m_rawDataBitSize, buf))
+            return false;
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle), reactorCount(),
+            extensionDictionaryFlag(), &reactorHandles, xDictHandle);
+        if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
         return false;
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), reactorCount(),
-        extensionDictionaryFlag(), &reactorHandles, xDictHandle);
-    return buf->isGood() && sb->isGood() && hb->isGood();
+    }
 }
 
 bool DRW_TableStyle::parseDxfR24NestedStyle(

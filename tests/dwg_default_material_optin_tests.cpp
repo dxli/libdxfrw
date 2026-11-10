@@ -1073,13 +1073,194 @@ bool ac1024AutoCad2016DefaultMaterialReplayGraphRoundtrip(
         DRW::AC1024, sources, output, extensionDictionaries, xrecords,
         handleMap, 0);
 }
+
+namespace {
+struct MaterialBufferState {
+    std::vector<std::uint8_t> bytes;
+    std::uint8_t bitPos{0};
+    bool good{true};
+    std::vector<DRW::DwgHandleWriteOccurrence> occurrences;
+};
+
+MaterialBufferState materialBufferState(const dwgBufferW& buffer) {
+    return {buffer.data(), buffer.bitPos(), buffer.isGood(),
+            buffer.handleOccurrences()};
+}
+
+bool sameMaterialBufferState(const MaterialBufferState& lhs,
+                             const MaterialBufferState& rhs) {
+    if (lhs.bytes != rhs.bytes || lhs.bitPos != rhs.bitPos
+        || lhs.good != rhs.good || lhs.occurrences.size() != rhs.occurrences.size())
+        return false;
+    for (std::size_t i = 0; i < lhs.occurrences.size(); ++i) {
+        const auto& a = lhs.occurrences[i];
+        const auto& b = rhs.occurrences[i];
+        if (a.code != b.code || a.reference != b.reference
+            || a.startBit != b.startBit || a.endBit != b.endBit)
+            return false;
+    }
+    return true;
+}
+
+bool ac1027MaterialDirectEncoderAllocationSweep(
+        const std::vector<DRW_Material>& sources) {
+    if (sources.empty()) return false;
+    DRW_TextCodec codec;
+    codec.setVersion(DRW::AC1027, false);
+    enum class Layout { Separate, SharedStringHandles, BodyString,
+                        BodyHandles, AllBody };
+    const std::array<Layout, 5> layouts{{Layout::Separate,
+        Layout::SharedStringHandles, Layout::BodyString,
+        Layout::BodyHandles, Layout::AllBody}};
+    std::size_t totalOffsets = 0;
+    for (const auto& source : sources) {
+        for (const Layout layout : layouts) {
+            const auto run = [&](int fault, bool& injected,
+                                 std::array<MaterialBufferState, 3>& state,
+                                 bool& result, int& allocationsUsed) {
+                MaterialSemanticProbe candidate;
+                static_cast<DRW_Material&>(candidate) = source;
+                dwgBufferW body(&codec), strings(&codec), handles(&codec);
+                body.put3Bits(5u);
+                strings.put3Bits(2u);
+                handles.put3Bits(6u);
+                dwgBufferW* stringArg = &strings;
+                dwgBufferW* handleArg = &handles;
+                if (layout == Layout::SharedStringHandles)
+                    handleArg = &strings;
+                else if (layout == Layout::BodyString)
+                    stringArg = &body;
+                else if (layout == Layout::BodyHandles)
+                    handleArg = &body;
+                else if (layout == Layout::AllBody) {
+                    stringArg = &body;
+                    handleArg = &body;
+                }
+                const auto beforeBody = materialBufferState(body);
+                const auto beforeStrings = materialBufferState(strings);
+                const auto beforeHandles = materialBufferState(handles);
+                failAfter = fault;
+                result = false;
+                try {
+                    result = candidate.encodeDwg(DRW::AC1027, &body,
+                                                 stringArg, handleArg);
+                } catch (...) {
+                    allocationsUsed = fault - failAfter.load();
+                    failAfter = -1;
+                    return false;
+                }
+                const int remaining = failAfter.load();
+                injected = fault >= 0 && remaining < 0;
+                allocationsUsed = fault >= 0 ? fault - remaining : 0;
+                failAfter = -1;
+                state = {{materialBufferState(body),
+                          materialBufferState(strings),
+                          materialBufferState(handles)}};
+                if (!injected) return true;
+                if (result || !sameMaterialBufferState(state[0], beforeBody)
+                    || !sameMaterialBufferState(state[1], beforeStrings)
+                    || !sameMaterialBufferState(state[2], beforeHandles))
+                    return false;
+                return true;
+            };
+
+            bool injected = false;
+            bool cleanResult = false;
+            std::array<MaterialBufferState, 3> clean{};
+            int unusedAllocationCount = 0;
+            if (!run(-1, injected, clean, cleanResult, unusedAllocationCount)
+                || !cleanResult)
+                return false;
+            bool calibrationInjected = false;
+            bool calibrationResult = false;
+            std::array<MaterialBufferState, 3> calibration{};
+            constexpr int calibrationLimit = 4096;
+            int allocationCount = 0;
+            if (!run(calibrationLimit, calibrationInjected, calibration,
+                     calibrationResult, allocationCount) || !calibrationResult
+                || calibrationInjected)
+                return false;
+            if (allocationCount <= 0 || allocationCount >= calibrationLimit)
+                return false;
+            // A non-faulting calibration must be byte-for-byte identical to
+            // the clean output, including pre-existing partial-byte state.
+            for (std::size_t i = 0; i < clean.size(); ++i)
+                if (!sameMaterialBufferState(clean[i], calibration[i]))
+                    return false;
+
+            for (int offset = 0; offset < allocationCount; ++offset) {
+                // Keep this exact object and these exact streams alive across
+                // the failed call and retry.
+                MaterialSemanticProbe candidate;
+                static_cast<DRW_Material&>(candidate) = source;
+                dwgBufferW body(&codec), strings(&codec), handles(&codec);
+                body.put3Bits(5u);
+                strings.put3Bits(2u);
+                handles.put3Bits(6u);
+                dwgBufferW* stringArg = &strings;
+                dwgBufferW* handleArg = &handles;
+                if (layout == Layout::SharedStringHandles)
+                    handleArg = &strings;
+                else if (layout == Layout::BodyString)
+                    stringArg = &body;
+                else if (layout == Layout::BodyHandles)
+                    handleArg = &body;
+                else if (layout == Layout::AllBody) {
+                    stringArg = &body;
+                    handleArg = &body;
+                }
+                const std::array<MaterialBufferState, 3> before{{
+                    materialBufferState(body), materialBufferState(strings),
+                    materialBufferState(handles)}};
+                failAfter = offset;
+                bool result = false;
+                try {
+                    result = candidate.encodeDwg(DRW::AC1027, &body,
+                                                 stringArg, handleArg);
+                } catch (...) {
+                    failAfter = -1;
+                    return false;
+                }
+                const int remaining = failAfter.load();
+                const bool didInject = remaining < 0;
+                const int faultAllocations = offset - remaining;
+                failAfter = -1;
+                const std::array<MaterialBufferState, 3> failed{{
+                    materialBufferState(body), materialBufferState(strings),
+                    materialBufferState(handles)}};
+                if (!didInject || faultAllocations != offset + 1 || result)
+                    return false;
+                for (std::size_t i = 0; i < before.size(); ++i)
+                    if (!sameMaterialBufferState(before[i], failed[i]))
+                        return false;
+                if (!candidate.encodeDwg(DRW::AC1027, &body, stringArg,
+                                         handleArg))
+                    return false;
+                const std::array<MaterialBufferState, 3> retried{{
+                    materialBufferState(body), materialBufferState(strings),
+                    materialBufferState(handles)}};
+                for (std::size_t i = 0; i < clean.size(); ++i)
+                    if (!sameMaterialBufferState(clean[i], retried[i]))
+                        return false;
+                ++totalOffsets;
+            }
+        }
+    }
+    std::cout << "AC1027 MATERIAL direct encoder rollback/retry PASS; "
+              << totalOffsets << " injected allocation offsets across "
+              << sources.size() << " source records and 5 stream layouts\n";
+    return true;
+}
+} // namespace
+
 bool ac1027DefaultMaterialReplayAllocationSweep(
         const std::vector<DRW_Material>& sources) {
+    if (!ac1027MaterialDirectEncoderAllocationSweep(sources)) return false;
     const auto nonce = std::chrono::steady_clock::now()
         .time_since_epoch().count();
     const std::string sentinel = "prior destination";
     int successfulOffset = -1;
-    for (int offset = 0; offset < 256; ++offset) {
+    for (int offset = 0; offset < 1024; ++offset) {
         const auto path = std::filesystem::temp_directory_path()
             / ("libdxfrw-ac1027-material-replay-fault-"
                + std::to_string(nonce) + "-" + std::to_string(offset)
@@ -1131,7 +1312,11 @@ bool ac1027DefaultMaterialReplayAllocationSweep(
             successfulOffset = offset;
             break;
         }
-        if (written) return false;
+        if (written) {
+            std::cerr << "AC1027 MATERIAL injected allocation " << offset
+                      << " did not fail the outer write\n";
+            return false;
+        }
         {
             std::ifstream prior(path, std::ios::binary);
             const std::string actual(std::istreambuf_iterator<char>(prior), {});
@@ -1163,7 +1348,10 @@ bool ac1027DefaultMaterialReplayAllocationSweep(
             return false;
         }
     }
-    if (successfulOffset <= 0) return false;
+    if (successfulOffset <= 0) {
+        std::cerr << "AC1027 MATERIAL allocation sweep did not reach a clean offset\n";
+        return false;
+    }
     std::cout << "AC1027 MATERIAL source-fed graph rollback/retry PASS; "
               << successfulOffset << " injected allocation offsets\n";
     return true;
@@ -1303,12 +1491,16 @@ int main(int argc,char**argv) {
             }
             selectedMaterials.push_back(*found);
         }
-        if (!ac1027DefaultMaterialReplayAllocationSweep(selectedMaterials))
+        if (!ac1027DefaultMaterialReplayAllocationSweep(selectedMaterials)) {
+            std::cerr << "physical AC1027 MATERIAL allocation rollback/retry failed\n";
             return 1;
+        }
         const std::filesystem::path output = argc == 4
             ? std::filesystem::path(argv[3]) : std::filesystem::path{};
-        if (!ac1027DefaultMaterialReplayGraphRoundtrip(selectedMaterials, output))
+        if (!ac1027DefaultMaterialReplayGraphRoundtrip(selectedMaterials, output)) {
+            std::cerr << "physical AC1027 MATERIAL graph replay/readback failed\n";
             return 1;
+        }
         std::cout << "physical AC1027 MATERIAL selected DWG replay/readback PASS\n";
         return 0;
     }

@@ -1,5 +1,17 @@
 # DWG/DXF parity — remaining implementation plan
 
+**Latest implementation slice (2026-11-10, AC1027 MATERIAL encoder
+transaction safety):** `DRW_Material::encodeDwg` now stages body, detached
+string and handle streams with alias-aware publication; failures leave every
+caller stream unchanged. The source-derived `ByBlock`, `ByLayer` and `Global`
+records from physical `Cover.dwg` pass 318 direct-encoder allocation failures
+across five stream layouts, followed by same-object retry against clean output.
+The selected graph writer sweep passes 295 injected offsets and fresh typed
+readback. Focused CTest passes 1/1. This establishes rollback/retry only for
+the selected AC1027 default-material profile; broader MATERIAL profiles,
+native acceptance and support claims remain open. No drawing fixture was
+added. See the [transaction receipt](docs/research/p6-ac1027-material-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 **P5 AC1018 TABLE direct-encoder transaction recheck (2026-11-10):** the
 focused generated allocation control now checks exact body/handle bytes,
 non-byte-aligned cursors, handle-occurrence ledgers, and common-write flags.
@@ -3176,6 +3188,15 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    J284, J293 and J295. These do not block independent local slices and cannot
    be promoted by generated controls, advisory reports, or transport-only
    evidence.
+
+- **P6 MATERIAL encoder transaction safety:** the existing Cover-derived
+  AC1027 `ByBlock`, `ByLayer`, and `Global` graph now survives 318 direct
+  encoder allocation faults across five stream-alias layouts and 295
+  whole-graph callback allocation faults. Each injected failure preserves
+  caller state; same-object/same-writer retry and fresh typed readback pass.
+  This closes allocation rollback for this selected profile only; physical
+  field semantics, other MATERIAL profiles, and native/output qualification
+  remain open. See the [transaction receipt](docs/research/p6-ac1027-material-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
 After every slice: run its focused fast checks; update this queue and the
 relevant receipt; commit code, plan and receipt together; report the commit and
