@@ -37,8 +37,17 @@ public:
         plotFlags = value;
     }
 
+    void setByBlockLinetypeForRollbackProbe() {
+        lineType = "BYBLOCK";
+        ltFlags = 0u;
+    }
+
     std::uint8_t plotFlagsForRollbackProbe() const {
         return plotFlags;
+    }
+
+    std::uint8_t linetypeFlagsForRollbackProbe() const {
+        return ltFlags;
     }
 
     bool encode(dwgBufferW& body, dwgBufferW& handles) {
@@ -102,6 +111,7 @@ bool seed(dwgBufferW& body, dwgBufferW& handles) {
 
 bool run() {
     TableProbe calibration = makeTable();
+    calibration.setByBlockLinetypeForRollbackProbe();
     dwgBufferW calibrationBody;
     dwgBufferW calibrationHandles;
     if (!seed(calibrationBody, calibrationHandles))
@@ -122,6 +132,7 @@ bool run() {
     std::size_t exercised = 0u;
     for (std::size_t offset = 0u; offset < allocationCount; ++offset) {
         TableProbe table = makeTable();
+        table.setByBlockLinetypeForRollbackProbe();
         table.setPlotFlagsForRollbackProbe(2u);
         dwgBufferW body;
         dwgBufferW handles;
@@ -144,9 +155,13 @@ bool run() {
             || handles.data() != handlesBefore
             || body.bitCount() != bodyBitsBefore
             || handles.bitCount() != handleBitsBefore
+            || table.linetypeFlagsForRollbackProbe() != 0u
             || table.plotFlagsForRollbackProbe() != 2u) {
             std::cerr << "failure rollback mismatch at allocation offset "
                       << offset << ", encoded=" << encoded
+                      << ", ltFlags="
+                      << static_cast<unsigned>(
+                             table.linetypeFlagsForRollbackProbe())
                       << ", plotFlags="
                       << static_cast<unsigned>(
                              table.plotFlagsForRollbackProbe()) << '\n';
@@ -161,6 +176,7 @@ bool run() {
             || handles.data().empty() || handles.data().front() != 0x5Au
             || body.data() != expectedBody
             || handles.data() != expectedHandles
+            || table.linetypeFlagsForRollbackProbe() != 1u
             || table.plotFlagsForRollbackProbe() != 0u)
             return false;
     }

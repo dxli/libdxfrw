@@ -3770,7 +3770,8 @@ Speed-oriented implementation sequence:
    embedded NULs; its generated refusal, destination-preservation, and corrected
    retry control is in the [exact string guard receipt](docs/research/p5-ac1018-table-cached-string-exact-match-2026-11-09.json).
    Allocation-failure coverage now also proves common-header flag caches roll
-   back with staged body/handle buffers and remain retryable on the same object
+   back with staged body/handle buffers: the sweep exercises both the BYBLOCK
+   `ltFlags` derivation and `plotFlags`, then retries the same object
    ([receipt](docs/research/p5-ac1018-table-common-header-state-rollback-2026-11-09.json)).
    The production
    compound writer still needs its own graph-level staging and atomic publication. The
