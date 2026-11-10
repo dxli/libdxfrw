@@ -25,6 +25,11 @@ public:
     using DRW_EvaluationGraph::encodeDwg;
 };
 
+class BlockRepresentationProbe final : public DRW_BlockRepresentationData {
+public:
+    using DRW_BlockRepresentationData::encodeDwg;
+};
+
 DimensionAssociationProbe makeAssociation() {
     DimensionAssociationProbe association;
     association.handle = 0xA100u;
@@ -242,6 +247,79 @@ bool sweepEvaluationGraph(bool aliasHandles) {
               << ", rollback/retry=PASS\n";
     return true;
 }
+
+BlockRepresentationProbe makeBlockRepresentation() {
+    BlockRepresentationProbe record;
+    record.handle = 0xC100u;
+    record.parentHandle = 0x20u;
+    record.reactorHandles = {0x21u};
+    record.xDictHandle = 0x22u;
+    record.m_flag = 3u;
+    record.m_blockHandle = 0x40u;
+    return record;
+}
+
+bool sweepBlockRepresentation(bool aliasHandles) {
+    DRW_TextCodec codec;
+    codec.setVersion(DRW::AC1024, false);
+    const BlockRepresentationProbe record = makeBlockRepresentation();
+    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
+    seed(cleanBody, cleanStrings, cleanHandles);
+    dwgBufferW* const cleanHandleOutput = aliasHandles ? nullptr : &cleanHandles;
+    if (!record.encodeDwg(DRW::AC1024, &cleanBody, &cleanStrings,
+                          cleanHandleOutput))
+        return false;
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    seed(body, strings, handles);
+    dwgBufferW* const handleOutput = aliasHandles ? nullptr : &handles;
+    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
+    const unsigned long beforeCalibration =
+        failedAllocations.load(std::memory_order_relaxed);
+    const bool calibrated = record.encodeDwg(
+        DRW::AC1024, &body, &strings, handleOutput);
+    const long allocations = 1000000
+        - allocationsBeforeFailure.load(std::memory_order_relaxed);
+    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+    if (!calibrated || allocations <= 0
+        || failedAllocations.load(std::memory_order_relaxed)
+            != beforeCalibration)
+        return false;
+
+    for (long offset = 0; offset < allocations; ++offset) {
+        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
+        seed(failedBody, failedStrings, failedHandles);
+        dwgBufferW* const failedHandleOutput = aliasHandles
+            ? nullptr : &failedHandles;
+        const dwgBufferW originalBody = failedBody;
+        const dwgBufferW originalStrings = failedStrings;
+        const dwgBufferW originalHandles = failedHandles;
+        const unsigned long beforeFailure =
+            failedAllocations.load(std::memory_order_relaxed);
+        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
+        const bool encoded = record.encodeDwg(
+            DRW::AC1024, &failedBody, &failedStrings, failedHandleOutput);
+        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+        if (encoded
+            || failedAllocations.load(std::memory_order_relaxed)
+                != beforeFailure + 1u
+            || !same(failedBody, originalBody)
+            || !same(failedStrings, originalStrings)
+            || !same(failedHandles, originalHandles))
+            return false;
+        if (!record.encodeDwg(DRW::AC1024, &failedBody, &failedStrings,
+                              failedHandleOutput)
+            || !same(failedBody, cleanBody)
+            || !same(failedStrings, cleanStrings)
+            || !same(failedHandles, cleanHandles))
+            return false;
+    }
+    std::cout << "BlockRepresentationData DWG encoder "
+              << (aliasHandles ? "body-aliased" : "separate")
+              << " handles: allocation offsets=" << allocations
+              << ", rollback/retry=PASS\n";
+    return true;
+}
 } // namespace
 
 void* operator new(std::size_t size) {
@@ -269,7 +347,9 @@ int main() {
         || !sweep(StreamAlias::SharedStringAndHandle)
         || !sweep(StreamAlias::AllBody)
         || !sweepEvaluationGraph(false)
-        || !sweepEvaluationGraph(true)) {
+        || !sweepEvaluationGraph(true)
+        || !sweepBlockRepresentation(false)
+        || !sweepBlockRepresentation(true)) {
         allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
         std::cerr << "DIMASSOC DWG encoder allocation transaction failed\n";
         return 1;

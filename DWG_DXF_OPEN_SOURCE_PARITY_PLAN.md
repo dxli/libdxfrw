@@ -1211,6 +1211,16 @@ created locally from scratch for the specific control.
   encoders, OBJECTS builders and whole-drawing failure paths remain open; no
   DWG/DXF fixture was added. See the [allocation rollback receipt](docs/research/p6-evaluation-graph-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **BlockRepresentationData DWG encoder transaction safety:**
+  `DRW_BlockRepresentationData::encodeDwg` now stages the body and effective
+  handle stream, retaining its version-dependent inline-handle behavior and
+  existing hard-owner role. Generated AC1024 controls sweep eight separate
+  stream and seven body-aliased allocation offsets; failure preserves all
+  caller streams and same-record retry matches clean bytes and handle roles.
+  The focused allocation and object-vector tests pass. This does not resolve
+  the record's opaque binary payload or qualify its producer semantics. No
+  DWG/DXF fixture was added. See the [allocation rollback receipt](docs/research/p6-block-representation-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

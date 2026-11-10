@@ -27756,16 +27756,32 @@ bool DRW_BlockRepresentationData::encodeDwg(
         || hasDataStorageBinaryData())
         return false;
 
-    dwgBufferW *hb = handleBuf != nullptr && version > DRW::AC1014
-        ? handleBuf : buf;
     (void)strBuf;
-    buf->putBitShort(m_flag);
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), reactorCount(),
-        extensionDictionaryFlag(), &reactorHandles, xDictHandle);
-    // dwg2.spec: block is a hard-owner reference (code 3, DXF 340).
-    hb->putHandle(makeRefW(m_blockHandle, DRW::DwgHardOwnership));
-    return buf->isGood() && hb->isGood();
+    dwgBufferW stagedBody;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *buf;
+        const bool separateHandles = handleBuf != nullptr && handleBuf != buf
+            && version > DRW::AC1014;
+        if (separateHandles)
+            stagedHandles = *handleBuf;
+        dwgBufferW *hb = separateHandles ? &stagedHandles : &stagedBody;
+        stagedBody.putBitShort(m_flag);
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle), reactorCount(),
+            extensionDictionaryFlag(), &reactorHandles, xDictHandle);
+        // dwg2.spec: block is a hard-owner reference (code 3, DXF 340).
+        hb->putHandle(makeRefW(m_blockHandle, DRW::DwgHardOwnership));
+        if (!stagedBody.isGood() || !hb->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (separateHandles)
+            handleBuf->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_AcDbPlaceholder::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
