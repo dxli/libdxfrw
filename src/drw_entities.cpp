@@ -297,6 +297,123 @@ constexpr std::int32_t kMaxMInsertCount =
 constexpr std::int32_t kMaxViewportFrozenLayers = 512;
 constexpr std::int32_t kMaxViewportLayerOverrideReferences = 512;
 
+// AC1018 AcDbTable stores merge roles directly on cells. Validate the two
+// bounded anchor spellings: a legacy non-merged anchor with merged unit-span
+// covered cells, and an explicit merged anchor with unmerged covered cells.
+// Keep this validator separate from R24's TABLECONTENT range representation.
+bool validAc1018TableCellMergeLayout(
+        const std::vector<DRW_TableRow>& rows,
+        bool allowExplicitAnchorSpans = false) noexcept {
+    if (rows.empty() || rows.size() > kMaxTableRows)
+        return false;
+    const std::size_t columns = rows.front().m_cells.size();
+    if (columns == 0u || columns > kMaxTableColumns
+        || rows.size() > kMaxTableCells / columns)
+        return false;
+    for (const DRW_TableRow& row : rows)
+        if (row.m_cells.size() != columns)
+            return false;
+
+    try {
+        std::vector<std::uint8_t> roles(rows.size() * columns, 0u);
+        bool hasLegacyAnchor = false;
+        bool hasExplicitAnchor = false;
+        for (const DRW_TableRow& row : rows) {
+            for (const DRW_TableCell& cell : row.m_cells) {
+                const bool hasSpan = cell.m_mergedWidth > 1
+                    || cell.m_mergedHeight > 1;
+                hasLegacyAnchor = hasLegacyAnchor
+                    || (!cell.m_isMerged && hasSpan);
+                hasExplicitAnchor = hasExplicitAnchor
+                    || (cell.m_isMerged && hasSpan);
+            }
+        }
+        if (hasLegacyAnchor && hasExplicitAnchor)
+            return false;
+        if (hasExplicitAnchor && !allowExplicitAnchorSpans)
+            return false;
+        const bool explicitAnchorProfile = hasExplicitAnchor;
+        for (std::size_t row = 0u; row < rows.size(); ++row) {
+            for (std::size_t column = 0u; column < columns; ++column) {
+                const DRW_TableCell& cell = rows[row].m_cells[column];
+                if (cell.m_isMerged && !explicitAnchorProfile) {
+                    if (cell.m_mergedWidth != 1 || cell.m_mergedHeight != 1)
+                        return false;
+                    continue;
+                }
+                if (explicitAnchorProfile && cell.m_isMerged
+                    && cell.m_mergedWidth == 1 && cell.m_mergedHeight == 1)
+                    return false;
+                if (explicitAnchorProfile && !cell.m_isMerged
+                    && ((cell.m_mergedWidth == 0
+                         && cell.m_mergedHeight == 0)
+                        || (cell.m_mergedWidth == 1
+                            && cell.m_mergedHeight == 1)))
+                    continue;
+                if (cell.m_mergedWidth <= 0 || cell.m_mergedHeight <= 0
+                    || static_cast<std::size_t>(cell.m_mergedWidth)
+                        > columns - column
+                    || static_cast<std::size_t>(cell.m_mergedHeight)
+                        > rows.size() - row)
+                    return false;
+                if (cell.m_mergedWidth == 1 && cell.m_mergedHeight == 1)
+                    continue;
+
+                const std::size_t right = column
+                    + static_cast<std::size_t>(cell.m_mergedWidth);
+                const std::size_t bottom = row
+                    + static_cast<std::size_t>(cell.m_mergedHeight);
+                for (std::size_t coveredRow = row; coveredRow < bottom;
+                     ++coveredRow) {
+                    for (std::size_t coveredColumn = column;
+                         coveredColumn < right; ++coveredColumn) {
+                        const bool anchor = coveredRow == row
+                            && coveredColumn == column;
+                        const DRW_TableCell& member =
+                            rows[coveredRow].m_cells[coveredColumn];
+                        const std::size_t index = coveredRow * columns
+                            + coveredColumn;
+                        const bool validMember = explicitAnchorProfile
+                            ? (anchor ? member.m_isMerged
+                                      : (!member.m_isMerged
+                                          && ((member.m_mergedWidth == 0
+                                               && member.m_mergedHeight == 0)
+                                              || (member.m_mergedWidth == 1
+                                                  && member.m_mergedHeight == 1))))
+                            : (anchor ? !member.m_isMerged
+                                      : (member.m_isMerged
+                                          && member.m_mergedWidth == 1
+                                          && member.m_mergedHeight == 1));
+                        if (roles[index] != 0u || !validMember)
+                            return false;
+                        roles[index] = anchor ? 1u : 2u;
+                    }
+                }
+            }
+        }
+        for (std::size_t row = 0u; row < rows.size(); ++row) {
+            for (std::size_t column = 0u; column < columns; ++column) {
+                const DRW_TableCell& cell = rows[row].m_cells[column];
+                const std::uint8_t role = roles[row * columns + column];
+                if (explicitAnchorProfile
+                    ? ((role == 1u && !cell.m_isMerged)
+                        || (role == 2u && cell.m_isMerged)
+                        || (role == 0u && cell.m_isMerged))
+                    : ((role == 1u && cell.m_isMerged)
+                        || (role == 2u && !cell.m_isMerged)
+                        || (role == 0u
+                            && (cell.m_isMerged || cell.m_mergedWidth != 1
+                                || cell.m_mergedHeight != 1)))
+                    )
+                    return false;
+            }
+        }
+    } catch (...) {
+        return false;
+    }
+    return true;
+}
+
 bool parseViewportLayerOverrideHandle(std::string_view text,
                                       std::uint64_t& handle) noexcept {
     if (text.empty() || text.size() > 16u)
@@ -14052,6 +14169,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || m_content.m_rows.empty()
         || m_content.m_rows.size() > kMaxTableRows
         || static_cast<std::size_t>(rowcount) != m_content.m_rows.size()
+        || !validAc1018TableCellMergeLayout(m_content.m_rows, true)
         || !m_content.m_fieldHandles.empty()
         || !m_content.m_mergedRanges.empty()
         || !m_content.m_subrecordRanges.empty()
@@ -14158,8 +14276,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
             && cell.m_edgeFlags == expectedCellEdgeFlags;
         return cell.m_type == 1 && cell.m_edgeFlags >= 0
             && cell.m_edgeFlags <= 15
-            && !cell.m_isMerged && !cell.m_autoFit
-            && cell.m_mergedWidth == 1 && cell.m_mergedHeight == 1
+            && !cell.m_autoFit
             && std::isfinite(cell.m_rotation) && cell.m_rotation == 0.0
             && cell.m_valueHandle == 0u && cell.m_textStyleHandle == 0u
             && cell.m_styleId == 0
@@ -14317,10 +14434,10 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
                     static_cast<std::uint16_t>(cell.m_type));
                 stagedBody.putRawChar8(
                     static_cast<std::uint8_t>(cell.m_edgeFlags));
-                stagedBody.putBit(false); // not merged
+                stagedBody.putBit(cell.m_isMerged);
                 stagedBody.putBit(false); // no auto-fit
-                stagedBody.putBitLong(1);
-                stagedBody.putBitLong(1);
+                stagedBody.putBitLong(cell.m_mergedWidth);
+                stagedBody.putBitLong(cell.m_mergedHeight);
                 stagedBody.putBitDouble(cell.m_rotation);
                 stagedBody.putVariableText(
                     version, cell.m_contents.front().m_text);
@@ -14839,6 +14956,14 @@ bool DRW_Table::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
             &m_content.m_subrecordRanges, tableBounds);
         if (!tableOverridesParsed)
             m_semanticContentComplete = false;
+    }
+    if (version == DRW::AC1018 && cellsParseComplete
+        && m_semanticContentComplete
+        && !validAc1018TableCellMergeLayout(m_content.m_rows, true)) {
+        // Keep the source frame and decoded cells, but do not report complete
+        // legacy TABLE semantics for an orphaned, overlapping, or out-of-range
+        // merge descriptor.
+        m_semanticContentComplete = false;
     }
     if (!cellsParseComplete || !m_semanticContentComplete)
         DRW_DBG("R2007 TABLE cell parse incomplete; anonymous block insert kept\n");

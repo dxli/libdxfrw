@@ -8526,7 +8526,10 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
                          std::uint32_t borderLineweightOverrideFlags = 0u,
                          std::uint32_t borderVisibilityOverrideFlags = 0u,
                          std::uint16_t cellAlignmentValue = 5u,
-                         bool cellAlignmentBitShort = false) {
+                         bool cellAlignmentBitShort = false,
+                         bool cellIsMerged = false,
+                         std::int32_t mergedWidth = 1,
+                         std::int32_t mergedHeight = 1) {
     constexpr std::uint32_t ac1018CellOverrideFlags = 0x0003FFE0u;
     const bool knownCellOverrideProfile = cellOverrideFlags == 0u
         || (version == DRW::AC1018 && cellOverrideFlags != 0u
@@ -8596,10 +8599,10 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
 
     body.putBitShort(cellType);
     body.putRawChar8(cellEdgeFlags);
+    body.putBit(cellIsMerged);
     body.putBit(0);
-    body.putBit(0);
-    body.putBitLong(1);
-    body.putBitLong(1);
+    body.putBitLong(mergedWidth);
+    body.putBitLong(mergedHeight);
     body.putBitDouble(0.0);
     frame.cellPrefixEndBit = body.bitCount();
 
@@ -9202,6 +9205,35 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                      == ac1018RetryFrame.tableDataEndBit,
              "same AC1018 TABLE parser retries a valid frame after unknown override refusal");
 
+    R2007TableFrame orphanedMergeFrame;
+    const bool orphanedMergeBuilt = makeR2007TableFrame(
+        1u, orphanedMergeFrame, TablePlacement{}, 0u, 0u,
+        DRW::AC1018, 0u, 0u, 1u, DRW::DwgHardPointer,
+        0u, 0u, 0u, 5u, false, true, 1, 1);
+    t.expect(orphanedMergeBuilt,
+             "AC1018 orphaned merged-cell vector builds");
+    if (!orphanedMergeBuilt)
+        return;
+    dwgBuffer orphanedMergeInput(orphanedMergeFrame.bytes.data(),
+                                 orphanedMergeFrame.bytes.size());
+    const bool orphanedMergeRead = table.parseDwg(
+        DRW::AC1018, &orphanedMergeInput);
+    t.expect(orphanedMergeRead && orphanedMergeInput.isGood()
+                 && table.m_hasSemanticContent
+                 && !table.m_semanticContentComplete
+                 && table.m_content.m_rows.size() == 1u
+                 && table.m_content.m_rows.front().m_cells.size() == 1u,
+             "AC1018 orphaned merged-cell role keeps its frame but cannot claim a complete grid");
+    dwgBuffer correctedAfterMergeInput(ac1018RetryFrame.bytes.data(),
+                                       ac1018RetryFrame.bytes.size());
+    const bool correctedAfterMergeRead = table.parseDwg(
+        DRW::AC1018, &correctedAfterMergeInput);
+    t.expect(correctedAfterMergeRead && correctedAfterMergeInput.isGood()
+                 && table.m_semanticContentComplete
+                 && cursorBit(correctedAfterMergeInput)
+                     == ac1018RetryFrame.tableDataEndBit,
+             "same AC1018 TABLE parser retries a valid grid after orphaned-merge refusal");
+
     TableDwgCodecProbe encodedAc1018Table;
     encodedAc1018Table.handle = 0xA500u;
     encodedAc1018Table.setDwgLayerHandle(DRW::DwgLayer0Handle);
@@ -9281,6 +9313,157 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         t.expect(encodedTableInput.isGood()
                      && sentinel == encodedTableSentinel,
                  "AC1018 plain-text TABLE encoder preserves the following body sentinel");
+    }
+
+    TableDwgCodecProbe mergedAc1018Table;
+    mergedAc1018Table.handle = 0xA500u;
+    mergedAc1018Table.setDwgLayerHandle(DRW::DwgLayer0Handle);
+    mergedAc1018Table.blockRecH = handle(0xA600u);
+    mergedAc1018Table.m_tableStyleHandle = 0xA700u;
+    mergedAc1018Table.basePoint = DRW_Coord{4.0, 5.0, 0.0};
+    mergedAc1018Table.extPoint = DRW_Coord{0.0, 0.0, 1.0};
+    mergedAc1018Table.m_horizontalDirection = DRW_Coord{1.0, 0.0, 0.0};
+    mergedAc1018Table.colcount = 2;
+    mergedAc1018Table.rowcount = 2;
+    for (int columnIndex = 0; columnIndex < 2; ++columnIndex) {
+        DRW_TableColumn column;
+        column.m_width = 8.0;
+        mergedAc1018Table.m_content.m_columns.push_back(column);
+    }
+    for (int rowIndex = 0; rowIndex < 2; ++rowIndex) {
+        DRW_TableRow row;
+        row.m_height = 3.0;
+        for (int columnIndex = 0; columnIndex < 2; ++columnIndex) {
+            DRW_TableCell cell;
+            cell.m_type = 1;
+            cell.m_mergedWidth = 1;
+            cell.m_mergedHeight = 1;
+            if (rowIndex == 0 && columnIndex == 0) {
+                cell.m_mergedWidth = 2;
+                cell.m_mergedHeight = 2;
+            } else {
+                cell.m_isMerged = true;
+            }
+            DRW_TableCellContent content;
+            content.m_type = 1;
+            content.m_text = rowIndex == 0 && columnIndex == 0
+                ? "merged AC1018 anchor" : "";
+            cell.m_contents.push_back(content);
+            row.m_cells.push_back(cell);
+        }
+        mergedAc1018Table.m_content.m_rows.push_back(row);
+    }
+    dwgBufferW mergedTableBody;
+    dwgBufferW mergedTableHandles;
+    dwgBufferW mergedTableTypePrefix;
+    mergedTableTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t mergedTableObjectSizeBit =
+        mergedTableTypePrefix.bitCount();
+    const bool mergedTableBuilt = mergedAc1018Table.encodeAsTableClass(
+        DRW::AC1018, mergedTableBody, mergedTableHandles);
+    t.expect(mergedTableBuilt,
+             "AC1018 plain-text TABLE accepts the validated legacy merge-cell profile");
+    if (mergedTableBuilt) {
+        const std::uint64_t mergedTableContentEndBit =
+            mergedTableBody.bitCount();
+        constexpr std::int32_t mergedTableSentinel = 0x71C0A19;
+        mergedTableBody.putBitLong(mergedTableSentinel);
+        mergedTableBody.patchRawLong32AtBit(mergedTableObjectSizeBit,
+                                            mergedTableBody.bitCount());
+        appendBits(mergedTableBody, mergedTableHandles);
+        dwgBuffer mergedTableInput(mergedTableBody.data().data(),
+                                   mergedTableBody.data().size());
+        TableDwgCodecProbe mergedTableReadback;
+        const bool mergedTableRead = mergedTableReadback.parseDwg(
+            DRW::AC1018, &mergedTableInput);
+        const auto& parsedRows = mergedTableReadback.m_content.m_rows;
+        const bool mergedFieldsMatch = mergedTableRead
+            && mergedTableInput.isGood()
+            && mergedTableReadback.m_semanticContentComplete
+            && parsedRows.size() == 2u
+            && parsedRows[0].m_cells.size() == 2u
+            && parsedRows[1].m_cells.size() == 2u
+            && !parsedRows[0].m_cells[0].m_isMerged
+            && parsedRows[0].m_cells[0].m_mergedWidth == 2
+            && parsedRows[0].m_cells[0].m_mergedHeight == 2
+            && parsedRows[0].m_cells[0].m_contents.front().m_text
+                == "merged AC1018 anchor"
+            && parsedRows[0].m_cells[1].m_isMerged
+            && parsedRows[1].m_cells[0].m_isMerged
+            && parsedRows[1].m_cells[1].m_isMerged
+            && std::all_of(parsedRows.begin(), parsedRows.end(),
+                [](const DRW_TableRow& row) {
+                    return std::all_of(row.m_cells.begin(), row.m_cells.end(),
+                        [](const DRW_TableCell& cell) {
+                            return cell.m_mergedWidth == (cell.m_isMerged ? 1 : 2)
+                                && cell.m_mergedHeight == (cell.m_isMerged ? 1 : 2);
+                        });
+                })
+            && cursorBit(mergedTableInput) == mergedTableContentEndBit;
+        t.expect(mergedFieldsMatch,
+                 "AC1018 TABLE merged-cell flags and spans survive exact body readback");
+        if (mergedFieldsMatch) {
+            t.expect(mergedTableInput.getBitLong() == mergedTableSentinel
+                         && mergedTableInput.isGood(),
+                     "AC1018 TABLE merged-cell encoding preserves the following-body sentinel");
+        }
+
+        TableDwgCodecProbe invalidMergedTable = mergedAc1018Table;
+        invalidMergedTable.m_content.m_rows[1].m_cells[1].m_isMerged = false;
+        dwgBufferW invalidMergedBody;
+        dwgBufferW invalidMergedHandles;
+        invalidMergedBody.putRawChar8(0xA5u);
+        invalidMergedHandles.putRawChar8(0x5Au);
+        const auto invalidMergedBodyBefore = invalidMergedBody.data();
+        const auto invalidMergedHandlesBefore = invalidMergedHandles.data();
+        const bool invalidMergeRefused = !invalidMergedTable.encodeAsTableClass(
+            DRW::AC1018, invalidMergedBody, invalidMergedHandles);
+        const bool invalidMergePreserved =
+            invalidMergedBody.data() == invalidMergedBodyBefore
+            && invalidMergedHandles.data() == invalidMergedHandlesBefore;
+        invalidMergedTable.m_content.m_rows[1].m_cells[1].m_isMerged = true;
+        const bool correctedMergeRetry = invalidMergedTable.encodeAsTableClass(
+            DRW::AC1018, invalidMergedBody, invalidMergedHandles);
+        t.expect(invalidMergeRefused && invalidMergePreserved
+                     && correctedMergeRetry,
+                 "AC1018 TABLE rejects orphaned merge roles atomically and accepts corrected same-object retry");
+    }
+
+    TableDwgCodecProbe explicitMergedAc1018Table = mergedAc1018Table;
+    explicitMergedAc1018Table.m_content.m_rows[0].m_cells[0].m_isMerged = true;
+    explicitMergedAc1018Table.m_content.m_rows[0].m_cells[1].m_isMerged = false;
+    explicitMergedAc1018Table.m_content.m_rows[1].m_cells[0].m_isMerged = false;
+    explicitMergedAc1018Table.m_content.m_rows[1].m_cells[1].m_isMerged = false;
+    dwgBufferW explicitMergedTableBody;
+    dwgBufferW explicitMergedTableHandles;
+    const bool explicitMergedTableBuilt =
+        explicitMergedAc1018Table.encodeAsTableClass(
+            DRW::AC1018, explicitMergedTableBody, explicitMergedTableHandles);
+    t.expect(explicitMergedTableBuilt,
+             "AC1018 plain-text TABLE accepts a bounded explicit-anchor merge profile");
+    if (explicitMergedTableBuilt) {
+        const std::uint64_t contentEndBit = explicitMergedTableBody.bitCount();
+        explicitMergedTableBody.patchRawLong32AtBit(
+            mergedTableObjectSizeBit, contentEndBit);
+        appendBits(explicitMergedTableBody, explicitMergedTableHandles);
+        dwgBuffer explicitMergedInput(explicitMergedTableBody.data().data(),
+                                      explicitMergedTableBody.data().size());
+        TableDwgCodecProbe explicitMergedReadback;
+        const bool explicitMergedRead = explicitMergedReadback.parseDwg(
+            DRW::AC1018, &explicitMergedInput);
+        const auto& rows = explicitMergedReadback.m_content.m_rows;
+        t.expect(explicitMergedRead && explicitMergedInput.isGood()
+                     && explicitMergedReadback.m_semanticContentComplete
+                     && rows.size() == 2u && rows[0].m_cells.size() == 2u
+                     && rows[1].m_cells.size() == 2u
+                     && rows[0].m_cells[0].m_isMerged
+                     && rows[0].m_cells[0].m_mergedWidth == 2
+                     && rows[0].m_cells[0].m_mergedHeight == 2
+                     && !rows[0].m_cells[1].m_isMerged
+                     && !rows[1].m_cells[0].m_isMerged
+                     && !rows[1].m_cells[1].m_isMerged
+                     && cursorBit(explicitMergedInput) == contentEndBit,
+                 "AC1018 explicit-anchor merge flags and spans survive exact body readback");
     }
 
     const auto makeEncodableAc1018Table = []() {

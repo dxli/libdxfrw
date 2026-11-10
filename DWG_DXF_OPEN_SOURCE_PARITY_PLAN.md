@@ -1177,6 +1177,39 @@ behavior independently. Local macOS checks do not satisfy those platform gates.
   see the [LibreDWG writer screen](docs/research/p5-ac1018-libredwg-table-writer-screen-2026-11-08.json).
   The full source/output fingerprints and limits are in the [TABLE readiness
   receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
+- **AC1018 ODA TABLE peer profile (2026-11-09):** ODA File Converter 27.1
+  converted the pinned ezdxf `acad_table_simple.dxf` (AC1027) into an AC1018
+  DWG in scratch storage. libdxfrw reads its TABLE `0x9c` with complete
+  3-by-3 text semantics, three 152-unit columns, row heights 11/9/9, and the
+  values `Title`, `1`–`6`. ACadSharp independently agrees on those values,
+  dimensions, the `*T1` block name, and its 15 children (7 MTEXT, 8 LINE),
+  though it reports the cells' content type as `Unknown`. The physical cell
+  profile has a merged title span and eight retained bounded override ranges;
+  it therefore does not match the direct codec's current nonmerged generated
+  profile. The TABLE's 15 block children point back to BLOCK_RECORD `0x9d`,
+  and libdxfrw's entry graph resolves through `*T1`. This one peer-converted
+  drawing also has an unrelated HEADER integrity warning, so it cannot qualify
+  strict whole-source output. Keep `dwgRW::writeTable` refused. The direct
+  codec now handles its observed merge-role shape, but does not encode the
+  retained override ranges. Next prove exact source-bound spans and field
+  equivalence for its merge cells and override ranges, then complete the
+  compound `*T` graph transaction and independent fresh readback. No drawing fixture was
+  added. Full hashes, field values, provenance, and limitations are in the
+  [ODA TABLE peer receipt](docs/research/p5-ac1018-oda-table-physical-peer-profile-2026-11-09.json).
+- **AC1018 merged-cell codec slice completed (2026-11-09):** the direct body
+  encoder now writes the cell merge flag and width/height fields for the
+  bounded legacy representation: a non-merged anchor carries its span, and
+  covered cells carry `merged=true` with unit spans. A shared bounded layout
+  validator rejects orphaned, overlapping, and out-of-range roles in the
+  encoder and marks malformed parsed AC1018 tables semantically incomplete
+  while retaining their frame. Generated vectors cover a 2x2 merge,
+  exact readback and following sentinel, atomic malformed-profile refusal, and
+  same-object retry; the focused `--table-cell-overrides` selector passes.
+  The allocation/retry control still passes all 26 offsets. Re-reading the ODA
+  peer sample against the rebuilt library retains its complete 3x1 title merge.
+  This does not admit its eight parsed subrecord ranges to the direct encoder,
+  generate the `*T` block, or enable `dwgRW::writeTable`. Keep source-output and
+  compound graph gates open; see the [peer/implementation receipt](docs/research/p5-ac1018-oda-table-physical-peer-profile-2026-11-09.json).
 - **Previous local slice:** AC1027/AC1032 PERSUBENTMGR typed failures now
   publish raw-only after independent common-shell and handle-stream validation.
   The hash-matched AC1027 physical source publishes handle `0x2E0` and reduces
@@ -3805,24 +3838,32 @@ Speed-oriented implementation sequence:
    `writeTable` until remaining profile and graph gates pass. Do not infer
    class IDs from the DWG version.
    Require bounded matching row/column counts, exactly the declared number
-   of cells in each row, and one value-content item of type 1 per cell. Allow only the
-   already validated table-scalar and per-cell override subsets; keep merges,
-   data links, fields, block content, attributes, retained raw subrecords, and
-   unexplained geometry/cache state refused. Match every
-   gate to the actual public model fields and reject anything outside that
-   profile before emitting bytes.
+   of cells in each row, and one value-content item of type 1 per cell. Allow
+   only the already validated table-scalar/per-cell override subset and the
+   bounded AC1018 merge-role layouts accepted by the direct codec. Keep data
+   links, fields, block content, attributes, retained raw subrecords, and
+   unexplained geometry/cache state refused. Match every gate to the actual
+   public model fields and reject anything outside that profile before
+   emitting bytes.
 2. **Complete:** bind CLASS registration and instance-count staging to the
    AC1018 TABLE frame transaction. The generated `dwgRW` control proves a
    committed frame updates the instance ledger, a late block-geometry failure
    followed by outer rollback removes frame/class/count/caller mutations, and
    a same-adapter retry commits successfully. This is transaction evidence;
    it does not qualify the geometry or authorize public `writeTable` output.
-3. After the remaining focused refusal/atomicity controls and empirical
-   class-map resolution, compare every encoded field against an independently bounded
-   physical AC1018 plain-text TABLE body. Keep this separate from the generated
-   parser/encoder self-consistency vector; if no complete source profile is
-   available, retain the codec as private experimental coverage and do not
-   claim physical interoperability.
+3. **Physical profile evidence remains partial.** The peer-converted AC1018
+   TABLE body is independently readable and agrees on the 3-by-3 text values,
+   dimensions, anonymous-block name, and 15-entity geometry census. The direct
+   generated codec now emits and reads back validated AC1018 merged-cell
+   flags/spans, but the current vector is encoder/parser consistency, not proof
+   of physical field offsets. It does not qualify the physical source's eight
+   retained override subrecord ranges or its text/line geometry generation.
+   Keep the direct encoder restricted to generated models with no retained
+   subrecords. Next establish exact source-bound spans and field equivalence for
+   the peer body's merged cells and all eight override ranges; then implement
+   the compound `*T` graph with exact ownership, rollback/retry and fresh
+   independent readback. Do not promote support from this single ODA-converted
+   drawing.
 4. Add the AC1018 compound writer only after the body profile passes: preflight
    and stage the exact `*T` BLOCK/BLOCK_RECORD and TABLE ownership/reference
    graph, then publish entity plus linked records atomically. Verify with a
