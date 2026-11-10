@@ -3853,11 +3853,16 @@ Speed-oriented implementation sequence:
    INSERT list and writer index point back to the TABLE exactly once. Mismatched
    names and non-TABLESTYLE targets are refused. The TABLE and TABLECONTENT
    style handles must agree and resolve to an emitted `AcDbTableStyle` class
-   instance. Outer rollback removes the block/entity edge and a same-writer
-   retry restores it. This closes only generated graph-bookkeeping
-   and retry evidence: the control uses one synthetic LINE, does not establish
-   that geometry matches cells or that the style is reachable from NOD, and has
-   no fresh independent readback. See the
+   instance. The `ACAD_TABLESTYLE` registration must select one emitted
+   dictionary whose parent is NOD and whose member list points to that style.
+   The emitted-dictionary ledger participates in outer rollback; a generated
+   table graph control confirms the pending NOD registration, dictionary
+   frame/index and TABLESTYLE class instance are removed by outer rollback and
+   all three are restored by same-writer retry. This closes only
+   generated graph-bookkeeping and retry evidence: the control uses one
+   synthetic LINE, does not establish that geometry matches cells or that the
+   dictionary key matches the TABLESTYLE name, and does not serialize/freshly
+   read back the final NOD frame. See the
    [graph-closure receipt](docs/research/p5-ac1018-table-block-graph-closure-2026-11-09.json).
    Public `dwgRW::writeTable` remains fail-closed. The
    existing AC1018 traces disagree on class number (528 versus
@@ -3885,9 +3890,10 @@ Speed-oriented implementation sequence:
    qualify native acceptance or text/line geometry generation. Keep the direct
    encoder restricted to generated models with no retained source subrecords.
    The graph-reference/ownership/retry bookkeeping slice is complete (see the
-   generated graph-closure receipt above). Next close NOD-to-dictionary-to-
-   TABLESTYLE ownership, resolve the base style values, and derive geometry
-   from the admitted TABLE model without guessing. Then implement atomic
+   generated graph-closure receipt above). Next verify the finalized NOD and
+   dictionary graph with a fresh independent reader, bind dictionary keys to
+   TABLESTYLE names/values, and derive geometry from the admitted TABLE model
+   without guessing. Then implement atomic
    BLOCK/BLOCK_RECORD/TABLE publication and verify a locally authored DWG with
    fresh independent readback. Do not promote
    support from the single ODA-converted source or the generated bookkeeping

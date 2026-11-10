@@ -8804,6 +8804,9 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         bool hasEmittedObjectHandle(std::uint32_t handle) const {
             return hasEmittedDwgObjectHandle(handle);
         }
+        bool emittedDictionary(std::uint32_t handle) const {
+            return hasEmittedDwgDictionary(handle);
+        }
 
         bool writeClassesSection(std::vector<std::uint8_t>& section) {
             section.clear();
@@ -10169,36 +10172,6 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         tableFacade.writer.get());
     constexpr std::uint32_t tableFacadeStyleDictionaryHandle = 0xA6FFu;
     constexpr std::uint32_t tableFacadeStyleHandle = 0xA700u;
-    DRW_Dictionary tableFacadeStyleDictionary;
-    tableFacadeStyleDictionary.handle = tableFacadeStyleDictionaryHandle;
-    tableFacadeStyleDictionary.parentHandle =
-        DRW::DwgNamedObjectsDictionaryHandle;
-    tableFacadeStyleDictionary.hardOwner = 1;
-    tableFacadeStyleDictionary.cloning = 1;
-    tableFacadeStyleDictionary.m_entries.push_back(
-        {"TABLE_STYLE", tableFacadeStyleHandle});
-    const bool tableFacadeStyleDictionaryWritten =
-        tableFacade.writeDictionary(&tableFacadeStyleDictionary);
-    DRW_TableStyle tableFacadeStyle;
-    tableFacadeStyle.handle = tableFacadeStyleHandle;
-    tableFacadeStyle.parentHandle = tableFacadeStyleDictionaryHandle;
-    tableFacadeStyle.m_name = "LIBDXFRW_TABLE_GRAPH_TEST";
-    for (int rowIndex = 0; rowIndex < 3; ++rowIndex) {
-        DRW_TableStyleRowStyle rowStyle;
-        rowStyle.m_textHeight = static_cast<double>(rowIndex + 1);
-        rowStyle.m_textAlignment = 5;
-        rowStyle.m_textStyleHandle = DRW::DwgStandardTextStyleHandle;
-        for (int edgeIndex = 0; edgeIndex < 6; ++edgeIndex) {
-            DRW_TableStyleBorder border;
-            border.m_edgeFlags = 1 << edgeIndex;
-            rowStyle.m_borders.push_back(border);
-        }
-        tableFacadeStyle.m_rowStyles.push_back(rowStyle);
-    }
-    const bool tableFacadeStyleWritten = tableFacade.writeTableStyle(
-        &tableFacadeStyle);
-    t.expect(tableFacadeStyleDictionaryWritten && tableFacadeStyleWritten,
-             "AC1018 TABLE graph control emits its named TABLESTYLE dependency before closure validation");
     const std::size_t tableFacadeInitialBytes =
         tableFacadeWriter == nullptr ? 0u : tableFacadeWriter->encodedBufferSize();
     const std::size_t tableFacadeInitialObjects =
@@ -10212,6 +10185,48 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             tableFacade.beginDwgWriteTransaction(true, true, true);
         if (transaction == 0u)
             return false;
+
+        const bool tableStyleRootRegistered =
+            tableFacade.registerDwgNamedObjectDictionaryEntry(
+                "ACAD_TABLESTYLE", tableFacadeStyleDictionaryHandle);
+        DRW_Dictionary tableStyleDictionary;
+        tableStyleDictionary.handle = tableFacadeStyleDictionaryHandle;
+        tableStyleDictionary.parentHandle =
+            DRW::DwgNamedObjectsDictionaryHandle;
+        tableStyleDictionary.hardOwner = 1;
+        tableStyleDictionary.cloning = 1;
+        tableStyleDictionary.m_entries.push_back(
+            {"LIBDXFRW_TABLE_GRAPH_TEST", tableFacadeStyleHandle});
+        const bool tableStyleDictionaryWritten = tableStyleRootRegistered
+            && tableFacade.writeDictionary(&tableStyleDictionary);
+        DRW_TableStyle tableStyle;
+        tableStyle.handle = tableFacadeStyleHandle;
+        tableStyle.parentHandle = tableFacadeStyleDictionaryHandle;
+        tableStyle.m_name = "LIBDXFRW_TABLE_GRAPH_TEST";
+        for (int rowIndex = 0; rowIndex < 3; ++rowIndex) {
+            DRW_TableStyleRowStyle rowStyle;
+            rowStyle.m_textHeight = static_cast<double>(rowIndex + 1);
+            rowStyle.m_textAlignment = 5;
+            rowStyle.m_textStyleHandle = DRW::DwgStandardTextStyleHandle;
+            for (int edgeIndex = 0; edgeIndex < 6; ++edgeIndex) {
+                DRW_TableStyleBorder border;
+                border.m_edgeFlags = 1 << edgeIndex;
+                rowStyle.m_borders.push_back(border);
+            }
+            tableStyle.m_rowStyles.push_back(rowStyle);
+        }
+        const bool tableStyleWritten = tableFacade.writeTableStyle(&tableStyle);
+        std::uint16_t tableStyleClassNumber = 0u;
+        const bool tableStyleClassRegistered = tableFacadeWriter
+            ->getDwgClassInstanceClass(tableFacadeStyleHandle,
+                                       tableStyleClassNumber);
+        if (!tableStyleDictionaryWritten || !tableStyleWritten
+            || !tableStyleClassRegistered
+            || !tableFacadeWriter->emittedDictionary(
+                tableFacadeStyleDictionaryHandle)) {
+            (void)tableFacade.rollbackDwgWriteTransaction(transaction);
+            return false;
+        }
 
         const std::string blockName = "*T_LIBDXFRW_FACADE_TEST";
         const std::uint32_t blockRecord = tableFacadeWriter->defineBlock(
@@ -10362,6 +10377,13 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             const bool handleRolledBack =
                 !tableFacadeWriter->getDwgClassInstanceClass(
                     table.handle, ignoredClass);
+            const bool dictionaryLedgerRolledBack =
+                !tableFacadeWriter->emittedDictionary(
+                    tableFacadeStyleDictionaryHandle);
+            std::uint16_t ignoredStyleClass = 0u;
+            const bool styleClassLedgerRolledBack =
+                !tableFacadeWriter->getDwgClassInstanceClass(
+                    tableFacadeStyleHandle, ignoredStyleClass);
             const bool graphRolledBack =
                 !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
             const bool writesRolledBack =
@@ -10378,6 +10400,8 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             const bool passed = rolledBack
                 && bytesRolledBack && objectsRolledBack && classRolledBack
                 && handleRolledBack && graphRolledBack
+                && dictionaryLedgerRolledBack
+                && styleClassLedgerRolledBack
                 && writesRolledBack && callerRestored
                 && !tableFacade.hasDwgWriteFailure();
             return passed;
@@ -10389,6 +10413,8 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             transaction);
         const bool passed = classLedgerValid && committed
             && tableFacadeWriter->emittedHandle(table.handle)
+            && tableFacadeWriter->emittedDictionary(
+                tableFacadeStyleDictionaryHandle)
             && tableReferencesExact
             && tableFacade.m_successfulEntityWrites
                 == tableFacadeInitialSuccesses + 2u;

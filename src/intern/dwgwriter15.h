@@ -262,6 +262,7 @@ public:
     bool writeRenderSettings(const DRW_RenderSettings& settings);
     bool writeVisualStyle(const DRW_VisualStyle& style);
     bool writeDictionary(const DRW_Dictionary& dictionary);
+    bool hasEmittedDwgDictionary(std::uint32_t handle) const;
     bool writeXRecord(const DRW_XRecord& xrecord);
     bool writePlotSettings(const DRW_PlotSettings& plotSettings);
     bool writeLayout(const DRW_Layout& layout);
@@ -877,6 +878,14 @@ private:
         std::vector<DRW::DwgNamedObjectDictionaryEntry> entries;
     };
 
+    struct EmittedDwgDictionary {
+        std::uint32_t handle {0};
+        std::uint32_t parentHandle {0};
+        int cloning {0};
+        int hardOwner {0};
+        std::vector<DRW::DwgNamedObjectDictionaryEntry> entries;
+    };
+
     bool ensureUserBlockIndex() const;
     PendingUserBlock* findUserBlock(std::uint32_t blockRecordHandle);
     const PendingUserBlock* findUserBlock(
@@ -904,6 +913,7 @@ private:
     std::vector<PendingUserBlock> m_userBlocks;
     std::vector<EmittedLayoutAssociation> m_emittedLayoutAssociations;
     std::vector<EmittedLayoutDictionary> m_emittedLayoutDictionaries;
+    std::vector<EmittedDwgDictionary> m_emittedDwgDictionaries;
     std::unordered_map<std::string, std::uint32_t> m_userBlockHandles;
     // Lazily sorted handle-to-vector-index view for repeated owner lookups.
     // It is derived state and invalidated whenever the block vector changes.

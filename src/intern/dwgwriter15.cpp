@@ -1577,6 +1577,51 @@ bool dwgWriter15::hasClosedAc1018TableBlockGraph(
     if (styleClass == m_dwgClassDefinitions.cend())
         return false;
 
+    const auto equalsAsciiNoCase = [](const std::string& value,
+                                     const char* expected) {
+        const std::size_t length = std::strlen(expected);
+        if (value.size() != length)
+            return false;
+        for (std::size_t index = 0u; index < length; ++index) {
+            if (std::toupper(static_cast<unsigned char>(value[index]))
+                != expected[index])
+                return false;
+        }
+        return true;
+    };
+    std::uint32_t styleDictionaryHandle = 0u;
+    std::size_t styleDictionaryRootCount = 0u;
+    for (const DRW::DwgNamedObjectDictionaryEntry& entry :
+         m_pendingDwgNamedObjectDictionaryEntries) {
+        if (equalsAsciiNoCase(entry.name, "ACAD_TABLESTYLE")
+            && entry.childHandle != 0u) {
+            styleDictionaryHandle = entry.childHandle;
+            ++styleDictionaryRootCount;
+        }
+    }
+    if (styleDictionaryRootCount != 1u
+        || styleDictionaryHandle == DRW::NoHandle)
+        return false;
+    const auto styleDictionary = std::find_if(
+        m_emittedDwgDictionaries.cbegin(), m_emittedDwgDictionaries.cend(),
+        [styleDictionaryHandle](const EmittedDwgDictionary& dictionary) {
+            return dictionary.handle == styleDictionaryHandle
+                && dictionary.parentHandle
+                    == DRW::DwgNamedObjectsDictionaryHandle
+                && dictionary.hardOwner == 1;
+        });
+    if (styleDictionary == m_emittedDwgDictionaries.cend())
+        return false;
+    const std::size_t styleDictionaryMemberCount =
+        static_cast<std::size_t>(std::count_if(
+            styleDictionary->entries.cbegin(), styleDictionary->entries.cend(),
+            [&table](const DRW::DwgNamedObjectDictionaryEntry& entry) {
+                return !entry.name.empty()
+                    && entry.childHandle == table.m_tableStyleHandle;
+            }));
+    if (styleDictionaryMemberCount != 1u)
+        return false;
+
     const PendingUserBlock* block = findUserBlock(table.blockRecH.ref);
     if (block == nullptr || block->ownerKind != BlockOwnerKind::OrdinaryBlock
         || toUpperCase(block->name) != toUpperCase(table.name)
@@ -1824,6 +1869,7 @@ dwgWriter::CompoundWriteCheckpoint dwgWriter15::checkpointCompoundWrite() const 
         m_emittedLayoutAssociations.size();
     checkpoint.emittedLayoutDictionaryCount =
         m_emittedLayoutDictionaries.size();
+    checkpoint.emittedDwgDictionaryCount = m_emittedDwgDictionaries.size();
     checkpoint.userBlockEntityCounts.reserve(m_userBlocks.size());
     checkpoint.userBlockInsertCounts.reserve(m_userBlocks.size());
     for (const PendingUserBlock& block : m_userBlocks)
@@ -1935,6 +1981,11 @@ void dwgWriter15::rollbackCompoundWrite(
         <= m_emittedLayoutDictionaries.size()) {
         m_emittedLayoutDictionaries.resize(
             checkpoint.emittedLayoutDictionaryCount);
+    }
+    if (checkpoint.emittedDwgDictionaryCount
+        <= m_emittedDwgDictionaries.size()) {
+        m_emittedDwgDictionaries.resize(
+            checkpoint.emittedDwgDictionaryCount);
     }
     const auto eraseRolledBackEntityHandles =
         [this](std::uint32_t ownerHandle,
@@ -4616,7 +4667,30 @@ bool dwgWriter15::writeDictionary(const DRW_Dictionary& dictionary) {
         layoutDictionaryRegistration
             != m_pendingDwgNamedObjectDictionaryEntries.cend()
         && layoutDictionaryRegistration->childHandle == object.handle;
+    const bool capturesRegisteredDictionary = std::any_of(
+        m_pendingDwgNamedObjectDictionaryEntries.cbegin(),
+        m_pendingDwgNamedObjectDictionaryEntries.cend(),
+        [&object](const DRW::DwgNamedObjectDictionaryEntry& entry) {
+            return entry.childHandle == object.handle;
+        });
+    EmittedDwgDictionary emittedDwgDictionary;
     EmittedLayoutDictionary emittedLayoutDictionary;
+    if (capturesRegisteredDictionary) {
+        try {
+            emittedDwgDictionary.handle = object.handle;
+            emittedDwgDictionary.parentHandle = object.parentHandle;
+            emittedDwgDictionary.cloning = object.cloning;
+            emittedDwgDictionary.hardOwner = object.hardOwner;
+            emittedDwgDictionary.entries.reserve(object.m_entries.size());
+            for (const DRW_Dictionary::Entry& entry : object.m_entries)
+                emittedDwgDictionary.entries.push_back(
+                    {entry.m_name, entry.m_handle});
+            m_emittedDwgDictionaries.reserve(
+                m_emittedDwgDictionaries.size() + 1u);
+        } catch (...) {
+            return false;
+        }
+    }
     if (capturesLayoutDictionary) {
         if (!m_emittedLayoutDictionaries.empty())
             return false;
@@ -4637,10 +4711,21 @@ bool dwgWriter15::writeDictionary(const DRW_Dictionary& dictionary) {
         m_objectEedWriteFailure = !object.extData.empty();
         return false;
     }
+    if (capturesRegisteredDictionary)
+        m_emittedDwgDictionaries.push_back(std::move(emittedDwgDictionary));
     if (capturesLayoutDictionary)
         m_emittedLayoutDictionaries.push_back(
             std::move(emittedLayoutDictionary));
     return true;
+}
+
+bool dwgWriter15::hasEmittedDwgDictionary(std::uint32_t handle) const {
+    return handle != 0u && handle != DRW::NoHandle
+        && std::any_of(m_emittedDwgDictionaries.cbegin(),
+                       m_emittedDwgDictionaries.cend(),
+                       [handle](const EmittedDwgDictionary& dictionary) {
+                           return dictionary.handle == handle;
+                       });
 }
 
 // XRECORD (ODA fixed type 0x4f = 79) — no class registration required.

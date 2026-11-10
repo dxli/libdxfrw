@@ -10,6 +10,8 @@
       "AC1018 writer and closed block-content scope",
       "TABLE name is an anonymous *T name matching the referenced user block",
       "TABLE and TABLECONTENT style handles agree and resolve to an emitted TABLESTYLE class instance",
+      "the registered ACAD_TABLESTYLE NOD edge selects one emitted dictionary owned by NOD",
+      "that dictionary contains exactly one non-null member reference to the typed TABLESTYLE object",
       "referenced ordinary BLOCK_RECORD has at least one owned entity",
       "every block-owned entity is present in the writer ownership index",
       "the block reverse INSERT list contains exactly the TABLE handle",
@@ -18,16 +20,17 @@
   },
   "control": {
     "test": "libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
-    "table_style": "locally generated DICTIONARY/TABLESTYLE records; the TABLE frame contains exactly one hard pointer to the typed AcDbTableStyle target",
+    "table_style": "locally generated ACAD_TABLESTYLE dictionary and TABLESTYLE records; the TABLE frame contains exactly one hard pointer to the typed AcDbTableStyle target",
     "generated_geometry": "one locally authored LINE child in the *T block",
     "table_frame_reference": "exactly one hard pointer each to the referenced TABLESTYLE and BLOCK_RECORD",
     "mutation_refusal": "mismatched TABLE and *T names and a handle to a non-TABLESTYLE object are rejected by the graph check",
-    "failure_retry": "outer rollback removes frame, class ledger, child ownership and reverse INSERT edge; same writer retries successfully",
+    "failure_retry": "outer rollback removes the pending ACAD_TABLESTYLE registration, dictionary frame/index, TABLESTYLE class instance, TABLE frame/class ledger, child ownership and reverse INSERT edge; same writer restages the graph and retries successfully",
     "result": "pass"
   },
   "limits": [
     "generated graph bookkeeping only; no DWG fixture or output file was added",
-    "does not validate NOD-to-dictionary ownership or TABLESTYLE rendering values",
+    "checks the planned NOD registration and emitted dictionary parent/member ledger, but does not serialize the final NOD frame or independently read back the complete root graph",
+    "does not validate TABLESTYLE name/key agreement or rendering values",
     "does not prove that supplied LINE/MTEXT geometry matches TABLE cell values, dimensions, styles, merges, or rendering",
     "does not include a fresh independent reader or native CAD readback",
     "does not enable public dwgRW::writeTable or promote TABLE support claims"
