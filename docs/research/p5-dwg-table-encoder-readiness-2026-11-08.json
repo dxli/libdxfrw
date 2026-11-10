@@ -200,28 +200,24 @@
       "named/true-color cell CMC, non-indexed color side channels, cell style maps, cache, geometry, or retained raw subrecords",
       "any unmodeled or incomplete semantic data"
     ],
-    "required_before_adapter_admission": [
-      "audit remaining unchecked public-model guard branches; expanded refusal cases, representative body/handle truncation, corrected retry, and atomic append now pass",
-      "bind the proven low-level class registration/frame path to a real dwgRW transaction; prove caller-state, destination and writer-state rollback after a late *T graph failure, with emitted class counts committed exactly once",
-      "produce a semantically complete anonymous *T BLOCK/BLOCK_RECORD geometry graph and close TABLE/BLOCK_RECORD/TABLESTYLE references",
-      "physical AC1018 plain-text source-to-output field comparison, or an explicit no-eligible-source disposition",
-      "serialize and independently qualify the complete AC1018 output using an independent reader/producer or native platform",
-      "same-adapter corrected retry and fresh readback after compound writer failure",
+    "implementation_and_qualification_gates": [
+      "generated direct-codec guard audit and deterministic allocation rollback: COMPLETED for the bounded plain-text profile; other excluded fields remain refused",
+      "dwgRW transaction, class instance accounting, *T geometry, TABLE/BLOCK_RECORD/TABLESTYLE/NOD closure and late graph-refusal rollback: COMPLETED for the bounded generated profile",
+      "physical AC1018 plain-text source-to-output field comparison: OPEN; available physical sources stop at unknown cell-override bits 0x40000/0x40020",
+      "independent/native AC1018 TABLE cell-body and rendering qualification: OPEN; LibreDWG verifies the graph and cached geometry but leaves the TABLE cell body opaque",
+      "same-facade corrected retry and fresh readback after generated compound graph refusal: COMPLETED; deterministic allocation injection through whole-file graph assembly remains OPEN",
       "no unsupported cell/override field silently omitted"
     ]
   },
   "validation_policy": "Focused generated controls and existing-source use only; no new downloaded DWG/DXF fixture is to be committed.",
-  "status": "OPEN_IMPLEMENTATION",
+  "status": "OPEN_SOURCE_AND_SEMANTIC_QUALIFICATION",
   "blockers": [
-    "A generated-profile direct body codec and AC1018 identity-based class-registration helper exist, but neither is integrated into the adapter and no complete compound writer exists.",
     "No complete AC1018 source-to-writer profile is currently recorded; the two screened AC1018 sources stop at undocumented 0x40000/0x40020 cell override flags.",
-    "Observed AC1018 AcDbTable class numbers differ by source (528 and 523); determine the supported CLASS-map resolution policy and never treat either ordinal as a version constant.",
-    "The only newly captured AC1021 TABLE ordinal is 506 and the two AC1018 ordinals differ (528/523); no numeric ordinal is a cross-file mapping. Production must use CLASS identity and serialized manifest evidence.",
+    "Observed AC1018 AcDbTable class ordinals differ by source (528 and 523); they are not version constants. The generated writer resolves class identity through its frozen manifest, and the synthetic class number 562 is test-only.",
     "The AC1018 unknown-override control now captures only the known prefix; the physical payload span and meaning of 0x40000/0x40020 remain unresolved and must not be skipped or emitted.",
-    "The generated AC1018 encoder control uses synthetic class number 562 solely to exercise the body codec; production class resolution and physical interoperability remain open.",
-    "The identity-based TABLE class registration helper is AC1018-only and not connected to public writeTable output. Generated CLASS metadata, committed instance accounting, actual entity-frame commit, and rollback now pass through a focused dwgRW transaction control. A true late *T graph-stage failure path is not implemented or injected yet.",
-    "The direct entity codec stages both streams and swaps them only after successful encoding, but no deterministic injected mid-emission failure exercises rollback; the production compound writer still needs graph-level staging and atomic publication.",
-    "The generated refusal matrix now covers the main excluded-field families but is not exhaustive at every guard branch; keep the direct entity encoder non-production until the remaining branches and compound transaction gates are satisfied.",
+    "Independent/native TABLE cell-body decoding and rendering acceptance remain open. LibreDWG's generated readback checks the output graph and cached geometry, not cell semantics.",
+    "Allocation injection covers direct entity encoding, not the full dwgRW compound graph assembly; add only if a concrete whole-file rollback gap is found.",
+    "The generated refusal matrix covers the main excluded-field families but is not exhaustive at every guard branch; keep unrepresented source/model fields fail-closed.",
     "The available AC1021 table source is semantically incomplete at cell CadValue type 48 and cannot validate a complete output route.",
     "R24+ TABLECONTENT/TABLEGEOMETRY relationship is outside the available ODA v5.4.1 layout and must remain refused."
   ],
@@ -244,7 +240,7 @@
       "refusal leaves pre-seeded body and handle output unchanged",
       "null body refusal leaves handle output untouched"
     ],
-    "disposition": "Focused guard coverage only; remaining guard branches and injected post-emission failures still require audit. No physical or production support claim."
+    "disposition": "Focused guard coverage only; remaining unrepresented source/model states stay fail-closed. Direct-codec allocation rollback is separately covered by generated_ac1018_allocation_failure_rollback_retry below. No physical or native support claim."
   },
   "generated_ac1018_class_identity_serialization_control": {
     "generatedFromScratch": true,
@@ -599,19 +595,25 @@
     "buildCommand": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests -j4",
     "runCommand": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
     "result": "PASS",
-    "injectedFailures": 18,
-    "profile": "bounded one-row/one-column plain-text TABLE with alignment and text-style handle overrides; seeded body and handle buffers",
+    "injectedFailures": 17,
+    "attemptedFailureOffsets": 18,
+    "profile": "bounded one-row/one-column plain-text TABLE with alignment and text-style handle overrides; body and handle buffers start at non-byte-aligned cursors",
     "assertions": [
       "Every injected std::bad_alloc is caught by the direct codec and returns failure.",
-      "Each failure preserves the exact pre-seeded entity-body and handle-buffer bytes.",
-      "After each failure, the same DRW_Table instance succeeds with fresh seeded buffers.",
-      "The sweep reaches a successful encode after all allocation sites exercised by this profile."
+      "Each failure preserves exact seeded body/handle bytes, bit counts, bit positions, health state and handle-occurrence ledgers.",
+      "Each failure leaves the TABLE common-write flags unchanged.",
+      "After each failure, the same DRW_Table instance retries into those same seeded buffers; bytes, cursors and handle occurrences equal an independently clean encoding.",
+      "The terminal non-failing attempt also equals the clean encoding and its caller common-write flags."
     ],
+    "validation": {
+      "build": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests -j4",
+      "focusedCTest": "ctest --test-dir build-gcc -R '^libdxfrw_dwg_table_cell_overrides$' --output-on-failure",
+      "result": "PASS; 17 injected allocation failures followed by a successful terminal offset; focused CTest 1/1 in 0.39 seconds"
+    },
     "limits": [
       "This verifies the direct DRW_Table::encodeDwg transaction only.",
-      "It does not exercise dwgRW::writeTable or the caller-state transaction.",
-      "It does not produce table cache geometry, prove the TABLE-to-*T graph, qualify a physical source, or validate with an independent reader.",
-      "Production TABLE output remains refused."
+      "Whole-file generated AC1018 TABLE finalization, caller rollback after a late graph-closure refusal, *T cached geometry, and fresh libdxfrw readback are now covered separately by p5-ac1018-table-whole-file-cached-geometry-2026-11-10.json.",
+      "No physical source-to-output profile, independent TABLE cell-body decode, native acceptance/rendering, or broad TABLE support claim follows."
     ]
   }
 }

@@ -1,5 +1,16 @@
 # DWG/DXF parity — remaining implementation plan
 
+**P5 AC1018 TABLE direct-encoder transaction recheck (2026-11-10):** the
+focused generated allocation control now checks exact body/handle bytes,
+non-byte-aligned cursors, handle-occurrence ledgers, and common-write flags.
+It injects 17 allocation failures, verifies rollback, then retries the same
+TABLE into the same seeded buffers and compares with a clean encoding; the
+terminal success offset also matches. `libdxfrw_dwg_table_cell_overrides`
+passes 1/1. This completes direct-codec rollback proof for that generated
+profile. It does not test allocation failure during whole-file graph assembly
+or qualify physical TABLE cells, native rendering, or broad TABLE support. See
+the [updated TABLE readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
+
 **P5 FIELD evidence refresh (2026-11-10, AC1021 metric sample):** a post-fix diagnostic run against the hash-bound `blocks_and_tables_-_metric.dwg` publishes 4,408/4,408 frames and reaches the FIELD refusal. The physical sample contains 162 FIELD objects in LibreDWG JSON; 14 nested values carry format flags `0x10801FC`. LibreDWG's projection for all 14 reports `data_type=0`, `data_long=256`, and `unit_type=1660972800`, so it does not provide a semantic or field-boundary oracle for this profile. ODA v5.4.1 §20.4.99 documents only bit `0x01` as the kGeneral selector and leaves these upper flags unspecified. Keep those fields raw-only and FIELD output refused; do not infer that the shared peer values are meaningful. This is a blocker refresh, not a support promotion. Receipt: [AC1021 FIELD unknown-flags screen](docs/research/p5-ac1021-field-unknown-format-flags-screen-2026-11-10.json).
 
 **Latest implementation slice (2026-11-10, parsed TABLE fallback proxy authorization):** `dx_iface::addTable` retained an authorized TABLE snapshot, but its incomplete-table INSERT compatibility projection copied the parser's `replayAuthorized=false` cache. Authorization was also attempted against `dx_data::sourceFormat/sourceVersion` during callbacks, before `fileImport` populates those values. The adapter now authorizes only the unchanged projection copy when its proxy provenance is `ParsedDwg`; later preflight still requires the output revision to equal the captured source revision and validates the exact proxy chunk framing. The generated ASCII/Binary proxy round-trip test now begins with source metadata unset, verifies the retained TABLE and INSERT fallback copy carry separate authorization, and passes 1/1. Rechecking the hash-bound AC1021 `blocks_and_tables_-_metric.dwg` now gets beyond the prior `typed-proxy-graphics-not-preserved` gate: the reader publishes 4,408/4,408 frames with zero parse failures, then strict export refuses at `FIELD/FIELDLIST carriers have no qualified DXF serializer`. No output file was published. That source-bound FIELD gate remains closed pending complete source graph and field semantics evidence; do not weaken it. See [the TABLE fallback authorization receipt](docs/research/p8-ac1021-table-incomplete-fallback-proxy-authorization-2026-11-10.json).
@@ -4031,17 +4042,20 @@ The common EED guards apply to all entity writers. The remaining model and
 parser-state checks apply only to the generated AC1018 TABLE codec.
 The direct encoder builds both streams in private copies, catches emission
 exceptions, and swaps the staged buffers into the caller only when both are
-good. A generated success append preserves pre-existing body and handle
-prefixes. The new focused allocation control injects failure at all 19 observed
-allocation points during encoding; every failure leaves both pre-seeded output
-buffers unchanged, and the same model and buffers then succeed on retry. The
-fast CTest passes in 0.16 seconds; no external drawing fixture is used. This
-closes only direct-codec allocation rollback. Production route instance
-publication, physical source-to-output proof, and compound-writer transaction
-remain open; `writeTable` remains fail-closed. See the [TABLE allocation
-receipt](docs/research/p5-ac1018-table-codec-allocation-rollback-2026-11-08.json)
-and the existing
-[encoder-readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
+good. The focused control injects 17 allocation failures across 18 attempted
+offsets, verifies exact seeded bytes, bit counts/positions, handle-occurrence
+ledgers and caller common-flag rollback, then retries the same TABLE into the
+same buffers and compares exact output with a clean encoding. The terminal
+success offset also matches. The focused CTest passes in 0.39 seconds; no
+external drawing fixture is used. This closes direct-codec allocation rollback
+for the bounded generated profile. The generated whole-file route now also
+covers class registration, `*T` geometry, graph closure, late refusal rollback,
+same-facade retry and fresh readback (see the [whole-file TABLE
+receipt](docs/research/p5-ac1018-table-whole-file-cached-geometry-2026-11-10.json)).
+Physical source-to-output proof, native/independent cell semantics and rendering,
+and whole-file allocation-failure injection remain open. See the [TABLE
+allocation receipt](docs/research/p5-ac1018-table-codec-allocation-rollback-2026-11-08.json)
+and the [updated encoder-readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 
 The two AC1018 CLASS records agree on the identity fields despite their
 different ordinals: app `ObjectDBX Classes`, class `AcDbTable`, record

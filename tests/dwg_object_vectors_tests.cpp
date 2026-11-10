@@ -8680,6 +8680,23 @@ public:
 
     std::uint8_t rawLinetypeFlags() const { return ltFlags; }
 
+    std::array<std::uint8_t, 7> rawCommonWriteFlags() const {
+        return {{plotFlags, ltFlags, materialFlag, shadowFlag,
+                 hasFullVisualStyle, hasFaceVisualStyle,
+                 hasEdgeVisualStyle}};
+    }
+
+    void restoreCommonWriteFlags(
+            const std::array<std::uint8_t, 7>& flags) {
+        plotFlags = flags[0];
+        ltFlags = flags[1];
+        materialFlag = flags[2];
+        shadowFlag = flags[3];
+        hasFullVisualStyle = flags[4];
+        hasFaceVisualStyle = flags[5];
+        hasEdgeVisualStyle = flags[6];
+    }
+
     void addStaleAppIdWriterRef() {
         dwgEedAppIdWriteRefs.push_back(PendingHandleRef{});
     }
@@ -10276,17 +10293,51 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         cell.m_overrideFlags = 0x00000011u;
         cell.m_textAlignment = 5;
         cell.m_textStyleOverrideHandle = 0xA903u;
+        const auto seedBuffer = [](dwgBufferW& buffer,
+                                   std::uint8_t marker) {
+            buffer.putBit(true);
+            buffer.putRawChar8(marker);
+        };
+        const auto sameBuffer = [](
+                const dwgBufferW& actual, const dwgBufferW& expected) {
+            const auto& actualOccurrences = actual.handleOccurrences();
+            const auto& expectedOccurrences = expected.handleOccurrences();
+            if (actual.data() != expected.data()
+                || actual.bitCount() != expected.bitCount()
+                || actual.bitPos() != expected.bitPos()
+                || actual.isGood() != expected.isGood()
+                || actualOccurrences.size() != expectedOccurrences.size())
+                return false;
+            for (std::size_t i = 0; i < actualOccurrences.size(); ++i) {
+                const auto& lhs = actualOccurrences[i];
+                const auto& rhs = expectedOccurrences[i];
+                if (lhs.code != rhs.code || lhs.reference != rhs.reference
+                    || lhs.startBit != rhs.startBit
+                    || lhs.endBit != rhs.endBit)
+                    return false;
+            }
+            return true;
+        };
+        dwgBufferW seededBody;
+        dwgBufferW seededHandles;
+        seedBuffer(seededBody, 0xA5u);
+        seedBuffer(seededHandles, 0x5Au);
+        const dwgBufferW originalBody = seededBody;
+        const dwgBufferW originalHandles = seededHandles;
+        TableDwgCodecProbe cleanTable = table;
+        dwgBufferW expectedBody = seededBody;
+        dwgBufferW expectedHandles = seededHandles;
+        const bool expectedEncoded = cleanTable.encodeAsTableClass(
+            DRW::AC1018, expectedBody, expectedHandles);
+        const auto originalCommonFlags = table.rawCommonWriteFlags();
         unsigned injectedFailures = 0u;
         bool reachedSuccess = false;
         bool atomicRollback = true;
         bool retryAfterEveryFailure = true;
         for (long failAt = 0; failAt < 256; ++failAt) {
-            dwgBufferW body;
-            dwgBufferW handles;
-            body.putRawChar8(0xA5u);
-            handles.putRawChar8(0x5Au);
-            const std::vector<std::uint8_t> bodyBefore = body.data();
-            const std::vector<std::uint8_t> handlesBefore = handles.data();
+            table.restoreCommonWriteFlags(originalCommonFlags);
+            dwgBufferW body = originalBody;
+            dwgBufferW handles = originalHandles;
 
             allocationFailureCountdown = failAt;
             bool encoded = false;
@@ -10300,23 +10351,27 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             if (countdownAfter >= 0) {
                 reachedSuccess = encoded;
                 atomicRollback = atomicRollback
-                    && body.data().size() > bodyBefore.size()
-                    && handles.data().size() > handlesBefore.size();
+                    && expectedEncoded
+                    && sameBuffer(body, expectedBody)
+                    && sameBuffer(handles, expectedHandles)
+                    && table.rawCommonWriteFlags()
+                        == cleanTable.rawCommonWriteFlags();
                 break;
             }
 
             ++injectedFailures;
             atomicRollback = atomicRollback && !encoded
-                && body.data() == bodyBefore
-                && handles.data() == handlesBefore;
-            body = dwgBufferW();
-            handles = dwgBufferW();
-            body.putRawChar8(0xA5u);
-            handles.putRawChar8(0x5Au);
+                && sameBuffer(body, originalBody)
+                && sameBuffer(handles, originalHandles)
+                && table.rawCommonWriteFlags() == originalCommonFlags;
             const bool retried = table.encodeAsTableClass(
                 DRW::AC1018, body, handles);
             retryAfterEveryFailure = retryAfterEveryFailure && retried
-                && body.data().size() > 1u && handles.data().size() > 1u;
+                && expectedEncoded
+                && sameBuffer(body, expectedBody)
+                && sameBuffer(handles, expectedHandles)
+                && table.rawCommonWriteFlags()
+                    == cleanTable.rawCommonWriteFlags();
         }
         t.expect(injectedFailures > 0u && reachedSuccess && atomicRollback
                      && retryAfterEveryFailure,
