@@ -1409,6 +1409,19 @@ control is `dwg2dxf_generated_dimassoc_graph_node`; AC1032 candidate fields are
 in the [network receipt](docs/research/p4-ac1032-assocnetwork-candidate-fields-2026-11-09.json)
 and physical MLINESTYLE limits are in the [source receipt](docs/research/p6-ac1032-mlinestyle-libredwg-source-profile-2026-11-09.json).
 
+**Generated regression slice completed (2026-11-09):** a from-scratch AC1032
+class-version-2 dispatch control now checks separate base/network action-index
+candidates, action ownership flags, and complete bounded prefix statuses while
+requiring `m_networkFieldsParsed=false`. Its malformed handle-boundary variant
+is rejected without typed publication, then the same reader accepts the
+corrected frame. The focused CTest pair passes 2/2, and the existing physical
+LibreDWG selector still matches both candidate records and their owner/action
+relations; that whole source remains blocked by its unrelated object and HEADER
+integrity failures. This is parser regression coverage only: it does not
+resolve the missing normative/source-producer schema, qualify graph closure,
+or enable AC1032 output. No DWG/DXF fixture was added. See the [generated
+control receipt](docs/research/p4-ac1032-assocnetwork-generated-candidate-control-2026-11-09.json).
+
 The generated R24 TABLESTYLE
 border LTYPE, value-domain, scalar format, margin, text-height, merge-flag,
 content-layout, alignment, property-flag, border-override, indexed-color,

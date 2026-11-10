@@ -12587,6 +12587,56 @@ public:
     std::size_t objectFailures() const { return m_objectParseFailures; }
 };
 
+class Ac1032AssociativeNetworkDispatchReader final : public dwgReader32 {
+public:
+    explicit Ac1032AssociativeNetworkDispatchReader(
+        std::vector<std::uint8_t>& bytes, std::uint16_t classNumber)
+        : dwgReader32(std::make_unique<dwgBuffer>(bytes.data(), bytes.size()),
+                      nullptr) {
+        version = DRW::AC1032;
+        decoder.setVersion(version, false);
+        auto definition = std::make_unique<DRW_Class>();
+        definition->classNum = classNumber;
+        definition->recName = "ACDBASSOCNETWORK";
+        definition->className = "AcDbAssocNetwork";
+        definition->entityFlag = 0;
+        if (classesmap.emplace(classNumber, definition.get()).second)
+            definition.release();
+    }
+
+    bool readObjects(std::vector<std::uint8_t>& bytes,
+        const std::vector<std::tuple<std::uint32_t, std::uint32_t,
+                                     std::uint64_t>>& frames,
+        DRW_Interface& sink) {
+        objObjectMap.clear();
+        m_dwgSourceFrameIndexes.clear();
+        m_dwgSourceFrameLedger.clear();
+        m_objectParseFailures = 0u;
+        for (const auto& frame : frames) {
+            const auto handle = std::get<0>(frame);
+            const auto offset = std::get<1>(frame);
+            const auto ordinal = std::get<2>(frame);
+            objHandle source(0u, handle, offset, ordinal);
+            source.sourceOffsetSpace = DRW_DwgFrameOffsetSpace::DecodedBuffer;
+            if (!objObjectMap.emplace(handle, source).second)
+                return false;
+            DRW_DwgFrameCoverageEntry entry;
+            entry.m_handle = handle;
+            entry.m_sourceOffset = offset;
+            entry.m_sourceMapOrdinal = ordinal;
+            entry.m_sourceOffsetSpace = source.sourceOffsetSpace;
+            m_dwgSourceFrameIndexes.emplace(handle,
+                                             m_dwgSourceFrameLedger.size());
+            m_dwgSourceFrameLedger.push_back(entry);
+        }
+        m_dwgFrameCoverageStatus = DRW_DwgFrameCoverageStatus::InProgress;
+        dwgBuffer input(bytes.data(), bytes.size(), &decoder);
+        return dwgReader::readDwgObjects(sink, &input);
+    }
+
+    std::size_t objectFailures() const { return m_objectParseFailures; }
+};
+
 void testAssociativeNetworkActionIndexGenerated(TestContext& t) {
     using namespace associative_constraint_group_test;
     constexpr std::uint16_t classNumber = 603u;
@@ -12706,6 +12756,136 @@ void testAssociativeNetworkActionIndexGenerated(TestContext& t) {
                  && assigned.m_networkVersion == 0
                  && assigned.m_networkFieldsParsed,
              "associative network index fields survive copy construction and assignment");
+}
+
+void testAc1032AssociativeNetworkCandidateGenerated(TestContext& t) {
+    using namespace associative_constraint_group_test;
+    constexpr std::uint16_t classNumber = 0x300u;
+    constexpr std::uint32_t sourceHandle = 0xA500u;
+    constexpr std::uint32_t parentHandle = 0xA009u;
+    constexpr std::uint32_t softActionHandle = 0xA011u;
+    constexpr std::uint32_t ownedActionHandle = 0xA012u;
+    constexpr std::int32_t baseActionIndex = 4;
+    constexpr std::int32_t networkActionIndex = 3;
+
+    dwgBufferW object;
+    dwgBufferW handles;
+    dwgBufferW strings;
+    object.putObjType(DRW::AC1032, classNumber);
+    object.putHandle(reference(DRW::DwgNullReference, sourceHandle));
+    object.putBitShort(0); // no EED
+    object.putBitLong(0); // no persistent reactors
+    object.putBit(1u); // no extension dictionary
+    object.putBit(0u); // no DataStorage payload
+    object.putBitShort(2); // AcDbAssocAction class version
+    object.putBitLong(0); // geometry status
+    object.putBitLong(baseActionIndex);
+    object.putBitLong(0); // maximum dependency index
+    object.putBitLong(0); // no action dependencies
+    object.putBitShort(0); // owned-parameter version
+    object.putBitLong(0); // no owned parameters
+    object.putBitShort(0); // value-parameter version
+    object.putBitLong(0); // no value parameters
+    object.putBitShort(0); // network version candidate
+    object.putBitLong(networkActionIndex);
+    object.putBitLong(2); // two action references
+    object.putBit(0u); // soft action reference
+    object.putBit(1u); // owned action reference
+    object.putBitLong(0); // no additional owned-action list
+
+    Frame frame;
+    const bool stringStreamBuilt = appendStringStream(object, strings);
+    object.alignToByte();
+    frame.objectEndBit = object.bitCount();
+    t.expect(stringStreamBuilt,
+             "generated AC1032 associative network string stream is valid");
+    if (!stringStreamBuilt)
+        return;
+    // The reader consumes common owner first, followed by action and network
+    // references from the separate object handle stream.
+    handles.putHandle(reference(DRW::DwgSoftPointer, parentHandle));
+    handles.putHandle(reference(DRW::DwgSoftPointer, 0u));
+    handles.putHandle(reference(DRW::DwgHardOwnership, 0u));
+    handles.putHandle(reference(DRW::DwgSoftPointer, softActionHandle));
+    handles.putHandle(reference(DRW::DwgHardOwnership, ownedActionHandle));
+    object.putBytes(handles.data().data(), handles.data().size());
+    const bool frameBuilt = object.isGood() && handles.isGood()
+        && object.bitCount() >= frame.objectEndBit
+        && handles.bitCount() <= std::numeric_limits<std::uint32_t>::max();
+    if (frameBuilt) {
+        frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
+        frame.payload = object.data();
+    }
+    std::vector<std::uint8_t> bytes;
+    const bool wrapped = frameBuilt && wrapFrame(frame, bytes);
+    t.expect(wrapped,
+             "AC1032 class-version-2 network frame is generated in memory");
+    if (!wrapped)
+        return;
+
+    Frame shortened = frame;
+    ++shortened.handleBits;
+    std::vector<std::uint8_t> malformedBytes;
+    const bool malformedBuilt = wrapFrame(shortened, malformedBytes);
+    t.expect(malformedBuilt,
+             "AC1032 network handle-boundary truncation control is generated");
+    if (!malformedBuilt)
+        return;
+
+    Ac1032AssociativeNetworkDispatchReader reader(bytes, classNumber);
+    PersistentManagerDispatchSink sink;
+    const bool malformedRead = reader.readObjects(
+        malformedBytes, {{sourceHandle, 0u, 0u}}, sink);
+    const bool malformedRefused = !malformedRead
+        && reader.objectFailures() != 0u && sink.typed.empty();
+    t.expect(malformedRefused,
+             "AC1032 network handle-boundary truncation is withheld");
+    if (!malformedRefused)
+        std::cerr << "AC1032 malformed-boundary read=" << malformedRead
+                  << " failures=" << reader.objectFailures()
+                  << " typed=" << sink.typed.size() << '\n';
+    sink.typed.clear();
+    sink.raw.clear();
+    sink.publications.clear();
+    const bool read = reader.readObjects(bytes, {{sourceHandle, 0u, 0u}}, sink);
+    const auto hasCompletePrefix = [](const DRW_AssociativeObject& object,
+                                      DRW_AssociativePrefixStatus::Kind kind) {
+        return std::count_if(object.m_prefixStatuses.begin(),
+                             object.m_prefixStatuses.end(),
+            [kind](const DRW_AssociativePrefixStatus& status) {
+                return status.m_kind == kind
+                    && status.m_status
+                        == DRW_AssociativePrefixStatus::ParseStatus::Complete
+                    && status.m_classVersion == 2u;
+            }) == 1;
+    };
+    const bool parsed = read && reader.objectFailures() == 0u
+        && sink.typed.size() == 1u
+        && sink.typed.front().m_recordName == "ACDBASSOCNETWORK"
+        && sink.typed.front().handle == sourceHandle
+        && sink.typed.front().parentHandle == parentHandle
+        && sink.typed.front().m_classVersion == 2u
+        && sink.typed.front().m_actionIndex == baseActionIndex
+        && sink.typed.front().m_networkVersion == 0
+        && sink.typed.front().m_networkActionIndex == networkActionIndex
+        && !sink.typed.front().m_networkFieldsParsed
+        && sink.typed.front().m_actions.size() == 2u
+        && !sink.typed.front().m_actions[0].m_isOwned
+        && sink.typed.front().m_actions[0].m_handle == softActionHandle
+        && sink.typed.front().m_actions[1].m_isOwned
+        && sink.typed.front().m_actions[1].m_handle == ownedActionHandle
+        && hasCompletePrefix(sink.typed.front(),
+            DRW_AssociativePrefixStatus::Kind::AcDbAssocAction)
+        && hasCompletePrefix(sink.typed.front(),
+            DRW_AssociativePrefixStatus::Kind::AcDbAssocNetwork);
+    t.expect(parsed,
+             "AC1032 preserves distinct action-index candidates without qualifying network output");
+    t.expect(malformedRefused && parsed,
+             "AC1032 candidate parser recovers on same-reader corrected-frame retry");
+    if (!parsed)
+        std::cerr << "AC1032 generated network read=" << read
+                  << " failures=" << reader.objectFailures()
+                  << " typed=" << sink.typed.size() << '\n';
 }
 
 void testAssociativeVariableGenerated(TestContext& t) {
@@ -21631,6 +21811,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testAssociativeNetworkActionIndexGenerated(focused);
         std::cout << "Generated AC1024 associative network action indexes: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--assocnetwork-ac1032-candidate-generated") {
+        TestContext focused;
+        testAc1032AssociativeNetworkCandidateGenerated(focused);
+        std::cout << "Generated AC1032 associative-network candidate fields: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
