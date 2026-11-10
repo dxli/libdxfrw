@@ -400,6 +400,14 @@ public:
   std::uint16_t dwgType() const { return oType; }
 };
 
+class SolidCodecProbe final : public DRW_Solid {
+public:
+  using DRW_Solid::encodeDwg;
+
+  void setDwgType(std::uint16_t value) { oType = value; }
+  std::uint16_t dwgType() const { return oType; }
+};
+
 class ViewportCodecProbe final : public DRW_Viewport {
 public:
   using DRW_Viewport::encodeDwg;
@@ -25106,6 +25114,26 @@ void testTraceDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testSolidDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+    SolidCodecProbe solid;
+    solid.handle = version == DRW::AC1021 ? 0xAE10u : 0xAE20u;
+    solid.parentHandle = 0xAE30u;
+    solid.reactorHandles = {0xAE40u};
+    solid.xDictHandle = 0xAE50u;
+    solid.setDwgType(0x777u);
+    solid.basePoint = DRW_Coord(1.25, 2.5, 3.75);
+    solid.secPoint = DRW_Coord(4.0, 2.5, 3.75);
+    solid.thirdPoint = DRW_Coord(4.0, 5.0, 0.0);
+    solid.fourPoint = DRW_Coord(1.25, 5.0, 3.75);
+    solid.thickness = 0.5;
+    solid.extPoint = DRW_Coord(0.0, 0.0, 1.0);
+    checkEntityDwgEncodeAllocationRollback(
+        t, solid, version, 31u,
+        version == DRW::AC1021 ? "AC1021 SOLID" : "AC1024 SOLID");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -28245,6 +28273,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testTraceDwgEncodeAllocationRollback(context);
       std::cout << "TRACE DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 &&
+        std::string(argv[1]) == "--solid-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testSolidDwgEncodeAllocationRollback(context);
+      std::cout << "SOLID DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

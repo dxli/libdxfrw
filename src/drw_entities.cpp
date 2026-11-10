@@ -8163,11 +8163,51 @@ bool DRW_3Dface::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t 
     return encodeDwgEntHandle(version, buf, handleBuf);
 }
 
-bool DRW_Solid::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
-    if (!drwHasDwgSingleElevation(*this)) return false;
-    (void)bs; (void)strBuf;
-    oType = 31;  // SOLID class id — see dwgreader.cpp:1305
-    if (!encodeDwgCommon(version, buf)) return false;
+bool DRW_Solid::encodeDwg(DRW::Version version, dwgBufferW *buf,
+                          std::uint32_t bs, dwgBufferW *strBuf,
+                          dwgBufferW *handleBuf) {
+  if (!drwHasDwgSingleElevation(*this) || buf == nullptr)
+    return false;
+  (void)bs;
+  (void)strBuf;
+
+  dwgBufferW *const bodyTarget = buf;
+  dwgBufferW *const stringTarget = strBuf != nullptr ? strBuf : bodyTarget;
+  dwgBufferW *const handleTarget =
+      handleBuf != nullptr ? handleBuf : bodyTarget;
+  try {
+    dwgBufferW bodyStage = *bodyTarget;
+    std::optional<dwgBufferW> stringStageStorage;
+    dwgBufferW *stringStage = &bodyStage;
+    if (stringTarget != bodyTarget) {
+      stringStageStorage.emplace(*stringTarget);
+      stringStage = &*stringStageStorage;
+    }
+    std::optional<dwgBufferW> handleStageStorage;
+    dwgBufferW *handleStage = &bodyStage;
+    if (handleTarget == bodyTarget) {
+      handleStage = &bodyStage;
+    } else if (handleTarget == stringTarget) {
+      handleStage = stringStage;
+    } else {
+      handleStageStorage.emplace(*handleTarget);
+      handleStage = &*handleStageStorage;
+    }
+
+    buf = &bodyStage;
+    handleBuf = handleBuf != nullptr ? handleStage : nullptr;
+    struct ObjectTypeRollback {
+      decltype(oType) &value;
+      decltype(oType) original;
+      bool committed{false};
+      ~ObjectTypeRollback() {
+        if (!committed)
+          value = original;
+      }
+    } typeRollback{oType, oType};
+    oType = 31; // SOLID class id — see dwgreader.cpp:1305
+    if (!encodeDwgCommon(version, buf))
+      return false;
 
     // Same body layout as TRACE (4 corners + extrusion).  Duplicated
     // here rather than delegating to DRW_Trace::encodeDwg because that
@@ -8184,7 +8224,19 @@ bool DRW_Solid::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t b
     buf->putRawDouble(fourPoint.y);
     buf->putExtrusion(extPoint, /*b_R2000_style=*/true);
 
-    return encodeDwgEntHandle(version, buf, handleBuf);
+    if (!encodeDwgEntHandle(version, buf, handleBuf) || !buf->isGood() ||
+        !stringStage->isGood() || !handleStage->isGood())
+      return false;
+    bodyTarget->swap(bodyStage);
+    if (stringTarget != bodyTarget)
+      stringTarget->swap(*stringStageStorage);
+    if (handleTarget != bodyTarget && handleTarget != stringTarget)
+      handleTarget->swap(*handleStageStorage);
+    typeRollback.committed = true;
+    return true;
+  } catch (const std::bad_alloc &) {
+    return false;
+  }
 }
 
 bool DRW_LWPolyline::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
