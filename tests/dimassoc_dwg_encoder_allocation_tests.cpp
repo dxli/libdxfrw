@@ -798,6 +798,69 @@ bool sweepVxControl(DRW::Version version, bool aliasHandles) {
         encode, outputs);
 }
 
+DRW_VxTableRecord makeVxTableRecord(DRW::Version version) {
+    DRW_VxTableRecord record;
+    record.handle = 0xAC00u;
+    record.parentHandle = 0x20u;
+    record.reactorHandles = {0x21u, 0x22u};
+    record.setDwgCommonObjectState(2, 1u, false);
+    record.xDictHandle = 0x23u;
+    record.classVersion = 4u;
+    record.flags = 5u;
+    record.name = "LOCAL_VX_RECORD";
+    if (version > DRW::AC1018
+        && !record.setDwgRawData({0xC3u, 0x5Au}, 11u, version))
+        record.flags = 0xFFFFFFFFu;
+    return record;
+}
+
+bool sweepVxTableRecord(ImageDefinitionStreams mode) {
+    const DRW::Version version =
+        mode == ImageDefinitionStreams::R2004DetachedHandles
+            ? DRW::AC1018 : DRW::AC1021;
+    const DRW_VxTableRecord record = makeVxTableRecord(version);
+    const auto encode = [&record](DRW::Version v, dwgBufferW* body,
+                                  dwgBufferW* strings, dwgBufferW* handles) {
+        return record.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [mode](dwgBufferW& body, dwgBufferW& strings,
+                                dwgBufferW& handles) {
+        dwgBufferW* stringOutput = nullptr;
+        dwgBufferW* handleOutput = nullptr;
+        switch (mode) {
+        case ImageDefinitionStreams::R13InlineSeparateArguments:
+            break;
+        case ImageDefinitionStreams::R2004DetachedHandles:
+        case ImageDefinitionStreams::Separate:
+            stringOutput = &strings;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SharedStringAndHandle:
+            stringOutput = &strings;
+            handleOutput = &strings;
+            break;
+        case ImageDefinitionStreams::AllBody:
+            break;
+        case ImageDefinitionStreams::BodyStringDetachedHandles:
+            stringOutput = &body;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SeparateStringBodyHandles:
+            stringOutput = &strings;
+            handleOutput = &body;
+            break;
+        }
+        return EncoderOutputs{stringOutput, handleOutput};
+    };
+    static const char* const names[] = {
+        "AC1012-inline", "AC1018-detached-handles", "separate",
+        "shared-string-handle", "all-body", "body-string-detached-handles",
+        "separate-string-body-handles"
+    };
+    return sweepTransactionalEncoder("VXTABLERECORD",
+        names[static_cast<std::size_t>(mode)], version, encode, outputs);
+}
+
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
     GeoDataProbe geo;
     geo.handle = 0xA900u;
@@ -1999,6 +2062,14 @@ int main() {
         || !sweepVxControl(DRW::AC1018, false)
         || !sweepVxControl(DRW::AC1021, false)
         || !sweepVxControl(DRW::AC1021, true)
+        || !sweepVxTableRecord(ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepVxTableRecord(ImageDefinitionStreams::Separate)
+        || !sweepVxTableRecord(ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepVxTableRecord(ImageDefinitionStreams::AllBody)
+        || !sweepVxTableRecord(
+            ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepVxTableRecord(
+            ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
         || !sweepGroup(ImageDefinitionStreams::Separate)

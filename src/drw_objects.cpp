@@ -9844,26 +9844,61 @@ bool DRW_VxTableRecord::encodeDwg(DRW::Version version, dwgBufferW *buf,
         && version != m_rawDataVersion)
         return false;
 
-    dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018)
-        ? strBuf : buf;
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
-        ? handleBuf : buf;
-    if (version > DRW::AC1018) {
-        buf->putBitLong(static_cast<std::int32_t>(classVersion));
-        buf->putBitLong(static_cast<std::int32_t>(flags));
-        sb->putVariableText(version, name);
-    }
-    if (m_rawDataValid
-        && !appendRawBits(m_rawData, m_rawDataBitSize, buf))
-        return false;
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerStringDest =
+        (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+    dwgBufferW *const callerHandleDest =
+        (handleBuf != nullptr && version > DRW::AC1014)
+            ? handleBuf : callerBody;
+    const bool separateStrings = callerStringDest != callerBody;
+    const bool separateHandles = callerHandleDest != callerBody
+        && callerHandleDest != callerStringDest;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *callerBody;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
 
-    const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
-        ? extensionDictionaryFlag() : 0;
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()), effectiveXDictFlag,
-        &reactorHandles, xDictHandle);
-    return buf->isGood() && sb->isGood() && hb->isGood();
+        buf = &stagedBody;
+        strBuf = separateStrings ? &stagedStrings : buf;
+        handleBuf = separateHandles ? &stagedHandles
+            : callerHandleDest == callerStringDest && separateStrings
+                ? &stagedStrings : buf;
+        dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018)
+            ? strBuf : buf;
+        dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
+            ? handleBuf : buf;
+        if (version > DRW::AC1018) {
+            buf->putBitLong(static_cast<std::int32_t>(classVersion));
+            buf->putBitLong(static_cast<std::int32_t>(flags));
+            sb->putVariableText(version, name);
+        }
+        if (m_rawDataValid
+            && !appendRawBits(m_rawData, m_rawDataBitSize, buf))
+            return false;
+
+        const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
+            ? extensionDictionaryFlag() : 0;
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()),
+            effectiveXDictFlag, &reactorHandles, xDictHandle);
+        if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_TvDeviceProperties::parseDwg(DRW::Version version,
