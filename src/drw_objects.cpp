@@ -9192,45 +9192,82 @@ bool DRW_UCS::encodeDwg(DRW::Version version, dwgBufferW *buf,
                         dwgBufferW *strBuf, dwgBufferW *hdlBuf) const {
     if (buf == nullptr || !validatePayloadFields())
         return false;
-    dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
-    dwgBufferW *hb = (hdlBuf && version > DRW::AC1014) ? hdlBuf : buf;
-    const auto reactorCount = static_cast<std::int32_t>(reactorHandles.size());
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerStringDest =
+        (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+    dwgBufferW *const callerHandleDest =
+        (hdlBuf != nullptr && version > DRW::AC1014)
+            ? hdlBuf : callerBody;
+    const bool separateStrings = callerStringDest != callerBody;
+    const bool separateHandles = callerHandleDest != callerBody
+        && callerHandleDest != callerStringDest;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *callerBody;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
 
-    sb->putVariableText(version, name);
-    putTableEntryXrefFlags(version, *buf, flags);
+        buf = &stagedBody;
+        strBuf = separateStrings ? &stagedStrings : buf;
+        hdlBuf = separateHandles ? &stagedHandles
+            : callerHandleDest == callerStringDest && separateStrings
+                ? &stagedStrings : buf;
+        dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
+        dwgBufferW *hb = (hdlBuf && version > DRW::AC1014) ? hdlBuf : buf;
+        const auto reactorCount =
+            static_cast<std::int32_t>(reactorHandles.size());
 
-    buf->put3BitDouble(origin);
-    buf->put3BitDouble(xAxisDirection);
-    buf->put3BitDouble(yAxisDirection);
+        sb->putVariableText(version, name);
+        putTableEntryXrefFlags(version, *buf, flags);
 
-    if (version > DRW::AC1014) {
-        buf->putBitDouble(elevation);
-        buf->putBitShort(static_cast<std::uint16_t>(orthoType));
-        if (!orthographicOptions.empty()) {
-            buf->putBitShort(static_cast<std::uint16_t>(orthographicOptions.size()));
-            for (const DRW_UCSOrthoPoint& option : orthographicOptions) {
-                buf->putBitShort(static_cast<std::uint16_t>(option.type));
-                buf->put3BitDouble(option.point);
-            }
-        } else if (isNonZeroCoord(orthoOrigin)) {
-            buf->putBitShort(1);
+        buf->put3BitDouble(origin);
+        buf->put3BitDouble(xAxisDirection);
+        buf->put3BitDouble(yAxisDirection);
+
+        if (version > DRW::AC1014) {
+            buf->putBitDouble(elevation);
             buf->putBitShort(static_cast<std::uint16_t>(orthoType));
-            buf->put3BitDouble(orthoOrigin);
-        } else {
-            buf->putBitShort(0);
+            if (!orthographicOptions.empty()) {
+                buf->putBitShort(static_cast<std::uint16_t>(
+                    orthographicOptions.size()));
+                for (const DRW_UCSOrthoPoint& option : orthographicOptions) {
+                    buf->putBitShort(static_cast<std::uint16_t>(option.type));
+                    buf->put3BitDouble(option.point);
+                }
+            } else if (isNonZeroCoord(orthoOrigin)) {
+                buf->putBitShort(1);
+                buf->putBitShort(static_cast<std::uint16_t>(orthoType));
+                buf->put3BitDouble(orthoOrigin);
+            } else {
+                buf->putBitShort(0);
+            }
         }
-    }
 
-    putCommonObjectHandlePrefix(
-        hb, kUcsControl, reactorCount, xDictFlag, &reactorHandles,
-        xDictHandle);
-    hb->putHandle(makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer));
+        putCommonObjectHandlePrefix(
+            hb, kUcsControl, reactorCount, xDictFlag, &reactorHandles,
+            xDictHandle);
+        hb->putHandle(makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer));
 
-    if (version > DRW::AC1014) {
-        hb->putHandle(makeRefW(baseUcsHandle.ref, DRW::DwgHardPointer));
-        hb->putHandle(makeRefW(namedUcsHandle.ref, DRW::DwgHardPointer));
+        if (version > DRW::AC1014) {
+            hb->putHandle(makeRefW(baseUcsHandle.ref, DRW::DwgHardPointer));
+            hb->putHandle(makeRefW(namedUcsHandle.ref, DRW::DwgHardPointer));
+        }
+        if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    return buf->isGood() && sb->isGood() && hb->isGood();
 }
 
 bool DRW_Vport::encodeDwg(DRW::Version version, dwgBufferW *buf,

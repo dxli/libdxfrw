@@ -41,6 +41,11 @@ public:
     using DRW_ImageDef::encodeDwg;
 };
 
+class UcsProbe final : public DRW_UCS {
+public:
+    using DRW_UCS::encodeDwg;
+};
+
 class PlotSettingsProbe final : public DRW_PlotSettings {
 public:
     using DRW_PlotSettings::encodeDwg;
@@ -957,6 +962,78 @@ bool sweepAppId(ImageDefinitionStreams mode) {
     };
     return sweepTransactionalEncoder("APPID",
         names[static_cast<std::size_t>(mode)], version, encode, outputs);
+}
+
+UcsProbe makeUcs() {
+    UcsProbe ucs;
+    ucs.handle = 0xAF00u;
+    ucs.parentHandle = 0x20u;
+    ucs.reactorHandles = {0x21u, 0x22u};
+    ucs.setDwgCommonObjectState(2, 1u, false);
+    ucs.xDictHandle = 0x23u;
+    ucs.name = "LOCAL_UCS";
+    ucs.flags = 0u;
+    ucs.origin = DRW_Coord(1.0, 2.0, 3.0);
+    ucs.xAxisDirection = DRW_Coord(1.0, 0.0, 0.0);
+    ucs.yAxisDirection = DRW_Coord(0.0, 1.0, 0.0);
+    ucs.elevation = 4.0;
+    ucs.orthoType = 3;
+    ucs.orthographicOptions = {
+        {1, DRW_Coord(10.0, 20.0, 30.0)},
+        {2, DRW_Coord(40.0, 50.0, 60.0)}
+    };
+    ucs.xrefBlockHandle.ref = 0x24u;
+    ucs.baseUcsHandle.ref = 0x25u;
+    ucs.namedUcsHandle.ref = 0x26u;
+    return ucs;
+}
+
+bool sweepUcs(ImageDefinitionStreams mode) {
+    const DRW::Version version =
+        mode == ImageDefinitionStreams::R13InlineSeparateArguments
+            ? DRW::AC1012
+            : mode == ImageDefinitionStreams::R2004DetachedHandles
+                ? DRW::AC1018 : DRW::AC1021;
+    const UcsProbe ucs = makeUcs();
+    const auto encode = [&ucs](DRW::Version v, dwgBufferW* body,
+                               dwgBufferW* strings, dwgBufferW* handles) {
+        return ucs.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [mode](dwgBufferW& body, dwgBufferW& strings,
+                                dwgBufferW& handles) {
+        dwgBufferW* stringOutput = nullptr;
+        dwgBufferW* handleOutput = nullptr;
+        switch (mode) {
+        case ImageDefinitionStreams::R13InlineSeparateArguments:
+        case ImageDefinitionStreams::R2004DetachedHandles:
+        case ImageDefinitionStreams::Separate:
+            stringOutput = &strings;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SharedStringAndHandle:
+            stringOutput = &strings;
+            handleOutput = &strings;
+            break;
+        case ImageDefinitionStreams::AllBody:
+            break;
+        case ImageDefinitionStreams::BodyStringDetachedHandles:
+            stringOutput = &body;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SeparateStringBodyHandles:
+            stringOutput = &strings;
+            handleOutput = &body;
+            break;
+        }
+        return EncoderOutputs{stringOutput, handleOutput};
+    };
+    static const char* const names[] = {
+        "AC1012-inline", "AC1018-detached-handles", "separate",
+        "shared-string-handle", "all-body", "body-string-detached-handles",
+        "separate-string-body-handles"
+    };
+    return sweepTransactionalEncoder("UCS", names[static_cast<std::size_t>(mode)],
+        version, encode, outputs);
 }
 
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
@@ -2179,6 +2256,13 @@ int main() {
         || !sweepAppId(ImageDefinitionStreams::AllBody)
         || !sweepAppId(ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepAppId(ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepUcs(ImageDefinitionStreams::R13InlineSeparateArguments)
+        || !sweepUcs(ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepUcs(ImageDefinitionStreams::Separate)
+        || !sweepUcs(ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepUcs(ImageDefinitionStreams::AllBody)
+        || !sweepUcs(ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepUcs(ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
         || !sweepGroup(ImageDefinitionStreams::Separate)

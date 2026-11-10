@@ -1453,6 +1453,15 @@ created locally from scratch for the specific control.
   the [APPID allocation receipt](docs/research/p6-appid-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 2,283 offsets across 115 cases.
 
+- **UCS DWG encoder transaction safety:** `DRW_UCS::encodeDwg` now stages the
+  body, detached text, and handle outputs, preserving aliased streams and the
+  versioned orthographic-option and handle layouts. Seven AC1012/AC1018/AC1021
+  generated layouts sweep 128 allocation offsets with caller rollback and
+  same-object retry. The allocation, object-vector, UCS handle-role, header,
+  graph-closure, and original-source tests pass 6/6. No fixture was added. See
+  the [UCS allocation receipt](docs/research/p6-ucs-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 2,411 offsets across 122 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
