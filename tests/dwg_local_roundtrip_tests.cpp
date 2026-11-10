@@ -67,6 +67,25 @@ bool runHatchSameDataTests(const std::filesystem::path& parent);
 bool writeHatchReferenceFile(const std::filesystem::path& path, bool binary);
 bool verifyHatchReferenceFile(const std::filesystem::path& path);
 
+class DrwEntityEncodeTestAccess {
+public:
+    static void markParsedProxyGraphics(DRW_Entity& entity,
+                                        DRW::Version version) {
+        entity.m_proxyGraphicsProvenance = {
+            DRW_ProxyGraphicsOrigin::ParsedDwg,
+            DRW_ProxyGraphicsEncoding::DwgBitStream,
+            version, "", 0,
+            static_cast<std::uint64_t>(entity.proxyGraphics.size()),
+            false, false};
+    }
+};
+
+const std::string& generatedTableProxyCache() {
+    static const std::string bytes = std::string(1u, '\x19') + "TABLE"
+        + std::string(1u, '\0') + "CACHE";
+    return bytes;
+}
+
 void writeLiteralDxfLayerZeroTable(dxfWriter& tags) {
     tags.writeString(0, "SECTION"); tags.writeString(2, "TABLES");
     tags.writeString(0, "TABLE"); tags.writeString(2, "LAYER");
@@ -38101,6 +38120,15 @@ public:
                 ++table.blockRecH.size;
             }
         }
+        if (m_useParsedProxyCache) {
+            table.proxyGraphics = generatedTableProxyCache();
+            table.numProxyGraph = static_cast<int>(table.proxyGraphics.size());
+            DrwEntityEncodeTestAccess::markParsedProxyGraphics(
+                table, DRW::AC1018);
+            ready = table.authorizeParsedDwgProxyGraphicsReplay();
+            if (!ready)
+                return;
+        }
         const std::array<std::array<DRW_Coord, 2>, 8> lines {{
             {{{0, 0, 0}, {456, 0, 0}}},
             {{{0, -11, 0}, {456, -11, 0}}},
@@ -38188,6 +38216,9 @@ public:
     void useParsedBlockRecordMetadata(bool use) noexcept {
         m_useParsedBlockRecordMetadata = use;
     }
+    void useParsedProxyCache(bool use) noexcept {
+        m_useParsedProxyCache = use;
+    }
 
 private:
     void initializeTable() {
@@ -38240,6 +38271,7 @@ private:
     bool m_emitTable {false};
     bool m_omitTableStyleRoot {false};
     bool m_useParsedBlockRecordMetadata {false};
+    bool m_useParsedProxyCache {false};
 };
 
 bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
@@ -38289,6 +38321,7 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
 
         producer.setOmitTableStyleRoot(false);
         producer.useParsedBlockRecordMetadata(true);
+        producer.useParsedProxyCache(true);
     }
     if (!output.write(&producer, DRW::AC1018, true) || !producer.ready) {
         const DRW_OperationDiagnostic diagnostic = output.getLastDiagnostic();
@@ -38376,6 +38409,9 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
         || table->blockRecH.rawCode != DRW::DwgHardPointer
         || table->blockRecH.ref64 != table->blockRecH.ref
         || table->blockRecH.size == 0u
+        || table->proxyGraphics != generatedTableProxyCache()
+        || table->numProxyGraph
+            != static_cast<int>(generatedTableProxyCache().size())
         || table->m_tableStyleHandle != emittedStyleHandle
         || table->m_content.m_rows.size() != 3u
         || table->m_content.m_columns.size() != 3u
