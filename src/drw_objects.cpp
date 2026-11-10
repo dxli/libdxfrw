@@ -22643,45 +22643,58 @@ bool DRW_SpatialFilter::encodeDwg(DRW::Version version, dwgBufferW *buf,
         return false;
     }
     DRW_UNUSED(strBuf);
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
+    try {
+        dwgBufferW stagedBody = *buf;
+        const bool separateHandles = handleBuf != nullptr
+            && handleBuf != buf && version > DRW::AC1014;
+        dwgBufferW stagedHandles;
+        if (separateHandles)
+            stagedHandles = *handleBuf;
+        dwgBufferW *hb = separateHandles ? &stagedHandles : &stagedBody;
 
-    const std::uint16_t pointCount =
-        static_cast<std::uint16_t>(m_boundaryPoints.size());
-    buf->putBitShort(pointCount);
-    for (const auto& p : m_boundaryPoints) {
-        buf->put2RawDouble(p);
+        const std::uint16_t pointCount =
+            static_cast<std::uint16_t>(m_boundaryPoints.size());
+        stagedBody.putBitShort(pointCount);
+        for (const auto& p : m_boundaryPoints)
+            stagedBody.put2RawDouble(p);
+
+        stagedBody.put3BitDouble(m_normal);
+        stagedBody.put3BitDouble(m_origin);
+        stagedBody.putBitShort(m_displayBoundary ? 1 : 0);
+        stagedBody.putBitShort(m_clipFrontPlane ? 1 : 0);
+        if (m_clipFrontPlane)
+            stagedBody.putBitDouble(m_frontDistance);
+        stagedBody.putBitShort(m_clipBackPlane ? 1 : 0);
+        if (m_clipBackPlane)
+            stagedBody.putBitDouble(m_backDistance);
+
+        // 4x3 transforms — 12 bit-doubles each.  Pad with 0.0 if the parsed
+        // vector is short (defensive: parser always reads exactly 12).
+        const auto writeMatrix12 = [&stagedBody](
+            const std::vector<double>& matrix) {
+            for (size_t i = 0; i < 12; ++i)
+                stagedBody.putBitDouble(i < matrix.size() ? matrix[i] : 0.0);
+        };
+        writeMatrix12(m_inverseInsertTransform);
+        writeMatrix12(m_insertTransform);
+
+        // Common handle prefix LAST (matches parser's post-body object handles).
+        const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
+            ? extensionDictionaryFlag() : 0;
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()),
+            effectiveXDictFlag, &reactorHandles, xDictHandle);
+        if (!stagedBody.isGood() || !hb->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (separateHandles)
+            handleBuf->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-
-    buf->put3BitDouble(m_normal);
-    buf->put3BitDouble(m_origin);
-    buf->putBitShort(m_displayBoundary ? 1 : 0);
-    buf->putBitShort(m_clipFrontPlane ? 1 : 0);
-    if (m_clipFrontPlane) {
-        buf->putBitDouble(m_frontDistance);
-    }
-    buf->putBitShort(m_clipBackPlane ? 1 : 0);
-    if (m_clipBackPlane) {
-        buf->putBitDouble(m_backDistance);
-    }
-
-    // 4x3 transforms — 12 bit-doubles each.  Pad with 0.0 if the parsed
-    // vector is short (defensive: parser always reads exactly 12).
-    auto writeMatrix12 = [&](const std::vector<double>& m) {
-        for (size_t i = 0; i < 12; ++i) {
-            buf->putBitDouble(i < m.size() ? m[i] : 0.0);
-        }
-    };
-    writeMatrix12(m_inverseInsertTransform);
-    writeMatrix12(m_insertTransform);
-
-    // Common handle prefix LAST (matches parser's post-body object handles).
-    const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
-        ? extensionDictionaryFlag() : 0;
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()),
-        effectiveXDictFlag, &reactorHandles, xDictHandle);
-    return buf->isGood() && hb->isGood();
 }
 
 // GEODATA (AcDbGeoData) encoder — ODA §20.4.78.  Inverts parseDwg below.

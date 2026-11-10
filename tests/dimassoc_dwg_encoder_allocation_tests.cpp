@@ -96,6 +96,11 @@ public:
     using DRW_SortEntsTable::encodeDwg;
 };
 
+class SpatialFilterProbe final : public DRW_SpatialFilter {
+public:
+    using DRW_SpatialFilter::encodeDwg;
+};
+
 DimensionAssociationProbe makeAssociation() {
     DimensionAssociationProbe association;
     association.handle = 0xA100u;
@@ -374,6 +379,99 @@ bool sweepSortEntsTable(DRW::Version version, bool aliasHandles) {
             return false;
     }
     std::cout << "SORTENTSTABLE DWG encoder version="
+              << static_cast<int>(version)
+              << (aliasHandles ? " body-aliased" : " separate-handles")
+              << ": allocation offsets=" << allocations
+              << ", rollback/retry=PASS\n";
+    return true;
+}
+
+SpatialFilterProbe makeSpatialFilter() {
+    SpatialFilterProbe filter;
+    filter.handle = 0xA800u;
+    filter.parentHandle = 0x20u;
+    filter.reactorHandles = {0x21u, 0x22u};
+    filter.setDwgCommonObjectState(2, 1u, false);
+    filter.xDictHandle = 0x23u;
+    filter.m_boundaryPoints = {
+        DRW_Coord{0.0, 0.0, 0.0}, DRW_Coord{4.0, 0.0, 0.0},
+        DRW_Coord{4.0, 3.0, 0.0}
+    };
+    filter.m_normal = DRW_Coord{0.0, 0.0, 1.0};
+    filter.m_origin = DRW_Coord{2.0, -1.0, 5.0};
+    filter.m_displayBoundary = true;
+    filter.m_clipFrontPlane = true;
+    filter.m_clipBackPlane = true;
+    filter.m_frontDistance = 2.5;
+    filter.m_backDistance = 7.5;
+    filter.m_inverseInsertTransform = {
+        1.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 1.0, 3.0, 4.0, 5.0
+    };
+    filter.m_insertTransform = {
+        1.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 1.0, -3.0, -4.0, -5.0
+    };
+    return filter;
+}
+
+bool sweepSpatialFilter(DRW::Version version, bool aliasHandles) {
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    const SpatialFilterProbe filter = makeSpatialFilter();
+    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
+    seed(cleanBody, cleanStrings, cleanHandles);
+    dwgBufferW* const cleanHandleOutput = aliasHandles ? &cleanBody
+                                                       : &cleanHandles;
+    if (!filter.encodeDwg(version, &cleanBody, &cleanStrings,
+                          cleanHandleOutput))
+        return false;
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    seed(body, strings, handles);
+    dwgBufferW* const handleOutput = aliasHandles ? &body : &handles;
+    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
+    const unsigned long beforeCalibration =
+        failedAllocations.load(std::memory_order_relaxed);
+    const bool calibrated = filter.encodeDwg(version, &body, &strings,
+                                             handleOutput);
+    const long allocations = 1000000
+        - allocationsBeforeFailure.load(std::memory_order_relaxed);
+    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+    if (!calibrated || allocations <= 0
+        || failedAllocations.load(std::memory_order_relaxed)
+            != beforeCalibration)
+        return false;
+
+    for (long offset = 0; offset < allocations; ++offset) {
+        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
+        seed(failedBody, failedStrings, failedHandles);
+        dwgBufferW* const failedHandleOutput = aliasHandles ? &failedBody
+                                                            : &failedHandles;
+        const dwgBufferW originalBody = failedBody;
+        const dwgBufferW originalStrings = failedStrings;
+        const dwgBufferW originalHandles = failedHandles;
+        const unsigned long beforeFailure =
+            failedAllocations.load(std::memory_order_relaxed);
+        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
+        const bool encoded = filter.encodeDwg(
+            version, &failedBody, &failedStrings, failedHandleOutput);
+        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+        if (encoded
+            || failedAllocations.load(std::memory_order_relaxed)
+                != beforeFailure + 1u
+            || !same(failedBody, originalBody)
+            || !same(failedStrings, originalStrings)
+            || !same(failedHandles, originalHandles))
+            return false;
+        if (!filter.encodeDwg(version, &failedBody, &failedStrings,
+                              failedHandleOutput)
+            || !same(failedBody, cleanBody)
+            || !same(failedStrings, cleanStrings)
+            || !same(failedHandles, cleanHandles))
+            return false;
+    }
+    std::cout << "SPATIAL_FILTER DWG encoder version="
               << static_cast<int>(version)
               << (aliasHandles ? " body-aliased" : " separate-handles")
               << ": allocation offsets=" << allocations
@@ -1803,6 +1901,9 @@ int main() {
         || !sweepSortEntsTable(DRW::AC1012, false)
         || !sweepSortEntsTable(DRW::AC1018, false)
         || !sweepSortEntsTable(DRW::AC1021, true)
+        || !sweepSpatialFilter(DRW::AC1012, false)
+        || !sweepSpatialFilter(DRW::AC1018, false)
+        || !sweepSpatialFilter(DRW::AC1021, true)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
         || !sweepGroup(ImageDefinitionStreams::Separate)

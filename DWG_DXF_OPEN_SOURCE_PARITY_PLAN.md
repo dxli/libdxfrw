@@ -1374,6 +1374,18 @@ created locally from scratch for the specific control.
   profiles. See the [SORTENTSTABLE allocation receipt](docs/research/p6-sortentstable-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 1,579 offsets across 78 cases.
 
+- **SPATIAL_FILTER DWG encoder transaction safety:**
+  `DRW_SpatialFilter::encodeDwg` now stages the geometry body and detached
+  handle stream, including the clipping flags/distances, two 4x3 transforms,
+  trailing common prefix, and version-specific extension-dictionary flag.
+  Generated AC1012, AC1018, and AC1021 controls sweep 36 allocation offsets;
+  each failure preserves caller streams/cursors/handle ledgers, and same-object
+  retry matches clean output. The combined allocation, object-vector, and
+  SPATIAL_FILTER OBJECTS allocation tests pass 3/3. No fixture was added. This
+  does not qualify source graph closure or native clipping. See the
+  [SPATIAL_FILTER allocation receipt](docs/research/p6-spatial-filter-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 1,615 offsets across 81 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
