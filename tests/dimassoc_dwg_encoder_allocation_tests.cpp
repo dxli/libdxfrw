@@ -66,6 +66,11 @@ public:
     using DRW_SpatialIndex::encodeDwg;
 };
 
+class ObjectPtrProbe final : public DRW_ObjectPtr {
+public:
+    using DRW_ObjectPtr::encodeDwg;
+};
+
 class PlotSettingsProbe final : public DRW_PlotSettings {
 public:
     using DRW_PlotSettings::encodeDwg;
@@ -1543,10 +1548,11 @@ SpatialIndexProbe makeSpatialIndex() {
 
 template <typename Probe>
 bool sweepIndexObject(const char* name, const Probe& object,
-                      ImageDefinitionStreams mode) {
+                      ImageDefinitionStreams mode,
+                      DRW::Version inlineVersion = DRW::AC1012) {
     const DRW::Version version =
         mode == ImageDefinitionStreams::R13InlineSeparateArguments
-            ? DRW::AC1012
+            ? inlineVersion
             : mode == ImageDefinitionStreams::R2004DetachedHandles
                 ? DRW::AC1018 : DRW::AC1021;
     const auto encode = [&object](DRW::Version v, dwgBufferW* body,
@@ -1588,6 +1594,16 @@ bool sweepIndexObject(const char* name, const Probe& object,
     };
     return sweepTransactionalEncoder(name,
         names[static_cast<std::size_t>(mode)], version, encode, outputs);
+}
+
+ObjectPtrProbe makeObjectPtr() {
+    ObjectPtrProbe object;
+    object.handle = 0xB900u;
+    object.parentHandle = 0x20u;
+    object.reactorHandles = {0x21u, 0x22u};
+    object.setDwgCommonObjectState(2, 1u, false);
+    object.xDictHandle = 0x23u;
+    return object;
 }
 
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
@@ -2903,6 +2919,24 @@ int main() {
             ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepIndexObject("SPATIAL_INDEX", makeSpatialIndex(),
             ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepIndexObject("OBJECT_PTR", makeObjectPtr(),
+            ImageDefinitionStreams::R13InlineSeparateArguments,
+            DRW::AC1015)
+        || !sweepIndexObject("OBJECT_PTR", makeObjectPtr(),
+            ImageDefinitionStreams::R2004DetachedHandles,
+            DRW::AC1018)
+        || !sweepIndexObject("OBJECT_PTR", makeObjectPtr(),
+            ImageDefinitionStreams::Separate, DRW::AC1021)
+        || !sweepIndexObject("OBJECT_PTR", makeObjectPtr(),
+            ImageDefinitionStreams::SharedStringAndHandle, DRW::AC1021)
+        || !sweepIndexObject("OBJECT_PTR", makeObjectPtr(),
+            ImageDefinitionStreams::AllBody, DRW::AC1021)
+        || !sweepIndexObject("OBJECT_PTR", makeObjectPtr(),
+            ImageDefinitionStreams::BodyStringDetachedHandles,
+            DRW::AC1021)
+        || !sweepIndexObject("OBJECT_PTR", makeObjectPtr(),
+            ImageDefinitionStreams::SeparateStringBodyHandles,
+            DRW::AC1021)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
         || !sweepGroup(ImageDefinitionStreams::Separate)

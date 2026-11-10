@@ -16653,13 +16653,32 @@ bool DRW_ObjectPtr::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || !dwgSafety::validReactorCount(reactorCount())
         || extensionDictionaryFlag() > 1)
         return false;
-
-    dwgBufferW *hb = handleBuf != nullptr && version > DRW::AC1014
-        ? handleBuf : buf;
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), reactorCount(),
-        extensionDictionaryFlag(), &reactorHandles, xDictHandle);
-    return buf->isGood() && hb->isGood();
+    try {
+        dwgBufferW *const callerBody = buf;
+        dwgBufferW *const callerHandleDest =
+            handleBuf != nullptr && version > DRW::AC1014
+                ? handleBuf : callerBody;
+        const bool separateHandles = callerHandleDest != callerBody;
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedHandles;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+        buf = &stagedBody;
+        handleBuf = separateHandles ? &stagedHandles : buf;
+        dwgBufferW *hb = handleBuf != nullptr && version > DRW::AC1014
+            ? handleBuf : buf;
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle), reactorCount(),
+            extensionDictionaryFlag(), &reactorHandles, xDictHandle);
+        if (!buf->isGood() || !hb->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_PartialViewingIndex::parseCode(

@@ -1530,6 +1530,14 @@ created locally from scratch for the specific control.
   checks. See the [index encoder receipt](docs/research/p6-dwg-index-objects-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 3,691 offsets across 183 cases.
 
+- **OBJECT_PTR DWG encoder transaction safety:**
+  `DRW_ObjectPtr::encodeDwg` stages its body and effective common-handle stream
+  before publishing. Seven generated AC1015/AC1018/AC1021 layouts sweep 47
+  allocation offsets with rollback and same-object retry; the object-vector
+  and allocation CTests pass 2/2. No fixture was added. See the [OBJECT_PTR
+  allocation receipt](docs/research/p6-objectptr-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 3,738 offsets across 190 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
