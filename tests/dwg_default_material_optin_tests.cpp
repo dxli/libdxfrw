@@ -480,7 +480,7 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
         if (mode == Mode::ReplayMaterial) {
             DRW_Dictionary dictionary; dictionary.handle=0xB100u;
             dictionary.parentHandle=DRW::DwgNamedObjectsDictionaryHandle;
-            dictionary.m_entries.push_back({"Global", 0xB101u});
+            dictionary.m_entries.push_back({replayMaterial.m_name, 0xB101u});
             if (!output.writeDictionary(&dictionary)) { rejected=true; return; }
             DRW_Material material=replayMaterial;
             material.handle=0xB101u; material.parentHandle=0xB100u;
@@ -520,13 +520,20 @@ struct Capture : LC3CompatCheck {
     }
     void addDictionary(const DRW_Dictionary& value) override {
         if(value.m_entries.size()!=3u) return;
-        if(value.m_entries[0].m_name=="ByBlock" && value.m_entries[1].m_name=="ByLayer"
-           && value.m_entries[2].m_name=="Global") {
-            dictionary=value.handle; owner=value.parentHandle;
-            for(std::size_t i=0;i<3;++i) children[i]=value.m_entries[i].m_handle;
+        const std::array<std::string, 3> names{{"ByBlock", "ByLayer", "Global"}};
+        std::array<std::uint32_t, 3> handles{};
+        for (std::size_t i = 0; i < names.size(); ++i) {
+            const auto entry = std::find_if(value.m_entries.begin(),
+                value.m_entries.end(), [&names, i](const DRW_Dictionary::Entry& e) {
+                    return e.m_name == names[i];
+                });
+            if (entry == value.m_entries.end()) return;
+            handles[i] = entry->m_handle;
         }
+        dictionary=value.handle; owner=value.parentHandle; children=handles;
     }
     void addMaterial(const DRW_Material& m) override {
+        parsedMaterials.push_back(m);
         const bool r2013Profile = rawVersion == DRW::AC1027;
         const auto close = [](double left, double right) {
             return std::abs(left - right) <= 1e-9;
@@ -638,6 +645,7 @@ struct Capture : LC3CompatCheck {
     std::uint32_t root=0,dictionary=0,owner=0,layerMaterial=0,layerPlotStyle=0;
     std::array<std::uint32_t,3> children{};
     std::vector<std::pair<std::string,std::uint32_t>> materials;
+    std::vector<DRW_Material> parsedMaterials;
     bool valid=true, requireSemantic=true, requireRaw=false;
     bool expectDefaultBody=true;
     bool physicalAc1021Profile=false;
@@ -706,14 +714,14 @@ bool ac1027DefaultMaterialReplayRoundtripImpl(const DRW_Material& source) {
             dictionarySeen = value.parentHandle
                     == DRW::DwgNamedObjectsDictionaryHandle
                 && value.m_entries.size() == 1u
-                && value.m_entries[0].m_name == "Global"
+                && value.m_entries[0].m_name == expectedName
                 && value.m_entries[0].m_handle == 0xB101u;
         }
         void addMaterial(const DRW_Material& value) override {
             materialSeen = value.handle == 0xB101u
                 && value.parentHandle == 0xB100u
                 && value.reactorHandles == std::vector<std::uint32_t>{0xB100u}
-                && value.m_name == "Global"
+                && value.m_name == expectedName
                 && value.hasCompleteDwgSemanticFields()
                 && value.canReplayAc1027DefaultDwgBody()
                 && value.dwgRawDataBitSize() == expectedBits
@@ -727,10 +735,12 @@ bool ac1027DefaultMaterialReplayRoundtripImpl(const DRW_Material& source) {
         }
         std::uint32_t rootHandle{0u};
         std::uint32_t expectedBits{0u};
+        std::string expectedName;
         std::vector<std::uint8_t> expectedBody;
         bool dictionarySeen{false};
         bool materialSeen{false};
     } capture;
+    capture.expectedName = source.m_name;
     capture.expectedBits = source.dwgRawDataBitSize();
     capture.expectedBody = source.dwgRawData();
     dwgRW reader(path.string().c_str());
@@ -749,6 +759,42 @@ bool ac1027DefaultMaterialReplayRoundtrip(const DRW_Material& source) {
     return ac1027DefaultMaterialReplayRoundtripImpl(source);
 }
 int main(int argc,char**argv) {
+    if (argc == 3
+        && std::string(argv[1]) == "--physical-ac1027-material-dwg-replay") {
+        dwgRW reader(argv[2]);
+        Capture capture;
+        capture.requireSemantic = true;
+        capture.requireRaw = true;
+        capture.rawVersion = DRW::AC1027;
+        if (!reader.read(&capture, false) || !capture.valid
+            || capture.root == 0u || capture.dictionary == 0u
+            || capture.owner != DRW::DwgNamedObjectsDictionaryHandle
+            || capture.parsedMaterials.size() != 3u) {
+            std::cerr << "physical AC1027 MATERIAL source audit failed: root="
+                      << capture.root << " dictionary=" << capture.dictionary
+                      << " materials=" << capture.parsedMaterials.size()
+                      << " valid=" << capture.valid << '\n';
+            return 1;
+        }
+        const std::array<std::string, 3> expectedNames{{
+            "ByBlock", "ByLayer", "Global"}};
+        for (const auto& name : expectedNames) {
+            const auto found = std::find_if(
+                capture.parsedMaterials.begin(), capture.parsedMaterials.end(),
+                [&name](const DRW_Material& material) {
+                    return material.m_name == name;
+                });
+            if (found == capture.parsedMaterials.end()
+                || !found->canReplayAc1027DefaultDwgBody()
+                || !ac1027DefaultMaterialReplayRoundtrip(*found)) {
+                std::cerr << "physical AC1027 MATERIAL write/readback failed for "
+                          << name << '\n';
+                return 1;
+            }
+        }
+        std::cout << "physical AC1027 MATERIAL selected DWG replay/readback PASS\n";
+        return 0;
+    }
     if (argc==3 && std::string(argv[1])=="--physical-ac1021-semantic-probe") {
         dwgRW reader(argv[2]);
         Capture capture;

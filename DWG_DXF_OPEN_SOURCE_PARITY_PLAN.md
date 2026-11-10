@@ -1,5 +1,7 @@
 # DWG/DXF parity — remaining implementation plan
 
+**Latest implementation slice (2026-11-10, physical-source AC1027 MATERIAL replay):** the physical `Cover.dwg` parser output for `ByBlock`, `ByLayer`, and `Global` now feeds the selected DWG writer path, which emits each exact retained MATERIAL body in an isolated dictionary graph and reads it back through a fresh libdxfrw reader. The test checks the three source records against the bounded profile and verifies decoded fields, handles, owner/reactor edges, detached strings, and retained body bits. The key matcher was corrected to bind dictionary entries by name rather than assuming their order. The focused CTest and physical selector pass; this is source-fed selected-record transport, not a full-source rewrite or producer/native acceptance. No drawing fixture or support claim was added. See the [source replay receipt](docs/research/p6-ac1027-material-source-fed-dwg-replay-2026-11-10.json).
+
 **Latest implementation slice (2026-11-10, AC1027 MATERIAL default-body replay):** the DWG writer now replays the exact 516-bit retained body and the five detached empty map-name strings for the parsed `Global`/`ByBlock`/`ByLayer` default profile only. A strict predicate checks all decoded body selectors and raw-frame version/size before output. Generated tests verify identical body bits, bounded string order, seeded-buffer preservation on mutation refusal, corrected same-object retry, and full generated AC1027 dictionary→MATERIAL file readback. The existing physical `Cover.dwg` audit confirms its three default materials meet the replay predicate; that source was not written back to DWG. Focused CTest passes 1/1, with no fixture or support claim. Other modern MATERIAL profiles remain refused. See the [replay receipt](docs/research/p6-ac1027-material-default-body-replay-2026-11-10.json).
 
 **Latest implementation slice (2026-11-10, AC1024 associative-network action/handle-role binding):** the qualified AC1024 class-version-1 parser now requires each `isOwned` action flag to agree with its DWG handle role (hard ownership for owned actions, soft pointer otherwise). Generated mutations for both contradictory roles are withheld, and the same reader accepts the corrected frame on retry. The focused network/output/readback cohort passes 8/8; a rebuilt inventory reader accepts the existing hash-bound AC1024 architectural sample and parses all 28 action references across five networks. AC1032 handling is unchanged and remains a candidate-only parse with output refused. No drawing fixture or support claim was added. See the [role-binding receipt](docs/research/p4-ac1024-assocnetwork-action-handle-role-binding-2026-11-10.json).
@@ -2453,13 +2455,16 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    only for parsed `Global`/`ByBlock`/`ByLayer` records whose full decoded
    selectors still match the source profile. A generated full-file
    dictionary/MATERIAL graph finalizes and fresh libdxfrw readback confirms
-   the exact body and strings; the current physical Cover source records pass
-   the eligibility predicate but were not written back to DWG. AC1021/AC1024
+   the exact body and strings. A new source-fed selector takes all three
+   parsed records from the physical Cover source through isolated selected
+   DWG writes and fresh readback, checking exact raw body, typed fields, names,
+   detached strings and graph roles. This is not whole-source rewrite or
+   producer/native acceptance. AC1021/AC1024
    raw bodies, other AC1027 bodies and newly authored modern MATERIAL values
    remain refused. The SUN, DICTIONARYWDFLT, TABLESTYLE, and MLEADERSTYLE
    body-reference profiles are complete. Only 3DSOLID remains partial in the
-   physical body-reference inventory; physical source-to-DWG output,
-   independent producer acceptance and the global strict guard remain open.
+   physical body-reference inventory; independent producer acceptance, broader
+   graph closure and the global strict guard remain open.
    Do not rescan the corpus. See the [body replay receipt](docs/research/p6-ac1027-material-default-body-replay-2026-11-10.json).
 
    **Completed MATERIAL profile/retry slice (2026-11-08):** the AC1027 exact
