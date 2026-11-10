@@ -1128,6 +1128,76 @@ bool sweepView(ImageDefinitionStreams mode) {
         version, encode, outputs);
 }
 
+DRW_Layer makeLayer(bool modern) {
+    DRW_Layer layer;
+    layer.handle = 0xB100u;
+    layer.parentHandle = 0x20u;
+    layer.reactorHandles = {0x21u, 0x22u};
+    layer.setDwgCommonObjectState(2, 1u, false);
+    layer.xDictHandle = 0x23u;
+    layer.name = "LOCAL_LAYER";
+    layer.flags = 0;
+    layer.color = 7;
+    if (modern)
+        layer.colorName = "LocalBook$Accent";
+    layer.plotF = true;
+    layer.lWeight = DRW_LW_Conv::widthDefault;
+    layer.xrefBlockHandle.ref = 0x24u;
+    layer.plotStyleHandle.ref = 0x25u;
+    layer.materialHandle.ref = 0x26u;
+    layer.lTypeH.ref = 0x27u;
+    return layer;
+}
+
+bool sweepLayer(ImageDefinitionStreams mode) {
+    DRW::Version version;
+    switch (mode) {
+    case ImageDefinitionStreams::R13InlineSeparateArguments:
+        version = DRW::AC1012;
+        break;
+    case ImageDefinitionStreams::R2004DetachedHandles:
+        version = DRW::AC1018;
+        break;
+    case ImageDefinitionStreams::Separate:
+    case ImageDefinitionStreams::SharedStringAndHandle:
+    case ImageDefinitionStreams::SeparateStringBodyHandles:
+        version = DRW::AC1021;
+        break;
+    case ImageDefinitionStreams::AllBody:
+    case ImageDefinitionStreams::BodyStringDetachedHandles:
+        return false;
+    }
+    const DRW_Layer layer = makeLayer(version > DRW::AC1018);
+    const auto encode = [&layer](DRW::Version v, dwgBufferW* body,
+                                 dwgBufferW* strings, dwgBufferW* handles) {
+        return layer.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [mode](dwgBufferW& body, dwgBufferW& strings,
+                                dwgBufferW& handles) {
+        switch (mode) {
+        case ImageDefinitionStreams::R13InlineSeparateArguments:
+        case ImageDefinitionStreams::R2004DetachedHandles:
+        case ImageDefinitionStreams::Separate:
+            return EncoderOutputs{&strings, &handles};
+        case ImageDefinitionStreams::SharedStringAndHandle:
+            return EncoderOutputs{&strings, &strings};
+        case ImageDefinitionStreams::SeparateStringBodyHandles:
+            return EncoderOutputs{&strings, &body};
+        case ImageDefinitionStreams::AllBody:
+        case ImageDefinitionStreams::BodyStringDetachedHandles:
+            break;
+        }
+        return EncoderOutputs{nullptr, nullptr};
+    };
+    static const char* const names[] = {
+        "AC1012-inline", "AC1018-detached-handles", "separate",
+        "shared-string-handle", "all-body", "body-string-detached-handles",
+        "separate-string-body-handles"
+    };
+    return sweepTransactionalEncoder("LAYER",
+        names[static_cast<std::size_t>(mode)], version, encode, outputs);
+}
+
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
     GeoDataProbe geo;
     geo.handle = 0xA900u;
@@ -2362,6 +2432,11 @@ int main() {
         || !sweepView(ImageDefinitionStreams::AllBody)
         || !sweepView(ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepView(ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepLayer(ImageDefinitionStreams::R13InlineSeparateArguments)
+        || !sweepLayer(ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepLayer(ImageDefinitionStreams::Separate)
+        || !sweepLayer(ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepLayer(ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
         || !sweepGroup(ImageDefinitionStreams::Separate)

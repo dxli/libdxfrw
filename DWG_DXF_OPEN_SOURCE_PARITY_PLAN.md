@@ -1471,6 +1471,16 @@ created locally from scratch for the specific control.
   No fixture was added. See the [VIEW allocation receipt](docs/research/p6-view-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 2,552 offsets across 129 cases.
 
+- **LAYER DWG encoder transaction safety:** `DRW_Layer::encodeDwgForWriter`
+  now stages the body, detached strings, and handles while preserving the
+  modern required string stream, CMC color-book names, legacy typed-null
+  policy, and versioned table references. Five AC1012/AC1018/AC1021 generated
+  layouts sweep 112 allocation offsets with rollback and same-object retry.
+  The allocation, object-vector, layer handle/color/name/reference, and color
+  order tests pass 7/7. No fixture was added. See the [LAYER allocation
+  receipt](docs/research/p6-layer-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 2,664 offsets across 134 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

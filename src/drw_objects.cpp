@@ -8778,8 +8778,8 @@ bool DRW_Layer::encodeDwg(DRW::Version version, dwgBufferW *buf,
 }
 
 bool DRW_Layer::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
-                                    dwgBufferW *strBuf, dwgBufferW *hdlBuf,
-                                    bool typedLegacyNulls) const {
+                                   dwgBufferW *strBuf, dwgBufferW *hdlBuf,
+                                   bool typedLegacyNulls) const {
     if (buf == nullptr || hasInvalidDxfLineweight || !validatePayloadFields())
         return false;
     if (version > DRW::AC1018 && (strBuf == nullptr || strBuf == buf))
@@ -8787,111 +8787,143 @@ bool DRW_Layer::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
     const std::int64_t colorValue = static_cast<std::int64_t>(color);
     const bool layerOff = colorValue < 0;
     const std::int64_t colorIndexValue = layerOff ? -colorValue : colorValue;
-    if (colorIndexValue < 0
-        || colorIndexValue > static_cast<std::int64_t>(DRW::ColorByLayer))
+    if (colorIndexValue < 0 ||
+        colorIndexValue > static_cast<std::int64_t>(DRW::ColorByLayer))
         return false;
-    const std::uint16_t colorIndex = static_cast<std::uint16_t>(colorIndexValue);
+    const std::uint16_t colorIndex =
+        static_cast<std::uint16_t>(colorIndexValue);
     const std::uint8_t canonicalMethod = color24 >= 0 ? dwgColor::RGB
-        : colorIndex == 256u ? dwgColor::BYLAYER
-        : colorIndex == 0u ? dwgColor::BYBLOCK : dwgColor::ACIS;
+                                         : colorIndex == 256u
+                                             ? dwgColor::BYLAYER
+                                         : colorIndex == 0u ? dwgColor::BYBLOCK
+                                                            : dwgColor::ACIS;
     if (m_colorDwgMethod != 0 && m_colorDwgMethod != canonicalMethod)
         return false;
-    if (m_hasDwgColorCmcMetadata
-        && (m_colorDwgMethod != canonicalMethod
-            || m_colorDwgRawIndex != 0u
-            || (m_colorDwgFlags & ~0x03u) != 0u
-            || ((m_colorDwgFlags & 0x01u) == 0u
-                && !m_colorDwgName.empty())
-            || ((m_colorDwgFlags & 0x02u) == 0u
-                && !m_colorDwgBookName.empty())))
+    if (m_hasDwgColorCmcMetadata &&
+        (m_colorDwgMethod != canonicalMethod || m_colorDwgRawIndex != 0u ||
+         (m_colorDwgFlags & ~0x03u) != 0u ||
+         ((m_colorDwgFlags & 0x01u) == 0u && !m_colorDwgName.empty()) ||
+         ((m_colorDwgFlags & 0x02u) == 0u && !m_colorDwgBookName.empty())))
         return false;
-    if (version < DRW::AC1018
-        && (color24 >= 0 || !colorName.empty()))
+    if (version < DRW::AC1018 && (color24 >= 0 || !colorName.empty()))
         return false;
-    dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
-    dwgBufferW *hb = (hdlBuf && version > DRW::AC1014) ? hdlBuf : buf;
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerStringDest =
+        (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+    dwgBufferW *const callerHandleDest =
+        (hdlBuf != nullptr && version > DRW::AC1014) ? hdlBuf : callerBody;
+    const bool separateStrings = callerStringDest != callerBody;
+    const bool separateHandles =
+        callerHandleDest != callerBody && callerHandleDest != callerStringDest;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *callerBody;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
 
-    sb->putVariableText(version, name);
-    putTableEntryXrefFlags(version, *buf, flags);
+        buf = &stagedBody;
+        strBuf = separateStrings ? &stagedStrings : buf;
+        hdlBuf = separateHandles ? &stagedHandles
+                 : callerHandleDest == callerStringDest && separateStrings
+                     ? &stagedStrings
+                     : buf;
+        dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
+        dwgBufferW *hb = (hdlBuf && version > DRW::AC1014) ? hdlBuf : buf;
 
-    if (version < DRW::AC1015) {
-        buf->putBit(static_cast<std::uint8_t>(flags & 1));         // frozen
-        buf->putBit(layerOff ? 1 : 0);                         // off
-        buf->putBit(static_cast<std::uint8_t>((flags >> 1) & 1));  // frozen in new
-        buf->putBit(static_cast<std::uint8_t>((flags >> 3) & 1));  // locked
-    }
-    if (version > DRW::AC1014) {
-        int lwIdx = DRW_LW_Conv::lineWidth2dwgInt(lWeight);
-        std::int16_t f = static_cast<std::int16_t>(
-            (flags & 0x01) |
-            (layerOff ? 0x02 : 0) |
-            ((flags & 0x02) << 1) |
-            ((flags & 0x04) << 1) |
-            (plotF ? 0x10 : 0) |
-            ((lwIdx & 0x1F) << 5));
-        buf->putSBitShort(f);
-    }
-    if (version >= DRW::AC1018) {
-        UTF8STRING bookName, entryName;
-        std::uint8_t flags = 0u;
-        const bool preserveParsedNames = m_hasDwgColorCmcMetadata
-            && colorName == colorBookEntryName(
-                m_colorDwgBookName, m_colorDwgName,
-                (m_colorDwgFlags & 0x02u) != 0u);
-        if (preserveParsedNames) {
-            bookName = m_colorDwgBookName;
-            entryName = m_colorDwgName;
-            flags = m_colorDwgFlags;
-        } else {
-            const bool hasBookName =
-                splitColorBookEntryName(colorName, bookName, entryName);
-            flags = static_cast<std::uint8_t>(
-                (entryName.empty() ? 0u : 1u)
-                | (hasBookName ? 2u : 0u));
+        sb->putVariableText(version, name);
+        putTableEntryXrefFlags(version, *buf, flags);
+
+        if (version < DRW::AC1015) {
+            buf->putBit(static_cast<std::uint8_t>(flags & 1)); // frozen
+            buf->putBit(layerOff ? 1 : 0);                     // off
+            buf->putBit(
+                static_cast<std::uint8_t>((flags >> 1) & 1)); // frozen in new
+            buf->putBit(static_cast<std::uint8_t>((flags >> 3) & 1)); // locked
         }
-        const std::uint8_t method = m_colorDwgMethod != 0
-            ? m_colorDwgMethod : canonicalMethod;
-        buf->putCmColorWithFlags(version, method, colorIndex, color24,
-                                 entryName, bookName, flags, sb);
-    } else {
-        buf->putCmColor(version, colorIndex);
-    }
+        if (version > DRW::AC1014) {
+            int lwIdx = DRW_LW_Conv::lineWidth2dwgInt(lWeight);
+            std::int16_t f = static_cast<std::int16_t>(
+                (flags & 0x01) | (layerOff ? 0x02 : 0) | ((flags & 0x02) << 1) |
+                ((flags & 0x04) << 1) | (plotF ? 0x10 : 0) |
+                ((lwIdx & 0x1F) << 5));
+            buf->putSBitShort(f);
+        }
+        if (version >= DRW::AC1018) {
+            UTF8STRING bookName, entryName;
+            std::uint8_t flags = 0u;
+            const bool preserveParsedNames =
+                m_hasDwgColorCmcMetadata &&
+                colorName ==
+                    colorBookEntryName(m_colorDwgBookName, m_colorDwgName,
+                                       (m_colorDwgFlags & 0x02u) != 0u);
+            if (preserveParsedNames) {
+                bookName = m_colorDwgBookName;
+                entryName = m_colorDwgName;
+                flags = m_colorDwgFlags;
+            } else {
+                const bool hasBookName =
+                    splitColorBookEntryName(colorName, bookName, entryName);
+                flags = static_cast<std::uint8_t>(
+                    (entryName.empty() ? 0u : 1u) | (hasBookName ? 2u : 0u));
+            }
+            const std::uint8_t method =
+                m_colorDwgMethod != 0 ? m_colorDwgMethod : canonicalMethod;
+            buf->putCmColorWithFlags(version, method, colorIndex, color24,
+                                     entryName, bookName, flags, sb);
+        } else {
+            buf->putCmColor(version, colorIndex);
+        }
 
-    // ODA 20.4.54: common layer handles followed by versioned references.
-    putCommonObjectHandlePrefix(
-        hb, kLayerControl, static_cast<std::int32_t>(reactorHandles.size()),
-        xDictFlag, &reactorHandles, xDictHandle, DRW::DwgSoftPointer, false,
-        version == DRW::AC1015 && typedLegacyNulls);
-    dwgHandle xref = makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer);
-    if (version == DRW::AC1015 && typedLegacyNulls && xref.ref == 0u)
-        xref.code = DRW::DwgHardPointer;
-    // Preserve an explicitly typed null; legacy untyped nulls stay unchanged.
-    if (version >= DRW::AC1018 && xrefBlockHandle.ref == 0u
-        && xrefBlockHandle.code == DRW::DwgHardPointer)
-        xref.code = DRW::DwgHardPointer;
-    hb->putHandle(xref);
-    if (version > DRW::AC1014)
-        hb->putHandle(makeRefW(plotStyleHandle.ref, DRW::DwgHardPointer));
-    if (version > DRW::AC1018)
-        hb->putHandle(makeRefW(materialHandle.ref, DRW::DwgHardPointer));
-    hb->putHandle(makeRefW(lTypeH.ref, DRW::DwgHardPointer));
-    if (version >= DRW::AC1027) {
-        auto unknown = makeRefW(unknownHandle.ref, DRW::DwgHardPointer);
-        if (version == DRW::AC1027 && typedLegacyNulls && unknown.ref == 0u)
-            unknown.code = DRW::DwgHardPointer;
-        hb->putHandle(unknown);
+        // ODA 20.4.54: common layer handles followed by versioned references.
+        putCommonObjectHandlePrefix(
+            hb, kLayerControl, static_cast<std::int32_t>(reactorHandles.size()),
+            xDictFlag, &reactorHandles, xDictHandle, DRW::DwgSoftPointer, false,
+            version == DRW::AC1015 && typedLegacyNulls);
+        dwgHandle xref = makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer);
+        if (version == DRW::AC1015 && typedLegacyNulls && xref.ref == 0u)
+            xref.code = DRW::DwgHardPointer;
+        // Preserve an explicitly typed null; legacy untyped nulls stay
+        // unchanged.
+        if (version >= DRW::AC1018 && xrefBlockHandle.ref == 0u &&
+            xrefBlockHandle.code == DRW::DwgHardPointer)
+            xref.code = DRW::DwgHardPointer;
+        hb->putHandle(xref);
+        if (version > DRW::AC1014)
+            hb->putHandle(makeRefW(plotStyleHandle.ref, DRW::DwgHardPointer));
+        if (version > DRW::AC1018)
+            hb->putHandle(makeRefW(materialHandle.ref, DRW::DwgHardPointer));
+        hb->putHandle(makeRefW(lTypeH.ref, DRW::DwgHardPointer));
+        if (version >= DRW::AC1027) {
+            auto unknown = makeRefW(unknownHandle.ref, DRW::DwgHardPointer);
+            if (version == DRW::AC1027 && typedLegacyNulls && unknown.ref == 0u)
+                unknown.code = DRW::DwgHardPointer;
+            hb->putHandle(unknown);
+        }
+        if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    return buf->isGood() && sb->isGood() && hb->isGood();
 }
 
 bool DRW_Textstyle::encodeDwg(DRW::Version version, dwgBufferW *buf,
-                               dwgBufferW *strBuf, dwgBufferW *hdlBuf) const {
+                              dwgBufferW *strBuf, dwgBufferW *hdlBuf) const {
     return encodeDwgForWriter(version, buf, strBuf, hdlBuf, false);
 }
 
 bool DRW_Textstyle::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
-                                        dwgBufferW *strBuf, dwgBufferW *hdlBuf,
-                                        bool typedLegacyNulls) const {
+                                       dwgBufferW *strBuf, dwgBufferW *hdlBuf,
+                                       bool typedLegacyNulls) const {
     if (buf == nullptr || !validatePayloadFields())
         return false;
     dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
