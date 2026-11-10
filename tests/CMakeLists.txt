@@ -1795,6 +1795,11 @@ add_test(NAME dwg2dxf_dimassoc_adapter_closure_refusal
 set_tests_properties(dwg2dxf_dimassoc_adapter_closure_refusal PROPERTIES
     LABELS "fast;dwg;dxf;dimassoc;adapter;graph;generated;transaction"
     TIMEOUT 30)
+add_test(NAME dwg2dxf_generated_dimassoc_graph_node
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --generated-dimassoc-graph)
+set_tests_properties(dwg2dxf_generated_dimassoc_graph_node PROPERTIES
+    LABELS "fast;dwg;dxf;dimassoc;adapter;graph;generated;retry"
+    TIMEOUT 15)
 add_test(NAME dwg2dxf_dimassoc_stale_generation_ignored
     COMMAND libdxfrw_dimassoc_physical_transport_tests
         --stale-generation-output

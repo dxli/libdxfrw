@@ -10236,6 +10236,9 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
         std::unordered_map<std::uint32_t,
                            const DRW_AssociativeObject*> associativeRecords;
         std::unordered_map<std::uint32_t,
+                           const DRW_DimensionAssociation*>
+            dimensionAssociations;
+        std::unordered_map<std::uint32_t,
                            const DRW_DynamicBlockObject*>
             dynamicBlockObjectsByHandle;
         std::unordered_map<std::uint32_t, const DRW_Entity*>
@@ -10349,6 +10352,33 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     return reject(ExtensionGraphFailure::InvalidGraph,
                         "duplicate associative source handle "
                         + std::to_string(object.handle));
+            }
+        }
+        if (data->sourceFormat == dx_source_format::DWG) {
+            inventoryFamily = "DWG DIMASSOC identities";
+            if (data->dimensionAssociationCaptureFailed)
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "DWG DIMASSOC callback capture is incomplete");
+            const auto first = data->dwgDimensionAssociations.lower_bound(
+                {data->importGeneration, 0u});
+            for (auto current = first;
+                 current != data->dwgDimensionAssociations.end()
+                     && current->first.first == data->importGeneration;
+                 ++current) {
+                if (!examineSourceRecord())
+                    return false;
+                const DRW_DimensionAssociation& association =
+                    current->second;
+                if (data->importGeneration == 0u
+                    || current->first.second == 0u
+                    || current->first.second == DRW::NoHandle
+                    || association.handle != current->first.second
+                    || !sourceHandles.insert(association.handle).second
+                    || !dimensionAssociations.emplace(
+                        association.handle, &association).second)
+                    return reject(ExtensionGraphFailure::InvalidGraph,
+                        "invalid, duplicate, or colliding DWG DIMASSOC identity "
+                        + std::to_string(current->first.second));
             }
         }
         const bool allowDxfAssociativeTraversal =
@@ -11572,6 +11602,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
         std::unordered_set<std::uint32_t> visitedDbColors;
         std::unordered_set<std::uint32_t> visitedUnderlayDefinitions;
         std::unordered_set<std::uint32_t> visitedAssociatives;
+        std::unordered_set<std::uint32_t> visitedDimensionAssociations;
         std::uint32_t selectedLayerStateScaleNodHandle = 0u;
         std::uint32_t selectedLayerStateScaleDictionaryHandle = 0u;
         bool selectedLayerStateScaleFramesChecked = false;
@@ -11605,6 +11636,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
             const DRW_Material* material{nullptr};
             const DRW_DbColor* dbColor{nullptr};
             const DRW_AssociativeObject* associative{nullptr};
+            const DRW_DimensionAssociation* dimensionAssociation{nullptr};
             const DRW_UnderlayDefinition* underlayDefinition{nullptr};
         };
         std::vector<Frame> frames;
@@ -11643,6 +11675,16 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                 && associative != associativeRecords.end()) {
                 Frame frame{handle};
                 frame.associative = associative->second;
+                frames.push_back(frame);
+                return true;
+            }
+            const auto dimensionAssociation =
+                dimensionAssociations.find(handle);
+            if (!requireDictionary
+                && dimensionAssociation != dimensionAssociations.end()) {
+                Frame frame{handle};
+                frame.dimensionAssociation =
+                    dimensionAssociation->second;
                 frames.push_back(frame);
                 return true;
             }
@@ -11805,6 +11847,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                 addOwner(materials);
                 addOwner(dbColors);
                 addOwner(associativeRecords);
+                addOwner(dimensionAssociations);
                 addOwner(blockRepresentationData);
                 addOwner(underlayDefinitions);
                 return owner;
@@ -11878,6 +11921,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     entryPointer = frame.dbColor;
                 else if (frame.associative != nullptr)
                     entryPointer = frame.associative;
+                else if (frame.dimensionAssociation != nullptr)
+                    entryPointer = frame.dimensionAssociation;
                 else if (frame.underlayDefinition != nullptr)
                     entryPointer = frame.underlayDefinition;
                 if (entryPointer == nullptr)
@@ -11924,6 +11969,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                             ? visitedDbColors.count(frame.handle) != 0
                                         : frame.underlayDefinition != nullptr
                                             ? visitedUnderlayDefinitions.count(frame.handle) != 0
+                                        : frame.dimensionAssociation != nullptr
+                                            ? visitedDimensionAssociations.count(frame.handle) != 0
                                             : frame.renderSettings != nullptr
                                                 ? visitedRenderSettings.count(frame.handle) != 0
                                                 : visitedAssociatives.count(frame.handle) != 0;
@@ -13773,6 +13820,34 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     } else if (frame.associative != nullptr) {
                         // The source-bound associative profile was validated
                         // above. It has no separate raw TABLESTYLE companion.
+                    } else if (frame.dimensionAssociation != nullptr) {
+                        const DRW_DimensionAssociation& association =
+                            *frame.dimensionAssociation;
+                        const dx_data::StandardDwgFrameKey sourceKey{
+                            data->importGeneration, frame.handle};
+                        const auto sourceFrame =
+                            data->m_opaqueDwgSourceFrames.find(sourceKey);
+                        const bool sourceFrameIdentityValidated =
+                            data->m_opaqueDwgSourceFrameIdentities.count(
+                                sourceKey) == 1u
+                            && sourceFrame
+                                != data->m_opaqueDwgSourceFrames.end()
+                            && sourceFrame->second.m_handle == frame.handle
+                            && sourceFrame->second.m_parentHandle
+                                == entry.parentHandle
+                            && sourceFrame->second.m_commonHandleDataValidated
+                            && drwDwgCommonLinkEvidenceValidated(
+                                sourceFrame->second.m_commonLinkEvidence);
+                        if (data->sourceFormat != dx_source_format::DWG
+                            || !data->dwgReadOutcome.attempted
+                            || data->importGeneration == 0u
+                            || association.handle != frame.handle
+                            || association.parentHandle != entry.parentHandle
+                            || association.m_hasUnrepresentableDetail
+                            || !sourceFrameIdentityValidated)
+                            return reject(
+                                ExtensionGraphFailure::InvalidGraph,
+                                "DIMASSOC lacks a complete typed body and exact validated DWG frame/owner identity");
                     } else if (frame.tableStyle != nullptr) {
                         const auto raw = rawTableStyles.find(frame.handle);
                         const bool typedDwgTableStyle =
@@ -13835,6 +13910,10 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         m_extensionMaterialHandles.push_back(frame.handle);
                     else if (frame.dbColor != nullptr)
                         m_extensionDbColorHandles.push_back(frame.handle);
+                    else if (frame.dimensionAssociation != nullptr) {
+                        // DWG DIMASSOC records are emitted by the dedicated
+                        // OBJECTS writer after entity-reference validation.
+                    }
                     else if (frame.underlayDefinition != nullptr) {
                         // UNDERLAY definitions are emitted by the dedicated
                         // rooted dictionary writer after generic graph proof.
@@ -14570,6 +14649,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         visitedRenderSettings.insert(frame.handle);
                     else if (frame.associative != nullptr)
                         visitedAssociatives.insert(frame.handle);
+                    else if (frame.dimensionAssociation != nullptr)
+                        visitedDimensionAssociations.insert(frame.handle);
                     else if (frame.material != nullptr)
                         visitedMaterials.insert(frame.handle);
                     else if (frame.dbColor != nullptr)
@@ -14853,6 +14934,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                 &visitedRenderSettings, &visitedMaterials,
                                 &visitedDbColors,
                                 &visitedAssociatives,
+                                &visitedDimensionAssociations,
                                 &linetypeHandles, &backgroundHandles,
                                 &blockDelimiterHandles, &blockRecordHandles,
                                 &sourceEntityHandles, &generatedDictionaryOwners, data,
@@ -14917,7 +14999,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                 || visitedRenderSettings.count(parent) != 0
                 || visitedMaterials.count(parent) != 0
                 || visitedDbColors.count(parent) != 0
-                || visitedAssociatives.count(parent) != 0;
+                || visitedAssociatives.count(parent) != 0
+                || visitedDimensionAssociations.count(parent) != 0;
         };
 
         std::size_t variableDictionaryRootCount = 0;
@@ -15017,6 +15100,13 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                 if (dbColor != dbColors.end()) {
                     ++matches;
                     targetOwner = dbColor->second->parentHandle;
+                }
+                const auto dimensionAssociation =
+                    dimensionAssociations.find(entry.m_handle);
+                if (dimensionAssociation != dimensionAssociations.end()) {
+                    ++matches;
+                    targetOwner =
+                        dimensionAssociation->second->parentHandle;
                 }
                 const auto scale = scales.find(entry.m_handle);
                 if (scale != scales.end()) {

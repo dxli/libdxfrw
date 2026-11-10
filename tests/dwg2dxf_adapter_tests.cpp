@@ -99,6 +99,21 @@ public:
         return interface_.prepareExtensionObjectGraph(
             &data, includeNamedObjectRoot);
     }
+    static bool seedDimensionAssociationFrame(
+            dx_data& data, const DRW_DimensionAssociation& association) {
+        const dx_data::StandardDwgFrameKey key{
+            data.importGeneration, association.handle};
+        DRW_UnsupportedObject frame;
+        frame.m_handle = association.handle;
+        frame.m_parentHandle = association.parentHandle;
+        frame.setCommonLinkEvidence(DRW_DwgCommonLinkEvidence::Validated);
+        try {
+            return data.m_opaqueDwgSourceFrames.emplace(key, frame).second
+                && data.m_opaqueDwgSourceFrameIdentities.insert(key).second;
+        } catch (...) {
+            return false;
+        }
+    }
     static bool prepareDxfLayerPlot(dx_iface& interface_, dx_data& data,
                                    DRW::Version version, bool strict) {
         interface_.cData = &data;
@@ -53819,6 +53834,50 @@ bool physicalAc1032MLineStyleHandleSourceProfile(
     return true;
 }
 
+bool generatedDimassocExtensionGraphNode() {
+    dx_data data;
+    data.sourceFormat = dx_source_format::DWG;
+    data.sourceVersion = DRW::AC1032;
+    data.importGeneration = 1u;
+    data.dwgReadOutcome.attempted = true;
+    data.hasNamedObjectDictionary = true;
+    data.namedObjectDictionary.handle = 1u;
+    data.namedObjectDictionary.parentHandle = 0u;
+    data.namedObjectDictionary.m_entries.push_back(
+        {"ACAD_DIMASSOC", 2u});
+
+    DRW_DimensionAssociation association;
+    association.handle = 2u;
+    association.parentHandle = 1u;
+    association.m_dimensionHandle = 0x10u;
+    if (!data.dwgDimensionAssociations.emplace(
+            std::make_pair(data.importGeneration, association.handle),
+            association).second
+        || !DxIfaceExtensionGraphTestAccess::seedDimensionAssociationFrame(
+            data, association))
+        return fail("could not seed generated DIMASSOC source identity");
+
+    dx_iface graph;
+    if (!DxIfaceExtensionGraphTestAccess::prepare(graph, data, true))
+        return fail("generated NOD-to-DIMASSOC graph was not admitted: "
+            + graph.extensionGraphFailureDetail());
+
+    data.dwgDimensionAssociations.begin()->second
+        .m_hasUnrepresentableDetail = true;
+    if (DxIfaceExtensionGraphTestAccess::prepare(graph, data, true)
+        || graph.extensionGraphFailure()
+            != dx_iface::ExtensionGraphFailure::InvalidGraph)
+        return fail("DIMASSOC with unrepresentable body details passed graph preflight");
+    data.dwgDimensionAssociations.begin()->second
+        .m_hasUnrepresentableDetail = false;
+    if (!DxIfaceExtensionGraphTestAccess::prepare(graph, data, true))
+        return fail("generated DIMASSOC graph did not recover on same-adapter retry: "
+            + graph.extensionGraphFailureDetail());
+    std::cerr << "Generated NOD-to-DIMASSOC typed graph admission, "
+                 "detail refusal and same-adapter retry PASS\n";
+    return true;
+}
+
 bool physicalViewportOutputReadback(
         const std::filesystem::path& sourcePath) {
     dx_iface sourceReader;
@@ -89005,6 +89064,8 @@ int main(int argc, char** argv) {
             && generatedImageDefinitionExtensions() ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--underlay-definition-graph")
         return underlayDefinitionGraphRoundTrip() ? 0 : 1;
+    if (argc == 2 && std::string(argv[1]) == "--generated-dimassoc-graph")
+        return generatedDimassocExtensionGraphNode() ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--group-adapter-roundtrip")
         return groupAdapterRoundTrip() ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--seqend-footer-table")

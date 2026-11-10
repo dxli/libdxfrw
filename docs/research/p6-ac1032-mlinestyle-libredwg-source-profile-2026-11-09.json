@@ -2,8 +2,8 @@
   "schema": "libdxfrw-research-receipt-v1",
   "id": "p6-ac1032-mlinestyle-libredwg-source-profile-2026-11-09",
   "date": "2026-11-09",
-  "status": "BOUNDED_PHYSICAL_PROFILE_AND_SELECTED_DEPENDENCY_GRAPH_AGREE",
-  "scope": "Check the generated AC1032 MLINESTYLE per-element handle-span implementation against one already-present public DWG and an independent LibreDWG 0.14 decode.",
+  "status": "BOUNDED_MLINESTYLE_SOURCE_PROFILE_AND_GENERATED_DIMASSOC_GRAPH_NODE",
+  "scope": "Bind the AC1032 MLINESTYLE source dependency profile and implement the missing typed DIMASSOC node in the generic extension graph; separately record the physical AC1032 blockers that prevent output qualification.",
   "supportClaimEffect": "none",
   "source": {
     "repository": "/Users/dli/dev/libredwg",
@@ -27,20 +27,52 @@
     "handle": "0x18",
     "name": "STANDARD",
     "parent": "0x17",
-    "reactors": ["0x17"],
+    "reactors": [
+      "0x17"
+    ],
     "elements": [
-      {"offset": 0.5, "linetypeHandle": "0x15"},
-      {"offset": -0.5, "linetypeHandle": "0x15"}
+      {
+        "offset": 0.5,
+        "linetypeHandle": "0x15"
+      },
+      {
+        "offset": -0.5,
+        "linetypeHandle": "0x15"
+      }
     ],
     "typedDependencyGraph": {
-      "namedObjectDictionaryEntry": {"key": "ACAD_MLINESTYLE", "target": "0x17", "occurrences": 1},
-      "ownerDictionary": {"handle": "0x17", "parent": "NOD", "entry": {"key": "Standard", "target": "0x18"}},
-      "linetype": {"handle": "0x15", "name": "ByLayer"},
+      "namedObjectDictionaryEntry": {
+        "key": "ACAD_MLINESTYLE",
+        "target": "0x17",
+        "occurrences": 1
+      },
+      "ownerDictionary": {
+        "handle": "0x17",
+        "parent": "NOD",
+        "entry": {
+          "key": "Standard",
+          "target": "0x18"
+        }
+      },
+      "linetype": {
+        "handle": "0x15",
+        "name": "ByLayer"
+      },
       "closure": "The typed callback graph closes for this selected MLINESTYLE and its two LTYPE dependencies. This does not close the drawing-wide object graph or prove native semantics."
     },
     "libdxfrwParserSpans": [
-      {"field": "element[0].linetypeHandle", "startBit": 627, "bitSize": 16, "rawHandleCode": 5},
-      {"field": "element[1].linetypeHandle", "startBit": 643, "bitSize": 16, "rawHandleCode": 5}
+      {
+        "field": "element[0].linetypeHandle",
+        "startBit": 627,
+        "bitSize": 16,
+        "rawHandleCode": 5
+      },
+      {
+        "field": "element[1].linetypeHandle",
+        "startBit": 643,
+        "bitSize": 16,
+        "rawHandleCode": 5
+      }
     ]
   },
   "independentPeer": {
@@ -50,15 +82,47 @@
     "objectRow": {
       "index": 20,
       "type": 73,
-      "handle": [0, 1, 24],
+      "handle": [
+        0,
+        1,
+        24
+      ],
       "size": 83,
       "bitsize": 603,
-      "ownerhandle": [8, 0, 0, 23],
-      "reactors": [[4, 1, 23, 23]],
+      "ownerhandle": [
+        8,
+        0,
+        0,
+        23
+      ],
+      "reactors": [
+        [
+          4,
+          1,
+          23,
+          23
+        ]
+      ],
       "name": "STANDARD",
       "lines": [
-        {"offset": 0.5, "lt_ltype": [5, 1, 21, 21]},
-        {"offset": -0.5, "lt_ltype": [5, 1, 21, 21]}
+        {
+          "offset": 0.5,
+          "lt_ltype": [
+            5,
+            1,
+            21,
+            21
+          ]
+        },
+        {
+          "offset": -0.5,
+          "lt_ltype": [
+            5,
+            1,
+            21,
+            21
+          ]
+        }
       ]
     },
     "comparison": "The peer independently agrees on the object and target identities, field order, and hard-pointer role code 5 for both element linetype references. It reports the common owner as code 8 and reactor as code 4; this receipt records those peer observations without widening the ODA-defined parser contract. LibreDWG JSON does not independently report the parser's absolute span offsets."
@@ -66,7 +130,7 @@
   "implementation": {
     "file": "tests/dwg2dxf_adapter_tests.cpp",
     "selector": "--mline-style-ac1032-source-profile",
-    "change": "Add a manual corpus-profile selector that asserts the typed style identity, NOD-to-owner-to-style links, unique ByLayer LTYPE dependency, two target handles, exact parser-reported offsets and span widths/roles observed for this source. The selector also prepares the AC1032 MLINESTYLE output-source snapshot and verifies that changing either the element target handle or the target LTYPE name invalidates the snapshot, then permits retry after restoration. The receipt binds the invocation to the DWG SHA-256; the selector does not implement its own hash check and is not registered in CTest."
+    "change": "The AC1032 physical selector continues to assert exact MLINESTYLE identity, NOD-to-owner graph and two ByLayer dependencies, then snapshots and mutation refusal/recovery. Production extension graph inventory now includes current-generation DWG DIMASSOC records, owner and NOD target resolution, typed traversal/visited accounting, exact source-frame/owner/common-link evidence and rejection of unrepresentable body detail. DIMASSOC remains emitted through its existing dedicated OBJECTS writer with entity-reference validation. A from-scratch in-memory graph selector covers NOD->DIMASSOC admission, unrepresentable-detail refusal, and same-adapter recovery; no drawing fixture is added."
   },
   "validation": {
     "build": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests --parallel 4",
@@ -79,13 +143,23 @@
       "independentPeerConfirmation": "LibreDWG 0.14 JSON for this same DWG reports DICTIONARY handle 0x3A8 with ACAD_DIMASSOC target 0x3B4 and DIMASSOC handle 0x3B4 owned by 0x3A8.",
       "consequence": "Do not treat MLINESTYLE output-source admission as writer/readback evidence. Implement DIMASSOC graph closure and output/readback before retrying the selected physical export."
     },
-    "focusedTests": "PASS: CTest selectors libdxfrw_ac1032_mlinestyle_handle_roles, libdxfrw_mline_style_dxf_defaults, libdxfrw_mline_style_validation, libdxfrw_mline_ltype_provider_profiles, libdxfrw_mline_style_xdata, libdxfrw_mline_source_dependency, libdxfrw_mline_ltype_source_live, libdxfrw_mline_root_dictionary_source_live, and libdxfrw_mline_style_dictionary_source_live (9/9).",
+    "focusedTests": "PASS: 14/14 fast CTests covering generated DIMASSOC graph admission/refusal/retry, existing DIMASSOC adapter closure/retry, AC1032 MLINESTYLE handle roles, and nine MLINESTYLE output/dependency controls.",
     "diffCheck": "PASS",
-    "fullTestSuites": "NOT RUN; target-local build, physical source-profile selector, and nine focused CTests used."
+    "fullTestSuites": "NOT RUN; focused build and 14 fast CTests only.",
+    "generatedDimassocGraph": {
+      "command": "ctest --test-dir build-gcc -R dwg2dxf_generated_dimassoc_graph_node --output-on-failure",
+      "result": "PASS; generated root-to-DIMASSOC target indexing, typed-node traversal, loss refusal, and same-adapter retry."
+    },
+    "physicalGraphProbe": {
+      "source": "The same adjacent LibreDWG example_2018.dwg recorded above; read in place, no fixture copied.",
+      "result": "Physical whole-root graph preparation remains refused before the DIMASSOC leaf. With the physical ACDBASSOCNETWORK records present, the first graph failure is the AC1024-only associative typed profile gate. The source has NOD ACAD_ASSOCNETWORK -> dictionary 0x38F -> ACDBASSOCNETWORK 0x390. LibreDWG source JSON independently records dictionary 0x3A8 key ACAD_DIMASSOC -> DIMASSOC 0x3B4, but that leaf is not reached until its owner path is qualified.",
+      "interpretation": "Generated DIMASSOC graph-node behavior is verified. Physical source graph closure, DIMASSOC output inspection/readback, MLINESTYLE output, and strict whole-source output remain unverified/refused. Do not bypass the associative-network gate."
+    }
   },
   "remainingGates": [
-    "Producer-qualified AutoCAD/ODA AC1032 span evidence remains absent.",
-    "Only selected-source MLINESTYLE admission and dependency snapshot are established. Drawing-wide graph closure, DIMASSOC target output, MLINESTYLE staged serialization/readback, strict output admission, native CAD, LibreCAD, LibreCAD_3, or support claim does not follow from this profile.",
-    "Generated exact-span, malformed-role, null, truncation, rollback and retry controls remain the primary span-boundary validation."
+    "Qualify or implement the AC1032 ACDBASSOCNETWORK source/owner path preceding dictionary 0x3A8; the current route is admitted only for the bounded AC1024 associative profile.",
+    "After owner-path qualification, rerun the physical 0x3A8 ACAD_DIMASSOC -> 0x3B4 route through staged-record inspection, entity/reference validation, and fresh DXF readback.",
+    "Producer-qualified AutoCAD/ODA AC1032 MLINESTYLE field-span evidence remains absent.",
+    "Only selected-source MLINESTYLE admission and generated DIMASSOC graph-node behavior are established. No physical MLINESTYLE writer/readback, strict output admission, native CAD, LibreCAD, LibreCAD_3, or support claim follows."
   ]
 }
