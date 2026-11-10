@@ -41,6 +41,11 @@ public:
     using DRW_ImageDef::encodeDwg;
 };
 
+class PlotSettingsProbe final : public DRW_PlotSettings {
+public:
+    using DRW_PlotSettings::encodeDwg;
+};
+
 DimensionAssociationProbe makeAssociation() {
     DimensionAssociationProbe association;
     association.handle = 0xA100u;
@@ -533,6 +538,147 @@ bool sweepImageDefinition(ImageDefinitionStreams mode) {
               << ", rollback/retry=PASS\n";
     return true;
 }
+
+PlotSettingsProbe makePlotSettings() {
+    PlotSettingsProbe settings;
+    settings.handle = 0xF100u;
+    settings.parentHandle = 0x20u;
+    settings.reactorHandles = {0x21u, 0x22u};
+    settings.xDictHandle = 0x23u;
+    settings.setDwgCommonObjectState(2, 1u, false);
+    settings.pageSetupName = "layout setup";
+    settings.printerConfig = "printer driver.pc3";
+    settings.plotLayoutFlags = 3;
+    settings.marginLeft = 0.25;
+    settings.marginBottom = 0.5;
+    settings.marginRight = 0.75;
+    settings.marginTop = 1.0;
+    settings.paperWidth = 210.0;
+    settings.paperHeight = 297.0;
+    settings.paperSize = "ISO A4";
+    settings.plotOriginX = 1.5;
+    settings.plotOriginY = -2.5;
+    settings.paperUnits = 1;
+    settings.plotRotation = 2;
+    settings.plotType = 5;
+    settings.windowMinX = -10.0;
+    settings.windowMinY = -20.0;
+    settings.windowMaxX = 30.0;
+    settings.windowMaxY = 40.0;
+    settings.plotViewName = "legacy plot view";
+    settings.realWorldUnits = 2.0;
+    settings.drawingUnits = 3.0;
+    settings.currentStyleSheet = "monochrome.ctb";
+    settings.scaleType = 4;
+    settings.scaleFactor = 1.25;
+    settings.paperImageOriginX = 0.125;
+    settings.paperImageOriginY = 0.25;
+    settings.shadePlotMode = 2;
+    settings.shadePlotResLevel = 4;
+    settings.shadePlotCustomDPI = 300;
+    settings.plotViewHandle.ref = 0x34u;
+    settings.shadePlotHandle.ref = 0x35u;
+    return settings;
+}
+
+bool sweepPlotSettings(ImageDefinitionStreams mode) {
+    const DRW::Version version = mode == ImageDefinitionStreams::R13InlineSeparateArguments
+        ? DRW::AC1012
+        : mode == ImageDefinitionStreams::R2004DetachedHandles
+            ? DRW::AC1018 : DRW::AC1021;
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    const PlotSettingsProbe settings = makePlotSettings();
+    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
+    seed(cleanBody, cleanStrings, cleanHandles);
+    const auto outputs = [mode](dwgBufferW& body, dwgBufferW& strings,
+                                dwgBufferW& handles) {
+        dwgBufferW* stringOutput = nullptr;
+        dwgBufferW* handleOutput = nullptr;
+        switch (mode) {
+        case ImageDefinitionStreams::R13InlineSeparateArguments:
+        case ImageDefinitionStreams::R2004DetachedHandles:
+        case ImageDefinitionStreams::Separate:
+            stringOutput = &strings;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SharedStringAndHandle:
+            stringOutput = &strings;
+            handleOutput = &strings;
+            break;
+        case ImageDefinitionStreams::AllBody:
+            break;
+        case ImageDefinitionStreams::BodyStringDetachedHandles:
+            stringOutput = &body;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SeparateStringBodyHandles:
+            stringOutput = &strings;
+            handleOutput = &body;
+            break;
+        }
+        return std::pair<dwgBufferW*, dwgBufferW*>(stringOutput, handleOutput);
+    };
+    const auto cleanOutputs = outputs(cleanBody, cleanStrings, cleanHandles);
+    if (!settings.encodeDwg(version, &cleanBody, cleanOutputs.first,
+                            cleanOutputs.second))
+        return false;
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    seed(body, strings, handles);
+    const auto output = outputs(body, strings, handles);
+    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
+    const unsigned long beforeCalibration =
+        failedAllocations.load(std::memory_order_relaxed);
+    const bool calibrated = settings.encodeDwg(
+        version, &body, output.first, output.second);
+    const long allocations = 1000000
+        - allocationsBeforeFailure.load(std::memory_order_relaxed);
+    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+    if (!calibrated || allocations <= 0
+        || failedAllocations.load(std::memory_order_relaxed)
+            != beforeCalibration)
+        return false;
+
+    for (long offset = 0; offset < allocations; ++offset) {
+        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
+        seed(failedBody, failedStrings, failedHandles);
+        const auto failedOutput = outputs(failedBody, failedStrings, failedHandles);
+        const dwgBufferW originalBody = failedBody;
+        const dwgBufferW originalStrings = failedStrings;
+        const dwgBufferW originalHandles = failedHandles;
+        const unsigned long beforeFailure =
+            failedAllocations.load(std::memory_order_relaxed);
+        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
+        const bool encoded = settings.encodeDwg(
+            version, &failedBody, failedOutput.first, failedOutput.second);
+        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+        if (encoded
+            || failedAllocations.load(std::memory_order_relaxed)
+                != beforeFailure + 1u
+            || !same(failedBody, originalBody)
+            || !same(failedStrings, originalStrings)
+            || !same(failedHandles, originalHandles))
+            return false;
+        if (!settings.encodeDwg(version, &failedBody, failedOutput.first,
+                                failedOutput.second)
+            || !same(failedBody, cleanBody)
+            || !same(failedStrings, cleanStrings)
+            || !same(failedHandles, cleanHandles))
+            return false;
+    }
+    static const char* const names[] = {
+        "AC1012-inline", "AC1018-detached-handles", "separate",
+        "shared-string-handle", "all-body", "body-string-detached-handles",
+        "separate-string-body-handles"
+    };
+    std::cout << "PLOTSETTINGS DWG encoder version="
+              << static_cast<int>(version) << ' '
+              << names[static_cast<std::size_t>(mode)]
+              << ": allocation offsets=" << allocations
+              << ", rollback/retry=PASS\n";
+    return true;
+}
 } // namespace
 
 void* operator new(std::size_t size) {
@@ -572,7 +718,14 @@ int main() {
         || !sweepImageDefinition(ImageDefinitionStreams::SharedStringAndHandle)
         || !sweepImageDefinition(ImageDefinitionStreams::AllBody)
         || !sweepImageDefinition(ImageDefinitionStreams::BodyStringDetachedHandles)
-        || !sweepImageDefinition(ImageDefinitionStreams::SeparateStringBodyHandles)) {
+        || !sweepImageDefinition(ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepPlotSettings(ImageDefinitionStreams::R13InlineSeparateArguments)
+        || !sweepPlotSettings(ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepPlotSettings(ImageDefinitionStreams::Separate)
+        || !sweepPlotSettings(ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepPlotSettings(ImageDefinitionStreams::AllBody)
+        || !sweepPlotSettings(ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepPlotSettings(ImageDefinitionStreams::SeparateStringBodyHandles)) {
         allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
         std::cerr << "DIMASSOC DWG encoder allocation transaction failed\n";
         return 1;

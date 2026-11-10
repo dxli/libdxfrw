@@ -7374,61 +7374,85 @@ bool DRW_PlotSettings::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || !std::isfinite(paperImageOriginY))
         return false;
 
-    dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018)
-        ? strBuf : buf;
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
-        ? handleBuf : buf;
+    const bool separateStrings = strBuf != nullptr && strBuf != buf
+        && version > DRW::AC1018;
+    const bool separateHandles = handleBuf != nullptr && handleBuf != buf
+        && version > DRW::AC1014;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *buf;
+        if (separateStrings)
+            stagedStrings = *strBuf;
+        if (separateHandles && (!separateStrings || handleBuf != strBuf))
+            stagedHandles = *handleBuf;
+        dwgBufferW *sb = separateStrings ? &stagedStrings : &stagedBody;
+        dwgBufferW *hb = !separateHandles ? &stagedBody
+            : (separateStrings && handleBuf == strBuf
+                ? &stagedStrings : &stagedHandles);
 
-    // AcDbPlotSettings data, in the order specified by libreDWG dwg.spec
-    // and shared by the prefix embedded in LAYOUT.
-    sb->putVariableText(version, pageSetupName);
-    sb->putVariableText(version, printerConfig);
-    buf->putBitShort(static_cast<std::uint16_t>(plotLayoutFlags));
-    buf->putBitDouble(marginLeft);
-    buf->putBitDouble(marginBottom);
-    buf->putBitDouble(marginRight);
-    buf->putBitDouble(marginTop);
-    buf->putBitDouble(paperWidth);
-    buf->putBitDouble(paperHeight);
-    sb->putVariableText(version, paperSize);
-    buf->putBitDouble(plotOriginX);
-    buf->putBitDouble(plotOriginY);
-    buf->putBitShort(static_cast<std::uint16_t>(paperUnits));
-    buf->putBitShort(static_cast<std::uint16_t>(plotRotation));
-    buf->putBitShort(static_cast<std::uint16_t>(plotType));
-    buf->putBitDouble(windowMinX);
-    buf->putBitDouble(windowMinY);
-    buf->putBitDouble(windowMaxX);
-    buf->putBitDouble(windowMaxY);
+        // AcDbPlotSettings data, in the order specified by libreDWG dwg.spec
+        // and shared by the prefix embedded in LAYOUT.
+        sb->putVariableText(version, pageSetupName);
+        sb->putVariableText(version, printerConfig);
+        stagedBody.putBitShort(static_cast<std::uint16_t>(plotLayoutFlags));
+        stagedBody.putBitDouble(marginLeft);
+        stagedBody.putBitDouble(marginBottom);
+        stagedBody.putBitDouble(marginRight);
+        stagedBody.putBitDouble(marginTop);
+        stagedBody.putBitDouble(paperWidth);
+        stagedBody.putBitDouble(paperHeight);
+        sb->putVariableText(version, paperSize);
+        stagedBody.putBitDouble(plotOriginX);
+        stagedBody.putBitDouble(plotOriginY);
+        stagedBody.putBitShort(static_cast<std::uint16_t>(paperUnits));
+        stagedBody.putBitShort(static_cast<std::uint16_t>(plotRotation));
+        stagedBody.putBitShort(static_cast<std::uint16_t>(plotType));
+        stagedBody.putBitDouble(windowMinX);
+        stagedBody.putBitDouble(windowMinY);
+        stagedBody.putBitDouble(windowMaxX);
+        stagedBody.putBitDouble(windowMaxY);
 
-    if (hasLegacyPlotViewName(version))
-        sb->putVariableText(version, plotViewName);
+        if (hasLegacyPlotViewName(version))
+            sb->putVariableText(version, plotViewName);
 
-    buf->putBitDouble(realWorldUnits);
-    buf->putBitDouble(drawingUnits);
-    sb->putVariableText(version, currentStyleSheet);
-    buf->putBitShort(static_cast<std::uint16_t>(scaleType));
-    buf->putBitDouble(scaleFactor);
-    buf->putBitDouble(paperImageOriginX);
-    buf->putBitDouble(paperImageOriginY);
+        stagedBody.putBitDouble(realWorldUnits);
+        stagedBody.putBitDouble(drawingUnits);
+        sb->putVariableText(version, currentStyleSheet);
+        stagedBody.putBitShort(static_cast<std::uint16_t>(scaleType));
+        stagedBody.putBitDouble(scaleFactor);
+        stagedBody.putBitDouble(paperImageOriginX);
+        stagedBody.putBitDouble(paperImageOriginY);
 
-    if (version >= DRW::AC1018) {
-        buf->putBitShort(static_cast<std::uint16_t>(shadePlotMode));
-        buf->putBitShort(static_cast<std::uint16_t>(shadePlotResLevel));
-        buf->putBitShort(static_cast<std::uint16_t>(shadePlotCustomDPI));
+        if (version >= DRW::AC1018) {
+            stagedBody.putBitShort(static_cast<std::uint16_t>(shadePlotMode));
+            stagedBody.putBitShort(static_cast<std::uint16_t>(shadePlotResLevel));
+            stagedBody.putBitShort(static_cast<std::uint16_t>(shadePlotCustomDPI));
+        }
+
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle), numReactors,
+            xDictFlag, &reactorHandles, xDictHandle);
+        if (version >= DRW::AC1018)
+            hb->putHandle(writeHandleWithCode(
+                plotViewHandle, DRW::DwgHardPointer));
+        if (version > DRW::AC1018)
+            hb->putHandle(writeHandleWithCode(
+                shadePlotHandle, DRW::DwgSoftPointer));
+
+        if (!stagedBody.isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+        buf->swap(stagedBody);
+        if (separateStrings)
+            strBuf->swap(stagedStrings);
+        if (separateHandles
+            && (!separateStrings || handleBuf != strBuf))
+            handleBuf->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), numReactors,
-        xDictFlag, &reactorHandles, xDictHandle);
-    if (version >= DRW::AC1018)
-        hb->putHandle(writeHandleWithCode(
-            plotViewHandle, DRW::DwgHardPointer));
-    if (version > DRW::AC1018)
-        hb->putHandle(writeHandleWithCode(
-            shadePlotHandle, DRW::DwgSoftPointer));
-
-    return buf->isGood() && sb->isGood() && hb->isGood();
 }
 
 bool DRW_UCS::parseCode(int code, const std::unique_ptr<dxfReader>& reader){

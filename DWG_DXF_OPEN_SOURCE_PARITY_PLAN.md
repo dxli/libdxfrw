@@ -1243,6 +1243,16 @@ created locally from scratch for the specific control.
   resolve the IMAGEDEF parent-role conflict or authorize image output. No
   DWG/DXF fixture was added. See the [allocation rollback receipt](docs/research/p6-imagedef-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **PLOTSETTINGS DWG encoder transaction safety:**
+  `DRW_PlotSettings::encodeDwg` now stages the body, detached text and handles
+  while preserving the existing revision-specific field layout and plot-view/
+  shade handle tail. Generated AC1012, AC1018 and AC1021 controls cover seven
+  stream arrangements and sweep 217 allocation offsets with rollback and
+  same-object retry. The focused PlotSettings DWG decode/readback, DXF OBJECTS
+  allocation, object-vector and combined DWG encoder tests pass 4/4. This is
+  local codec/transaction evidence, not native plotting qualification. No
+  fixture was added. See the [allocation rollback receipt](docs/research/p6-plotsettings-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
