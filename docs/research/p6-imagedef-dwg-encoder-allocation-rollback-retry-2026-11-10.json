@@ -25,7 +25,7 @@
   "validation": {
     "build": "cmake --build build-gcc --target libdxfrw_dwg_object_encoder_allocation_tests -j2",
     "focused_tests": "ctest --test-dir build-gcc -R '^libdxfrw_dwg_image_compound_transaction$|^libdxfrw_dwg_object_vectors$|^libdxfrw_dwg_object_encoder_allocation_retry$|^libdxfrw_dimassoc_dwg_detail_readback$' --output-on-failure",
-    "result": "4/4 focused CTests passed; this encoder passed 127 allocation offsets. The combined allocation control covers 297 reached offsets across 20 stream/version cases; git diff --check passed."
+    "result": "4/4 focused CTests passed; this encoder passed 127 allocation offsets. The combined allocation control covers 274 reached offsets across 17 stream/version cases; git diff --check passed."
   },
   "limits": [
     "This does not resolve the cross-version IMAGEDEF parent-role conflict or authorize IMAGEDEF/IMAGEDEF_REACTOR output; existing strict-output gates remain unchanged.",
