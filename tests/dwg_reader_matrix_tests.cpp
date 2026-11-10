@@ -12888,6 +12888,118 @@ void testAc1032AssociativeNetworkCandidateGenerated(TestContext& t) {
                   << " typed=" << sink.typed.size() << '\n';
 }
 
+void testAc1032AssociativeNetworkMultiActionGenerated(TestContext& t) {
+    using namespace associative_constraint_group_test;
+    constexpr std::uint16_t classNumber = 0x300u;
+    constexpr std::uint32_t sourceHandle = 0xA520u;
+    constexpr std::uint32_t parentHandle = 0xA009u;
+    constexpr std::uint32_t ownedActionListHandle = 0xA018u;
+    constexpr std::int32_t baseActionIndex = 7;
+    constexpr std::int32_t networkActionIndex = 3;
+    const std::array<std::uint32_t, 3> actionHandles = {
+        0xA015u, 0xA016u, 0xA017u};
+
+    dwgBufferW object;
+    dwgBufferW handles;
+    dwgBufferW strings;
+    object.putObjType(DRW::AC1032, classNumber);
+    object.putHandle(reference(DRW::DwgNullReference, sourceHandle));
+    object.putBitShort(0); // no EED
+    object.putBitLong(0); // no persistent reactors
+    object.putBit(1u); // no extension dictionary
+    object.putBit(0u); // no DataStorage payload
+    object.putBitShort(2); // AcDbAssocAction class version
+    object.putBitLong(0); // geometry status
+    object.putBitLong(baseActionIndex);
+    object.putBitLong(0); // maximum dependency index
+    object.putBitLong(0); // no action dependencies
+    object.putBitShort(0); // owned-parameter version
+    object.putBitLong(0); // no owned parameters
+    object.putBitShort(0); // value-parameter version
+    object.putBitLong(0); // no value parameters
+    object.putBitShort(0); // network version candidate
+    object.putBitLong(networkActionIndex);
+    object.putBitLong(static_cast<std::int32_t>(actionHandles.size()));
+    for (std::size_t i = 0u; i < actionHandles.size(); ++i)
+        object.putBit((i == 1u) ? 1u : 0u);
+    object.putBitLong(1); // one separately listed owned action
+
+    Frame frame;
+    const bool stringStreamBuilt = appendStringStream(object, strings);
+    object.alignToByte();
+    frame.objectEndBit = object.bitCount();
+    t.expect(stringStreamBuilt,
+             "generated AC1032 multi-action string stream is valid");
+    if (!stringStreamBuilt)
+        return;
+
+    handles.putHandle(reference(DRW::DwgSoftPointer, parentHandle));
+    handles.putHandle(reference(DRW::DwgSoftPointer, 0u));
+    handles.putHandle(reference(DRW::DwgHardOwnership, 0u));
+    for (std::size_t i = 0u; i < actionHandles.size(); ++i) {
+        const std::uint8_t role = (i == 1u)
+            ? DRW::DwgHardOwnership : DRW::DwgSoftPointer;
+        handles.putHandle(reference(role, actionHandles[i]));
+    }
+    handles.putHandle(reference(DRW::DwgHardOwnership,
+                                ownedActionListHandle));
+    object.putBytes(handles.data().data(), handles.data().size());
+    const bool frameBuilt = object.isGood() && handles.isGood()
+        && object.bitCount() >= frame.objectEndBit
+        && handles.bitCount() <= std::numeric_limits<std::uint32_t>::max();
+    if (frameBuilt) {
+        frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
+        frame.payload = object.data();
+    }
+    std::vector<std::uint8_t> bytes;
+    const bool wrapped = frameBuilt && wrapFrame(frame, bytes);
+    t.expect(wrapped,
+             "AC1032 multi-action network frame is generated in memory");
+    if (!wrapped)
+        return;
+
+    Ac1032AssociativeNetworkDispatchReader reader(bytes, classNumber);
+    PersistentManagerDispatchSink sink;
+    const bool read = reader.readObjects(bytes, {{sourceHandle, 0u, 0u}}, sink);
+    const auto hasCompleteNetworkPrefix = [](const DRW_AssociativeObject& value) {
+        return std::count_if(value.m_prefixStatuses.begin(),
+                             value.m_prefixStatuses.end(),
+            [](const DRW_AssociativePrefixStatus& status) {
+                return status.m_kind
+                           == DRW_AssociativePrefixStatus::Kind::AcDbAssocNetwork
+                    && status.m_status
+                           == DRW_AssociativePrefixStatus::ParseStatus::Complete
+                    && status.m_classVersion == 2u;
+            }) == 1;
+    };
+    const bool parsed = read && reader.objectFailures() == 0u
+        && sink.typed.size() == 1u
+        && sink.typed.front().m_recordName == "ACDBASSOCNETWORK"
+        && sink.typed.front().handle == sourceHandle
+        && sink.typed.front().parentHandle == parentHandle
+        && sink.typed.front().m_classVersion == 2u
+        && sink.typed.front().m_actionIndex == baseActionIndex
+        && sink.typed.front().m_networkVersion == 0
+        && sink.typed.front().m_networkActionIndex == networkActionIndex
+        && !sink.typed.front().m_networkFieldsParsed
+        && sink.typed.front().m_actions.size() == actionHandles.size()
+        && !sink.typed.front().m_actions[0].m_isOwned
+        && sink.typed.front().m_actions[0].m_handle == actionHandles[0]
+        && sink.typed.front().m_actions[1].m_isOwned
+        && sink.typed.front().m_actions[1].m_handle == actionHandles[1]
+        && !sink.typed.front().m_actions[2].m_isOwned
+        && sink.typed.front().m_actions[2].m_handle == actionHandles[2]
+        && sink.typed.front().m_ownedActions.size() == 1u
+        && sink.typed.front().m_ownedActions.front() == ownedActionListHandle
+        && hasCompleteNetworkPrefix(sink.typed.front());
+    t.expect(parsed,
+             "AC1032 three-action candidates and the separate owned-action list parse without promoting output eligibility");
+    if (!parsed)
+        std::cerr << "AC1032 multi-action generated read=" << read
+                  << " failures=" << reader.objectFailures()
+                  << " typed=" << sink.typed.size() << '\n';
+}
+
 void testAssociativeVariableGenerated(TestContext& t) {
     using namespace associative_constraint_group_test;
     constexpr std::uint16_t classNumber = 757u; // DWG class type 1257
@@ -21987,6 +22099,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testAc1032AssociativeNetworkCandidateGenerated(focused);
         std::cout << "Generated AC1032 associative-network candidate fields: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--assocnetwork-ac1032-multi-action-generated") {
+        TestContext focused;
+        testAc1032AssociativeNetworkMultiActionGenerated(focused);
+        std::cout << "Generated AC1032 associative-network multi-action profile: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

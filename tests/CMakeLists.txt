@@ -5483,6 +5483,13 @@ set_tests_properties(libdxfrw_assocnetwork_ac1032_candidate_generated
     PROPERTIES LABELS "fast;dwg;objects;associative;generated;AC1032"
                TIMEOUT 15)
 
+add_test(NAME libdxfrw_assocnetwork_ac1032_multi_action_generated
+    COMMAND libdxfrw_dwg_reader_matrix_tests
+        --assocnetwork-ac1032-multi-action-generated)
+set_tests_properties(libdxfrw_assocnetwork_ac1032_multi_action_generated
+    PROPERTIES LABELS "fast;dwg;objects;associative;generated;AC1032"
+               TIMEOUT 15)
+
 add_test(NAME libdxfrw_associative_variable_generated
     COMMAND libdxfrw_dwg_reader_matrix_tests
         --associative-variable-generated)
