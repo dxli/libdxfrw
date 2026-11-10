@@ -10948,6 +10948,10 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1018,
         [](TableDwgCodecProbe& table) { table.xDictHandle = 0xA90Fu; });
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects an unclosed plot-style reference without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.plotStyle = 0xA910; });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects a null layer reference without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) { table.setDwgLayerHandle(0u); });
@@ -11752,6 +11756,25 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             extensionDictionaryHandles);
     t.expect(extensionDictionaryRefused && extensionDictionaryCorrectedRetry,
              "AC1018 TABLE refuses an unclosed extension-dictionary handle atomically and accepts corrected same-object retry");
+
+    TableDwgCodecProbe plotStyleRetry = makeEncodableAc1018Table();
+    plotStyleRetry.plotStyle = 0xA910;
+    dwgBufferW plotStyleBody;
+    dwgBufferW plotStyleHandles;
+    plotStyleBody.putRawChar8(0xA5u);
+    plotStyleHandles.putRawChar8(0x5Au);
+    const bool plotStyleRefused =
+        !plotStyleRetry.encodeAsTableClass(
+            DRW::AC1018, plotStyleBody, plotStyleHandles)
+        && plotStyleBody.bitCount() == 8u
+        && plotStyleBody.data().front() == 0xA5u
+        && plotStyleHandles.bitCount() == 8u
+        && plotStyleHandles.data().front() == 0x5Au;
+    plotStyleRetry.plotStyle = DRW::DefaultPlotStyle;
+    const bool plotStyleCorrectedRetry = plotStyleRetry.encodeAsTableClass(
+        DRW::AC1018, plotStyleBody, plotStyleHandles);
+    t.expect(plotStyleRefused && plotStyleCorrectedRetry,
+             "AC1018 TABLE refuses an unclosed plot-style hard pointer atomically and accepts corrected same-object retry");
 
     TableDwgCodecProbe appendAc1018Table = makeEncodableAc1018Table();
     dwgBufferW appendTableBody;

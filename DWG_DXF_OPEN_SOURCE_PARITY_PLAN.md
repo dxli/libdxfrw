@@ -1,5 +1,7 @@
 # DWG/DXF parity — remaining implementation plan
 
+**Latest implementation slice (2026-11-10, AC1018 TABLE plot-style preflight):** the bounded direct TABLE writer now admits only `DRW::DefaultPlotStyle`; a positive value becomes a hard-pointer handle in the common entity stream, but this route has no TABLE-specific plot-style target-role/graph closure. The focused vector proves atomic refusal and corrected same-object retry. No drawing fixture was added. This closes an admission hole only; it does not implement plot-style graph output or qualify physical/native TABLE behavior. See the [plot-style preflight receipt](docs/research/p5-ac1018-table-plotstyle-preflight-2026-11-10.json).
+
 **Latest implementation slice (2026-11-10, AC1018 TABLE extension-dictionary preflight):** the bounded direct TABLE encoder now refuses a nonzero `xDictHandle`, because its common entity header emits that handle while this TABLE profile does not close or emit the extension-dictionary graph. The focused vector verifies seeded body/handle buffers survive refusal and that clearing the unsupported reference permits same-object retry. The focused TABLE selector passes; no drawing fixture was added. This closes only the direct-codec omission, not extension-dictionary output or physical/native TABLE qualification. See the [extension-dictionary preflight receipt](docs/research/p5-ac1018-table-xdictionary-preflight-2026-11-10.json).
 
 **Latest verification slice (2026-11-10, AC1018 whole-file TABLE proxy retention):** the corrected generated AC1018 TABLE whole-file retry now uses both canonical parsed BLOCK_RECORD metadata and an explicitly authorized parsed-DWG proxy cache. Fresh file readback verifies the cache bytes/count alongside TABLE fields, graph closure, and all 15 `*T1` children. The focused whole-file CTest passes. This extends local generated no-loss evidence only; it does not qualify the physical source's compound graph, native cache semantics, or whole-drawing conversion. See the [parsed-handle graph receipt](docs/research/p5-ac1018-table-parsed-blockrecord-graph-retry-2026-11-10.json).
@@ -222,8 +224,9 @@ of its parsed proxy cache; the direct-body probe does not rewrite the compound
 not establish whole-source or native acceptance. Keep FIELD/BLOCK content,
 unknown/unmatched source subrecords, R24 TABLECONTENT, producer breadth and
 native rendering gated. The direct-codec preflight also rejects nonzero
-extension-dictionary handles until that graph is explicitly closed. Do not infer
-cell semantics from cached geometry or class/graph closure alone. See the
+extension-dictionary and non-default plot-style references until their graphs
+are explicitly closed. Do not infer cell semantics from cached geometry or
+class/graph closure alone. See the
 [whole-file TABLE
 receipt](docs/research/p5-ac1018-table-whole-file-cached-geometry-2026-11-10.json).
 

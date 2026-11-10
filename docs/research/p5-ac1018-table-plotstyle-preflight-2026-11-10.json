@@ -1,0 +1,23 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "date": "2026-11-10",
+  "id": "p5-ac1018-table-plotstyle-preflight-2026-11-10",
+  "title": "AC1018 TABLE direct-encoder plot-style preflight",
+  "question": "Does the bounded AC1018 TABLE direct encoder reject a non-default plot-style reference when the route does not close its target graph?",
+  "finding": {
+    "before": "DRW_Entity::encodeDwgCommon emits a hard-pointer handle for a positive plotStyle value. The bounded TABLE route had no TABLE-specific check for the target's identity, role, or graph closure.",
+    "change": "The bounded AC1018 TABLE encoder now admits only DRW::DefaultPlotStyle. A generated vector seeds both output buffers, verifies that a positive plot-style handle is refused without mutation, then resets the field and successfully retries on the same object.",
+    "scope": "Direct AC1018 TABLE frame admission. This does not implement plot-style dictionary/placeholder output or certify a physical source profile.",
+    "fixtures": "No DWG/DXF fixture was added; the control uses a generated in-memory TABLE object."
+  },
+  "validation": {
+    "build": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests -j4",
+    "focused": "./build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
+    "result": "PASS: AC1018 TABLE encoder allocation failures injected=19 rollback=PASS retry=PASS; AC1018/AC1021 TABLE cell override vectors: PASS"
+  },
+  "limitations": [
+    "The guard remains specific to the bounded AC1018 TABLE profile.",
+    "Plot-style output requires exact target identity/role, recursive dictionary closure, and readback before admission is broadened.",
+    "No support claim is promoted."
+  ]
+}
