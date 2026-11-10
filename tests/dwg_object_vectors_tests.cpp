@@ -73,6 +73,19 @@ void operator delete[](void* memory) noexcept { std::free(memory); }
 void operator delete(void* memory, std::size_t) noexcept { std::free(memory); }
 void operator delete[](void* memory, std::size_t) noexcept { std::free(memory); }
 
+class DrwEntityEncodeTestAccess {
+public:
+    static void markParsedProxyGraphics(DRW_Entity& entity,
+                                        DRW::Version version) {
+        entity.m_proxyGraphicsProvenance = {
+            DRW_ProxyGraphicsOrigin::ParsedDwg,
+            DRW_ProxyGraphicsEncoding::DwgBitStream,
+            version, "", 0,
+            static_cast<std::uint64_t>(entity.proxyGraphics.size()),
+            false, false};
+    }
+};
+
 namespace {
 
 struct TestContext {
@@ -9474,13 +9487,107 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
 
             TableDwgCodecProbe retainedRangeModel = mergedAc1018Table;
             retainedRangeModel.m_content.m_subrecordRanges = parsedRanges;
+            retainedRangeModel.blockRecH.code = DRW::DwgHardPointer;
+            retainedRangeModel.blockRecH.size = 2u;
+            retainedRangeModel.blockRecH.rawCode = DRW::DwgHardPointer;
+            retainedRangeModel.blockRecH.ref64 =
+                retainedRangeModel.blockRecH.ref;
             dwgBufferW retainedRangeBody;
             dwgBufferW retainedRangeHandles;
+            dwgBufferW normalizedRangeBody;
+            dwgBufferW normalizedRangeHandles;
             const bool retainedRangeEncode =
                 retainedRangeModel.encodeAsTableClass(
                     DRW::AC1018, retainedRangeBody, retainedRangeHandles);
+            const bool normalizedRangeEncode =
+                mergedAc1018Table.encodeAsTableClass(
+                    DRW::AC1018, normalizedRangeBody,
+                    normalizedRangeHandles);
             t.expect(retainedRangeEncode,
                      "AC1018 TABLE writer admits only the parsed zero-mask cell and table override ranges");
+            t.expect(retainedRangeEncode
+                         && normalizedRangeEncode
+                         && retainedRangeBody.data()
+                             == normalizedRangeBody.data()
+                         && retainedRangeHandles.data()
+                             == normalizedRangeHandles.data(),
+                     "AC1018 TABLE emits the same BLOCK HEADER hard-pointer bytes for normalized and parsed handle metadata");
+
+            TableDwgCodecProbe cachedProxyTable = mergedAc1018Table;
+            cachedProxyTable.proxyGraphics = std::string("AC1018 cache\0bytes", 18u);
+            cachedProxyTable.numProxyGraph = static_cast<int>(
+                cachedProxyTable.proxyGraphics.size());
+            DrwEntityEncodeTestAccess::markParsedProxyGraphics(
+                cachedProxyTable, DRW::AC1018);
+            dwgBufferW refusedProxyBody;
+            dwgBufferW refusedProxyHandles;
+            refusedProxyBody.putRawChar8(0xA1u);
+            refusedProxyHandles.putRawChar8(0x18u);
+            const auto refusedProxyBodyBefore = refusedProxyBody.data();
+            const auto refusedProxyHandlesBefore =
+                refusedProxyHandles.data();
+            const bool unapprovedProxyRefused =
+                !cachedProxyTable.encodeAsTableClass(
+                    DRW::AC1018, refusedProxyBody, refusedProxyHandles);
+            const bool unapprovedProxyPreserved =
+                refusedProxyBody.data() == refusedProxyBodyBefore
+                && refusedProxyHandles.data()
+                    == refusedProxyHandlesBefore;
+            const bool proxyAuthorizationAccepted =
+                cachedProxyTable.authorizeParsedDwgProxyGraphicsReplay();
+            dwgBufferW cachedProxyBody;
+            dwgBufferW cachedProxyHandles;
+            const bool cachedProxyEncoded = proxyAuthorizationAccepted
+                && cachedProxyTable.encodeAsTableClass(
+                    DRW::AC1018, cachedProxyBody, cachedProxyHandles);
+            TableDwgCodecProbe clearedAuthorizedProxy = cachedProxyTable;
+            clearedAuthorizedProxy.proxyGraphics.clear();
+            clearedAuthorizedProxy.numProxyGraph = 0;
+            dwgBufferW clearedProxyBody;
+            dwgBufferW clearedProxyHandles;
+            clearedProxyBody.putRawChar8(0xA2u);
+            clearedProxyHandles.putRawChar8(0x19u);
+            const auto clearedProxyBodyBefore = clearedProxyBody.data();
+            const auto clearedProxyHandlesBefore = clearedProxyHandles.data();
+            const bool staleProxyAuthorizationRefused =
+                !clearedAuthorizedProxy.encodeAsTableClass(
+                    DRW::AC1018, clearedProxyBody, clearedProxyHandles);
+            const bool staleProxyAuthorizationPreserved =
+                clearedProxyBody.data() == clearedProxyBodyBefore
+                && clearedProxyHandles.data()
+                    == clearedProxyHandlesBefore;
+            t.expect(unapprovedProxyRefused && unapprovedProxyPreserved
+                         && proxyAuthorizationAccepted && cachedProxyEncoded
+                         && staleProxyAuthorizationRefused
+                         && staleProxyAuthorizationPreserved,
+                     "AC1018 TABLE refuses unauthorized or invalidated parsed proxy bytes atomically, then encodes only after same-version authorization");
+            if (cachedProxyEncoded) {
+                const std::uint64_t cachedProxyContentEndBit =
+                    cachedProxyBody.bitCount();
+                constexpr std::int32_t cachedProxySentinel = 0xA1018;
+                cachedProxyBody.putBitLong(cachedProxySentinel);
+                cachedProxyBody.patchRawLong32AtBit(
+                    mergedTableObjectSizeBit, cachedProxyBody.bitCount());
+                appendBits(cachedProxyBody, cachedProxyHandles);
+                dwgBuffer cachedProxyInput(cachedProxyBody.data().data(),
+                                           cachedProxyBody.data().size());
+                TableDwgCodecProbe cachedProxyReadback;
+                const bool cachedProxyRead = cachedProxyReadback.parseDwg(
+                    DRW::AC1018, &cachedProxyInput);
+                t.expect(cachedProxyRead && cachedProxyInput.isGood()
+                             && cachedProxyReadback.proxyGraphics
+                                 == cachedProxyTable.proxyGraphics
+                             && cachedProxyReadback.numProxyGraph
+                                 == cachedProxyTable.numProxyGraph
+                             && cachedProxyReadback.blockRecH.ref
+                                 == cachedProxyTable.blockRecH.ref
+                             && cursorBit(cachedProxyInput)
+                                 == cachedProxyContentEndBit
+                             && cachedProxyInput.getBitLong()
+                                 == cachedProxySentinel
+                             && cachedProxyInput.isGood(),
+                         "authorized AC1018 TABLE proxy bytes and handle roles survive exact readback with the following-body sentinel");
+            }
             if (retainedRangeEncode) {
                 const std::uint64_t retainedRangeEndBit =
                     retainedRangeBody.bitCount();
@@ -9566,6 +9673,39 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                          && unknownTableFlagsPreserved
                          && correctedRangeRetry,
                      "AC1018 TABLE refuses malformed span and handle metadata atomically, then accepts corrected same-object retry");
+
+            TableDwgCodecProbe invalidBlockReferenceRole =
+                retainedRangeModel;
+            invalidBlockReferenceRole.blockRecH.code = DRW::DwgSoftPointer;
+            invalidBlockReferenceRole.blockRecH.rawCode =
+                DRW::DwgSoftPointer;
+            dwgBufferW invalidBlockRoleBody;
+            dwgBufferW invalidBlockRoleHandles;
+            invalidBlockRoleBody.putRawChar8(0xA7u);
+            invalidBlockRoleHandles.putRawChar8(0x7Au);
+            const auto invalidBlockRoleBodyBefore =
+                invalidBlockRoleBody.data();
+            const auto invalidBlockRoleHandlesBefore =
+                invalidBlockRoleHandles.data();
+            const bool invalidBlockRoleRefused =
+                !invalidBlockReferenceRole.encodeAsTableClass(
+                    DRW::AC1018, invalidBlockRoleBody,
+                    invalidBlockRoleHandles);
+            const bool invalidBlockRolePreserved =
+                invalidBlockRoleBody.data() == invalidBlockRoleBodyBefore
+                && invalidBlockRoleHandles.data()
+                    == invalidBlockRoleHandlesBefore;
+            invalidBlockReferenceRole.blockRecH.code =
+                DRW::DwgHardPointer;
+            invalidBlockReferenceRole.blockRecH.rawCode =
+                DRW::DwgHardPointer;
+            const bool correctedBlockRoleRetry =
+                invalidBlockReferenceRole.encodeAsTableClass(
+                    DRW::AC1018, invalidBlockRoleBody,
+                    invalidBlockRoleHandles);
+            t.expect(invalidBlockRoleRefused && invalidBlockRolePreserved
+                         && correctedBlockRoleRetry,
+                     "AC1018 TABLE rejects a mis-typed BLOCK HEADER reference and retries after correcting the same object");
         }
 
         TableDwgCodecProbe invalidMergedTable = mergedAc1018Table;

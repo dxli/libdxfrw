@@ -2657,6 +2657,48 @@ bool validLegacyTableValueFlag(int value) {
         && (flags & baseFlags) == baseFlags;
 }
 
+bool validAc1018TableBlockRecordHandle(const dwgHandle& blockRecord) {
+    const bool normalized = blockRecord.code == DRW::DwgNullReference
+        && blockRecord.size == 0u && blockRecord.rawCode == 0u
+        && blockRecord.ref64 == 0u;
+    if (normalized)
+        return true;
+    if (blockRecord.code != DRW::DwgHardPointer
+        || blockRecord.rawCode != DRW::DwgHardPointer
+        || blockRecord.ref == 0u || blockRecord.ref64 != blockRecord.ref
+        || blockRecord.size == 0u || blockRecord.size > sizeof(blockRecord.ref))
+        return false;
+
+    std::uint32_t remaining = blockRecord.ref;
+    std::uint8_t minimalSize = 1u;
+    while (remaining > 0xFFu) {
+        remaining >>= 8u;
+        ++minimalSize;
+    }
+    return blockRecord.size == minimalSize;
+}
+
+bool validAc1018TableProxyGraphics(const DRW_Table& table) {
+    const DRW_ProxyGraphicsProvenance& provenance =
+        table.proxyGraphicsProvenance();
+    if (table.proxyGraphics.empty() && table.numProxyGraph == 0) {
+        return provenance.origin == DRW_ProxyGraphicsOrigin::Unspecified
+            && provenance.declaredByteCount == 0u
+            && !provenance.replayAuthorized;
+    }
+    return provenance.origin == DRW_ProxyGraphicsOrigin::ParsedDwg
+        && provenance.encoding == DRW_ProxyGraphicsEncoding::DwgBitStream
+        && provenance.sourceVersion == DRW::AC1018
+        && provenance.sourceCodePage.empty()
+        && provenance.countCode == 0
+        && provenance.declaredByteCount == table.proxyGraphics.size()
+        && provenance.replayAuthorized
+        && !provenance.resourceIndicesRemappedForDxf
+        && table.numProxyGraph > 0
+        && table.proxyGraphics.size()
+            == static_cast<std::size_t>(table.numProxyGraph);
+}
+
 bool isValidSplineDegree(int degree) {
     return degree >= 1 && degree <= kMaxSplineDegree;
 }
@@ -14136,8 +14178,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
     if (version != DRW::AC1018 || buf == nullptr || strBuf != nullptr
         || eType != DRW::TABLE || oType < 500 || handle == 0
         || blockRecH.ref == 0
-        || blockRecH.code != 0u || blockRecH.size != 0u
-        || blockRecH.rawCode != 0u || blockRecH.ref64 != 0u
+        || !validAc1018TableBlockRecordHandle(blockRecH)
         || dwgLayerHandle() == 0u
         || ltFlags > 3u
         || (space != DRW::ModelSpace && space != DRW::PaperSpace)
@@ -14171,7 +14212,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || !pendingLayerRefResolutions.empty()
         || !dwgEedAppIdWriteRefs.empty() || !dwgEedLayerWriteRefs.empty()
         || !appData.empty()
-        || !proxyGraphics.empty() || numProxyGraph != 0
+        || !validAc1018TableProxyGraphics(*this)
         || reactorHandles.size() != 0u || dwgReactorCount() != 0
         || material != DRW::MaterialByLayer
         || shadow != DRW::CastAndReceieveShadows || shadowHandle != 0u

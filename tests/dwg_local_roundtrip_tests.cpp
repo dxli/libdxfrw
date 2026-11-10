@@ -37837,6 +37837,11 @@ bool runBlockRecordXrefMetadataRoundTrip(
     return true;
 }
 
+class PhysicalTableReadback final : public DRW_Table {
+public:
+    using DRW_Table::parseDwg;
+};
+
 bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
     dx_iface reader;
     dx_data data;
@@ -37867,6 +37872,46 @@ bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
         dwgBufferW zeroFlagHandles;
         const bool zeroFlagEncoded = zeroValueFlag.encodeDwg(
             DRW::AC1018, &zeroFlagBody, 0u, nullptr, &zeroFlagHandles);
+        DRW_Table authorizedProxy = table;
+        const bool proxyAuthorized =
+            authorizedProxy.authorizeParsedDwgProxyGraphicsReplay();
+        dwgBufferW authorizedProxyBody;
+        dwgBufferW authorizedProxyHandles;
+        const bool authorizedProxyEncoded = proxyAuthorized
+            && authorizedProxy.encodeDwg(
+                DRW::AC1018, &authorizedProxyBody, 0u, nullptr,
+                &authorizedProxyHandles);
+        bool authorizedProxyReadback = false;
+        if (authorizedProxyEncoded) {
+            dwgBufferW frame = authorizedProxyBody;
+            const std::uint64_t contentEndBit = frame.bitCount();
+            constexpr std::int32_t sentinel = 0xA1018;
+            frame.putBitLong(sentinel);
+            dwgBufferW typePrefix;
+            typePrefix.putObjType(DRW::AC1018,
+                static_cast<std::uint16_t>(table.getDwgClassNum()));
+            frame.patchRawLong32AtBit(typePrefix.bitCount(),
+                                      frame.bitCount());
+            std::vector<std::uint8_t> frameBytes = frame.data();
+            std::uint64_t frameBitCount = frame.bitCount();
+            const bool handlesAppended = appendWireBits(
+                frameBytes, frameBitCount, authorizedProxyHandles.data(),
+                authorizedProxyHandles.bitCount());
+            dwgBuffer frameInput(frameBytes.data(), frameBytes.size());
+            PhysicalTableReadback decoded;
+            authorizedProxyReadback = handlesAppended
+                && decoded.parseDwg(DRW::AC1018, &frameInput)
+                && frameInput.isGood()
+                && frameInput.getPosition() * 8u + frameInput.getBitPos()
+                    == contentEndBit
+                && frameInput.getBitLong() == sentinel
+                && frameInput.isGood()
+                && decoded.proxyGraphics == table.proxyGraphics
+                && decoded.numProxyGraph == table.numProxyGraph
+                && decoded.blockRecH.ref == table.blockRecH.ref
+                && decoded.m_content.m_rows.size()
+                    == table.m_content.m_rows.size();
+        }
         std::size_t nonemptyTextCells = 0u;
         for (const DRW_TableRow& row : table.m_content.m_rows) {
             for (const DRW_TableCell& cell : row.m_cells) {
@@ -37886,6 +37931,9 @@ bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
                   << " encoded=" << encoded
                   << " withoutRanges=" << withoutRangeEncoded
                   << " zeroFlag=" << zeroFlagEncoded
+                  << " proxyAuthorized=" << proxyAuthorized
+                  << " authorizedProxyEncoded=" << authorizedProxyEncoded
+                  << " authorizedProxyReadback=" << authorizedProxyReadback
                   << " bodyBits=" << body.bitCount()
                   << " handleBits=" << handles.bitCount()
                   << " dataVersion=" << table.m_dataVersion
@@ -37894,6 +37942,19 @@ bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
                   << table.m_tableStyleHandle << " blockRecord=0x"
                   << table.blockRecH.ref << " ownerBlockRecord=0x"
                   << table.m_ownerBlockRecordHandle << std::dec
+                  << " blockHandleRole="
+                  << static_cast<unsigned>(table.blockRecH.code) << '/'
+                  << static_cast<unsigned>(table.blockRecH.rawCode) << '/'
+                  << static_cast<unsigned>(table.blockRecH.size) << '/'
+                  << table.blockRecH.ref64
+                  << " layerHandle=" << table.dwgLayerHandle()
+                  << " space=" << static_cast<int>(table.space)
+                  << " linetypeHandle=" << table.dwgLinetypeHandle()
+                  << " lineType='" << table.lineType << "'"
+                  << " ltypeScale=" << table.ltypeScale
+                  << " lineWeight=" << static_cast<int>(table.lWeight)
+                  << " plotStyle=" << static_cast<int>(table.plotStyle)
+                  << " color=" << table.color << " color24=" << table.color24
                   << " tableOverrideFlags=" << table.m_tableOverrideFlags
                   << " borderFlags=" << table.m_borderColorOverrideFlags
                   << '/' << table.m_borderLineweightOverrideFlags << '/'
@@ -37901,7 +37962,20 @@ bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
                   << " fields=" << table.m_content.m_fieldHandles.size()
                   << " merges=" << table.m_content.m_mergedRanges.size()
                   << " styleType=" << table.m_content.m_overrideStyleType
+                  << " proxy=" << table.proxyGraphics.size() << '/'
+                  << table.numProxyGraph
+                  << " dataStorage=" << table.hasDataStorageRecord << '/'
+                  << table.dataStorageHandle << '/'
+                  << table.hasDataStoragePayloadMarker
+                  << " extData=" << table.extData.size()
+                  << " appData=" << table.appData.size()
                   << '\n';
+        for (const DRW_TableColumn& column : table.m_content.m_columns) {
+            std::cout << "  column width=" << column.m_width
+                      << " style=" << column.m_styleId
+                      << " overrideStyle=" << column.m_overrideStyleType
+                      << " name='" << column.m_name << "'\n";
+        }
         for (const DRW_TableRow& row : table.m_content.m_rows) {
             std::cout << "  row height=" << row.m_height
                       << " style=" << row.m_styleId
@@ -37915,6 +37989,16 @@ bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
                           << cell.m_mergedWidth << 'x' << cell.m_mergedHeight
                           << " overrides=" << cell.m_overrideFlags
                           << " style=" << cell.m_styleId
+                          << " overrideStyle=" << cell.m_overrideStyleType
+                          << " autoFit=" << cell.m_autoFit
+                          << " rotation=" << cell.m_rotation
+                          << " dimensions=" << cell.m_width << 'x'
+                          << cell.m_height
+                          << " geometry=" << cell.m_geometryFlags << '/'
+                          << cell.m_geometryHandle << '/'
+                          << cell.m_geometryRecordFlags
+                          << " contentSize=" << cell.m_contentWidth << 'x'
+                          << cell.m_contentHeight
                           << " content=" << cell.m_contents.size();
                 if (cell.m_contents.size() == 1u) {
                     const DRW_CadValue& value =
