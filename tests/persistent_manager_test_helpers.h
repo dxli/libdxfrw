@@ -25,6 +25,7 @@ struct Options {
     std::int32_t subentityCount = 0;
     std::vector<std::int32_t> subentities;
     bool singleCountBit = false;
+    bool invalidTwoBitTail = false;
 };
 
 struct Frame {
@@ -68,13 +69,20 @@ inline bool makeFrame(const Options& options, Frame& frame) {
     object.putBitLong(options.unknown2);
     object.putBitLong(options.associationStepCount);
     object.putBitLong(options.associationSubentities);
-    object.putBitLong(options.stepCount);
-    for (const auto step : options.steps)
-        object.putBitLong(step);
-    if (options.hasSubentityCount) {
-        object.putBitLong(options.subentityCount);
-        for (const auto subentity : options.subentities)
-            object.putBitLong(subentity);
+    if (options.invalidTwoBitTail) {
+        // 01 begins a long-form BL but is deliberately truncated at the
+        // bounded object-data end. This is a negative wire-control only.
+        object.putBit(0u);
+        object.putBit(1u);
+    } else {
+        object.putBitLong(options.stepCount);
+        for (const auto step : options.steps)
+            object.putBitLong(step);
+        if (options.hasSubentityCount) {
+            object.putBitLong(options.subentityCount);
+            for (const auto subentity : options.subentities)
+                object.putBitLong(subentity);
+        }
     }
     if (options.singleCountBit)
         object.putBit(1u); // Cannot borrow the following zero footer as BL0's second bit.

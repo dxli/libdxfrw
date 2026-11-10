@@ -30760,8 +30760,39 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
             m_persistentUnknown2 = static_cast<std::uint32_t>(unknown2);
             std::uint32_t stepCount = 0;
             std::uint32_t subentityCount = 0;
-            if (!readBodyCount(stepCount)
-                || !readBodyVector(m_persistentSteps, stepCount)) {
+            // ACadRust 0.6.8's runtime PERSUBENTMGR route reads the five
+            // scalar prefix values, then consumes a flat BL tail. Its
+            // hash-bound AC1027/AC1032 observations contain one two-bit BL
+            // zero after [2,0,2,0,0], but the reader does not establish
+            // whether that zero is a count or another scalar. Publish only
+            // the bounded prefix and leave those bits opaque.
+            dwgBuffer opaqueTailProbe = buf->forkIndependent();
+            std::int32_t opaqueTailValue = -1;
+            const bool exactOpaqueZeroTail =
+                bodyEndBit >= currentObjectDwgBit(buf)
+                && bodyEndBit - currentObjectDwgBit(buf) == 2u
+                && readBitLongWithinBody(&opaqueTailProbe, version,
+                                         bodyEndBit, opaqueTailValue)
+                && opaqueTailValue == 0
+                && currentObjectDwgBit(&opaqueTailProbe) == bodyEndBit;
+            const bool abbreviatedAc1027OrAc1032Prefix =
+                (version == DRW::AC1027 || version == DRW::AC1032)
+                && classVersion == 2 && unknown0 == 0 && unknown2 == 2
+                && m_persistentAssocStepCount == 0u
+                && m_persistentAssocSubentityCount == 0u
+                && exactOpaqueZeroTail;
+            if (abbreviatedAc1027OrAc1032Prefix) {
+                appendPrefixStatus(
+                    DRW_AssociativePrefixStatus::Kind::AcDbAssocActionBody,
+                    prefixStartBit,
+                    DRW_AssociativePrefixStatus::ParseStatus::Partial,
+                    m_classVersion, 0, 0, -1);
+                m_prefixStatuses.back().m_sourceAssumption =
+                    version == DRW::AC1027
+                    ? "AC1027 class-version-2 source prefix [2,0,2,0,0] has a bounded two-bit BL-zero tail; ACadRust 0.6.8 consumes the tail as a flat scalar run without establishing its role"
+                    : "AC1032 class-version-2 source prefix [2,0,2,0,0] has a bounded two-bit BL-zero tail; ACadRust 0.6.8 consumes the tail as a flat scalar run without establishing its role";
+            } else if (!readBodyCount(stepCount)
+                       || !readBodyVector(m_persistentSteps, stepCount)) {
                 appendPrefixStatus(
                     DRW_AssociativePrefixStatus::Kind::AcDbAssocActionBody,
                     currentObjectDwgBit(buf),
@@ -30793,19 +30824,24 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
                 && currentObjectDwgBit(buf) == bodyEndBit;
             const bool abbreviatedSourcePrefix = abbreviatedAc1021Prefix
                 || abbreviatedAc1024Prefix;
-            if (!abbreviatedSourcePrefix
+            if (!abbreviatedAc1027OrAc1032Prefix
+                && !abbreviatedSourcePrefix
                 && (!readBodyCount(subentityCount)
                     || !readBodyVector(m_persistentSubentityIds, subentityCount)))
                 return fail();
-            appendPrefixStatus(
-                DRW_AssociativePrefixStatus::Kind::AcDbAssocActionBody,
-                prefixStartBit,
-                bodyFits() && !abbreviatedSourcePrefix
-                    ? DRW_AssociativePrefixStatus::ParseStatus::Complete
-                    : DRW_AssociativePrefixStatus::ParseStatus::Partial,
-                m_classVersion, 0,
-                m_persistentSteps.size() + m_persistentSubentityIds.size(),
-                abbreviatedSourcePrefix ? -1 : static_cast<std::int32_t>(subentityCount));
+            if (!abbreviatedAc1027OrAc1032Prefix) {
+                appendPrefixStatus(
+                    DRW_AssociativePrefixStatus::Kind::AcDbAssocActionBody,
+                    prefixStartBit,
+                    bodyFits() && !abbreviatedSourcePrefix
+                        ? DRW_AssociativePrefixStatus::ParseStatus::Complete
+                        : DRW_AssociativePrefixStatus::ParseStatus::Partial,
+                    m_classVersion, 0,
+                    m_persistentSteps.size()
+                        + m_persistentSubentityIds.size(),
+                    abbreviatedSourcePrefix
+                        ? -1 : static_cast<std::int32_t>(subentityCount));
+            }
             if (abbreviatedSourcePrefix) {
                 m_prefixStatuses.back().m_sourceAssumption = abbreviatedAc1024Prefix
                     ? (m_persistentAssocStepCount == 4u

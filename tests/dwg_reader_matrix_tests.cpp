@@ -15268,9 +15268,9 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
     Options ac1032Source;
     ac1032Source.version = DRW::AC1032;
     ac1032Source.classNumber = 601u;
-    // Reproduce the public Platte physical profile: six BL values
-    // [2,0,2,0,0,0], followed by the absent-string footer and no proven
-    // num_subents field. Keep it raw-only until the field layout is resolved.
+    // Reproduce the public Platte physical profile: five bounded prefix BLs
+    // [2,0,2,0,0], then a two-bit BL-zero tail, followed by the absent-string
+    // footer. Keep the tail opaque because its field role is unresolved.
     ac1032Source.classVersion = 2;
     ac1032Source.unknown0 = 0;
     ac1032Source.unknown2 = 2;
@@ -15324,9 +15324,27 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
             [&ac1032Sentinel](const DRW_DwgFramePublication& publication) {
                 return publication.m_handle == ac1032Sentinel.handle;
             });
-        const bool rawOnlyRecovery = read && reader.objectFailures() == 0u
-            && sink.typed.size() == 1u
-            && sink.typed.front().handle == ac1032Sentinel.handle
+        const auto typedSource = std::find_if(
+            sink.typed.begin(), sink.typed.end(),
+            [&ac1032Source](const DRW_AssociativeObject& object) {
+                return object.handle == ac1032Source.handle;
+            });
+        const bool partialPrefix = typedSource != sink.typed.end()
+            && typedSource->m_classVersion == 2u
+            && typedSource->m_persistentUnknown0 == 0u
+            && typedSource->m_persistentUnknown2 == 2u
+            && typedSource->m_persistentAssocStepCount == 0u
+            && typedSource->m_persistentAssocSubentityCount == 0u
+            && typedSource->m_persistentSteps.empty()
+            && typedSource->m_persistentSubentityIds.empty()
+            && typedSource->m_prefixStatuses.size() == 1u
+            && typedSource->m_prefixStatuses.front().m_status
+                == DRW_AssociativePrefixStatus::ParseStatus::Partial
+            && typedSource->m_prefixStatuses.front().m_sourceAssumption.find(
+                "AC1032") != UTF8STRING::npos;
+        const bool partialRecovery = read && reader.objectFailures() == 0u
+            && sink.typed.size() == 2u
+            && partialPrefix
             && sink.raw.size() == 2u
             && rawSource != sink.raw.end()
             && rawSource->m_rawBytes == ac1032SourceObject.payload
@@ -15347,9 +15365,9 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
             && sentinelPublication->m_carrier
                 == DRW_DwgFramePublication::Carrier::TypedAndRaw
             && sink.publications.size() == 2u;
-        t.expect(rawOnlyRecovery,
-                 "AC1032 disputed PERSUBENTMGR body publishes only after raw-shell validation and preserves following-object recovery");
-        if (!rawOnlyRecovery) {
+        t.expect(partialRecovery,
+                 "AC1032 source-bound PERSUBENTMGR prefix publishes partial typed fields and preserves the opaque carrier and following object");
+        if (!partialRecovery) {
             std::cerr << "AC1032 PERSUBENTMGR raw-only recovery: read="
                       << read << " failures=" << reader.objectFailures()
                       << " typed=" << sink.typed.size()
@@ -15420,9 +15438,20 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
                 ac1032Sentinel.handle, correctedSink);
             const bool correctedRetry = correctedRead
                 && correctedReader.objectFailures() == 0u
-                && correctedSink.typed.size() == 1u
-                && correctedSink.typed.front().handle
-                    == ac1032Sentinel.handle
+                && correctedSink.typed.size() == 2u
+                && std::any_of(correctedSink.typed.begin(),
+                    correctedSink.typed.end(),
+                    [&ac1032Source](const DRW_AssociativeObject& object) {
+                        return object.handle == ac1032Source.handle
+                            && object.m_prefixStatuses.size() == 1u
+                            && object.m_prefixStatuses.front().m_status
+                                == DRW_AssociativePrefixStatus::ParseStatus::Partial;
+                    })
+                && std::any_of(correctedSink.typed.begin(),
+                    correctedSink.typed.end(),
+                    [&ac1032Sentinel](const DRW_AssociativeObject& object) {
+                        return object.handle == ac1032Sentinel.handle;
+                    })
                 && correctedSink.raw.size() == 2u
                 && correctedSink.raw.front().m_handle
                     == ac1032Source.handle
@@ -15432,7 +15461,7 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
                     == ac1032Sentinel.handle
                 && correctedSink.publications.size() == 2u;
             t.expect(truncatedRejected && correctedRetry,
-                     "truncated AC1032 PERSUBENTMGR common handle tail is withheld, following object survives, and corrected input retries raw-only");
+                     "truncated AC1032 PERSUBENTMGR common handle tail is withheld, following object survives, and corrected input retries the partial prefix");
             if (!truncatedRejected || !correctedRetry) {
                 std::cerr << "AC1032 PERSUBENTMGR bounded-shell retry: truncatedRead="
                           << truncatedRead
@@ -15446,6 +15475,145 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
                           << '\n';
             }
         }
+    }
+
+    for (const DRW::Version version : {DRW::AC1027}) {
+        Options manager;
+        manager.version = version;
+        manager.classNumber = 601u;
+        manager.associationStepCount = 0;
+        manager.associationSubentities = 0;
+        manager.stepCount = 0;
+        manager.steps.clear();
+        Options sentinel = manager;
+        sentinel.handle = 0xD64u;
+        Frame managerObject, sentinelObject;
+        std::vector<std::uint8_t> managerFrame, sentinelFrame;
+        const bool built = makeFrame(manager, managerObject)
+            && wrapFrame(manager, managerObject, managerFrame)
+            && makeFrame(sentinel, sentinelObject)
+            && wrapFrame(sentinel, sentinelObject, sentinelFrame);
+        t.expect(built,
+                 "AC1027 observed PERSUBENTMGR prefix is generated in memory");
+        if (!built)
+            continue;
+
+        const auto sentinelOffset = static_cast<std::uint32_t>(
+            managerFrame.size());
+        std::vector<std::uint8_t> bytes = managerFrame;
+        bytes.insert(bytes.end(), sentinelFrame.begin(), sentinelFrame.end());
+        PersistentManagerDispatchReader reader(
+            bytes, version, manager.classNumber);
+        PersistentManagerDispatchSink sink;
+        const bool read = reader.readObjects(
+            bytes, manager.handle, sentinelOffset, sentinel.handle, sink);
+        const auto parsed = std::find_if(
+            sink.typed.begin(), sink.typed.end(),
+            [&manager](const DRW_AssociativeObject& object) {
+                return object.handle == manager.handle;
+            });
+        const auto raw = std::find_if(
+            sink.raw.begin(), sink.raw.end(),
+            [&manager](const DRW_UnsupportedObject& object) {
+                return object.m_handle == manager.handle;
+            });
+        const bool sourcePartial = parsed != sink.typed.end()
+            && parsed->m_classVersion == 2u
+            && parsed->m_persistentUnknown0 == 0u
+            && parsed->m_persistentUnknown2 == 2u
+            && parsed->m_persistentAssocStepCount == 0u
+            && parsed->m_persistentAssocSubentityCount == 0u
+            && parsed->m_persistentSteps.empty()
+            && parsed->m_persistentSubentityIds.empty()
+            && parsed->m_prefixStatuses.size() == 1u
+            && parsed->m_prefixStatuses.front().m_status
+                == DRW_AssociativePrefixStatus::ParseStatus::Partial
+            && parsed->m_prefixStatuses.front().m_decodedCountValue == -1
+            && parsed->m_prefixStatuses.front().m_sourceAssumption.find(
+                version == DRW::AC1027 ? "AC1027" : "AC1032")
+                != UTF8STRING::npos;
+        const bool preservedCarrier = raw != sink.raw.end()
+            && raw->m_rawBytes == managerObject.payload
+            && !raw->m_typedPayloadValidated;
+        const bool exactProfile = read && reader.objectFailures() == 0u
+            && sourcePartial && preservedCarrier
+            && sink.typed.size() == 2u && sink.raw.size() == 2u
+            && sink.publications.size() == 2u
+            && std::any_of(sink.typed.begin(), sink.typed.end(),
+                [&sentinel](const DRW_AssociativeObject& object) {
+                    return object.handle == sentinel.handle;
+                });
+        t.expect(exactProfile,
+                 "AC1027 source-bound PERSUBENTMGR prefix publishes partial typed fields, opaque tail and following frame");
+
+        // One extra body bit must not widen this exact source profile. The
+        // normal vector parser rejects the incomplete tail and raw-shell
+        // recovery retains the object without publishing the typed prefix.
+        Options nearMiss = manager;
+        nearMiss.singleCountBit = true;
+        Frame nearMissObject;
+        std::vector<std::uint8_t> nearMissFrame;
+        const bool nearMissBuilt = makeFrame(nearMiss, nearMissObject)
+            && wrapFrame(nearMiss, nearMissObject, nearMissFrame);
+        t.expect(nearMissBuilt,
+                 "near-miss PERSUBENTMGR body bound is generated in memory");
+        if (!nearMissBuilt)
+            continue;
+        const auto nearMissSentinelOffset = static_cast<std::uint32_t>(
+            nearMissFrame.size());
+        std::vector<std::uint8_t> nearMissBytes = nearMissFrame;
+        nearMissBytes.insert(nearMissBytes.end(), sentinelFrame.begin(),
+                             sentinelFrame.end());
+        PersistentManagerDispatchReader nearMissReader(
+            nearMissBytes, version, nearMiss.classNumber);
+        PersistentManagerDispatchSink nearMissSink;
+        const bool nearMissRead = nearMissReader.readObjects(
+            nearMissBytes, nearMiss.handle, nearMissSentinelOffset,
+            sentinel.handle, nearMissSink);
+        const bool nearMissRawOnly = nearMissRead
+            && nearMissReader.objectFailures() == 0u
+            && nearMissSink.typed.size() == 1u
+            && nearMissSink.typed.front().handle == sentinel.handle
+            && nearMissSink.raw.size() == 2u
+            && nearMissSink.raw.front().m_handle == nearMiss.handle
+            && nearMissSink.raw.front().m_rawBytes == nearMissObject.payload
+            && !nearMissSink.raw.front().m_typedPayloadValidated
+            && nearMissSink.publications.size() == 2u;
+        t.expect(nearMissRawOnly,
+                 "one-bit near miss remains raw-only and following object recovers");
+
+        Options invalidTail = manager;
+        invalidTail.invalidTwoBitTail = true;
+        Frame invalidTailObject;
+        std::vector<std::uint8_t> invalidTailFrame;
+        const bool invalidTailBuilt = makeFrame(invalidTail, invalidTailObject)
+            && wrapFrame(invalidTail, invalidTailObject, invalidTailFrame);
+        t.expect(invalidTailBuilt,
+                 "truncated two-bit PERSUBENTMGR BL tail is generated in memory");
+        if (!invalidTailBuilt)
+            continue;
+        const auto invalidTailSentinelOffset = static_cast<std::uint32_t>(
+            invalidTailFrame.size());
+        std::vector<std::uint8_t> invalidTailBytes = invalidTailFrame;
+        invalidTailBytes.insert(invalidTailBytes.end(), sentinelFrame.begin(),
+                                sentinelFrame.end());
+        PersistentManagerDispatchReader invalidTailReader(
+            invalidTailBytes, version, invalidTail.classNumber);
+        PersistentManagerDispatchSink invalidTailSink;
+        const bool invalidTailRead = invalidTailReader.readObjects(
+            invalidTailBytes, invalidTail.handle, invalidTailSentinelOffset,
+            sentinel.handle, invalidTailSink);
+        const bool invalidTailRawOnly = invalidTailRead
+            && invalidTailReader.objectFailures() == 0u
+            && invalidTailSink.typed.size() == 1u
+            && invalidTailSink.typed.front().handle == sentinel.handle
+            && invalidTailSink.raw.size() == 2u
+            && invalidTailSink.raw.front().m_handle == invalidTail.handle
+            && invalidTailSink.raw.front().m_rawBytes == invalidTailObject.payload
+            && !invalidTailSink.raw.front().m_typedPayloadValidated
+            && invalidTailSink.publications.size() == 2u;
+        t.expect(invalidTailRawOnly,
+                 "truncated two-bit BL tail is rejected from the partial profile and following object recovers");
     }
 
     Options ac1027RawManager;
