@@ -4775,10 +4775,14 @@ degree-valued files are distinguishable; the root writer-primitives check
 passes and the built archive contains the new marker. Existing 2.0.0 files
 remain ambiguous and are not newly qualified. The consumer hatch microtarget
 was 7/9 before this fix: the other failure was its missing
-`support/library/misc/a3.dxf` asset. Its rebuild against the updated header
-would trigger a full LibreCAD library rebuild and was stopped below 5%; the
-consumer version test and relevant focused hatch cases still need rerun against
-the committed 2.0.1 upstream revision. See the [P8 adapter bridge
+`support/library/misc/a3.dxf` asset. A post-fix focused consumer link rebuilt
+the hatch test translation unit against the byte-identical 2.0.1 header,
+replaced only `libdxfrw.cpp.o` in a scratch copy of the existing consumer
+archive, and relinked the test target; the degree-writer, legacy/foreign-header,
+and write/readback cases pass (45 assertions in 3 cases). This avoids the full
+LibreCAD library rebuild but is not a clean/full consumer rebuild or native,
+ABI, or platform qualification. Keep the missing `a3.dxf` asset separate and
+retain the historical 2.0.0 ambiguity gate. See the [P8 adapter bridge
 receipt](docs/research/p8-upstream-librecad-default-graph-adapter-bridge-2026-11-08.json)
 and [version-comment compatibility receipt](docs/research/p8-upstream-hatch-version-comment-2026-11-09.json).
 

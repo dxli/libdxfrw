@@ -37,8 +37,10 @@
     "writerPrimitiveBuild": "libdxfrw_writer_primitives_tests: PASS",
     "writerPrimitiveRun": "Writer primitives: PASS",
     "compiledMarker": "build-gcc/libdxfrw.a contains the compiled 2.0.1 literal; src/libdxfrw.cpp constructs the DXF version comment from DRW_VERSION.",
-    "consumerRebuild": "Not completed. Syncing the updated shared header into the isolated LibreCAD build caused a full librecad_lib rebuild; it was interrupted below 5% to avoid a broad rebuild. The existing pre-update consumer binaries were not used to claim post-fix success."
+    "consumerRebuild": "Focused post-fix consumer link completed without rebuilding librecad_lib: compiled the hatch test translation unit against the byte-identical 2.0.1 drw_base.h, copied the existing scratch liblibrecad_lib.a, replaced only its libdxfrw.cpp.o member with the freshly compiled object containing 2.0.1, then relinked librecad_hatch_angle_units_tests against that scratch archive. This verifies the marker boundary and focused hatch paths; it is not a clean/full LibreCAD rebuild or broad consumer qualification.",
+    "consumerHatchCases": "PASS: 45 assertions in 3 cases: DRW_VERSION is a degree writer; Legacy and foreign headers decide hatch angle units; A hatch saved with libdxfrw 0.6.4 writes degrees and reads back.",
+    "consumerCompileNote": "The targeted consumer test translation unit emitted an existing -Wswitch warning for four associative enum values in librecad/src/lib/engine/document/lc_dwgadvancedmetadata.h. It did not fail this focused build and is unrelated to hatch units."
   },
   "fixturePolicy": "No DWG or DXF fixture added. The LibreCAD build is scratch-only.",
-  "nextAction": "Publish/sync the upstream 2.0.1 commit into the isolated LibreCAD consumer build, then rerun the single DRW_VERSION degree-writer case and focused hatch-angle cases. Keep the missing a3.dxf asset as a separate test-environment issue, and retain the historical 2.0.0 ambiguity gate."
+  "nextAction": "Keep the missing a3.dxf asset as a separate test-environment issue, retain the historical 2.0.0 ambiguity gate, and continue with the next independently ready P4/P6 implementation slice. This focused marker-boundary check does not qualify a clean/full LibreCAD rebuild, native application behavior, ABI, or platform support."
 }
