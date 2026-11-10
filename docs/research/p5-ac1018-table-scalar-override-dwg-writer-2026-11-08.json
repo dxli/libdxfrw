@@ -57,6 +57,20 @@
       "unsupported mask, unflagged value residue, invalid flow, negative margin, and unflagged margin residue fail before output changes"
     ]
   },
+  "supplemental_control_2026_11_10": {
+    "case": "AC1018 TABLE override mask 0x01 with title_suppressed=false",
+    "checks": [
+      "encoder admits the selected false Boolean payload",
+      "fresh parser readback retains mask 0x01 and false title-suppression value",
+      "parser cursor equals the encoded body boundary",
+      "following body sentinel remains readable"
+    ],
+    "validation": {
+      "build": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests -j4",
+      "test": "ctest --test-dir build-gcc -R '^libdxfrw_dwg_table_cell_overrides$' --output-on-failure",
+      "result": "passed; 1/1 focused CTest"
+    }
+  },
   "validation": {
     "build": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests -j4",
     "test": "ctest --test-dir build-gcc -R '^libdxfrw_dwg_table_cell_overrides$' --output-on-failure",

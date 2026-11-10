@@ -10072,6 +10072,44 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         }
     }
 
+    TableDwgCodecProbe titleShownOverride = makeEncodableAc1018Table();
+    titleShownOverride.m_tableOverrideFlags = 0x01u;
+    titleShownOverride.m_titleSuppressed = false;
+    dwgBufferW titleShownBody;
+    dwgBufferW titleShownHandles;
+    dwgBufferW titleShownTypePrefix;
+    titleShownTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t titleShownObjectSizeBit =
+        titleShownTypePrefix.bitCount();
+    const bool titleShownEncoded = titleShownOverride.encodeAsTableClass(
+        DRW::AC1018, titleShownBody, titleShownHandles);
+    const std::uint64_t titleShownBodyEndBit = titleShownBody.bitCount();
+    constexpr std::int32_t titleShownSentinel = 0x51CA0001;
+    titleShownBody.putBitLong(titleShownSentinel);
+    titleShownBody.patchRawLong32AtBit(
+        titleShownObjectSizeBit,
+        static_cast<std::uint32_t>(titleShownBody.bitCount()));
+    appendBits(titleShownBody, titleShownHandles);
+    dwgBuffer titleShownInput(titleShownBody.data().data(),
+                              titleShownBody.data().size());
+    TableDwgCodecProbe titleShownReadback;
+    const bool titleShownRead = titleShownEncoded
+        && titleShownReadback.parseDwg(DRW::AC1018, &titleShownInput);
+    const bool titleShownMatches = titleShownRead
+        && titleShownInput.isGood()
+        && titleShownReadback.m_semanticContentComplete
+        && titleShownReadback.m_tableOverrideFlags == 0x01u
+        && !titleShownReadback.m_titleSuppressed
+        && !titleShownReadback.m_headerSuppressed
+        && cursorBit(titleShownInput) == titleShownBodyEndBit;
+    t.expect(titleShownMatches,
+             "AC1018 TABLE selected title-suppression override round-trips false");
+    if (titleShownMatches) {
+        const std::int32_t sentinel = titleShownInput.getBitLong();
+        t.expect(titleShownInput.isGood() && sentinel == titleShownSentinel,
+                 "AC1018 TABLE false title-suppression override preserves body sentinel");
+    }
+
     TableDwgCodecProbe textHeightTable = makeEncodableAc1018Table();
     DRW_TableCell& textHeightCell =
         textHeightTable.m_content.m_rows.front().m_cells.front();
