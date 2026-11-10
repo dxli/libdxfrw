@@ -87945,8 +87945,13 @@ void dx_iface::writeEntity(DRW_Entity* e){
         break;
     }
     if (selected != m_hatchTargets.end()) {
-        if (!written || e->handle != selected->second.emitted
-            || dxfW->getWritingContext()->writtenSourceEntityHandles.count(sourceHandle) != 1)
+        // Entity writers restore caller-owned handles before returning; prove
+        // publication through the source map and write ledger, not e->handle.
+        if (!written
+            || selected->second.emitted
+                != dxfW->remapEntityHandle(sourceHandle)
+            || dxfW->getWritingContext()->writtenSourceEntityHandles.count(
+                   sourceHandle) != 1u)
             failHatchPublication();
         else
             selected->second.published = true;
