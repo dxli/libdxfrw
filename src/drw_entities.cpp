@@ -7014,10 +7014,51 @@ bool DRW_Entity::encodeDwgEntHandle(DRW::Version version, dwgBufferW *buf,
     return buf->isGood() && hb->isGood();
 }
 
-bool DRW_Point::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
-    (void)bs; (void)strBuf;
-    oType = 27;  // POINT class id — see dwgreader.cpp:1111 dispatch
-    if (!encodeDwgCommon(version, buf)) return false;
+bool DRW_Point::encodeDwg(DRW::Version version, dwgBufferW *buf,
+                          std::uint32_t bs, dwgBufferW *strBuf,
+                          dwgBufferW *handleBuf) {
+  (void)bs;
+  (void)strBuf;
+  if (buf == nullptr)
+    return false;
+
+  dwgBufferW *const bodyTarget = buf;
+  dwgBufferW *const stringTarget = strBuf != nullptr ? strBuf : bodyTarget;
+  dwgBufferW *const handleTarget =
+      handleBuf != nullptr ? handleBuf : bodyTarget;
+  try {
+    dwgBufferW bodyStage = *bodyTarget;
+    std::optional<dwgBufferW> stringStageStorage;
+    dwgBufferW *stringStage = &bodyStage;
+    if (stringTarget != bodyTarget) {
+      stringStageStorage.emplace(*stringTarget);
+      stringStage = &*stringStageStorage;
+    }
+    std::optional<dwgBufferW> handleStageStorage;
+    dwgBufferW *handleStage = &bodyStage;
+    if (handleTarget == bodyTarget) {
+      handleStage = &bodyStage;
+    } else if (handleTarget == stringTarget) {
+      handleStage = stringStage;
+    } else {
+      handleStageStorage.emplace(*handleTarget);
+      handleStage = &*handleStageStorage;
+    }
+
+    buf = &bodyStage;
+    handleBuf = handleBuf != nullptr ? handleStage : nullptr;
+    struct ObjectTypeRollback {
+      decltype(oType) &value;
+      decltype(oType) original;
+      bool committed{false};
+      ~ObjectTypeRollback() {
+        if (!committed)
+          value = original;
+      }
+    } typeRollback{oType, oType};
+    oType = 27; // POINT class id — see dwgreader.cpp:1111 dispatch
+    if (!encodeDwgCommon(version, buf))
+      return false;
 
     // Point body — mirror of DRW_Point::parseDwg below.
     buf->putBitDouble(basePoint.x);
@@ -7025,9 +7066,21 @@ bool DRW_Point::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t b
     buf->putBitDouble(basePoint.z);
     buf->putThickness(thickness, /*b_R2000_style=*/true);
     buf->putExtrusion(extPoint, /*b_R2000_style=*/true);
-    buf->putBitDouble(xAxisAngle);  // ODA §20.4.31 code 50
+    buf->putBitDouble(xAxisAngle); // ODA §20.4.31 code 50
 
-    return encodeDwgEntHandle(version, buf, handleBuf);
+    if (!encodeDwgEntHandle(version, buf, handleBuf) || !buf->isGood() ||
+        !stringStage->isGood() || !handleStage->isGood())
+      return false;
+    bodyTarget->swap(bodyStage);
+    if (stringTarget != bodyTarget)
+      stringTarget->swap(*stringStageStorage);
+    if (handleTarget != bodyTarget && handleTarget != stringTarget)
+      handleTarget->swap(*handleStageStorage);
+    typeRollback.committed = true;
+    return true;
+  } catch (const std::bad_alloc &) {
+    return false;
+  }
 }
 
 void DRW_Point::resetDwgState() {

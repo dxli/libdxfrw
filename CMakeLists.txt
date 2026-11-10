@@ -2143,6 +2143,13 @@ if(LIBDXFRW_BUILD_TESTS)
         PROPERTIES
             LABELS "fast;dwg;object-vectors;arc;ellipse;generated;transaction"
             TIMEOUT 20)
+    add_test(NAME libdxfrw_point_dwg_encode_allocation_rollback
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --point-dwg-encode-allocation-rollback)
+    set_tests_properties(libdxfrw_point_dwg_encode_allocation_rollback
+        PROPERTIES
+            LABELS "fast;dwg;object-vectors;point;generated;transaction"
+            TIMEOUT 20)
     add_test(NAME libdxfrw_r2018_attribute_outer_annotative
         COMMAND libdxfrw_dwg_object_vectors_tests --r2018-attribute-outer)
     set_tests_properties(libdxfrw_r2018_attribute_outer_annotative PROPERTIES

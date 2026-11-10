@@ -368,6 +368,14 @@ public:
   std::uint16_t dwgType() const { return oType; }
 };
 
+class PointCodecProbe final : public DRW_Point {
+public:
+  using DRW_Point::encodeDwg;
+
+  void setDwgType(std::uint16_t value) { oType = value; }
+  std::uint16_t dwgType() const { return oType; }
+};
+
 class ViewportCodecProbe final : public DRW_Viewport {
 public:
   using DRW_Viewport::encodeDwg;
@@ -25006,6 +25014,24 @@ void testArcEllipseDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testPointDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+    PointCodecProbe point;
+    point.handle = version == DRW::AC1021 ? 0xAE10u : 0xAE20u;
+    point.parentHandle = 0xAE30u;
+    point.reactorHandles = {0xAE40u};
+    point.xDictHandle = 0xAE50u;
+    point.setDwgType(0x777u);
+    point.basePoint = DRW_Coord(1.25, 2.5, 3.75);
+    point.thickness = 0.5;
+    point.extPoint = DRW_Coord(0.0, 0.0, 1.0);
+    point.xAxisAngle = 0.375;
+    checkEntityDwgEncodeAllocationRollback(
+        t, point, version, 27u,
+        version == DRW::AC1021 ? "AC1021 POINT" : "AC1024 POINT");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -28121,6 +28147,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testArcEllipseDwgEncodeAllocationRollback(context);
       std::cout << "ARC/ELLIPSE DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 &&
+        std::string(argv[1]) == "--point-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testPointDwgEncodeAllocationRollback(context);
+      std::cout << "POINT DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }
