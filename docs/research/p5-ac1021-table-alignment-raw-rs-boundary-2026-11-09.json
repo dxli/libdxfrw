@@ -11,18 +11,18 @@
   },
   "implementation": {
     "productionFile": "src/drw_entities.cpp",
-    "productionSha256": "2f551d536a8aca9c2ff01cd9ecdc1857f80658288a329ecb2dbb0573d03520f",
-    "change": "none; parser unchanged",
+    "productionSha256": "7d278d047a40a132d530c5116d9d93a3f1ef187480fd8f84f106d1ed4698d425",
+    "change": "For the exact AC1021 text-cell override mask 0x01 profile, retain the ODA raw-RS alignment value, mark only values 1-9 semantically complete, and keep nonzero edge/virtual-edge flags incomplete. Other AC1021 cell override masks remain incomplete.",
     "testFile": "tests/dwg_object_vectors_tests.cpp",
-    "testSha256": "b058910567ab2ad7321462bc868e5ce04db9de86d9d07f54deaa13d164c50b69",
+    "testSha256": "2b1011ecd8e5aa317a8f8710a0c0d838f02dee2db29d3a4870e5ec106670722f",
     "generatedFrame": "The existing from-scratch AC1021 one-cell TABLE vector emits alignment value 5 with putRawShort16, then the separate unknown BL, CadValue flags/type/integer payload, unit and detached empty strings. No DWG/DXF fixture file is written."
   },
   "control": {
     "selector": "libdxfrw_dwg_table_cell_overrides",
     "assertions": [
-      "frame builds",
-      "parse remains bounded and semantically incomplete because AC1021 alignment semantics are not promoted by this control",
-      "override mask 0x01 is retained",
+      "frame builds from scratch with raw little-endian RS alignment value 5",
+      "parse completes semantic content for the exact AC1021 text-cell mask 0x01 profile",
+      "typed text alignment is 5",
       "cursor lands exactly at tableDataEndBit after the following CadValue",
       "following table sentinel remains aligned"
     ],
@@ -38,13 +38,19 @@
   "physicalSource": {
     "path": "/Users/dli/doc/dwg/blocks_and_tables_-_metric.dwg",
     "sha256": "7d5507da05fb70ba55875d99e676524ca2caa0ed7a5582ad130c3c06e8d925f1",
-    "observation": "The two first candidate failures are row 8/column 0 at body bit 278726 for TABLE 0x2856e and row 9/column 0 at body bit 312907 for TABLE 0x2a974. Both local traces report override mask 0x01. The candidate data type 48 is undocumented; keep both TABLE semantic snapshots incomplete."
+    "observation": "The two first candidate failures remain row 8/column 0 at body bit 278726 for TABLE 0x2856e and row 9/column 0 at body bit 312907 for TABLE 0x2a974. Both local traces report override mask 0x01. After this parser change, both traces still reach the same undocumented data type 48 candidates; this slice neither fixes nor qualifies those physical TABLE bodies."
   },
   "validation": {
     "build": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests -j4",
-    "executableSha256": "49942e874b0f11c65e986050dd3fb79933541d403cc44ead41071eb4ac60b458",
+    "executableSha256": "be61cf7f59847dfe2ceeeb208e7c3483d9a49bc6e259833ade081bd0e5485570",
     "ctest": "ctest --test-dir build-gcc -R ^libdxfrw_dwg_table_cell_overrides$ --output-on-failure",
-    "diffCheck": "git diff --check passed"
+    "diffCheck": "git diff --check passed",
+    "librarySha256": "9303261f1d9891ae928c7990674382f5b42768256775ca6e4f0a91e2a806ab0b",
+    "physicalReadback": {
+      "command": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/doc/dwg/blocks_and_tables_-_metric.dwg -y -d -v2010 /private/tmp/metric-after-alignment.dxf",
+      "executableSha256": "5732b8554ff2b6339434b0a3be120d6fa9853143991c804330128cdb72bb86b7",
+      "result": "The same two type-48 candidates remain at the recorded body bits; no broader TABLE support is inferred."
+    }
   },
   "remainingAction": "Build an independent physical source-span walk for the preceding override/body fields and reconcile the remaining cursor difference before any production parser change. No support claim is promoted."
 }

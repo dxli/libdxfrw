@@ -3276,6 +3276,8 @@ bool parseR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
     constexpr std::uint32_t contentColorFlag = 0x00000008u;
     constexpr std::uint32_t textStyleFlag = 0x00000010u;
     constexpr std::uint32_t textHeightFlag = 0x00000020u;
+    const bool ac1021TextAlignmentProfile = version == DRW::AC1021
+        && cell.m_type == 1u && cell.m_overrideFlags == cellAlignmentFlag;
     std::uint32_t representableOverrideFlags =
         cellAlignmentFlag | backgroundFillNoneFlag | backgroundColorFlag
         | contentColorFlag | textStyleFlag | textHeightFlag;
@@ -3286,14 +3288,16 @@ bool parseR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
         && cell.m_type == 1 && cell.m_overrideFlags != 0u
         && (cell.m_overrideFlags & ~representableOverrideFlags) == 0u;
     if (cell.m_overrideFlags != 0u
-        && !legacyAc1018CellOverrideProfile)
+        && !legacyAc1018CellOverrideProfile
+        && !ac1021TextAlignmentProfile)
         semanticComplete = false;
 
     if (cell.m_overrideFlags & cellAlignmentFlag) {
         std::uint16_t alignment = 0;
         if (!readBoundedRawShort16(*buf, bounds.bodyEndBit, alignment))
             return false;
-        if (legacyAc1018CellOverrideProfile) {
+        if (legacyAc1018CellOverrideProfile
+            || ac1021TextAlignmentProfile) {
             cell.m_textAlignment = static_cast<int>(alignment);
             if (alignment < 1u || alignment > 9u)
                 semanticComplete = false;
@@ -3446,6 +3450,9 @@ bool parseR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
             || cell.m_virtualEdgeFlags != 0)
             semanticComplete = false;
     }
+    if (ac1021TextAlignmentProfile
+        && (cell.m_edgeFlags != 0u || cell.m_virtualEdgeFlags != 0u))
+        semanticComplete = false;
 
     const bool good = buf->isGood() && (!strBuf || strBuf->isGood()) && (!hdlBuf || hdlBuf->isGood());
     if (!appendDwgSubrecordRange(

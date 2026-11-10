@@ -11326,12 +11326,13 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             && table.m_content.m_rows.front().m_cells.size() == 1u
         ? &table.m_content.m_rows.front().m_cells.front() : nullptr;
     t.expect(ac1021CellAlignmentRead && ac1021CellAlignmentInput.isGood()
-                 && !table.m_semanticContentComplete
+                 && table.m_semanticContentComplete
                  && ac1021CellAlignmentCell != nullptr
                  && ac1021CellAlignmentCell->m_overrideFlags == 0x00000001u
+                 && ac1021CellAlignmentCell->m_textAlignment == 5
                  && cursorBit(ac1021CellAlignmentInput)
                      == ac1021CellAlignmentFrame.tableDataEndBit,
-             "AC1021 TABLE cell-alignment RS field preserves the following CadValue and table sentinel boundaries");
+             "AC1021 TABLE cell-alignment RS field decodes its value and preserves the following CadValue/table sentinel boundaries");
 
     R2007TableFrame blockFrame;
     const bool blockBuilt = makeR2007TableFrame(2, blockFrame);

@@ -1970,10 +1970,13 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    field as raw `RS`; its successful semantic decode therefore does not prove
    the physical cursor span for these cells. A new from-scratch AC1021 vector
    covers the documented raw-RS field followed by the CadValue and checks the
-   table sentinel boundary, but does not resolve the producer sample's type-48
-   candidates. Keep the parser profile and output gate unchanged. Next compare
-   exact per-cell body spans with an independent wire walk and resolve the
-   remaining cursor difference before any production parser change. See the
+   table sentinel boundary. The reader now retains alignment values 1–9 for
+   the exact AC1021 text-cell profile with override mask `0x01`; other AC1021
+   cell-override combinations remain semantically incomplete. The physical
+   metric source still reaches the same type-48 candidates after this change,
+   so the bounded parser improvement does not resolve its producer profile or
+   qualify TABLE output. Next compare exact per-cell body spans with an
+   independent wire walk and resolve the remaining cursor difference. See the
    [current type-48 recheck](docs/research/p5-ac1021-metric-table-current-type48-cursor-recheck-2026-11-09.json),
    [peer field-order review](docs/research/p5-ac1021-metric-table-peer-alignment-field-review-2026-11-09.json),
    and [generated alignment boundary control](docs/research/p5-ac1021-table-alignment-raw-rs-boundary-2026-11-09.json).
