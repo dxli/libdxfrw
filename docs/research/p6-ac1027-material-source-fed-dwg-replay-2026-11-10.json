@@ -17,6 +17,7 @@
       "mode": "One generated AC1027 DWG file in the system temporary directory; its ACAD_MATERIAL dictionary contains all three selected physical-source MATERIAL records and is owned by NOD.",
       "readback": "Fresh libdxfrw reader checks all three dictionary key/name bindings, remapped record handles, owner/reactor roles, complete semantic fields, each exact retained 516-bit body, and detached strings.",
       "independentPeerReadback": "LibreDWG 0.14 dwgread minJSON independently reads the generated DWG. A committed verifier checks the NOD-to-dictionary-to-material graph, all three key/name/handle bindings, common owner/reactor roles, exact default map/color/scalar fields, and empty image-backed map filenames. Three mutation controls reject changed owner, channel flags, and record name.",
+      "allocationFailure": "The same selected graph is emitted with allocation failure injected at each of 219 measured allocation offsets inside the MATERIAL/dictionary OBJECTS callback. Every failure leaves the seeded destination unchanged. The same writer and adapter then retry, and fresh typed readback checks the NOD/dictionary/three-material graph and source-derived body profiles.",
       "fixturePolicy": "No drawing fixture committed; temporary outputs are removed by test cleanup."
     }
   },
@@ -48,7 +49,7 @@
     },
     "physicalSourceSelector": {
       "command": "build-gcc/tests/libdxfrw_dwg_default_material_optin_tests --physical-ac1027-material-dwg-replay /Users/dli/doc/dwg/Cover.dwg",
-      "result": "PASS for ByBlock, ByLayer and Global"
+      "result": "PASS for ByBlock, ByLayer and Global; rollback/retry sweep passed at 219 allocation offsets"
     },
     "independentPeerVerifier": {
       "command": "python3 tools/research/verify_ac1027_material_graph_minjson.py /tmp/libdxfrw-ac1027-material-source-graph.min.json",
@@ -56,8 +57,8 @@
     },
     "diffCheck": "PASS",
     "sha256": {
-      "tests/dwg_default_material_optin_tests.cpp": "4595eb0a47287e8f53502332d0210f1471e5551d5095071539b257564f5e92a7",
-      "build-gcc/tests/libdxfrw_dwg_default_material_optin_tests": "014c910f8d417efb68fac8b92621eadd94d6c05d9042c7a7e60b6925924e88b7",
+      "tests/dwg_default_material_optin_tests.cpp": "5e2a65fe2678d7423f7da7092c6cb75c838be611ada2c16309b9f32431af76ab",
+      "build-gcc/tests/libdxfrw_dwg_default_material_optin_tests": "3dd83fadb723f65930ba9da64352b89863015b794e79eb1020e59e10a4b95cf6",
       "tools/research/verify_ac1027_material_graph_minjson.py": "fb8a28a84b0aa0a9137a469add8a22123a3b0fdbf676e676e3507c543f7300d8",
       "/Users/dli/doc/dwg/Cover.dwg": "3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42"
     }

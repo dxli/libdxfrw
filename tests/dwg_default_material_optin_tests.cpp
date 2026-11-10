@@ -47,6 +47,8 @@ bool ac1027DefaultMaterialReplayRoundtrip(const DRW_Material& source);
 bool ac1027DefaultMaterialReplayGraphRoundtrip(
     const std::vector<DRW_Material>& sources,
     const std::filesystem::path& output = {});
+bool ac1027DefaultMaterialReplayAllocationSweep(
+    const std::vector<DRW_Material>& sources);
 
 class DwgBlockRecordXrefWireTestAccess {
 public:
@@ -486,6 +488,19 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
             (void)output.writeDictionary(&source);
         }
         if (mode == Mode::ReplayMaterial) {
+            struct AllocationFaultScope {
+                bool enabled;
+                bool& triggered;
+                ~AllocationFaultScope() {
+                    if (enabled) {
+                        triggered = failAfter < 0;
+                        failAfter = -1;
+                    }
+                }
+            } faultScope{replayAllocationOffset >= 0,
+                         replayAllocationTriggered};
+            if (faultScope.enabled)
+                failAfter = replayAllocationOffset;
             DRW_Dictionary dictionary; dictionary.handle=0xB100u;
             dictionary.parentHandle=DRW::DwgNamedObjectsDictionaryHandle;
             const std::size_t count = replayMaterials.empty()
@@ -533,6 +548,8 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
     Mode mode=Mode::Normal; std::size_t slot=0;
     DRW_Material replayMaterial;
     std::vector<DRW_Material> replayMaterials;
+    int replayAllocationOffset{-1};
+    bool replayAllocationTriggered{false};
     std::array<std::uint32_t,4> handles{};
     std::uint32_t plotStylePlaceholder=0;
 };
@@ -815,6 +832,101 @@ bool ac1027DefaultMaterialReplayGraphRoundtrip(
         const std::filesystem::path& output) {
     return ac1027DefaultMaterialReplayGraphRoundtripImpl(sources, output);
 }
+bool ac1027DefaultMaterialReplayAllocationSweep(
+        const std::vector<DRW_Material>& sources) {
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const std::string sentinel = "prior destination";
+    int successfulOffset = -1;
+    for (int offset = 0; offset < 256; ++offset) {
+        const auto path = std::filesystem::temp_directory_path()
+            / ("libdxfrw-ac1027-material-replay-fault-"
+               + std::to_string(nonce) + "-" + std::to_string(offset)
+               + ".dwg");
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() { std::error_code error; std::filesystem::remove(path, error); }
+        } cleanup{path};
+        {
+            std::ofstream prior(path, std::ios::binary | std::ios::trunc);
+            prior << sentinel;
+            if (!prior) return false;
+        }
+        dwgRW writer(path.string().c_str());
+        Adapter adapter(writer);
+        adapter.enabled = false;
+        adapter.plotEnabled = false;
+        adapter.mode = Mode::ReplayMaterial;
+        adapter.replayMaterials = sources;
+        if (!writer.reserveHandle(0xB100u)) {
+            std::cerr << "AC1027 MATERIAL root handle reservation failed\n";
+            return false;
+        }
+        for (std::size_t i = 0; i < sources.size(); ++i)
+            if (!writer.reserveHandle(static_cast<std::uint32_t>(0xB101u + i))) {
+                std::cerr << "AC1027 MATERIAL child handle reservation failed\n";
+                return false;
+            }
+
+        bool written = false;
+        bool escaped = false;
+        try {
+            adapter.replayAllocationOffset = offset;
+            written = writer.write(&adapter, DRW::AC1027, true);
+        } catch (...) {
+            escaped = true;
+        }
+        if (escaped) {
+            std::cerr << "AC1027 MATERIAL graph write escaped allocation "
+                      << offset << '\n';
+            return false;
+        }
+        if (!adapter.replayAllocationTriggered) {
+            if (!written) {
+                std::cerr << "AC1027 MATERIAL graph failed without injected allocation at "
+                          << offset << '\n';
+                return false;
+            }
+            successfulOffset = offset;
+            break;
+        }
+        if (written) return false;
+        {
+            std::ifstream prior(path, std::ios::binary);
+            const std::string actual(std::istreambuf_iterator<char>(prior), {});
+            if (actual != sentinel) {
+                std::cerr << "AC1027 MATERIAL allocation " << offset
+                          << " changed destination before retry\n";
+                return false;
+            }
+        }
+        adapter.replayAllocationOffset = -1;
+        if (!writer.write(&adapter, DRW::AC1027, true)) {
+            std::cerr << "AC1027 MATERIAL same-writer retry failed at allocation "
+                      << offset << '\n';
+            return false;
+        }
+        Capture readback;
+        readback.rawVersion = DRW::AC1027;
+        readback.requireSemantic = true;
+        readback.requireRaw = true;
+        dwgRW reader(path.string().c_str());
+        if (!reader.read(&readback, false) || !readback.valid
+            || readback.root != 0xB100u || readback.dictionary != 0xB100u
+            || readback.owner != DRW::DwgNamedObjectsDictionaryHandle
+            || readback.parsedMaterials.size() != sources.size()
+            || readback.children != std::array<std::uint32_t,3>{{
+                0xB101u, 0xB102u, 0xB103u}}) {
+            std::cerr << "AC1027 MATERIAL graph allocation retry readback failed at "
+                      << offset << '\n';
+            return false;
+        }
+    }
+    if (successfulOffset <= 0) return false;
+    std::cout << "AC1027 MATERIAL source-fed graph rollback/retry PASS; "
+              << successfulOffset << " injected allocation offsets\n";
+    return true;
+}
 int main(int argc,char**argv) {
     if ((argc == 3 || argc == 4)
         && std::string(argv[1]) == "--physical-ac1027-material-dwg-replay") {
@@ -851,6 +963,8 @@ int main(int argc,char**argv) {
             }
             selectedMaterials.push_back(*found);
         }
+        if (!ac1027DefaultMaterialReplayAllocationSweep(selectedMaterials))
+            return 1;
         const std::filesystem::path output = argc == 4
             ? std::filesystem::path(argv[3]) : std::filesystem::path{};
         if (!ac1027DefaultMaterialReplayGraphRoundtrip(selectedMaterials, output))
