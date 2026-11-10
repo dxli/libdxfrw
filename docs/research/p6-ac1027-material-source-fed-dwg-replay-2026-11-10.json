@@ -2,7 +2,7 @@
   "schema": "libdxfrw-research-receipt-v1",
   "id": "p6-ac1027-material-source-fed-dwg-replay-2026-11-10",
   "date": "2026-11-10",
-  "status": "SELECTED_PHYSICAL_SOURCE_MATERIAL_DWG_REPLAY_READBACK_PASS",
+  "status": "SELECTED_PHYSICAL_SOURCE_MATERIAL_DWG_REPLAY_AND_LIBREDWG_READBACK_PASS",
   "supportClaimEffect": "none",
   "scope": "Take the three exact-profile AC1027 MATERIAL records parsed from the existing Cover.dwg source and emit them together through one selected-object DWG graph, then verify the complete graph with a fresh libdxfrw reader.",
   "evidence": {
@@ -16,6 +16,7 @@
     "output": {
       "mode": "One generated AC1027 DWG file in the system temporary directory; its ACAD_MATERIAL dictionary contains all three selected physical-source MATERIAL records and is owned by NOD.",
       "readback": "Fresh libdxfrw reader checks all three dictionary key/name bindings, remapped record handles, owner/reactor roles, complete semantic fields, each exact retained 516-bit body, and detached strings.",
+      "independentPeerReadback": "LibreDWG 0.14 dwgread minJSON independently reads the generated DWG. A committed verifier checks the NOD-to-dictionary-to-material graph, all three key/name/handle bindings, common owner/reactor roles, exact default map/color/scalar fields, and empty image-backed map filenames. Three mutation controls reject changed owner, channel flags, and record name.",
       "fixturePolicy": "No drawing fixture committed; temporary outputs are removed by test cleanup."
     }
   },
@@ -23,6 +24,18 @@
     "file": "tests/dwg_default_material_optin_tests.cpp",
     "change": "Added a physical-source selector that reads the three MATERIAL callbacks and feeds all parsed records together into one selected DWG replay/readback graph. Replay graph construction and readback use each selected material's own dictionary key and distinct remapped handle. The shared physical audit identifies dictionary entries by key instead of depending on entry order.",
     "selector": "build-gcc/tests/libdxfrw_dwg_default_material_optin_tests --physical-ac1027-material-dwg-replay /Users/dli/doc/dwg/Cover.dwg"
+  },
+  "independentPeer": {
+    "name": "LibreDWG",
+    "version": "dwgread 0.14",
+    "binaryPath": "/opt/homebrew/Cellar/libredwg/0.14/bin/dwgread",
+    "binarySha256": "536eef295f1dfdc2e63b4f1cd2961905f98c55bbd1fe017ef3574c0f1345f1ff",
+    "command": "dwgread -O minJSON -o /tmp/libdxfrw-ac1027-material-source-graph.min.json /tmp/libdxfrw-ac1027-material-source-graph.dwg",
+    "checker": "tools/research/verify_ac1027_material_graph_minjson.py",
+    "checkerSha256": "fb8a28a84b0aa0a9137a469add8a22123a3b0fdbf676e676e3507c543f7300d8",
+    "outputDwgSha256": "aa2735e76fad1217b78c78a609eba608e79d8ebdc90a5d063763b8d8b7e22563",
+    "minJsonSha256": "33667c65345e1899f1f48fc204f509af5449029b0cc602aaf9f0957799d87314",
+    "result": "PASS; NOD 0xC → ACAD_MATERIAL dictionary 0xB100 → three MATERIAL records 0xB101–0xB103"
   },
   "validation": {
     "build": {
@@ -37,16 +50,22 @@
       "command": "build-gcc/tests/libdxfrw_dwg_default_material_optin_tests --physical-ac1027-material-dwg-replay /Users/dli/doc/dwg/Cover.dwg",
       "result": "PASS for ByBlock, ByLayer and Global"
     },
+    "independentPeerVerifier": {
+      "command": "python3 tools/research/verify_ac1027_material_graph_minjson.py /tmp/libdxfrw-ac1027-material-source-graph.min.json",
+      "result": "PASS; owner, channel-flag, and name mutations rejected 3/3"
+    },
     "diffCheck": "PASS",
     "sha256": {
-      "tests/dwg_default_material_optin_tests.cpp": "d2606b64ecd47a1d4669b35355fefd51801cfca4e1c6e52702374781873e7197",
-      "build-gcc/tests/libdxfrw_dwg_default_material_optin_tests": "f720c1627192f4896c7b426092e00b5e533bf4579ff1842a2e88f15fa00d1d23",
+      "tests/dwg_default_material_optin_tests.cpp": "4595eb0a47287e8f53502332d0210f1471e5551d5095071539b257564f5e92a7",
+      "build-gcc/tests/libdxfrw_dwg_default_material_optin_tests": "014c910f8d417efb68fac8b92621eadd94d6c05d9042c7a7e60b6925924e88b7",
+      "tools/research/verify_ac1027_material_graph_minjson.py": "fb8a28a84b0aa0a9137a469add8a22123a3b0fdbf676e676e3507c543f7300d8",
       "/Users/dli/doc/dwg/Cover.dwg": "3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42"
     }
   },
   "limitations": [
     "This is source-fed selected-record serialization into one generated graph, not a writeback of the original Cover.dwg or whole-source conversion.",
     "Readback uses the same libdxfrw implementation; no independent producer/native reader acceptance is established.",
+    "LibreDWG is an independent reader implementation but is a peer library, not an AutoCAD/ODA producer or native semantic consumer.",
     "Other AC1027 MATERIAL profiles, AC1021/AC1024 retained modern bodies, general MATERIAL semantics, and broad graph closure remain unqualified and refused.",
     "No support claim is promoted."
   ]

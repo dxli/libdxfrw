@@ -45,7 +45,8 @@ public:
 
 bool ac1027DefaultMaterialReplayRoundtrip(const DRW_Material& source);
 bool ac1027DefaultMaterialReplayGraphRoundtrip(
-    const std::vector<DRW_Material>& sources);
+    const std::vector<DRW_Material>& sources,
+    const std::filesystem::path& output = {});
 
 class DwgBlockRecordXrefWireTestAccess {
 public:
@@ -698,7 +699,8 @@ bool inspect(const std::string& path,const std::array<std::uint32_t,4>& h,bool s
 }
 
 bool ac1027DefaultMaterialReplayGraphRoundtripImpl(
-        const std::vector<DRW_Material>& sources) {
+        const std::vector<DRW_Material>& sources,
+        const std::filesystem::path& requestedOutput = {}) {
     if (sources.empty()
         || !std::all_of(sources.begin(), sources.end(),
             [](const DRW_Material& source) {
@@ -707,13 +709,23 @@ bool ac1027DefaultMaterialReplayGraphRoundtripImpl(
         return false;
     const auto nonce = std::chrono::steady_clock::now()
         .time_since_epoch().count();
-    const auto path = std::filesystem::temp_directory_path()
-        / ("libdxfrw-ac1027-material-replay-" + std::to_string(nonce)
-           + ".dwg");
+    const auto path = requestedOutput.empty()
+        ? std::filesystem::temp_directory_path()
+            / ("libdxfrw-ac1027-material-replay-" + std::to_string(nonce)
+               + ".dwg")
+        : requestedOutput;
+    if (!requestedOutput.empty() && std::filesystem::exists(path))
+        return false;
     struct Cleanup {
         std::filesystem::path path;
-        ~Cleanup() { std::error_code error; std::filesystem::remove(path, error); }
-    } cleanup{path};
+        bool remove{true};
+        ~Cleanup() {
+            if (remove) {
+                std::error_code error;
+                std::filesystem::remove(path, error);
+            }
+        }
+    } cleanup{path, requestedOutput.empty()};
 
     dwgRW writer(path.string().c_str());
     Adapter adapter(writer);
@@ -799,11 +811,12 @@ bool ac1027DefaultMaterialReplayRoundtrip(const DRW_Material& source) {
     return ac1027DefaultMaterialReplayGraphRoundtripImpl({source});
 }
 bool ac1027DefaultMaterialReplayGraphRoundtrip(
-        const std::vector<DRW_Material>& sources) {
-    return ac1027DefaultMaterialReplayGraphRoundtripImpl(sources);
+        const std::vector<DRW_Material>& sources,
+        const std::filesystem::path& output) {
+    return ac1027DefaultMaterialReplayGraphRoundtripImpl(sources, output);
 }
 int main(int argc,char**argv) {
-    if (argc == 3
+    if ((argc == 3 || argc == 4)
         && std::string(argv[1]) == "--physical-ac1027-material-dwg-replay") {
         dwgRW reader(argv[2]);
         Capture capture;
@@ -838,7 +851,9 @@ int main(int argc,char**argv) {
             }
             selectedMaterials.push_back(*found);
         }
-        if (!ac1027DefaultMaterialReplayGraphRoundtrip(selectedMaterials))
+        const std::filesystem::path output = argc == 4
+            ? std::filesystem::path(argv[3]) : std::filesystem::path{};
+        if (!ac1027DefaultMaterialReplayGraphRoundtrip(selectedMaterials, output))
             return 1;
         std::cout << "physical AC1027 MATERIAL selected DWG replay/readback PASS\n";
         return 0;
