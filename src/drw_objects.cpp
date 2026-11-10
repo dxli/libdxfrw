@@ -13372,11 +13372,38 @@ bool DRW_Section::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || xDictFlag > 1)
         return false;
 
-    const std::int32_t reactorCount = static_cast<std::int32_t>(
-        reactorHandles.size());
-
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerStringDest = strBuf != nullptr ? strBuf
+                                                           : callerBody;
+    dwgBufferW *const callerHandleDest = handleBuf != nullptr ? handleBuf
+                                                               : callerBody;
+    const bool separateStrings = callerStringDest != callerBody;
+    const bool separateHandles = callerHandleDest != callerBody
+        && callerHandleDest != callerStringDest;
+    try {
+    dwgBufferW stagedBody = *callerBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    if (separateStrings)
+        stagedStrings = *callerStringDest;
+    if (separateHandles)
+        stagedHandles = *callerHandleDest;
+    buf = &stagedBody;
+    strBuf = separateStrings ? &stagedStrings : buf;
+    handleBuf = separateHandles ? &stagedHandles
+        : callerHandleDest == callerStringDest && separateStrings
+            ? &stagedStrings : buf;
     dwgBufferW *sb = strBuf != nullptr ? strBuf : buf;
     dwgBufferW *hb = handleBuf != nullptr ? handleBuf : buf;
+    const auto publish = [&]() {
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+    };
+    const std::int32_t reactorCount = static_cast<std::int32_t>(
+        reactorHandles.size());
     if (m_kind == Manager) {
         if (m_sectionHandles.size()
                 > static_cast<std::size_t>(kMaxSectionCount)
@@ -13393,7 +13420,10 @@ bool DRW_Section::encodeDwg(DRW::Version version, dwgBufferW *buf,
                                     xDictHandle);
         for (std::uint32_t handle : m_sectionHandles)
             hb->putHandle(makeRefW(handle, DRW::DwgHardPointer));
-        return buf->isGood() && sb->isGood() && hb->isGood();
+        if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+        publish();
+        return true;
     }
 
     if (m_types.size() > static_cast<std::size_t>(kMaxSectionTypeCount))
@@ -13511,7 +13541,13 @@ bool DRW_Section::encodeDwg(DRW::Version version, dwgBufferW *buf,
         hb->putHandle(makeRefW(
             type.m_destinationBlockHandle, DRW::DwgSoftPointer));
     }
-    return buf->isGood() && sb->isGood() && hb->isGood();
+    if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+        return false;
+    publish();
+    return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_RenderSettings::parseCode(int code, const std::unique_ptr<dxfReader>& reader){

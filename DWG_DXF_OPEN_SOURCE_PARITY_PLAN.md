@@ -1600,6 +1600,17 @@ created locally from scratch for the specific control.
   allocation receipt](docs/research/p6-rendersettings-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 4,819 offsets across 234 cases.
 
+- **SECTION_MANAGER DWG encoder transaction safety:**
+  `DRW_Section::encodeDwg` stages body, string, and handle destinations and
+  publishes the manager profile only after the handle list and common links
+  succeed. Six generated AC1021 stream layouts sweep 59 allocation offsets
+  with rollback and same-object retry. The focused encoder-allocation and DWG
+  object-vector tests pass 2/2. No fixture was added. SECTION_SETTINGS and its
+  nested geometry/profile output still require separate coverage; this does
+  not qualify native section behavior. See the [SECTION_MANAGER allocation
+  receipt](docs/research/p6-section-manager-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 4,878 offsets across 240 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

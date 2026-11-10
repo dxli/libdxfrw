@@ -101,6 +101,11 @@ public:
     using DRW_RenderSettings::encodeDwg;
 };
 
+class SectionProbe final : public DRW_Section {
+public:
+    using DRW_Section::encodeDwg;
+};
+
 class PlotSettingsProbe final : public DRW_PlotSettings {
 public:
     using DRW_PlotSettings::encodeDwg;
@@ -1758,6 +1763,19 @@ RenderSettingsProbe makeRenderSettings() {
     return object;
 }
 
+SectionProbe makeSectionManager() {
+    SectionProbe object;
+    object.handle = 0xC000u;
+    object.parentHandle = 0x20u;
+    object.reactorHandles = {0x21u, 0x22u};
+    object.setDwgCommonObjectState(2, 1u, false);
+    object.xDictHandle = 0x23u;
+    object.m_kind = DRW_Section::Manager;
+    object.m_isLive = true;
+    object.m_sectionHandles = {0x31u, 0x32u, 0x33u};
+    return object;
+}
+
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
     GeoDataProbe geo;
     geo.handle = 0xA900u;
@@ -3211,6 +3229,19 @@ int main() {
         || !sweepIndexObject("RENDERSETTINGS", makeRenderSettings(),
             ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepIndexObject("RENDERSETTINGS", makeRenderSettings(),
+            ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepIndexObject("SECTION_MANAGER", makeSectionManager(),
+            ImageDefinitionStreams::R13InlineSeparateArguments,
+            DRW::AC1021)
+        || !sweepIndexObject("SECTION_MANAGER", makeSectionManager(),
+            ImageDefinitionStreams::Separate)
+        || !sweepIndexObject("SECTION_MANAGER", makeSectionManager(),
+            ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepIndexObject("SECTION_MANAGER", makeSectionManager(),
+            ImageDefinitionStreams::AllBody)
+        || !sweepIndexObject("SECTION_MANAGER", makeSectionManager(),
+            ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepIndexObject("SECTION_MANAGER", makeSectionManager(),
             ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
