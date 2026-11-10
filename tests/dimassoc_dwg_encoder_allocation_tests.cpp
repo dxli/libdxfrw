@@ -116,6 +116,11 @@ public:
     using DRW_AcDbPlaceholder::encodeDwg;
 };
 
+class MLineStyleProbe final : public DRW_MLineStyle {
+public:
+    using DRW_MLineStyle::encodeDwg;
+};
+
 class PointCloudDefProbe final : public DRW_PointCloudDef {
 public:
     using DRW_PointCloudDef::encodeDwg;
@@ -784,6 +789,77 @@ bool sweepAcDbPlaceholder(DRW::Version version, bool aliasHandles) {
         "ACDBPLACEHOLDER", aliasHandles ? "body-aliased-handles"
                                         : "separate-handles",
         version, encode, outputs);
+}
+
+MLineStyleProbe makeMLineStyle(bool paletteNames = false) {
+    MLineStyleProbe style;
+    style.handle = 0xDF00u;
+    style.parentHandle = 0xDF01u;
+    style.reactorHandles = {0xDF02u};
+    style.setDwgCommonObjectState(2, 1u, false);
+    style.xDictHandle = 0xDF03u;
+    style.name = "Generated transaction MLINESTYLE";
+    style.description = "Generated multiline style";
+    style.flags = 2;
+    style.startAngle = 0.25;
+    style.endAngle = 1.75;
+    style.fillColor = paletteNames ? 5 : 256;
+    if (paletteNames) {
+        style.fillColorName = "Style palette color";
+        style.fillColorBookName = "Generated palette";
+    }
+    DRW_MLineElement first;
+    first.offset = 0.5;
+    first.color = 1;
+    first.linetypeIndex = 1;
+    first.linetypeHandle = 0xDF10u;
+    DRW_MLineElement second;
+    second.offset = -0.5;
+    second.color = 2;
+    second.linetypeIndex = 2;
+    second.linetypeHandle = 0xDF11u;
+    style.elements = {first, second};
+    return style;
+}
+
+enum class MLineStyleStreamLayout {
+    Separate,
+    SharedStringAndHandle,
+    BodyStringDetachedHandles,
+    SeparateStringBodyHandles,
+    AllBody
+};
+
+bool sweepMLineStyle(DRW::Version version, MLineStyleStreamLayout layout,
+                     bool paletteNames = false) {
+    const MLineStyleProbe style = makeMLineStyle(paletteNames);
+    const auto encode = [&style](DRW::Version v, dwgBufferW* body,
+                                 dwgBufferW* strings, dwgBufferW* handles) {
+        return style.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [layout](dwgBufferW& body, dwgBufferW& strings,
+                                  dwgBufferW& handles) {
+        switch (layout) {
+        case MLineStyleStreamLayout::Separate:
+            return EncoderOutputs{&strings, &handles};
+        case MLineStyleStreamLayout::SharedStringAndHandle:
+            return EncoderOutputs{&strings, &strings};
+        case MLineStyleStreamLayout::BodyStringDetachedHandles:
+            return EncoderOutputs{&body, &handles};
+        case MLineStyleStreamLayout::SeparateStringBodyHandles:
+            return EncoderOutputs{&strings, &body};
+        case MLineStyleStreamLayout::AllBody:
+            return EncoderOutputs{};
+        }
+        return EncoderOutputs{&strings, &handles};
+    };
+    static const char* const names[] = {
+        "separate", "shared-string-handle", "body-string-detached-handles",
+        "separate-string-body-handles", "all-body"
+    };
+    return sweepTransactionalEncoder(
+        paletteNames ? "MLINESTYLE-PALETTE-CMC" : "MLINESTYLE",
+        names[static_cast<std::size_t>(layout)], version, encode, outputs);
 }
 
 RasterVariablesProbe makeRasterVariables() {
@@ -3475,6 +3551,17 @@ int main() {
         || !sweepAcDbPlaceholder(DRW::AC1018, true)
         || !sweepAcDbPlaceholder(DRW::AC1021, false)
         || !sweepAcDbPlaceholder(DRW::AC1021, true)
+        || !sweepMLineStyle(DRW::AC1027, MLineStyleStreamLayout::Separate)
+        || !sweepMLineStyle(DRW::AC1027, MLineStyleStreamLayout::SharedStringAndHandle)
+        || !sweepMLineStyle(DRW::AC1027, MLineStyleStreamLayout::BodyStringDetachedHandles)
+        || !sweepMLineStyle(DRW::AC1027, MLineStyleStreamLayout::SeparateStringBodyHandles)
+        || !sweepMLineStyle(DRW::AC1027, MLineStyleStreamLayout::AllBody)
+        || !sweepMLineStyle(DRW::AC1027, MLineStyleStreamLayout::Separate, true)
+        || !sweepMLineStyle(DRW::AC1032, MLineStyleStreamLayout::Separate)
+        || !sweepMLineStyle(DRW::AC1032, MLineStyleStreamLayout::SharedStringAndHandle)
+        || !sweepMLineStyle(DRW::AC1032, MLineStyleStreamLayout::BodyStringDetachedHandles)
+        || !sweepMLineStyle(DRW::AC1032, MLineStyleStreamLayout::SeparateStringBodyHandles)
+        || !sweepMLineStyle(DRW::AC1032, MLineStyleStreamLayout::AllBody)
         || !sweep(StreamAlias::Separate)
         || !sweep(StreamAlias::SharedStringAndHandle)
         || !sweep(StreamAlias::AllBody)

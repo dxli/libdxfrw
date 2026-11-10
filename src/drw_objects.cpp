@@ -21753,53 +21753,86 @@ bool DRW_MLineStyle::encodeDwg(DRW::Version version, dwgBufferW *buf,
         if (std::any_of(elements.begin(), elements.end(), invalidLinetypeIndex))
             return false;
     }
-    dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
-    dwgBufferW *hb = (hdlBuf && version > DRW::AC1014) ? hdlBuf : buf;
+    try {
+        dwgBufferW *const callerBody = buf;
+        dwgBufferW *const callerStringDest =
+            (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+        dwgBufferW *const callerHandleDest =
+            (hdlBuf != nullptr && version > DRW::AC1014)
+                ? hdlBuf : callerBody;
+        const bool separateStrings = callerStringDest != callerBody;
+        const bool separateHandles = callerHandleDest != callerBody
+            && callerHandleDest != callerStringDest;
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedStrings;
+        dwgBufferW stagedHandles;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+        buf = &stagedBody;
+        strBuf = separateStrings ? &stagedStrings : buf;
+        hdlBuf = separateHandles ? &stagedHandles
+            : callerHandleDest == callerStringDest && separateStrings
+                ? &stagedStrings : buf;
+        dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018)
+            ? strBuf : buf;
+        dwgBufferW *hb = (hdlBuf != nullptr && version > DRW::AC1014)
+            ? hdlBuf : buf;
 
-    sb->putVariableText(version, name);
-    sb->putVariableText(version, description);
-    buf->putBitShort(static_cast<std::uint16_t>(flags));
-    const auto writeColor = [version, buf, sb](
-            const EncodedCmcColor& color, int rgb24) {
-        if (version >= DRW::AC1018) {
-            buf->putCmColorWithFlags(version, color.method, color.index,
-                                     rgb24, *color.name, *color.bookName,
-                                     color.flags, sb);
-        } else {
-            buf->putCmColor(version, color.index);
+        sb->putVariableText(version, name);
+        sb->putVariableText(version, description);
+        buf->putBitShort(static_cast<std::uint16_t>(flags));
+        const auto writeColor = [version, buf, sb](
+                const EncodedCmcColor& color, int rgb24) {
+            if (version >= DRW::AC1018) {
+                buf->putCmColorWithFlags(version, color.method, color.index,
+                                         rgb24, *color.name, *color.bookName,
+                                         color.flags, sb);
+            } else {
+                buf->putCmColor(version, color.index);
+            }
+        };
+        writeColor(encodedFillColor, fillColor24);
+        buf->putBitDouble(startAngle);
+        buf->putBitDouble(endAngle);
+
+        const std::size_t numLines = elements.size();
+        buf->putRawChar8(static_cast<std::uint8_t>(numLines));
+        for (std::size_t i = 0; i < numLines; ++i) {
+            const DRW_MLineElement& e = elements[i];
+            buf->putBitDouble(e.offset);
+            EncodedCmcColor elementColor;
+            if (!prepareCmcColor(e.color, e.color24, e.colorMethod,
+                                 e.colorFlags, e.colorName, e.colorBookName,
+                                 e.colorDwgIndex, elementColor))
+                return false;
+            writeColor(elementColor, e.color24);
+            if (version < DRW::AC1032)
+                buf->putSBitShort(static_cast<std::int16_t>(e.linetypeIndex));
         }
-    };
-    writeColor(encodedFillColor, fillColor24);
-    buf->putBitDouble(startAngle);
-    buf->putBitDouble(endAngle);
-
-    const std::size_t numLines = elements.size();
-    buf->putRawChar8(static_cast<std::uint8_t>(numLines));
-    for (std::size_t i = 0; i < numLines; ++i) {
-        const DRW_MLineElement& e = elements[i];
-        buf->putBitDouble(e.offset);
-        EncodedCmcColor elementColor;
-        if (!prepareCmcColor(e.color, e.color24, e.colorMethod,
-                             e.colorFlags, e.colorName, e.colorBookName,
-                             e.colorDwgIndex,
-                             elementColor))
+        const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
+            ? extensionDictionaryFlag() : 0;
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()),
+            effectiveXDictFlag, &reactorHandles, xDictHandle);
+        if (version >= DRW::AC1032) {
+            for (std::size_t i = 0; i < numLines; ++i)
+                hb->putHandle(makeRefW(
+                    elements[i].linetypeHandle, DRW::DwgHardPointer));
+        }
+        if (!buf->isGood() || !sb->isGood() || !hb->isGood())
             return false;
-        writeColor(elementColor, e.color24);
-        if (version < DRW::AC1032)
-            buf->putSBitShort(static_cast<std::int16_t>(e.linetypeIndex));
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
-        ? extensionDictionaryFlag() : 0;
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()),
-        effectiveXDictFlag, &reactorHandles, xDictHandle);
-    if (version >= DRW::AC1032) {
-        for (std::size_t i = 0; i < numLines; ++i)
-            hb->putHandle(makeRefW(
-                elements[i].linetypeHandle, DRW::DwgHardPointer));
-    }
-    return buf->isGood() && sb->isGood() && hb->isGood();
 }
 
 // MLEADERSTYLE per ODA spec. Defensive parser following the MLEADER

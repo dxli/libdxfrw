@@ -1188,6 +1188,14 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P6 MLINESTYLE DWG encoder transaction safety:** the encoder now stages
+  body, string and handle destinations, including CMC palette strings and
+  AC1032 per-element linetype handles. Eleven generated AC1027/AC1032 layouts
+  sweep 325 allocation offsets; every failure preserves caller state and
+  same-object retry matches clean output. The focused allocation CTest passes.
+  This does not qualify physical wire layouts, graph closure, native rendering
+  or output support. See the [rollback receipt](docs/research/p6-mlinestyle-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **P6 ACDBPLACEHOLDER DWG encoder transaction safety:** the public writer and
   typed-writer route now stage body and handle output, preserving AC1012 inline
   handles, later detached handles and aliasing. Eight generated AC1012/AC1015/
