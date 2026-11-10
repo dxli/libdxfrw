@@ -9483,30 +9483,65 @@ bool DRW_ViewportEntityHeader::encodeDwg(DRW::Version version,
     const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
         ? xDictFlag : 0;
 
-    dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018)
-        ? strBuf : buf;
-    dwgBufferW *hb = (hdlBuf != nullptr && version > DRW::AC1014)
-        ? hdlBuf : buf;
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerStringDest =
+        (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+    dwgBufferW *const callerHandleDest =
+        (hdlBuf != nullptr && version > DRW::AC1014)
+            ? hdlBuf : callerBody;
+    const bool separateStrings = callerStringDest != callerBody;
+    const bool separateHandles = callerHandleDest != callerBody
+        && callerHandleDest != callerStringDest;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *callerBody;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
 
-    sb->putVariableText(version, name);
-    putTableEntryXrefFlags(version, *buf, flags);
-    buf->putBit(isOn ? 1 : 0);
+        buf = &stagedBody;
+        strBuf = separateStrings ? &stagedStrings : buf;
+        hdlBuf = separateHandles ? &stagedHandles
+            : callerHandleDest == callerStringDest && separateStrings
+                ? &stagedStrings : buf;
+        dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018)
+            ? strBuf : buf;
+        dwgBufferW *hb = (hdlBuf != nullptr && version > DRW::AC1014)
+            ? hdlBuf : buf;
 
-    const std::int32_t reactorCount =
-        static_cast<std::int32_t>(reactorHandles.size());
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), reactorCount,
-        effectiveXDictFlag, &reactorHandles, xDictHandle);
-    hb->putHandle(makeRefW(xrefBlockHandle, DRW::DwgHardPointer));
-    hb->putHandle(makeRefW(viewportEntityHandle, DRW::DwgSoftOwnership));
+        sb->putVariableText(version, name);
+        putTableEntryXrefFlags(version, *buf, flags);
+        buf->putBit(isOn ? 1 : 0);
 
-    // The parser represents the required self-link as zero so callers do not
-    // need to know the source handle. Recreate the on-disk self-link here.
-    const std::uint32_t previousHandle =
-        previousViewportEntityHeaderHandle == 0
-            ? handle : previousViewportEntityHeaderHandle;
-    hb->putHandle(makeRefW(previousHandle, DRW::DwgHardPointer));
-    return buf->isGood() && sb->isGood() && hb->isGood();
+        const std::int32_t reactorCount =
+            static_cast<std::int32_t>(reactorHandles.size());
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle), reactorCount,
+            effectiveXDictFlag, &reactorHandles, xDictHandle);
+        hb->putHandle(makeRefW(xrefBlockHandle, DRW::DwgHardPointer));
+        hb->putHandle(makeRefW(viewportEntityHandle, DRW::DwgSoftOwnership));
+
+        // The parser represents the required self-link as zero so callers do
+        // not need to know the source handle. Recreate the on-disk self-link.
+        const std::uint32_t previousHandle =
+            previousViewportEntityHeaderHandle == 0
+                ? handle : previousViewportEntityHeaderHandle;
+        hb->putHandle(makeRefW(previousHandle, DRW::DwgHardPointer));
+        if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_VxControl::parseDwg(DRW::Version version, dwgBuffer *buf,

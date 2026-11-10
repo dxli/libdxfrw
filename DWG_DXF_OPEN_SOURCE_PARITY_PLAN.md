@@ -1403,6 +1403,18 @@ created locally from scratch for the specific control.
   focused RasterVariables, WipeoutVariables, SortEntsTable, SpatialFilter,
   and GeoData CTests passed again; no assertion scope changed.
 
+- **VPORT_ENTITY_HEADER DWG encoder transaction safety:**
+  `DRW_ViewportEntityHeader::encodeDwg` now stages its body, string, and handle
+  destinations while preserving legacy xdictionary handling, xref/viewport
+  handle roles, and the reconstructed self-link. Six AC1018/AC1021 generated
+  stream profiles sweep 107 allocation offsets with full rollback and
+  same-object retry. The allocation, object-vector, handle-role, and runtime
+  dispatch tests pass 4/4. The broader `libdxfrw_viewport_original_sources`
+  test fails at `fault=16 parsed=0`; no baseline comparison was made, so keep
+  that failure untriaged. No fixture was added. See the [VPORT entity-header
+  allocation receipt](docs/research/p6-vport-entity-header-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 1,990 offsets across 94 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
