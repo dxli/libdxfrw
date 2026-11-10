@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <new>
 #include <string_view>
 #include <type_traits>
 #include <vector>
@@ -20041,28 +20042,61 @@ bool DRW_CellStyleMap::encodeDwg(DRW::Version version, dwgBufferW *buf,
         ? strBuf : buf;
     dwgBufferW *hBuf = version > DRW::AC1014 && handleBuf != nullptr
         ? handleBuf : buf;
-    buf->putBitLong(static_cast<std::int32_t>(m_cellStyles.size()));
-    for (const DRW_TableStyleCellStyle& style : m_cellStyles) {
-        putCellStyleMapCellStyle(version, *buf, *stringBuffer, style);
-    }
+    try {
+        // Keep aliases shared between staged streams: callers may legally
+        // direct multiple output categories to the same buffer.
+        dwgBufferW bodyStage = *buf;
+        std::optional<dwgBufferW> stringStageStorage;
+        dwgBufferW *stringStage = &bodyStage;
+        if (stringBuffer != buf) {
+            stringStageStorage.emplace(*stringBuffer);
+            stringStage = &*stringStageStorage;
+        }
+        std::optional<dwgBufferW> handleStageStorage;
+        dwgBufferW *handleStage = &bodyStage;
+        if (hBuf == buf) {
+            handleStage = &bodyStage;
+        } else if (hBuf == stringBuffer) {
+            handleStage = stringStage;
+        } else {
+            handleStageStorage.emplace(*hBuf);
+            handleStage = &*handleStageStorage;
+        }
 
-    putCommonObjectHandlePrefix(
-        hBuf, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()),
-        extensionDictionaryFlag(), &reactorHandles, xDictHandle);
-    for (const DRW_TableStyleCellStyle& style : m_cellStyles) {
-        if (!style.m_hasData)
-            continue;
-        hBuf->putHandle(makeRefW(style.m_contentFormat.m_textStyleHandle,
-                                 DRW::DwgHardPointer));
-        for (const DRW_TableStyleBorder& border : style.m_borders) {
-            if (border.m_edgeFlags != 0) {
-                hBuf->putHandle(makeRefW(border.m_lineTypeHandle,
-                                         DRW::DwgHardPointer));
+        bodyStage.putBitLong(static_cast<std::int32_t>(m_cellStyles.size()));
+        for (const DRW_TableStyleCellStyle& style : m_cellStyles)
+            putCellStyleMapCellStyle(version, bodyStage, *stringStage, style);
+
+        putCommonObjectHandlePrefix(
+            handleStage, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()),
+            extensionDictionaryFlag(), &reactorHandles, xDictHandle);
+        for (const DRW_TableStyleCellStyle& style : m_cellStyles) {
+            if (!style.m_hasData)
+                continue;
+            handleStage->putHandle(makeRefW(
+                style.m_contentFormat.m_textStyleHandle,
+                DRW::DwgHardPointer));
+            for (const DRW_TableStyleBorder& border : style.m_borders) {
+                if (border.m_edgeFlags != 0) {
+                    handleStage->putHandle(makeRefW(
+                        border.m_lineTypeHandle, DRW::DwgHardPointer));
+                }
             }
         }
+        if (!bodyStage.isGood() || !stringStage->isGood()
+            || !handleStage->isGood())
+            return false;
+
+        buf->swap(bodyStage);
+        if (stringBuffer != buf)
+            stringBuffer->swap(*stringStageStorage);
+        if (hBuf != buf && hBuf != stringBuffer)
+            hBuf->swap(*handleStageStorage);
+        return true;
+    } catch (const std::bad_alloc&) {
+        return false;
     }
-    return buf->isGood() && stringBuffer->isGood() && hBuf->isGood();
 }
 
 bool DRW_Layout::parseCode(int code, const std::unique_ptr<dxfReader>& reader){

@@ -4016,6 +4016,127 @@ void testCellStyleMapDwgEncodeRoundTrip(TestContext& t) {
     data.m_name = "Generated data style";
     source.m_cellStyles = {title, custom, data};
 
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    CellStyleMapCodecProbe cleanSource = source;
+    dwgBufferW expectedBody(&codec), expectedStrings(&codec),
+        expectedHandles(&codec);
+    expectedBody.putBitLong(0x5A17u);
+    expectedStrings.putVariableText(version, "retry-string-sentinel");
+    dwgHandle expectedHandle;
+    expectedHandle.code = DRW::DwgSoftPointer;
+    expectedHandle.size = 1;
+    expectedHandle.ref = 0xAAu;
+    expectedHandle.ref64 = 0xAAu;
+    expectedHandles.putHandle(expectedHandle);
+    const bool expectedEncoded = cleanSource.encodeDwg(
+        version, &expectedBody, &expectedStrings, &expectedHandles);
+    unsigned allocationFailures = 0u;
+    bool reachedFailureFreeOffset = false;
+    for (long failAt = 0; failAt < 256; ++failAt) {
+        CellStyleMapCodecProbe attempt = source;
+        dwgBufferW body(&codec), strings(&codec), handles(&codec);
+        body.putBitLong(0x5A17u);
+        strings.putVariableText(version, "retry-string-sentinel");
+        handles.putHandle(expectedHandle);
+        const auto bodyBefore = body.data();
+        const auto stringsBefore = strings.data();
+        const auto handlesBefore = handles.data();
+        const std::size_t handleOccurrencesBefore =
+            handles.handleOccurrences().size();
+        const std::uint64_t bodyBitsBefore = body.bitCount();
+        const std::uint64_t stringBitsBefore = strings.bitCount();
+        const std::uint64_t handleBitsBefore = handles.bitCount();
+        allocationFailureCountdown = failAt;
+        bool encoded = false;
+        bool threw = false;
+        try {
+            encoded = attempt.encodeDwg(version, &body, &strings, &handles);
+        } catch (const std::bad_alloc&) {
+            threw = true;
+        }
+        allocationFailureCountdown = -1;
+        if (encoded && !threw) {
+            reachedFailureFreeOffset = body.data() == expectedBody.data()
+                && strings.data() == expectedStrings.data()
+                && handles.data() == expectedHandles.data()
+                && handles.handleOccurrences().size()
+                    == expectedHandles.handleOccurrences().size()
+                && body.bitCount() == expectedBody.bitCount()
+                && strings.bitCount() == expectedStrings.bitCount()
+                && handles.bitCount() == expectedHandles.bitCount();
+            break;
+        }
+        ++allocationFailures;
+        const bool rolledBack = body.data() == bodyBefore
+            && strings.data() == stringsBefore
+            && handles.data() == handlesBefore
+            && handles.handleOccurrences().size()
+                == handleOccurrencesBefore
+            && body.bitCount() == bodyBitsBefore
+            && strings.bitCount() == stringBitsBefore
+            && handles.bitCount() == handleBitsBefore
+            && attempt.m_cellStyles.size() == source.m_cellStyles.size()
+            && attempt.m_cellStyles[1].m_contentFormat.m_valueFormatString
+                == source.m_cellStyles[1].m_contentFormat.m_valueFormatString
+            && attempt.m_cellStyles[1].m_borders.size()
+                == source.m_cellStyles[1].m_borders.size();
+        const bool retried = attempt.encodeDwg(
+                version, &body, &strings, &handles)
+            && body.data() == expectedBody.data()
+            && strings.data() == expectedStrings.data()
+            && handles.data() == expectedHandles.data()
+            && handles.handleOccurrences().size()
+                == expectedHandles.handleOccurrences().size()
+            && body.bitCount() == expectedBody.bitCount()
+            && strings.bitCount() == expectedStrings.bitCount()
+            && handles.bitCount() == expectedHandles.bitCount();
+        if (!rolledBack || !retried) {
+            std::cerr << "CELLSTYLEMAP allocation sweep failed at offset "
+                      << failAt << ", threw=" << threw
+                      << ", encoded=" << encoded
+                      << ", rollback=" << rolledBack
+                      << ", retry=" << retried
+                      << ", body=" << (body.data() == bodyBefore) << '/'
+                      << body.data().size() << '/' << bodyBefore.size()
+                      << ", strings=" << (strings.data() == stringsBefore)
+                      << '/' << strings.data().size() << '/'
+                      << stringsBefore.size()
+                      << ", handles=" << (handles.data() == handlesBefore)
+                      << '/' << handles.data().size() << '/'
+                      << handlesBefore.size()
+                      << ", handleOccurrences="
+                      << handles.handleOccurrences().size() << '/'
+                      << handleOccurrencesBefore
+                      << ", styles=" << attempt.m_cellStyles.size()
+                      << '/' << source.m_cellStyles.size()
+                      << ", formatMatches="
+                      << (attempt.m_cellStyles.size() > 1u
+                          && attempt.m_cellStyles[1].m_contentFormat
+                                 .m_valueFormatString
+                              == source.m_cellStyles[1].m_contentFormat
+                                     .m_valueFormatString) << '\n';
+            break;
+        }
+    }
+    t.expect(expectedEncoded && allocationFailures > 0u
+                 && reachedFailureFreeOffset,
+             "AC1021 CELLSTYLEMAP allocation failures roll back all buffers and retry on the same object");
+    CellStyleMapCodecProbe aliasedSource = source;
+    CellStyleMapCodecProbe defaultRoutedSource = source;
+    dwgBufferW aliasedBuffer(&codec), defaultRoutedBuffer(&codec);
+    const bool aliasRoutingMatches =
+        aliasedSource.encodeDwg(version, &aliasedBuffer, &aliasedBuffer,
+                                &aliasedBuffer)
+        && defaultRoutedSource.encodeDwg(
+            version, &defaultRoutedBuffer, nullptr, nullptr)
+        && aliasedBuffer.data() == defaultRoutedBuffer.data()
+        && aliasedBuffer.bitCount() == defaultRoutedBuffer.bitCount();
+    t.expect(aliasRoutingMatches,
+             "AC1021 CELLSTYLEMAP staging preserves aliased output-buffer routing");
+    std::cout << "AC1021 CELLSTYLEMAP allocation rollback/retry: "
+              << allocationFailures << " injected failures, same-object retries PASS\n";
+
     t.expect(source.validateDwgPayload(version),
              "AC1021 CELLSTYLEMAP validates a complete generated style set");
     t.expect(!source.validateDwgPayload(DRW::AC1024),
@@ -4143,8 +4264,6 @@ void testCellStyleMapDwgEncodeRoundTrip(TestContext& t) {
 
     CellStyleMapCodecProbe invalid = source;
     invalid.m_cellStyles[1].m_contentFormat.m_valueUnitType = 0x10;
-    DRW_TextCodec codec;
-    codec.setVersion(version, false);
     dwgBufferW body(&codec), strings(&codec), handles(&codec);
     body.putBitLong(77);
     strings.putVariableText(version, "sentinel");
