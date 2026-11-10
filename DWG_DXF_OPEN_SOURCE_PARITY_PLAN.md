@@ -1995,12 +1995,20 @@ the unrelated IMAGEDEF owner role. The corrected LibreDWG bytes are a
 differential target only; independent native/semantic validation remains open.
 See the [inline-SAB carrier gate receipt](docs/research/p4-ac1021-inline-sab-torus-dxf-carrier-gate-2026-11-08.json).
 
-**Next:** run the exact corrected SAT payload through the pinned InventorLoader
-inside native FreeCAD and capture B-rep validity and geometry measurements,
-then obtain independent-kernel and source-native evidence. Broader native
-consumer/platform qualification follows separately. Do not promote support
-from parser fields, the local reader/writer loop, or the LibreDWG comparison.
-Keep full-source IMAGEDEF and opaque-frame output gates separate.
+**Completed selected-profile check:** the exact corrected SAT payload was run
+through the pinned InventorLoader and native FreeCAD Part/OpenCASCADE; it built
+one valid closed shell and solid, with bounds and analytic area/volume matching
+the source-derived torus. The ODA-produced DXF carrier was also decoded by
+ACadRust and matched the selected source-derived torus fields. These receipts
+close only that selected torus semantic check, not an independent-kernel,
+source-native, full ACDS/history, or whole-source output gate. See the [native
+B-rep receipt](docs/research/p7-ac1021-freecad-native-torus-brep-2026-11-08.json)
+and [semantic cross-check receipt](docs/research/p7-oda-ac1021-torus-semantic-crosscheck-2026-11-09.json).
+Next seek a genuinely independent SAT-to-B-rep kernel and source-native
+acceptance for a selected profile. Broader native consumer/platform
+qualification remains separate. Do not promote support from parser fields,
+the local reader/writer loop, or LibreDWG comparison. Keep full-source
+IMAGEDEF and opaque-frame output gates separate.
 
 Use the pinned existing local source only as an opt-in/manual probe. During the
 edit loop, rebuild `libdxfrw_dwg_local_roundtrip` once and run the hash-pinned
