@@ -1232,6 +1232,17 @@ created locally from scratch for the specific control.
   output. No DWG/DXF fixture was added. See the [allocation rollback
   receipt](docs/research/p6-imagedef-reactor-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **IMAGEDEF DWG compound-writer transaction safety:**
+  `DRW_ImageDef::encodeDwg` now stages its effective body, detached string and
+  handle destinations before publishing, retaining the AC1012 inline layout,
+  AC1018 detached-handle layout and AC1021 stream alias combinations. The
+  generated control sweeps 127 reached allocation offsets across seven
+  version/alias cases; failures preserve caller streams and corrected same-
+  object retries match clean output. The image compound transaction, object
+  vector, allocation retry and DIMASSOC readback tests pass 4/4. This does not
+  resolve the IMAGEDEF parent-role conflict or authorize image output. No
+  DWG/DXF fixture was added. See the [allocation rollback receipt](docs/research/p6-imagedef-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

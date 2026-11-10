@@ -7020,27 +7020,54 @@ bool DRW_ImageDef::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || !std::isfinite(up) || !std::isfinite(vp)
         || !dwgSafety::validReactorCount(numReactors) || xDictFlag > 1)
         return false;
-    dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018) ? strBuf : buf;
+    const bool separateStrings = strBuf != nullptr && strBuf != buf
+        && version > DRW::AC1018;
     // R2004/R2007 use a detached trailing handle stream even though the
     // string stream is not detached until R2007. The writer supplies that
     // buffer from AC1015 onward so objSize stops before the handles.
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
-        ? handleBuf : buf;
+    const bool separateHandles = handleBuf != nullptr && handleBuf != buf
+        && version > DRW::AC1014;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *buf;
+        if (separateStrings)
+            stagedStrings = *strBuf;
+        if (separateHandles && (!separateStrings || handleBuf != strBuf))
+            stagedHandles = *handleBuf;
+        dwgBufferW *sb = separateStrings ? &stagedStrings : &stagedBody;
+        dwgBufferW *hb = !separateHandles ? &stagedBody
+            : (separateStrings && handleBuf == strBuf
+                ? &stagedStrings : &stagedHandles);
 
-    buf->putBitLong(static_cast<std::int32_t>(imgVersion));
-    buf->putRawDouble(u);
-    buf->putRawDouble(v);
-    sb->putVariableText(version, name);
-    buf->putBit(loaded ? 1 : 0);
-    buf->putRawChar8(static_cast<std::uint8_t>(resolution));
-    buf->putRawDouble(up);
-    buf->putRawDouble(vp);
+        stagedBody.putBitLong(static_cast<std::int32_t>(imgVersion));
+        stagedBody.putRawDouble(u);
+        stagedBody.putRawDouble(v);
+        sb->putVariableText(version, name);
+        stagedBody.putBit(loaded ? 1 : 0);
+        stagedBody.putRawChar8(static_cast<std::uint8_t>(resolution));
+        stagedBody.putRawDouble(up);
+        stagedBody.putRawDouble(vp);
 
-    // Common object handle prefix. IMAGEDEF has no table-entry xref slot.
-    putCommonObjectHandlePrefix(hb, static_cast<std::uint32_t>(parentHandle),
-                                numReactors, xDictFlag, &reactorHandles,
-                                xDictHandle, DRW::DwgHardOwnership);
-    return buf->isGood() && sb->isGood() && hb->isGood();
+        // Common object handle prefix. IMAGEDEF has no table-entry xref slot.
+        putCommonObjectHandlePrefix(hb,
+                                    static_cast<std::uint32_t>(parentHandle),
+                                    numReactors, xDictFlag, &reactorHandles,
+                                    xDictHandle, DRW::DwgHardOwnership);
+        if (!stagedBody.isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (separateStrings)
+            strBuf->swap(stagedStrings);
+        if (separateHandles
+            && (!separateStrings || handleBuf != strBuf))
+            handleBuf->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_PlotSettings::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
