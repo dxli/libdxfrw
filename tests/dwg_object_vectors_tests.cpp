@@ -328,6 +328,14 @@ public:
   std::uint16_t dwgType() const { return oType; }
 };
 
+class TextCodecProbe final : public DRW_Text {
+public:
+  using DRW_Text::encodeDwg;
+
+  void setDwgType(std::uint16_t value) { oType = value; }
+  std::uint16_t dwgType() const { return oType; }
+};
+
 class ViewportCodecProbe final : public DRW_Viewport {
 public:
   using DRW_Viewport::encodeDwg;
@@ -24506,7 +24514,153 @@ void testMTextDwgEncodeAllocationRollback(TestContext& t) {
   }
 }
 
-void testMTextDxfBackgroundTrueColor(TestContext& t) {
+void testTextDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    TextCodecProbe source;
+    source.handle = version == DRW::AC1021 ? 0xAC10u : 0xAC20u;
+    source.parentHandle = 0xAC30u;
+    source.reactorHandles = {0xAC40u};
+    source.xDictHandle = 0xAC50u;
+    source.setDwgType(0x777u);
+    source.text = "TEXT_ALLOCATION_RETRY_\xCE\xA9";
+    source.basePoint = DRW_Coord(1.25, 2.5, 3.75);
+    source.secPoint = DRW_Coord(4.5, 5.75, 3.75);
+    source.extPoint = DRW_Coord(0.0, 0.0, 1.0);
+    source.height = 2.5;
+    source.widthscale = 0.8;
+    source.angle = 15.0;
+    source.oblique = 5.0;
+    source.alignH = DRW_Text::HCenter;
+    source.alignV = DRW_Text::VMiddle;
+
+    dwgBufferW expectedBody(&codec), expectedStrings(&codec),
+        expectedHandles(&codec);
+    expectedBody.putBitLong(0x5A17u);
+    expectedStrings.putVariableText(version, "retry-string-sentinel");
+    dwgHandle seedHandle;
+    seedHandle.code = DRW::DwgSoftPointer;
+    seedHandle.size = 1u;
+    seedHandle.ref = 0xAAu;
+    seedHandle.ref64 = 0xAAu;
+    expectedHandles.putHandle(seedHandle);
+    TextCodecProbe expectedSource = source;
+    const bool expectedEncoded = expectedSource.encodeDwg(
+        version, &expectedBody, 0u, &expectedStrings, &expectedHandles);
+
+    unsigned failures = 0u;
+    bool reachedFailureFreeOffset = false;
+    bool rollbackAndRetry = true;
+    for (long failAt = 0; failAt < 512; ++failAt) {
+      TextCodecProbe attempt = source;
+      dwgBufferW body(&codec), strings(&codec), handles(&codec);
+      body.putBitLong(0x5A17u);
+      strings.putVariableText(version, "retry-string-sentinel");
+      handles.putHandle(seedHandle);
+      const auto bodyBefore = body.data();
+      const auto stringsBefore = strings.data();
+      const auto handlesBefore = handles.data();
+      const auto bodyBitsBefore = body.bitCount();
+      const auto stringBitsBefore = strings.bitCount();
+      const auto handleBitsBefore = handles.bitCount();
+      const auto handleCountBefore = handles.handleOccurrences().size();
+
+      allocationFailureCountdown = failAt;
+      bool encoded = false;
+      bool threw = false;
+      try {
+        encoded = attempt.encodeDwg(version, &body, 0u, &strings, &handles);
+      } catch (const std::bad_alloc &) {
+        threw = true;
+      }
+      const long countdownAfter = allocationFailureCountdown.exchange(-1);
+      if (countdownAfter >= 0) {
+        reachedFailureFreeOffset =
+            encoded && !threw && body.data() == expectedBody.data() &&
+            strings.data() == expectedStrings.data() &&
+            handles.data() == expectedHandles.data() &&
+            handles.handleOccurrences().size() ==
+                expectedHandles.handleOccurrences().size() &&
+            attempt.dwgType() == 1u &&
+            body.bitCount() == expectedBody.bitCount() &&
+            strings.bitCount() == expectedStrings.bitCount() &&
+            handles.bitCount() == expectedHandles.bitCount();
+        break;
+      }
+
+      ++failures;
+      const bool rolledBack =
+          !encoded && !threw && body.data() == bodyBefore &&
+          strings.data() == stringsBefore && handles.data() == handlesBefore &&
+          body.bitCount() == bodyBitsBefore &&
+          strings.bitCount() == stringBitsBefore &&
+          handles.bitCount() == handleBitsBefore &&
+          handles.handleOccurrences().size() == handleCountBefore &&
+          attempt.dwgType() == source.dwgType() && attempt.text == source.text;
+      const bool retried =
+          attempt.encodeDwg(version, &body, 0u, &strings, &handles) &&
+          body.data() == expectedBody.data() &&
+          strings.data() == expectedStrings.data() &&
+          handles.data() == expectedHandles.data() &&
+          handles.handleOccurrences().size() ==
+              expectedHandles.handleOccurrences().size() &&
+          attempt.dwgType() == 1u &&
+          body.bitCount() == expectedBody.bitCount() &&
+          strings.bitCount() == expectedStrings.bitCount() &&
+          handles.bitCount() == expectedHandles.bitCount();
+      rollbackAndRetry = rollbackAndRetry && rolledBack && retried;
+      if (!rolledBack || !retried)
+        break;
+    }
+    const std::string label =
+        version == DRW::AC1021 ? "AC1021 TEXT" : "AC1024 TEXT";
+    t.expect(expectedEncoded && failures > 0u && reachedFailureFreeOffset &&
+                 rollbackAndRetry,
+             label +
+                 " encoder rolls back allocation failures and retries exactly");
+
+    TextCodecProbe cleanAliased = source;
+    TextCodecProbe retryAliased = source;
+    dwgBufferW expectedAlias(&codec), actualAlias(&codec);
+    const bool expectedAliasOk = cleanAliased.encodeDwg(
+        version, &expectedAlias, 0u, &expectedAlias, &expectedAlias);
+    allocationFailureCountdown = 0;
+    bool aliasThrew = false;
+    bool aliasEncoded = false;
+    try {
+      aliasEncoded = retryAliased.encodeDwg(version, &actualAlias, 0u,
+                                            &actualAlias, &actualAlias);
+    } catch (const std::bad_alloc &) {
+      aliasThrew = true;
+    }
+    allocationFailureCountdown = -1;
+    const bool aliasRolledBack = !aliasEncoded && !aliasThrew &&
+                                 actualAlias.data().empty() &&
+                                 actualAlias.bitCount() == 0u &&
+                                 actualAlias.handleOccurrences().empty() &&
+                                 retryAliased.dwgType() == source.dwgType();
+    const bool aliasRetried =
+        retryAliased.encodeDwg(version, &actualAlias, 0u, &actualAlias,
+                               &actualAlias) &&
+        actualAlias.data() == expectedAlias.data() &&
+        actualAlias.handleOccurrences().size() ==
+            expectedAlias.handleOccurrences().size() &&
+        retryAliased.dwgType() == 1u &&
+        actualAlias.bitCount() == expectedAlias.bitCount();
+    t.expect(expectedAliasOk && aliasRolledBack && aliasRetried,
+             label + " preserves all-stream alias state on failure and retry");
+    std::cout << label << " allocation failures=" << failures
+              << " rollback/retry="
+              << (rollbackAndRetry && reachedFailureFreeOffset &&
+                          aliasRolledBack && aliasRetried
+                      ? "PASS"
+                      : "FAIL")
+              << '\n';
+  }
+}
+
+void testMTextDxfBackgroundTrueColor(TestContext &t) {
   // DXF stores both an ACI fallback (63) and active RGB (421). It has no
   // parsed native CMC provenance. DWG C2 has one RGB value and a reserved
   // zero index, not a second active ACI. Preserve the caller's fallback.
@@ -24529,14 +24683,17 @@ void testMTextDxfBackgroundTrueColor(TestContext& t) {
           source.m_backgroundTransparency = 1234;
           MTextFrame frame;
           const bool encoded = makeMTextFrame(version, source, frame);
-          t.expect(encoded, "DXF MTEXT RGB with independent ACI fallback encodes");
-          if (!encoded) continue;
-          t.expect(source.m_backgroundColor == fallback
-                       && source.m_backgroundColorTrue == rgb
-                       && source.m_backgroundColorName == name
-                       && source.m_backgroundColorDwgMethod == 0xFFu
-                       && !source.m_backgroundColorDwgMetadataPresent,
-                   "native color projection leaves DXF source color fields unchanged");
+          t.expect(encoded,
+                   "DXF MTEXT RGB with independent ACI fallback encodes");
+          if (!encoded)
+            continue;
+          t.expect(source.m_backgroundColor == fallback &&
+                       source.m_backgroundColorTrue == rgb &&
+                       source.m_backgroundColorName == name &&
+                       source.m_backgroundColorDwgMethod == 0xFFu &&
+                       !source.m_backgroundColorDwgMetadataPresent,
+                   "native color projection leaves DXF source color fields "
+                   "unchanged");
 
           dwgBuffer wire(frame.bodyBytes.data(), frame.bodyBytes.size(), &codec);
           dwgBuffer strings(frame.stringBytes.data(), frame.stringBytes.size(), &codec);
@@ -27418,6 +27575,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testMTextDwgEncodeAllocationRollback(context);
       std::cout << "MTEXT DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--text-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testTextDwgEncodeAllocationRollback(context);
+      std::cout << "TEXT DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

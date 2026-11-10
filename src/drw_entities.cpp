@@ -8024,50 +8024,106 @@ bool drwHasDwgTextAlignmentElevation(const DRW_Text& text) noexcept {
         && (alignment == 0.0 || alignment == elevation);
 }
 
-bool DRW_Text::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
-    if (!drwHasDwgTextAlignmentElevation(*this)) return false;
-    (void)bs;
-    oType = 1;  // TEXT class id — see dwgreader.cpp:1208
-    if (!encodeDwgCommon(version, buf)) return false;
+bool DRW_Text::encodeDwg(DRW::Version version, dwgBufferW *buf,
+                         std::uint32_t bs, dwgBufferW *strBuf,
+                         dwgBufferW *handleBuf) {
+  (void)bs;
+  if (buf == nullptr || !drwHasDwgTextAlignmentElevation(*this))
+    return false;
+
+  dwgBufferW *const bodyTarget = buf;
+  dwgBufferW *const stringTarget = strBuf != nullptr ? strBuf : bodyTarget;
+  dwgBufferW *const handleTarget =
+      handleBuf != nullptr ? handleBuf : bodyTarget;
+  try {
+    dwgBufferW bodyStage = *bodyTarget;
+    std::optional<dwgBufferW> stringStageStorage;
+    dwgBufferW *stringStage = &bodyStage;
+    if (stringTarget != bodyTarget) {
+      stringStageStorage.emplace(*stringTarget);
+      stringStage = &*stringStageStorage;
+    }
+    std::optional<dwgBufferW> handleStageStorage;
+    dwgBufferW *handleStage = &bodyStage;
+    if (handleTarget == bodyTarget) {
+      handleStage = &bodyStage;
+    } else if (handleTarget == stringTarget) {
+      handleStage = stringStage;
+    } else {
+      handleStageStorage.emplace(*handleTarget);
+      handleStage = &*handleStageStorage;
+    }
+
+    buf = &bodyStage;
+    strBuf = strBuf != nullptr ? stringStage : nullptr;
+    handleBuf = handleBuf != nullptr ? handleStage : nullptr;
+    struct ObjectTypeRollback {
+      decltype(oType) &value;
+      decltype(oType) original;
+      bool committed{false};
+      ~ObjectTypeRollback() {
+        if (!committed)
+          value = original;
+      }
+    } typeRollback{oType, oType};
+    oType = 1; // TEXT class id — see dwgreader.cpp:1208
+    if (!encodeDwgCommon(version, buf))
+      return false;
 
     // R2000+ TEXT body — mirror of DRW_Text::parseDwg.  We emit
     // data_flags=0 so the reader sees every optional field rather than
     // substituting defaults — keeps the encoder simple, costs ~30 bytes
     // per TEXT versus the most compressed form.
-    buf->putRawChar8(0);                              // data_flags=0
-    buf->putRawDouble(basePoint.z);                   // elevation RD
-    buf->putRawDouble(basePoint.x);                   // insertion 2RD
+    buf->putRawChar8(0);            // data_flags=0
+    buf->putRawDouble(basePoint.z); // elevation RD
+    buf->putRawDouble(basePoint.x); // insertion 2RD
     buf->putRawDouble(basePoint.y);
-    buf->putDefaultDouble(basePoint.x, secPoint.x);   // alignment 2DD
+    buf->putDefaultDouble(basePoint.x, secPoint.x); // alignment 2DD
     buf->putDefaultDouble(basePoint.y, secPoint.y);
     buf->putExtrusion(extPoint, /*b_R2000_style=*/true);
     buf->putThickness(thickness, /*b_R2000_style=*/true);
-    buf->putRawDouble(oblique / ARAD);                // oblique radians
+    buf->putRawDouble(oblique / ARAD); // oblique radians
     // Angle: struct holds degrees; on-disk format is radians.  Reader
     // does `angle *= ARAD` (180/π) after read.  Inverse: divide here.
     buf->putRawDouble(angle / ARAD);
-    buf->putRawDouble(height);                        // text height
-    buf->putRawDouble(widthscale);                    // width factor
-    (strBuf ? strBuf : buf)->putVariableText(version, text);  // text string
+    buf->putRawDouble(height);                               // text height
+    buf->putRawDouble(widthscale);                           // width factor
+    (strBuf ? strBuf : buf)->putVariableText(version, text); // text string
     buf->putBitShort(static_cast<std::uint16_t>(textgen));
     buf->putBitShort(static_cast<std::uint16_t>(alignH));
     buf->putBitShort(static_cast<std::uint16_t>(alignV));
 
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
+    if (!encodeDwgEntHandle(version, buf, handleBuf))
+      return false;
 
     // styleH — hard pointer to STYLE table record.  Default points at
     // the STANDARD textstyle (handle 0x13) if caller hasn't set one.
     dwgHandle sH;
     std::uint32_t sref = (styleH.ref == 0) ? 0x13 : styleH.ref;
-    sH.code = 5;  // hard pointer
-    sH.ref  = sref;
+    sH.code = 5; // hard pointer
+    sH.ref = sref;
     sH.size = 0;
     if (sref != 0) {
-        std::uint32_t t = sref;
-        while (t != 0) { t >>= 8; ++sH.size; }
+      std::uint32_t t = sref;
+      while (t != 0) {
+        t >>= 8;
+        ++sH.size;
+      }
     }
     (handleBuf ? handleBuf : buf)->putHandle(sH);
+    if (!buf->isGood() || !stringStage->isGood() || !handleStage->isGood())
+      return false;
+
+    bodyTarget->swap(bodyStage);
+    if (stringTarget != bodyTarget)
+      stringTarget->swap(*stringStageStorage);
+    if (handleTarget != bodyTarget && handleTarget != stringTarget)
+      handleTarget->swap(*handleStageStorage);
+    typeRollback.committed = true;
     return true;
+  } catch (const std::bad_alloc &) {
+    return false;
+  }
 }
 
 bool DRW_Ellipse::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
