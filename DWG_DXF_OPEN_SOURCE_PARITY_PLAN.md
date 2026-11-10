@@ -1589,6 +1589,17 @@ created locally from scratch for the specific control.
   unqualified. See the [SUNSTUDY allocation receipt](docs/research/p6-sunstudy-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 4,640 offsets across 227 cases.
 
+- **RENDERSETTINGS DWG encoder transaction safety:**
+  `DRW_RenderSettings::encodeDwg` stages body, preset strings, handles, and
+  raw-tail replay, and now catches allocation failures across the complete
+  writer path. Seven generated AC1015/AC1018/AC1021 Settings profiles sweep
+  179 allocation offsets with rollback and same-object retry. The focused
+  encoder-allocation and DWG object-vector tests pass 2/2. No fixture was
+  added. This does not qualify the other RenderSettings subclasses, opaque-tail
+  semantics, producer breadth, or native rendering. See the [RENDERSETTINGS
+  allocation receipt](docs/research/p6-rendersettings-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 4,819 offsets across 234 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

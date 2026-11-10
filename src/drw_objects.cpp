@@ -14067,6 +14067,32 @@ bool DRW_RenderSettings::encodeDwg(DRW::Version version, dwgBufferW *buf,
         && version != m_rawDataVersion)
         return false;
 
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerStringDest =
+        version > DRW::AC1018 && strBuf != nullptr ? strBuf : callerBody;
+    dwgBufferW *const callerHandleDest =
+        version > DRW::AC1014 && handleBuf != nullptr
+            ? handleBuf : callerBody;
+    const bool separateStrings = callerStringDest != callerBody;
+    const bool separateHandles = callerHandleDest != callerBody
+        && callerHandleDest != callerStringDest;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *callerBody;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+    } catch (...) {
+        return false;
+    }
+    buf = &stagedBody;
+    strBuf = separateStrings ? &stagedStrings : buf;
+    handleBuf = separateHandles ? &stagedHandles
+        : callerHandleDest == callerStringDest && separateStrings
+            ? &stagedStrings : buf;
     dwgBufferW *stringBuf = version > DRW::AC1018 && strBuf != nullptr
         ? strBuf : buf;
     dwgBufferW *handles = version > DRW::AC1014 && handleBuf != nullptr
@@ -14149,6 +14175,7 @@ bool DRW_RenderSettings::encodeDwg(DRW::Version version, dwgBufferW *buf,
                 return false;
         }
     }
+    try {
     const auto putClassVersion = [&]() {
         const std::int32_t value = longAt(0, m_classVersion);
         if (version >= DRW::AC1027
@@ -14279,7 +14306,18 @@ bool DRW_RenderSettings::encodeDwg(DRW::Version version, dwgBufferW *buf,
         handles, static_cast<std::uint32_t>(parentHandle),
         static_cast<std::int32_t>(reactorHandles.size()), xDictFlag,
         &reactorHandles, xDictHandle);
-    return buf->isGood() && stringBuf->isGood() && handles->isGood();
+    if (!buf->isGood() || !stringBuf->isGood() || !handles->isGood())
+        return false;
+
+    callerBody->swap(stagedBody);
+    if (separateStrings)
+        callerStringDest->swap(stagedStrings);
+    if (separateHandles)
+        callerHandleDest->swap(stagedHandles);
+    return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 void DRW_SunStudy::reset() {

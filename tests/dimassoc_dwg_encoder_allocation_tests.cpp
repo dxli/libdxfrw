@@ -96,6 +96,11 @@ public:
     using DRW_SunStudy::encodeDwg;
 };
 
+class RenderSettingsProbe final : public DRW_RenderSettings {
+public:
+    using DRW_RenderSettings::encodeDwg;
+};
+
 class PlotSettingsProbe final : public DRW_PlotSettings {
 public:
     using DRW_PlotSettings::encodeDwg;
@@ -1734,6 +1739,25 @@ SunStudyProbe makeSunStudy() {
     return object;
 }
 
+RenderSettingsProbe makeRenderSettings() {
+    RenderSettingsProbe object;
+    object.handle = 0xBF00u;
+    object.parentHandle = 0x20u;
+    object.reactorHandles = {0x21u, 0x22u};
+    object.setDwgCommonObjectState(2, 1u, false);
+    object.xDictHandle = 0x23u;
+    object.m_kind = DRW_RenderSettings::Settings;
+    object.m_classVersion = 2;
+    object.m_name = "transaction render preset";
+    object.m_longs = {2, 7};
+    object.m_strings = {object.m_name, "preview.png", "receipt text"};
+    object.m_bools = {true, false, true, false};
+    object.m_displayIndex = 7;
+    object.m_fogEnabled = true;
+    object.m_backfacesEnabled = true;
+    return object;
+}
+
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
     GeoDataProbe geo;
     geo.handle = 0xA900u;
@@ -3172,6 +3196,21 @@ int main() {
         || !sweepIndexObject("SUNSTUDY", makeSunStudy(),
             ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepIndexObject("SUNSTUDY", makeSunStudy(),
+            ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepIndexObject("RENDERSETTINGS", makeRenderSettings(),
+            ImageDefinitionStreams::R13InlineSeparateArguments,
+            DRW::AC1015)
+        || !sweepIndexObject("RENDERSETTINGS", makeRenderSettings(),
+            ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepIndexObject("RENDERSETTINGS", makeRenderSettings(),
+            ImageDefinitionStreams::Separate)
+        || !sweepIndexObject("RENDERSETTINGS", makeRenderSettings(),
+            ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepIndexObject("RENDERSETTINGS", makeRenderSettings(),
+            ImageDefinitionStreams::AllBody)
+        || !sweepIndexObject("RENDERSETTINGS", makeRenderSettings(),
+            ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepIndexObject("RENDERSETTINGS", makeRenderSettings(),
             ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
