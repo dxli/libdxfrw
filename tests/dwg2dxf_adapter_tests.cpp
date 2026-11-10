@@ -36698,10 +36698,10 @@ bool verifyRetainedTable(const dx_data& data) {
         || retained.m_borderColorOverrideFlags != 4u
         || retained.m_borderLineweightOverrideFlags != 5u
         || retained.m_borderVisibilityOverrideFlags != 6u
-        || !retained.m_hasSemanticContent || !retained.m_semanticContentComplete
+        || !retained.m_hasSemanticContent || retained.m_semanticContentComplete
         || cells.size() != 3u || retained.m_content.m_columns.size() != 2u
         || cells[2].m_cells.size() != 2u)
-        return fail("retained ACAD_TABLE lost table-level fields or its cell matrix: version="
+        return fail("retained ACAD_TABLE lost table-level fields or its incomplete-content disposition: version="
             + std::to_string(retained.m_dataVersion) + " owner="
             + std::to_string(retained.m_ownerBlockRecordHandle) + " flow="
             + std::to_string(retained.m_flowDirection) + " margins="
@@ -41890,6 +41890,13 @@ bool tableWriterRoundTrip(bool binary) {
     DRW_Table incompleteLinkedTable = makeTextTableControl();
     incompleteLinkedTable.handle = 0x516u;
     incompleteLinkedTable.m_semanticContentComplete = false;
+    incompleteLinkedTable.proxyGraphics = generatedDwgTableProxyGraphic();
+    incompleteLinkedTable.numProxyGraph = static_cast<int>(
+        incompleteLinkedTable.proxyGraphics.size());
+    DrwEntityEncodeTestAccess::setParsedDwgProxy(
+        incompleteLinkedTable, DRW::AC1027);
+    if (!incompleteLinkedTable.authorizeParsedDwgProxyGraphicsReplay())
+        return fail("could not authorize generated incomplete TABLE proxy cache");
     DRW_TableCell& incompleteLinkedCell =
         incompleteLinkedTable.m_content.m_rows[0].m_cells[0];
     incompleteLinkedCell.m_hasLinkedData = true;
@@ -41918,14 +41925,76 @@ bool tableWriterRoundTrip(bool binary) {
                     && insert->name == incompleteLinkedTable.name;
             }))
         : 0u;
+    bool retainedProxyGraphics = false;
+    if (fallbackReadback.mBlock != nullptr) {
+        for (const DRW_Entity* entity : fallbackReadback.mBlock->ent) {
+            const auto* insert = dynamic_cast<const DRW_Insert*>(entity);
+            if (insert != nullptr
+                && insert->name == incompleteLinkedTable.name
+                && insert->proxyGraphics == incompleteLinkedTable.proxyGraphics) {
+                retainedProxyGraphics = true;
+                break;
+            }
+        }
+    }
     if (!fallbackImported || !fallbackReadback.tables.empty()
-        || retainedInserts != 1u)
+        || retainedInserts != 1u || !retainedProxyGraphics)
         return fail("incomplete linked TABLE was not downgraded to one readable INSERT fallback: imported="
             + std::to_string(fallbackImported) + " tables="
             + std::to_string(fallbackReadback.tables.size()) + " insert="
             + std::to_string(retainedInserts) + " entities="
             + std::to_string(fallbackReadback.mBlock != nullptr
-                ? fallbackReadback.mBlock->ent.size() : 0u));
+                ? fallbackReadback.mBlock->ent.size() : 0u)
+            + " proxyGraphics=" + std::to_string(retainedProxyGraphics));
+
+    const std::filesystem::path fallbackRejected =
+        std::filesystem::temp_directory_path()
+        / ("libdxfrw-table-linked-fallback-reject-" + std::to_string(nonce)
+           + (binary ? "-binary.dxf" : "-ascii.dxf"));
+    const std::string fallbackSentinel = "prior incomplete TABLE proxy output";
+    {
+        std::ofstream output(fallbackRejected, std::ios::binary | std::ios::trunc);
+        output << fallbackSentinel;
+    }
+    if (fallbackWriter.fileExport(
+            fallbackRejected.string(), DRW::AC1024, binary, &fallbackData,
+            false, false, dx_dxfSourceTextPolicy::Compatible,
+            DRW::DxfTextWritePolicy::Compatible,
+            dx_dxfProxyGraphicsPolicy::FailIfNotPreserved)) {
+        std::filesystem::remove(fallbackRejected, ignored);
+        return fail("incomplete TABLE proxy cache was accepted for another revision");
+    }
+    std::ifstream fallbackPreserved(fallbackRejected, std::ios::binary);
+    if (std::string(std::istreambuf_iterator<char>(fallbackPreserved), {})
+        != fallbackSentinel) {
+        std::filesystem::remove(fallbackRejected, ignored);
+        return fail("wrong-revision TABLE proxy refusal replaced its destination");
+    }
+    std::filesystem::remove(fallbackRejected, ignored);
+    if (!fallbackWriter.fileExport(
+            fallbackOutput.string(), DRW::AC1027, binary, &fallbackData,
+            false, false, dx_dxfSourceTextPolicy::Compatible,
+            DRW::DxfTextWritePolicy::Compatible,
+            dx_dxfProxyGraphicsPolicy::FailIfNotPreserved))
+        return fail("same-adapter TABLE proxy retry failed after revision refusal");
+    dx_data fallbackRetryReadback;
+    dx_iface fallbackRetryReader;
+    if (!fallbackRetryReader.fileImport(
+            fallbackOutput.string(), &fallbackRetryReadback, false)
+        || !fallbackRetryReadback.tables.empty()
+        || fallbackRetryReadback.mBlock == nullptr
+        || std::count_if(
+               fallbackRetryReadback.mBlock->ent.cbegin(),
+               fallbackRetryReadback.mBlock->ent.cend(),
+               [&incompleteLinkedTable](const DRW_Entity* entity) {
+                   const auto* insert = dynamic_cast<const DRW_Insert*>(entity);
+                   return insert != nullptr
+                       && insert->name == incompleteLinkedTable.name
+                       && insert->proxyGraphics
+                           == incompleteLinkedTable.proxyGraphics;
+               }) != 1)
+        return fail("same-adapter TABLE proxy retry lost exact INSERT fallback bytes");
+    std::filesystem::remove(fallbackOutput, ignored);
     return true;
 }
 
@@ -42050,6 +42119,8 @@ bool tableMergeMatrixWriterRoundTrip(bool binary, std::uint64_t nonce) {
         for (std::size_t column = 0; column < tableRow.m_cells.size(); ++column) {
             DRW_TableCell& cell = tableRow.m_cells[column];
             cell.m_type = 1;
+            cell.m_mergedWidth = 1;
+            cell.m_mergedHeight = 1;
             DRW_TableCellContent content;
             content.m_type = 1;
             content.m_text = "R" + std::to_string(row) + "C"
@@ -42163,6 +42234,9 @@ bool tableMergeMatrixWriterRoundTrip(bool binary, std::uint64_t nonce) {
 }
 
 bool retainTableCallback() {
+    // The table-level border-color override mask below is intentionally
+    // unsupported by the typed model; retain its callback but keep semantic
+    // completeness false while verifying the other parsed fields.
     std::string drawing =
         "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1027\n"
         "0\nENDSEC\n0\nSECTION\n2\nENTITIES\n"
@@ -42178,13 +42252,18 @@ bool retainTableCallback() {
         "91\n7\n178\n3\n145\n0.25\n7\nCellStyle\n140\n2.5\n"
         "170\n3\n64\n22\n63\n33\n283\n1\n69\n69\n279\n2\n289\n1\n"
         "2\n" + std::string(250, 'A') + "\n1\nB\n"
-        "171\n2\n172\n1\n340\n301\n144\n1.5\n179\n1\n"
+        "171\n2\n172\n1\n173\n0\n175\n1\n176\n1\n"
+        "340\n301\n144\n1.5\n179\n1\n"
         "331\n302\n300\nBLOCK_ATTR\n"
-        "171\n1\n344\n303\n301\nCELL_VALUE\n302\nFIELD_VALUE\n304\nACVALUE_END\n"
-        "171\n1\n301\nCELL_VALUE\n302\n\n304\nACVALUE_END\n"
-        "171\n1\n301\nCELL_VALUE\n302\n" + std::string(250, 'C')
+        "171\n1\n173\n0\n175\n1\n176\n1\n"
+        "344\n303\n301\nCELL_VALUE\n302\nFIELD_VALUE\n304\nACVALUE_END\n"
+        "171\n1\n173\n0\n175\n1\n176\n1\n"
+        "301\nCELL_VALUE\n302\n\n304\nACVALUE_END\n"
+        "171\n1\n173\n0\n175\n1\n176\n1\n"
+        "301\nCELL_VALUE\n302\n" + std::string(250, 'C')
         + "\n303\nD\n304\nACVALUE_END\n"
-        "171\n1\n301\nCELL_VALUE\n302\nR2C1\n304\nACVALUE_END\n"
+        "171\n1\n173\n0\n175\n1\n176\n1\n"
+        "301\nCELL_VALUE\n302\nR2C1\n304\nACVALUE_END\n"
         "70\n1\n40\n0.5\n41\n0.75\n280\n1\n281\n1\n"
         "0\nINSERT\n5\n102\n330\n1F\n100\nAcDbEntity\n8\n0\n"
         "100\nAcDbBlockReference\n2\nLOCAL_ORDINARY_BLOCK\n"
@@ -42209,10 +42288,12 @@ bool retainTableCallback() {
 
     std::string multiContentDrawing = drawing;
     const std::string originalBlockCell =
-        "171\n2\n172\n1\n340\n301\n144\n1.5\n179\n1\n"
+        "171\n2\n172\n1\n173\n0\n175\n1\n176\n1\n"
+        "340\n301\n144\n1.5\n179\n1\n"
         "331\n302\n300\nBLOCK_ATTR\n";
     const std::string multiContentBlockCell =
-        "171\n2\n301\nCELL_VALUE\n302\nPRELUDE\n304\nACVALUE_END\n"
+        "171\n2\n173\n0\n175\n1\n176\n1\n"
+        "301\nCELL_VALUE\n302\nPRELUDE\n304\nACVALUE_END\n"
         "340\n301\n144\n1.5\n179\n1\n331\n302\n300\nBLOCK_ATTR\n";
     const std::size_t blockCellOffset =
         multiContentDrawing.find(originalBlockCell);
@@ -42273,7 +42354,8 @@ bool retainTableCallback() {
 
     std::string unassociatedAttributeDrawing = drawing;
     const std::string unassociatedBlockCell =
-        "171\n2\n172\n1\n179\n1\n331\n302\n"
+        "171\n2\n172\n1\n173\n0\n175\n1\n176\n1\n"
+        "179\n1\n331\n302\n"
         "340\n301\n144\n1.5\n300\nBLOCK_ATTR\n";
     const std::size_t associatedBlockCellOffset =
         unassociatedAttributeDrawing.find(originalBlockCell);
@@ -42302,7 +42384,8 @@ bool retainTableCallback() {
 
     std::string ambiguousCellValueDrawing = drawing;
     const std::string ambiguousBlockCell =
-        "171\n2\n172\n1\n340\n301\n144\n1.5\n"
+        "171\n2\n172\n1\n173\n0\n175\n1\n176\n1\n"
+        "340\n301\n144\n1.5\n"
         "301\nCELL_VALUE\n93\n1\n90\n4\n94\n0\n"
         "300\n\n302\n\n304\nACVALUE_END\n";
     const std::size_t ambiguousBlockCellOffset =
@@ -42343,12 +42426,13 @@ bool retainTableCallback() {
         dx_iface parser;
         const bool imported = parser.fileImport(path.string(), &parsed, false);
         if (!imported || parsed.tables.size() != 1u
-            || !parsed.tables.front().m_semanticContentComplete
+            || !parsed.tables.front().m_hasSemanticContent
+            || parsed.tables.front().m_semanticContentComplete
             || parsed.tables.front().m_content.m_rows.size() != 3u
             || parsed.tables.front().m_content.m_rows[0].m_cells.size() != 2u
             || parsed.tables.front().m_content.m_rows[2].m_cells.size() != 2u)
             return fail(std::string(binary ? "binary" : "ASCII")
-                + " empty CELL_VALUE control lost its bounded TABLE grid or complete local value fields");
+                + " empty CELL_VALUE control lost its bounded TABLE grid or expected incomplete disposition");
 
         const DRW_TableCell& blockCell =
             parsed.tables.front().m_content.m_rows[0].m_cells[1];

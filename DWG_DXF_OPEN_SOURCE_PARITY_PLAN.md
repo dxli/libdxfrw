@@ -4866,6 +4866,22 @@ Native source-release builds and platform qualification remain open.
   These checks cover API shape and generated record delivery only, not native
   application behavior. Qualify intended 3D consumers and remaining FreeCAD
   `dwg2dxf` profiles without dropping required geometry.
+
+### Incomplete TABLE proxy fallback transport (generated fast slice)
+
+The concrete LibreCAD adapter previously cleared proxy graphics from every
+TABLE-to-INSERT projection, although an incomplete TABLE is emitted only by
+that legacy INSERT path. It now clears the duplicate projection cache only
+when the typed TABLE is semantically complete. For an incomplete TABLE, the
+INSERT fallback retains parsed-DWG proxy bytes and can replay them only at the
+source revision after exact chunk-framing validation in both the writer and
+the `FailIfNotPreserved` adapter preflight. Generated ASCII and Binary controls
+prove one readable INSERT, no emitted TABLE, exact proxy-byte readback, refusal
+of a different output revision without replacing a sentinel destination, and
+same-adapter retry/readback. These are opaque-carrier and 2D callback
+compatibility checks, not display semantics, full-document output, or native
+LibreCAD/LibreCAD_3/FreeCAD qualification. The authored control remains in
+memory and no DWG/DXF fixture was added. See the [fallback proxy receipt](docs/research/p8-incomplete-table-insert-proxy-fallback-2026-11-09.json).
   A dirty local LibreCAD_3 snapshot's native persistence target passes three
   existing DXF export tests and a planar LINE/CIRCLE open/save/reopen probe
   against a pinned libdxfrw build. Its raw include/library finder route loses

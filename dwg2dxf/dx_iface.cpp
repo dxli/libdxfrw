@@ -81822,6 +81822,20 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                            == DRW_ProxyGraphicsEncoding::DwgBitStream
                     && provenance.sourceCodePage.empty()
                     && provenance.countCode == 0;
+            if (entity.eType == DRW::INSERT
+                && typeid(entity) == typeid(DRW_Insert)) {
+                if (provenance.origin != DRW_ProxyGraphicsOrigin::ParsedDwg
+                    || provenance.encoding
+                           != DRW_ProxyGraphicsEncoding::DwgBitStream
+                    || !provenance.sourceCodePage.empty()
+                    || provenance.countCode != 0)
+                    return false;
+                const DRW_ProxyGraphicDecodeResult inspection =
+                    DRW_ProxyGraphicDecoder::inspect(entity.proxyGraphics);
+                return inspection.completed()
+                    && inspection.consumedByteCount
+                        == entity.proxyGraphics.size();
+            }
             if (entity.eType == DRW::MLEADER)
             {
                 if (cData == nullptr || v != DRW::AC1021

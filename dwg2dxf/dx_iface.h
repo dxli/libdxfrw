@@ -857,7 +857,9 @@ public:
     virtual void addKnot(const DRW_Entity& data) override{(void)data;}
 
     virtual void addInsert(const DRW_Insert& data) override{
-        if (m_entitiesTableProjection && data.eType == DRW::TABLE
+        const auto* table = dynamic_cast<const DRW_Table*>(&data);
+        if (m_entitiesTableProjection && table != nullptr
+            && table->m_semanticContentComplete
             && (data.numProxyGraph != 0 || !data.proxyGraphics.empty())) {
             // The typed TABLE record retains and serializes this exact cache.
             // Its INSERT-shaped compatibility projection must not advertise a

@@ -1052,8 +1052,10 @@ bool canReplayTypedProxyGraphics(const DRW_Entity& entity,
     if (entity.eType == DRW::TABLE
         || dynamic_cast<const DRW_Table*>(&entity) != nullptr) {
         const auto* table = dynamic_cast<const DRW_Table*>(&entity);
-        if (entity.eType != DRW::TABLE || table == nullptr
-            || typeid(entity) != typeid(DRW_Table)
+        const bool typedTable = table != nullptr
+            && typeid(entity) == typeid(DRW_Table)
+            && entity.eType == DRW::TABLE;
+        if (!typedTable
             || provenance.origin != DRW_ProxyGraphicsOrigin::ParsedDwg
             || provenance.encoding != DRW_ProxyGraphicsEncoding::DwgBitStream
             || !provenance.sourceCodePage.empty()
@@ -1064,6 +1066,21 @@ bool canReplayTypedProxyGraphics(const DRW_Entity& entity,
         // in group 92 and the bytes in group 310. Preserve the DWG cache as
         // opaque bytes only for same-version output; do not promote its
         // rendering semantics or reinterpret its marker/resource controls.
+        const DRW_ProxyGraphicDecodeResult inspection =
+            DRW_ProxyGraphicDecoder::inspect(entity.proxyGraphics);
+        return inspection.completed()
+            && inspection.consumedByteCount == entity.proxyGraphics.size();
+    }
+    if (entity.eType == DRW::INSERT
+        && typeid(entity) == typeid(DRW_Insert)) {
+        // A parsed-DWG INSERT cache, including the legacy fallback carrier for
+        // an incomplete TABLE, remains an opaque same-revision payload. This
+        // gate establishes complete chunk framing only, not display semantics.
+        if (provenance.origin != DRW_ProxyGraphicsOrigin::ParsedDwg
+            || provenance.encoding != DRW_ProxyGraphicsEncoding::DwgBitStream
+            || !provenance.sourceCodePage.empty()
+            || provenance.countCode != 0)
+            return false;
         const DRW_ProxyGraphicDecodeResult inspection =
             DRW_ProxyGraphicDecoder::inspect(entity.proxyGraphics);
         return inspection.completed()
