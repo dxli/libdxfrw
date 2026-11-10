@@ -1188,6 +1188,15 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P6 LIGHTLIST DWG encoder transaction safety:** `DRW_LightList::encodeDwg`
+  now stages the body, string and handle destinations while preserving
+  body-resident child-light hard pointers and alias routing. The generated
+  AC1021 profile sweeps 157 allocation offsets across five stream layouts;
+  every failure preserves caller state and same-object retry matches clean
+  output. The focused allocation CTest passes. This proves local writer
+  rollback only; physical source semantics, graph closure and output support
+  remain open. See the [rollback receipt](docs/research/p6-lightlist-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **P6 MLEADERSTYLE DWG encoder transaction safety:** a review of the live
   encoder list found `DRW_MLeaderStyle::encodeDwg` still wrote directly to
   caller buffers. It now stages body, string and handle destinations, preserves

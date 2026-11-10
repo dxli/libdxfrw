@@ -96,6 +96,11 @@ public:
     using DRW_MLeaderStyle::encodeDwg;
 };
 
+class LightListProbe final : public DRW_LightList {
+public:
+    using DRW_LightList::encodeDwg;
+};
+
 class PointCloudDefProbe final : public DRW_PointCloudDef {
 public:
     using DRW_PointCloudDef::encodeDwg;
@@ -593,6 +598,63 @@ bool sweepMLeaderStyle(MLeaderStyleStreamLayout layout,
     return sweepTransactionalEncoder(
         colorNames ? "MLEADERSTYLE-NAMED-CMC" : "MLEADERSTYLE",
         names[static_cast<std::size_t>(layout)], version, encode, outputs);
+}
+
+LightListProbe makeLightList() {
+    LightListProbe list;
+    list.handle = 0xDB00u;
+    list.parentHandle = 0xDB01u;
+    list.reactorHandles = {0xDB02u, 0xDB03u};
+    list.setDwgCommonObjectState(2, 1u, false);
+    list.xDictHandle = 0xDB04u;
+    list.m_classVersion = 1;
+    list.m_lightCount = 3;
+    list.m_lights = {
+        {0xDB10u, "Key light"},
+        {0xDB11u, "Fill light"},
+        {0xDB12u, "Rim light"}
+    };
+    return list;
+}
+
+enum class LightListStreamLayout {
+    Separate,
+    SharedStringAndHandle,
+    BodyStringDetachedHandles,
+    SeparateStringBodyHandles,
+    AllBody
+};
+
+bool sweepLightList(LightListStreamLayout layout) {
+    const DRW::Version version = DRW::AC1021;
+    const LightListProbe list = makeLightList();
+    const auto encode = [&list](DRW::Version v, dwgBufferW* body,
+                                dwgBufferW* strings, dwgBufferW* handles) {
+        return list.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [layout](dwgBufferW& body, dwgBufferW& strings,
+                                  dwgBufferW& handles) {
+        switch (layout) {
+        case LightListStreamLayout::Separate:
+            return EncoderOutputs{&strings, &handles};
+        case LightListStreamLayout::SharedStringAndHandle:
+            return EncoderOutputs{&strings, &strings};
+        case LightListStreamLayout::BodyStringDetachedHandles:
+            return EncoderOutputs{&body, &handles};
+        case LightListStreamLayout::SeparateStringBodyHandles:
+            return EncoderOutputs{&strings, &body};
+        case LightListStreamLayout::AllBody:
+            return EncoderOutputs{};
+        }
+        return EncoderOutputs{&strings, &handles};
+    };
+    static const char* const names[] = {
+        "separate", "shared-string-handle", "body-string-detached-handles",
+        "separate-string-body-handles", "all-body"
+    };
+    return sweepTransactionalEncoder(
+        "LIGHTLIST", names[static_cast<std::size_t>(layout)],
+        version, encode, outputs);
 }
 
 RasterVariablesProbe makeRasterVariables() {
@@ -3260,6 +3322,11 @@ int main() {
         || !sweepMLeaderStyle(MLeaderStyleStreamLayout::SeparateStringBodyHandles)
         || !sweepMLeaderStyle(MLeaderStyleStreamLayout::AllBody)
         || !sweepMLeaderStyle(MLeaderStyleStreamLayout::Separate, true)
+        || !sweepLightList(LightListStreamLayout::Separate)
+        || !sweepLightList(LightListStreamLayout::SharedStringAndHandle)
+        || !sweepLightList(LightListStreamLayout::BodyStringDetachedHandles)
+        || !sweepLightList(LightListStreamLayout::SeparateStringBodyHandles)
+        || !sweepLightList(LightListStreamLayout::AllBody)
         || !sweep(StreamAlias::Separate)
         || !sweep(StreamAlias::SharedStringAndHandle)
         || !sweep(StreamAlias::AllBody)

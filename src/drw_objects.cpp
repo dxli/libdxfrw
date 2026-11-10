@@ -25980,28 +25980,57 @@ bool DRW_LightList::encodeDwg(DRW::Version version, dwgBufferW *buf,
         return false;
     }
 
-    dwgBufferW *stringBuf = (version > DRW::AC1018 && strBuf != nullptr)
-        ? strBuf : buf;
-    dwgBufferW *handles = (version > DRW::AC1014 && handleBuf != nullptr)
-        ? handleBuf : buf;
+    try {
+        dwgBufferW *const callerBody = buf;
+        dwgBufferW *const callerStringDest =
+            (strBuf != nullptr && version > DRW::AC1018) ? strBuf : callerBody;
+        dwgBufferW *const callerHandleDest =
+            (handleBuf != nullptr && version > DRW::AC1014)
+                ? handleBuf : callerBody;
+        const bool separateStrings = callerStringDest != callerBody;
+        const bool separateHandles = callerHandleDest != callerBody
+            && callerHandleDest != callerStringDest;
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedStrings;
+        dwgBufferW stagedHandles;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+        buf = &stagedBody;
+        dwgBufferW *stringBuf = separateStrings ? &stagedStrings
+            : buf;
+        dwgBufferW *handles = separateHandles ? &stagedHandles
+            : callerHandleDest == callerStringDest && separateStrings
+                ? &stagedStrings : buf;
 
-    // AcDbLightList stores each type-specific light reference in the object
-    // body, followed by the common object handle stream.
-    buf->putBitLong(static_cast<std::int32_t>(m_classVersion));
-    buf->putBitLong(static_cast<std::int32_t>(m_lightCount));
-    for (const DRW_LightListEntry& light : m_lights) {
-        // libreDWG's AcDbLightList definition uses SUB_FIELD_HANDLE(..., 5,
-        // 5): each child LIGHT is a hard-pointer reference in the body, not
-        // part of the common object handle stream.
-        buf->putHandle(makeRefW(
-            light.m_handle, DRW::DwgHardPointer));
-        stringBuf->putVariableText(version, light.m_name);
+        // AcDbLightList stores each type-specific light reference in the object
+        // body, followed by the common object handle stream.
+        buf->putBitLong(static_cast<std::int32_t>(m_classVersion));
+        buf->putBitLong(static_cast<std::int32_t>(m_lightCount));
+        for (const DRW_LightListEntry& light : m_lights) {
+            // libreDWG's AcDbLightList definition uses SUB_FIELD_HANDLE(..., 5,
+            // 5): each child LIGHT is a hard-pointer reference in the body, not
+            // part of the common object handle stream.
+            buf->putHandle(makeRefW(
+                light.m_handle, DRW::DwgHardPointer));
+            stringBuf->putVariableText(version, light.m_name);
+        }
+        putCommonObjectHandlePrefix(handles,
+                                    static_cast<std::uint32_t>(parentHandle),
+                                    reactorCount(), extensionDictionaryFlag(),
+                                    &reactorHandles, xDictHandle);
+        if (!buf->isGood() || !stringBuf->isGood() || !handles->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    putCommonObjectHandlePrefix(handles,
-                                static_cast<std::uint32_t>(parentHandle),
-                                reactorCount(), extensionDictionaryFlag(),
-                                &reactorHandles, xDictHandle);
-    return buf->isGood() && stringBuf->isGood() && handles->isGood();
 }
 
 bool DRW_LayerFilter::parseCode(
