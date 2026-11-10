@@ -173,6 +173,10 @@ public:
     bool hasActiveBlockContent() const override {
         return m_activeUserBlockRecordHandle != 0;
     }
+    /// Verify the closed anonymous geometry block referenced by one AC1018
+    /// TABLE. This checks ownership/reference closure only; it does not prove
+    /// that the supplied geometry renders the TABLE's cell semantics.
+    bool hasClosedAc1018TableBlockGraph(const DRW_Table& table) const;
     bool emitDeferredBlockControl() override;
 
     CompoundWriteCheckpoint checkpointCompoundWrite() const override;

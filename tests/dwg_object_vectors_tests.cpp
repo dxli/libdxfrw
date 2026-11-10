@@ -10202,6 +10202,20 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             && tableFacade.getLastDwgObjectFrame(receipt)
             && receipt.valid && receipt.objectHandle == table.handle
             && receipt.classNumber == classNumber;
+        std::vector<DRW::DwgObjectHandleOccurrence> tableOccurrences;
+        const bool tableOccurrencesCaptured = receiptMatches
+            && tableFacade.getLastDwgObjectHandleOccurrences(
+                tableOccurrences);
+        const std::size_t tableBlockReferenceCount =
+            static_cast<std::size_t>(std::count_if(
+                tableOccurrences.cbegin(), tableOccurrences.cend(),
+                [&](const DRW::DwgObjectHandleOccurrence& occurrence) {
+                    return occurrence.objectHandle == table.handle
+                        && occurrence.token.code == DRW::DwgHardPointer
+                        && occurrence.token.reference == blockRecord;
+                }));
+        const bool tableBlockReferenceExact = tableOccurrencesCaptured
+            && tableBlockReferenceCount == 1u;
         if (!receiptMatches) {
             (void)tableFacade.rollbackDwgWriteTransaction(transaction);
             return false;
@@ -10229,6 +10243,13 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             const bool injectedFailureOccurred =
                 !tableFacade.writeLine(&failedGeometryLine);
             const bool graphScopeClosed = tableFacade.endBlockContent();
+            const bool closedTableGraph = graphScopeClosed
+                && tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
+            const UTF8STRING savedTableName = table.name;
+            table.name = "*T_MISMATCHED";
+            const bool mismatchedNameRefused =
+                !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
+            table.name = savedTableName;
             const bool failedGeometryCallerRestored =
                 failedGeometryLine.handle == 0xA812u
                 && failedGeometryLine.parentHandle == DRW::NoHandle;
@@ -10236,7 +10257,9 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                 tableFacadeWriter->encodedBufferSize()
                     > tableFacadeInitialBytes;
             if (!earlierGeometryWritten || !injectedFailureOccurred
-                || !graphScopeClosed || !failedGeometryCallerRestored
+                || !graphScopeClosed || !closedTableGraph
+                || !mismatchedNameRefused
+                || !failedGeometryCallerRestored
                 || !tableFrameStillStaged
                 || tableFacade.m_successfulEntityWrites
                     != tableFacadeInitialSuccesses + 2u) {
@@ -10246,7 +10269,15 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         } else {
             const bool geometryWritten = tableFacade.writeLine(&geometryLine);
             const bool graphScopeClosed = tableFacade.endBlockContent();
-            if (!geometryWritten || !graphScopeClosed) {
+            const bool closedTableGraph = graphScopeClosed
+                && tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
+            const UTF8STRING savedTableName = table.name;
+            table.name = "*T_MISMATCHED";
+            const bool mismatchedNameRefused =
+                !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
+            table.name = savedTableName;
+            if (!geometryWritten || !graphScopeClosed || !closedTableGraph
+                || !mismatchedNameRefused) {
                 (void)tableFacade.rollbackDwgWriteTransaction(transaction);
                 return false;
             }
@@ -10266,6 +10297,8 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             const bool handleRolledBack =
                 !tableFacadeWriter->getDwgClassInstanceClass(
                     table.handle, ignoredClass);
+            const bool graphRolledBack =
+                !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
             const bool writesRolledBack =
                 tableFacade.m_successfulEntityWrites
                     == tableFacadeInitialSuccesses;
@@ -10279,7 +10312,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                 && failedGeometryLine.parentHandle == DRW::NoHandle;
             const bool passed = rolledBack
                 && bytesRolledBack && objectsRolledBack && classRolledBack
-                && handleRolledBack
+                && handleRolledBack && graphRolledBack
                 && writesRolledBack && callerRestored
                 && !tableFacade.hasDwgWriteFailure();
             return passed;
@@ -10291,6 +10324,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             transaction);
         const bool passed = classLedgerValid && committed
             && tableFacadeWriter->emittedHandle(table.handle)
+            && tableBlockReferenceExact
             && tableFacade.m_successfulEntityWrites
                 == tableFacadeInitialSuccesses + 2u;
         return passed;
@@ -10298,7 +10332,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     const bool facadeRollbackAndRetry = tableFacadeAttempt(true)
         && tableFacadeAttempt(false);
     t.expect(facadeRollbackAndRetry,
-             "AC1018 TABLE facade transaction rolls back staged frame/class/caller state and retries to one committed frame");
+             "AC1018 TABLE frame references its *T block exactly once, closes owned-entity/reverse-INSERT edges, then rolls back and retries atomically");
 
     const auto expectAtomicPreflightRefusal =
         [&](const char* message, DRW::Version version, auto mutate) {

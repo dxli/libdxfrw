@@ -1546,6 +1546,44 @@ bool dwgWriter15::endBlockContent() {
     return true;
 }
 
+bool dwgWriter15::hasClosedAc1018TableBlockGraph(
+    const DRW_Table& table) const {
+    if (m_version != DRW::AC1018 || m_activeUserBlockRecordHandle != 0
+        || table.eType != DRW::TABLE || table.handle == 0u
+        || table.handle == DRW::NoHandle
+        || table.blockRecH.ref == 0u || table.blockRecH.ref == DRW::NoHandle
+        || table.blockRecH.code != DRW::DwgNullReference
+        || table.blockRecH.size != 0u || table.blockRecH.rawCode != 0u
+        || table.blockRecH.ref64 != 0u
+        || table.name.size() < 3u || table.name[0] != '*'
+        || std::toupper(static_cast<unsigned char>(table.name[1])) != 'T')
+        return false;
+
+    const PendingUserBlock* block = findUserBlock(table.blockRecH.ref);
+    if (block == nullptr || block->ownerKind != BlockOwnerKind::OrdinaryBlock
+        || toUpperCase(block->name) != toUpperCase(table.name)
+        || block->entityHandles.empty() || block->insertHandles.size() != 1u
+        || block->insertHandles.front() != table.handle
+        || std::count(block->insertHandles.cbegin(),
+                      block->insertHandles.cend(), table.handle) != 1
+        || m_blockInsertReferenceHandles.count(
+               blockInsertReferenceKey(block->blockRecordHandle,
+                                       table.handle)) != 1u)
+        return false;
+
+    // The table's BLOCK_RECORD must actually own every emitted child and the
+    // per-writer ownership index must agree. This is graph closure evidence,
+    // not a claim that those children reproduce the table's displayed cells.
+    for (const std::uint32_t entityHandle : block->entityHandles) {
+        const auto owner = m_blockOwnedEntityHandles.find(
+            std::make_pair(block->blockRecordHandle, entityHandle));
+        if (entityHandle == 0u || entityHandle == DRW::NoHandle
+            || owner == m_blockOwnedEntityHandles.end())
+            return false;
+    }
+    return true;
+}
+
 dwgWriter15::EntityFrameCheckpoint
 dwgWriter15::checkpointEntityFrame() const {
     EntityFrameCheckpoint checkpoint;

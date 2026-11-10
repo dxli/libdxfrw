@@ -3846,7 +3846,17 @@ Speed-oriented implementation sequence:
    `ltFlags` derivation and `plotFlags`, then retries the same object
    ([receipt](docs/research/p5-ac1018-table-common-header-state-rollback-2026-11-09.json)).
    The production
-   compound writer still needs its own graph-level staging and atomic publication. The
+   compound writer still needs its own graph-level staging and atomic publication. A
+   generated ownership slice now verifies that the AC1018 TABLE frame has one
+   hard-pointer edge to its matching anonymous `*T` BLOCK_RECORD, every
+   `*T` child is indexed under that record, and the BLOCK_RECORD's reverse
+   INSERT list and writer index point back to the TABLE exactly once. Mismatched
+   names are refused; outer rollback removes the block/entity edge and a
+   same-writer retry restores it. This closes only generated graph-bookkeeping
+   and retry evidence: the control uses one synthetic LINE, does not establish
+   that geometry matches cells, and has no fresh independent readback. See the
+   [graph-closure receipt](docs/research/p5-ac1018-table-block-graph-closure-2026-11-09.json).
+   Public `dwgRW::writeTable` remains fail-closed. The
    existing AC1018 traces disagree on class number (528 versus
    523), while their CLASS identity metadata agrees. An AC1018-only writer
    registration helper now allocates a local ordinal and resolves duplicates
@@ -3861,13 +3871,7 @@ Speed-oriented implementation sequence:
    unexplained geometry/cache state refused. Match every gate to the actual
    public model fields and reject anything outside that profile before
    emitting bytes.
-2. **Complete:** bind CLASS registration and instance-count staging to the
-   AC1018 TABLE frame transaction. The generated `dwgRW` control proves a
-   committed frame updates the instance ledger, a late block-geometry failure
-   followed by outer rollback removes frame/class/count/caller mutations, and
-   a same-adapter retry commits successfully. This is transaction evidence;
-   it does not qualify the geometry or authorize public `writeTable` output.
-3. **Physical profile evidence remains partial.** The peer-converted AC1018
+2. **Physical profile evidence remains partial.** The peer-converted AC1018
    TABLE body is independently readable and agrees on the 3-by-3 text values,
    dimensions, anonymous-block name, and 15-entity geometry census. The direct
    generated codec now emits and reads back validated AC1018 merged-cell
@@ -3877,16 +3881,14 @@ Speed-oriented implementation sequence:
    converted from AC1027 DXF, has a HEADER integrity warning, and does not
    qualify native acceptance or text/line geometry generation. Keep the direct
    encoder restricted to generated models with no retained source subrecords.
-   Next implement the compound `*T` graph with exact ownership, rollback/retry
-   and fresh independent readback. Do not promote support from this single
-   converted drawing.
-4. Add the AC1018 compound writer only after the body profile passes: preflight
-   and stage the exact `*T` BLOCK/BLOCK_RECORD and TABLE ownership/reference
-   graph, then publish entity plus linked records atomically. Verify with a
-   locally authored from-scratch DWG control and fresh libdxfrw readback; use
-   an already available independent writer/reader only if its provenance and
-   exact profile are recorded. Do not commit downloaded DWG/DXF fixtures.
-5. Keep AC1021+ and AC1024+ refused until their source-bound stream/handle
+   The graph-reference/ownership/retry bookkeeping slice is complete (see the
+   generated graph-closure receipt above). Next resolve the TABLESTYLE record
+   and derive geometry from the admitted TABLE model without guessing base
+   style values; then implement atomic BLOCK/BLOCK_RECORD/TABLE publication and
+   verify a locally authored DWG with fresh independent readback. Do not promote
+   support from the single ODA-converted source or the generated bookkeeping
+   control.
+3. Keep AC1021+ and AC1024+ refused until their source-bound stream/handle
    profiles and the R24 TABLECONTENT/TABLEGEOMETRY graph are established. Add
    one version at a time with separate body, dependency, rollback/retry, and
    readback evidence. Native table rendering and broad support claims remain
