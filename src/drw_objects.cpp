@@ -22813,16 +22813,46 @@ bool DRW_DictionaryVar::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || reactorHandles.size() > dwgSafety::MaxReactorCount
         || xDictFlag > 1 || m_schema < 0 || m_schema > 0xff)
         return false;
-    dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018) ? strBuf : buf;
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
+    dwgBufferW *const stringDest =
+        (strBuf != nullptr && version > DRW::AC1018) ? strBuf : buf;
+    dwgBufferW *const handleDest =
+        (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
+    const bool separateStrings = stringDest != buf;
+    const bool separateHandles = handleDest != buf && handleDest != stringDest;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *buf;
+        if (separateStrings)
+            stagedStrings = *stringDest;
+        if (separateHandles)
+            stagedHandles = *handleDest;
 
-    buf->putRawChar8(static_cast<std::uint8_t>(m_schema));
-    sb->putVariableText(version, m_value);
+        dwgBufferW *const bodyOut = &stagedBody;
+        dwgBufferW *const stringOut = separateStrings
+            ? &stagedStrings : bodyOut;
+        dwgBufferW *const handleOut = handleDest == buf ? bodyOut
+            : handleDest == stringDest ? stringOut : &stagedHandles;
+        bodyOut->putRawChar8(static_cast<std::uint8_t>(m_schema));
+        stringOut->putVariableText(version, m_value);
 
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), numReactors, xDictFlag,
-        &reactorHandles, xDictHandle);
-    return buf->isGood() && sb->isGood() && hb->isGood();
+        putCommonObjectHandlePrefix(
+            handleOut, static_cast<std::uint32_t>(parentHandle), numReactors,
+            xDictFlag, &reactorHandles, xDictHandle);
+        if (!bodyOut->isGood() || !stringOut->isGood()
+            || !handleOut->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (separateStrings)
+            stringDest->swap(stagedStrings);
+        if (separateHandles)
+            handleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 // DICTIONARYWDFLT (AcDbDictionaryWithDefault) encoder — ODA §20.4.45.

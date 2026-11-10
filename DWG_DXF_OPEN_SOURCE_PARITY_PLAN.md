@@ -1300,6 +1300,18 @@ created locally from scratch for the specific control.
   broad source/output support. No fixture was added. See the [DICTIONARY
   allocation receipt](docs/research/p6-dictionary-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **DICTIONARYVAR DWG encoder transaction safety:** `DRW_DictionaryVar::encodeDwg`
+  now stages its body, heap-backed value text, and common handle stream before
+  publication. Generated AC1012/AC1018/AC1021 controls sweep 114 allocation
+  offsets over seven version/alias cases; each failure preserves the seeded
+  streams and the same object retries to clean output. The combined encoder
+  allocation, object-vector, and three existing DICTIONARYVAR behavior tests
+  pass. This adds no value-schema support and does not close graph or source
+  gates. No fixture was added. See the [DICTIONARYVAR allocation
+  receipt](docs/research/p6-dictionaryvar-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 1,211 offsets across 57
+  stream/version cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
