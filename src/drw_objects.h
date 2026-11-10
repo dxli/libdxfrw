@@ -7562,9 +7562,9 @@ public:
   std::vector<DRW_AssociativeHandleRef> m_actions;
   std::vector<std::uint32_t> m_ownedParams;
   std::vector<std::uint32_t> m_ownedActions;
-  // Source-qualified AC1024 ACDBASSOCNETWORK version/index fields. Keep them
-  // distinct from the shared AcDbAssocAction prefix until other versions are
-  // independently bound.
+  // AC1024-qualified ACDBASSOCNETWORK version/index fields. AC1032 candidate
+  // values may be retained here from a bounded parse, but m_networkFieldsParsed
+  // remains false until that version's source profile is independently bound.
   std::int32_t m_networkVersion = 0;
   std::int32_t m_networkActionIndex = 0;
   bool m_actionPrefixParsed = false;

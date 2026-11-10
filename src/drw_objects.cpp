@@ -30186,6 +30186,13 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
                 m_networkVersion = networkVersion;
                 m_networkActionIndex = networkActionIndex;
                 m_networkFieldsParsed = true;
+            } else if (version == DRW::AC1032) {
+                // The AC1032 physical candidate and LibreDWG peer both
+                // expose these as distinct fields. Retain the decoded values
+                // without promoting this version to the qualified writer
+                // profile; m_networkFieldsParsed stays false.
+                m_networkVersion = networkVersion;
+                m_networkActionIndex = networkActionIndex;
             } else {
                 // Preserve the legacy projection on unqualified versions;
                 // only AC1024 has independent source-backed field bindings.

@@ -53834,6 +53834,80 @@ bool physicalAc1032MLineStyleHandleSourceProfile(
     return true;
 }
 
+bool physicalAc1032AssociativeNetworkCandidateProfile(
+        const std::filesystem::path& sourcePath) {
+    dx_iface reader;
+    dx_data data;
+    if (!reader.fileImport(sourcePath.string(), &data, false)
+        || data.sourceFormat != dx_source_format::DWG
+        || data.sourceVersion != DRW::AC1032)
+        return fail("physical AC1032 associative-network source did not import as AC1032 DWG");
+
+    const DRW_AssociativeObject* root = nullptr;
+    const DRW_AssociativeObject* child = nullptr;
+    for (const DRW_AssociativeObject& object :
+         data.dwgAssociativeObjects) {
+        if (object.m_recordName != "ACDBASSOCNETWORK")
+            continue;
+        if (object.handle == 0x390u)
+            root = &object;
+        else if (object.handle == 0x38Eu)
+            child = &object;
+    }
+    const auto completePrefix = [](const DRW_AssociativeObject& object,
+                                   DRW_AssociativePrefixStatus::Kind kind) {
+        return std::count_if(object.m_prefixStatuses.begin(),
+                             object.m_prefixStatuses.end(),
+            [kind](const DRW_AssociativePrefixStatus& status) {
+                return status.m_kind == kind
+                    && status.m_status
+                        == DRW_AssociativePrefixStatus::ParseStatus::Complete
+                    && status.m_classVersion == 2u;
+            }) == 1;
+    };
+    if (root == nullptr || child == nullptr
+        || root->m_classVersion != 2u || child->m_classVersion != 2u
+        || root->parentHandle != 0x38Fu || child->parentHandle != 0x38Du
+        || root->m_owningNetworkHandle != 0u
+        || child->m_owningNetworkHandle != root->handle
+        || root->m_actionIndex != 0 || child->m_actionIndex != 1
+        || root->m_networkVersion != 0 || child->m_networkVersion != 0
+        || root->m_networkActionIndex != 1
+        || child->m_networkActionIndex != 1
+        || root->m_networkFieldsParsed || child->m_networkFieldsParsed
+        || root->m_actions.size() != 1u || child->m_actions.size() != 1u
+        || root->m_actions.front().m_isOwned
+        || root->m_actions.front().m_handle != child->handle
+        || !child->m_actions.front().m_isOwned
+        || child->m_actions.front().m_handle != 0x391u
+        || !completePrefix(*root,
+            DRW_AssociativePrefixStatus::Kind::AcDbAssocAction)
+        || !completePrefix(*root,
+            DRW_AssociativePrefixStatus::Kind::AcDbAssocNetwork)
+        || !completePrefix(*child,
+            DRW_AssociativePrefixStatus::Kind::AcDbAssocAction)
+        || !completePrefix(*child,
+            DRW_AssociativePrefixStatus::Kind::AcDbAssocNetwork))
+        return fail("AC1032 class-version-2 network values, ownership, action roles, or bounded prefix candidates changed");
+
+    for (const DRW_AssociativeObject* object : {root, child}) {
+        for (const DRW_AssociativePrefixStatus& status :
+             object->m_prefixStatuses) {
+            std::cerr << "AC1032 associative network " << object->handle
+                      << " prefix=" << static_cast<unsigned>(status.m_kind)
+                      << " start=" << status.m_startBit
+                      << " bits=" << status.m_bitSize
+                      << " classVersion=" << status.m_classVersion
+                      << " status=" << static_cast<unsigned>(status.m_status)
+                      << '\n';
+        }
+    }
+    std::cout << "Physical AC1032 class-version-2 associative-network "
+                 "candidate fields and owner/action graph PASS; "
+                 "writer qualification remains false\n";
+    return true;
+}
+
 bool generatedDimassocExtensionGraphNode() {
     dx_data data;
     data.sourceFormat = dx_source_format::DWG;
@@ -89122,6 +89196,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--mline-style-ac1032-source-profile")
         return physicalAc1032MLineStyleHandleSourceProfile(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--assocnetwork-ac1032-candidate-profile")
+        return physicalAc1032AssociativeNetworkCandidateProfile(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--viewport-physical-output-readback")
         return physicalViewportOutputReadback(argv[2]) ? 0 : 1;
