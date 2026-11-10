@@ -16272,51 +16272,86 @@ bool DRW_SunStudy::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || extensionDictionaryFlag() > 1)
         return false;
 
-    dwgBufferW *sb = strBuf != nullptr && version > DRW::AC1018
-        ? strBuf : buf;
-    // R2000/R2004 store the handle stream after the object body. The writer
-    // stages it separately so finishObject() can publish the body boundary.
-    dwgBufferW *hb = handleBuf != nullptr && version > DRW::AC1014
-        ? handleBuf : buf;
-    buf->putBitLong(m_classVersion);
-    sb->putVariableText(version, m_setupName);
-    sb->putVariableText(version, m_description);
-    buf->putBitLong(m_outputType);
-    if (m_outputType == 0) {
-        buf->putBit(m_useSubset ? 1 : 0);
-        sb->putVariableText(version, m_sheetSetName);
-        sb->putVariableText(version, m_sheetSubsetName);
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerStringDest =
+        strBuf != nullptr && version > DRW::AC1018 ? strBuf : callerBody;
+    dwgBufferW *const callerHandleDest =
+        handleBuf != nullptr && version > DRW::AC1014
+            ? handleBuf : callerBody;
+    const bool separateStrings = callerStringDest != callerBody;
+    const bool separateHandles = callerHandleDest != callerBody
+        && callerHandleDest != callerStringDest;
+    try {
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedStrings;
+        dwgBufferW stagedHandles;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+
+        buf = &stagedBody;
+        strBuf = separateStrings ? &stagedStrings : buf;
+        handleBuf = separateHandles ? &stagedHandles
+            : callerHandleDest == callerStringDest && separateStrings
+                ? &stagedStrings : buf;
+        dwgBufferW *sb = strBuf != nullptr && version > DRW::AC1018
+            ? strBuf : buf;
+        // R2000/R2004 store the handle stream after the object body. The
+        // writer stages it separately so finishObject() can publish the body
+        // boundary.
+        dwgBufferW *hb = handleBuf != nullptr && version > DRW::AC1014
+            ? handleBuf : buf;
+        buf->putBitLong(m_classVersion);
+        sb->putVariableText(version, m_setupName);
+        sb->putVariableText(version, m_description);
+        buf->putBitLong(m_outputType);
+        if (m_outputType == 0) {
+            buf->putBit(m_useSubset ? 1 : 0);
+            sb->putVariableText(version, m_sheetSetName);
+            sb->putVariableText(version, m_sheetSubsetName);
+        }
+        buf->putBit(m_selectDatesFromCalendar ? 1 : 0);
+        buf->putBitLong(static_cast<std::int32_t>(m_dates.size()));
+        for (const DRW_SunStudyDate& date : m_dates) {
+            buf->putBitLong(date.m_julianDay);
+            buf->putBitLong(date.m_milliseconds);
+        }
+        buf->putBit(m_selectRangeOfDates ? 1 : 0);
+        if (m_selectRangeOfDates) {
+            buf->putBitLong(m_startTime);
+            buf->putBitLong(m_endTime);
+            buf->putBitLong(m_interval);
+        }
+        buf->putBitLong(static_cast<std::int32_t>(m_hours.size()));
+        for (bool hour : m_hours)
+            buf->putBit(hour ? 1 : 0);
+        buf->putBitLong(m_shadePlotType);
+        buf->putBitLong(m_viewportCount);
+        buf->putBitLong(m_rowCount);
+        buf->putBitLong(m_columnCount);
+        buf->putBitDouble(m_spacing);
+        buf->putBit(m_lockViewports ? 1 : 0);
+        buf->putBit(m_labelViewports ? 1 : 0);
+        hb->putHandle(makeRefW(m_pageSetupWizardHandle, DRW::DwgHardPointer));
+        hb->putHandle(makeRefW(m_viewHandle, DRW::DwgHardPointer));
+        hb->putHandle(makeRefW(m_visualStyleHandle, DRW::DwgHardPointer));
+        hb->putHandle(makeRefW(m_textStyleHandle, DRW::DwgHardPointer));
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle), reactorCount(),
+            extensionDictionaryFlag(), &reactorHandles, xDictHandle);
+        if (!buf->isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    buf->putBit(m_selectDatesFromCalendar ? 1 : 0);
-    buf->putBitLong(static_cast<std::int32_t>(m_dates.size()));
-    for (const DRW_SunStudyDate& date : m_dates) {
-        buf->putBitLong(date.m_julianDay);
-        buf->putBitLong(date.m_milliseconds);
-    }
-    buf->putBit(m_selectRangeOfDates ? 1 : 0);
-    if (m_selectRangeOfDates) {
-        buf->putBitLong(m_startTime);
-        buf->putBitLong(m_endTime);
-        buf->putBitLong(m_interval);
-    }
-    buf->putBitLong(static_cast<std::int32_t>(m_hours.size()));
-    for (bool hour : m_hours)
-        buf->putBit(hour ? 1 : 0);
-    buf->putBitLong(m_shadePlotType);
-    buf->putBitLong(m_viewportCount);
-    buf->putBitLong(m_rowCount);
-    buf->putBitLong(m_columnCount);
-    buf->putBitDouble(m_spacing);
-    buf->putBit(m_lockViewports ? 1 : 0);
-    buf->putBit(m_labelViewports ? 1 : 0);
-    hb->putHandle(makeRefW(m_pageSetupWizardHandle, DRW::DwgHardPointer));
-    hb->putHandle(makeRefW(m_viewHandle, DRW::DwgHardPointer));
-    hb->putHandle(makeRefW(m_visualStyleHandle, DRW::DwgHardPointer));
-    hb->putHandle(makeRefW(m_textStyleHandle, DRW::DwgHardPointer));
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), reactorCount(),
-        extensionDictionaryFlag(), &reactorHandles, xDictHandle);
-    return buf->isGood() && sb->isGood() && hb->isGood();
 }
 
 bool DRW_MotionPath::parseCode(int code,

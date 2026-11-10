@@ -91,6 +91,11 @@ public:
     using DRW_PointCloudColorMap::encodeDwg;
 };
 
+class SunStudyProbe final : public DRW_SunStudy {
+public:
+    using DRW_SunStudy::encodeDwg;
+};
+
 class PlotSettingsProbe final : public DRW_PlotSettings {
 public:
     using DRW_PlotSettings::encodeDwg;
@@ -1694,6 +1699,41 @@ PointCloudColorMapProbe makePointCloudColorMap() {
     return object;
 }
 
+SunStudyProbe makeSunStudy() {
+    SunStudyProbe object;
+    object.handle = 0xBE00u;
+    object.parentHandle = 0x20u;
+    object.reactorHandles = {0x21u, 0x22u};
+    object.setDwgCommonObjectState(2, 1u, false);
+    object.xDictHandle = 0x23u;
+    object.m_classVersion = 2;
+    object.m_setupName = "transaction study";
+    object.m_description = "generated allocation rollback";
+    object.m_sheetSetName = "sheet set";
+    object.m_sheetSubsetName = "subset";
+    object.m_outputType = 0;
+    object.m_useSubset = true;
+    object.m_selectDatesFromCalendar = true;
+    object.m_dates = {{2451545, 1000}, {2451546, 2000}};
+    object.m_selectRangeOfDates = true;
+    object.m_startTime = 10;
+    object.m_endTime = 20;
+    object.m_interval = 2;
+    object.m_hours = {true, false, true, true};
+    object.m_shadePlotType = 3;
+    object.m_viewportCount = 2;
+    object.m_rowCount = 1;
+    object.m_columnCount = 2;
+    object.m_spacing = 0.5;
+    object.m_lockViewports = true;
+    object.m_labelViewports = false;
+    object.m_pageSetupWizardHandle = 0x31u;
+    object.m_viewHandle = 0x32u;
+    object.m_visualStyleHandle = 0x33u;
+    object.m_textStyleHandle = 0x34u;
+    return object;
+}
+
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
     GeoDataProbe geo;
     geo.handle = 0xA900u;
@@ -3117,6 +3157,21 @@ int main() {
             ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepIndexObject("POINTCLOUDCOLORMAP",
             makePointCloudColorMap(),
+            ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepIndexObject("SUNSTUDY", makeSunStudy(),
+            ImageDefinitionStreams::R13InlineSeparateArguments,
+            DRW::AC1015)
+        || !sweepIndexObject("SUNSTUDY", makeSunStudy(),
+            ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepIndexObject("SUNSTUDY", makeSunStudy(),
+            ImageDefinitionStreams::Separate)
+        || !sweepIndexObject("SUNSTUDY", makeSunStudy(),
+            ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepIndexObject("SUNSTUDY", makeSunStudy(),
+            ImageDefinitionStreams::AllBody)
+        || !sweepIndexObject("SUNSTUDY", makeSunStudy(),
+            ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepIndexObject("SUNSTUDY", makeSunStudy(),
             ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
