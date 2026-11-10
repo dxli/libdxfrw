@@ -44,6 +44,8 @@ public:
 };
 
 bool ac1027DefaultMaterialReplayRoundtrip(const DRW_Material& source);
+bool ac1027DefaultMaterialReplayGraphRoundtrip(
+    const std::vector<DRW_Material>& sources);
 
 class DwgBlockRecordXrefWireTestAccess {
 public:
@@ -432,8 +434,13 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
         if (mode == Mode::ReplayMaterial) {
             (void)output.registerDwgNamedObjectDictionaryEntry(
                 "ACAD_MATERIAL", 0xB100u);
-            DRW_Material material; material.handle=0xB101u;
-            (void)output.registerMaterialObjectClass(&material);
+            const std::size_t count = replayMaterials.empty()
+                ? 1u : replayMaterials.size();
+            for (std::size_t i = 0; i < count; ++i) {
+                DRW_Material material;
+                material.handle = static_cast<std::uint32_t>(0xB101u + i);
+                (void)output.registerMaterialObjectClass(&material);
+            }
         }
         if (mode == Mode::EarlyRawSection) {
             DRW_RawDwgSection section; section.m_name="AcDb:OpaqueProbe";
@@ -480,12 +487,26 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
         if (mode == Mode::ReplayMaterial) {
             DRW_Dictionary dictionary; dictionary.handle=0xB100u;
             dictionary.parentHandle=DRW::DwgNamedObjectsDictionaryHandle;
-            dictionary.m_entries.push_back({replayMaterial.m_name, 0xB101u});
+            const std::size_t count = replayMaterials.empty()
+                ? 1u : replayMaterials.size();
+            for (std::size_t i = 0; i < count; ++i) {
+                const DRW_Material& source = replayMaterials.empty()
+                    ? replayMaterial : replayMaterials[i];
+                dictionary.m_entries.push_back({source.m_name,
+                    static_cast<std::uint32_t>(0xB101u + i)});
+            }
             if (!output.writeDictionary(&dictionary)) { rejected=true; return; }
-            DRW_Material material=replayMaterial;
-            material.handle=0xB101u; material.parentHandle=0xB100u;
-            material.reactorHandles={0xB100u};
-            if (!output.writeMaterial(&material)) rejected=true;
+            for (std::size_t i = 0; i < count; ++i) {
+                DRW_Material material = replayMaterials.empty()
+                    ? replayMaterial : replayMaterials[i];
+                material.handle=static_cast<std::uint32_t>(0xB101u + i);
+                material.parentHandle=0xB100u;
+                material.reactorHandles={0xB100u};
+                if (!output.writeMaterial(&material)) {
+                    rejected=true;
+                    return;
+                }
+            }
         }
         if (mode == Mode::DictionaryOwner || mode == Mode::DictionaryChild || mode == Mode::DictionaryHandle) {
             DRW_Dictionary d; d.handle=0xC500; d.parentHandle=DRW::DwgNamedObjectsDictionaryHandle;
@@ -510,6 +531,7 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
     bool enabled=true, plotEnabled=true, opaqueAbsent=true, rejected=false, supplied=false;
     Mode mode=Mode::Normal; std::size_t slot=0;
     DRW_Material replayMaterial;
+    std::vector<DRW_Material> replayMaterials;
     std::array<std::uint32_t,4> handles{};
     std::uint32_t plotStylePlaceholder=0;
 };
@@ -675,8 +697,13 @@ bool inspect(const std::string& path,const std::array<std::uint32_t,4>& h,bool s
     return read && matched;
 }
 
-bool ac1027DefaultMaterialReplayRoundtripImpl(const DRW_Material& source) {
-    if (!source.canReplayAc1027DefaultDwgBody())
+bool ac1027DefaultMaterialReplayGraphRoundtripImpl(
+        const std::vector<DRW_Material>& sources) {
+    if (sources.empty()
+        || !std::all_of(sources.begin(), sources.end(),
+            [](const DRW_Material& source) {
+                return source.canReplayAc1027DefaultDwgBody();
+            }))
         return false;
     const auto nonce = std::chrono::steady_clock::now()
         .time_since_epoch().count();
@@ -694,15 +721,23 @@ bool ac1027DefaultMaterialReplayRoundtripImpl(const DRW_Material& source) {
     adapter.enabled = false;
     adapter.plotEnabled = false;
     adapter.mode = Mode::ReplayMaterial;
-    adapter.replayMaterial = source;
-    if (!writer.reserveHandle(0xB100u) || !writer.reserveHandle(0xB101u)
-        || !writer.write(&adapter, DRW::AC1027, true)) {
+    adapter.replayMaterials = sources;
+    if (!writer.reserveHandle(0xB100u)) {
+        return false;
+    }
+    for (std::size_t i = 0; i < sources.size(); ++i) {
+        if (!writer.reserveHandle(static_cast<std::uint32_t>(0xB101u + i)))
+            return false;
+    }
+    if (!writer.write(&adapter, DRW::AC1027, true)) {
         std::cerr << "AC1027 selected MATERIAL writer roundtrip could not finalize\n";
         return false;
     }
 
     class ReplayCapture final : public LC3CompatCheck {
     public:
+        explicit ReplayCapture(const std::vector<DRW_Material>& values)
+            : expected(values), materialSeen(values.size(), false) {}
         void addNamedObjectDictionary(const DRW_Dictionary& value) override {
             for (const DRW_Dictionary::Entry& entry : value.m_entries)
                 if (entry.m_name == "ACAD_MATERIAL")
@@ -713,19 +748,25 @@ bool ac1027DefaultMaterialReplayRoundtripImpl(const DRW_Material& source) {
                 return;
             dictionarySeen = value.parentHandle
                     == DRW::DwgNamedObjectsDictionaryHandle
-                && value.m_entries.size() == 1u
-                && value.m_entries[0].m_name == expectedName
-                && value.m_entries[0].m_handle == 0xB101u;
+                && value.m_entries.size() == expected.size();
+            for (std::size_t i = 0; dictionarySeen && i < expected.size(); ++i)
+                dictionarySeen = value.m_entries[i].m_name == expected[i].m_name
+                    && value.m_entries[i].m_handle
+                        == static_cast<std::uint32_t>(0xB101u + i);
         }
         void addMaterial(const DRW_Material& value) override {
-            materialSeen = value.handle == 0xB101u
-                && value.parentHandle == 0xB100u
+            if (value.handle < 0xB101u
+                || value.handle >= 0xB101u + expected.size())
+                return;
+            const std::size_t index = value.handle - 0xB101u;
+            materialSeen[index] = value.parentHandle == 0xB100u
                 && value.reactorHandles == std::vector<std::uint32_t>{0xB100u}
-                && value.m_name == expectedName
+                && value.m_name == expected[index].m_name
                 && value.hasCompleteDwgSemanticFields()
                 && value.canReplayAc1027DefaultDwgBody()
-                && value.dwgRawDataBitSize() == expectedBits
-                && value.dwgRawData() == expectedBody
+                && value.dwgRawDataBitSize()
+                    == expected[index].dwgRawDataBitSize()
+                && value.dwgRawData() == expected[index].dwgRawData()
                 && value.m_diffuseMapFileName.empty()
                 && value.m_specularMapFileName.empty()
                 && value.m_reflectionMapFileName.empty()
@@ -734,29 +775,32 @@ bool ac1027DefaultMaterialReplayRoundtripImpl(const DRW_Material& source) {
                 && value.m_refractionMapFileName.empty();
         }
         std::uint32_t rootHandle{0u};
-        std::uint32_t expectedBits{0u};
-        std::string expectedName;
-        std::vector<std::uint8_t> expectedBody;
+        std::vector<DRW_Material> expected;
+        std::vector<bool> materialSeen;
         bool dictionarySeen{false};
-        bool materialSeen{false};
-    } capture;
-    capture.expectedName = source.m_name;
-    capture.expectedBits = source.dwgRawDataBitSize();
-    capture.expectedBody = source.dwgRawData();
+    } capture(sources);
     dwgRW reader(path.string().c_str());
     if (!reader.read(&capture, false) || capture.rootHandle != 0xB100u
-        || !capture.dictionarySeen || !capture.materialSeen) {
+        || !capture.dictionarySeen
+        || std::find(capture.materialSeen.begin(), capture.materialSeen.end(),
+                     false) != capture.materialSeen.end()) {
         std::cerr << "AC1027 selected MATERIAL writer readback mismatch: root="
                   << capture.rootHandle << " dictionary="
-                  << capture.dictionarySeen << " material="
-                  << capture.materialSeen << '\n';
+                  << capture.dictionarySeen << " materials="
+                  << std::count(capture.materialSeen.begin(),
+                                capture.materialSeen.end(), true)
+                  << '/' << capture.materialSeen.size() << '\n';
         return false;
     }
     return true;
 }
 }
 bool ac1027DefaultMaterialReplayRoundtrip(const DRW_Material& source) {
-    return ac1027DefaultMaterialReplayRoundtripImpl(source);
+    return ac1027DefaultMaterialReplayGraphRoundtripImpl({source});
+}
+bool ac1027DefaultMaterialReplayGraphRoundtrip(
+        const std::vector<DRW_Material>& sources) {
+    return ac1027DefaultMaterialReplayGraphRoundtripImpl(sources);
 }
 int main(int argc,char**argv) {
     if (argc == 3
@@ -778,6 +822,7 @@ int main(int argc,char**argv) {
         }
         const std::array<std::string, 3> expectedNames{{
             "ByBlock", "ByLayer", "Global"}};
+        std::vector<DRW_Material> selectedMaterials;
         for (const auto& name : expectedNames) {
             const auto found = std::find_if(
                 capture.parsedMaterials.begin(), capture.parsedMaterials.end(),
@@ -791,7 +836,10 @@ int main(int argc,char**argv) {
                           << name << '\n';
                 return 1;
             }
+            selectedMaterials.push_back(*found);
         }
+        if (!ac1027DefaultMaterialReplayGraphRoundtrip(selectedMaterials))
+            return 1;
         std::cout << "physical AC1027 MATERIAL selected DWG replay/readback PASS\n";
         return 0;
     }

@@ -4,7 +4,7 @@
   "date": "2026-11-10",
   "status": "SELECTED_PHYSICAL_SOURCE_MATERIAL_DWG_REPLAY_READBACK_PASS",
   "supportClaimEffect": "none",
-  "scope": "Take the three exact-profile AC1027 MATERIAL records parsed from the existing Cover.dwg source and emit each through an isolated selected-object DWG graph, then verify it with a fresh libdxfrw reader.",
+  "scope": "Take the three exact-profile AC1027 MATERIAL records parsed from the existing Cover.dwg source and emit them together through one selected-object DWG graph, then verify the complete graph with a fresh libdxfrw reader.",
   "evidence": {
     "source": {
       "path": "/Users/dli/doc/dwg/Cover.dwg",
@@ -14,14 +14,14 @@
       "producer": "Not independently certified by this receipt"
     },
     "output": {
-      "mode": "Three isolated generated AC1027 DWG files in the system temporary directory; each contains the selected source MATERIAL in a named dictionary owned by NOD.",
-      "readback": "Fresh libdxfrw reader checks dictionary key/name, record handle, owner/reactor roles, complete semantic fields, exact retained 516-bit body, and all detached strings.",
+      "mode": "One generated AC1027 DWG file in the system temporary directory; its ACAD_MATERIAL dictionary contains all three selected physical-source MATERIAL records and is owned by NOD.",
+      "readback": "Fresh libdxfrw reader checks all three dictionary key/name bindings, remapped record handles, owner/reactor roles, complete semantic fields, each exact retained 516-bit body, and detached strings.",
       "fixturePolicy": "No drawing fixture committed; temporary outputs are removed by test cleanup."
     }
   },
   "implementation": {
     "file": "tests/dwg_default_material_optin_tests.cpp",
-    "change": "Added a physical-source selector that reads the three MATERIAL callbacks and individually feeds each parsed record to the selected DWG replay/readback route. Replay graph construction and readback now use the selected material's own dictionary key. The shared physical audit identifies dictionary entries by key instead of depending on entry order.",
+    "change": "Added a physical-source selector that reads the three MATERIAL callbacks and feeds all parsed records together into one selected DWG replay/readback graph. Replay graph construction and readback use each selected material's own dictionary key and distinct remapped handle. The shared physical audit identifies dictionary entries by key instead of depending on entry order.",
     "selector": "build-gcc/tests/libdxfrw_dwg_default_material_optin_tests --physical-ac1027-material-dwg-replay /Users/dli/doc/dwg/Cover.dwg"
   },
   "validation": {
@@ -39,13 +39,13 @@
     },
     "diffCheck": "PASS",
     "sha256": {
-      "tests/dwg_default_material_optin_tests.cpp": "e33a62352f88e5780a4473699b97213f7e5de0ff7729d335744d30643dfd918d",
-      "build-gcc/tests/libdxfrw_dwg_default_material_optin_tests": "061be2d27b254f7cdcad24e8f34b2c634af17447c87704709c05ce06ecdfae7a",
+      "tests/dwg_default_material_optin_tests.cpp": "d2606b64ecd47a1d4669b35355fefd51801cfca4e1c6e52702374781873e7197",
+      "build-gcc/tests/libdxfrw_dwg_default_material_optin_tests": "f720c1627192f4896c7b426092e00b5e533bf4579ff1842a2e88f15fa00d1d23",
       "/Users/dli/doc/dwg/Cover.dwg": "3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42"
     }
   },
   "limitations": [
-    "This is source-fed selected-record serialization into isolated generated graphs, not a writeback of the original Cover.dwg or whole-source conversion.",
+    "This is source-fed selected-record serialization into one generated graph, not a writeback of the original Cover.dwg or whole-source conversion.",
     "Readback uses the same libdxfrw implementation; no independent producer/native reader acceptance is established.",
     "Other AC1027 MATERIAL profiles, AC1021/AC1024 retained modern bodies, general MATERIAL semantics, and broad graph closure remain unqualified and refused.",
     "No support claim is promoted."
