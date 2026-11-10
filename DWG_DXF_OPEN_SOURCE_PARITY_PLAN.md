@@ -2026,22 +2026,24 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    TextObjectContextData remains raw-only.
    Remaining P6 work is limited to source-backed version/layout gaps and independent evidence for the
    IMAGEDEF owner-role conflict and AC1027/AC1032 HEADER suffixes. The prior
-   successful 27.1 GUI route produced hash-bound AC1027 outputs, but did not
-   isolate the suffix's meaning. On 2026-11-09 the ODA GUI was visible in one
-   desktop check, then its accessibility check reported the Mac locked before
-   any conversion was started. Two locally authored AC1027 controls intended
-   to differ only in `$LTSCALE` were readable with zero frame failures, but
-   strict DXF output stopped at the unrelated AC1027 source-reference gate.
-   No ODA comparison was obtained. LibreDWG 0.14 independently decodes `$LTSCALE=1.0` and `$LTSCALE=2.0` from the controlled pair, verifying the input difference but not its relationship to suffix bytes. A follow-up ODA CLI startup check again aborts with PasteBoard/XPC errors before input processing; conversion remains unstarted. See the [controlled-variable receipt](docs/research/p6-ac1027-header-variable-controlled-conversion-lock-2026-11-09.json).
-   Earlier checksum-valid suffix mutations already yielded identical ODA DXF
-   apart from timestamp variables, so do not repeat suffix-only mutations or
-   unchanged resaves. When the GUI session is available, first verify both
-   decoded values, convert only the two-file scratch input folder, and compare
-   CRC/sentinel-validated HEADER envelopes with independently decoded values;
-   keep every suffix byte unclaimed until its meaning is established. The last
-   direct CLI attempt aborted during PasteBoard/XPC startup before processing
-   input; that failure is not format evidence. Continue independent local
-   implementation while this platform check waits.
+   same-version ODA resaves established repeatable suffix presence but did not
+   isolate its meaning. On 2026-11-09, two scratch DXFs derived from the
+   existing Cover ODA projection and differing only in `$LTSCALE` (1.0/2.0)
+   were converted to AC1027 by ODA File Converter 27.1.0.0. LibreDWG 0.14
+   independently reads the intended values; libdxfrw publishes 119/119 frames
+   with zero entity/object failures for each, then correctly refuses DXF output
+   at the separate source-reference gate. Both decompressed HEADER sections
+   pass the sentinel and CRC16 audit. Their size words differ by eight, and the
+   unclaimed suffix lengths are 28,852 and 28,844 bytes with different hashes.
+   This controlled correlation does not identify a field boundary, suffix
+   encoding, or causal relationship to `$LTSCALE`; keep every suffix byte
+   unclaimed. Two earlier locally authored minimal AC1027 DWGs were rejected
+   by ODA as needing recovery and are excluded from this comparison. See the
+   [controlled ODA suffix receipt](docs/research/p6-ac1027-header-controlled-oda-suffix-2026-11-09.json)
+   and [earlier local-control receipt](docs/research/p6-ac1027-header-variable-controlled-conversion-lock-2026-11-09.json).
+   Do not repeat the unchanged resave or suffix-only mutation. Further suffix
+   interpretation needs source-level field evidence; continue independent
+   implementation meanwhile.
 
    **AC1027 source-reference audit update (the guard change remains
    unauthorized):** marker lifecycle is audited:
