@@ -22211,114 +22211,145 @@ bool DRW_Layout::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || !finiteCoord(ucsYAxis) || !std::isfinite(elevation)
         || !finiteCoord(extMin) || !finiteCoord(extMax))
         return false;
-    dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018) ? strBuf : buf;
+    dwgBufferW *const stringDest =
+        (strBuf != nullptr && version > DRW::AC1018) ? strBuf : buf;
     // R2000/R2004 keep the handle stream in the same object frame, but the
     // writer stages it separately so objSize can stop at the data boundary
     // before finishObject appends the tail. R2007+ uses the same buffer split.
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
+    dwgBufferW *const handleDest = (handleBuf != nullptr && version > DRW::AC1014)
         ? handleBuf : buf;
 
-    // --- PLOTSETTINGS prefix ---
-    sb->putVariableText(version, pageSetupName);
-    sb->putVariableText(version, printerConfig);
-    buf->putBitShort(static_cast<std::uint16_t>(plotLayoutFlags));
-    buf->putBitDouble(marginLeft);
-    buf->putBitDouble(marginBottom);
-    buf->putBitDouble(marginRight);
-    buf->putBitDouble(marginTop);
-    buf->putBitDouble(paperWidth);
-    buf->putBitDouble(paperHeight);
-    sb->putVariableText(version, paperSize);
-    buf->putBitDouble(plotOriginX);
-    buf->putBitDouble(plotOriginY);
-    buf->putBitShort(static_cast<std::uint16_t>(paperUnits));
-    buf->putBitShort(static_cast<std::uint16_t>(plotRotation));
-    buf->putBitShort(static_cast<std::uint16_t>(plotType));
-    buf->putBitDouble(windowMinX);
-    buf->putBitDouble(windowMinY);
-    buf->putBitDouble(windowMaxX);
-    buf->putBitDouble(windowMaxY);
+    const bool separateStrings = stringDest != buf;
+    const bool separateHandles = handleDest != buf && handleDest != stringDest;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *buf;
+        if (separateStrings)
+            stagedStrings = *stringDest;
+        if (separateHandles)
+            stagedHandles = *handleDest;
 
-    if (hasLegacyPlotViewName(version)) {
-        // R13-R2000: plotViewName precedes scale fields.
-        sb->putVariableText(version, plotViewName);
-    }
+        dwgBufferW *const bodyOut = &stagedBody;
+        dwgBufferW *const stringOut = separateStrings
+            ? &stagedStrings : bodyOut;
+        dwgBufferW *const handleOut = handleDest == buf ? bodyOut
+            : handleDest == stringDest ? stringOut : &stagedHandles;
 
-    buf->putBitDouble(realWorldUnits);
-    buf->putBitDouble(drawingUnits);
-    sb->putVariableText(version, currentStyleSheet);
-    buf->putBitShort(static_cast<std::uint16_t>(scaleType));
-    buf->putBitDouble(scaleFactor);
-    buf->putBitDouble(paperImageOriginX);
-    buf->putBitDouble(paperImageOriginY);
+        // --- PLOTSETTINGS prefix ---
+        stringOut->putVariableText(version, pageSetupName);
+        stringOut->putVariableText(version, printerConfig);
+        bodyOut->putBitShort(static_cast<std::uint16_t>(plotLayoutFlags));
+        bodyOut->putBitDouble(marginLeft);
+        bodyOut->putBitDouble(marginBottom);
+        bodyOut->putBitDouble(marginRight);
+        bodyOut->putBitDouble(marginTop);
+        bodyOut->putBitDouble(paperWidth);
+        bodyOut->putBitDouble(paperHeight);
+        stringOut->putVariableText(version, paperSize);
+        bodyOut->putBitDouble(plotOriginX);
+        bodyOut->putBitDouble(plotOriginY);
+        bodyOut->putBitShort(static_cast<std::uint16_t>(paperUnits));
+        bodyOut->putBitShort(static_cast<std::uint16_t>(plotRotation));
+        bodyOut->putBitShort(static_cast<std::uint16_t>(plotType));
+        bodyOut->putBitDouble(windowMinX);
+        bodyOut->putBitDouble(windowMinY);
+        bodyOut->putBitDouble(windowMaxX);
+        bodyOut->putBitDouble(windowMaxY);
 
-    if (version >= DRW::AC1018) {  // R2004+
-        buf->putBitShort(static_cast<std::uint16_t>(shadePlotMode));
-        buf->putBitShort(static_cast<std::uint16_t>(shadePlotResLevel));
-        buf->putBitShort(static_cast<std::uint16_t>(shadePlotCustomDPI));
-    }
-
-    // --- LAYOUT-specific fields ---
-    sb->putVariableText(version, name);
-    buf->putBitLong(tabOrder);
-    buf->putBitShort(static_cast<std::uint16_t>(layoutFlags));
-    buf->put3BitDouble(ucsOrigin);
-    buf->putRawDouble(limMinX);
-    buf->putRawDouble(limMinY);
-    buf->putRawDouble(limMaxX);
-    buf->putRawDouble(limMaxY);
-    buf->put3BitDouble(insPoint);
-    buf->put3BitDouble(ucsXAxis);
-    buf->put3BitDouble(ucsYAxis);
-    buf->putBitDouble(elevation);
-    buf->putBitShort(static_cast<std::uint16_t>(orthoViewType));
-    buf->put3BitDouble(extMin);
-    buf->put3BitDouble(extMax);
-
-    if (version >= DRW::AC1018) {
-        // Match the BL representation confirmed by the AC1024 source-sample
-        // trace and LibreDWG FIELD_BL. ODA v5.4.1 §20.4.84 says RL; that
-        // published field-type discrepancy is documented at the reader above.
-        buf->putBitLong(viewportCount);
-    }
-
-    // --- Handle stream ---
-    // Common prefix (parentHandle + reactors + xdic) FIRST, matching the
-    // post-PR-2 parser's readCommonObjectHandles call ordering.
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), numReactors, xDictFlag,
-        &reactorHandles, xDictHandle);
-
-    // Type-specific tail per ODA §20.4.84.  plotViewHandle and shadePlotHandle
-    // are gated on the same version branches as the parser.
-    if (version >= DRW::AC1018) {
-        // ODA §20.4.84 defines plot view as a hard pointer; the following
-        // Visual Style/ShadePlot reference is a soft pointer.
-        hb->putHandle(writeHandleWithCode(
-            plotViewHandle, DRW::DwgHardPointer)); // plotview
-    }
-    if (version > DRW::AC1018) {
-        hb->putHandle(writeHandleWithCode(
-            shadePlotHandle, DRW::DwgSoftPointer)); // shadeplot
-    }
-    hb->putHandle(writeHandleWithCode(
-        paperSpaceBlockRecordHandle, DRW::DwgSoftPointer));
-    hb->putHandle(writeHandleWithCode(
-        lastActiveViewportHandle, DRW::DwgSoftPointer));
-    hb->putHandle(writeHandleWithCode(
-        baseUcsHandle, DRW::DwgHardPointer));
-    hb->putHandle(writeHandleWithCode(
-        namedUcsHandle, DRW::DwgHardPointer));
-
-    if (version >= DRW::AC1018) {
-        for (std::int32_t i = 0; i < viewportCount; ++i) {
-            std::uint32_t ref = (i < static_cast<std::int32_t>(viewportHandles.size()))
-                ? viewportHandles[static_cast<size_t>(i)]
-                : 0;
-            hb->putHandle(makeRefW(ref, DRW::DwgSoftPointer));
+        if (hasLegacyPlotViewName(version)) {
+            // R13-R2000: plotViewName precedes scale fields.
+            stringOut->putVariableText(version, plotViewName);
         }
+
+        bodyOut->putBitDouble(realWorldUnits);
+        bodyOut->putBitDouble(drawingUnits);
+        stringOut->putVariableText(version, currentStyleSheet);
+        bodyOut->putBitShort(static_cast<std::uint16_t>(scaleType));
+        bodyOut->putBitDouble(scaleFactor);
+        bodyOut->putBitDouble(paperImageOriginX);
+        bodyOut->putBitDouble(paperImageOriginY);
+
+        if (version >= DRW::AC1018) {  // R2004+
+            bodyOut->putBitShort(static_cast<std::uint16_t>(shadePlotMode));
+            bodyOut->putBitShort(static_cast<std::uint16_t>(shadePlotResLevel));
+            bodyOut->putBitShort(static_cast<std::uint16_t>(shadePlotCustomDPI));
+        }
+
+        // --- LAYOUT-specific fields ---
+        stringOut->putVariableText(version, name);
+        bodyOut->putBitLong(tabOrder);
+        bodyOut->putBitShort(static_cast<std::uint16_t>(layoutFlags));
+        bodyOut->put3BitDouble(ucsOrigin);
+        bodyOut->putRawDouble(limMinX);
+        bodyOut->putRawDouble(limMinY);
+        bodyOut->putRawDouble(limMaxX);
+        bodyOut->putRawDouble(limMaxY);
+        bodyOut->put3BitDouble(insPoint);
+        bodyOut->put3BitDouble(ucsXAxis);
+        bodyOut->put3BitDouble(ucsYAxis);
+        bodyOut->putBitDouble(elevation);
+        bodyOut->putBitShort(static_cast<std::uint16_t>(orthoViewType));
+        bodyOut->put3BitDouble(extMin);
+        bodyOut->put3BitDouble(extMax);
+
+        if (version >= DRW::AC1018) {
+            // Match the BL representation confirmed by the AC1024 source-sample
+            // trace and LibreDWG FIELD_BL. ODA v5.4.1 §20.4.84 says RL; that
+            // published field-type discrepancy is documented at the reader above.
+            bodyOut->putBitLong(viewportCount);
+        }
+
+        // --- Handle stream ---
+        // Common prefix (parentHandle + reactors + xdic) FIRST, matching the
+        // post-PR-2 parser's readCommonObjectHandles call ordering.
+        putCommonObjectHandlePrefix(
+            handleOut, static_cast<std::uint32_t>(parentHandle), numReactors, xDictFlag,
+            &reactorHandles, xDictHandle);
+
+        // Type-specific tail per ODA §20.4.84.  plotViewHandle and shadePlotHandle
+        // are gated on the same version branches as the parser.
+        if (version >= DRW::AC1018) {
+            // ODA §20.4.84 defines plot view as a hard pointer; the following
+            // Visual Style/ShadePlot reference is a soft pointer.
+            handleOut->putHandle(writeHandleWithCode(
+                plotViewHandle, DRW::DwgHardPointer)); // plotview
+        }
+        if (version > DRW::AC1018) {
+            handleOut->putHandle(writeHandleWithCode(
+                shadePlotHandle, DRW::DwgSoftPointer)); // shadeplot
+        }
+        handleOut->putHandle(writeHandleWithCode(
+            paperSpaceBlockRecordHandle, DRW::DwgSoftPointer));
+        handleOut->putHandle(writeHandleWithCode(
+            lastActiveViewportHandle, DRW::DwgSoftPointer));
+        handleOut->putHandle(writeHandleWithCode(
+            baseUcsHandle, DRW::DwgHardPointer));
+        handleOut->putHandle(writeHandleWithCode(
+            namedUcsHandle, DRW::DwgHardPointer));
+
+        if (version >= DRW::AC1018) {
+            for (std::int32_t i = 0; i < viewportCount; ++i) {
+                std::uint32_t ref = (i < static_cast<std::int32_t>(viewportHandles.size()))
+                    ? viewportHandles[static_cast<size_t>(i)]
+                    : 0;
+                handleOut->putHandle(makeRefW(ref, DRW::DwgSoftPointer));
+            }
+        }
+        if (!stagedBody.isGood() || !stringOut->isGood()
+            || !handleOut->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (separateStrings)
+            stringDest->swap(stagedStrings);
+        if (separateHandles)
+            handleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    return buf->isGood() && sb->isGood() && hb->isGood();
 }
 
 // DICTIONARY (AcDbDictionary) encoder — ODA §20.4.44.  Inverts parseDwg

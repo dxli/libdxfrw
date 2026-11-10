@@ -1274,6 +1274,18 @@ created locally from scratch for the specific control.
   the broader P4 source and graph closures. No fixture was added. See the
   [transaction and gate receipt](docs/research/p6-group-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **LAYOUT DWG encoder transaction safety:** `DRW_Layout::encodeDwg` now stages
+  each distinct effective body, string, and handle destination, preserving the
+  AC1012 inline, AC1018 inline-text/detached-handle, AC1021 detached-stream,
+  and intentional alias profiles. Generated controls sweep 254 allocation
+  offsets over seven version/alias cases; each failure preserves caller bytes,
+  cursors, and handle ledgers, and same-object retry matches clean output. The
+  combined allocation test, DWG object-vector, PlotSettings decode/readback,
+  and LAYOUT compound owner round-trip tests pass. This is local writer
+  transaction evidence only; it does not qualify native plotting or broaden
+  graph/output claims. No fixture was added. See the [LAYOUT allocation
+  receipt](docs/research/p6-layout-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

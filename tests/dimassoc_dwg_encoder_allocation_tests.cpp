@@ -46,6 +46,11 @@ public:
     using DRW_PlotSettings::encodeDwg;
 };
 
+class LayoutProbe final : public DRW_Layout {
+public:
+    using DRW_Layout::encodeDwg;
+};
+
 class ScaleProbe final : public DRW_Scale {
 public:
     using DRW_Scale::encodeDwg;
@@ -690,6 +695,164 @@ bool sweepPlotSettings(ImageDefinitionStreams mode) {
     return true;
 }
 
+LayoutProbe makeLayout() {
+    LayoutProbe layout;
+    layout.handle = 0xF180u;
+    layout.parentHandle = 0x20u;
+    layout.reactorHandles = {0x21u, 0x22u};
+    layout.xDictHandle = 0x23u;
+    layout.setDwgCommonObjectState(2, 1u, false);
+    layout.pageSetupName = "layout setup";
+    layout.printerConfig = "printer driver.pc3";
+    layout.plotLayoutFlags = 3;
+    layout.marginLeft = 0.25;
+    layout.marginBottom = 0.5;
+    layout.marginRight = 0.75;
+    layout.marginTop = 1.0;
+    layout.paperWidth = 210.0;
+    layout.paperHeight = 297.0;
+    layout.paperSize = "ISO A4";
+    layout.plotOriginX = 1.5;
+    layout.plotOriginY = -2.5;
+    layout.paperUnits = 1;
+    layout.plotRotation = 2;
+    layout.plotType = 5;
+    layout.windowMinX = -10.0;
+    layout.windowMinY = -20.0;
+    layout.windowMaxX = 30.0;
+    layout.windowMaxY = 40.0;
+    layout.plotViewName = "legacy plot view";
+    layout.realWorldUnits = 2.0;
+    layout.drawingUnits = 3.0;
+    layout.currentStyleSheet = "monochrome.ctb";
+    layout.scaleType = 4;
+    layout.scaleFactor = 1.25;
+    layout.paperImageOriginX = 0.125;
+    layout.paperImageOriginY = 0.25;
+    layout.shadePlotMode = 2;
+    layout.shadePlotResLevel = 4;
+    layout.shadePlotCustomDPI = 300;
+    layout.name = "MODEL";
+    layout.tabOrder = 2;
+    layout.layoutFlags = 1;
+    layout.ucsOrigin = DRW_Coord{1.0, 2.0, 3.0};
+    layout.limMinX = -100.0;
+    layout.limMinY = -200.0;
+    layout.limMaxX = 100.0;
+    layout.limMaxY = 200.0;
+    layout.insPoint = DRW_Coord{4.0, 5.0, 6.0};
+    layout.ucsXAxis = DRW_Coord{1.0, 0.0, 0.0};
+    layout.ucsYAxis = DRW_Coord{0.0, 1.0, 0.0};
+    layout.elevation = 7.0;
+    layout.orthoViewType = 3;
+    layout.extMin = DRW_Coord{-10.0, -20.0, -30.0};
+    layout.extMax = DRW_Coord{10.0, 20.0, 30.0};
+    layout.viewportCount = 2;
+    layout.viewportHandles = {0x31u, 0x32u};
+    layout.plotViewHandle.ref = 0x34u;
+    layout.shadePlotHandle.ref = 0x35u;
+    layout.paperSpaceBlockRecordHandle.ref = 0x36u;
+    layout.lastActiveViewportHandle.ref = 0x37u;
+    layout.baseUcsHandle.ref = 0x38u;
+    layout.namedUcsHandle.ref = 0x39u;
+    return layout;
+}
+
+bool sweepLayout(ImageDefinitionStreams mode) {
+    const DRW::Version version = mode == ImageDefinitionStreams::R13InlineSeparateArguments
+        ? DRW::AC1012
+        : mode == ImageDefinitionStreams::R2004DetachedHandles
+            ? DRW::AC1018 : DRW::AC1021;
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    const LayoutProbe layout = makeLayout();
+    const auto outputs = [mode](dwgBufferW& body, dwgBufferW& strings,
+                                dwgBufferW& handles) {
+        dwgBufferW* stringOutput = nullptr;
+        dwgBufferW* handleOutput = nullptr;
+        switch (mode) {
+        case ImageDefinitionStreams::R13InlineSeparateArguments:
+        case ImageDefinitionStreams::R2004DetachedHandles:
+        case ImageDefinitionStreams::Separate:
+            stringOutput = &strings;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SharedStringAndHandle:
+            stringOutput = &strings;
+            handleOutput = &strings;
+            break;
+        case ImageDefinitionStreams::AllBody:
+            break;
+        case ImageDefinitionStreams::BodyStringDetachedHandles:
+            stringOutput = &body;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SeparateStringBodyHandles:
+            stringOutput = &strings;
+            handleOutput = &body;
+            break;
+        }
+        return std::pair<dwgBufferW*, dwgBufferW*>(stringOutput, handleOutput);
+    };
+
+    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
+    seed(cleanBody, cleanStrings, cleanHandles);
+    const auto cleanOutput = outputs(cleanBody, cleanStrings, cleanHandles);
+    if (!layout.encodeDwg(version, &cleanBody, cleanOutput.first,
+                          cleanOutput.second))
+        return false;
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    seed(body, strings, handles);
+    const auto output = outputs(body, strings, handles);
+    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
+    const unsigned long beforeCalibration =
+        failedAllocations.load(std::memory_order_relaxed);
+    const bool calibrated = layout.encodeDwg(
+        version, &body, output.first, output.second);
+    const long allocations = 1000000
+        - allocationsBeforeFailure.load(std::memory_order_relaxed);
+    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+    if (!calibrated || allocations <= 0
+        || failedAllocations.load(std::memory_order_relaxed)
+            != beforeCalibration)
+        return false;
+
+    for (long offset = 0; offset < allocations; ++offset) {
+        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
+        seed(failedBody, failedStrings, failedHandles);
+        const auto failedOutput = outputs(
+            failedBody, failedStrings, failedHandles);
+        const dwgBufferW originalBody = failedBody;
+        const dwgBufferW originalStrings = failedStrings;
+        const dwgBufferW originalHandles = failedHandles;
+        const unsigned long beforeFailure =
+            failedAllocations.load(std::memory_order_relaxed);
+        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
+        const bool encoded = layout.encodeDwg(
+            version, &failedBody, failedOutput.first, failedOutput.second);
+        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+        if (encoded
+            || failedAllocations.load(std::memory_order_relaxed)
+                != beforeFailure + 1u
+            || !same(failedBody, originalBody)
+            || !same(failedStrings, originalStrings)
+            || !same(failedHandles, originalHandles))
+            return false;
+        if (!layout.encodeDwg(version, &failedBody, failedOutput.first,
+                              failedOutput.second)
+            || !same(failedBody, cleanBody)
+            || !same(failedStrings, cleanStrings)
+            || !same(failedHandles, cleanHandles))
+            return false;
+    }
+    std::cout << "LAYOUT DWG encoder version=" << static_cast<int>(version)
+              << " stream mode=" << static_cast<int>(mode)
+              << ": allocation offsets=" << allocations
+              << ", rollback/retry=PASS\n";
+    return true;
+}
+
 ScaleProbe makeScale() {
     ScaleProbe scale;
     scale.handle = 0xF200u;
@@ -923,6 +1086,13 @@ int main() {
         || !sweepPlotSettings(ImageDefinitionStreams::AllBody)
         || !sweepPlotSettings(ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepPlotSettings(ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepLayout(ImageDefinitionStreams::R13InlineSeparateArguments)
+        || !sweepLayout(ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepLayout(ImageDefinitionStreams::Separate)
+        || !sweepLayout(ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepLayout(ImageDefinitionStreams::AllBody)
+        || !sweepLayout(ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepLayout(ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepScale(DRW::AC1012, false, false)
         || !sweepScale(DRW::AC1021, true, false)
         || !sweepScale(DRW::AC1021, false, true)
