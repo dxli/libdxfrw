@@ -9300,6 +9300,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
 
     TableDwgCodecProbe encodedAc1018Table;
     encodedAc1018Table.handle = 0xA500u;
+    encodedAc1018Table.name = "*T1";
     encodedAc1018Table.setDwgLayerHandle(DRW::DwgLayer0Handle);
     encodedAc1018Table.blockRecH = handle(0xA600u);
     encodedAc1018Table.m_tableStyleHandle = 0xA700u;
@@ -9381,6 +9382,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
 
     TableDwgCodecProbe mergedAc1018Table;
     mergedAc1018Table.handle = 0xA500u;
+    mergedAc1018Table.name = "*T1";
     mergedAc1018Table.setDwgLayerHandle(DRW::DwgLayer0Handle);
     mergedAc1018Table.blockRecH = handle(0xA600u);
     mergedAc1018Table.m_tableStyleHandle = 0xA700u;
@@ -9769,6 +9771,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     const auto makeEncodableAc1018Table = []() {
         TableDwgCodecProbe table;
         table.handle = 0xA500u;
+        table.name = "*T1";
         table.setDwgLayerHandle(DRW::DwgLayer0Handle);
         table.blockRecH = handle(0xA600u);
         table.m_tableStyleHandle = 0xA700u;
@@ -11700,6 +11703,28 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                                         &nullBodyHandles)
                  && nullBodyHandles.bitCount() == 0u,
              "AC1018 TABLE codec refuses a null body buffer without touching handles");
+
+    TableDwgCodecProbe invalidTableBlockName = makeEncodableAc1018Table();
+    invalidTableBlockName.name = "LOCAL_TABLE_DISPLAY";
+    dwgBufferW invalidTableBlockNameBody;
+    dwgBufferW invalidTableBlockNameHandles;
+    invalidTableBlockNameBody.putRawChar8(0xA5u);
+    invalidTableBlockNameHandles.putRawChar8(0x5Au);
+    const bool invalidTableBlockNameRefused =
+        !invalidTableBlockName.encodeAsTableClass(
+            DRW::AC1018, invalidTableBlockNameBody,
+            invalidTableBlockNameHandles)
+        && invalidTableBlockNameBody.bitCount() == 8u
+        && invalidTableBlockNameBody.data().front() == 0xA5u
+        && invalidTableBlockNameHandles.bitCount() == 8u
+        && invalidTableBlockNameHandles.data().front() == 0x5Au;
+    invalidTableBlockName.name = "*T_RETRY";
+    const bool validTableBlockNameRetry =
+        invalidTableBlockName.encodeAsTableClass(
+            DRW::AC1018, invalidTableBlockNameBody,
+            invalidTableBlockNameHandles);
+    t.expect(invalidTableBlockNameRefused && validTableBlockNameRetry,
+             "AC1018 TABLE refuses an unrepresentable display name atomically and accepts a corrected anonymous block name on retry");
 
     TableDwgCodecProbe appendAc1018Table = makeEncodableAc1018Table();
     dwgBufferW appendTableBody;

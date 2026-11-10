@@ -14149,6 +14149,8 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
     const bool linetypeContinuous = equalsAsciiNoCase(lineType, "CONTINUOUS");
     const bool builtInLinetype = linetypeByLayer || linetypeByBlock
         || linetypeContinuous;
+    const bool validTableBlockName = name.size() >= 3u && name[0] == '*'
+        && std::toupper(static_cast<unsigned char>(name[1])) == 'T';
     const int lineWeightCode = static_cast<int>(lWeight);
     const bool validLineWeight = lineWeightCode >= 0
         && (lineWeightCode <= 27
@@ -14179,6 +14181,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || eType != DRW::TABLE || oType < 500 || handle == 0
         || blockRecH.ref == 0
         || !validAc1018TableBlockRecordHandle(blockRecH)
+        || !validTableBlockName
         || dwgLayerHandle() == 0u
         || ltFlags > 3u
         || (space != DRW::ModelSpace && space != DRW::PaperSpace)

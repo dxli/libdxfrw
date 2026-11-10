@@ -3878,6 +3878,16 @@ group-code role. The narrower TABLE profile continues to refuse all nonempty
 `appData` because its selected model covers no common application groups.
 This preserves known common references without claiming a mapping for other
 group-102 application data.
+The next direct-codec model audit found that the inherited
+`DRW_Insert::name` was not emitted by the AC1018 TABLE entity frame and was not
+validated by its direct encoder; arbitrary display names could therefore pass
+the frame preflight even though the compound output requires a matching
+anonymous `*T…` BLOCK_RECORD. The direct AC1018 encoder now requires the
+bounded `*T` name profile before staging output. A generated negative vector
+checks destination preservation and same-object correction retry; valid frame
+encoding still passes. Compound graph validation remains responsible for
+matching the TABLE name to the actual BLOCK_RECORD name. See the [TABLE block
+name preflight receipt](docs/research/p5-ac1018-table-block-name-preflight-2026-11-10.json).
 The retained-state audit found one more edge case: an unsupported group 97/98/4
 can mark DXF parsing incomplete before the TABLE grid exists, so the public
 `m_hasSemanticContent` flag is still false. The encoder now checks its private
