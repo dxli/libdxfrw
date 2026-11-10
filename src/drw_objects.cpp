@@ -37116,39 +37116,56 @@ bool DRW_EvaluationGraph::encodeDwg(
         || extensionDictionaryFlag() > 1)
         return false;
 
-    dwgBufferW *handles = handleBuf != nullptr ? handleBuf : buf;
-    buf->putBitLong(m_value96);
-    buf->putBitLong(m_value97);
-    buf->putBitLong(static_cast<std::int32_t>(m_nodes.size()));
-    for (const DRW_EvaluationGraphNode& node : m_nodes) {
-        buf->putBitLong(node.m_index);
-        buf->putBitLong(node.m_flags);
-        buf->putBitLong(node.m_nextNodeIndex);
-        buf->putBitLong(node.m_data1);
-        buf->putBitLong(node.m_data2);
-        buf->putBitLong(node.m_data3);
-        buf->putBitLong(node.m_data4);
-    }
-    buf->putBitLong(static_cast<std::int32_t>(m_edges.size()));
-    for (const DRW_EvaluationGraphEdge& edge : m_edges) {
-        buf->putBitLong(edge.m_value92);
-        buf->putBitLong(edge.m_value93);
-        buf->putBitLong(edge.m_value94);
-        buf->putBitLong(edge.m_value91a);
-        buf->putBitLong(edge.m_value91b);
-        buf->putBitLong(edge.m_value92a);
-        buf->putBitLong(edge.m_value92b);
-        buf->putBitLong(edge.m_value92c);
-        buf->putBitLong(edge.m_value92d);
-        buf->putBitLong(edge.m_value92e);
-    }
+    dwgBufferW stagedBody;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *buf;
+        const bool separateHandles = handleBuf != nullptr && handleBuf != buf;
+        if (separateHandles)
+            stagedHandles = *handleBuf;
+        dwgBufferW *handles = separateHandles ? &stagedHandles : &stagedBody;
 
-    putCommonObjectHandlePrefix(
-        handles, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()),
-        extensionDictionaryFlag(), &reactorHandles, xDictHandle);
-    for (const DRW_EvaluationGraphNode& node : m_nodes)
-        handles->putHandle(makeRefW(
-            node.m_expressionHandle, DRW::DwgSoftPointer));
-    return buf->isGood() && handles->isGood();
+        stagedBody.putBitLong(m_value96);
+        stagedBody.putBitLong(m_value97);
+        stagedBody.putBitLong(static_cast<std::int32_t>(m_nodes.size()));
+        for (const DRW_EvaluationGraphNode& node : m_nodes) {
+            stagedBody.putBitLong(node.m_index);
+            stagedBody.putBitLong(node.m_flags);
+            stagedBody.putBitLong(node.m_nextNodeIndex);
+            stagedBody.putBitLong(node.m_data1);
+            stagedBody.putBitLong(node.m_data2);
+            stagedBody.putBitLong(node.m_data3);
+            stagedBody.putBitLong(node.m_data4);
+        }
+        stagedBody.putBitLong(static_cast<std::int32_t>(m_edges.size()));
+        for (const DRW_EvaluationGraphEdge& edge : m_edges) {
+            stagedBody.putBitLong(edge.m_value92);
+            stagedBody.putBitLong(edge.m_value93);
+            stagedBody.putBitLong(edge.m_value94);
+            stagedBody.putBitLong(edge.m_value91a);
+            stagedBody.putBitLong(edge.m_value91b);
+            stagedBody.putBitLong(edge.m_value92a);
+            stagedBody.putBitLong(edge.m_value92b);
+            stagedBody.putBitLong(edge.m_value92c);
+            stagedBody.putBitLong(edge.m_value92d);
+            stagedBody.putBitLong(edge.m_value92e);
+        }
+
+        putCommonObjectHandlePrefix(
+            handles, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()),
+            extensionDictionaryFlag(), &reactorHandles, xDictHandle);
+        for (const DRW_EvaluationGraphNode& node : m_nodes)
+            handles->putHandle(makeRefW(
+                node.m_expressionHandle, DRW::DwgSoftPointer));
+        if (!stagedBody.isGood() || !handles->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (separateHandles)
+            handleBuf->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }

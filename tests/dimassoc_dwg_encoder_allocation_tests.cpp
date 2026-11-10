@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Generated DIMASSOC DWG encoder allocation rollback and retry control.
+// Generated DWG object encoder allocation rollback and retry controls.
 #include "drw_objects.h"
 #include "intern/dwgbufferw.h"
 #include "intern/drw_textcodec.h"
@@ -18,6 +18,11 @@ std::atomic<unsigned long> failedAllocations{0};
 class DimensionAssociationProbe final : public DRW_DimensionAssociation {
 public:
     using DRW_DimensionAssociation::encodeDwg;
+};
+
+class EvaluationGraphProbe final : public DRW_EvaluationGraph {
+public:
+    using DRW_EvaluationGraph::encodeDwg;
 };
 
 DimensionAssociationProbe makeAssociation() {
@@ -156,6 +161,87 @@ bool sweep(StreamAlias alias) {
               << ", rollback/retry=PASS\n";
     return true;
 }
+
+EvaluationGraphProbe makeEvaluationGraph() {
+    EvaluationGraphProbe graph;
+    graph.handle = 0xB100u;
+    graph.parentHandle = 0x20u;
+    graph.reactorHandles = {0x21u, 0x22u};
+    graph.xDictHandle = 0x23u;
+    graph.m_value96 = 17;
+    graph.m_value97 = 29;
+    graph.m_nodes = {
+        {1, 3, 2, 0x40u, 5, 7, 11, 13},
+        {2, 9, 0, 0x44u, 17, 19, 23, 31}
+    };
+    graph.m_edges = {
+        {1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+        {11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+    };
+    return graph;
+}
+
+bool sweepEvaluationGraph(bool aliasHandles) {
+    DRW_TextCodec codec;
+    codec.setVersion(DRW::AC1021, false);
+    const EvaluationGraphProbe graph = makeEvaluationGraph();
+    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
+    seed(cleanBody, cleanStrings, cleanHandles);
+    dwgBufferW* const cleanHandleOutput = aliasHandles ? nullptr : &cleanHandles;
+    if (!graph.encodeDwg(DRW::AC1021, &cleanBody, &cleanStrings,
+                         cleanHandleOutput))
+        return false;
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    seed(body, strings, handles);
+    dwgBufferW* const handleOutput = aliasHandles ? nullptr : &handles;
+    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
+    const unsigned long beforeCalibration =
+        failedAllocations.load(std::memory_order_relaxed);
+    const bool calibrated = graph.encodeDwg(
+        DRW::AC1021, &body, &strings, handleOutput);
+    const long allocations = 1000000
+        - allocationsBeforeFailure.load(std::memory_order_relaxed);
+    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+    if (!calibrated || allocations <= 0
+        || failedAllocations.load(std::memory_order_relaxed)
+            != beforeCalibration)
+        return false;
+
+    for (long offset = 0; offset < allocations; ++offset) {
+        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
+        seed(failedBody, failedStrings, failedHandles);
+        dwgBufferW* const failedHandleOutput = aliasHandles
+            ? nullptr : &failedHandles;
+        const dwgBufferW originalBody = failedBody;
+        const dwgBufferW originalStrings = failedStrings;
+        const dwgBufferW originalHandles = failedHandles;
+        const unsigned long beforeFailure =
+            failedAllocations.load(std::memory_order_relaxed);
+        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
+        const bool encoded = graph.encodeDwg(
+            DRW::AC1021, &failedBody, &failedStrings, failedHandleOutput);
+        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+        if (encoded
+            || failedAllocations.load(std::memory_order_relaxed)
+                != beforeFailure + 1u
+            || !same(failedBody, originalBody)
+            || !same(failedStrings, originalStrings)
+            || !same(failedHandles, originalHandles))
+            return false;
+        if (!graph.encodeDwg(DRW::AC1021, &failedBody, &failedStrings,
+                             failedHandleOutput)
+            || !same(failedBody, cleanBody)
+            || !same(failedStrings, cleanStrings)
+            || !same(failedHandles, cleanHandles))
+            return false;
+    }
+    std::cout << "EvaluationGraph DWG encoder "
+              << (aliasHandles ? "body-aliased" : "separate")
+              << " handles: allocation offsets=" << allocations
+              << ", rollback/retry=PASS\n";
+    return true;
+}
 } // namespace
 
 void* operator new(std::size_t size) {
@@ -181,7 +267,9 @@ void operator delete[](void* memory, std::size_t) noexcept { std::free(memory); 
 int main() {
     if (!sweep(StreamAlias::Separate)
         || !sweep(StreamAlias::SharedStringAndHandle)
-        || !sweep(StreamAlias::AllBody)) {
+        || !sweep(StreamAlias::AllBody)
+        || !sweepEvaluationGraph(false)
+        || !sweepEvaluationGraph(true)) {
         allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
         std::cerr << "DIMASSOC DWG encoder allocation transaction failed\n";
         return 1;

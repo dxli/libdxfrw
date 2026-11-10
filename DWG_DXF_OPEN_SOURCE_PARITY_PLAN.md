@@ -1200,6 +1200,17 @@ created locally from scratch for the specific control.
   builders and whole-drawing failure paths remain open. No DWG/DXF fixture was
   added. See the [allocation rollback receipt](docs/research/p6-dimassoc-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **EvaluationGraph DWG encoder transaction safety:**
+  `DRW_EvaluationGraph::encodeDwg` now stages its body and handle ledger and
+  publishes them together only on success. Generated AC1021 controls sweep all
+  14 reached allocation offsets with separate body/handle streams and all 10
+  offsets when those streams alias; every injected failure preserves caller
+  state and same-buffer retry matches clean bytes and handle occurrences. The
+  combined fast allocation test and focused object-vector/readback tests pass.
+  This closes only this record encoder's local transaction path. Other DWG
+  encoders, OBJECTS builders and whole-drawing failure paths remain open; no
+  DWG/DXF fixture was added. See the [allocation rollback receipt](docs/research/p6-evaluation-graph-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
