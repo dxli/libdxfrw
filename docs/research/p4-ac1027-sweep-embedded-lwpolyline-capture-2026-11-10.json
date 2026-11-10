@@ -61,7 +61,7 @@
   "generatedControl": {
     "test": "libdxfrw_acsh_action_body_exact_span",
     "result": "PASS",
-    "change": "The from-scratch AC1027 embedded-polyline vector now includes plinegen 0x100 and closed 0x200 flags alongside optional scalar, bulge, vertex-id and width arrays."
+    "change": "The from-scratch AC1027 embedded-polyline vector includes plinegen 0x100 and closed 0x200 flags alongside optional scalar, bulge, vertex-id and width arrays. A malformed flag vector verifies typed refusal while the containing Sweep body and exact raw embedded payload remain available."
   },
   "validation": {
     "build": "cmake --build build-gcc --target libdxfrw_hardening_tests libdxfrw_ac1027_acds_source_probe -j2",

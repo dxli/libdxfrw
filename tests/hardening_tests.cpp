@@ -20478,6 +20478,34 @@ void testAcshActionBodyExactSpan(TestContext& t) {
                  && embeddedPolyline.m_vertices[1].m_vertexId == 102,
              "type-77 embedded LWPOLYLINE fields decode within the declared bit span");
 
+    dwgBufferW malformedPolylineWriter;
+    malformedPolylineWriter.putBitShort(0x0800u);
+    malformedPolylineWriter.putRawChar8(0xA5u);
+    const std::uint32_t malformedPolylineBits = static_cast<std::uint32_t>(
+        malformedPolylineWriter.size() * 8u
+        - (malformedPolylineWriter.bitPos() == 0u
+            ? 0u : 8u - malformedPolylineWriter.bitPos()));
+    const auto malformedPolylineBody = makeBody(
+        false, 0, 0, 77, true,
+        malformedPolylineWriter.data(), malformedPolylineBits);
+    dwgBuffer malformedPolylineBuffer(malformedPolylineBody.first.data(),
+                                      malformedPolylineBody.first.size());
+    DRW_AcShHistoryObject::SweepActionBodyCapture malformedPolylineCapture;
+    std::uint64_t malformedPolylineEnd = 0;
+    const bool malformedPolylineRead =
+        DRW_AcShHistoryTestAccess::parseSweepActionBody(
+            DRW::AC1027, malformedPolylineBuffer,
+            malformedPolylineBody.second, malformedPolylineCapture,
+            malformedPolylineEnd);
+    t.expect(malformedPolylineRead
+                 && malformedPolylineEnd == malformedPolylineBody.second
+                 && malformedPolylineCapture.m_exactBodyEnd
+                 && malformedPolylineCapture.m_profileBits
+                    == malformedPolylineWriter.data()
+                 && malformedPolylineCapture.m_profilePolyline.m_vertices.empty()
+                 && !malformedPolylineCapture.m_profilePolyline.m_fieldsParsed,
+             "invalid embedded LWPOLYLINE flags retain exact raw payload without losing the bounded Sweep body");
+
     const auto specialProfileBody = makeBody(false, 0, 0, 15);
     dwgBuffer specialProfileBuffer(specialProfileBody.first.data(),
                                    specialProfileBody.first.size());

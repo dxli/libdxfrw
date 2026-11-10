@@ -1193,8 +1193,10 @@ created locally from scratch for the specific control.
   vertex and optional-array fields, including valid polyline flags `0x100`,
   `0x200` and `0x400`. The hash-bound source probe captures both profile/path
   payloads while preserving their 4-bit/2-bit opaque suffixes. The focused
-  generated control passes. This is one-source parser evidence only; Sweep
-  output, graph closure and semantic support remain refused. Next, continue
+  generated control passes, including a malformed-flags case that withholds
+  typed publication while preserving the containing action body and raw
+  payload. This is one-source parser evidence only; Sweep output, graph closure
+  and semantic support remain refused. Next, continue
   with the unresolved source/profile and dependency gates or another ready
   source-backed slice. See the [receipt](docs/research/p4-ac1027-sweep-embedded-lwpolyline-capture-2026-11-10.json).
 
