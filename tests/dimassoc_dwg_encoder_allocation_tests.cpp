@@ -71,6 +71,11 @@ public:
     using DRW_ObjectPtr::encodeDwg;
 };
 
+class PartialViewingIndexProbe final : public DRW_PartialViewingIndex {
+public:
+    using DRW_PartialViewingIndex::encodeDwg;
+};
+
 class PlotSettingsProbe final : public DRW_PlotSettings {
 public:
     using DRW_PlotSettings::encodeDwg;
@@ -1606,6 +1611,20 @@ ObjectPtrProbe makeObjectPtr() {
     return object;
 }
 
+PartialViewingIndexProbe makePartialViewingIndex() {
+    PartialViewingIndexProbe object;
+    object.handle = 0xBA00u;
+    object.parentHandle = 0x20u;
+    object.reactorHandles = {0x21u, 0x22u};
+    object.setDwgCommonObjectState(2, 1u, false);
+    object.xDictHandle = 0x23u;
+    object.m_entries = {
+        {{0.0, 1.0, 2.0}, {3.0, 4.0, 5.0}, 0x31u},
+        {{6.0, 7.0, 8.0}, {9.0, 10.0, 11.0}, 0x32u}
+    };
+    return object;
+}
+
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
     GeoDataProbe geo;
     geo.handle = 0xA900u;
@@ -2935,6 +2954,31 @@ int main() {
             ImageDefinitionStreams::BodyStringDetachedHandles,
             DRW::AC1021)
         || !sweepIndexObject("OBJECT_PTR", makeObjectPtr(),
+            ImageDefinitionStreams::SeparateStringBodyHandles,
+            DRW::AC1021)
+        || !sweepIndexObject("PARTIAL_VIEWING_INDEX",
+            makePartialViewingIndex(),
+            ImageDefinitionStreams::R13InlineSeparateArguments,
+            DRW::AC1015)
+        || !sweepIndexObject("PARTIAL_VIEWING_INDEX",
+            makePartialViewingIndex(),
+            ImageDefinitionStreams::R2004DetachedHandles,
+            DRW::AC1018)
+        || !sweepIndexObject("PARTIAL_VIEWING_INDEX",
+            makePartialViewingIndex(), ImageDefinitionStreams::Separate,
+            DRW::AC1021)
+        || !sweepIndexObject("PARTIAL_VIEWING_INDEX",
+            makePartialViewingIndex(),
+            ImageDefinitionStreams::SharedStringAndHandle, DRW::AC1021)
+        || !sweepIndexObject("PARTIAL_VIEWING_INDEX",
+            makePartialViewingIndex(), ImageDefinitionStreams::AllBody,
+            DRW::AC1021)
+        || !sweepIndexObject("PARTIAL_VIEWING_INDEX",
+            makePartialViewingIndex(),
+            ImageDefinitionStreams::BodyStringDetachedHandles,
+            DRW::AC1021)
+        || !sweepIndexObject("PARTIAL_VIEWING_INDEX",
+            makePartialViewingIndex(),
             ImageDefinitionStreams::SeparateStringBodyHandles,
             DRW::AC1021)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)

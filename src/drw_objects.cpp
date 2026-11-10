@@ -16880,22 +16880,43 @@ bool DRW_PartialViewingIndex::encodeDwg(
                      }))
         return false;
 
-    const std::uint32_t entryCount =
-        static_cast<std::uint32_t>(m_entries.size());
-    dwgBufferW *hb = handleBuf != nullptr && version > DRW::AC1014
-        ? handleBuf : buf;
-    buf->putBitLong(entryCount);
-    if (entryCount != 0)
-        buf->putBit(1);
-    for (const DRW_PartialViewingIndexEntry& entry : m_entries) {
-        buf->put3BitDouble(entry.extentsMin);
-        buf->put3BitDouble(entry.extentsMax);
-        buf->putHandle(makeRefW(entry.objectHandle, DRW::DwgHardPointer));
+    try {
+        dwgBufferW *const callerBody = buf;
+        dwgBufferW *const callerHandleDest =
+            handleBuf != nullptr && version > DRW::AC1014
+                ? handleBuf : callerBody;
+        const bool separateHandles = callerHandleDest != callerBody;
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedHandles;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+        buf = &stagedBody;
+        handleBuf = separateHandles ? &stagedHandles : buf;
+        dwgBufferW *hb = handleBuf != nullptr && version > DRW::AC1014
+            ? handleBuf : buf;
+
+        const std::uint32_t entryCount =
+            static_cast<std::uint32_t>(m_entries.size());
+        buf->putBitLong(entryCount);
+        if (entryCount != 0)
+            buf->putBit(1);
+        for (const DRW_PartialViewingIndexEntry& entry : m_entries) {
+            buf->put3BitDouble(entry.extentsMin);
+            buf->put3BitDouble(entry.extentsMax);
+            buf->putHandle(makeRefW(entry.objectHandle, DRW::DwgHardPointer));
+        }
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle), reactorCount(),
+            extensionDictionaryFlag(), &reactorHandles, xDictHandle);
+        if (!buf->isGood() || !hb->isGood())
+            return false;
+        callerBody->swap(stagedBody);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), reactorCount(),
-        extensionDictionaryFlag(), &reactorHandles, xDictHandle);
-    return buf->isGood() && hb->isGood();
 }
 
 bool DRW_Background::parseCode(int code, const std::unique_ptr<dxfReader>& reader){

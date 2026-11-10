@@ -1538,6 +1538,15 @@ created locally from scratch for the specific control.
   allocation receipt](docs/research/p6-objectptr-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 3,738 offsets across 190 cases.
 
+- **PARTIAL_VIEWING_INDEX DWG encoder transaction safety:**
+  `DRW_PartialViewingIndex::encodeDwg` stages extents, embedded entry handles,
+  and the common handle tail before publishing. Seven generated AC1015/AC1018/
+  AC1021 layouts sweep 97 allocation offsets with rollback and same-object
+  retry; object-vector, allocation, DXF OBJECTS allocation, and reference-
+  closure tests pass 4/4. No fixture was added. See the [PARTIAL_VIEWING_INDEX
+  allocation receipt](docs/research/p6-partial-viewing-index-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 3,835 offsets across 197 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
