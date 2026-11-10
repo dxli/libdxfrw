@@ -34418,16 +34418,20 @@ bool dx_iface::prepareDwgMLineStyles(DRW::Version version) noexcept {
         || (cData->sourceVersion != DRW::AC1015
             && cData->sourceVersion != DRW::AC1018
             && cData->sourceVersion != DRW::AC1021
-            && cData->sourceVersion != DRW::AC1024)
+            && cData->sourceVersion != DRW::AC1024
+            && cData->sourceVersion != DRW::AC1032)
         || (version != DRW::AC1024
             && !(cData->sourceVersion == DRW::AC1021
-                && version == DRW::AC1021))
+                && version == DRW::AC1021)
+            && !(cData->sourceVersion == DRW::AC1032
+                && version == DRW::AC1032))
         || m_extensionMLineStyleHandles.empty())
         return true;
 
-    // Admit only the source-backed AC1015/AC1018/AC1021/AC1024 STANDARD
-    // profile in the tracked witnesses. Other MLINESTYLE bodies continue
-    // through the existing writer, but do not qualify their opaque callbacks.
+    // Admit only the source-backed STANDARD profiles in the tracked
+    // witnesses. AC1032 additionally binds every element handle to a unique
+    // ByLayer LTYPE source record; other MLINESTYLE bodies continue through
+    // the existing writer without qualifying their opaque callbacks.
     if (m_extensionMLineStyleHandles.size() != 1u
         || cData->mLineStyles.size() != 1u
         || !cData->hasNamedObjectDictionary
@@ -34453,14 +34457,46 @@ bool dx_iface::prepareDwgMLineStyles(DRW::Version version) noexcept {
         || !std::isfinite(style.startAngle)
         || !std::isfinite(style.endAngle))
         return true;
+    std::vector<std::pair<std::uint32_t, std::string>> linetypeDependencies;
     for (const DRW_MLineElement& element : style.elements) {
         if (!std::isfinite(element.offset) || element.color != 256
             || element.color24 != -1 || element.colorMethod != 192u
             || element.colorFlags != 0u || !element.colorName.empty()
             || !element.colorBookName.empty() || element.colorDwgIndex != 0u
-            || element.linetypeIndex != 32767
-            || element.linetypeHandle != 0u || !element.linetype.empty())
+            || !element.linetype.empty())
             return true;
+        if (cData->sourceVersion == DRW::AC1032) {
+            if (element.linetypeHandle == 0u
+                || element.linetypeHandle == DRW::NoHandle)
+                return true;
+            const auto lineType = std::find_if(
+                cData->lineTypes.begin(), cData->lineTypes.end(),
+                [&element](const DRW_LType& candidate) {
+                    return candidate.handle == element.linetypeHandle;
+                });
+            if (lineType == cData->lineTypes.end()
+                || lineType->name != "ByLayer"
+                || std::count_if(cData->lineTypes.begin(),
+                    cData->lineTypes.end(), [&element](
+                        const DRW_LType& candidate) {
+                            return candidate.handle
+                                == element.linetypeHandle;
+                        }) != 1u)
+                return true;
+            const auto existing = std::find_if(
+                linetypeDependencies.begin(), linetypeDependencies.end(),
+                [&element](const auto& dependency) {
+                    return dependency.first == element.linetypeHandle;
+                });
+            if (existing == linetypeDependencies.end())
+                linetypeDependencies.emplace_back(
+                    element.linetypeHandle, lineType->name);
+            else if (existing->second != lineType->name)
+                return true;
+        } else if (element.linetypeIndex != 32767
+                   || element.linetypeHandle != 0u) {
+            return true;
+        }
     }
 
     const dx_data::StandardDwgFrameKey frameKey{
@@ -34572,7 +34608,8 @@ bool dx_iface::prepareDwgMLineStyles(DRW::Version version) noexcept {
         m_dwgMLineStyleOutputSources.emplace(
             style.handle,
             DwgMLineStyleOutputSource{
-                style, *rootOwner, nod.handle, nod.hardOwner, *rootEntry});
+                style, *rootOwner, nod.handle, nod.hardOwner, *rootEntry,
+                std::move(linetypeDependencies)});
         m_dwgMLineStyleOutputOwner = cData;
         m_dwgMLineStyleOutputGeneration = cData->importGeneration;
         return hasUnchangedDwgMLineStyleOutputSources();
@@ -34594,7 +34631,8 @@ bool dx_iface::hasUnchangedDwgMLineStyleOutputSources() const noexcept {
         || (cData->sourceVersion != DRW::AC1015
             && cData->sourceVersion != DRW::AC1018
             && cData->sourceVersion != DRW::AC1021
-            && cData->sourceVersion != DRW::AC1024)
+            && cData->sourceVersion != DRW::AC1024
+            && cData->sourceVersion != DRW::AC1032)
         || !cData->hasSingleSuccessfulNamedResourceImport()
         || cData->mLineStyles.size() != m_dwgMLineStyleOutputSources.size()
         || m_extensionMLineStyleHandles.size()
@@ -34636,6 +34674,41 @@ bool dx_iface::hasUnchangedDwgMLineStyleOutputSources() const noexcept {
                                            cData->sourceVersion)
                 || !mlineFieldsEqual(frozen->second.model, current))
                 return false;
+            if (cData->sourceVersion == DRW::AC1032) {
+                std::unordered_set<std::uint32_t> currentDependencies;
+                for (const DRW_MLineElement& element : current.elements) {
+                    const auto expected = std::find_if(
+                        frozen->second.linetypeDependencies.begin(),
+                        frozen->second.linetypeDependencies.end(),
+                        [&element](const auto& dependency) {
+                            return dependency.first
+                                == element.linetypeHandle;
+                        });
+                    const auto live = std::find_if(
+                        cData->lineTypes.begin(), cData->lineTypes.end(),
+                        [&element](const DRW_LType& candidate) {
+                            return candidate.handle
+                                == element.linetypeHandle;
+                        });
+                    if (element.linetypeHandle == 0u
+                        || element.linetypeHandle == DRW::NoHandle
+                        || expected
+                            == frozen->second.linetypeDependencies.end()
+                        || live == cData->lineTypes.end()
+                        || live->name != expected->second
+                        || std::count_if(cData->lineTypes.begin(),
+                            cData->lineTypes.end(), [&element](
+                                const DRW_LType& candidate) {
+                                    return candidate.handle
+                                        == element.linetypeHandle;
+                            }) != 1u)
+                        return false;
+                    currentDependencies.insert(element.linetypeHandle);
+                }
+                if (currentDependencies.size()
+                    != frozen->second.linetypeDependencies.size())
+                    return false;
+            }
             const auto frame = cData->m_opaqueDwgSourceFrames.find(
                 {cData->importGeneration, current.handle});
             // Keep the AC1018 exception identical to admission: its source
@@ -34742,7 +34815,9 @@ bool dx_iface::inspectDwgMLineStyles(
     const bool supportedVersion = cData != nullptr
         && (view.version == DRW::AC1024
             || (cData->sourceVersion == DRW::AC1021
-                && view.version == DRW::AC1021));
+                && view.version == DRW::AC1021)
+            || (cData->sourceVersion == DRW::AC1032
+                && view.version == DRW::AC1032));
     if (dxfW == nullptr || cData == nullptr || !supportedVersion
         || !hasUnchangedDwgMLineStyleOutputSources())
         return reject("source snapshot or output version");
@@ -34787,6 +34862,28 @@ bool dx_iface::inspectDwgMLineStyles(
         };
         const DwgMLineStyleOutputSource& source =
             m_dwgMLineStyleOutputSources.begin()->second;
+        for (const auto& dependency : source.linetypeDependencies) {
+            const auto live = std::find_if(
+                cData->lineTypes.begin(), cData->lineTypes.end(),
+                [&dependency](const DRW_LType& candidate) {
+                    return candidate.handle == dependency.first;
+                });
+            if (live == cData->lineTypes.end()
+                || live->name != dependency.second
+                || std::count_if(cData->lineTypes.begin(),
+                    cData->lineTypes.end(), [&dependency](
+                        const DRW_LType& candidate) {
+                            return candidate.handle == dependency.first;
+                    }) != 1u)
+                return reject("source LTYPE dependency identity");
+            const std::uint32_t emitted =
+                dxfW->dxfWriteSourceLinetypeTargetHandle(dependency.first);
+            if (emitted == 0u || emitted == DRW::NoHandle
+                || dxfW->dxfWriteRecordHandleCount(emitted) != 1u
+                || !dxfW->dxfWriteRecordHasIdentity(
+                    emitted, "LTYPE", "TABLES"))
+                return reject("emitted LTYPE dependency identity");
+        }
         const DRW_Dictionary& sourceRoot =
             source.rootOwner;
         const DRW_Dictionary& liveNod = cData->namedObjectDictionary;
@@ -34847,6 +34944,7 @@ bool dx_iface::inspectDwgMLineStyles(
         }
 
         std::unordered_set<std::uint32_t> seenStyles, seenOwners, seenNods;
+        const auto& linetypeDependencies = source.linetypeDependencies;
         bool namesMatch = true;
         const char* stagedFailure = "selected record inventory";
         const bool inspected = dx_standard_output::inspectSelected(
@@ -34937,7 +35035,21 @@ bool dx_iface::inspectDwgMLineStyles(
                 projected.fillColorMethod = 0u;
                 for (DRW_MLineElement& element : projected.elements) {
                     element.colorMethod = 0u;
-                    element.linetype = "BYLAYER";
+                    if (cData->sourceVersion == DRW::AC1032) {
+                        const auto dependency = std::find_if(
+                            linetypeDependencies.begin(),
+                            linetypeDependencies.end(),
+                            [&element](const auto& candidate) {
+                                return candidate.first
+                                    == element.linetypeHandle;
+                            });
+                        if (dependency
+                            == linetypeDependencies.end())
+                            return false;
+                        element.linetype = dependency->second;
+                    } else {
+                        element.linetype = "BYLAYER";
+                    }
                     element.linetypeIndex = -1;
                     element.linetypeHandle = 0u;
                 }

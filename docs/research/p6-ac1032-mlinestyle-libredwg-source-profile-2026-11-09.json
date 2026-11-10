@@ -66,19 +66,26 @@
   "implementation": {
     "file": "tests/dwg2dxf_adapter_tests.cpp",
     "selector": "--mline-style-ac1032-source-profile",
-    "change": "Add a manual corpus-profile selector that asserts the typed style identity, NOD-to-owner-to-style links, unique ByLayer LTYPE dependency, two target handles, exact parser-reported offsets and span widths/roles observed for this source. The receipt binds the invocation to the DWG SHA-256; the selector does not implement its own hash check and is not registered in CTest."
+    "change": "Add a manual corpus-profile selector that asserts the typed style identity, NOD-to-owner-to-style links, unique ByLayer LTYPE dependency, two target handles, exact parser-reported offsets and span widths/roles observed for this source. The selector also prepares the AC1032 MLINESTYLE output-source snapshot and verifies that changing either the element target handle or the target LTYPE name invalidates the snapshot, then permits retry after restoration. The receipt binds the invocation to the DWG SHA-256; the selector does not implement its own hash check and is not registered in CTest."
   },
   "validation": {
     "build": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests --parallel 4",
     "buildResult": "PASS with configured warning-as-error flags.",
     "physicalSelector": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --mline-style-ac1032-source-profile /Users/dli/dev/libredwg/test/test-data/example_2018.dwg",
-    "physicalSelectorResult": "PASS: exact NOD ACAD_MLINESTYLE entry -> dictionary 0x17 -> style 0x18 graph; both linetype refs resolve to unique LTYPE 0x15 ByLayer; parser spans are 627+16 and 643+16 bits, both hard-pointer code 5. The read reports one unrelated object parse failure; strict whole-source conversion remains refused.",
+    "physicalSelectorResult": "PASS: exact NOD ACAD_MLINESTYLE entry -> dictionary 0x17 -> style 0x18 graph; both linetype refs resolve to unique LTYPE 0x15 ByLayer; parser spans are 627+16 and 643+16 bits, both hard-pointer code 5. The adapter admits the source snapshot; target-handle and LTYPE-name mutations are rejected and restoration passes.",
+    "selectedPhysicalOutputAttempt": {
+      "result": "BLOCKED_BEFORE_MLINESTYLE_STAGED_INSPECTION",
+      "firstRelevantGraphFailure": "DICTIONARY 0x3A8 contains ACAD_DIMASSOC -> DIMASSOC 0x3B4 (type 526), which is absent from the qualified emitted-object graph.",
+      "independentPeerConfirmation": "LibreDWG 0.14 JSON for this same DWG reports DICTIONARY handle 0x3A8 with ACAD_DIMASSOC target 0x3B4 and DIMASSOC handle 0x3B4 owned by 0x3A8.",
+      "consequence": "Do not treat MLINESTYLE output-source admission as writer/readback evidence. Implement DIMASSOC graph closure and output/readback before retrying the selected physical export."
+    },
+    "focusedTests": "PASS: CTest selectors libdxfrw_ac1032_mlinestyle_handle_roles, libdxfrw_mline_style_dxf_defaults, libdxfrw_mline_style_validation, libdxfrw_mline_ltype_provider_profiles, libdxfrw_mline_style_xdata, libdxfrw_mline_source_dependency, libdxfrw_mline_ltype_source_live, libdxfrw_mline_root_dictionary_source_live, and libdxfrw_mline_style_dictionary_source_live (9/9).",
     "diffCheck": "PASS",
-    "fullTestSuites": "NOT RUN; focused source-profile selector and target-local build used."
+    "fullTestSuites": "NOT RUN; target-local build, physical source-profile selector, and nine focused CTests used."
   },
   "remainingGates": [
     "Producer-qualified AutoCAD/ODA AC1032 span evidence remains absent.",
-    "Only the selected typed MLINESTYLE dependency graph closes. Drawing-wide graph closure, strict output admission, writer, native CAD, LibreCAD, LibreCAD_3, or support claim does not follow from this profile.",
+    "Only selected-source MLINESTYLE admission and dependency snapshot are established. Drawing-wide graph closure, DIMASSOC target output, MLINESTYLE staged serialization/readback, strict output admission, native CAD, LibreCAD, LibreCAD_3, or support claim does not follow from this profile.",
     "Generated exact-span, malformed-role, null, truncation, rollback and retry controls remain the primary span-boundary validation."
   ]
 }

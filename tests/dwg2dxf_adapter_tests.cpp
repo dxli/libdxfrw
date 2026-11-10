@@ -175,6 +175,26 @@ public:
 
 class DxIfaceStandardDwgCaptureTestAccess {
 public:
+    static bool prepareMLineStyleOutputSource(dx_iface& iface,
+                                              DRW::Version target) {
+        return iface.prepareDwgMLineStyles(target);
+    }
+
+    static void setMLineStyleOutputHandle(dx_iface& iface,
+                                          std::uint32_t handle) {
+        iface.m_extensionMLineStyleHandles.assign(1u, handle);
+    }
+
+    static std::size_t mLineStyleOutputSourceCount(
+            const dx_iface& iface) noexcept {
+        return iface.m_dwgMLineStyleOutputSources.size();
+    }
+
+    static bool mLineStyleOutputSourcesUnchanged(
+            const dx_iface& iface) noexcept {
+        return iface.hasUnchangedDwgMLineStyleOutputSources();
+    }
+
     static void copyAc1027MaterialSourceProof(const dx_data& source,
                                                dx_data& projection) {
         projection.dwgClassCoverage = source.dwgClassCoverage;
@@ -53747,8 +53767,55 @@ bool physicalAc1032MLineStyleHandleSourceProfile(
                   << " role=" << static_cast<unsigned int>(span.m_rawHandleCode)
                   << " target=" << element.linetypeHandle << '\n';
     }
+    DxIfaceStandardDwgCaptureTestAccess::setMLineStyleOutputHandle(
+        reader, style.handle);
+    if (!DxIfaceStandardDwgCaptureTestAccess::prepareMLineStyleOutputSource(
+            reader, DRW::AC1032)
+        || DxIfaceStandardDwgCaptureTestAccess::mLineStyleOutputSourceCount(
+               reader) != 1u
+        || !DxIfaceStandardDwgCaptureTestAccess::mLineStyleOutputSourcesUnchanged(
+               reader))
+        return fail("physical AC1032 MLINESTYLE source did not enter its exact output-source snapshot: namedImport="
+            + std::to_string(data.hasSingleSuccessfulNamedResourceImport())
+            + " captureFailed=" + std::to_string(data.mLineStyleCaptureFailed)
+            + " sources=" + std::to_string(
+                DxIfaceStandardDwgCaptureTestAccess::mLineStyleOutputSourceCount(
+                    reader))
+            + " unchanged=" + std::to_string(
+                DxIfaceStandardDwgCaptureTestAccess::mLineStyleOutputSourcesUnchanged(
+                    reader)));
+
+    DRW_MLineStyle& mutableStyle = data.mLineStyles.front();
+    const std::uint32_t originalHandle =
+        mutableStyle.elements.front().linetypeHandle;
+    mutableStyle.elements.front().linetypeHandle = 0x16u;
+    const bool wrongTargetRejected =
+        !DxIfaceStandardDwgCaptureTestAccess::mLineStyleOutputSourcesUnchanged(
+            reader);
+    mutableStyle.elements.front().linetypeHandle = originalHandle;
+    if (!wrongTargetRejected
+        || !DxIfaceStandardDwgCaptureTestAccess::mLineStyleOutputSourcesUnchanged(
+            reader))
+        return fail("physical AC1032 MLINESTYLE dependency mutation was not refused and recoverable");
+
+    auto sourceLinetype = std::find_if(
+        data.lineTypes.begin(), data.lineTypes.end(),
+        [](const DRW_LType& candidate) { return candidate.handle == 0x15u; });
+    if (sourceLinetype == data.lineTypes.end())
+        return fail("physical AC1032 MLINESTYLE source LTYPE disappeared");
+    const std::string originalName = sourceLinetype->name;
+    sourceLinetype->name = "ByBlock";
+    const bool renamedTargetRejected =
+        !DxIfaceStandardDwgCaptureTestAccess::mLineStyleOutputSourcesUnchanged(
+            reader);
+    sourceLinetype->name = originalName;
+    if (!renamedTargetRejected
+        || !DxIfaceStandardDwgCaptureTestAccess::mLineStyleOutputSourcesUnchanged(
+            reader))
+        return fail("physical AC1032 MLINESTYLE LTYPE-name mutation was not refused and recoverable");
     std::cout << "Physical AC1032 MLINESTYLE rooted dictionary and LTYPE "
-                 "dependency graph, handle roles and spans PASS\n";
+                 "dependency graph, source snapshot, mutation refusal, "
+                 "handle roles and spans PASS\n";
     return true;
 }
 

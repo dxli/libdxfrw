@@ -3960,6 +3960,7 @@ private:
         std::uint32_t nodHandle{0u};
         int nodHardOwner{0};
         DRW_Dictionary::Entry nodRootEntry;
+        std::vector<std::pair<std::uint32_t, std::string>> linetypeDependencies;
     };
     std::map<std::uint32_t,DwgMLineStyleOutputSource>
         m_dwgMLineStyleOutputSources;
