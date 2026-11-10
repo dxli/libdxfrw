@@ -14803,23 +14803,57 @@ bool DRW_NavisworksModelDef::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || extensionDictionaryFlag() > 1
         || !finiteCoord(m_minExtent) || !finiteCoord(m_maxExtent))
         return false;
-    dwgBufferW *stringBuf = version > DRW::AC1018 && strBuf != nullptr
-                                ? strBuf : buf;
-    dwgBufferW *handles = version > DRW::AC1014 && handleBuf != nullptr
-                              ? handleBuf : buf;
-    buf->putBitShort(static_cast<std::int16_t>(m_flags));
-    stringBuf->putVariableText(version, m_path);
-    buf->putBit(m_status ? 1 : 0);
-    buf->put3BitDouble(m_minExtent);
-    buf->put3BitDouble(m_maxExtent);
-    buf->putBit(m_hostDrawingVisibility ? 1 : 0);
-    const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
-        ? extensionDictionaryFlag() : 0;
-    putCommonObjectHandlePrefix(
-        handles, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()), effectiveXDictFlag,
-        &reactorHandles, xDictHandle);
-    return buf->isGood() && stringBuf->isGood() && handles->isGood();
+    dwgBufferW *const callerBody = buf;
+    dwgBufferW *const callerStringDest =
+        version > DRW::AC1018 && strBuf != nullptr ? strBuf : callerBody;
+    dwgBufferW *const callerHandleDest =
+        version > DRW::AC1014 && handleBuf != nullptr
+            ? handleBuf : callerBody;
+    const bool separateStrings = callerStringDest != callerBody;
+    const bool separateHandles = callerHandleDest != callerBody
+        && callerHandleDest != callerStringDest;
+    try {
+        dwgBufferW stagedBody = *callerBody;
+        dwgBufferW stagedStrings;
+        dwgBufferW stagedHandles;
+        if (separateStrings)
+            stagedStrings = *callerStringDest;
+        if (separateHandles)
+            stagedHandles = *callerHandleDest;
+
+        buf = &stagedBody;
+        strBuf = separateStrings ? &stagedStrings : buf;
+        handleBuf = separateHandles ? &stagedHandles
+            : callerHandleDest == callerStringDest && separateStrings
+                ? &stagedStrings : buf;
+        dwgBufferW *stringBuf = version > DRW::AC1018 && strBuf != nullptr
+                                    ? strBuf : buf;
+        dwgBufferW *handles = version > DRW::AC1014 && handleBuf != nullptr
+                                  ? handleBuf : buf;
+        buf->putBitShort(static_cast<std::int16_t>(m_flags));
+        stringBuf->putVariableText(version, m_path);
+        buf->putBit(m_status ? 1 : 0);
+        buf->put3BitDouble(m_minExtent);
+        buf->put3BitDouble(m_maxExtent);
+        buf->putBit(m_hostDrawingVisibility ? 1 : 0);
+        const std::uint8_t effectiveXDictFlag = version > DRW::AC1015
+            ? extensionDictionaryFlag() : 0;
+        putCommonObjectHandlePrefix(
+            handles, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()),
+            effectiveXDictFlag, &reactorHandles, xDictHandle);
+        if (!buf->isGood() || !stringBuf->isGood() || !handles->isGood())
+            return false;
+
+        callerBody->swap(stagedBody);
+        if (separateStrings)
+            callerStringDest->swap(stagedStrings);
+        if (separateHandles)
+            callerHandleDest->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_PointCloudColorMap::parseCode(

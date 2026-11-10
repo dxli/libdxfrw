@@ -1558,6 +1558,17 @@ created locally from scratch for the specific control.
   the [POINTCLOUDDEF allocation receipt](docs/research/p6-pointclouddef-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 3,993 offsets across 206 cases.
 
+- **NAVISWORKSMODELDEF DWG encoder transaction safety:**
+  `DRW_NavisworksModelDef::encodeDwg` stages body, path-string, and common
+  handle destinations while preserving versioned and aliased stream layouts.
+  Seven generated AC1015/AC1018/AC1021 profiles sweep 131 allocation offsets
+  with rollback and same-object retry. The focused encoder-allocation and
+  DWG object-vector tests pass 2/2. No fixture was added. This preserves the
+  existing metadata-only model: it does not load external Navisworks assets or
+  qualify native visualization. See the [NAVISWORKSMODELDEF allocation
+  receipt](docs/research/p6-navisworksmodeldef-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 4,124 offsets across 213 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

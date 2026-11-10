@@ -81,6 +81,11 @@ public:
     using DRW_PointCloudDef::encodeDwg;
 };
 
+class NavisworksModelDefProbe final : public DRW_NavisworksModelDef {
+public:
+    using DRW_NavisworksModelDef::encodeDwg;
+};
+
 class PlotSettingsProbe final : public DRW_PlotSettings {
 public:
     using DRW_PlotSettings::encodeDwg;
@@ -1598,7 +1603,7 @@ bool sweepIndexObject(const char* name, const Probe& object,
         return EncoderOutputs{stringOutput, handleOutput};
     };
     static const char* const names[] = {
-        "AC1012-inline", "AC1018-detached-handles", "separate",
+        "inline-separate-arguments", "AC1018-detached-handles", "separate",
         "shared-string-handle", "all-body", "body-string-detached-handles",
         "separate-string-body-handles"
     };
@@ -1644,6 +1649,22 @@ PointCloudDefProbe makePointCloudDefinition(DRW_PointCloudDef::Kind kind) {
     object.m_pointCount = 0x123456789u;
     object.m_extentsMin = DRW_Coord{-10.0, -20.0, -30.0};
     object.m_extentsMax = DRW_Coord{10.0, 20.0, 30.0};
+    return object;
+}
+
+NavisworksModelDefProbe makeNavisworksModelDef() {
+    NavisworksModelDefProbe object;
+    object.handle = 0xBC00u;
+    object.parentHandle = 0x20u;
+    object.reactorHandles = {0x21u, 0x22u};
+    object.setDwgCommonObjectState(2, 1u, false);
+    object.xDictHandle = 0x23u;
+    object.m_flags = 0x1234;
+    object.m_path = "models/transaction-probe.nwd";
+    object.m_status = true;
+    object.m_minExtent = DRW_Coord{-12.0, -23.0, -34.0};
+    object.m_maxExtent = DRW_Coord{12.0, 23.0, 34.0};
+    object.m_hostDrawingVisibility = true;
     return object;
 }
 
@@ -3031,6 +3052,26 @@ int main() {
         || !sweepIndexObject("POINTCLOUD_REACTOR_EX",
             makePointCloudDefinition(DRW_PointCloudDef::ReactorEx),
             ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepIndexObject("NAVISWORKSMODELDEF",
+            makeNavisworksModelDef(),
+            ImageDefinitionStreams::R13InlineSeparateArguments,
+            DRW::AC1015)
+        || !sweepIndexObject("NAVISWORKSMODELDEF",
+            makeNavisworksModelDef(),
+            ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepIndexObject("NAVISWORKSMODELDEF",
+            makeNavisworksModelDef(), ImageDefinitionStreams::Separate)
+        || !sweepIndexObject("NAVISWORKSMODELDEF",
+            makeNavisworksModelDef(),
+            ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepIndexObject("NAVISWORKSMODELDEF",
+            makeNavisworksModelDef(), ImageDefinitionStreams::AllBody)
+        || !sweepIndexObject("NAVISWORKSMODELDEF",
+            makeNavisworksModelDef(),
+            ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepIndexObject("NAVISWORKSMODELDEF",
+            makeNavisworksModelDef(),
+            ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
         || !sweepGroup(ImageDefinitionStreams::Separate)
