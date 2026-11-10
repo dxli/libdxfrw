@@ -55,7 +55,19 @@
         "cellOverrideRanges": 7,
         "cellOverrideBitSizes": [10, 10, 10, 10, 10, 10, 10],
         "tableOverrideRanges": 1,
-        "tableOverrideBitSize": 4
+        "tableOverrideBitSize": 4,
+        "offsetSpace": "bit positions in the decompressed DWG object-body buffer; not file offsets",
+        "ranges": [
+          {"kind": "cell-overrides", "startBit": 17626, "bitSize": 10, "overrideFlags": 0, "virtualEdgeFlags": 0, "parseComplete": true},
+          {"kind": "cell-overrides", "startBit": 17787, "bitSize": 10, "overrideFlags": 0, "virtualEdgeFlags": 0, "parseComplete": true},
+          {"kind": "cell-overrides", "startBit": 17858, "bitSize": 10, "overrideFlags": 0, "virtualEdgeFlags": 0, "parseComplete": true},
+          {"kind": "cell-overrides", "startBit": 17929, "bitSize": 10, "overrideFlags": 0, "virtualEdgeFlags": 0, "parseComplete": true},
+          {"kind": "cell-overrides", "startBit": 18000, "bitSize": 10, "overrideFlags": 0, "virtualEdgeFlags": 0, "parseComplete": true},
+          {"kind": "cell-overrides", "startBit": 18071, "bitSize": 10, "overrideFlags": 0, "virtualEdgeFlags": 0, "parseComplete": true},
+          {"kind": "cell-overrides", "startBit": 18142, "bitSize": 10, "overrideFlags": 0, "virtualEdgeFlags": 0, "parseComplete": true},
+          {"kind": "table-overrides", "startBit": 18152, "bitSize": 4, "enabledMaskCount": 0, "parseComplete": true}
+        ],
+        "interpretation": "The typed parser records exact consumed spans and reports zero cell override masks/virtual-edge values and zero enabled TABLE masks. These are source-bound libdxfrw observations, not independent bit-offset proof from a second decoder."
       },
       "anonymousBlock": {
         "name": "*T1",
@@ -134,6 +146,7 @@
   "limitations": [
     "ODA converted an AC1027 DXF example; this is not a native AutoCAD AC1018 source witness.",
     "The TABLE source contains an unrelated HEADER integrity warning and cannot qualify strict whole-source output.",
+    "The exact subrecord offsets are decompressed object-body bit positions reported by libdxfrw; independent source-level bit-span reproduction remains open.",
     "ACadSharp and libdxfrw agree on rows, columns, dimensions, strings, block name, and block entity census, but this does not establish table rendering or native semantic acceptance.",
     "The direct writer still refuses parsed physical source subrecord ranges, and dwgRW::writeTable still refuses all TABLE output because the compound *T graph transaction is not implemented.",
     "The source profile is one file and does not authorize broader TABLE support claims."
