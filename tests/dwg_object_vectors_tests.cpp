@@ -10179,7 +10179,8 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     const std::size_t tableFacadeInitialSuccesses =
         tableFacade.m_successfulEntityWrites;
     const auto tableFacadeAttempt = [&](bool rollback,
-                                        bool wrongStyleParent = false) {
+                                        bool wrongStyleParent = false,
+                                        bool embeddedNulStyleName = false) {
         if (tableFacadeWriter == nullptr)
             return false;
         const std::uint64_t transaction =
@@ -10197,7 +10198,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         tableStyleDictionary.hardOwner = 1;
         tableStyleDictionary.cloning = 1;
         tableStyleDictionary.m_entries.push_back(
-            {rollback && !wrongStyleParent
+            {rollback && !wrongStyleParent && !embeddedNulStyleName
                  ? "LIBDXFRW_TABLE_GRAPH_WRONG_KEY"
                  : "LIBDXFRW_TABLE_GRAPH_TEST",
              tableFacadeStyleHandle});
@@ -10209,6 +10210,10 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             ? tableFacadeStyleDictionaryHandle + 1u
             : tableFacadeStyleDictionaryHandle;
         tableStyle.m_name = "LIBDXFRW_TABLE_GRAPH_TEST";
+        if (embeddedNulStyleName) {
+            tableStyle.m_name.push_back('\0');
+            tableStyle.m_name += "TAIL";
+        }
         for (int rowIndex = 0; rowIndex < 3; ++rowIndex) {
             DRW_TableStyleRowStyle rowStyle;
             rowStyle.m_textHeight = static_cast<double>(rowIndex + 1);
@@ -10428,7 +10433,9 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         return passed;
     };
     const bool facadeRollbackAndRetry = tableFacadeAttempt(true)
-        && tableFacadeAttempt(true, true) && tableFacadeAttempt(false);
+        && tableFacadeAttempt(true, true)
+        && tableFacadeAttempt(true, false, true)
+        && tableFacadeAttempt(false);
     t.expect(facadeRollbackAndRetry,
              "AC1018 TABLE frame references its TABLESTYLE and *T block exactly once, closes owned-entity/reverse-INSERT edges, then rolls back and retries atomically");
 

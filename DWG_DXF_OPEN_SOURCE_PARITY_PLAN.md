@@ -128,8 +128,9 @@ readback. See the [TABLE readiness receipt](docs/research/p5-dwg-table-encoder-r
 the generated AC1018 TABLE graph ledger now retains the emitted TABLESTYLE
 handle/name as transaction-scoped state and requires the registered
 `ACAD_TABLESTYLE` dictionary entry's key to match that emitted name
-case-insensitively, and requires the emitted TABLESTYLE parent handle to point
-back to that dictionary. Closure also requires exactly one captured
+with exact byte length and ASCII-only case folding, and requires the emitted
+TABLESTYLE parent handle to point back to that dictionary. This also refuses
+embedded-NUL names whose prefix alone matches a dictionary key. Closure requires exactly one captured
 NOD-registered dictionary and TABLESTYLE record for the selected handles. Two
 outer rollback controls deliberately stage a mismatched key and a mismatched
 style parent; closure refuses both. The same writer then retries with matching

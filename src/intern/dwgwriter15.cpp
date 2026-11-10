@@ -1578,13 +1578,18 @@ bool dwgWriter15::hasClosedAc1018TableBlockGraph(
         return false;
 
     const auto equalsAsciiNoCase = [](const std::string& value,
-                                     const char* expected) {
-        const std::size_t length = std::strlen(expected);
+                                     const std::string& expected) {
+        const std::size_t length = expected.size();
         if (value.size() != length)
             return false;
         for (std::size_t index = 0u; index < length; ++index) {
-            if (std::toupper(static_cast<unsigned char>(value[index]))
-                != expected[index])
+            const auto foldAscii = [](unsigned char character) {
+                return character >= 'a' && character <= 'z'
+                    ? static_cast<unsigned char>(character - 'a' + 'A')
+                    : character;
+            };
+            if (foldAscii(static_cast<unsigned char>(value[index]))
+                != foldAscii(static_cast<unsigned char>(expected[index])))
                 return false;
         }
         return true;
@@ -1651,7 +1656,7 @@ bool dwgWriter15::hasClosedAc1018TableBlockGraph(
                 const DRW::DwgNamedObjectDictionaryEntry& entry) {
                 return entry.childHandle == table.m_tableStyleHandle
                     && equalsAsciiNoCase(entry.name,
-                                         emittedTableStyle->name.c_str());
+                                         emittedTableStyle->name);
             }));
     if (styleDictionaryMemberCount != 1u
         || styleDictionaryNameMatchCount != 1u)
