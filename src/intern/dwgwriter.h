@@ -116,6 +116,8 @@ struct DwgTypedClassRow {
     const char* className;
     const char* recordName;
     std::uint16_t entityFlagRaw;
+    std::int32_t dwgVersion{0};
+    std::int32_t maintenanceVersion{0};
 };
 
 inline constexpr DwgTypedClassRow kDwgTypedClassRows[] = {
@@ -125,7 +127,7 @@ inline constexpr DwgTypedClassRow kDwgTypedClassRows[] = {
     {"VxTableRecord", DRW_VxTableRecord::kDwgClassNum, 0x401, "ObjectDBX Classes", "AcDbVxTableRecord", "VXTABLERECORD", 0x1F3},
     {"MLeaderStyle", DRW_MLeaderStyle::kDwgClassNum, 0x401, "ACDB_MLEADERSTYLE_CLASS", "AcDbMLeaderStyle", "MLEADERSTYLE", 0x1F3},
     {"TableStyle", DRW_TableStyle::kDwgClassNum, 0xFFF, "ObjectDBX Classes", "AcDbTableStyle", "TABLESTYLE", 0x1F3},
-    {"Material", DRW_Material::kDwgClassNum, 0x401, "ObjectDBX Classes", "AcDbMaterial", "MATERIAL", 0x1F3},
+    {"Material", DRW_Material::kDwgClassNum, 0x481, "ObjectDBX Classes", "AcDbMaterial", "MATERIAL", 0x1F3, 23, 14},
     {"DbColor", DRW_DbColor::kDwgClassNum, 0x401, "ACTION", "AcDbColor", "DBCOLOR", 0x1F3},
     {"SunStudy", DRW_SunStudy::kDwgClassNum, 0x401, "SCENEOE", "AcDbSunStudy", "SUNSTUDY", 0x1F3},
     {"MotionPath", DRW_MotionPath::kDwgClassNum, 0x401, "ACTION", "AcDbMotionPath", "MOTIONPATH", 0x1F3},
@@ -1057,6 +1059,8 @@ public:
         definition.m_className = row.className;
         definition.m_recordName = row.recordName;
         definition.m_entityFlagRaw = row.entityFlagRaw;
+        definition.m_dwgVersion = row.dwgVersion;
+        definition.m_maintenanceVersion = row.maintenanceVersion;
         return registerTypedObjectClass(definition, handle);
     }
 

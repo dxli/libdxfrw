@@ -33,6 +33,19 @@ def handle(value):
 def verify(document):
     require(document.get("FILEHEADER", {}).get("version") == "AC1027",
             "input is not AC1027")
+    classes = [c for c in document.get("CLASSES", [])
+               if c.get("dxfname") == "MATERIAL"]
+    require(len(classes) == 1, "expected one MATERIAL class definition")
+    material_class = classes[0]
+    require(material_class.get("cppname") == "AcDbMaterial"
+            and material_class.get("appname") == "ObjectDBX Classes"
+            and material_class.get("proxyflag") == 0x481
+            and material_class.get("num_instances") == 3
+            and material_class.get("is_zombie") == 0
+            and material_class.get("item_class_id") == 0x1F3
+            and material_class.get("dwg_version") == 23
+            and material_class.get("maint_version") == 14,
+            "MATERIAL CLASSES metadata differs from the qualified AC1027 profile")
     objects = document.get("OBJECTS")
     require(isinstance(objects, list), "missing OBJECTS array")
 
