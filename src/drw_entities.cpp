@@ -13937,7 +13937,8 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || (ltFlags == 1u && !linetypeByBlock)
         || (ltFlags == 2u && !linetypeContinuous)
         || plotStyle < DRW::DefaultPlotStyle
-        || !std::isfinite(ltypeScale) || !validLineWeight
+        || !std::isfinite(ltypeScale) || ltypeScale <= 0.0
+        || !validLineWeight
         || hasAcDbColorH != (acDbColorHandle != 0u)
         || color < 0 || color > 256
         || color24 < -1 || color24 > 0x00FFFFFF

@@ -10361,6 +10361,14 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             table.ltypeScale = std::numeric_limits<double>::quiet_NaN();
         });
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects zero linetype scale without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.ltypeScale = 0.0; });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects negative linetype scale without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) { table.ltypeScale = -1.0; });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects invalid lineweight code without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {

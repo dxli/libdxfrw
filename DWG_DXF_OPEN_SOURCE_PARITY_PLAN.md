@@ -150,6 +150,14 @@ codec caller-state rollback; it does not qualify physical TABLE bytes, the
 `*T` graph, public writer admission, or native behavior. See the [common-header
 rollback receipt](docs/research/p5-ac1018-table-common-header-state-rollback-2026-11-09.json).
 
+**Completed P5 model-domain guard (2026-11-09, TABLE linetype scale):** the
+AC1018 direct TABLE codec now refuses zero and negative `ltypeScale`, matching
+the existing shared DXF entity validation rule. Generated controls verify
+atomic refusal for both values; the focused TABLE cell-override CTest passes.
+This closes a model-domain inconsistency only and does not qualify native
+linetype rendering or broaden the direct TABLE profile. See the [scale guard
+receipt](docs/research/p5-ac1018-table-linetype-scale-domain-2026-11-09.json).
+
 **Resume checkpoint (2026-11-09, AC1024 PERSUBENTMGR D63 partial profile):**
 the hash-bound AutoCAD SAVEAS sample `sample_AC1024.dwg` at handle `0xD63`
 now enters a source-matched partial-prefix path for values
