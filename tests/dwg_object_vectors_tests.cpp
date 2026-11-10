@@ -10943,6 +10943,14 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                 .m_contents.front().m_value.m_value = DRW_Variant(90, 7);
         });
     expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects a cached string with an embedded-NUL suffix without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            const std::string value("retry AC1018 text\0hidden", 24u);
+            table.m_content.m_rows.front().m_cells.front()
+                .m_contents.front().m_value.m_value.addString(1, value);
+        });
+    expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects non-finite insertion and rotation values without writing",
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
@@ -11001,6 +11009,28 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1018, retryBody, retryHandles);
     t.expect(retryInitiallyRefused && retryAfterCorrection,
              "same AC1018 TABLE encoder accepts a corrected model after preflight refusal");
+
+    TableDwgCodecProbe embeddedNulRetry = makeEncodableAc1018Table();
+    embeddedNulRetry.m_content.m_rows.front().m_cells.front()
+        .m_contents.front().m_value.m_value.addString(
+            1, std::string("retry AC1018 text\0hidden", 24u));
+    dwgBufferW embeddedNulBody;
+    dwgBufferW embeddedNulHandles;
+    embeddedNulBody.putRawChar8(0xA5u);
+    embeddedNulHandles.putRawChar8(0x5Au);
+    const bool embeddedNulInitiallyRefused =
+        !embeddedNulRetry.encodeAsTableClass(
+            DRW::AC1018, embeddedNulBody, embeddedNulHandles)
+        && embeddedNulBody.bitCount() == 8u
+        && embeddedNulBody.data().front() == 0xA5u
+        && embeddedNulHandles.bitCount() == 8u
+        && embeddedNulHandles.data().front() == 0x5Au;
+    embeddedNulRetry.m_content.m_rows.front().m_cells.front()
+        .m_contents.front().m_value.m_value.addString(1, "retry AC1018 text");
+    const bool embeddedNulCorrectedRetry = embeddedNulRetry.encodeAsTableClass(
+        DRW::AC1018, embeddedNulBody, embeddedNulHandles);
+    t.expect(embeddedNulInitiallyRefused && embeddedNulCorrectedRetry,
+             "AC1018 TABLE encoder preserves destinations and accepts an exact cached string after embedded-NUL refusal");
 
     TableDwgCodecProbe stringStreamRefusal = makeEncodableAc1018Table();
     dwgBufferW stringStreamBody;

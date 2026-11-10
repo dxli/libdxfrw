@@ -124,6 +124,20 @@ transaction behavior; `dwgRW::writeTable` remains refused pending the physical
 TABLE-to-`*T` geometry graph, caller transaction integration, and independent
 readback. See the [TABLE readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 
+**Completed P5 guard slice (2026-11-09, exact cached TABLE string match):**
+the AC1018 direct codec previously compared the cached `DRW_Variant` string
+through `c_str()`. A public value containing an embedded NUL followed by extra
+bytes could therefore compare equal to the cell text's prefix and be silently
+truncated when the encoder emitted the separate cell text. `DRW_Variant` now
+provides an exact length-and-byte `stringEquals` check, and the TABLE preflight
+uses it. Generated controls verify atomic refusal with destination preservation
+and corrected same-object retry. The focused
+`libdxfrw_dwg_table_cell_overrides` CTest passes; no drawing fixture was added.
+This closes one direct-codec model-consistency gap only. Keep the compound
+writer refused until the physical body profile, semantic `*T` graph, outer
+transaction, and independent readback gates pass. See the [exact string guard
+receipt](docs/research/p5-ac1018-table-cached-string-exact-match-2026-11-09.json).
+
 **Resume checkpoint (2026-11-09, AC1024 PERSUBENTMGR D63 partial profile):**
 the hash-bound AutoCAD SAVEAS sample `sample_AC1024.dwg` at handle `0xD63`
 now enters a source-matched partial-prefix path for values
@@ -3731,7 +3745,11 @@ Speed-oriented implementation sequence:
    dimensions within limits. Normal and ASan focused selectors pass. See the
    [grid-budget receipt](docs/research/p5-ac1018-table-grid-budget-refusals-2026-11-09.json).
    Continue auditing remaining guard branches only where a distinct public
-   model invariant lacks an observable refusal/readback control. The production
+   model invariant lacks an observable refusal/readback control. The cached
+   string-versus-cell-text check now compares exact length and bytes, including
+   embedded NULs; its generated refusal, destination-preservation, and corrected
+   retry control is in the [exact string guard receipt](docs/research/p5-ac1018-table-cached-string-exact-match-2026-11-09.json).
+   The production
    compound writer still needs its own graph-level staging and atomic publication. The
    existing AC1018 traces disagree on class number (528 versus
    523), while their CLASS identity metadata agrees. An AC1018-only writer

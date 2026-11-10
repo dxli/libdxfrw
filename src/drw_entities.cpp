@@ -14164,8 +14164,8 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
             && cell.m_contents.front().m_value.m_rawData.empty()
             && (cell.m_contents.front().m_value.m_value.type()
                     != DRW_Variant::STRING
-                || cell.m_contents.front().m_value.m_value.c_str()
-                    == cell.m_contents.front().m_text)
+                || cell.m_contents.front().m_value.m_value.stringEquals(
+                    cell.m_contents.front().m_text))
             && (cell.m_contents.front().m_value.m_value.type()
                     == DRW_Variant::INVALID
                 || cell.m_contents.front().m_value.m_value.type()

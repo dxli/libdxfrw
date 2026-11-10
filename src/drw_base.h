@@ -971,6 +971,11 @@ public:
     enum TYPE type() const { return vType;}
     int code() const { return vCode;}       /*!< returns dxf code of this value*/
     bool isLayerRef() const { return sIsLayerRef && vType == STRING; }
+    // Compare the complete stored string, including any embedded NUL bytes.
+    // c_str()-based comparisons can silently ignore a suffix after NUL.
+    bool stringEquals(const UTF8STRING& value) const noexcept {
+        return vType == STRING && sdata == value;
+    }
     const char* c_str() const { return content.s->c_str(); }
     double d_val() const { return content.d; }
     std::int32_t i_val() const { return content.i; }
