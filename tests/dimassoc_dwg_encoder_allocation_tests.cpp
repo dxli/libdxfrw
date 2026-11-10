@@ -861,6 +861,42 @@ bool sweepVxTableRecord(ImageDefinitionStreams mode) {
         names[static_cast<std::size_t>(mode)], version, encode, outputs);
 }
 
+DRW_TvDeviceProperties makeTvDeviceProperties() {
+    DRW_TvDeviceProperties properties;
+    properties.handle = 0xAD00u;
+    properties.parentHandle = 0x20u;
+    properties.reactorHandles = {0x21u, 0x22u};
+    properties.setDwgCommonObjectState(2, 1u, false);
+    properties.xDictHandle = 0x23u;
+    properties.flags = 3u;
+    properties.maxRegenThreads = 4;
+    properties.useLutPalette = 5u;
+    properties.alternateHighlight = 6u;
+    properties.alternateHighlightColor = 7u;
+    properties.geometryShaderUsage = 8u;
+    properties.blendingMode = 9;
+    properties.antialiasingLevel = 0.25;
+    properties.valueBd2 = 0.75;
+    return properties;
+}
+
+bool sweepTvDeviceProperties(DRW::Version version, bool aliasHandles) {
+    const DRW_TvDeviceProperties properties = makeTvDeviceProperties();
+    const auto encode = [&properties](DRW::Version v, dwgBufferW* body,
+                                      dwgBufferW* strings,
+                                      dwgBufferW* handles) {
+        return properties.encodeDwg(v, body, strings, handles);
+    };
+    const auto outputs = [aliasHandles](dwgBufferW& body,
+                                        dwgBufferW& strings,
+                                        dwgBufferW& handles) {
+        return EncoderOutputs{&strings, aliasHandles ? &body : &handles};
+    };
+    return sweepTransactionalEncoder("TVDEVICEPROPERTIES",
+        aliasHandles ? "body-aliased" : "separate-handles", version,
+        encode, outputs);
+}
+
 GeoDataProbe makeGeoData(DRW::Version targetVersion) {
     GeoDataProbe geo;
     geo.handle = 0xA900u;
@@ -2070,6 +2106,10 @@ int main() {
             ImageDefinitionStreams::BodyStringDetachedHandles)
         || !sweepVxTableRecord(
             ImageDefinitionStreams::SeparateStringBodyHandles)
+        || !sweepTvDeviceProperties(DRW::AC1015, false)
+        || !sweepTvDeviceProperties(DRW::AC1018, false)
+        || !sweepTvDeviceProperties(DRW::AC1021, false)
+        || !sweepTvDeviceProperties(DRW::AC1021, true)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
         || !sweepGroup(ImageDefinitionStreams::Separate)

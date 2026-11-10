@@ -1435,6 +1435,14 @@ created locally from scratch for the specific control.
   allocation receipt](docs/research/p6-vxtablerecord-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 2,135 offsets across 104 cases.
 
+- **TVDEVICEPROPERTIES DWG encoder transaction safety:**
+  `DRW_TvDeviceProperties::encodeDwg` now stages its modeled scalar body and
+  detached handle stream. Four AC1015/AC1018/AC1021 profiles sweep 42
+  allocation offsets with rollback and same-object retry; the allocation and
+  object-vector tests pass 2/2. No fixture was added. See the
+  [TVDEVICEPROPERTIES allocation receipt](docs/research/p6-tvdeviceproperties-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 2,177 offsets across 108 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

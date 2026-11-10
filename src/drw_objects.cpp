@@ -10038,21 +10038,37 @@ bool DRW_TvDeviceProperties::encodeDwg(DRW::Version version,
         return false;
 
     (void)strBuf;
-    dwgBufferW *hb = (handleBuf && version > DRW::AC1014) ? handleBuf : buf;
-    buf->putBitLong(flags);
-    buf->putBitShort(static_cast<std::uint16_t>(maxRegenThreads));
-    buf->putBitLong(useLutPalette);
-    buf->putBitLongLong(alternateHighlight);
-    buf->putBitLongLong(alternateHighlightColor);
-    buf->putBitLongLong(geometryShaderUsage);
-    buf->putBitLong(blendingMode);
-    buf->putBitDouble(antialiasingLevel);
-    buf->putBitDouble(valueBd2);
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle),
-        static_cast<std::int32_t>(reactorHandles.size()), xDictFlag,
-        &reactorHandles, xDictHandle);
-    return buf->isGood() && hb->isGood();
+    try {
+        dwgBufferW stagedBody = *buf;
+        const bool separateHandles = handleBuf != nullptr
+            && handleBuf != buf && version > DRW::AC1014;
+        dwgBufferW stagedHandles;
+        if (separateHandles)
+            stagedHandles = *handleBuf;
+        dwgBufferW *hb = separateHandles ? &stagedHandles : &stagedBody;
+        stagedBody.putBitLong(flags);
+        stagedBody.putBitShort(static_cast<std::uint16_t>(maxRegenThreads));
+        stagedBody.putBitLong(useLutPalette);
+        stagedBody.putBitLongLong(alternateHighlight);
+        stagedBody.putBitLongLong(alternateHighlightColor);
+        stagedBody.putBitLongLong(geometryShaderUsage);
+        stagedBody.putBitLong(blendingMode);
+        stagedBody.putBitDouble(antialiasingLevel);
+        stagedBody.putBitDouble(valueBd2);
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle),
+            static_cast<std::int32_t>(reactorHandles.size()), xDictFlag,
+            &reactorHandles, xDictHandle);
+        if (!stagedBody.isGood() || !hb->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (separateHandles)
+            handleBuf->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_CsacDocumentOptions::parseDwg(DRW::Version version,
