@@ -1435,10 +1435,18 @@ LibreDWG sample has root `0x390` (NOD key `ACAD_ASSOCNETWORK`, owner dictionary
 both have a complete bounded parser prefix and the independent LibreDWG 0.14
 JSON agrees on indexes and action roles. The supplied ODA v5.4.1 PDF has no
 class-specific ACDBASSOCNETWORK schema section, so these candidates do not
-qualify output. Current graph/writer admission remains AC1024-only and physical
-output stays refused. Next identify authoritative producer/schema evidence for
-class version 2, then close the exact owner/action dependencies before enabling
-any AC1032 writer route. Do not prune `ACAD_ASSOCNETWORK` or DIMASSOC edges to
+qualify output. Autodesk ObjectARX distinguishes logical action membership from
+physical hard ownership; its documented NOD root path uses a soft-owning
+subdictionary, while block-record subnetworks may be logically parented by the
+root and physically owned through a block-record extension dictionary. Keep the
+NOD/dictionary path, network action list, action owning-network edge, physical
+hard owner, and dependency targets as separate graph roles ([ownership
+semantics receipt](docs/research/p4-ac1032-assocnetwork-autodesk-ownership-semantics-2026-11-09.json)).
+These API semantics do not resolve the AC1032 class-version-2 byte layout.
+Current graph/writer admission remains AC1024-only and physical output stays
+refused. Next identify authoritative producer/schema evidence for class version
+2, then close the exact owner/action dependencies before enabling any AC1032
+writer route. Do not prune `ACAD_ASSOCNETWORK` or DIMASSOC edges to
 claim MLINESTYLE output. Once qualified, run exact physical
 DIMASSOC→MLINESTYLE output, staged identity inspection, and fresh
 ASCII/Binary readback. The generated DIMASSOC graph admission/refusal/retry
