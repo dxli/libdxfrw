@@ -107,6 +107,17 @@
         "rowHeights": [11, 9, 9]
       },
       "rowMajorText": ["Title", "", "", "1", "2", "3", "4", "5", "6"],
+      "instrumentedWirePositions": {
+        "source": "ACadSharp DwgObjectReader.Entities.cs, scratch-instrumented copy at source revision 3a52a52047e84670759c1f9ad3916ec3ce85ff56",
+        "cellOverridePresentBits": [53513, 53568, 53613, 53674, 53745, 53816, 53887, 53958, 54029],
+        "cellOverrideDataStarts": [53514, 53675, 53746, 53817, 53888, 53959, 54030],
+        "cellOverrideMasks": [0, 0, 0, 0, 0, 0, 0],
+        "virtualEdgeFlags": [0, 0, 0, 0, 0, 0, 0],
+        "tableOverrideMaskBits": [54040, 54041, 54042, 54043],
+        "tableOverrideMaskPresent": [false, false, false, false],
+        "libdxfrwToACadSharpBitBias": 35888,
+        "crossCheck": "For all seven override records, ACadSharp data-start bit minus 35888 equals libdxfrw m_startBit; the four ACadSharp table-mask positions minus 35888 equal libdxfrw's 18152 start bit plus offsets 0..3. The same constant aligns all eight ranges."
+      },
       "limitation": "ACadSharp retains the string values but reports ContentType.Unknown for these cells; this does not independently qualify cell-type semantics or native rendering."
     }
   },
@@ -120,8 +131,8 @@
     ]
   },
   "decision": {
-    "status": "physical-peer-profile-partial-merged-cell-codec-implemented",
-    "implementationImpact": "The AC1018 parser now validates complete, non-overlapping anchor/covered-cell merge layouts and marks orphaned or invalid layouts semantically incomplete while preserving their bounded source frame. The direct generated AC1018 body encoder emits the merged flag and span values instead of hardcoding unmerged cells. The public dwgRW::writeTable route remains refused: parsed source subrecord ranges are deliberately not admitted by the direct writer, and no compound *T geometry graph is emitted."
+    "status": "physical-peer-profile-cross-checked; merge-and-zero-override-codec-implemented",
+    "implementationImpact": "The AC1018 parser now validates complete, non-overlapping anchor/covered-cell merge layouts and marks orphaned or invalid layouts semantically incomplete while preserving their bounded source frame. The direct generated AC1018 body encoder emits merge flags/spans and reproduces the peer's zero-mask empty override record for populated text cells plus its four absent TABLE-mask bits. Independent instrumented ACadSharp cursor positions cross-check all eight source spans. The public dwgRW::writeTable route remains refused: parsed source subrecord ranges are deliberately not admitted by the direct writer, and no compound *T geometry graph is emitted."
   },
   "implementation": {
     "files": [
@@ -130,7 +141,7 @@
     ],
     "profile": "AC1018 only; the bounded merge validator and direct body encoder accept both (a) the physically observed legacy form with an unmerged anchor carrying a non-unit span and merged=true covered cells with unit spans and (b) the explicit-anchor form with a merged=true anchor carrying a non-unit span and unmerged covered cells with zero or unit spans. The physical ODA peer confirms only form (a); R24 TABLECONTENT merge ranges remain unchanged.",
     "generatedControls": [
-      "A generated 2x2 single-anchor merge encodes and reads back the anchor span plus each covered-cell flag, with a following body sentinel.",
+      "A generated 2x2 single-anchor merge encodes and reads back the anchor span, covered-cell flags, one populated-cell zero-mask override span, and the 4-bit all-absent TABLE override span, with a following body sentinel.",
       "A separate generated explicit-anchor 2x2 merge encodes and reads back the anchor flag/span and unmerged covered-cell flags.",
       "An orphaned merged-cell role is rejected by the direct encoder without changing seeded body/handle buffers; correcting the same object allows retry.",
       "A malformed AC1018 reader frame retains its bounded typed grid but sets semantic completeness false; the same parser then accepts a corrected frame."
@@ -139,14 +150,14 @@
       "build": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests libdxfrw_table_dwg_codec_allocation_tests -j4",
       "focusedSelector": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
       "allocationRetryControl": "build-gcc/libdxfrw_table_dwg_codec_allocation_tests",
-      "result": "Both focused controls pass; the TABLE direct codec allocation sweep covers all 26 reached allocations with rollback and same-object retry. git diff --check passes."
+    "result": "The focused selector passes for both merge-role forms and zero-mask override spans; the TABLE direct codec allocation sweep covers all 26 reached allocations with rollback and same-object retry. git diff --check passes."
     },
     "physicalPeerRecheck": "After rebuilding, libdxfrw still reads the scratch AC1018 peer table as semantically complete and retains the 3x1 title anchor plus the two 1x1 covered cells. This confirms parser compatibility with that profile; it does not qualify output."
   },
   "limitations": [
     "ODA converted an AC1027 DXF example; this is not a native AutoCAD AC1018 source witness.",
     "The TABLE source contains an unrelated HEADER integrity warning and cannot qualify strict whole-source output.",
-    "The exact subrecord offsets are decompressed object-body bit positions reported by libdxfrw; independent source-level bit-span reproduction remains open.",
+    "The exact subrecord offsets are decompressed object-body bit positions. An instrumented ACadSharp reader independently reproduces the spans under a constant 35,888-bit cursor-origin bias, but this is still one ODA-converted source profile, not native AutoCAD qualification.",
     "ACadSharp and libdxfrw agree on rows, columns, dimensions, strings, block name, and block entity census, but this does not establish table rendering or native semantic acceptance.",
     "The direct writer still refuses parsed physical source subrecord ranges, and dwgRW::writeTable still refuses all TABLE output because the compound *T graph transaction is not implemented.",
     "The source profile is one file and does not authorize broader TABLE support claims."

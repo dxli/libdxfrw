@@ -14441,8 +14441,15 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
                 stagedBody.putBitDouble(cell.m_rotation);
                 stagedBody.putVariableText(
                     version, cell.m_contents.front().m_text);
-                stagedBody.putBit(cell.m_overrideFlags != 0u);
-                if (cell.m_overrideFlags != 0u) {
+                // The physical ODA AC1018 TABLE peer carries an empty
+                // override record on populated text cells: has-overrides=1,
+                // flags=0, virtual-edge-flags=0. Blank merged cells omit it.
+                // Reproduce that bounded profile while retaining selected
+                // nonzero override records on generated models.
+                const bool hasOverrideRecord = cell.m_overrideFlags != 0u
+                    || !cell.m_contents.front().m_text.empty();
+                stagedBody.putBit(hasOverrideRecord);
+                if (hasOverrideRecord) {
                     stagedBody.putBitLong(
                         static_cast<std::int32_t>(cell.m_overrideFlags));
                     stagedBody.putRawChar8(

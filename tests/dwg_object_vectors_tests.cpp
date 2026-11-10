@@ -9377,6 +9377,8 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         const bool mergedTableRead = mergedTableReadback.parseDwg(
             DRW::AC1018, &mergedTableInput);
         const auto& parsedRows = mergedTableReadback.m_content.m_rows;
+        const auto& parsedRanges =
+            mergedTableReadback.m_content.m_subrecordRanges;
         const bool mergedFieldsMatch = mergedTableRead
             && mergedTableInput.isGood()
             && mergedTableReadback.m_semanticContentComplete
@@ -9391,6 +9393,16 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             && parsedRows[0].m_cells[1].m_isMerged
             && parsedRows[1].m_cells[0].m_isMerged
             && parsedRows[1].m_cells[1].m_isMerged
+            && parsedRanges.size() == 2u
+            && parsedRanges.front().m_name
+                == "r2007-table-cell-overrides"
+            && parsedRanges.front().m_bitSize == 10u
+            && parsedRanges.front().m_count == 0u
+            && parsedRanges.front().m_parseComplete
+            && parsedRanges.back().m_name == "r2007-table-overrides"
+            && parsedRanges.back().m_bitSize == 4u
+            && parsedRanges.back().m_count == 0u
+            && parsedRanges.back().m_parseComplete
             && std::all_of(parsedRows.begin(), parsedRows.end(),
                 [](const DRW_TableRow& row) {
                     return std::all_of(row.m_cells.begin(), row.m_cells.end(),
@@ -9401,7 +9413,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                 })
             && cursorBit(mergedTableInput) == mergedTableContentEndBit;
         t.expect(mergedFieldsMatch,
-                 "AC1018 TABLE merged-cell flags and spans survive exact body readback");
+                 "AC1018 TABLE merge fields and populated-cell zero-flag override span survive exact body readback");
         if (mergedFieldsMatch) {
             t.expect(mergedTableInput.getBitLong() == mergedTableSentinel
                          && mergedTableInput.isGood(),

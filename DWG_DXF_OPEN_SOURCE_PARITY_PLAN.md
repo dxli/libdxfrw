@@ -1185,21 +1185,22 @@ behavior independently. Local macOS checks do not satisfy those platform gates.
   dimensions, the `*T1` block name, and its 15 children (7 MTEXT, 8 LINE),
   though it reports the cells' content type as `Unknown`. The physical cell
   profile has a merged title span and eight retained bounded override ranges.
-  The direct codec handles its observed merge-role shape but does not encode
-  those retained override ranges. The TABLE's 15 block children point back to
+  The direct codec handles the merge-role shape and now emits the observed
+  zero-mask override record for populated text cells, but still refuses parsed
+  source subrecord ranges. The TABLE's 15 block children point back to
   BLOCK_RECORD `0x9d`,
   and libdxfrw's entry graph resolves through `*T1`. This one peer-converted
   drawing also has an unrelated HEADER integrity warning, so it cannot qualify
   strict whole-source output. Keep `dwgRW::writeTable` refused. The parser
-  records seven complete 10-bit cell
-  override spans (zero override and virtual-edge flags) and one complete 4-bit
-  TABLE override span (zero enabled masks); offsets are in the decompressed
-  object-body bit stream, not the DWG file. These are reader observations, not
-  an independent offset reproduction. Next independently establish source
-  spans and field equivalence for the merge cells and override ranges, then
-  complete the compound `*T` graph transaction and fresh readback. No drawing
-  fixture was added. Full hashes, field values, provenance, and limitations
-  are in the
+  records seven complete 10-bit cell override spans (zero override and
+  virtual-edge flags) and one complete 4-bit TABLE override span (zero enabled
+  masks). Instrumented ACadSharp cursor positions independently reproduce all
+  eight spans under a constant 35,888-bit cursor-origin bias; these are bits in
+  decompressed object bodies, not DWG file offsets. Next complete the compound
+  `*T` graph transaction and fresh independent readback. This one ODA-converted
+  drawing still does not establish native AutoCAD acceptance or geometry
+  generation. No drawing fixture was added. Full hashes, field values,
+  provenance, and limitations are in the
   [ODA TABLE peer receipt](docs/research/p5-ac1018-oda-table-physical-peer-profile-2026-11-09.json).
 - **AC1018 merged-cell codec slice completed (2026-11-09):** the direct body
   encoder now writes the cell merge flag and width/height fields for the
@@ -1215,6 +1216,16 @@ behavior independently. Local macOS checks do not satisfy those platform gates.
   This does not admit its eight parsed subrecord ranges to the direct encoder,
   generate the `*T` block, or enable `dwgRW::writeTable`. Keep source-output and
   compound graph gates open; see the [peer/implementation receipt](docs/research/p5-ac1018-oda-table-physical-peer-profile-2026-11-09.json).
+- **AC1018 zero-mask override slice completed (2026-11-09):** instrumented
+  ACadSharp independently reproduces the seven cell-override spans and the
+  four TABLE mask bits from the ODA-converted peer. All cell override masks and
+  virtual-edge flags are zero; the four TABLE mask-presence bits are false.
+  The direct generated codec now emits the 10-bit zero-mask override record for
+  populated text cells and the 4-bit all-absent TABLE mask tail. Generated
+  merge/readback controls assert both spans, exact cursor boundary and sentinel;
+  the focused object-vector and 26-point allocation/retry controls pass. This
+  still proves only the bounded body profile; retained source ranges remain
+  refused, and compound `*T` graph output is not enabled. See the peer receipt.
 - **Previous local slice:** AC1027/AC1032 PERSUBENTMGR typed failures now
   publish raw-only after independent common-shell and handle-stream validation.
   The hash-matched AC1027 physical source publishes handle `0x2E0` and reduces
@@ -3860,16 +3871,15 @@ Speed-oriented implementation sequence:
    TABLE body is independently readable and agrees on the 3-by-3 text values,
    dimensions, anonymous-block name, and 15-entity geometry census. The direct
    generated codec now emits and reads back validated AC1018 merged-cell
-   flags/spans, but the current vector is encoder/parser consistency, not proof
-   of physical field offsets. It does not qualify the physical source's eight
-   retained override subrecord ranges or its text/line geometry generation.
-   The receipt records parser-reported object-body bit spans and decoded zero
-   masks, but no independent decoder reproduces those offsets. Keep the direct
-   encoder restricted to generated models with no retained subrecords. Next
-   independently establish source-bound field spans and equivalence for the
-   peer body's merge and all eight override ranges; then implement the compound
-   `*T` graph with exact ownership, rollback/retry and fresh independent
-   readback. Do not promote support from this single ODA-converted drawing.
+   flags/spans and the seven zero-mask cell records plus four absent TABLE mask
+   bits. Instrumented ACadSharp independently reproduces their source-bound
+   cursor spans under a constant 35,888-bit origin bias. The peer is ODA
+   converted from AC1027 DXF, has a HEADER integrity warning, and does not
+   qualify native acceptance or text/line geometry generation. Keep the direct
+   encoder restricted to generated models with no retained source subrecords.
+   Next implement the compound `*T` graph with exact ownership, rollback/retry
+   and fresh independent readback. Do not promote support from this single
+   converted drawing.
 4. Add the AC1018 compound writer only after the body profile passes: preflight
    and stage the exact `*T` BLOCK/BLOCK_RECORD and TABLE ownership/reference
    graph, then publish entity plus linked records atomically. Verify with a
