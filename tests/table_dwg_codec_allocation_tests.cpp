@@ -33,6 +33,14 @@ class TableProbe final : public DRW_Table {
 public:
     using DRW_Table::parseDwg;
 
+    void setPlotFlagsForRollbackProbe(std::uint8_t value) {
+        plotFlags = value;
+    }
+
+    std::uint8_t plotFlagsForRollbackProbe() const {
+        return plotFlags;
+    }
+
     bool encode(dwgBufferW& body, dwgBufferW& handles) {
         oType = 562u; // generated dispatch value; not a production class ordinal
         return encodeDwg(DRW::AC1018, &body, 0u, nullptr, &handles);
@@ -114,6 +122,7 @@ bool run() {
     std::size_t exercised = 0u;
     for (std::size_t offset = 0u; offset < allocationCount; ++offset) {
         TableProbe table = makeTable();
+        table.setPlotFlagsForRollbackProbe(2u);
         dwgBufferW body;
         dwgBufferW handles;
         if (!seed(body, handles))
@@ -134,8 +143,15 @@ bool run() {
         if (encoded || body.data() != bodyBefore
             || handles.data() != handlesBefore
             || body.bitCount() != bodyBitsBefore
-            || handles.bitCount() != handleBitsBefore)
+            || handles.bitCount() != handleBitsBefore
+            || table.plotFlagsForRollbackProbe() != 2u) {
+            std::cerr << "failure rollback mismatch at allocation offset "
+                      << offset << ", encoded=" << encoded
+                      << ", plotFlags="
+                      << static_cast<unsigned>(
+                             table.plotFlagsForRollbackProbe()) << '\n';
             return false;
+        }
         ++exercised;
 
         // Retry this same table and the same output buffers after each injected
@@ -144,7 +160,8 @@ bool run() {
             || body.data().empty() || body.data().front() != 0xA5u
             || handles.data().empty() || handles.data().front() != 0x5Au
             || body.data() != expectedBody
-            || handles.data() != expectedHandles)
+            || handles.data() != expectedHandles
+            || table.plotFlagsForRollbackProbe() != 0u)
             return false;
     }
 

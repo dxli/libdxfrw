@@ -138,6 +138,18 @@ writer refused until the physical body profile, semantic `*T` graph, outer
 transaction, and independent readback gates pass. See the [exact string guard
 receipt](docs/research/p5-ac1018-table-cached-string-exact-match-2026-11-09.json).
 
+**Completed P5 rollback slice (2026-11-09, TABLE common-header caller state):**
+the generated TABLE allocation sweep exposed a late failure that preserved
+body/handle buffers but left `DRW_Table::plotFlags` recomputed by
+`encodeDwgCommon`. The direct AC1018 encoder now restores all common-header
+flag caches it can mutate unless both staged output buffers commit. The
+25-offset rectangular-grid allocation sweep checks caller flag state on every
+failure and confirms the successful same-object retry retains the emitted
+derived flags. Its focused allocation CTest passes. This closes only direct
+codec caller-state rollback; it does not qualify physical TABLE bytes, the
+`*T` graph, public writer admission, or native behavior. See the [common-header
+rollback receipt](docs/research/p5-ac1018-table-common-header-state-rollback-2026-11-09.json).
+
 **Resume checkpoint (2026-11-09, AC1024 PERSUBENTMGR D63 partial profile):**
 the hash-bound AutoCAD SAVEAS sample `sample_AC1024.dwg` at handle `0xD63`
 now enters a source-matched partial-prefix path for values
@@ -3749,6 +3761,9 @@ Speed-oriented implementation sequence:
    string-versus-cell-text check now compares exact length and bytes, including
    embedded NULs; its generated refusal, destination-preservation, and corrected
    retry control is in the [exact string guard receipt](docs/research/p5-ac1018-table-cached-string-exact-match-2026-11-09.json).
+   Allocation-failure coverage now also proves common-header flag caches roll
+   back with staged body/handle buffers and remain retryable on the same object
+   ([receipt](docs/research/p5-ac1018-table-common-header-state-rollback-2026-11-09.json)).
    The production
    compound writer still needs its own graph-level staging and atomic publication. The
    existing AC1018 traces disagree on class number (528 versus

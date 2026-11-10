@@ -14191,6 +14191,53 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || !std::isfinite(m_horizontalDirection.z))
         return false;
 
+    // encodeDwgCommon derives these cached fields as it writes the header.
+    // Keep caller-visible TABLE state unchanged if a later body/handle write
+    // fails; successful encoding retains the derived values as before.
+    struct CommonFlagRollback {
+        std::uint8_t& ltFlags;
+        std::uint8_t& plotFlags;
+        std::uint8_t& materialFlag;
+        std::uint8_t& shadowFlag;
+        std::uint8_t& hasFullVisualStyle;
+        std::uint8_t& hasFaceVisualStyle;
+        std::uint8_t& hasEdgeVisualStyle;
+        std::uint8_t originalLtFlags;
+        std::uint8_t originalPlotFlags;
+        std::uint8_t originalMaterialFlag;
+        std::uint8_t originalShadowFlag;
+        std::uint8_t originalHasFullVisualStyle;
+        std::uint8_t originalHasFaceVisualStyle;
+        std::uint8_t originalHasEdgeVisualStyle;
+        bool committed = false;
+
+        explicit CommonFlagRollback(DRW_Table& table)
+            : ltFlags(table.ltFlags), plotFlags(table.plotFlags),
+              materialFlag(table.materialFlag), shadowFlag(table.shadowFlag),
+              hasFullVisualStyle(table.hasFullVisualStyle),
+              hasFaceVisualStyle(table.hasFaceVisualStyle),
+              hasEdgeVisualStyle(table.hasEdgeVisualStyle),
+              originalLtFlags(table.ltFlags),
+              originalPlotFlags(table.plotFlags),
+              originalMaterialFlag(table.materialFlag),
+              originalShadowFlag(table.shadowFlag),
+              originalHasFullVisualStyle(table.hasFullVisualStyle),
+              originalHasFaceVisualStyle(table.hasFaceVisualStyle),
+              originalHasEdgeVisualStyle(table.hasEdgeVisualStyle) {}
+
+        ~CommonFlagRollback() {
+            if (!committed) {
+                ltFlags = originalLtFlags;
+                plotFlags = originalPlotFlags;
+                materialFlag = originalMaterialFlag;
+                shadowFlag = originalShadowFlag;
+                hasFullVisualStyle = originalHasFullVisualStyle;
+                hasFaceVisualStyle = originalHasFaceVisualStyle;
+                hasEdgeVisualStyle = originalHasEdgeVisualStyle;
+            }
+        }
+    } commonFlagRollback(*this);
+
     dwgBufferW stagedBody;
     dwgBufferW stagedHandles;
     dwgBufferW *handles = &stagedBody;
@@ -14335,6 +14382,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
     buf->swap(stagedBody);
     if (handleBuf != nullptr && handleBuf != buf)
         handleBuf->swap(stagedHandles);
+    commonFlagRollback.committed = true;
     return true;
 }
 
