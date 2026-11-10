@@ -15,7 +15,7 @@
       "transaction": "CompoundWriteCheckpoint snapshots the ledger length; rollback removes appended dictionary records"
     },
     "table_style_ledger": {
-      "retained_fields": ["TABLESTYLE handle", "TABLESTYLE name"],
+      "retained_fields": ["TABLESTYLE handle", "TABLESTYLE parent handle", "TABLESTYLE name"],
       "transaction": "the TABLESTYLE ledger is checkpointed and rolled back with its class instance and object frame"
     },
     "closure_checks": [
@@ -23,6 +23,7 @@
       "the selected dictionary has NOD as parent and hardOwner=1",
       "the selected dictionary has exactly one entry for the TABLESTYLE handle",
       "the dictionary entry name matches the emitted TABLESTYLE name using ASCII case-insensitive comparison",
+      "the emitted TABLESTYLE parent handle is the selected dictionary handle",
       "exactly one emitted dictionary and TABLESTYLE ledger entry exists for each selected handle",
       "TABLE and TABLECONTENT style handles agree and resolve to the typed TABLESTYLE class instance",
       "the TABLE frame references that TABLESTYLE and its *T BLOCK_RECORD exactly once"
@@ -32,8 +33,8 @@
     "test": "build-gcc/libdxfrw_dwg_object_vectors_tests --table-cell-overrides",
     "ctest": "libdxfrw_dwg_table_cell_overrides",
     "generated_graph": "ACAD_TABLESTYLE registration -> NOD-owned dictionary -> TABLESTYLE -> TABLE, plus TABLE -> *T BLOCK_RECORD and owned LINE",
-    "negative_case": "the first transaction supplies a dictionary key that differs from the TABLESTYLE name; graph closure refuses it",
-    "rollback_retry": "outer rollback removes pending NOD registration, dictionary/style ledgers, style and TABLE class instances, frames, block ownership and reverse INSERT; same writer retries with a matching key",
+    "negative_cases": ["the first transaction supplies a dictionary key that differs from the TABLESTYLE name; graph closure refuses it", "the second transaction gives the emitted TABLESTYLE a different parent handle; graph closure refuses it"],
+    "rollback_retry": "each outer rollback removes pending NOD registration, dictionary/style ledgers, style and TABLE class instances, frames, block ownership and reverse INSERT; same writer retries with a matching key and parent",
     "result": "PASS"
   },
   "limits": [

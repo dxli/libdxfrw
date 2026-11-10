@@ -1635,6 +1635,8 @@ bool dwgWriter15::hasClosedAc1018TableBlockGraph(
         });
     if (emittedTableStyle == m_emittedDwgTableStyles.cend())
         return false;
+    if (emittedTableStyle->parentHandle != styleDictionaryHandle)
+        return false;
     const std::size_t styleDictionaryMemberCount =
         static_cast<std::size_t>(std::count_if(
             styleDictionary->entries.cbegin(), styleDictionary->entries.cend(),
@@ -4425,6 +4427,7 @@ bool dwgWriter15::writeTableStyle(const DRW_TableStyle& style) {
     EmittedDwgTableStyle emittedStyle;
     try {
         emittedStyle.handle = object.handle;
+        emittedStyle.parentHandle = object.parentHandle;
         emittedStyle.name = object.m_name;
         m_emittedDwgTableStyles.reserve(
             m_emittedDwgTableStyles.size() + 1u);

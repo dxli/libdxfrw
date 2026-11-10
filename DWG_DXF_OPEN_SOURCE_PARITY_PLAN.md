@@ -128,11 +128,13 @@ readback. See the [TABLE readiness receipt](docs/research/p5-dwg-table-encoder-r
 the generated AC1018 TABLE graph ledger now retains the emitted TABLESTYLE
 handle/name as transaction-scoped state and requires the registered
 `ACAD_TABLESTYLE` dictionary entry's key to match that emitted name
-case-insensitively. Closure also requires exactly one captured NOD-registered
-dictionary and TABLESTYLE record for the selected handles. The outer rollback
-control deliberately stages a mismatched key, proves closure refuses it, then
-retries on the same writer with a matching key; dictionary/style state and the
-pending NOD registration are rolled back before retry. The focused
+case-insensitively, and requires the emitted TABLESTYLE parent handle to point
+back to that dictionary. Closure also requires exactly one captured
+NOD-registered dictionary and TABLESTYLE record for the selected handles. Two
+outer rollback controls deliberately stage a mismatched key and a mismatched
+style parent; closure refuses both. The same writer then retries with matching
+key and parent; dictionary/style state and the pending NOD registration are
+rolled back before retry. The focused
 `libdxfrw_dwg_table_cell_overrides` CTest passes 1/1. This closes only generated
 graph-identity bookkeeping: whole-file NOD finalization, independent readback,
 style-value semantics, cell-to-`*T` geometry correspondence, and native

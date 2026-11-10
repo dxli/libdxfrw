@@ -888,6 +888,7 @@ private:
 
     struct EmittedDwgTableStyle {
         std::uint32_t handle {0};
+        std::uint32_t parentHandle {0};
         UTF8STRING name;
     };
 

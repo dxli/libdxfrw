@@ -10178,7 +10178,8 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         tableFacadeWriter == nullptr ? 0u : tableFacadeWriter->encodedObjectMapSize();
     const std::size_t tableFacadeInitialSuccesses =
         tableFacade.m_successfulEntityWrites;
-    const auto tableFacadeAttempt = [&](bool rollback) {
+    const auto tableFacadeAttempt = [&](bool rollback,
+                                        bool wrongStyleParent = false) {
         if (tableFacadeWriter == nullptr)
             return false;
         const std::uint64_t transaction =
@@ -10196,14 +10197,17 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         tableStyleDictionary.hardOwner = 1;
         tableStyleDictionary.cloning = 1;
         tableStyleDictionary.m_entries.push_back(
-            {rollback ? "LIBDXFRW_TABLE_GRAPH_WRONG_KEY"
-                      : "LIBDXFRW_TABLE_GRAPH_TEST",
+            {rollback && !wrongStyleParent
+                 ? "LIBDXFRW_TABLE_GRAPH_WRONG_KEY"
+                 : "LIBDXFRW_TABLE_GRAPH_TEST",
              tableFacadeStyleHandle});
         const bool tableStyleDictionaryWritten = tableStyleRootRegistered
             && tableFacade.writeDictionary(&tableStyleDictionary);
         DRW_TableStyle tableStyle;
         tableStyle.handle = tableFacadeStyleHandle;
-        tableStyle.parentHandle = tableFacadeStyleDictionaryHandle;
+        tableStyle.parentHandle = wrongStyleParent
+            ? tableFacadeStyleDictionaryHandle + 1u
+            : tableFacadeStyleDictionaryHandle;
         tableStyle.m_name = "LIBDXFRW_TABLE_GRAPH_TEST";
         for (int rowIndex = 0; rowIndex < 3; ++rowIndex) {
             DRW_TableStyleRowStyle rowStyle;
@@ -10305,7 +10309,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             const bool graphScopeClosed = tableFacade.endBlockContent();
             const bool closedTableGraph = graphScopeClosed
                 && tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
-            const bool styleKeyMismatchRefused = !closedTableGraph;
+            const bool expectedGraphMismatchRefused = !closedTableGraph;
             const UTF8STRING savedTableName = table.name;
             table.name = "*T_MISMATCHED";
             const bool mismatchedNameRefused =
@@ -10329,7 +10333,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                 tableFacadeWriter->encodedBufferSize()
                     > tableFacadeInitialBytes;
             if (!earlierGeometryWritten || !injectedFailureOccurred
-                || !graphScopeClosed || !styleKeyMismatchRefused
+                || !graphScopeClosed || !expectedGraphMismatchRefused
                 || !mismatchedNameRefused || !nonStyleObjectRefused
                 || !failedGeometryCallerRestored
                 || !tableFrameStillStaged
@@ -10424,7 +10428,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         return passed;
     };
     const bool facadeRollbackAndRetry = tableFacadeAttempt(true)
-        && tableFacadeAttempt(false);
+        && tableFacadeAttempt(true, true) && tableFacadeAttempt(false);
     t.expect(facadeRollbackAndRetry,
              "AC1018 TABLE frame references its TABLESTYLE and *T block exactly once, closes owned-entity/reverse-INSERT edges, then rolls back and retries atomically");
 
