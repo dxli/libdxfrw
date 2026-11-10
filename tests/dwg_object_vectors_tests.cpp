@@ -8532,7 +8532,9 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
         || (version == DRW::AC1018
             && (cellOverrideFlags == 0x00040000u
                 || cellOverrideFlags == 0x00040020u))
-        || (version == DRW::AC1021 && cellOverrideFlags == 0x00000004u);
+        || (version == DRW::AC1021
+            && (cellOverrideFlags == 0x00000001u
+                || cellOverrideFlags == 0x00000004u));
     constexpr std::uint32_t generatedTableOverrideFlags =
         0x007FFFFFu;
     if (!knownCellOverrideProfile
@@ -8613,7 +8615,11 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
             body.putRawChar8(virtualEdgeFlags);
             frame.cellOverridePrefixEndBit = body.bitCount();
             if (version == DRW::AC1021
-                && cellOverrideFlags == 0x00000004u) {
+                && cellOverrideFlags == 0x00000001u) {
+                // ODA v5.4.1 §20.4.96.1 declares cell alignment as raw RS.
+                body.putRawShort16(5);
+            } else if (version == DRW::AC1021
+                       && cellOverrideFlags == 0x00000004u) {
                 // ODA v5.4.1 §20.4.96.1: bit 0x04 selects Background color
                 // CMC. Use a literal ByLayer CMC so this test does not rely
                 // on the production CMC writer to construct its own input.
@@ -11302,6 +11308,30 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  && textCell->m_contents.front().m_value.m_value.i_val() == 42
                  && cursorBit(textInput) == textFrame.tableDataEndBit,
              "known AC1021 TABLE text cell parses completely after same-object unknown-cell refusal");
+
+    R2007TableFrame ac1021CellAlignmentFrame;
+    const bool ac1021CellAlignmentBuilt = makeR2007TableFrame(
+        1u, ac1021CellAlignmentFrame, TablePlacement{}, 0x00000001u);
+    t.expect(ac1021CellAlignmentBuilt,
+             "AC1021 TABLE raw-RS cell-alignment vector builds from scratch");
+    if (!ac1021CellAlignmentBuilt)
+        return;
+    dwgBuffer ac1021CellAlignmentInput(
+        ac1021CellAlignmentFrame.bytes.data(),
+        ac1021CellAlignmentFrame.bytes.size());
+    const bool ac1021CellAlignmentRead = table.parseDwg(
+        DRW::AC1021, &ac1021CellAlignmentInput);
+    const DRW_TableCell* ac1021CellAlignmentCell =
+        table.m_content.m_rows.size() == 1u
+            && table.m_content.m_rows.front().m_cells.size() == 1u
+        ? &table.m_content.m_rows.front().m_cells.front() : nullptr;
+    t.expect(ac1021CellAlignmentRead && ac1021CellAlignmentInput.isGood()
+                 && !table.m_semanticContentComplete
+                 && ac1021CellAlignmentCell != nullptr
+                 && ac1021CellAlignmentCell->m_overrideFlags == 0x00000001u
+                 && cursorBit(ac1021CellAlignmentInput)
+                     == ac1021CellAlignmentFrame.tableDataEndBit,
+             "AC1021 TABLE cell-alignment RS field preserves the following CadValue and table sentinel boundaries");
 
     R2007TableFrame blockFrame;
     const bool blockBuilt = makeR2007TableFrame(2, blockFrame);

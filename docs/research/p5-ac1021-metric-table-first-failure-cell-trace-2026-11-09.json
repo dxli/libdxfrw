@@ -20,22 +20,39 @@
       "table_handle": "0x2856e",
       "row": 8,
       "column": 0,
-      "cell_start_bits": {"body": 278571, "string": 285694, "handle": 286955},
-      "cad_value": {"format_flags": 18137348, "data_type": 48, "payload_start_body_bit": 278726}
+      "cell_start_bits": {
+        "body": 278571,
+        "string": 285694,
+        "handle": 286955
+      },
+      "cad_value": {
+        "format_flags": 18137348,
+        "data_type": 48,
+        "payload_start_body_bit": 278726
+      }
     },
     {
       "table_handle": "0x2a974",
       "row": 9,
       "column": 0,
-      "cell_start_bits": {"body": 312752, "string": 320295, "handle": 321684},
-      "cad_value": {"format_flags": 18141444, "data_type": 48, "payload_start_body_bit": 312907}
+      "cell_start_bits": {
+        "body": 312752,
+        "string": 320295,
+        "handle": 321684
+      },
+      "cad_value": {
+        "format_flags": 18141444,
+        "data_type": 48,
+        "payload_start_body_bit": 312907
+      }
     }
   ],
   "evidence_review": {
-    "authority": "ODA v5.4.1 §§20.4.96.1 and 20.4.99 specify the R21 cell sequence and CadValue fields. The current parser follows that sequence for these AC1021 entities. ACadSharp at commit 3a52a52047e84670759c1f9ad3916ec3ce85ff56 follows the same candidate order; this is peer implementation evidence, not a source-span proof.",
-    "peer_limit": "LibreDWG 0.14 identifies two ACAD_TABLE entities but retains their bodies as unknown bits, so its output does not independently identify these cell fields.",
-    "interpretation": "The first unsupported candidate is localized to row 8/column 0 in handle 0x2856e and row 9/column 0 in handle 0x2a974. Earlier cells complete under the current candidate sequence. ODA does not document type 48, and the huge flags remain incompatible with a trustworthy CadValue interpretation. The trace does not establish whether the cause is an earlier cursor displacement, an undocumented producer profile, or malformed source data.",
-    "disposition": "No production parser change. Keep both TABLE bodies semantically incomplete and output-gated until exact source spans or an independent producer decode resolve the preceding fields. No support claim is promoted."
+    "authority": "ODA v5.4.1 \u00a7\u00a720.4.96.1 and 20.4.99 define cell alignment as raw RS, followed after the separate R2007+ unknown BL by CadValue flags/type. libdxfrw follows that sequence. The pinned ACadSharp source is not identical for alignment: readTableCellData uses ReadBitShort (variable BS) for the RS field, so its decoded cell values do not independently prove the physical span.",
+    "peer_limit": "ACadSharp at commit 3a52a52047e84670759c1f9ad3916ec3ce85ff56 successfully decodes the table values but reads the alignment override differently from ODA. LibreDWG 0.14 retains these ACAD_TABLE bodies as unknown bits. Neither peer supplies independent source spans for the candidate type-48 positions.",
+    "interpretation": "The first unsupported candidate is localized to row 8/column 0 in handle 0x2856e and row 9/column 0 in handle 0x2a974. Both cells carry alignment override flag 0x01 in the local cursor trace. A generated raw-RS boundary control now covers the normative alignment field and following CadValue/sentinel, but does not resolve the physical candidate. The exact preceding cursor difference remains open; do not add a type-48 decoder or claim malformed source data until an independent source-span walk resolves it.",
+    "disposition": "No production parser change. Keep both TABLE bodies semantically incomplete and output-gated until exact source spans or an independent producer decode resolve the preceding fields. No support claim is promoted.",
+    "generated_control": "docs/research/p5-ac1021-table-alignment-raw-rs-boundary-2026-11-09.json"
   },
   "fixture_policy": "The external DWG is existing local sample material; no fixture was added or committed."
 }

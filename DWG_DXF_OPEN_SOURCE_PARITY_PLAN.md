@@ -1965,8 +1965,18 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    precedence, and rendering remain unqualified.
    Physical-source coverage remains open: the current metric TABLE trace reads
    candidate type 48 at two offsets, with suspicious large format flags; type
-   16 is already supported. Do not broaden the parser before resolving the
-   preceding physical spans. See the [current type-48 recheck](docs/research/p5-ac1021-metric-table-current-type48-cursor-recheck-2026-11-09.json).
+   16 is already supported. A peer-source recheck found that pinned ACadSharp
+   reads cell alignment with `ReadBitShort`, while ODA §20.4.96.1 defines the
+   field as raw `RS`; its successful semantic decode therefore does not prove
+   the physical cursor span for these cells. A new from-scratch AC1021 vector
+   covers the documented raw-RS field followed by the CadValue and checks the
+   table sentinel boundary, but does not resolve the producer sample's type-48
+   candidates. Keep the parser profile and output gate unchanged. Next compare
+   exact per-cell body spans with an independent wire walk and resolve the
+   remaining cursor difference before any production parser change. See the
+   [current type-48 recheck](docs/research/p5-ac1021-metric-table-current-type48-cursor-recheck-2026-11-09.json),
+   [peer field-order review](docs/research/p5-ac1021-metric-table-peer-alignment-field-review-2026-11-09.json),
+   and [generated alignment boundary control](docs/research/p5-ac1021-table-alignment-raw-rs-boundary-2026-11-09.json).
 4. **P6 / source-backed parser and no-loss gaps.** The
    raster wire observer now recognizes the witnessed IMAGEDEF code-`0xC`
    parent in AC1021/24/27/32 as `UnqualifiedOwnerRole`; the generated control

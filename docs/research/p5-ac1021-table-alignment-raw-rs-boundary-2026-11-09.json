@@ -1,0 +1,50 @@
+{
+  "schema": "libdxfrw.research-receipt-v1",
+  "id": "p5-ac1021-table-alignment-raw-rs-boundary-2026-11-09",
+  "date": "2026-11-09",
+  "scope": "Generated parser control for the ODA-defined AC1021 TABLE cell alignment RS field, which is present on the two metric-source cells with unresolved CadValue cursor candidates.",
+  "supportClaimEffect": "none; generated parser-boundary evidence only",
+  "authority": {
+    "specification": "ODA Open Design Specification for .dwg files v5.4.1 \u00a720.4.96.1, pp. 230-232",
+    "field": "cell alignment, RS (raw little-endian 16-bit), selected by override mask 0x01",
+    "sequence": "cell override flag BL, virtual edge RC, selected alignment RS, separate R2007+ unknown BL, CadValue flags/type/payload, unit BL and detached format/value TV strings"
+  },
+  "implementation": {
+    "productionFile": "src/drw_entities.cpp",
+    "productionSha256": "2f551d536a8aca9c2ff01cd9ecdc1857f80658288a329ecb2dbb0573d03520f",
+    "change": "none; parser unchanged",
+    "testFile": "tests/dwg_object_vectors_tests.cpp",
+    "testSha256": "b058910567ab2ad7321462bc868e5ce04db9de86d9d07f54deaa13d164c50b69",
+    "generatedFrame": "The existing from-scratch AC1021 one-cell TABLE vector emits alignment value 5 with putRawShort16, then the separate unknown BL, CadValue flags/type/integer payload, unit and detached empty strings. No DWG/DXF fixture file is written."
+  },
+  "control": {
+    "selector": "libdxfrw_dwg_table_cell_overrides",
+    "assertions": [
+      "frame builds",
+      "parse remains bounded and semantically incomplete because AC1021 alignment semantics are not promoted by this control",
+      "override mask 0x01 is retained",
+      "cursor lands exactly at tableDataEndBit after the following CadValue",
+      "following table sentinel remains aligned"
+    ],
+    "result": "passed 1/1"
+  },
+  "peerReview": {
+    "peer": "ACadSharp",
+    "revision": "3a52a52047e84670759c1f9ad3916ec3ce85ff56",
+    "source": "src/ACadSharp/IO/DWG/DwgStreamReaders/DwgObjectReader.Entities.cs, readTableCellData alignment override",
+    "observation": "The peer calls ReadBitShort for cell alignment, while ODA specifies raw RS. Its semantic decode is not independent physical-span proof for these cells.",
+    "disposition": "Do not use peer table values to justify changing the libdxfrw alignment decoder or to claim the physical type-48 cursor issue is resolved."
+  },
+  "physicalSource": {
+    "path": "/Users/dli/doc/dwg/blocks_and_tables_-_metric.dwg",
+    "sha256": "7d5507da05fb70ba55875d99e676524ca2caa0ed7a5582ad130c3c06e8d925f1",
+    "observation": "The two first candidate failures are row 8/column 0 at body bit 278726 for TABLE 0x2856e and row 9/column 0 at body bit 312907 for TABLE 0x2a974. Both local traces report override mask 0x01. The candidate data type 48 is undocumented; keep both TABLE semantic snapshots incomplete."
+  },
+  "validation": {
+    "build": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests -j4",
+    "executableSha256": "49942e874b0f11c65e986050dd3fb79933541d403cc44ead41071eb4ac60b458",
+    "ctest": "ctest --test-dir build-gcc -R ^libdxfrw_dwg_table_cell_overrides$ --output-on-failure",
+    "diffCheck": "git diff --check passed"
+  },
+  "remainingAction": "Build an independent physical source-span walk for the preceding override/body fields and reconcile the remaining cursor difference before any production parser change. No support claim is promoted."
+}
