@@ -376,6 +376,22 @@ public:
   std::uint16_t dwgType() const { return oType; }
 };
 
+class RayCodecProbe final : public DRW_Ray {
+public:
+  using DRW_Ray::encodeDwg;
+
+  void setDwgType(std::uint16_t value) { oType = value; }
+  std::uint16_t dwgType() const { return oType; }
+};
+
+class XlineCodecProbe final : public DRW_Xline {
+public:
+  using DRW_Ray::encodeDwg;
+
+  void setDwgType(std::uint16_t value) { oType = value; }
+  std::uint16_t dwgType() const { return oType; }
+};
+
 class ViewportCodecProbe final : public DRW_Viewport {
 public:
   using DRW_Viewport::encodeDwg;
@@ -25032,6 +25048,36 @@ void testPointDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testRayXlineDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+    const std::uint32_t baseHandle = version == DRW::AC1021 ? 0xAE10u : 0xAE20u;
+
+    RayCodecProbe ray;
+    ray.handle = baseHandle;
+    ray.parentHandle = 0xAE30u;
+    ray.reactorHandles = {0xAE40u};
+    ray.xDictHandle = 0xAE50u;
+    ray.setDwgType(0x777u);
+    ray.basePoint = DRW_Coord(1.25, 2.5, 3.75);
+    ray.secPoint = DRW_Coord(0.0, 1.0, 0.0);
+    checkEntityDwgEncodeAllocationRollback(
+        t, ray, version, 40u,
+        version == DRW::AC1021 ? "AC1021 RAY" : "AC1024 RAY");
+
+    XlineCodecProbe xline;
+    xline.handle = baseHandle + 1u;
+    xline.parentHandle = 0xAE30u;
+    xline.reactorHandles = {0xAE40u};
+    xline.xDictHandle = 0xAE50u;
+    xline.setDwgType(0x777u);
+    xline.basePoint = DRW_Coord(1.25, 2.5, 3.75);
+    xline.secPoint = DRW_Coord(0.0, 1.0, 0.0);
+    checkEntityDwgEncodeAllocationRollback(
+        t, xline, version, 41u,
+        version == DRW::AC1021 ? "AC1021 XLINE" : "AC1024 XLINE");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -28155,6 +28201,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testPointDwgEncodeAllocationRollback(context);
       std::cout << "POINT DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 &&
+        std::string(argv[1]) == "--ray-xline-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testRayXlineDwgEncodeAllocationRollback(context);
+      std::cout << "RAY/XLINE DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

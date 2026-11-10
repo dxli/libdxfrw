@@ -7391,21 +7391,70 @@ bool DRW_Ray::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs,
                         dwgBufferW *strBuf, dwgBufferW *handleBuf) {
   (void)bs;
   (void)strBuf;
-  // Ray = 40, Xline = 41 — derive from runtime type so DRW_Xline can
-  // share this encoder (it inherits from DRW_Ray).
-  oType = (eType == DRW::XLINE) ? 41 : 40;
-  if (!encodeDwgCommon(version, buf))
+  if (buf == nullptr)
     return false;
 
-  // 3 BD basePoint + 3 BD vector — same layout as parseDwg.
-  buf->putBitDouble(basePoint.x);
-  buf->putBitDouble(basePoint.y);
-  buf->putBitDouble(basePoint.z);
-  buf->putBitDouble(secPoint.x);
-  buf->putBitDouble(secPoint.y);
-  buf->putBitDouble(secPoint.z);
+  dwgBufferW *const bodyTarget = buf;
+  dwgBufferW *const stringTarget = strBuf != nullptr ? strBuf : bodyTarget;
+  dwgBufferW *const handleTarget =
+      handleBuf != nullptr ? handleBuf : bodyTarget;
+  try {
+    dwgBufferW bodyStage = *bodyTarget;
+    std::optional<dwgBufferW> stringStageStorage;
+    dwgBufferW *stringStage = &bodyStage;
+    if (stringTarget != bodyTarget) {
+      stringStageStorage.emplace(*stringTarget);
+      stringStage = &*stringStageStorage;
+    }
+    std::optional<dwgBufferW> handleStageStorage;
+    dwgBufferW *handleStage = &bodyStage;
+    if (handleTarget == bodyTarget) {
+      handleStage = &bodyStage;
+    } else if (handleTarget == stringTarget) {
+      handleStage = stringStage;
+    } else {
+      handleStageStorage.emplace(*handleTarget);
+      handleStage = &*handleStageStorage;
+    }
 
-  return encodeDwgEntHandle(version, buf, handleBuf);
+    buf = &bodyStage;
+    handleBuf = handleBuf != nullptr ? handleStage : nullptr;
+    struct ObjectTypeRollback {
+      decltype(oType) &value;
+      decltype(oType) original;
+      bool committed{false};
+      ~ObjectTypeRollback() {
+        if (!committed)
+          value = original;
+      }
+    } typeRollback{oType, oType};
+    // Ray = 40, Xline = 41 — derive from runtime type so DRW_Xline can
+    // share this encoder (it inherits from DRW_Ray).
+    oType = (eType == DRW::XLINE) ? 41 : 40;
+    if (!encodeDwgCommon(version, buf))
+      return false;
+
+    // 3 BD basePoint + 3 BD vector — same layout as parseDwg.
+    buf->putBitDouble(basePoint.x);
+    buf->putBitDouble(basePoint.y);
+    buf->putBitDouble(basePoint.z);
+    buf->putBitDouble(secPoint.x);
+    buf->putBitDouble(secPoint.y);
+    buf->putBitDouble(secPoint.z);
+
+    if (!encodeDwgEntHandle(version, buf, handleBuf) || !buf->isGood() ||
+        !stringStage->isGood() || !handleStage->isGood())
+      return false;
+    bodyTarget->swap(bodyStage);
+    if (stringTarget != bodyTarget)
+      stringTarget->swap(*stringStageStorage);
+    if (handleTarget != bodyTarget && handleTarget != stringTarget)
+      handleTarget->swap(*handleStageStorage);
+    typeRollback.committed = true;
+    return true;
+  } catch (const std::bad_alloc &) {
+    return false;
+  }
 }
 
 // SOLID and TRACE expose 2D corners and a single OCS elevation. Historically,
