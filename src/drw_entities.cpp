@@ -8237,26 +8237,119 @@ bool DRW_Text::encodeDwg(DRW::Version version, dwgBufferW *buf,
   }
 }
 
-bool DRW_Ellipse::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
-    (void)bs; (void)strBuf;
-    oType = 35;  // ELLIPSE class id — see dwgreader.cpp:1117
-    if (!encodeDwgCommon(version, buf)) return false;
+bool DRW_Ellipse::encodeDwg(DRW::Version version, dwgBufferW *buf,
+                            std::uint32_t bs, dwgBufferW *strBuf,
+                            dwgBufferW *handleBuf) {
+  (void)bs;
+  (void)strBuf;
+  if (buf == nullptr)
+    return false;
+
+  dwgBufferW *const bodyTarget = buf;
+  dwgBufferW *const stringTarget = strBuf != nullptr ? strBuf : bodyTarget;
+  dwgBufferW *const handleTarget =
+      handleBuf != nullptr ? handleBuf : bodyTarget;
+  try {
+    dwgBufferW bodyStage = *bodyTarget;
+    std::optional<dwgBufferW> stringStageStorage;
+    dwgBufferW *stringStage = &bodyStage;
+    if (stringTarget != bodyTarget) {
+      stringStageStorage.emplace(*stringTarget);
+      stringStage = &*stringStageStorage;
+    }
+    std::optional<dwgBufferW> handleStageStorage;
+    dwgBufferW *handleStage = &bodyStage;
+    if (handleTarget == bodyTarget) {
+      handleStage = &bodyStage;
+    } else if (handleTarget == stringTarget) {
+      handleStage = stringStage;
+    } else {
+      handleStageStorage.emplace(*handleTarget);
+      handleStage = &*handleStageStorage;
+    }
+
+    buf = &bodyStage;
+    handleBuf = handleBuf != nullptr ? handleStage : nullptr;
+    struct ObjectTypeRollback {
+      decltype(oType) &value;
+      decltype(oType) original;
+      bool committed{false};
+      ~ObjectTypeRollback() {
+        if (!committed)
+          value = original;
+      }
+    } typeRollback{oType, oType};
+    oType = 35; // ELLIPSE class id — see dwgreader.cpp:1117
+    if (!encodeDwgCommon(version, buf))
+      return false;
 
     // Ellipse body — mirror of DRW_Ellipse::parseDwg.
-    buf->put3BitDouble(basePoint);       // center
-    buf->put3BitDouble(secPoint);        // major axis vector
-    buf->put3BitDouble(extPoint);        // extrusion
-    buf->putBitDouble(ratio);            // minor/major ratio
-    buf->putBitDouble(staparam);         // start parameter
-    buf->putBitDouble(endparam);         // end parameter
+    buf->put3BitDouble(basePoint); // center
+    buf->put3BitDouble(secPoint);  // major axis vector
+    buf->put3BitDouble(extPoint);  // extrusion
+    buf->putBitDouble(ratio);      // minor/major ratio
+    buf->putBitDouble(staparam);   // start parameter
+    buf->putBitDouble(endparam);   // end parameter
 
-    return encodeDwgEntHandle(version, buf, handleBuf);
+    if (!encodeDwgEntHandle(version, buf, handleBuf) || !buf->isGood() ||
+        !stringStage->isGood() || !handleStage->isGood())
+      return false;
+    bodyTarget->swap(bodyStage);
+    if (stringTarget != bodyTarget)
+      stringTarget->swap(*stringStageStorage);
+    if (handleTarget != bodyTarget && handleTarget != stringTarget)
+      handleTarget->swap(*handleStageStorage);
+    typeRollback.committed = true;
+    return true;
+  } catch (const std::bad_alloc &) {
+    return false;
+  }
 }
 
-bool DRW_Arc::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
-    (void)bs; (void)strBuf;
-    oType = 17;  // ARC class id — see dwgreader.cpp:1093
-    if (!encodeDwgCommon(version, buf)) return false;
+bool DRW_Arc::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs,
+                        dwgBufferW *strBuf, dwgBufferW *handleBuf) {
+  (void)bs;
+  (void)strBuf;
+  if (buf == nullptr)
+    return false;
+
+  dwgBufferW *const bodyTarget = buf;
+  dwgBufferW *const stringTarget = strBuf != nullptr ? strBuf : bodyTarget;
+  dwgBufferW *const handleTarget =
+      handleBuf != nullptr ? handleBuf : bodyTarget;
+  try {
+    dwgBufferW bodyStage = *bodyTarget;
+    std::optional<dwgBufferW> stringStageStorage;
+    dwgBufferW *stringStage = &bodyStage;
+    if (stringTarget != bodyTarget) {
+      stringStageStorage.emplace(*stringTarget);
+      stringStage = &*stringStageStorage;
+    }
+    std::optional<dwgBufferW> handleStageStorage;
+    dwgBufferW *handleStage = &bodyStage;
+    if (handleTarget == bodyTarget) {
+      handleStage = &bodyStage;
+    } else if (handleTarget == stringTarget) {
+      handleStage = stringStage;
+    } else {
+      handleStageStorage.emplace(*handleTarget);
+      handleStage = &*handleStageStorage;
+    }
+
+    buf = &bodyStage;
+    handleBuf = handleBuf != nullptr ? handleStage : nullptr;
+    struct ObjectTypeRollback {
+      decltype(oType) &value;
+      decltype(oType) original;
+      bool committed{false};
+      ~ObjectTypeRollback() {
+        if (!committed)
+          value = original;
+      }
+    } typeRollback{oType, oType};
+    oType = 17; // ARC class id — see dwgreader.cpp:1093
+    if (!encodeDwgCommon(version, buf))
+      return false;
 
     // Arc body — Circle body + 2 BD angles.
     buf->putBitDouble(basePoint.x);
@@ -8268,7 +8361,19 @@ bool DRW_Arc::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs,
     buf->putBitDouble(staangle);
     buf->putBitDouble(endangle);
 
-    return encodeDwgEntHandle(version, buf, handleBuf);
+    if (!encodeDwgEntHandle(version, buf, handleBuf) || !buf->isGood() ||
+        !stringStage->isGood() || !handleStage->isGood())
+      return false;
+    bodyTarget->swap(bodyStage);
+    if (stringTarget != bodyTarget)
+      stringTarget->swap(*stringStageStorage);
+    if (handleTarget != bodyTarget && handleTarget != stringTarget)
+      handleTarget->swap(*handleStageStorage);
+    typeRollback.committed = true;
+    return true;
+  } catch (const std::bad_alloc &) {
+    return false;
+  }
 }
 
 bool DRW_Line::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
