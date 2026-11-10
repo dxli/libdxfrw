@@ -3873,6 +3873,7 @@ int selfTest() {
     partialTable.name = "PARTIAL_TABLE_BLOCK";
     partialTable.basePoint = DRW_Coord{12.0, 34.0, 5.0};
     partialTable.angle = 0.25;
+    partialTable.proxyGraphics = {0x41u, 0x00u, 0x42u};
     partialTable.m_hasSemanticContent = true;
     partialTable.m_semanticContentComplete = false;
     DRW_Interface& legacyCallbacks = legacyTableSink;
@@ -3885,7 +3886,14 @@ int selfTest() {
         || !fieldEquals(legacyTableSink, "INSERT", "blockName",
                         jsonString("PARTIAL_TABLE_BLOCK"))
         || !fieldEquals(legacyTableSink, "INSERT", "insertionPoint",
-                        "{\"x\":12,\"y\":34,\"z\":5}"))
+                        "{\"x\":12,\"y\":34,\"z\":5}")
+        || legacyTableSink.carriers.size() != 1u
+        || legacyTableSink.carriers.front().source.find(
+               "/entityProxyGraphics") == std::string::npos
+        || legacyTableSink.carriers.front().size != 3u
+        || legacyTableSink.carriers.front().disposition != "preserved"
+        || legacyTableSink.carriers.front().recordId
+            != legacyTableSink.records.front().id)
         return fail(__LINE__);
     SemanticSink dimensionSink("dxfRW", "read");
     DRW_DimAligned dimension;
