@@ -69,14 +69,20 @@
   },
   "validation": {
     "build": "cmake --build build-gcc --target libdxfrw_dwg_default_material_optin_tests -j4",
-    "test_binary_sha256": "b76ad3700fba17c3c7e26aa848e20c56f6c0db6eb70b3ee38a1f925d9765bd1f",
+    "test_binary_sha256": "f60f584e417baca2cc672737a4d944cc4e4c5eb1d8e65b2d2a18776515bbb6bc",
     "focused_ctest": {
       "command": "ctest --test-dir build-gcc -R '^libdxfrw_dwg_default_material_optin$' --output-on-failure",
       "result": "1/1 passed"
     },
     "source_fed_replay": {
       "command": "build-gcc/tests/libdxfrw_dwg_default_material_optin_tests --physical-ac1024-autocad-material-replay /private/tmp/nextgis-arc_2010.dwg",
-      "result": "PASS; fresh libdxfrw readback checks all selected materials, xDictionary handles, dictionary owners/entries, XRECORD owner/reactor links and tile payloads."
+      "result": "PASS; fresh libdxfrw readback checks all selected materials, xDictionary handles, dictionary owners/entries, XRECORD owner/reactor links and tile payloads.",
+      "failure_retry": {
+        "injected_allocation_offset": 0,
+        "failure_result": "The first reached allocation failed inside the source-fed graph emission.",
+        "destination": "Pre-existing sentinel bytes were unchanged after the failed attempt.",
+        "retry": "The same writer and adapter then retried without the fault; finalization and fresh readback passed."
+      }
     },
     "independent_peer": {
       "tool": "LibreDWG dwgread 0.14",

@@ -1165,13 +1165,15 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
-- **AC1024 AutoCAD 2016 MATERIAL replay:** commit `77bb08a7` admits only the
+- **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile
   XRECORDs. Fresh libdxfrw readback and LibreDWG 0.14 peer comparison verify
   semantic fields and graph references. The same source exposed and fixed
   detached-string bit-padding in the shared R2007+ stream writer. The focused
-  MATERIAL CTest passes 1/1. The sample/output stay in `/private/tmp`; this is
+  MATERIAL CTest passes 1/1. An injected first-allocation failure preserves
+  the existing destination, and the same writer retries successfully with
+  fresh readback. The sample/output stay in `/private/tmp`; this is
   not whole-source or broad AC1024 qualification. See the [profile receipt](docs/research/p6-ac1024-autocad2016-material-replay-2026-11-10.json).
 
 - **Clean LibreCAD_3 master compatibility patch:** a fresh archive of
@@ -2495,7 +2497,10 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    writer bug: the R2007+ stream assembler copied byte padding as logical string
    bits. It now appends only the string buffer's logical bits and pads the
    combined stream at its trailer boundary. The generated 51-object output
-   peer-parses successfully. The focused MATERIAL CTest passes 1/1. The input
+   peer-parses successfully. The focused MATERIAL CTest passes 1/1. An
+   injected first-allocation failure preserved pre-existing destination bytes;
+   the same writer then retried successfully and passed the same graph
+   readback. The input
    and output remain in `/private/tmp`; no downloaded drawing is committed.
    This is a selected source-fed writer/readback profile, not whole-source
    conversion, AutoCAD acceptance, or broad AC1024 support. Other AC1024

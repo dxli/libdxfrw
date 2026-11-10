@@ -786,7 +786,8 @@ bool defaultMaterialReplayGraphRoundtripImpl(
         const std::filesystem::path& requestedOutput = {},
         const std::vector<DRW_Dictionary>& extensionDictionaries = {},
         const std::vector<DRW_XRecord>& xrecords = {},
-        const std::unordered_map<std::uint32_t, std::uint32_t>& handleMap = {}) {
+        const std::unordered_map<std::uint32_t, std::uint32_t>& handleMap = {},
+        int allocationFailureOffset = -1) {
     const auto replayable = [version](const DRW_Material& source) {
         return version == DRW::AC1024
             ? source.canReplayAc1024AutoCad2016DefaultDwgBody()
@@ -818,6 +819,15 @@ bool defaultMaterialReplayGraphRoundtripImpl(
         }
     } cleanup{path, requestedOutput.empty()};
 
+    const std::string priorDestination = "prior destination";
+    if (allocationFailureOffset >= 0) {
+        std::ofstream prior(path, std::ios::binary | std::ios::trunc);
+        prior.write(priorDestination.data(),
+                    static_cast<std::streamsize>(priorDestination.size()));
+        if (!prior)
+            return false;
+    }
+
     dwgRW writer(path.string().c_str());
     Adapter adapter(writer);
     adapter.version = version;
@@ -841,7 +851,38 @@ bool defaultMaterialReplayGraphRoundtripImpl(
         if (!writer.reserveHandle(mapping.second))
             return false;
     }
-    if (!writer.write(&adapter, version, true)) {
+    if (allocationFailureOffset >= 0) {
+        bool failedWrite = false;
+        bool escaped = false;
+        adapter.replayAllocationOffset = allocationFailureOffset;
+        try {
+            failedWrite = !writer.write(&adapter, version, true);
+        } catch (...) {
+            escaped = true;
+        }
+        if (escaped || !failedWrite || !adapter.replayAllocationTriggered) {
+            std::cerr << "selected MATERIAL injected allocation did not fail transactionally for version "
+                      << static_cast<unsigned>(version) << '\n';
+            return false;
+        }
+        std::ifstream prior(path, std::ios::binary);
+        const std::string actual(std::istreambuf_iterator<char>(prior), {});
+        if (actual != priorDestination) {
+            std::cerr << "selected MATERIAL allocation failure changed destination for version "
+                      << static_cast<unsigned>(version) << '\n';
+            return false;
+        }
+        adapter.replayAllocationOffset = -1;
+    }
+    bool written = false;
+    try {
+        written = writer.write(&adapter, version, true);
+    } catch (...) {
+        std::cerr << "selected MATERIAL same-writer retry escaped for version "
+                  << static_cast<unsigned>(version) << '\n';
+        return false;
+    }
+    if (!written) {
         std::cerr << "selected MATERIAL writer roundtrip could not finalize for version "
                   << static_cast<unsigned>(version) << " error="
                   << writer.getError();
@@ -1030,7 +1071,7 @@ bool ac1024AutoCad2016DefaultMaterialReplayGraphRoundtrip(
         const std::unordered_map<std::uint32_t, std::uint32_t>& handleMap) {
     return defaultMaterialReplayGraphRoundtripImpl(
         DRW::AC1024, sources, output, extensionDictionaries, xrecords,
-        handleMap);
+        handleMap, 0);
 }
 bool ac1027DefaultMaterialReplayAllocationSweep(
         const std::vector<DRW_Material>& sources) {
