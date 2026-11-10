@@ -1,5 +1,7 @@
 # DWG/DXF parity — remaining implementation plan
 
+**Latest implementation slice (2026-11-10, AC1018 TABLE layer/linetype identity closure):** the compound TABLE gate now resolves the layer and any explicit linetype handle against the writer's normalized name→handle maps, and requires each matching table record to be emitted once deferred records are complete. Generated graph controls reject mismatched layer handles and unresolved named linetypes; the focused TABLE selector passes. This closes only reference identity/record-existence checks for the bounded TABLE route; it does not qualify physical-source semantics or native rendering. No fixture was added. See the [layer/linetype closure receipt](docs/research/p5-ac1018-table-layer-linetype-graph-closure-2026-11-10.json).
+
 **Latest implementation slice (2026-11-10, AC1018 TABLE AcDbColor graph closure):** the compound TABLE gate now requires a flagged AcDbColor target to have an emitted object frame and class registration matching `AcDbColor`/`DBCOLOR`; an inconsistent flag/handle pair also refuses. The generated graph vector mutates the TABLE to a dangling AcDbColor handle and confirms refusal, while the focused TABLE selector passes. This retains the existing typed DBCOLOR writer route but does not yet prove successful TABLE→DBCOLOR full-file readback or native color semantics. No fixture was added. See the [AcDbColor graph receipt](docs/research/p5-ac1018-table-dbcolor-graph-closure-2026-11-10.json).
 
 **Latest implementation slice (2026-11-10, AC1018 TABLE plot-style graph closure):** the direct TABLE codec continues to serialize an explicit plot-style hard pointer. The compound TABLE graph gate now accepts a non-default handle only when it is exactly the placeholder from the staged default plot-style graph and that placeholder frame has been emitted; a generated dangling-handle mutation is refused. The focused TABLE selector passes. This connects TABLE output to the existing provider graph without promoting physical-source or native semantics. No drawing fixture was added. See the [plot-style graph-closure receipt](docs/research/p5-ac1018-table-plotstyle-graph-closure-2026-11-10.json).
@@ -228,9 +230,10 @@ unknown/unmatched source subrecords, R24 TABLECONTENT, producer breadth and
 native rendering gated. The direct-codec preflight rejects nonzero
 extension-dictionary references until that graph is explicitly closed; the
 compound TABLE gate admits only a non-default plot-style handle bound to the
-emitted provider placeholder graph and resolves AcDbColor references only to
-an emitted DBCOLOR-class frame. Successful TABLE→DBCOLOR full-file readback,
-the layer/linetype target-name closures, and native meaning remain outstanding.
+emitted provider placeholder graph, resolves AcDbColor references only to an
+emitted DBCOLOR-class frame, and matches layer/explicit-linetype references to
+normalized names and emitted table records. Successful TABLE→DBCOLOR full-file
+readback and native meaning remain outstanding.
 Do not infer cell semantics from cached geometry or class/graph closure alone. See the
 [whole-file TABLE
 receipt](docs/research/p5-ac1018-table-whole-file-cached-geometry-2026-11-10.json).

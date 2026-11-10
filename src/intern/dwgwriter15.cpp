@@ -1581,6 +1581,23 @@ bool dwgWriter15::hasClosedAc1018TableBlockGraph(
         || std::toupper(static_cast<unsigned char>(table.name[1])) != 'T')
         return false;
 
+    const auto layer = m_writingCtx.layerMap.find(toUpperCase(table.layer));
+    if (table.layer.empty() || layer == m_writingCtx.layerMap.cend()
+        || layer->second != table.dwgLayerHandle()
+        || (m_dwgTableRecordsComplete
+            && m_emittedDwgTableRecordHandles.count(layer->second) != 1u))
+        return false;
+    if (table.dwgLinetypeHandle() != 0u) {
+        const auto linetype = m_writingCtx.ltypeMap.find(
+            toUpperCase(table.lineType));
+        if (linetype == m_writingCtx.ltypeMap.cend()
+            || linetype->second != table.dwgLinetypeHandle()
+            || (m_dwgTableRecordsComplete
+                && m_emittedDwgTableRecordHandles.count(linetype->second)
+                    != 1u))
+            return false;
+    }
+
     if (table.plotStyle != DRW::DefaultPlotStyle) {
         if (table.plotStyle <= 0
             || static_cast<std::uint32_t>(table.plotStyle)

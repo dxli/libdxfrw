@@ -10614,6 +10614,20 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             const bool danglingAcDbColorRefused =
                 !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
             table.setDwgAcDbColorHandle(savedHasAcDbColor, savedAcDbColor);
+            const std::uint32_t savedLayerHandle = table.dwgLayerHandle();
+            table.setDwgLayerHandle(0xA912u);
+            const bool mismatchedLayerRefused =
+                !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
+            table.setDwgLayerHandle(savedLayerHandle);
+            const UTF8STRING savedLinetypeName = table.lineType;
+            const std::uint32_t savedLinetypeHandle =
+                table.dwgLinetypeHandle();
+            table.lineType = "CENTER";
+            table.setDwgLinetypeHandle(0xA913u);
+            const bool unresolvedLinetypeRefused =
+                !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
+            table.lineType = savedLinetypeName;
+            table.setDwgLinetypeHandle(savedLinetypeHandle);
             const UTF8STRING savedTableName = table.name;
             table.name = "*T_MISMATCHED";
             const bool mismatchedNameRefused =
@@ -10644,6 +10658,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             if (!earlierGeometryWritten || !injectedFailureOccurred
                 || !graphScopeClosed || !expectedGraphMismatchRefused
                 || !danglingAcDbColorRefused
+                || !mismatchedLayerRefused || !unresolvedLinetypeRefused
                 || !mismatchedNameRefused || !nonStyleObjectRefused
                 || !danglingPlotStyleRefused
                 || !failedGeometryCallerRestored
@@ -10665,6 +10680,20 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             const bool danglingAcDbColorRefused =
                 !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
             table.setDwgAcDbColorHandle(savedHasAcDbColor, savedAcDbColor);
+            const std::uint32_t savedLayerHandle = table.dwgLayerHandle();
+            table.setDwgLayerHandle(0xA912u);
+            const bool mismatchedLayerRefused =
+                !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
+            table.setDwgLayerHandle(savedLayerHandle);
+            const UTF8STRING savedLinetypeName = table.lineType;
+            const std::uint32_t savedLinetypeHandle =
+                table.dwgLinetypeHandle();
+            table.lineType = "CENTER";
+            table.setDwgLinetypeHandle(0xA913u);
+            const bool unresolvedLinetypeRefused =
+                !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
+            table.lineType = savedLinetypeName;
+            table.setDwgLinetypeHandle(savedLinetypeHandle);
             const UTF8STRING savedTableName = table.name;
             table.name = "*T_MISMATCHED";
             const bool mismatchedNameRefused =
@@ -10689,6 +10718,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             if (!geometryWritten || !graphScopeClosed
                 || closedTableGraph != expectedTableGraphClosure
                 || !danglingAcDbColorRefused
+                || !mismatchedLayerRefused || !unresolvedLinetypeRefused
                 || !mismatchedNameRefused || !nonStyleObjectRefused
                 || !danglingPlotStyleRefused) {
                 (void)tableFacade.rollbackDwgWriteTransaction(transaction);
