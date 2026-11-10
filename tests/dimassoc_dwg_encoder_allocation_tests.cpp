@@ -51,6 +51,11 @@ public:
     using DRW_Scale::encodeDwg;
 };
 
+class GroupProbe final : public DRW_Group {
+public:
+    using DRW_Group::encodeDwg;
+};
+
 DimensionAssociationProbe makeAssociation() {
     DimensionAssociationProbe association;
     association.handle = 0xA100u;
@@ -759,6 +764,118 @@ bool sweepScale(DRW::Version version, bool separateStringStream,
               << ", rollback/retry=PASS\n";
     return true;
 }
+
+GroupProbe makeGroup() {
+    GroupProbe group;
+    group.handle = 0xF300u;
+    group.parentHandle = 0x20u;
+    group.reactorHandles = {0x21u};
+    group.xDictHandle = 0x22u;
+    group.setDwgCommonObjectState(1, 1u, false);
+    group.m_description = "three selected entities";
+    group.m_isUnnamed = false;
+    group.m_selectable = true;
+    group.m_entityHandles = {0x40u, 0x44u, 0x48u};
+    return group;
+}
+
+bool sweepGroup(ImageDefinitionStreams mode) {
+    const DRW::Version version = mode == ImageDefinitionStreams::R13InlineSeparateArguments
+        ? DRW::AC1012
+        : mode == ImageDefinitionStreams::R2004DetachedHandles
+            ? DRW::AC1018 : DRW::AC1021;
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    const GroupProbe group = makeGroup();
+    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
+    seed(cleanBody, cleanStrings, cleanHandles);
+    const auto outputs = [mode](dwgBufferW& body, dwgBufferW& strings,
+                                dwgBufferW& handles) {
+        dwgBufferW* stringOutput = nullptr;
+        dwgBufferW* handleOutput = nullptr;
+        switch (mode) {
+        case ImageDefinitionStreams::R13InlineSeparateArguments:
+        case ImageDefinitionStreams::R2004DetachedHandles:
+        case ImageDefinitionStreams::Separate:
+            stringOutput = &strings;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SharedStringAndHandle:
+            stringOutput = &strings;
+            handleOutput = &strings;
+            break;
+        case ImageDefinitionStreams::AllBody:
+            break;
+        case ImageDefinitionStreams::BodyStringDetachedHandles:
+            stringOutput = &body;
+            handleOutput = &handles;
+            break;
+        case ImageDefinitionStreams::SeparateStringBodyHandles:
+            stringOutput = &strings;
+            handleOutput = &body;
+            break;
+        }
+        return std::pair<dwgBufferW*, dwgBufferW*>(stringOutput, handleOutput);
+    };
+    const auto cleanOutputs = outputs(cleanBody, cleanStrings, cleanHandles);
+    if (!group.encodeDwg(version, &cleanBody, cleanOutputs.first,
+                         cleanOutputs.second))
+        return false;
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    seed(body, strings, handles);
+    const auto output = outputs(body, strings, handles);
+    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
+    const unsigned long beforeCalibration =
+        failedAllocations.load(std::memory_order_relaxed);
+    const bool calibrated = group.encodeDwg(
+        version, &body, output.first, output.second);
+    const long allocations = 1000000
+        - allocationsBeforeFailure.load(std::memory_order_relaxed);
+    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+    if (!calibrated || allocations <= 0
+        || failedAllocations.load(std::memory_order_relaxed)
+            != beforeCalibration)
+        return false;
+
+    for (long offset = 0; offset < allocations; ++offset) {
+        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
+        seed(failedBody, failedStrings, failedHandles);
+        const auto failedOutput = outputs(failedBody, failedStrings, failedHandles);
+        const dwgBufferW originalBody = failedBody;
+        const dwgBufferW originalStrings = failedStrings;
+        const dwgBufferW originalHandles = failedHandles;
+        const unsigned long beforeFailure =
+            failedAllocations.load(std::memory_order_relaxed);
+        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
+        const bool encoded = group.encodeDwg(
+            version, &failedBody, failedOutput.first, failedOutput.second);
+        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+        if (encoded
+            || failedAllocations.load(std::memory_order_relaxed)
+                != beforeFailure + 1u
+            || !same(failedBody, originalBody)
+            || !same(failedStrings, originalStrings)
+            || !same(failedHandles, originalHandles))
+            return false;
+        if (!group.encodeDwg(version, &failedBody, failedOutput.first,
+                             failedOutput.second)
+            || !same(failedBody, cleanBody)
+            || !same(failedStrings, cleanStrings)
+            || !same(failedHandles, cleanHandles))
+            return false;
+    }
+    static const char* const names[] = {
+        "AC1012-inline", "AC1018-detached-handles", "separate",
+        "shared-string-handle", "all-body", "body-string-detached-handles",
+        "separate-string-body-handles"
+    };
+    std::cout << "GROUP DWG encoder version=" << static_cast<int>(version)
+              << ' ' << names[static_cast<std::size_t>(mode)]
+              << ": allocation offsets=" << allocations
+              << ", rollback/retry=PASS\n";
+    return true;
+}
 } // namespace
 
 void* operator new(std::size_t size) {
@@ -808,7 +925,14 @@ int main() {
         || !sweepPlotSettings(ImageDefinitionStreams::SeparateStringBodyHandles)
         || !sweepScale(DRW::AC1012, false, false)
         || !sweepScale(DRW::AC1021, true, false)
-        || !sweepScale(DRW::AC1021, false, true)) {
+        || !sweepScale(DRW::AC1021, false, true)
+        || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
+        || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
+        || !sweepGroup(ImageDefinitionStreams::Separate)
+        || !sweepGroup(ImageDefinitionStreams::SharedStringAndHandle)
+        || !sweepGroup(ImageDefinitionStreams::AllBody)
+        || !sweepGroup(ImageDefinitionStreams::BodyStringDetachedHandles)
+        || !sweepGroup(ImageDefinitionStreams::SeparateStringBodyHandles)) {
         allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
         std::cerr << "DIMASSOC DWG encoder allocation transaction failed\n";
         return 1;

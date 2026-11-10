@@ -1262,6 +1262,16 @@ created locally from scratch for the specific control.
   general SCALE graph or producer semantics. No fixture was added. See the
   [allocation rollback receipt](docs/research/p6-scale-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **GROUP DWG encoder transaction safety:** `DRW_Group::encodeDwg` now stages
+  its body, description and handles while retaining the existing versioned
+  stream boundaries and member order. Generated AC1012/AC1018/AC1021 controls
+  sweep 121 allocation offsets over seven alias/layout cases, checking rollback
+  and same-object retry. The focused Group encoder vector and allocation tests
+  pass. The two broader GROUP dictionary/metadata CTests still fail at their
+  bounded source-export assertions because AC1027 source-reference preflight
+  refuses the input before output; that P4 graph/qualification gap remains
+  open. No fixture was added. See the [transaction receipt](docs/research/p6-group-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

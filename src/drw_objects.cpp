@@ -22114,25 +22114,51 @@ bool DRW_Group::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || reactorHandles.size() > dwgSafety::MaxReactorCount
         || xDictFlag > 1)
         return false;
-    dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018) ? strBuf : buf;
+    const bool separateStrings = strBuf != nullptr && strBuf != buf
+        && version > DRW::AC1018;
     // Keep the AC1015/AC1018 handle stream detached from the data body; only
     // the string stream remains inline for those versions.
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
-        ? handleBuf : buf;
+    const bool separateHandles = handleBuf != nullptr && handleBuf != buf
+        && version > DRW::AC1014;
+    dwgBufferW stagedBody;
+    dwgBufferW stagedStrings;
+    dwgBufferW stagedHandles;
+    try {
+        stagedBody = *buf;
+        if (separateStrings)
+            stagedStrings = *strBuf;
+        if (separateHandles && (!separateStrings || handleBuf != strBuf))
+            stagedHandles = *handleBuf;
+        dwgBufferW *sb = separateStrings ? &stagedStrings : &stagedBody;
+        dwgBufferW *hb = !separateHandles ? &stagedBody
+            : (separateStrings && handleBuf == strBuf
+                ? &stagedStrings : &stagedHandles);
 
-    sb->putVariableText(version, m_description);
-    buf->putBitShort(m_isUnnamed ? 1 : 0);
-    buf->putBitShort(m_selectable ? 1 : 0);
-    buf->putBitLong(static_cast<std::int32_t>(m_entityHandles.size()));
+        sb->putVariableText(version, m_description);
+        stagedBody.putBitShort(m_isUnnamed ? 1 : 0);
+        stagedBody.putBitShort(m_selectable ? 1 : 0);
+        stagedBody.putBitLong(static_cast<std::int32_t>(m_entityHandles.size()));
 
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), numReactors, xDictFlag,
-        &reactorHandles, xDictHandle);
-    for (std::uint32_t h : m_entityHandles) {
-        hb->putHandle(makeRefW(
-            h, DRW::DwgHardPointer));     // GROUP members
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle), numReactors,
+            xDictFlag, &reactorHandles, xDictHandle);
+        for (std::uint32_t h : m_entityHandles) {
+            hb->putHandle(makeRefW(
+                h, DRW::DwgHardPointer));     // GROUP members
+        }
+        if (!stagedBody.isGood() || !sb->isGood() || !hb->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (separateStrings)
+            strBuf->swap(stagedStrings);
+        if (separateHandles
+            && (!separateStrings || handleBuf != strBuf))
+            handleBuf->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-    return buf->isGood() && sb->isGood() && hb->isGood();
 }
 
 // LAYOUT (AcDbLayout) encoder — ODA §20.4.84.  Inverts parseDwg above.
