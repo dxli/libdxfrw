@@ -1635,6 +1635,22 @@ control is `dwg2dxf_generated_dimassoc_graph_node`; AC1032 candidate fields are
 in the [network receipt](docs/research/p4-ac1032-assocnetwork-candidate-fields-2026-11-09.json)
 and physical MLINESTYLE limits are in the [source receipt](docs/research/p6-ac1032-mlinestyle-libredwg-source-profile-2026-11-09.json).
 
+**Additional AC1032 candidate screened (2026-11-10):** the ACadSharp
+`samples/aec_objects/AecObjects.dwg` CLASSES table declares four
+`ACDBASSOCNETWORK` instances, but its DWG producer/integrity provenance is not
+established. The current reader refuses earlier at `BAD_READ_HANDLES`: it
+consumes 5,295 of the declared 5,557 handle-map bytes and publishes no object
+frames; it also reports a separate HEADER envelope length discrepancy. The
+class count therefore supplies no object-field evidence. Do not relax either
+integrity check or infer associative fields from the declaration. A reusable
+read-only `--assocnetwork-source-inventory` selector now prints candidate
+fields and bounded spans for any source the current reader successfully
+imports. The selector builds and passes against the existing hash-bound
+LibreDWG example, but that remains the previously recorded same-peer profile.
+Running it on the ACadSharp AEC candidate returns before inventory because the
+reader refuses its handle map; the selector does not bypass that gate.
+See the [ACadSharp candidate screen receipt](docs/research/p4-ac1032-assocnetwork-acadsharp-aec-sample-screen-2026-11-10.json).
+
 **Generated regression slice completed (2026-11-09):** a from-scratch AC1032
 class-version-2 dispatch control now checks separate base/network action-index
 candidates, action ownership flags, and complete bounded prefix statuses while

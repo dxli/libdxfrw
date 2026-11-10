@@ -53992,6 +53992,57 @@ bool physicalAc1032AssociativeNetworkCandidateProfile(
     return true;
 }
 
+bool physicalAssociativeNetworkInventory(
+        const std::filesystem::path& sourcePath) {
+    dx_iface reader;
+    dx_data data;
+    if (!reader.fileImport(sourcePath.string(), &data, false)
+        || data.sourceFormat != dx_source_format::DWG)
+        return fail("associative-network inventory source did not import as DWG");
+
+    std::size_t networks = 0u;
+    for (const DRW_AssociativeObject& object : data.dwgAssociativeObjects) {
+        if (object.m_recordName != "ACDBASSOCNETWORK")
+            continue;
+        ++networks;
+        std::cout << "network handle=" << object.handle
+                  << " classVersion=" << object.m_classVersion
+                  << " owner=" << object.parentHandle
+                  << " owningNetwork=" << object.m_owningNetworkHandle
+                  << " actionIndex=" << object.m_actionIndex
+                  << " networkVersion=" << object.m_networkVersion
+                  << " networkActionIndex=" << object.m_networkActionIndex
+                  << " fieldsParsed=" << object.m_networkFieldsParsed
+                  << " actions=" << object.m_actions.size()
+                  << " ownedActions=" << object.m_ownedActions.size()
+                  << '\n';
+        for (const DRW_AssociativeHandleRef& action : object.m_actions)
+            std::cout << "  action owned=" << action.m_isOwned
+                      << " handle=" << action.m_handle << '\n';
+        for (const DRW_AssociativePrefixStatus& status : object.m_prefixStatuses)
+            if (status.m_kind
+                == DRW_AssociativePrefixStatus::Kind::AcDbAssocNetwork
+                || status.m_kind
+                    == DRW_AssociativePrefixStatus::Kind::AcDbAssocAction)
+                std::cout << "  prefix kind="
+                          << static_cast<unsigned>(status.m_kind)
+                          << " startBit=" << status.m_startBit
+                          << " bitSize=" << status.m_bitSize
+                          << " classVersion=" << status.m_classVersion
+                          << " status="
+                          << static_cast<unsigned>(status.m_status) << '\n';
+    }
+    if (networks == 0u)
+        return fail("associative-network inventory found no ACDBASSOCNETWORK records");
+
+    std::cout << "sourceVersion=" << static_cast<unsigned>(data.sourceVersion)
+              << " networkCount=" << networks
+              << " dwgReadAttempted=" << data.dwgReadOutcome.attempted
+              << " operationSucceeded="
+              << data.dwgReadOutcome.operationSucceeded << '\n';
+    return true;
+}
+
 bool generatedDimassocExtensionGraphNode() {
     dx_data data;
     data.sourceFormat = dx_source_format::DWG;
@@ -89283,6 +89334,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--assocnetwork-ac1032-candidate-profile")
         return physicalAc1032AssociativeNetworkCandidateProfile(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--assocnetwork-source-inventory")
+        return physicalAssociativeNetworkInventory(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--viewport-physical-output-readback")
         return physicalViewportOutputReadback(argv[2]) ? 0 : 1;
