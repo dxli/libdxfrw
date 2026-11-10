@@ -30181,8 +30181,15 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
                         std::uint32_t actionHandle = 0;
                         if (!readBitWithinBody(&bodyProbe, version,
                                                objectDataEnd, isOwned)
-                            || !readHandleTransactional(&handleProbe,
-                                                        actionHandle)) {
+                            || !(version == DRW::AC1024
+                                     && m_classVersion == 1u
+                                ? readHandleTransactionalWithCode(
+                                      &handleProbe, actionHandle,
+                                      isOwned ? DRW::DwgHardOwnership
+                                              : DRW::DwgSoftPointer,
+                                      true)
+                                : readHandleTransactional(&handleProbe,
+                                                          actionHandle))) {
                             complete = false;
                             break;
                         }
