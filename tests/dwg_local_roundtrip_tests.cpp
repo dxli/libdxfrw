@@ -12880,6 +12880,24 @@ bool runDwgGroupDictionaryControls(
                            && strictRefused && retainedBytes == sentinel,
                        "Incomplete generic raw capture keeps strict conversion refused without replacing destination",
                        failures);
+                if (version == DRW::AC1027) {
+                    const bool partialRefused = !exporter.fileExport(
+                        dxf.string(), DRW::AC1032, binary, &imported, false, true,
+                        dx_dxfSourceTextPolicy::Compatible,
+                        DRW::DxfTextWritePolicy::Compatible,
+                        dx_dxfProxyGraphicsPolicy::Compatible,
+                        dx_dwgReadCompletenessPolicy::AllowPartial);
+                    std::ifstream partialRetained(dxf, std::ios::binary);
+                    const std::string partialBytes(
+                        (std::istreambuf_iterator<char>(partialRetained)),
+                        std::istreambuf_iterator<char>());
+                    expect(partialRefused && partialBytes == sentinel,
+                           "AC1027 source-reference guard remains atomic in explicit partial mode",
+                           failures);
+                    expect(graphMatches(imported),
+                           "AC1027 GROUP refusal leaves the source graph unchanged", failures);
+                    continue;
+                }
                 const bool exported = exporter.fileExport(dxf.string(), DRW::AC1032,
                     binary, &imported, false, true, dx_dxfSourceTextPolicy::Compatible,
                     DRW::DxfTextWritePolicy::Compatible, dx_dxfProxyGraphicsPolicy::Compatible,
@@ -13235,6 +13253,23 @@ bool runStandardDwgGroupMetadataControls(const std::filesystem::path& parent) {
         }
         for (const auto target : {DRW::AC1018, DRW::AC1032}) for (const bool binary : {false, true}) {
             const auto output = scratch / ("output-" + std::to_string(cells++) + ".dxf");
+            if (version == DRW::AC1027) {
+                const std::string sentinel = "AC1027_GROUP_SOURCE_GUARD_SENTINEL";
+                { std::ofstream prior(output, std::ios::binary); prior << sentinel; }
+                const bool refused = !exporter.fileExport(
+                    output.string(), target, binary, &data, false, true,
+                    dx_dxfSourceTextPolicy::Compatible,
+                    DRW::DxfTextWritePolicy::Compatible,
+                    dx_dxfProxyGraphicsPolicy::Compatible,
+                    dx_dwgReadCompletenessPolicy::AllowPartial);
+                std::ifstream retained(output, std::ios::binary);
+                const std::string bytes((std::istreambuf_iterator<char>(retained)),
+                                         std::istreambuf_iterator<char>());
+                expect(refused && bytes == sentinel,
+                       "AC1027 GROUP metadata export remains atomically refused by the source-reference guard",
+                       failures);
+                continue;
+            }
             const bool wrote = exporter.fileExport(output.string(), target, binary, &data, false, true,
                 dx_dxfSourceTextPolicy::Compatible, DRW::DxfTextWritePolicy::Compatible,
                 dx_dxfProxyGraphicsPolicy::Compatible, dx_dwgReadCompletenessPolicy::AllowPartial);

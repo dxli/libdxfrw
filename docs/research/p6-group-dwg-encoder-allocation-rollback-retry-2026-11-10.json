@@ -25,14 +25,12 @@
   "validation": {
     "build": "cmake --build build-gcc --target libdxfrw_dwg_object_encoder_allocation_tests libdxfrw_dwg_object_vectors_tests -j2",
     "passing_tests": "ctest --test-dir build-gcc -R '^libdxfrw_dwg_object_encoder_allocation_retry$|^libdxfrw_dwg_object_vectors$' --output-on-failure",
-    "result": "The two focused encoder/vector CTests passed; this encoder passed 121 allocation offsets. The combined local encoder allocation control covers 642 reached offsets across 34 stream/version cases; git diff --check passed.",
-    "related_end_to_end_tests": {
-      "libdxfrw_dwg_group_dictionary_controls": "FAILED at the bounded GROUP projection assertion; the log reports the AC1027 source-reference completeness preflight refusal.",
-      "libdxfrw_standard_dwg_group_metadata": "FAILED at the expected finalized GROUP metadata assertion; the log reports the same AC1027 source-reference completeness preflight refusal."
-    }
+    "additional_end_to_end_tests": "ctest --test-dir build-gcc -R '^libdxfrw_dwg_group_dictionary_controls$|^libdxfrw_standard_dwg_group_metadata$' --output-on-failure",
+    "result": "The focused encoder/vector tests passed; this encoder passed 121 allocation offsets. Both broader GROUP CTests pass 2/2 after updating their generated AC1027 cases to assert atomic refusal under AllowPartial at the existing source-reference gate. The combined local encoder allocation control covers 642 reached offsets across 34 stream/version cases; git diff --check passed.",
+    "test_expectation_correction": "An initial run exposed stale expectations that explicit AllowPartial should export the AC1027 generated GROUP source. The guard is intentional. Tests now verify refusal and destination-sentinel preservation for AC1027; successful selected projections remain tested for other generated source revisions."
   },
   "limits": [
-    "The failed end-to-end GROUP tests remain a separate source/reference qualification gap; this encoder transaction change does not bypass that refusal.",
+    "The AC1027 source/reference qualification gap remains open; this encoder transaction change and corrected test expectation do not bypass that refusal.",
     "Generated codec-level rollback/retry evidence only; no producer prevalence, whole-source export or support claim is established.",
     "Other DWG encoders, OBJECTS builders and whole-drawing failure paths remain open."
   ]

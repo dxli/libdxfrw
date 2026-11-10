@@ -1267,10 +1267,12 @@ created locally from scratch for the specific control.
   stream boundaries and member order. Generated AC1012/AC1018/AC1021 controls
   sweep 121 allocation offsets over seven alias/layout cases, checking rollback
   and same-object retry. The focused Group encoder vector and allocation tests
-  pass. The two broader GROUP dictionary/metadata CTests still fail at their
-  bounded source-export assertions because AC1027 source-reference preflight
-  refuses the input before output; that P4 graph/qualification gap remains
-  open. No fixture was added. See the [transaction receipt](docs/research/p6-group-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  pass. The GROUP dictionary and metadata CTests now pass after correcting
+  their AC1027 expectation: explicit partial mode must still preserve atomic
+  refusal at the unqualified source-reference gate. This verifies the gate
+  without bypassing it; AC1027 GROUP output qualification remains open, as do
+  the broader P4 source and graph closures. No fixture was added. See the
+  [transaction and gate receipt](docs/research/p6-group-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
