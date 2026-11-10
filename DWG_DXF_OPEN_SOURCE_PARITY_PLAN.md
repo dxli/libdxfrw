@@ -1363,6 +1363,17 @@ created locally from scratch for the specific control.
   fixture was added. See the [WIPEOUTVARIABLES allocation receipt](docs/research/p6-wipeoutvariables-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
   The combined allocation target now covers 1,543 offsets across 75 cases.
 
+- **SORTENTSTABLE DWG encoder transaction safety:**
+  `DRW_SortEntsTable::encodeDwg` now stages the body and detached handle stream
+  while preserving inline sort-handle order, the block-owner reference, and
+  entity-handle roles. Generated AC1012, AC1018, and AC1021 controls sweep 36
+  allocation offsets; each failure preserves caller streams/cursors/handle
+  ledgers, and same-object retry matches clean output. The combined allocation,
+  object-vector, typed-capture, and adapter tests pass 4/4. No fixture was
+  added. This does not relax P4 refusal for unresolved or non-model/paper owner
+  profiles. See the [SORTENTSTABLE allocation receipt](docs/research/p6-sortentstable-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+  The combined allocation target now covers 1,579 offsets across 78 cases.
+
 - **AC1024 AutoCAD 2016 MATERIAL replay:** the writer admits only the
   exact 1284-bit default profile from the public NextGIS AC1024 sample and
   remaps its three MATERIALs, three extension dictionaries and 18 tile

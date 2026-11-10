@@ -22563,34 +22563,50 @@ bool DRW_SortEntsTable::encodeDwg(DRW::Version version, dwgBufferW *buf,
                     }))
         return false;
     DRW_UNUSED(strBuf);
-    dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
+    try {
+        dwgBufferW stagedBody = *buf;
+        const bool separateHandles = handleBuf != nullptr
+            && handleBuf != buf && version > DRW::AC1014;
+        dwgBufferW stagedHandles;
+        if (separateHandles)
+            stagedHandles = *handleBuf;
+        dwgBufferW *hb = separateHandles ? &stagedHandles : &stagedBody;
 
-    const std::size_t entryCount = m_entityHandles.size();
-    buf->putBitLong(static_cast<std::int32_t>(entryCount));
+        const std::size_t entryCount = m_entityHandles.size();
+        stagedBody.putBitLong(static_cast<std::int32_t>(entryCount));
 
-    // Sort handles — emitted inline in body to match parser's
-    // `buf->getOffsetHandle(handle)` reads (pre-common-prefix).
-    for (std::size_t i = 0; i < entryCount; ++i) {
-        buf->putHandle(makeRefW(
-            m_sortHandles[i],
-            DRW::DwgNullReference));
+        // Sort handles — emitted inline in body to match parser's
+        // `buf->getOffsetHandle(handle)` reads (pre-common-prefix).
+        for (std::size_t i = 0; i < entryCount; ++i) {
+            stagedBody.putHandle(makeRefW(
+                m_sortHandles[i],
+                DRW::DwgNullReference));
+        }
+
+        // Common handle prefix.
+        putCommonObjectHandlePrefix(
+            hb, static_cast<std::uint32_t>(parentHandle), numReactors,
+            xDictFlag, &reactorHandles, xDictHandle);
+
+        // Block-owner handle (soft pointer to the parent BlockRecord).
+        hb->putHandle(makeRefW(m_blockOwnerHandle, DRW::DwgSoftPointer));
+
+        // Entity handles have the same exact count as the inline sort handles.
+        for (std::size_t i = 0; i < entryCount; ++i) {
+            hb->putHandle(makeRefW(
+                m_entityHandles[i],
+                DRW::DwgSoftPointer));
+        }
+        if (!stagedBody.isGood() || !hb->isGood())
+            return false;
+
+        buf->swap(stagedBody);
+        if (separateHandles)
+            handleBuf->swap(stagedHandles);
+        return true;
+    } catch (...) {
+        return false;
     }
-
-    // Common handle prefix.
-    putCommonObjectHandlePrefix(
-        hb, static_cast<std::uint32_t>(parentHandle), numReactors, xDictFlag,
-        &reactorHandles, xDictHandle);
-
-    // Block-owner handle (soft pointer to the parent BlockRecord).
-    hb->putHandle(makeRefW(m_blockOwnerHandle, DRW::DwgSoftPointer));
-
-    // Entity handles have the same exact count as the inline sort handles.
-    for (std::size_t i = 0; i < entryCount; ++i) {
-        hb->putHandle(makeRefW(
-            m_entityHandles[i],
-            DRW::DwgSoftPointer));
-    }
-    return buf->isGood() && hb->isGood();
 }
 
 // SPATIAL_FILTER (AcDbSpatialFilter) encoder — ODA §20.4.94 / libreDWG

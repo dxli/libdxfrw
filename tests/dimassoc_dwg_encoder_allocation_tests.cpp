@@ -91,6 +91,11 @@ public:
     using DRW_WipeoutVariables::encodeDwg;
 };
 
+class SortEntsTableProbe final : public DRW_SortEntsTable {
+public:
+    using DRW_SortEntsTable::encodeDwg;
+};
+
 DimensionAssociationProbe makeAssociation() {
     DimensionAssociationProbe association;
     association.handle = 0xA100u;
@@ -292,6 +297,83 @@ bool sweepWipeoutVariables(DRW::Version version, bool aliasHandles) {
             return false;
     }
     std::cout << "WIPEOUTVARIABLES DWG encoder version="
+              << static_cast<int>(version)
+              << (aliasHandles ? " body-aliased" : " separate-handles")
+              << ": allocation offsets=" << allocations
+              << ", rollback/retry=PASS\n";
+    return true;
+}
+
+SortEntsTableProbe makeSortEntsTable() {
+    SortEntsTableProbe table;
+    table.handle = 0xA700u;
+    table.parentHandle = 0x20u;
+    table.reactorHandles = {0x21u, 0x22u};
+    table.setDwgCommonObjectState(2, 1u, false);
+    table.xDictHandle = 0x23u;
+    table.m_blockOwnerHandle = 0x30u;
+    table.m_sortHandles = {0x101u, 0x102u, 0x103u};
+    table.m_entityHandles = {0x201u, 0x202u, 0x203u};
+    return table;
+}
+
+bool sweepSortEntsTable(DRW::Version version, bool aliasHandles) {
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    const SortEntsTableProbe table = makeSortEntsTable();
+    dwgBufferW cleanBody(&codec), cleanStrings(&codec), cleanHandles(&codec);
+    seed(cleanBody, cleanStrings, cleanHandles);
+    dwgBufferW* const cleanHandleOutput = aliasHandles ? &cleanBody
+                                                       : &cleanHandles;
+    if (!table.encodeDwg(version, &cleanBody, &cleanStrings,
+                         cleanHandleOutput))
+        return false;
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    seed(body, strings, handles);
+    dwgBufferW* const handleOutput = aliasHandles ? &body : &handles;
+    allocationsBeforeFailure.store(1000000, std::memory_order_relaxed);
+    const unsigned long beforeCalibration =
+        failedAllocations.load(std::memory_order_relaxed);
+    const bool calibrated = table.encodeDwg(version, &body, &strings,
+                                            handleOutput);
+    const long allocations = 1000000
+        - allocationsBeforeFailure.load(std::memory_order_relaxed);
+    allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+    if (!calibrated || allocations <= 0
+        || failedAllocations.load(std::memory_order_relaxed)
+            != beforeCalibration)
+        return false;
+
+    for (long offset = 0; offset < allocations; ++offset) {
+        dwgBufferW failedBody(&codec), failedStrings(&codec), failedHandles(&codec);
+        seed(failedBody, failedStrings, failedHandles);
+        dwgBufferW* const failedHandleOutput = aliasHandles ? &failedBody
+                                                            : &failedHandles;
+        const dwgBufferW originalBody = failedBody;
+        const dwgBufferW originalStrings = failedStrings;
+        const dwgBufferW originalHandles = failedHandles;
+        const unsigned long beforeFailure =
+            failedAllocations.load(std::memory_order_relaxed);
+        allocationsBeforeFailure.store(offset, std::memory_order_relaxed);
+        const bool encoded = table.encodeDwg(
+            version, &failedBody, &failedStrings, failedHandleOutput);
+        allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
+        if (encoded
+            || failedAllocations.load(std::memory_order_relaxed)
+                != beforeFailure + 1u
+            || !same(failedBody, originalBody)
+            || !same(failedStrings, originalStrings)
+            || !same(failedHandles, originalHandles))
+            return false;
+        if (!table.encodeDwg(version, &failedBody, &failedStrings,
+                             failedHandleOutput)
+            || !same(failedBody, cleanBody)
+            || !same(failedStrings, cleanStrings)
+            || !same(failedHandles, cleanHandles))
+            return false;
+    }
+    std::cout << "SORTENTSTABLE DWG encoder version="
               << static_cast<int>(version)
               << (aliasHandles ? " body-aliased" : " separate-handles")
               << ": allocation offsets=" << allocations
@@ -1718,6 +1800,9 @@ int main() {
         || !sweepWipeoutVariables(DRW::AC1012, false)
         || !sweepWipeoutVariables(DRW::AC1018, false)
         || !sweepWipeoutVariables(DRW::AC1021, true)
+        || !sweepSortEntsTable(DRW::AC1012, false)
+        || !sweepSortEntsTable(DRW::AC1018, false)
+        || !sweepSortEntsTable(DRW::AC1021, true)
         || !sweepGroup(ImageDefinitionStreams::R13InlineSeparateArguments)
         || !sweepGroup(ImageDefinitionStreams::R2004DetachedHandles)
         || !sweepGroup(ImageDefinitionStreams::Separate)
