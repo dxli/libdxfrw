@@ -8529,7 +8529,8 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
                          bool cellAlignmentBitShort = false,
                          bool cellIsMerged = false,
                          std::int32_t mergedWidth = 1,
-                         std::int32_t mergedHeight = 1) {
+                         std::int32_t mergedHeight = 1,
+                         std::uint16_t tableValueFlag = 0u) {
     constexpr std::uint32_t ac1018CellOverrideFlags = 0x0003FFE0u;
     const bool knownCellOverrideProfile = cellOverrideFlags == 0u
         || (version == DRW::AC1018 && cellOverrideFlags != 0u
@@ -8573,7 +8574,7 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
     if (!putTablePlacement(body, placement))
         return false;
     body.putBit(0);
-    body.putBitShort(0);
+    body.putBitShort(tableValueFlag);
     body.put3BitDouble(DRW_Coord{1.0, 0.0, 0.0});
     body.putBitLong(1);
     body.putBitLong(1);
@@ -9208,6 +9209,53 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                      == ac1018RetryFrame.tableDataEndBit,
              "same AC1018 TABLE parser retries a valid frame after unknown override refusal");
 
+    const auto makeTableFlagFrame = [](std::uint16_t valueFlag,
+                                       R2007TableFrame& frame) {
+        return makeR2007TableFrame(1u, frame, TablePlacement{}, 0u, 0u,
+            DRW::AC1018, 0u, 0u, 1u, DRW::DwgHardPointer, 0u, 0u, 0u,
+            5u, false, false, 1, 1, valueFlag);
+    };
+    R2007TableFrame directionFlagFrame;
+    const bool directionFlagBuilt = makeTableFlagFrame(
+        0x0016u, directionFlagFrame);
+    bool directionFlagRead = false;
+    if (directionFlagBuilt) {
+        dwgBuffer directionFlagInput(directionFlagFrame.bytes.data(),
+                                     directionFlagFrame.bytes.size());
+        directionFlagRead = table.parseDwg(DRW::AC1018,
+                                           &directionFlagInput)
+            && directionFlagInput.isGood()
+            && table.m_semanticContentComplete && table.m_valueFlag == 0x16
+            && cursorBit(directionFlagInput)
+                == directionFlagFrame.tableDataEndBit;
+    }
+    t.expect(directionFlagBuilt && directionFlagRead,
+             "AC1018 TABLE retains ODA-defined base and direction flags 0x16");
+
+    R2007TableFrame unknownTableFlagsFrame;
+    const bool unknownTableFlagsBuilt = makeTableFlagFrame(
+        0x0040u, unknownTableFlagsFrame);
+    bool unknownTableFlagsRead = false;
+    if (unknownTableFlagsBuilt) {
+        dwgBuffer unknownTableFlagsInput(unknownTableFlagsFrame.bytes.data(),
+                                         unknownTableFlagsFrame.bytes.size());
+        unknownTableFlagsRead = table.parseDwg(
+            DRW::AC1018, &unknownTableFlagsInput)
+            && unknownTableFlagsInput.isGood()
+            && table.m_hasSemanticContent
+            && !table.m_semanticContentComplete
+            && table.m_valueFlag == 0x40;
+    }
+    dwgBuffer flagCorrectionInput(ac1018RetryFrame.bytes.data(),
+                                  ac1018RetryFrame.bytes.size());
+    const bool flagCorrectionRead = table.parseDwg(
+        DRW::AC1018, &flagCorrectionInput)
+        && flagCorrectionInput.isGood() && table.m_semanticContentComplete
+        && table.m_valueFlag == 0;
+    t.expect(unknownTableFlagsBuilt && unknownTableFlagsRead
+                 && flagCorrectionRead,
+             "AC1018 TABLE keeps unknown value-flag bits incomplete and retries a corrected frame");
+
     R2007TableFrame orphanedMergeFrame;
     const bool orphanedMergeBuilt = makeR2007TableFrame(
         1u, orphanedMergeFrame, TablePlacement{}, 0u, 0u,
@@ -9326,6 +9374,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
     mergedAc1018Table.basePoint = DRW_Coord{4.0, 5.0, 0.0};
     mergedAc1018Table.extPoint = DRW_Coord{0.0, 0.0, 1.0};
     mergedAc1018Table.m_horizontalDirection = DRW_Coord{1.0, 0.0, 0.0};
+    mergedAc1018Table.m_valueFlag = 0x16;
     mergedAc1018Table.colcount = 2;
     mergedAc1018Table.rowcount = 2;
     for (int columnIndex = 0; columnIndex < 2; ++columnIndex) {
@@ -9385,6 +9434,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         const bool mergedFieldsMatch = mergedTableRead
             && mergedTableInput.isGood()
             && mergedTableReadback.m_semanticContentComplete
+            && mergedTableReadback.m_valueFlag == 0x16
             && parsedRows.size() == 2u
             && parsedRows[0].m_cells.size() == 2u
             && parsedRows[1].m_cells.size() == 2u
@@ -9494,6 +9544,16 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                     == malformedRangeHandlesBefore;
             malformedRetainedRanges.m_content.m_subrecordRanges.front()
                 .m_rawHandleCode = 0u;
+            malformedRetainedRanges.m_valueFlag = 0x40;
+            const bool unknownTableFlagsRefused =
+                !malformedRetainedRanges.encodeAsTableClass(
+                    DRW::AC1018, malformedRangeBody,
+                    malformedRangeHandles);
+            const bool unknownTableFlagsPreserved =
+                malformedRangeBody.data() == malformedRangeBodyBefore
+                && malformedRangeHandles.data()
+                    == malformedRangeHandlesBefore;
+            malformedRetainedRanges.m_valueFlag = 0x16;
             const bool correctedRangeRetry =
                 malformedRetainedRanges.encodeAsTableClass(
                     DRW::AC1018, malformedRangeBody,
@@ -9502,6 +9562,8 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                          && malformedSpanPreserved
                          && nonzeroRawHandleRefused
                          && nonzeroRawHandlePreserved
+                         && unknownTableFlagsRefused
+                         && unknownTableFlagsPreserved
                          && correctedRangeRetry,
                      "AC1018 TABLE refuses malformed span and handle metadata atomically, then accepts corrected same-object retry");
         }

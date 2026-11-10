@@ -2639,6 +2639,24 @@ bool validAc1018TableEmptyOverrideRanges(
                 - tableRange.m_startBit;
 }
 
+bool validLegacyTableValueFlag(int value) {
+    // ODA v5.4.1 §20.4.96.1 defines the 0x06 base pair, table direction,
+    // and title-suppressed bits. Keep zero as the existing generated legacy
+    // profile, but never pass unknown or partial base-bit combinations.
+    constexpr std::uint32_t baseFlags = 0x00000006u;
+    constexpr std::uint32_t directionFlag = 0x00000010u;
+    constexpr std::uint32_t titleSuppressedFlag = 0x00000020u;
+    constexpr std::uint32_t knownFlags =
+        baseFlags | directionFlag | titleSuppressedFlag;
+    if (value == 0)
+        return true;
+    if (value < 0)
+        return false;
+    const std::uint32_t flags = static_cast<std::uint32_t>(value);
+    return (flags & ~knownFlags) == 0u
+        && (flags & baseFlags) == baseFlags;
+}
+
 bool isValidSplineDegree(int degree) {
     return degree >= 1 && degree <= kMaxSplineDegree;
 }
@@ -14170,7 +14188,7 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
             && m_ownerBlockRecordHandle != blockRecH.ref)
         || m_dxfUnsupportedData || m_dxfInCellValue || m_dxfMergeFieldsInvalid
         || (m_hasSemanticContent && !m_semanticContentComplete)
-        || m_dataVersion != 0 || m_valueFlag != 0
+        || m_dataVersion != 0 || !validLegacyTableValueFlag(m_valueFlag)
         || !validTableScalarOverrides
         || m_borderColorOverrideFlags != 0u
         || m_borderLineweightOverrideFlags != 0u
@@ -14978,6 +14996,8 @@ bool DRW_Table::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
         return fail();
     m_content.m_tableStyleHandle = m_tableStyleHandle;
     m_semanticContentComplete = true;
+    if (!validLegacyTableValueFlag(parsedValueFlag))
+        m_semanticContentComplete = false;
     // For <=AC1018 (R2000/R2004) there is no separate R2007+ string stream:
     // DRW_Entity::parseDwg only seeks sBuf when version > AC1018 (see the
     // `strBuf != NULL && version > DRW::AC1018` guard there), so legacy cell

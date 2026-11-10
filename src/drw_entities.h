@@ -2125,9 +2125,9 @@ public:
     DRW_Table& operator=(DRW_Table&&) noexcept = default;
 
     // TABLE has a distinct, versioned DWG frame and linked-object graph.
-    // The direct encoder currently covers one generated AC1018 plain-text
-    // profile only; adapter output stays disabled until the compound graph is
-    // staged transactionally.
+    // Direct DWG encoding and the transactional whole-file route admit only
+    // the bounded generated AC1018 plain-text profile; unknown retained body
+    // subrecords and unqualified source-model fields remain refused.
     [[nodiscard]] bool encodeDwg(DRW::Version version, dwgBufferW *buf,
                                  std::uint32_t bs=0,
                                  dwgBufferW *strBuf=nullptr,

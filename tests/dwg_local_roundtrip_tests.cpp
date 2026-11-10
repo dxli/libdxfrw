@@ -37837,6 +37837,117 @@ bool runBlockRecordXrefMetadataRoundTrip(
     return true;
 }
 
+bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
+    dx_iface reader;
+    dx_data data;
+    if (!reader.fileImport(inputPath.string(), &data, false)) {
+        std::cerr << "physical TABLE probe import failed: "
+                  << inputPath << '\n';
+        return false;
+    }
+    std::cout << "physical TABLE probe revision="
+              << static_cast<int>(data.sourceVersion)
+              << " tables=" << data.tables.size() << '\n';
+    bool encodedOneTable = false;
+    for (DRW_Table& table : data.tables) {
+        dwgBufferW body;
+        dwgBufferW handles;
+        const bool encoded = table.encodeDwg(
+            DRW::AC1018, &body, 0u, nullptr, &handles);
+        DRW_Table withoutRanges = table;
+        withoutRanges.m_content.m_subrecordRanges.clear();
+        dwgBufferW withoutRangeBody;
+        dwgBufferW withoutRangeHandles;
+        const bool withoutRangeEncoded = withoutRanges.encodeDwg(
+            DRW::AC1018, &withoutRangeBody, 0u, nullptr,
+            &withoutRangeHandles);
+        DRW_Table zeroValueFlag = table;
+        zeroValueFlag.m_valueFlag = 0;
+        dwgBufferW zeroFlagBody;
+        dwgBufferW zeroFlagHandles;
+        const bool zeroFlagEncoded = zeroValueFlag.encodeDwg(
+            DRW::AC1018, &zeroFlagBody, 0u, nullptr, &zeroFlagHandles);
+        std::size_t nonemptyTextCells = 0u;
+        for (const DRW_TableRow& row : table.m_content.m_rows) {
+            for (const DRW_TableCell& cell : row.m_cells) {
+                if (cell.m_contents.size() == 1u
+                    && !cell.m_contents.front().m_text.empty())
+                    ++nonemptyTextCells;
+            }
+        }
+        std::cout << "TABLE handle=0x" << std::hex << table.handle
+                  << std::dec << " class=" << table.getDwgClassNum()
+                  << " grid=" << table.m_content.m_rows.size() << 'x'
+                  << table.m_content.m_columns.size()
+                  << " semantic=" << table.m_hasSemanticContent << '/'
+                  << table.m_semanticContentComplete
+                  << " textCells=" << nonemptyTextCells
+                  << " ranges=" << table.m_content.m_subrecordRanges.size()
+                  << " encoded=" << encoded
+                  << " withoutRanges=" << withoutRangeEncoded
+                  << " zeroFlag=" << zeroFlagEncoded
+                  << " bodyBits=" << body.bitCount()
+                  << " handleBits=" << handles.bitCount()
+                  << " dataVersion=" << table.m_dataVersion
+                  << " valueFlag=" << table.m_valueFlag
+                  << " styleHandle=0x" << std::hex
+                  << table.m_tableStyleHandle << " blockRecord=0x"
+                  << table.blockRecH.ref << " ownerBlockRecord=0x"
+                  << table.m_ownerBlockRecordHandle << std::dec
+                  << " tableOverrideFlags=" << table.m_tableOverrideFlags
+                  << " borderFlags=" << table.m_borderColorOverrideFlags
+                  << '/' << table.m_borderLineweightOverrideFlags << '/'
+                  << table.m_borderVisibilityOverrideFlags
+                  << " fields=" << table.m_content.m_fieldHandles.size()
+                  << " merges=" << table.m_content.m_mergedRanges.size()
+                  << " styleType=" << table.m_content.m_overrideStyleType
+                  << '\n';
+        for (const DRW_TableRow& row : table.m_content.m_rows) {
+            std::cout << "  row height=" << row.m_height
+                      << " style=" << row.m_styleId
+                      << " overrideStyle=" << row.m_overrideStyleType
+                      << " cells=" << row.m_cells.size() << '\n';
+            for (const DRW_TableCell& cell : row.m_cells) {
+                std::cout << "  cell type=" << cell.m_type
+                          << " edge=" << cell.m_edgeFlags
+                          << " virtual=" << static_cast<unsigned>(cell.m_virtualEdgeFlags)
+                          << " merge=" << cell.m_isMerged << ':'
+                          << cell.m_mergedWidth << 'x' << cell.m_mergedHeight
+                          << " overrides=" << cell.m_overrideFlags
+                          << " style=" << cell.m_styleId
+                          << " content=" << cell.m_contents.size();
+                if (cell.m_contents.size() == 1u) {
+                    const DRW_CadValue& value =
+                        cell.m_contents.front().m_value;
+                    std::cout << " text='" << cell.m_contents.front().m_text
+                              << "' valueType=" << value.m_value.type()
+                              << " dataType=" << value.m_dataType
+                              << " dataSize=" << value.m_dataSize
+                              << " formatFlags=" << value.m_formatFlags
+                              << " unit=" << value.m_unitType
+                              << " valueText='" << value.m_valueString
+                              << "' format='" << value.m_formatString
+                              << "' raw=" << value.m_rawData.size();
+                }
+                std::cout << '\n';
+            }
+        }
+        for (const DRW_DwgSubrecordRange& range :
+             table.m_content.m_subrecordRanges) {
+            std::cout << "  range=" << range.m_name
+                      << " start=" << range.m_startBit
+                      << " bits=" << range.m_bitSize
+                      << " version=" << range.m_version
+                      << " count=" << range.m_count
+                      << " rawHandleCode="
+                      << static_cast<unsigned>(range.m_rawHandleCode)
+                      << " complete=" << range.m_parseComplete << '\n';
+        }
+        encodedOneTable = encodedOneTable || encoded;
+    }
+    return !data.tables.empty() && encodedOneTable;
+}
+
 } // namespace
 
 #include "dwg_ellipse_wcs_test.h"
@@ -38251,6 +38362,10 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 3
+        && std::string(argv[1]) == "--inspect-physical-table-codec") {
+        return inspectPhysicalTableDirectCodec(argv[2]) ? 0 : 1;
+    }
     if ((argc == 2 || argc == 3)
         && std::string(argv[1]) == "--tablestyle-nod-whole-file-roundtrip") {
         const bool passed = testTableStyleNodWholeFileRoundTrip(
