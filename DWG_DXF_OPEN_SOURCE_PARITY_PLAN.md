@@ -1195,7 +1195,11 @@ created locally from scratch for the specific control.
   separate `owned_actions` vector to use soft-pointer references. Generated
   controls prove both action-role mismatches and a hard-owned vector entry are
   rejected, then accept corrected inputs on the same reader. Focused CTests
-  pass. This is a peer-grammar-backed parser guard only:
+  pass. A fresh read-only pass of LibreDWG's hash-bound `example_2018.dwg`
+  also accepts the two AC1032 candidate networks with complete bounded Action
+  and Network prefixes and no CRC mismatch; its unrelated TABLECONTENT record
+  remains the sole object parse failure. This is a peer-grammar-backed parser
+  guard only:
   `m_networkFieldsParsed` remains
   false, the ACadSharp candidate still fails before OBJECTS, and AC1032 output
   remains refused. See the [role-guard receipt](docs/research/p4-ac1032-assocnetwork-action-handle-role-guard-2026-11-10.json).

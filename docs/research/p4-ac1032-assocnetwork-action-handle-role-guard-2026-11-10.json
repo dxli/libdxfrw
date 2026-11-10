@@ -29,6 +29,14 @@
     ],
     "result": "PASS"
   },
+  "physicalSourceRecheck": {
+    "repository": "/Users/dli/dev/libredwg",
+    "revision": "6d6a33987a1a97095b069c799c3d8a793320f812",
+    "path": "test/test-data/example_2018.dwg",
+    "sha256": "7bc7721224003062b237845842b7a976e46771c37eba6833b9ed3712e7a5a65a",
+    "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --assocnetwork-ac1032-candidate-profile /Users/dli/dev/libredwg/test/test-data/example_2018.dwg",
+    "result": "PASS for associative-network candidate: source AC1032, objects 0x390 and 0x38e each retain complete bounded Action and Network prefixes (class version 2), separate action-index candidates, and action ownership roles. The whole file has one unrelated TABLECONTENT parse failure, 473/474 frames published, and no CLASSES/data-section CRC mismatch. No output was written."
+  },
   "remainingBlockers": [
     "The cited grammar is from LibreDWG and does not replace ODA's authoritative specification.",
     "The ACadSharp AecObjects.dwg candidate still fails the libdxfrw handle-map gate before OBJECTS and has unresolved producer/integrity provenance.",
