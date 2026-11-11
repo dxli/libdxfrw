@@ -29,6 +29,12 @@ int main(){
     model.m_hasTableBorderLineweightOverrides[4]=true;if(!reject())return 13;model=source;
     model.m_hasTableBorderVisibilityOverrides[4]=true;if(!reject())return 14;model=source;
     model.m_content.m_subrecordRanges[0].m_rawHandleCode=5u;if(!reject())return 15;model=source;
+    model=source;model.m_content.m_subrecordRanges[0].m_name+="x";if(!reject())return 23;model=source;
+    ++model.m_content.m_subrecordRanges[0].m_startBit;if(!reject())return 24;model=source;
+    ++model.m_content.m_subrecordRanges[0].m_bitSize;if(!reject())return 25;model=source;
+    model.m_content.m_subrecordRanges[0].m_version=DRW::AC1027;if(!reject())return 26;model=source;
+    ++model.m_content.m_subrecordRanges[0].m_count;if(!reject())return 27;model=source;
+    model.m_content.m_subrecordRanges[0].m_parseComplete=false;if(!reject())return 28;model=source;
     model.m_content.m_rows[0].m_cells[0].m_contents[0].m_text="changed";if(!reject())return 16;model=source;
     model.m_content.m_rows[0].m_cells[0].m_contents[0].m_value.m_value.addString(1,"changed");
     if(!reject() || *source.m_content.m_rows[0].m_cells[0].m_contents[0].m_value.m_value.content.s!="x")return 17;model=source;

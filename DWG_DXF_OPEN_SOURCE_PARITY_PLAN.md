@@ -1571,7 +1571,9 @@ created locally from scratch for the specific control.
   DWG row/border overrides and raw range handle codes. Focused controls still
   verify mutation refusal across these fields and semantic cell values. This is
   comparator groundwork only: no raw source bytes are yet bound to a TABLE,
-  and no parsed nonempty-range output is enabled
+  and no parsed nonempty-range output is enabled. The focused comparator
+  control now rejects changes independently to range name, bit start, bit size,
+  version, count, parse-complete state and raw handle code
   ([comparator receipt](docs/research/p5-ac1018-table-shared-snapshot-comparator-2026-11-11.json)).
 
 - **P8 HELIX consumer carrier remains blocked:** a scratch LibreCAD_3
