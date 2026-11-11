@@ -1575,6 +1575,15 @@ created locally from scratch for the specific control.
   control now rejects changes independently to range name, bit start, bit size,
   version, count, parse-complete state and raw handle code
   ([comparator receipt](docs/research/p5-ac1018-table-shared-snapshot-comparator-2026-11-11.json)).
+  The writer audit confirms raw replay only patches the class code, entity
+  handle and block owner; nested handles stay source-valued. Existing TABLE
+  finalization closes modeled block/style dependencies but does not enumerate
+  arbitrary references hidden in retained ranges. Therefore the source-binding
+  packet must first prove either that each retained range has no handle fields
+  or that every such role maps to the exact emitted target identity; exact body
+  equality alone is insufficient. Keep replay refused pending this map and a
+  fresh readback control
+  ([replay-boundary receipt](docs/research/p5-ac1018-table-source-replay-reference-boundary-2026-11-11.json)).
 
 - **P8 HELIX consumer carrier remains blocked:** a scratch LibreCAD_3
   candidate preserves an unchanged same-revision HELIX and refuses its own
