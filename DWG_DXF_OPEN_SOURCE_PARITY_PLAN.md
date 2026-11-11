@@ -1664,6 +1664,12 @@ created locally from scratch for the specific control.
   integrity observation, so this remains an evidence query, never an output
   permit. See the
   [adapter source-binding receipt](docs/research/p5-ac1018-style-resource-adapter-binding-2026-11-11.json).
+  A portable from-scratch AC1018 CTest now exercises that path: it writes one
+  STYLE with APPID-backed EED and the matching APPID row, requires source and
+  EED closure, refuses STYLE-height and APPID-metadata mutations, withholds the
+  source bundle for a truncated `.dwg` copy, then retries the original through
+  the same adapter. The runtime files are removed and no fixture is committed
+  ([generated receipt](docs/research/p5-ac1018-style-resource-generated-reader-binding-2026-11-11.json)).
   **Writer-stage/finalization revalidation (2026-11-11):** when this selected
   source bundle is present, `writeTextstyles` rechecks the same-import source
   and typed STYLE/APPID snapshot immediately before emission. The adapter

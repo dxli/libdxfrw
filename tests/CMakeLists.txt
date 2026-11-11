@@ -6221,3 +6221,15 @@ add_test(NAME p5_ltype_generated_reader_ticket
     COMMAND p5_ac1018_ltype_pair_candidate_live_probe --self-test
         ${CMAKE_CURRENT_BINARY_DIR}/generated-p5-ltype-ticket.dwg)
 set_tests_properties(p5_ltype_generated_reader_ticket PROPERTIES LABELS "dwg;fast;table" TIMEOUT 30)
+
+add_executable(p5_ac1018_style_resource_source_probe
+    ${CMAKE_SOURCE_DIR}/tools/research/p5_ac1018_style_resource_source_probe.cpp
+    ${_libdxfrw_test_adapter_source})
+target_compile_features(p5_ac1018_style_resource_source_probe PRIVATE cxx_std_17)
+target_compile_options(p5_ac1018_style_resource_source_probe PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(p5_ac1018_style_resource_source_probe PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/dwg2dxf)
+target_link_libraries(p5_ac1018_style_resource_source_probe PRIVATE dxfrw)
+add_test(NAME p5_style_resource_generated_source_binding
+    COMMAND p5_ac1018_style_resource_source_probe
+        ${CMAKE_CURRENT_BINARY_DIR}/generated-p5-style-resource-source.dwg)
+set_tests_properties(p5_style_resource_generated_source_binding PROPERTIES LABELS "dwg;fast;table" TIMEOUT 30)
