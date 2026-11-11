@@ -1210,6 +1210,14 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P6 POINTCLOUDEX cropped DWG output:** nondefault values in fields omitted
+  by the cropped wire profile now cause preflight refusal, preserving the
+  destination and source. A generated AC1027/AC1032 control checks each
+  omitted field, corrected retry, zero-crop compatibility and cropped
+  whole-file readback; the focused test passes. This is peer-grammar and
+  local readback evidence, not native producer qualification. See the
+  [receipt](docs/research/p6-pointcloudex-cropped-dwg-omitted-fields-refusal-2026-11-10.json).
+
 - **P6 classic POINTCLOUD omitted-field refusal:** source-list and earlier
   version layouts now refuse non-default values for fields they cannot encode;
   2D clip vertices and non-box depth fields are likewise checked. Generated

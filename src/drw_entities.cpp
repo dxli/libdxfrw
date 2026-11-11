@@ -26684,6 +26684,18 @@ bool DRW_PointCloudEx::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uin
         && (!integral32(intensityMin) || !integral32(intensityMax))) {
         return false;
     }
+    // The modeled DWG layout carries these values only when there are no
+    // croppings. Refuse values that would otherwise disappear on readback.
+    if (croppingCount != 0
+        && (unknownInt0 != 0 || unknownInt1 != 0 || stylizationType != 0
+            || !intensityColorScheme.empty() || !currentColorScheme.empty()
+            || !classificationColorScheme.empty() || elevationMin != 0.0
+            || elevationMax != 0.0 || intensityMin != 0.0
+            || intensityMax != 0.0 || intensityOutOfRangeBehavior != 0
+            || elevationOutOfRangeBehavior != 0 || elevationApplyToFixedRange
+            || intensityAsGradient || elevationAsGradient)) {
+        return false;
+    }
 
     oType = kDwgClassNum;
     if (!encodeDwgCommon(version, buf, strBuf))
