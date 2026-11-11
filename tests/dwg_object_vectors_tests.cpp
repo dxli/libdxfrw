@@ -465,6 +465,13 @@ public:
   std::uint16_t dwgType() const { return oType; }
 };
 
+class PointCloudExCodecProbe final : public DRW_PointCloudEx {
+public:
+  using DRW_PointCloudEx::encodeDwg;
+  void setDwgType(std::int16_t value) { oType = value; }
+  std::int16_t dwgType() const { return oType; }
+};
+
 class PointCloudCodecProbe final : public DRW_PointCloud {
 public:
   using DRW_PointCloud::encodeDwg;
@@ -26406,6 +26413,62 @@ void testNavisworksModelDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testPointCloudExDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1027, DRW::AC1032}) {
+    for (const bool cropped : {false, true}) {
+      PointCloudExCodecProbe cloud;
+      cloud.handle = 0xC900u + static_cast<std::uint32_t>(version);
+      cloud.parentHandle = 0xC910u;
+      cloud.reactorHandles = {0xC920u};
+      cloud.xDictHandle = 0xC930u;
+      cloud.setDwgType(0x777);
+      cloud.classVersion = 1;
+      cloud.extentsMin = DRW_Coord(-1.0, -2.0, -3.0);
+      cloud.extentsMax = DRW_Coord(4.0, 5.0, 6.0);
+      cloud.name = "POINTCLOUDEX transaction";
+      cloud.definitionHandle = 0xC940u;
+      cloud.reactorHandle = 0xC950u;
+      cloud.isLocked = true;
+      cloud.showIntensity = true;
+      if (cropped) {
+        cloud.showCropping = true;
+        DRW_PointCloudExCropping clip;
+        clip.type = 1;
+        clip.isInside = true;
+        clip.cropPlane = DRW_Coord(0.0, 0.0, 1.0);
+        clip.cropXDirection = DRW_Coord(1.0, 0.0, 0.0);
+        clip.cropYDirection = DRW_Coord(0.0, 1.0, 0.0);
+        clip.pointCount = 3;
+        clip.points = {DRW_Coord(0.0, 0.0, 0.0),
+                       DRW_Coord(4.0, 0.0, 0.0),
+                       DRW_Coord(4.0, 3.0, 0.0)};
+        cloud.croppingCount = 1;
+        cloud.croppings = {clip};
+      } else {
+        cloud.unknownInt0 = 3;
+        cloud.unknownInt1 = 4;
+        cloud.stylizationType = 1;
+        cloud.intensityColorScheme = "Intensity transaction";
+        cloud.currentColorScheme = "Current transaction";
+        cloud.classificationColorScheme = "Classification transaction";
+        cloud.elevationMin = -2.0;
+        cloud.elevationMax = 5.0;
+        cloud.intensityMin = 3;
+        cloud.intensityMax = 42;
+        cloud.intensityOutOfRangeBehavior = 1;
+        cloud.elevationOutOfRangeBehavior = 1;
+        cloud.elevationApplyToFixedRange = true;
+        cloud.intensityAsGradient = true;
+        cloud.elevationAsGradient = true;
+      }
+      checkEntityDwgEncodeAllocationRollback(
+          t, cloud, version, DRW_PointCloudEx::kDwgClassNum,
+          std::string(version == DRW::AC1027 ? "AC1027" : "AC1032") +
+              (cropped ? " POINTCLOUDEX cropped" : " POINTCLOUDEX uncropped"));
+    }
+  }
+}
+
 void testPointCloudDwgRepresentability(TestContext &t) {
   using Mutation = std::pair<const char *, std::function<void(PointCloudCodecProbe &)>>;
   const std::vector<Mutation> extended = {
@@ -29961,6 +30024,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testNavisworksModelDwgEncodeAllocationRollback(context);
       std::cout << "NAVISWORKSMODEL DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--pointcloudex-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testPointCloudExDwgEncodeAllocationRollback(context);
+      std::cout << "POINTCLOUDEX DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

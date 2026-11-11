@@ -1210,6 +1210,13 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P6 POINTCLOUDEX DWG encoder transaction safety:** cropped and uncropped
+  AC1027/AC1032 profiles now stage body, strings and handles; 138 injected
+  allocation failures preserve prior state and retry exactly. The focused
+  POINTCLOUD/POINTCLOUDEX cohort passes 4/4, including cropped-field refusal.
+  Physical producer, graph and native rendering qualification remain open.
+  See the [rollback receipt](docs/research/p6-pointcloudex-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **P6 POINTCLOUDEX cropped DWG output:** nondefault values in fields omitted
   by the cropped wire profile now cause preflight refusal, preserving the
   destination and source. A generated AC1027/AC1032 control checks each

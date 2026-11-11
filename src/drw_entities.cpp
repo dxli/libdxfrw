@@ -26697,66 +26697,70 @@ bool DRW_PointCloudEx::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uin
         return false;
     }
 
-    oType = kDwgClassNum;
-    if (!encodeDwgCommon(version, buf, strBuf))
-        return false;
-    dwgBufferW *sBuf = strBuf ? strBuf : buf;
-    buf->putBitShort(static_cast<std::uint16_t>(classVersion));
-    buf->put3BitDouble(extentsMin);
-    buf->put3BitDouble(extentsMax);
-    buf->put3BitDouble(ucsOrigin);
-    buf->put3BitDouble(ucsXDirection);
-    buf->put3BitDouble(ucsYDirection);
-    buf->put3BitDouble(ucsZDirection);
-    buf->putBit(isLocked ? 1 : 0);
-    sBuf->putVariableText(version, name);
-    buf->putBit(showIntensity ? 1 : 0);
-    buf->putBit(showCropping ? 1 : 0);
-    buf->putBitLong(croppingCount);
-    if (croppingCount == 0) {
-        buf->putBitLong(unknownInt0);
-        buf->putBitLong(unknownInt1);
-        buf->putBitShort(static_cast<std::uint16_t>(stylizationType));
-        sBuf->putVariableText(version, intensityColorScheme);
-        sBuf->putVariableText(version, currentColorScheme);
-        sBuf->putVariableText(version, classificationColorScheme);
-        buf->putBitDouble(elevationMin);
-        buf->putBitDouble(elevationMax);
-        buf->putBitLong(static_cast<std::int32_t>(intensityMin));
-        buf->putBitLong(static_cast<std::int32_t>(intensityMax));
-        buf->putBitShort(static_cast<std::uint16_t>(intensityOutOfRangeBehavior));
-        buf->putBitShort(static_cast<std::uint16_t>(elevationOutOfRangeBehavior));
-        buf->putBit(elevationApplyToFixedRange ? 1 : 0);
-        buf->putBit(intensityAsGradient ? 1 : 0);
-        buf->putBit(elevationAsGradient ? 1 : 0);
-    }
-    for (const DRW_PointCloudExCropping& cropping : croppings) {
-        buf->putBitShort(static_cast<std::uint16_t>(cropping.type));
-        buf->putBit(cropping.isInside ? 1 : 0);
-        buf->putBit(cropping.isInverted ? 1 : 0);
-        buf->put3BitDouble(cropping.cropPlane);
-        buf->put3BitDouble(cropping.cropXDirection);
-        buf->put3BitDouble(cropping.cropYDirection);
-        buf->putBitLong(cropping.pointCount);
-        for (const DRW_Coord& point : cropping.points)
-            buf->put3BitDouble(point);
-    }
-    if (!encodeDwgEntHandle(version, buf, handleBuf))
-        return false;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [&](dwgBufferW *buf, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
+            oType = kDwgClassNum;
+            if (!encodeDwgCommon(version, buf, strBuf))
+                return false;
+            dwgBufferW *sBuf = strBuf ? strBuf : buf;
+            buf->putBitShort(static_cast<std::uint16_t>(classVersion));
+            buf->put3BitDouble(extentsMin);
+            buf->put3BitDouble(extentsMax);
+            buf->put3BitDouble(ucsOrigin);
+            buf->put3BitDouble(ucsXDirection);
+            buf->put3BitDouble(ucsYDirection);
+            buf->put3BitDouble(ucsZDirection);
+            buf->putBit(isLocked ? 1 : 0);
+            sBuf->putVariableText(version, name);
+            buf->putBit(showIntensity ? 1 : 0);
+            buf->putBit(showCropping ? 1 : 0);
+            buf->putBitLong(croppingCount);
+            if (croppingCount == 0) {
+                buf->putBitLong(unknownInt0);
+                buf->putBitLong(unknownInt1);
+                buf->putBitShort(static_cast<std::uint16_t>(stylizationType));
+                sBuf->putVariableText(version, intensityColorScheme);
+                sBuf->putVariableText(version, currentColorScheme);
+                sBuf->putVariableText(version, classificationColorScheme);
+                buf->putBitDouble(elevationMin);
+                buf->putBitDouble(elevationMax);
+                buf->putBitLong(static_cast<std::int32_t>(intensityMin));
+                buf->putBitLong(static_cast<std::int32_t>(intensityMax));
+                buf->putBitShort(static_cast<std::uint16_t>(intensityOutOfRangeBehavior));
+                buf->putBitShort(static_cast<std::uint16_t>(elevationOutOfRangeBehavior));
+                buf->putBit(elevationApplyToFixedRange ? 1 : 0);
+                buf->putBit(intensityAsGradient ? 1 : 0);
+                buf->putBit(elevationAsGradient ? 1 : 0);
+            }
+            for (const DRW_PointCloudExCropping& cropping : croppings) {
+                buf->putBitShort(static_cast<std::uint16_t>(cropping.type));
+                buf->putBit(cropping.isInside ? 1 : 0);
+                buf->putBit(cropping.isInverted ? 1 : 0);
+                buf->put3BitDouble(cropping.cropPlane);
+                buf->put3BitDouble(cropping.cropXDirection);
+                buf->put3BitDouble(cropping.cropYDirection);
+                buf->putBitLong(cropping.pointCount);
+                for (const DRW_Coord& point : cropping.points)
+                    buf->put3BitDouble(point);
+            }
+            if (!encodeDwgEntHandle(version, buf, handleBuf))
+                return false;
 
-    dwgBufferW *hBuf = handleBuf ? handleBuf : buf;
-    auto putHandle = [hBuf](std::uint8_t code, std::uint32_t ref) {
-        dwgHandle handle;
-        handle.code = ref == 0 ? 0 : code;
-        handle.ref = ref;
-        handle.size = 0;
-        for (std::uint32_t value = ref; value != 0; value >>= 8)
-            ++handle.size;
-        hBuf->putHandle(handle);
-    };
-    putHandle(5, definitionHandle);
-    putHandle(3, reactorHandle);
-    return true;
+            dwgBufferW *hBuf = handleBuf ? handleBuf : buf;
+            auto putHandle = [hBuf](std::uint8_t code, std::uint32_t ref) {
+                dwgHandle handle;
+                handle.code = ref == 0 ? 0 : code;
+                handle.ref = ref;
+                handle.size = 0;
+                for (std::uint32_t value = ref; value != 0; value >>= 8)
+                    ++handle.size;
+                hBuf->putHandle(handle);
+            };
+            putHandle(5, definitionHandle);
+            putHandle(3, reactorHandle);
+            return true;
+        });
 }
 
 bool DRW_Surface::parseCode(int code, const std::unique_ptr<dxfReader>& reader) {
