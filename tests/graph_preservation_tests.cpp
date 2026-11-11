@@ -14686,6 +14686,19 @@ void testSab21800RecordHeaderAlignment(TestContext& t) {
                         != bodies21500.front().graphLinks.end()
                  && body21500LumpLink->pointerOrdinal == 2u
                  && bodies21500.front().bodyTransformNodeIndex == 13
+                 && bodies21500.front().report.bodyTransformPresent
+                 && bodies21500.front().transform.pointerResolved
+                 && bodies21500.front().transform.rawLiteralPresent
+                 && bodies21500.front().transform.rawLiteral
+                        == "1 0 0 0 1 0 0 0 1 0 0 0"
+                 && bodies21500.front().transform.rawLiteralTokenIndex == 3u
+                 && bodies21500.front().transform.candidateComponentsPresent
+                 && bodies21500.front().transform.candidateComponents
+                        == expectedBodyTransformComponents
+                 && bodies21500.front().transform.state
+                        == DRW_AcisTransformState::ParsedUnapplied
+                 && !bodies21500.front().report.bodyTransformsApplied
+                 && !bodies21500.front().report.sourceUnitScaleApplied
                  && bodies21500.front().wireframe.vertices.size() == 2u
                  && bodies21500.front().wireframe.faces.size() == 1u
                  && bodies21500.front().wireframe.faces.front().hasSense

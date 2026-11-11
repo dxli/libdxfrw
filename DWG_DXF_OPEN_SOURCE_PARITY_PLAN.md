@@ -1261,6 +1261,12 @@ created locally from scratch for the specific control.
   specifically scoped generated control backed by an independent placement
   oracle. No external DWG/DXF fixture was added. See the [source-screen
   receipt](docs/research/p7-ac1024-conference-room-transform-source-screen-2026-11-11.json).
+  The from-scratch ACIS 21500 rooted-graph control now also asserts the exact
+  transform literal, all twelve retained candidate components, the resolved
+  body pointer, and explicit unapplied transform/unit status. The focused
+  graph/preservation executable passes. This is generated projection and
+  regression evidence only; no independent placement oracle or transform
+  semantics was added. See the [unapplied-transform control receipt](docs/research/p7-acis-21500-unapplied-transform-candidate-control-2026-11-11.json).
 
 - **P6 R12 ellipse numerical stability:** the ellipse-to-polyline converter
   now uses scaled length calculations for axes and normals whose norms are
