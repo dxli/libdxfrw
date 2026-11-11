@@ -12759,7 +12759,7 @@ bool model(const Selection& selected,bool owners) {
     return true;
 }
 struct Output final:dx_iface {
-    dx_data empty;Selection selected;bool good=true;
+    dx_data empty;Selection selected;bool good=true, useInheritedFinalizer=false;
     explicit Output(Selection s):selected(s){cData=&empty;currentBlock=empty.mBlock;}
     void writeBlockRecords()override{good=dxfW->writeBlockRecord("ALIGN_BLOCK")&&good;}
     void writeBlocks()override {
@@ -12769,6 +12769,9 @@ struct Output final:dx_iface {
         good=dxfW->writeBlockEnd()&&good;
     }
     void writeEntities()override{good=dxfW->writeInsert(selected.parent)&&good;good=dxfW->writeLine(selected.line)&&good;}
+    // This fixture drives dxfRW directly with its own selected callbacks;
+    // it does not run dx_iface::fileExport's adapter graph-planning pipeline.
+    bool finalizeDxfWrite()override{return useInheritedFinalizer ? dx_iface::finalizeDxfWrite() : good;}
 };
 struct WireRecord {std::string name,tag;std::uint32_t self=0u,owner=0u;std::size_t ordinal=0u;
     std::array<std::vector<std::pair<int,double>>,3> points;std::array<unsigned,3> markers{};};
@@ -12869,12 +12872,35 @@ bool run(TestContext& t) {
     };
     for(bool inputBinary:{false,true}) {
         const auto input=dir/(inputBinary?"source-bin.dxf":"source-asc.dxf");if(!verify(source(input,inputBinary)&&wireProof(attdefWireTags(input,inputBinary),true),"authored original wire"))return false;++sources;sourcePhysical+=2u*count;
+        if (!inputBinary) {
+            dx_iface negativeReader; dx_data negativeData;
+            if (!verify(negativeReader.fileImport(input.string(),&negativeData,false),"negative import")) return false;
+            const auto negativeSelection=select(negativeData);
+            if (!verify(model(negativeSelection,true),"negative source model")) return false;
+            const auto before=snapshot(negativeSelection,false);
+            const auto rejected=dir/"inherited-finalizer-negative.dxf";
+            {std::ofstream sentinel(rejected);sentinel<<"sentinel";}
+            Output negative(negativeSelection);negative.useInheritedFinalizer=true;
+            dxfRW negativeWriter(rejected.string().c_str());negative.dxfW=&negativeWriter;
+            if (!verify(!negativeWriter.write(&negative,DRW::AC1032,false)&&negative.good
+                    &&negativeWriter.getLastDiagnostic().code=="dxf-finalize-rejected"
+                    &&snapshot(negativeSelection,false)==before&&bytes(rejected)=="sentinel",
+                    "inherited finalizer requires adapter graph planning")) return false;
+        }
         for(bool binary:{false,true}) {
             dx_iface reader;dx_data data;if(!reader.fileImport(input.string(),&data,false))return verify(false,"original import");const auto selected=select(data);
             if(!verify(model(selected,true),"original A/C model and owners"))return false;const auto geometry=snapshot(selected,false);Output adapter(selected);
             transportModels+=2u*count;zeroProfiles+=4u;equalProfiles+=2u;defaultProfiles+=4u;classicProfiles+=2u;
             const auto output=dir/"transport.dxf";dxfRW writer(output.string().c_str());adapter.dxfW=&writer;
-            if(!verify(writer.write(&adapter,DRW::AC1032,binary)&&adapter.good&&snapshot(selected,false)==geometry,"selected export/caller geometry")||!outputProof(output,binary))return false;
+            const bool written=writer.write(&adapter,DRW::AC1032,binary);
+            if (!written || !adapter.good || snapshot(selected,false)!=geometry) {
+                const auto& diagnostic=writer.getLastDiagnostic();
+                std::cerr<<"Embedded attribute write="<<written<<" callback="<<adapter.good
+                         <<" geometry="<<(snapshot(selected,false)==geometry)
+                         <<" diagnostic="<<diagnostic.code<<" message="<<diagnostic.message<<'\n';
+                return verify(false,"selected export/caller geometry");
+            }
+            if(!outputProof(output,binary))return false;
             ++cells;
             const auto wire=attdefWireTags(output,binary);
             for(unsigned kind=0u;kind<6u;++kind) {

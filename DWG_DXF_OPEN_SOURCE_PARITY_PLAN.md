@@ -1220,12 +1220,16 @@ created locally from scratch for the specific control.
   embedded-column grammars refuse import. Retained source memory is budgeted
   and shared with copies. This is a bounded source carrier, not proof of native
   layout, producer semantics, full provenance or output support. A base-class
-  copy deliberately loses the derived carrier. The wider existing
-  `libdxfrw_mtext_column_object_scope` fixture still fails its embedded
-  attribute selected-export stage on both this build and an isolated
-  `e5341dd3` baseline; investigate that independent failure before claiming
-  the broader test passes. See the
-  [column-collision receipt](docs/research/p6-mtext-legacy-column-code-collision-2026-11-11.json).
+  copy deliberately loses the derived carrier. The broader
+  `libdxfrw_mtext_column_object_scope` fixture now completes after its custom
+  direct-`dxfRW` test adapter stopped invoking `dx_iface`'s unprepared graph
+  finalizer. A negative control confirms that inherited finalization still
+  refuses atomically without the normal `fileExport` planning pipeline; the
+  production proxy-graph guard is unchanged. The wider fixture verifies its
+  selected geometry, raw field order and owners, refusals and retries, not
+  native column rendering. See the
+  [column-collision receipt](docs/research/p6-mtext-legacy-column-code-collision-2026-11-11.json)
+  and [fixture investigation](docs/research/p6-mtext-embedded-alignment-test-finalizer-2026-11-11.json).
 
 - **P6 R12 ellipse boundary:** a distinct parameter span below `1e-10` now
   remains a partial ellipse when tessellated; near-full spans also remain

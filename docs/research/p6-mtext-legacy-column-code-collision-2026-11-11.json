@@ -22,14 +22,14 @@
     "fixtures": "All drawings are locally authored temporary files and removed; no DWG/DXF fixtures were committed.",
     "existingFixtureCurrent": {
       "command": "ctest --test-dir build-gcc -R '^libdxfrw_mtext_column_object_scope$' --output-on-failure",
-      "result": "FAIL at embedded-attribute alignment selected export/caller geometry; the wider fixture is not claimed as passing."
+      "result": "PASS after fixture-specific direct-callback finalizer repair; prior run failed at selected export before any geometry assertion. See p6-mtext-embedded-alignment-test-finalizer-2026-11-11.json."
     },
     "existingFixtureBaseline": {
       "source": "isolated e5341dd3 source snapshot at /private/tmp/p5-desc-isolated-source",
       "configure": "cmake -S /private/tmp/p5-desc-isolated-source -B /private/tmp/mtext-baseline-build -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DLIBDXFRW_BUILD_TESTS=ON -DBUILD_TESTING=ON",
       "build": "cmake --build /private/tmp/mtext-baseline-build --target libdxfrw_dxf_fixture_tests -j4",
       "command": "ctest --test-dir /private/tmp/mtext-baseline-build -R '^libdxfrw_mtext_column_object_scope$' --output-on-failure",
-      "result": "Same selected export/caller geometry failure on the isolated baseline. The test source SHA-256 is b5623ec3380ee1dba5fe64096f8f09885033a9d5f77aeb7bb5cc2a8c6c4233f3 in both trees. The fixture failure remains open for troubleshooting."
+      "result": "The isolated baseline failed at selected export/caller geometry with the same test source SHA-256 b5623ec3380ee1dba5fe64096f8f09885033a9d5f77aeb7bb5cc2a8c6c4233f3. This historical comparison predates the test-harness correction; see the dedicated finalizer receipt."
     }
   },
   "limits": "This carrier records typed group values and source revision/encoding, not original lexical bytes or authenticated provenance. Binary group-50 counts are tested as locally generated doubles according to the library classifier; Autodesk's text describes a count as Int16 and native binary framing is unqualified. The bounded order is not a producer-wide schema, and no native rendering, linked-column semantics, conversion, or support claim is promoted. Copying to a base DRW_MText intentionally removes the loss guard. Other source grammars, record ordering, independent producer witnesses and native/platform tests remain open."
