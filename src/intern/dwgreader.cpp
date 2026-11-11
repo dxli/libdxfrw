@@ -8376,6 +8376,47 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
       }
       publication.m_carrier = DRW_DwgFramePublication::Carrier::Control;
       stagedTableFramePublications.push_back(std::move(publication));
+      if (version == DRW::AC1018
+          && descriptor.controlType == DRW::DwgLTypeControlObjectType) {
+        {
+          constexpr std::size_t maxBody = 4096u;
+          const auto& source = sourceIt->source;
+          const bool duplicate = std::any_of(m_verifiedTableCandidates.cbegin(),
+              m_verifiedTableCandidates.cend(), [&](const VerifiedTableCandidatePending& p) {
+                return p.handle == object.handle || p.ordinal == source.ordinal
+                    || (p.space == source.offsetSpace && p.offset == source.offset);
+              });
+          dwgBuffer probe = dbuf->forkIndependent();
+          DwgObjectFrame frame;
+          if (m_verifiedTableCandidateFailed || duplicate
+              || m_verifiedTableCandidates.size() >= 8u
+              || m_verifiedTableCandidateBytes > maxBody
+              || !frame.readAt(probe, version, object.loc)
+              || frame.body().size() > maxBody) {
+            m_verifiedTableCandidates.clear();
+            m_verifiedTableCandidateBytes = 0u;
+            m_verifiedTableCandidateFailed = true;
+          } else {
+            try {
+              VerifiedTableCandidatePending pending;
+              pending.kind = DwgVerifiedTableCandidateKind::LTypeControl;
+              pending.version = version;
+              pending.classNumber = static_cast<std::uint16_t>(descriptor.controlType);
+              pending.handle = object.handle;
+              pending.offset = source.offset;
+              pending.ordinal = source.ordinal;
+              pending.space = source.offsetSpace;
+              pending.frame = std::move(frame);
+              m_verifiedTableCandidates.push_back(std::move(pending));
+              m_verifiedTableCandidateBytes += m_verifiedTableCandidates.back().frame.body().size();
+            } catch (...) {
+              m_verifiedTableCandidates.clear();
+              m_verifiedTableCandidateBytes = 0u;
+              m_verifiedTableCandidateFailed = true;
+            }
+          }
+        }
+      }
     } catch (...) {
       return false;
     }
