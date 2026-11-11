@@ -4,8 +4,36 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <cstdlib>
+#include <new>
 #include <stdexcept>
 #include <string>
+
+// Test-only, one-shot fault injection; armed at the optional sink query, after
+// the selected record's normal callback and source lease have completed.
+namespace fault {
+long remaining = -1;
+bool fired = false;
+bool observe = false;
+std::size_t largest = 0;
+std::size_t allocations = 0;
+}
+void* operator new(std::size_t n) {
+    if (fault::observe) { ++fault::allocations; if (n > fault::largest) fault::largest = n; }
+    if (fault::remaining == 0) {
+        fault::remaining = -1;
+        fault::fired = true;
+        throw std::bad_alloc();
+    }
+    if (fault::remaining > 0) --fault::remaining;
+    if (void* p = std::malloc(n ? n : 1u)) return p;
+    throw std::bad_alloc();
+}
+void* operator new[](std::size_t n) { return ::operator new(n); }
+void operator delete(void* p) noexcept { std::free(p); }
+void operator delete[](void* p) noexcept { std::free(p); }
+void operator delete(void* p, std::size_t) noexcept { std::free(p); }
+void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
 
 class DxIfaceStandardDwgCaptureTestAccess {
 public:
@@ -23,7 +51,7 @@ namespace {
 constexpr std::uint32_t handle=0xA602u;
 class Writer final : public dx_iface {
 public:
-    explicit Writer(dwgRW& w):w_(w) {}
+    explicit Writer(dwgRW& w, std::size_t payloadSize=0u):w_(w),payloadSize_(payloadSize) {}
     void writeHeader(DRW_Header& h) override {h.vars.clear();}
     void writeDwgClasses() override {
         registered=w_.registerDwgNamedObjectDictionaryEntry("SOURCE",handle)
@@ -43,12 +71,35 @@ public:
     void writeAppId() override {}
     void writeObjects() override {
         DRW_XRecord x; x.handle=handle; x.parentHandle=DRW::DwgNamedObjectsDictionaryHandle;
-        x.m_values.emplace_back(1,UTF8STRING("LOCALLY_GENERATED"));
+        if (payloadSize_) x.m_values.emplace_back(310,std::vector<std::uint8_t>(payloadSize_,0xA5u));
+        else x.m_values.emplace_back(1,UTF8STRING("LOCALLY_GENERATED"));
         written=registered && w_.writeXRecord(&x);
         x.handle=handle+1u;
+        x.m_values.clear(); x.m_values.emplace_back(1,UTF8STRING("FOLLOWING"));
         written=written && w_.writeXRecord(&x);
     }
-    dwgRW& w_; bool registered=false, written=false;
+    dwgRW& w_; std::size_t payloadSize_; bool registered=false, written=false;
+};
+class FaultSink final : public dx_iface {
+public:
+    long failAt=-1; bool captureEnabled=true; mutable bool selected=false; bool following=false;
+    bool wantsVerifiedXRecord(std::uint32_t h) const noexcept override {
+        if (h!=handle) return false;
+        if (!selected) {
+            selected=true;
+            fault::remaining=failAt;
+            fault::observe=true;
+        }
+        return captureEnabled;
+    }
+    void addXRecord(const DRW_XRecord& x) override {
+        if (x.handle==handle+1u && selected) {
+            following=true;
+            fault::remaining=-1;
+            fault::observe=false;
+        }
+        dx_iface::addXRecord(x);
+    }
 };
 class FailingCallback final : public dx_iface {
 public:
@@ -106,6 +157,97 @@ bool physicalCrcImportControl(const std::filesystem::path& path) {
     return reader.fileImport(path.string(),&retry,false)
         && dx_iface::hasUnchangedVerifiedXRecordSource(retry,handle);
 }
+bool sameImportedXRecord(const dx_data& a,const dx_data& b) {
+    const auto find=[](const dx_data& d) -> const DRW_XRecord* {
+        const DRW_XRecord* result=nullptr;
+        for (const auto& x:d.xRecords) if (x.handle==handle) {
+            if (result) return nullptr;
+            result=&x;
+        }
+        return result;
+    };
+    const auto* x=find(a); const auto* y=find(b);
+    if (!x || !y || x->parentHandle!=y->parentHandle || x->m_cloning!=y->m_cloning
+        || x->m_values.size()!=y->m_values.size()
+        || x->m_dataEntries.size()!=y->m_dataEntries.size()
+        || x->m_handleValues!=y->m_handleValues) return false;
+    const auto same=[](const auto& left,const auto& right) {
+        for (std::size_t i=0;i<left.size();++i) {
+            if (left[i].code()!=right[i].code() || left[i].type()!=right[i].type()) return false;
+            if (left[i].type()==DRW_Variant::BINARY && *left[i].binary()!=*right[i].binary()) return false;
+            if (left[i].type()==DRW_Variant::STRING && *left[i].content.s!=*right[i].content.s) return false;
+        }
+        return true;
+    };
+    return same(x->m_values,y->m_values) && same(x->m_dataEntries,y->m_dataEntries);
+}
+bool candidateAllocationControl(const std::filesystem::path& path) {
+    dx_iface baselineReader; dx_data baseline;
+    if (!baselineReader.fileImport(path.string(),&baseline,false)) return false;
+    const auto calibrate=[&](bool enabled,std::size_t& count) {
+        FaultSink reader; reader.captureEnabled=enabled; reader.enableVerifiedXRecordSource(handle);
+        dx_data imported; fault::allocations=0; fault::remaining=-1; fault::observe=false;
+        const bool ok=reader.fileImport(path.string(),&imported,false);
+        fault::remaining=-1; fault::observe=false;
+        count=fault::allocations;
+        return ok && reader.selected && reader.following && sameImportedXRecord(baseline,imported)
+            && dx_iface::hasUnchangedVerifiedXRecordSource(imported,handle)==enabled;
+    };
+    std::size_t on=0,off=0;
+    if (!calibrate(true,on) || !calibrate(false,off) || on<=off || on-off>64u) return false;
+    const std::size_t expected=on-off;
+    std::size_t covered=0;
+    for (long offset=0; offset<static_cast<long>(expected); ++offset) {
+        FaultSink reader; reader.enableVerifiedXRecordSource(handle); reader.failAt=offset;
+        dx_data failed; fault::fired=false; fault::largest=0;
+        bool imported=false;
+        try {imported=reader.fileImport(path.string(),&failed,false);} catch (...) {
+            fault::remaining=-1; fault::observe=false; return false;
+        }
+        fault::remaining=-1; fault::observe=false;
+        if (!reader.selected) return false;
+        const bool hit=fault::fired;
+        const bool sealed=dx_iface::hasUnchangedVerifiedXRecordSource(failed,handle);
+        if (!hit || sealed || !imported) return false;
+        if (failed.dwgReadOutcome.observations.objectParseFailures!=0u
+            || failed.dwgReadOutcome.observations.entityParseFailures!=0u
+            || !sameImportedXRecord(baseline,failed)) return false;
+        ++covered;
+        dx_data retry; reader.failAt=-1; reader.selected=false; reader.following=false;
+        if (!reader.fileImport(path.string(),&retry,false)
+            || !dx_iface::hasUnchangedVerifiedXRecordSource(retry,handle)) return false;
+        fault::remaining=-1; fault::observe=false;
+    }
+    std::cout<<"optional candidate allocation faults covered="<<covered<<'\n';
+    return covered==expected;
+}
+bool oversizedCandidateControl(const std::filesystem::path& path) {
+    if (std::filesystem::exists(path)) return false;
+    struct Cleanup {std::filesystem::path path; ~Cleanup(){std::error_code e; std::filesystem::remove(path,e);}} cleanup{path};
+    constexpr std::size_t payload=1024u*1024u;
+    dwgRW out(path.string().c_str()); Writer writer(out,payload);
+    if (!out.write(&writer,DRW::AC1015,true) || !writer.written) return false;
+    dx_data plain; dx_iface plainReader;
+    if (!plainReader.fileImport(path.string(),&plain,false)) return false;
+    const auto& raw=DxIfaceStandardDwgCaptureTestAccess::raw(plain,handle);
+    if (raw.m_rawBytes.size()<=payload) return false;
+    FaultSink reader; reader.enableVerifiedXRecordSource(handle);
+    dx_data selected; fault::largest=0; fault::fired=false;
+    const bool imported=reader.fileImport(path.string(),&selected,false);
+    fault::remaining=-1; fault::observe=false;
+    if (!imported || !reader.selected || !reader.following
+        || fault::largest>=raw.m_rawBytes.size()
+        || selected.xRecords.size()!=plain.xRecords.size() || !sameImportedXRecord(plain,selected)
+        || DxIfaceStandardDwgCaptureTestAccess::raw(selected,handle).m_rawBytes!=raw.m_rawBytes
+        || plain.dwgReadOutcome.observations.objectParseFailures!=0u
+        || plain.dwgReadOutcome.observations.entityParseFailures!=0u
+        || selected.dwgReadOutcome.observations.objectParseFailures!=0u
+        || selected.dwgReadOutcome.observations.entityParseFailures!=0u
+        || dx_iface::hasUnchangedVerifiedXRecordSource(selected,handle)) return false;
+    std::cout<<"oversized candidate bytes="<<raw.m_rawBytes.size()
+             <<" maximum allocation after selection="<<fault::largest<<'\n';
+    return true;
+}
 bool run(const std::filesystem::path& path) {
     const auto fail=[](const char* s) {std::cerr<<s<<'\n'; return false;};
     dwgRW out(path.string().c_str()); Writer writer(out);
@@ -157,6 +299,8 @@ bool run(const std::filesystem::path& path) {
     (void)outer.fileImport(path.string(),&crossData,false);
     if (!outer.attempted || dx_iface::hasUnchangedVerifiedXRecordSource(crossData,handle)) return fail("cross-iface reentry sealed evidence");
     if (!physicalCrcImportControl(path.string()+".ac1015.dwg")) return fail("AC1015 physical CRC refusal/retry failed");
+    if (!candidateAllocationControl(path)) return fail("optional candidate allocation fault/retry failed");
+    if (!oversizedCandidateControl(path.string()+".oversized.dwg")) return fail("oversized candidate preflight failed");
     return true;
 }
 }

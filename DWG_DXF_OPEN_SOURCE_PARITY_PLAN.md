@@ -1263,8 +1263,12 @@ created locally from scratch for the specific control.
   generated AC1018 mutation, identity, callback-failure and reentry controls
   pass. The recreated physical AC1018 `0xbc` also seals as source evidence
   ([receipt](docs/research/p5-ac1018-table-xrecord-verified-source-capability-2026-11-11.json)).
-  Next add targeted allocation-failure and size-limit controls for this optional
-  capture, then design the opt-in write path with capability revalidation at
+  Focused controls now inject all eight calibrated candidate-stage allocation
+  failures and refuse a generated 1,060,932-byte selected frame before a
+  comparable allocation; ordinary selected-record import and same-adapter retry
+  remain intact ([receipt](docs/research/p5-xrecord-source-candidate-fault-bounds-2026-11-11.json)).
+  Next cover allocation failures in the later adapter snapshot and sealing
+  stages, then design the opt-in write path with capability revalidation at
   staging and finalization, transactional rollback and recomputed output CRC.
   Keep physical subtree output refused until all three opaque descendants,
   source-bound owner/target roles, class identities and graph closure are proven.
