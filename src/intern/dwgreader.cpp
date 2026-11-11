@@ -8394,8 +8394,9 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
       }
       publication.m_carrier = DRW_DwgFramePublication::Carrier::Control;
       stagedTableFramePublications.push_back(std::move(publication));
-      if (version == DRW::AC1018
-          && descriptor.controlType == DRW::DwgLTypeControlObjectType) {
+      if (version == DRW::AC1018 &&
+          (descriptor.controlType == DRW::DwgLTypeControlObjectType ||
+           descriptor.controlType == DRW::DwgStyleControlObjectType)) {
         {
           constexpr std::size_t maxBody = 4096u;
           const auto& source = sourceIt->source;
@@ -8417,7 +8418,9 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
           } else {
             try {
               VerifiedTableCandidatePending pending;
-              pending.kind = DwgVerifiedTableCandidateKind::LTypeControl;
+              pending.kind = descriptor.controlType == DRW::DwgLTypeControlObjectType
+                  ? DwgVerifiedTableCandidateKind::LTypeControl
+                  : DwgVerifiedTableCandidateKind::StyleControl;
               pending.version = version;
               pending.classNumber = static_cast<std::uint16_t>(descriptor.controlType);
               pending.handle = object.handle;
@@ -13412,7 +13415,7 @@ void dwgReader::deliverVerifiedTableCandidates(DRW_Interface& target) noexcept {
   if (!sink)return;
   auto pending=std::move(m_verifiedTableCandidates);m_verifiedTableCandidateBytes=0u;
   for(const auto& item:pending) {
-    if (!sink->wantsVerifiedTableCandidate(item.handle))return;
+    if (!sink->wantsVerifiedTableCandidate(item.handle))continue;
     DwgVerifiedTableCandidateTicket ticket(item.kind,item.version,item.classNumber,
         item.handle,item.offset,item.ordinal,item.space,item.frame,item.tableModel.get(),item.ltypeModel.get());
     sink->verifiedTableCandidate(ticket);

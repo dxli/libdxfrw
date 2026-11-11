@@ -53,7 +53,7 @@
   },
   "remaining": [
     "The two sibling APPID rows now have CRC-checked selected-source body spans and ODA/LibreDWG cross-checks in the companion resource-wire receipt; broader producer-profile closure and dependencies outside these rows remain open.",
-    "STYLE_CONTROL and remaining LTYPE/STYLE resources remain open.",
+    "STYLE_CONTROL handle 0x3 now has one CRC-checked post-finalization reader ticket whose role-2 member binds to the same-import STYLE 0x11 row; see p5-ac1018-style-control-reader-source-binding-2026-11-11.json. Other LTYPE/STYLE resources remain open.",
     "Font resolution/rendering, physical source-to-output ordering, recursive graph closure, transactional output/readback, independent consumer semantics, and Linux/Windows qualification remain open."
   ],
   "limitations": [

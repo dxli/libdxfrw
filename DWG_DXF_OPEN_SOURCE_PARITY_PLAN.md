@@ -1603,7 +1603,16 @@ created locally from scratch for the specific control.
   it does not qualify producer-wide APPID closure or fonts. See the [resource
   wire receipt](docs/research/p5-ac1018-table-style-ltype-resource-wire-2026-11-11.json)
   and [STYLE EED APPID binding receipt](docs/research/p5-ac1018-style-eed-appid-reader-binding-2026-11-11.json).
-  STYLE_CONTROL, remaining resources, font meaning and output ordering remain open.
+  The selected STYLE_CONTROL `0x3` frame now receives a CRC-checked, opt-in
+  source ticket only after complete AC1018 read finalization. The ticket binds
+  decoded offset 46/ordinal 2 and type 52 to STYLE `0x11`; parsing confirms one
+  role-2 member, which is the same typed STYLE row whose EED APPID `0x12` edge
+  was observed above. This closes only this selected control-to-row membership
+  edge and its same-import identity join. It does not qualify physical output,
+  output ordering, other STYLE/LTYPE resources, font meaning, or the remaining
+  TABLESTYLE graph. See the [STYLE_CONTROL source-binding
+  receipt](docs/research/p5-ac1018-style-control-reader-source-binding-2026-11-11.json).
+  Remaining resources, font meaning and output ordering remain open.
   A bounded standalone
   LTYPE_CONTROL/ByBlock observer now checks selected frame fields and roles
   ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)).

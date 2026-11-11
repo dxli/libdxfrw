@@ -38005,13 +38005,39 @@ public:
             captureFailed = true;
         }
     }
+    bool wantsVerifiedTableCandidate(std::uint32_t handle) const noexcept override {
+        return handle == 0x3u;
+    }
+    void verifiedTableCandidate(
+        const DwgVerifiedTableCandidateTicket& ticket) noexcept override {
+        ++styleControlTickets;
+        styleControlTicketValid = ticket.kind()
+                == DwgVerifiedTableCandidateKind::StyleControl
+            && ticket.version() == DRW::AC1018
+            && ticket.classNumber() == DRW::DwgStyleControlObjectType
+            && ticket.handle() == 0x3u && ticket.offset() == 46u
+            && ticket.ordinal() == 2u
+            && ticket.space() == DRW_DwgFrameOffsetSpace::DecodedBuffer
+            && ticket.frame().body().size() == 13u;
+        const auto& body = ticket.frame().body();
+        dwgBuffer buffer(body.data(), body.size(), nullptr);
+        DRW_ObjControl control;
+        const bool parsed = control.parseDwg(
+            ticket.version(), &buffer, ticket.frame().bodyBitSize());
+        styleControlTicketValid = styleControlTicketValid && parsed
+            && buffer.isGood() && control.handle == 0x3u
+            && control.orderedHandleSlots == std::vector<std::uint32_t>{0x11u}
+            && control.orderedHandleRoles == std::vector<std::uint8_t>{2u};
+    }
 
     std::size_t observations{0u};
+    std::size_t styleControlTickets{0u};
     DRW::Version sourceVersion{DRW::UNKNOWNV};
     std::uint32_t observedStyleHandle{0u};
     std::vector<DRW_TableEntry::PendingHandleRef> appIdReferences;
     bool targetsResolve{false};
     bool captureFailed{false};
+    bool styleControlTicketValid{false};
 };
 
 bool inspectPhysicalStyleEedAppIdBinding(
@@ -38048,6 +38074,8 @@ bool inspectPhysicalStyleEedAppIdBinding(
             });
     const bool passed = data.sourceVersion == DRW::AC1018
         && reader.observations == 1u && !reader.captureFailed
+        && reader.styleControlTickets == 1u
+        && reader.styleControlTicketValid
         && reader.sourceVersion == DRW::AC1018
         && reader.observedStyleHandle == 0x11u
         && reader.targetsResolve && reader.appIdReferences.size() == 1u
@@ -38067,6 +38095,8 @@ bool inspectPhysicalStyleEedAppIdBinding(
               << " styleHandle=0x" << std::hex << reader.observedStyleHandle
               << " appidRefs=" << std::dec << reader.appIdReferences.size()
               << " targetsResolve=" << reader.targetsResolve
+              << " styleControlTickets=" << reader.styleControlTickets
+              << " styleControlTicketValid=" << reader.styleControlTicketValid
               << " typedAppid=" << (appId != data.appIds.end())
               << " typedSiblings=" << (dimstyleAppId != data.appIds.end())
               << '/' << (mleaderAppId != data.appIds.end())
