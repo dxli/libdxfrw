@@ -760,6 +760,14 @@ public:
     std::int16_t dwgType() const { return oType; }
 };
 
+class NavisworksModelCodecProbe final : public DRW_NavisworksModel {
+public:
+    using DRW_NavisworksModel::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+};
+
 class MeshCodecProbe final : public DRW_Mesh {
 public:
     using DRW_Mesh::encodeDwg;
@@ -26355,6 +26363,31 @@ void testImageWipeoutDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testNavisworksModelDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1015, DRW::AC1018,
+                                     DRW::AC1021, DRW::AC1024}) {
+    NavisworksModelCodecProbe model;
+    model.handle = 0xC300u + static_cast<std::uint32_t>(version);
+    model.parentHandle = 0xC310u;
+    model.reactorHandles = {0xC320u};
+    model.xDictHandle = 0xC330u;
+    model.setDwgType(0x777);
+    model.flags = 3u;
+    model.definitionHandle = 0xC340u;
+    model.transform = {1.0, 0.0, 0.0, 10.0,
+                       0.0, 2.0, 0.0, 20.0,
+                       0.0, 0.0, 3.0, 30.0,
+                       0.0, 0.0, 0.0, 1.0};
+    model.unitFactor = 0.001;
+    checkEntityDwgEncodeAllocationRollback(
+        t, model, version, DRW_NavisworksModel::kDwgClassNum,
+        version == DRW::AC1015 ? "AC1015 NAVISWORKSMODEL"
+        : version == DRW::AC1018 ? "AC1018 NAVISWORKSMODEL"
+        : version == DRW::AC1021 ? "AC1021 NAVISWORKSMODEL"
+                                 : "AC1024 NAVISWORKSMODEL");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -29678,6 +29711,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testImageWipeoutDwgEncodeAllocationRollback(context);
       std::cout << "IMAGE/WIPEOUT DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--navisworks-model-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testNavisworksModelDwgEncodeAllocationRollback(context);
+      std::cout << "NAVISWORKSMODEL DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

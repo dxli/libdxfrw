@@ -25628,35 +25628,42 @@ bool DRW_NavisworksModel::encodeDwg(DRW::Version version, dwgBufferW *buf,
                         [](double value) { return std::isfinite(value); }))
         return false;
 
-    oType = kDwgClassNum;
-    if (!encodeDwgCommon(version, buf, strBuf))
-        return false;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            oType = kDwgClassNum;
+            if (!encodeDwgCommon(version, body, strings))
+                return false;
 
-    buf->putBitShort(flags);
-    dwgBufferW *hb = handleBuf ? handleBuf : buf;
-    auto makeHandle = [](std::uint8_t code, std::uint32_t ref) {
-        dwgHandle handle;
-        handle.code = ref == 0 ? 0 : code;
-        handle.ref = ref;
-        handle.size = 0;
-        for (std::uint32_t value = ref; value != 0; value >>= 8)
-            ++handle.size;
-        return handle;
-    };
+            body->putBitShort(flags);
+            dwgBufferW *handleTarget = handles ? handles : body;
+            const auto makeHandle = [](std::uint8_t code, std::uint32_t ref) {
+                dwgHandle handle;
+                handle.code = ref == 0 ? 0 : code;
+                handle.ref = ref;
+                handle.size = 0;
+                for (std::uint32_t value = ref; value != 0; value >>= 8)
+                    ++handle.size;
+                return handle;
+            };
 
-    // AC1015/AC1018 place this entity-specific handle before the matrix in
-    // the legacy data stream. AC1021+ places it after the common handles.
-    if (version <= DRW::AC1018)
-        buf->putHandle(makeHandle(2, definitionHandle));
-    for (double value : transform)
-        buf->putBitDouble(value);
-    buf->putBitDouble(unitFactor);
+            // AC1015/AC1018 place the definition handle before the matrix in
+            // the legacy data stream. AC1021+ places it after common handles.
+            if (version <= DRW::AC1018)
+                body->putHandle(makeHandle(2, definitionHandle));
+            for (double value : transform)
+                body->putBitDouble(value);
+            body->putBitDouble(unitFactor);
 
-    if (!DRW_Entity::encodeDwgEntHandle(version, buf, handleBuf))
-        return false;
-    if (version > DRW::AC1018)
-        hb->putHandle(makeHandle(2, definitionHandle));
-    return true;
+            if (!DRW_Entity::encodeDwgEntHandle(version, body, handles))
+                return false;
+            if (version > DRW::AC1018)
+                handleTarget->putHandle(makeHandle(2, definitionHandle));
+            return body->isGood()
+                && (strings == nullptr || strings->isGood())
+                && handleTarget->isGood();
+        });
 }
 
 bool DRW_PointCloud::parseCode(int code, const std::unique_ptr<dxfReader>& reader) {

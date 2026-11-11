@@ -3557,6 +3557,19 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
   open. No DWG/DXF fixture was added. See the [allocation rollback
   receipt](docs/research/p6-image-wipeout-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **P6 NAVISWORKSMODEL DWG encoder transaction safety:** the writer now stages
+  body, strings, and handle streams while preserving the AC1015/AC1018
+  pre-matrix definition handle placement and the AC1021+ trailing soft-pointer
+  role. Generated matrix/unit-factor profiles at AC1015/AC1018 sweep 16
+  allocation failures each; AC1021/AC1024 sweep 15 each. Rollback,
+  class-code restoration, same-object retry, and stream aliases pass. The
+  focused selector and 32-test entity-writer transaction cohort pass; with
+  the IMAGE compound transaction CTest, the focused cohort is 33/33. This is
+  transaction evidence only; external NWD semantics, producer coverage,
+  native model behavior, and output support remain unqualified. No DWG/DXF
+  fixture was added. See the [allocation rollback
+  receipt](docs/research/p6-navisworks-model-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 After every slice: run its focused fast checks; update this queue and the
 relevant receipt; commit code, plan and receipt together; report the commit and
 next eligible slice, then continue. Keep fixtures out of commits unless already
