@@ -35,6 +35,19 @@ output gates open. No drawing fixture was added. See the [native B-rep
 receipt](docs/research/p7-ac1024-acis700-freecad-cube-native-brep-2026-11-11.json)
 and [reproducible probe](tools/research/freecad_acis700_sat_probe.py).
 
+**P7 AC1024 inline SAB 700 DXF carrier (2026-11-11):** the writer now admits
+only the observed same-version profile: marker-bounded, complete zero-count
+ACIS 700 SAB on an AC1024 modeler-version-2 3DSOLID, one declared body,
+contained source byte range, and no DataStorage tail. A physical ODA-generated
+cube source was read; its selected 3DSOLID plus source APPID table exported to
+AC1024 ASCII and Binary DXF and read back with the exact SAT carrier. Its EED
+APPID is preserved; missing APPID registration and AC1027 cross-version
+output refuse atomically. Whole-document export remains refused because the
+source still has two AcDb:Header integrity diagnostics. Generated controls
+also pass import-export-import and allocation/retry checks. This closes a
+bounded carrier route only; no whole-document or 3D support claim is promoted.
+No external fixture was committed. See the [carrier receipt](docs/research/p7-ac1024-acis700-same-version-dxf-carrier-2026-11-11.json).
+
 **P7 second source-distinct AC1024/21500 topology lift (2026-11-11):**
 LibreDWG 0.14 minJSON supplied the complete SAB payload for conference-room
 3DSOLID `0x1FB`; libdxfrw projected 626 records to SAT v1. The pinned

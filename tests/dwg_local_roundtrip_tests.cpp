@@ -23195,6 +23195,202 @@ bool runModelerDwgVersionValidation() {
         && checkVersion(DRW::AC1024);
 }
 
+bool runAc1024Acis700SatDxfRoundTrip() {
+    const auto failStage = [](const char *stage) {
+        std::cerr << "AC1024 ACIS 700 DXF output check failed: " << stage
+                  << '\n';
+        return false;
+    };
+    std::vector<std::uint8_t> sab{
+        'A','C','I','S',' ','B','i','n','a','r','y','F','i','l','e'};
+    const auto putU32 = [&sab](std::uint32_t value) {
+        for (unsigned shift = 0u; shift < 32u; shift += 8u)
+            sab.push_back(static_cast<std::uint8_t>(value >> shift));
+    };
+    const auto putString = [&sab](std::uint8_t tag, const char *value,
+                                  std::size_t length) {
+        sab.push_back(tag);
+        sab.push_back(static_cast<std::uint8_t>(length));
+        sab.insert(sab.end(), value, value + length);
+    };
+    const auto putDouble = [&sab](double value) {
+        sab.push_back(DRW_SabTag::Double);
+        std::uint64_t bits = 0u;
+        std::memcpy(&bits, &value, sizeof(value));
+        for (unsigned shift = 0u; shift < 64u; shift += 8u)
+            sab.push_back(static_cast<std::uint8_t>(bits >> shift));
+    };
+    putU32(700u);
+    putU32(0u); // observed ACIS 700 zero-count profile; terminal required
+    putU32(1u);
+    putU32(0u);
+    putString(DRW_SabTag::Str, "P", 1u);
+    putString(DRW_SabTag::Str, "A", 1u);
+    putString(DRW_SabTag::Str, "D", 1u);
+    putDouble(1.0);
+    putDouble(0.1);
+    putDouble(0.01);
+    putString(DRW_SabTag::EntityType, "body", 4u);
+    sab.push_back(DRW_SabTag::BoolTrue);
+    sab.push_back(DRW_SabTag::RecordEnd);
+    putString(DRW_SabTag::EntityType, "End-of-ACIS-data", 16u);
+    sab.push_back(DRW_SabTag::RecordEnd);
+
+    DRW_SabData parsedSab;
+    DRW_SabParseOutcome parseOutcome;
+    if (!drw_parseSabWithOutcome(sab.data(), sab.size(), parsedSab,
+                                 parseOutcome)
+        || !parseOutcome.complete || !parseOutcome.terminalRecordSeen
+        || parsedSab.header.version != 700
+        || parsedSab.header.numRecords != 0
+        || parsedSab.records.size() != 2u)
+        return failStage("generated complete v700 SAB profile");
+    std::vector<std::uint8_t> sat;
+    if (!drw_convertSabToSatV1(sab.data(), sab.size(), DRW::AC1024, sat)
+        || sat.empty())
+        return failStage("convert generated v700 SAB to SAT 700");
+
+    DRW_ModelerGeometry sourceModeler(DRW::E3DSOLID);
+    sourceModeler.m_modelerVersion = 2u;
+    sourceModeler.m_dwgSourceVersion = DRW::AC1024;
+    sourceModeler.m_objectSize = static_cast<std::uint32_t>(
+        55u + sab.size());
+    sourceModeler.m_bodyBitSize = 29u;
+    sourceModeler.m_hasModelerData = true;
+    sourceModeler.m_rawBytes.resize(sourceModeler.m_objectSize, 0u);
+    sourceModeler.m_dwgAcisPayload = sab;
+    const std::string appIdName = "ACAD_OBJECT_CHANGE_GUID";
+    sourceModeler.extData.push_back(
+        std::make_shared<DRW_Variant>(1001, appIdName));
+    DRW_ModelerPayloadRange range;
+    range.m_kind = DRW_ModelerPayloadRange::Kind::Sab;
+    range.m_section = DRW_ModelerPayloadRange::Section::Body;
+    range.m_offset = 50u;
+    range.m_bitOffset = 7u;
+    range.m_length = sab.size();
+    range.m_consistency = DRW_ModelerPayloadRange::Consistency::Exact;
+    range.m_confidence = DRW_ModelerPayloadRange::Confidence::Marker;
+    range.m_markerText =
+        "End-of-ACIS-data (tagged SAB marker; AC1018/AC1021/AC1024)";
+    sourceModeler.m_payloadRanges.push_back(range);
+
+    std::vector<std::uint8_t> expectedDxfPayload = sat;
+    for (std::uint8_t& byte : expectedDxfPayload) {
+        if (byte > 0x20u && byte <= 0x7Eu)
+            byte = static_cast<std::uint8_t>(0x9Fu - byte);
+    }
+    const std::filesystem::path base =
+        std::filesystem::temp_directory_path();
+    std::error_code ec;
+    const std::filesystem::path missingAppIdOutput = base
+        / "libdxfrw-ac1024-acis700-missing-appid.dxf";
+    std::filesystem::remove(missingAppIdOutput, ec);
+    dx_data missingAppIdSource;
+    missingAppIdSource.mBlock->ent.push_back(
+        new DRW_ModelerGeometry(sourceModeler));
+    dx_iface missingAppIdExporter;
+    const bool missingAppIdRefused = !missingAppIdExporter.fileExport(
+        missingAppIdOutput.string(), DRW::AC1024, false,
+        &missingAppIdSource, false)
+        && !std::filesystem::exists(missingAppIdOutput);
+    std::filesystem::remove(missingAppIdOutput, ec);
+    if (!missingAppIdRefused)
+        return failStage("missing EED APPID dependency must refuse atomically");
+
+    for (bool binary : {false, true}) {
+        const std::string mode = binary ? "binary" : "ascii";
+        const std::filesystem::path output = base
+            / ("libdxfrw-ac1024-acis700-" + mode + ".dxf");
+        const std::filesystem::path reexport = base
+            / ("libdxfrw-ac1024-acis700-" + mode + "-reexport.dxf");
+        std::filesystem::remove(output, ec);
+        std::filesystem::remove(reexport, ec);
+
+        dx_data source;
+        DRW_AppId appId;
+        appId.name = appIdName;
+        source.appIds.push_back(appId);
+        source.mBlock->ent.push_back(
+            new DRW_ModelerGeometry(sourceModeler));
+        dx_iface exporter;
+        if (!exporter.fileExport(output.string(), DRW::AC1024, binary,
+                                 &source, false))
+            return failStage("same-version source-bound ASCII/Binary export");
+
+        dx_data imported;
+        dx_iface importer;
+        if (!importer.fileImport(output.string(), &imported, false))
+            return failStage("public ASCII/Binary DXF readback");
+        bool found = false;
+        for (const DRW_Entity *entity : imported.mBlock->ent) {
+            if (entity == nullptr || entity->eType != DRW::E3DSOLID)
+                continue;
+            const auto *decoded =
+                static_cast<const DRW_ModelerGeometry *>(entity);
+            found = decoded->m_modelerVersion == 1u
+                && decoded->m_rawBytes == expectedDxfPayload
+                && !decoded->m_dxfPayloadChunks.empty()
+                && decoded->m_dwgAcisPayload.empty()
+                && decoded->m_dwgSourceVersion == DRW::UNKNOWNV;
+            found = found && std::any_of(decoded->extData.begin(),
+                decoded->extData.end(), [&appIdName](const auto& value) {
+                    return value != nullptr && value->code() == 1001
+                        && value->stringEquals(appIdName);
+                }) && std::any_of(imported.appIds.begin(), imported.appIds.end(),
+                [&appIdName](const DRW_AppId& value) {
+                    return value.name == appIdName;
+                });
+            for (const DRW_ModelerPayloadChunk& chunk :
+                 decoded->m_dxfPayloadChunks) {
+                found = found
+                    && (chunk.m_groupCode == 1 || chunk.m_groupCode == 3);
+            }
+            break;
+        }
+        if (!found)
+            return failStage("typed SAT 700 text-carrier readback");
+
+        dx_iface reExporter;
+        if (!reExporter.fileExport(reexport.string(), DRW::AC1024, binary,
+                                   &imported, false))
+            return failStage("same-encoding SAT text re-export");
+        dx_data reimported;
+        dx_iface reimporter;
+        if (!reimporter.fileImport(reexport.string(), &reimported, false))
+            return failStage("same-encoding SAT text re-import");
+        bool replayMatches = false;
+        for (const DRW_Entity *entity : reimported.mBlock->ent) {
+            if (entity != nullptr && entity->eType == DRW::E3DSOLID) {
+                const auto *decoded =
+                    static_cast<const DRW_ModelerGeometry *>(entity);
+                replayMatches = decoded->m_modelerVersion == 1u
+                    && decoded->m_rawBytes == expectedDxfPayload
+                    && !decoded->m_dxfPayloadChunks.empty();
+                break;
+            }
+        }
+        std::filesystem::remove(output, ec);
+        std::filesystem::remove(reexport, ec);
+        if (!replayMatches)
+            return failStage("SAT text import-export-import readback");
+    }
+
+    dx_data crossVersionSource;
+    crossVersionSource.mBlock->ent.push_back(
+        new DRW_ModelerGeometry(sourceModeler));
+    const std::filesystem::path rejected = base
+        / "libdxfrw-ac1024-acis700-cross-version-rejected.dxf";
+    std::filesystem::remove(rejected, ec);
+    dx_iface crossVersionExporter;
+    const bool crossVersionRefused = !crossVersionExporter.fileExport(
+        rejected.string(), DRW::AC1027, false, &crossVersionSource, false)
+        && !std::filesystem::exists(rejected);
+    std::filesystem::remove(rejected, ec);
+    if (!crossVersionRefused)
+        return failStage("atomic refusal for AC1027 cross-version output");
+    return true;
+}
+
 DRW_UnsupportedObject makeLocalRawReplayObject(
     DRW::Version version, std::uint16_t classNumber, std::uint32_t handle,
     std::uint32_t encodedHandle = 0) {
@@ -40486,6 +40682,12 @@ int main(int argc, char** argv) {
         std::cout << "AC1015/AC1018 SAT-v1 extraction and chunk-cut controls: "
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
+    } else if (argc == 2
+        && std::string(argv[1]) == "--modeler-ac1024-acis700-sat") {
+        const bool passed = runAc1024Acis700SatDxfRoundTrip();
+        std::cout << "AC1024 ACIS 700 SAT 700 ASCII/Binary output/readback: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
     } else if (argc == 2 && std::string(argv[1]) == "--hatch-pattern-preservation") {
         const bool passed = runHatchPatternPredicateControls()
             && runDxfHatchPatternPreservation(false, directory, false)
@@ -40590,6 +40792,7 @@ int main(int argc, char** argv) {
                      " [--modeler-dxf-chunk-boundaries]"
                      " [--compare-modeler-dxf-encodings ASCII BINARY]"
                      " [--modeler-sat-v1-extraction]"
+                     " [--modeler-ac1024-acis700-sat]"
                      " [--modeler-block-census]"
                      " [--modeler-block-codec [DIRECTORY]]"
                      " [--dxf-spline-helix-source-identities]"

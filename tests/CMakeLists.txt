@@ -4202,6 +4202,18 @@ set_tests_properties(dwg_sat_v1_bounded_extraction PROPERTIES
     TIMEOUT 30
 )
 
+# Exercise the source-bound AC1024 ACIS 700 to SAT 700 route without adding an
+# external DWG/DXF/SAT fixture to the repository.
+add_test(
+    NAME dwg_ac1024_acis700_sat_dxf_roundtrip
+    COMMAND $<TARGET_FILE:libdxfrw_dwg_local_roundtrip>
+            --modeler-ac1024-acis700-sat
+)
+set_tests_properties(dwg_ac1024_acis700_sat_dxf_roundtrip PROPERTIES
+    LABELS "fast;dwg;dxf;3d;acis;generated"
+    TIMEOUT 30
+)
+
 add_executable(libdxfrw_acis_sat_allocation_tests
     acis_sat_allocation_tests.cpp)
 target_compile_features(libdxfrw_acis_sat_allocation_tests PRIVATE cxx_std_17)
