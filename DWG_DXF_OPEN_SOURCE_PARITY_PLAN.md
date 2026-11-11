@@ -1352,6 +1352,12 @@ created locally from scratch for the specific control.
   ([receipt](docs/research/p5-ac1018-table-nine-child-source-binding-2026-11-11.json)).
   TABLE parent/dictionary, TABLESTYLE and recursive resources, independent
   meaning, and transactional output closure are still open.
+  The selected TABLESTYLE branch now has a complete source walk through its
+  dictionary, extension XRECORD and CELLSTYLEMAP, including STYLE and LTYPE
+  references. The source and same-vendor DXF use different dictionary and
+  style orders; bind identities and preserve the appropriate order before any
+  output decision. STYLE/LTYPE controls, fonts, layer and block dependencies
+  remain unclosed. See the [style graph receipt](docs/research/p5-ac1018-tablestyle-cellstylemap-graph-wire-2026-11-11.json).
   See the [DATATABLE candidate receipt](docs/research/p5-ac1018-datatable-candidate-observer-2026-11-11.json).
 
   The recreated AC1018 XRECORD `0xbc` is now independently walked to its
