@@ -5516,6 +5516,8 @@ bool dwgRW::processDwg() {
     reader->prepareDwgClassSource(dynamic_cast<DRW_DwgClassSourceHandler*>(iface));
     reader->prepareDwgStyleEedSource(
         dynamic_cast<DRW_DwgStyleEedSourceHandler*>(iface));
+    reader->prepareVerifiedTableCandidateSink(
+        dynamic_cast<DwgVerifiedTableCandidateSink*>(iface));
     reader->beginDwgClassCoverage();
     ret = reader->readDwgHeader(hdr);
     if (ret)

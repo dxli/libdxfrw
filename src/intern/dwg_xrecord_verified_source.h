@@ -43,7 +43,7 @@ public:
     virtual void verifiedXRecord(const DwgVerifiedXRecordTicket&) noexcept = 0;
 };
 
-enum class DwgVerifiedTableCandidateKind : std::uint8_t { TableContent, DataTable, TableGeometry, ExtensionDictionary, TableEntity, TableStyle, StyleExtensionDictionary, CellStyleMap, LTypeControl, LTypeRecord, StyleControl };
+enum class DwgVerifiedTableCandidateKind : std::uint8_t { TableContent, DataTable, TableGeometry, ExtensionDictionary, TableEntity, TableStyle, StyleExtensionDictionary, CellStyleMap, LTypeControl, LTypeRecord, StyleControl, StyleRecord };
 
 // As with XRECORD tickets, this is a provisional, reader-created CRC-checked
 // frame observation, not an authenticated aggregate or an output permit.
@@ -53,9 +53,9 @@ class DwgVerifiedTableCandidateTicket final {
             DRW::Version version,std::uint16_t classNumber,std::uint32_t handle,
             std::uint32_t offset,std::uint64_t ordinal,
             DRW_DwgFrameOffsetSpace space,const DwgObjectFrame& frame,const DRW_Table* model,
-            const DRW_LType* ltypeModel) noexcept
+            const DRW_LType* ltypeModel,const DRW_Textstyle* styleModel) noexcept
         :kind_(kind),version_(version),classNumber_(classNumber),handle_(handle),
-         offset_(offset),ordinal_(ordinal),space_(space),frame_(frame),model_(model),ltypeModel_(ltypeModel) {}
+         offset_(offset),ordinal_(ordinal),space_(space),frame_(frame),model_(model),ltypeModel_(ltypeModel),styleModel_(styleModel) {}
 public:
     DwgVerifiedTableCandidateTicket(const DwgVerifiedTableCandidateTicket&)=delete;
     DwgVerifiedTableCandidateTicket& operator=(const DwgVerifiedTableCandidateTicket&)=delete;
@@ -69,6 +69,7 @@ public:
     const DwgObjectFrame& frame() const noexcept {return frame_;}
     const DRW_Table* tableModel() const noexcept {return model_;}
     const DRW_LType* ltypeModel() const noexcept {return ltypeModel_;}
+    const DRW_Textstyle* styleModel() const noexcept {return styleModel_;}
 private:
     DwgVerifiedTableCandidateKind kind_;
     DRW::Version version_;
@@ -79,6 +80,7 @@ private:
     const DwgObjectFrame& frame_;
     const DRW_Table* model_;
     const DRW_LType* ltypeModel_;
+    const DRW_Textstyle* styleModel_;
 };
 
 class DwgVerifiedTableCandidateSink {

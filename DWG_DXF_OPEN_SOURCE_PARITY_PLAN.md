@@ -1613,6 +1613,15 @@ created locally from scratch for the specific control.
   TABLESTYLE graph. See the [STYLE_CONTROL source-binding
   receipt](docs/research/p5-ac1018-style-control-reader-source-binding-2026-11-11.json).
   Remaining resources, font meaning and output ordering remain open.
+  **Next source-capture slice:** the reader now stages an opt-in CRC-checked
+  STYLE record frame together with a private typed `DRW_Textstyle` snapshot;
+  the candidate is selected by source handle and bounded by the existing
+  provisional-ticket limits. This supplies the source/model pair needed for
+  writer-stage revalidation. The targeted build compiles, but runtime delivery,
+  exact physical STYLE frame/model comparison, rollback and output readback
+  have not been qualified. Keep output admission closed until those checks and
+  the ordered resource graph are implemented. See the [STYLE source-frame
+  capture receipt](docs/research/p5-ac1018-style-record-reader-source-capture-2026-11-11.json).
   A bounded standalone
   LTYPE_CONTROL/ByBlock observer now checks selected frame fields and roles
   ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)).

@@ -6999,6 +6999,11 @@ void dwgReader::prepareDwgStyleEedSource(
   m_dwgStyleEedSourceReferences.clear();
 }
 
+void dwgReader::prepareVerifiedTableCandidateSink(
+    DwgVerifiedTableCandidateSink *sink) noexcept {
+  m_verifiedTableCandidateSink = sink;
+}
+
 void dwgReader::publishDwgStyleEedSource(const DRW_Textstyle &style) noexcept {
   if (m_dwgStyleEedSourceHandler == nullptr)
     return;
@@ -8482,6 +8487,56 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
           m_verifiedTableCandidateBytes+=pending.frame.body().size();
           m_verifiedTableCandidates.push_back(std::move(pending));
         } catch (...) {m_verifiedTableCandidates.clear();m_verifiedTableCandidateFailed=true;}
+      }
+    }
+    if (version == DRW::AC1018
+        && descriptor.recordType == DRW::DwgStyleObjectType) {
+      auto* sink = m_verifiedTableCandidateSink;
+      if (sink != nullptr && sink->wantsVerifiedTableCandidate(object.handle)) {
+        const auto sourceIt = std::find_if(
+            erasedObjectHandles.crbegin(), erasedObjectHandles.crend(),
+            [&object](const auto& erased) {
+              return erased.source.handle == object.handle;
+            });
+        auto* style = dynamic_cast<DRW_Textstyle*>(record.get());
+        constexpr std::size_t maxBody = 4096u;
+        const bool duplicate = std::any_of(
+            m_verifiedTableCandidates.cbegin(),
+            m_verifiedTableCandidates.cend(),
+            [&object](const VerifiedTableCandidatePending& pending) {
+              return pending.handle == object.handle;
+            });
+        if (sourceIt == erasedObjectHandles.crend() || style == nullptr
+            || m_verifiedTableCandidateFailed || duplicate
+            || m_verifiedTableCandidates.size() >= 8u
+            || frame.body().size() > maxBody
+            || m_verifiedTableCandidateBytes > maxBody
+            || frame.body().size()
+                > maxBody - m_verifiedTableCandidateBytes) {
+          m_verifiedTableCandidates.clear();
+          m_verifiedTableCandidateBytes = 0u;
+          m_verifiedTableCandidateFailed = true;
+        } else {
+          try {
+            VerifiedTableCandidatePending pending;
+            pending.kind = DwgVerifiedTableCandidateKind::StyleRecord;
+            pending.version = version;
+            pending.classNumber = static_cast<std::uint16_t>(
+                descriptor.recordType);
+            pending.handle = object.handle;
+            pending.offset = sourceIt->source.offset;
+            pending.ordinal = sourceIt->source.ordinal;
+            pending.space = sourceIt->source.offsetSpace;
+            pending.frame = frame;
+            pending.styleModel = std::make_shared<DRW_Textstyle>(*style);
+            m_verifiedTableCandidateBytes += pending.frame.body().size();
+            m_verifiedTableCandidates.push_back(std::move(pending));
+          } catch (...) {
+            m_verifiedTableCandidates.clear();
+            m_verifiedTableCandidateBytes = 0u;
+            m_verifiedTableCandidateFailed = true;
+          }
+        }
       }
     }
     if (version <= DRW::AC1018)
@@ -13417,7 +13472,8 @@ void dwgReader::deliverVerifiedTableCandidates(DRW_Interface& target) noexcept {
   for(const auto& item:pending) {
     if (!sink->wantsVerifiedTableCandidate(item.handle))continue;
     DwgVerifiedTableCandidateTicket ticket(item.kind,item.version,item.classNumber,
-        item.handle,item.offset,item.ordinal,item.space,item.frame,item.tableModel.get(),item.ltypeModel.get());
+        item.handle,item.offset,item.ordinal,item.space,item.frame,item.tableModel.get(),
+        item.ltypeModel.get(),item.styleModel.get());
     sink->verifiedTableCandidate(ticket);
   }
 }

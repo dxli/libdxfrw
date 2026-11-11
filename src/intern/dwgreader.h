@@ -1223,6 +1223,7 @@ private:
     DwgObjectFrame frame;
     std::shared_ptr<const DRW_Table> tableModel;
     std::shared_ptr<const DRW_LType> ltypeModel;
+    std::shared_ptr<const DRW_Textstyle> styleModel;
   };
   std::shared_ptr<const DRW_Table> m_verifiedTableParsedModel;
   std::vector<std::uint8_t> m_verifiedTableParsedBody;
@@ -1536,6 +1537,8 @@ protected:
   void prepareDwgClassSource(DRW_DwgClassSourceHandler *handler) noexcept;
   void prepareDwgStyleEedSource(
       DRW_DwgStyleEedSourceHandler *handler) noexcept;
+  void prepareVerifiedTableCandidateSink(
+      DwgVerifiedTableCandidateSink *sink) noexcept;
   void publishDwgStyleEedSource(const DRW_Textstyle &style) noexcept;
   void captureDwgClassSource(const std::uint8_t *bytes, std::uint64_t size,
                             std::int32_t descriptor, std::uint64_t declaredSize) noexcept;
@@ -2160,6 +2163,7 @@ public:
   std::unordered_map<std::uint32_t, DwgStyleEedSourceReferences>
       m_dwgStyleEedSourceReferences;
   DRW_DwgStyleEedSourceHandler *m_dwgStyleEedSourceHandler{nullptr};
+  DwgVerifiedTableCandidateSink *m_verifiedTableCandidateSink{nullptr};
   std::unordered_map<std::uint32_t, DRW_Dimstyle *> dimstylemap;
   std::unordered_map<std::uint32_t, DRW_Vport *> vportmap;
   std::unordered_map<std::uint32_t, DRW_Block_Record *> blockRecordmap;
