@@ -19703,14 +19703,51 @@ bool validCellStyleMapContentFormat(
         && std::isfinite(format.m_textHeight);
 }
 
+bool emptyCellStyleColor(const DRW_TableStyleCmcColor& color) noexcept {
+    return color.m_rgb == -1 && color.m_name.empty()
+        && color.m_bookName.empty() && color.m_method == 0u
+        && color.m_flags == 0u && color.m_reservedIndex == 0u;
+}
+
+bool emptyCellStyleFormat(const DRW_TableStyleContentFormat& format) noexcept {
+    return format.m_propertyOverrideFlags == 0u && format.m_propertyFlags == 0u
+        && format.m_valueDataType == 0 && format.m_valueUnitType == 0
+        && format.m_valueFormatString.empty() && format.m_rotation == 0.0
+        && format.m_blockScale == 1.0 && format.m_cellAlignment == 0
+        && format.m_contentColor == 0 && emptyCellStyleColor(format.m_contentColorCmc)
+        && format.m_textStyleHandle == 0u && format.m_textHeight == 0.0;
+}
+
+bool emptyCellStyleMargins(const DRW_TableStyleCellStyle& style) noexcept {
+    return style.m_verticalMargin == 0.0 && style.m_horizontalMargin == 0.0
+        && style.m_bottomMargin == 0.0 && style.m_rightMargin == 0.0
+        && style.m_marginHorizontalSpacing == 0.0
+        && style.m_marginVerticalSpacing == 0.0;
+}
+
+bool emptyCellStyleBorder(const DRW_TableStyleBorder& border) noexcept {
+    return border.m_propertyOverrideFlags == 0 && border.m_borderType == 0
+        && border.m_color == 0 && emptyCellStyleColor(border.m_colorCmc)
+        && border.m_lineWeight == 0 && border.m_lineTypeHandle == 0u
+        && border.m_visible == 0 && border.m_doubleLineSpacing == 0.0;
+}
+
 bool validCellStyleMapCellStyle(
         DRW::Version version,
         const DRW_TableStyleCellStyle& style) noexcept {
     if (style.m_type < 1 || style.m_type > 5
         || !validCellStyleMapIdentity(version, style))
         return false;
+    // ODA §20.4.101.4 omits these members when the corresponding presence
+    // marker is clear. Refuse payload that would be lost on readback.
     if (!style.m_hasData)
-        return true;
+        return style.m_propertyOverrideFlags == 0u && style.m_mergeFlags == 0u
+            && style.m_backgroundColor == 0
+            && emptyCellStyleColor(style.m_backgroundColorCmc)
+            && style.m_contentLayout == 0u
+            && emptyCellStyleFormat(style.m_contentFormat)
+            && style.m_marginOverrideFlags == 0 && emptyCellStyleMargins(style)
+            && style.m_borders.empty();
     if ((style.m_propertyOverrideFlags & ~std::uint32_t{0x7FFFFu}) != 0u
         || (style.m_mergeFlags & ~std::uint32_t{0x18000u}) != 0u
         || !tableStyleCmcValid(style.m_backgroundColor,
@@ -19720,6 +19757,8 @@ bool validCellStyleMapCellStyle(
         || style.m_marginOverrideFlags < 0
         || (style.m_marginOverrideFlags & ~0x1) != 0
         || style.m_borders.size() > 6u)
+        return false;
+    if (style.m_marginOverrideFlags == 0 && !emptyCellStyleMargins(style))
         return false;
     if (style.m_marginOverrideFlags != 0
         && (!std::isfinite(style.m_verticalMargin)
@@ -19732,6 +19771,8 @@ bool validCellStyleMapCellStyle(
     for (const DRW_TableStyleBorder& border : style.m_borders) {
         if ((static_cast<std::uint32_t>(border.m_edgeFlags)
                 & ~std::uint32_t{0x3Fu}) != 0u)
+            return false;
+        if (border.m_edgeFlags == 0 && !emptyCellStyleBorder(border))
             return false;
         if (border.m_edgeFlags == 0)
             continue;

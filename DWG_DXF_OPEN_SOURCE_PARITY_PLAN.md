@@ -1210,6 +1210,13 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P5 DWG cell-style no-loss validation:** CELLSTYLEMAP and R24 TABLESTYLE
+  now refuse non-default data in fields omitted by absent style-data, margin,
+  or border markers. Generated CELLSTYLEMAP mutations and an R24 TABLESTYLE
+  control cover destination preservation and corrected retry; the focused
+  four-test cohort passes. Physical producer and native rendering qualification
+  remain open. See the [receipt](docs/research/p5-cellstylemap-tablestyle-dwg-omitted-fields-2026-11-10.json).
+
 - **P4 AC1032 AecObjects handle-map tail:** four CRC-valid groups and a
   CRC-valid terminator precede 262 unclaimed bytes. LibreDWG reports four
   networks but also missing handles and object errors; the current integrity

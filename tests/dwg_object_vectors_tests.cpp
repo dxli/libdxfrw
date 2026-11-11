@@ -4466,6 +4466,71 @@ void testCellStyleMapDwgEncodeRoundTrip(TestContext& t) {
     expectedHandles.putHandle(expectedHandle);
     const bool expectedEncoded = cleanSource.encodeDwg(
         version, &expectedBody, &expectedStrings, &expectedHandles);
+    using StyleMutation = std::pair<const char*,
+        std::function<void(CellStyleMapCodecProbe&)>>;
+    const auto clearMargins = [](CellStyleMapCodecProbe& s) {
+        auto& v = s.m_cellStyles[1];
+        v.m_marginOverrideFlags = 0;
+        v.m_verticalMargin = v.m_horizontalMargin = v.m_bottomMargin = 0.0;
+        v.m_rightMargin = v.m_marginHorizontalSpacing = v.m_marginVerticalSpacing = 0.0;
+    };
+    const std::vector<StyleMutation> omittedFields = {
+        {"absent style flags", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_propertyOverrideFlags = 1; }},
+        {"absent style merge", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_mergeFlags = 1; }},
+        {"absent style background", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_backgroundColor = 3; }},
+        {"absent style CMC", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_backgroundColorCmc.m_name = "book"; }},
+        {"absent style layout", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_contentLayout = 1; }},
+        {"absent format flags", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_contentFormat.m_propertyFlags = 1; }},
+        {"absent format override", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_contentFormat.m_propertyOverrideFlags = 1; }},
+        {"absent data type", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_contentFormat.m_valueDataType = 1; }},
+        {"absent unit type", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_contentFormat.m_valueUnitType = 1; }},
+        {"absent format string", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_contentFormat.m_valueFormatString = "0.0"; }},
+        {"absent format rotation", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_contentFormat.m_rotation = 1; }},
+        {"absent format scale", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_contentFormat.m_blockScale = 2; }},
+        {"absent format alignment", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_contentFormat.m_cellAlignment = 1; }},
+        {"absent format color", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_contentFormat.m_contentColorCmc.m_rgb = 0; }},
+        {"absent format color index", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_contentFormat.m_contentColor = 1; }},
+        {"absent text style", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_contentFormat.m_textStyleHandle = 123; }},
+        {"absent text height", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_contentFormat.m_textHeight = 1; }},
+        {"absent margins", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_verticalMargin = 1; }},
+        {"absent margin flags", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_marginOverrideFlags = 1; }},
+        {"absent borders", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[0].m_borders.emplace_back(); }},
+        {"unflagged vertical margin", [clearMargins](CellStyleMapCodecProbe& s) { clearMargins(s); s.m_cellStyles[1].m_verticalMargin = 1; }},
+        {"unflagged horizontal margin", [clearMargins](CellStyleMapCodecProbe& s) { clearMargins(s); s.m_cellStyles[1].m_horizontalMargin = 1; }},
+        {"unflagged bottom margin", [clearMargins](CellStyleMapCodecProbe& s) { clearMargins(s); s.m_cellStyles[1].m_bottomMargin = 1; }},
+        {"unflagged right margin", [clearMargins](CellStyleMapCodecProbe& s) { clearMargins(s); s.m_cellStyles[1].m_rightMargin = 1; }},
+        {"unflagged horizontal spacing", [clearMargins](CellStyleMapCodecProbe& s) { clearMargins(s); s.m_cellStyles[1].m_marginHorizontalSpacing = 1; }},
+        {"unflagged vertical spacing", [clearMargins](CellStyleMapCodecProbe& s) { clearMargins(s); s.m_cellStyles[1].m_marginVerticalSpacing = 1; }},
+        {"zero edge flags", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[1].m_borders[1].m_propertyOverrideFlags = 1; }},
+        {"zero edge color", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[1].m_borders[1].m_colorCmc.m_rgb = 0; }},
+        {"zero edge type", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[1].m_borders[1].m_borderType = 1; }},
+        {"zero edge color index", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[1].m_borders[1].m_color = 1; }},
+        {"zero edge lineweight", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[1].m_borders[1].m_lineWeight = 5; }},
+        {"zero edge handle", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[1].m_borders[1].m_lineTypeHandle = 123; }},
+        {"zero edge visibility", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[1].m_borders[1].m_visible = 1; }},
+        {"zero edge spacing", [](CellStyleMapCodecProbe& s) { s.m_cellStyles[1].m_borders[1].m_doubleLineSpacing = 1; }}
+    };
+    for (const auto& mutation : omittedFields) {
+        CellStyleMapCodecProbe attempt = source;
+        mutation.second(attempt);
+        dwgBufferW body(&codec), strings(&codec), handles(&codec);
+        body.putBitLong(0x5A17u);
+        strings.putVariableText(version, "retry-string-sentinel");
+        handles.putHandle(expectedHandle);
+        const auto oldBody = body.data(), oldStrings = strings.data(), oldHandles = handles.data();
+        const auto bodyBits = body.bitCount(), stringBits = strings.bitCount(), handleBits = handles.bitCount();
+        const bool refused = !attempt.encodeDwg(version, &body, &strings, &handles)
+            && body.data() == oldBody && strings.data() == oldStrings && handles.data() == oldHandles
+            && body.bitCount() == bodyBits && strings.bitCount() == stringBits
+            && handles.bitCount() == handleBits && handles.handleOccurrences().size() == 1u;
+        attempt = source;
+        const bool retried = attempt.encodeDwg(version, &body, &strings, &handles)
+            && body.data() == expectedBody.data() && strings.data() == expectedStrings.data()
+            && handles.data() == expectedHandles.data() && body.bitCount() == expectedBody.bitCount()
+            && strings.bitCount() == expectedStrings.bitCount() && handles.bitCount() == expectedHandles.bitCount();
+        t.expect(expectedEncoded && refused && retried,
+                 std::string("CELLSTYLEMAP rejects omitted ") + mutation.first + " and retries");
+    }
     unsigned allocationFailures = 0u;
     bool reachedFailureFreeOffset = false;
     for (long failAt = 0; failAt < 256; ++failAt) {
@@ -4779,6 +4844,28 @@ void testTableStyleDwgEncodeAllocationRollback(TestContext& t) {
         TableStyleCodecProbe cleanSource = source;
         const bool expectedEncoded = cleanSource.encodeDwg(
             version, &expectedBody, &expectedStrings, &expectedHandles);
+
+        if (version >= DRW::AC1024) {
+            TableStyleCodecProbe attempt = source;
+            attempt.m_tableCellStyle.m_contentFormat.m_textStyleHandle = 0x123u;
+            dwgBufferW body(&codec), strings(&codec), handles(&codec);
+            body.putRawChar8(0x5Au);
+            strings.putVariableText(version, "retry-string-sentinel");
+            handles.putHandle(seedHandle);
+            const auto oldBody = body.data(), oldStrings = strings.data(), oldHandles = handles.data();
+            const auto bodyBits = body.bitCount(), stringBits = strings.bitCount(), handleBits = handles.bitCount();
+            const bool refused = !attempt.encodeDwg(version, &body, &strings, &handles)
+                && body.data() == oldBody && strings.data() == oldStrings && handles.data() == oldHandles
+                && body.bitCount() == bodyBits && strings.bitCount() == stringBits
+                && handles.bitCount() == handleBits && handles.handleOccurrences().size() == 1u;
+            attempt = source;
+            const bool retried = attempt.encodeDwg(version, &body, &strings, &handles)
+                && body.data() == expectedBody.data() && strings.data() == expectedStrings.data()
+                && handles.data() == expectedHandles.data() && body.bitCount() == expectedBody.bitCount()
+                && strings.bitCount() == expectedStrings.bitCount() && handles.bitCount() == expectedHandles.bitCount();
+            t.expect(expectedEncoded && refused && retried,
+                     label + " rejects absent cell-style payload and retries");
+        }
 
         unsigned failures = 0u;
         bool reachedFailureFreeOffset = false;
