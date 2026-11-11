@@ -90,6 +90,8 @@ struct DRW_SabHeader {
     std::string signature;
     int version = 0;
     int numRecords = 0;
+    // Raw third header integer. Its interpretation is version-specific;
+    // preserve it without treating it as a body count unless qualified.
     int numEntities = 0;
     int flags = 0;
     std::string productId;
