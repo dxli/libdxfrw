@@ -613,6 +613,39 @@ public:
     std::int16_t dwgType() const { return oType; }
 };
 
+class DimAlignedCodecProbe final : public DRW_DimAligned {
+public:
+    using DRW_DimAligned::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+    void setHandles(std::uint32_t dimStyle, std::uint32_t block) {
+        dimStyleH.code = DRW::DwgHardPointer;
+        dimStyleH.ref = dimStyle;
+        blockH.code = DRW::DwgHardPointer;
+        blockH.ref = block;
+    }
+    void setOblique(double value) { setOb52(value); }
+};
+
+class DimLinearCodecProbe final : public DRW_DimLinear {
+public:
+    using DRW_DimLinear::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+    void setHandles(std::uint32_t dimStyle, std::uint32_t block) {
+        dimStyleH.code = DRW::DwgHardPointer;
+        dimStyleH.ref = dimStyle;
+        blockH.code = DRW::DwgHardPointer;
+        blockH.ref = block;
+    }
+    void setAngles(double oblique, double rotation) {
+        setOb52(oblique);
+        setAn50(rotation);
+    }
+};
+
 class MeshCodecProbe final : public DRW_Mesh {
 public:
     using DRW_Mesh::encodeDwg;
@@ -25889,6 +25922,55 @@ void testRTextDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testAlignedLinearDimDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1015, DRW::AC1018,
+                                     DRW::AC1021, DRW::AC1024}) {
+    DimAlignedCodecProbe aligned;
+    aligned.handle = 0xB810u + static_cast<std::uint32_t>(version);
+    aligned.parentHandle = 0xB820u;
+    aligned.reactorHandles = {0xB830u};
+    aligned.xDictHandle = 0xB840u;
+    aligned.setDwgType(0x777);
+    aligned.setName("*D_ALIGNED_TRANSACTION");
+    aligned.setText("ALIGNED DIMENSION \xCE\xA9");
+    aligned.setStyle("STANDARD");
+    aligned.setTextPoint(DRW_Coord(2.0, 3.0, 0.0));
+    aligned.setDimPoint(DRW_Coord(1.0, 2.0, 0.0));
+    aligned.setDef1Point(DRW_Coord(0.0, 0.0, 0.0));
+    aligned.setDef2Point(DRW_Coord(5.0, 0.0, 0.0));
+    aligned.setOblique(5.0);
+    aligned.setHandles(0xB850u, 0xB860u);
+    checkEntityDwgEncodeAllocationRollback(
+        t, aligned, version, 22u,
+        version == DRW::AC1015 ? "AC1015 DIMENSION aligned"
+        : version == DRW::AC1018 ? "AC1018 DIMENSION aligned"
+        : version == DRW::AC1021 ? "AC1021 DIMENSION aligned"
+                                 : "AC1024 DIMENSION aligned");
+
+    DimLinearCodecProbe linear;
+    linear.handle = 0xB910u + static_cast<std::uint32_t>(version);
+    linear.parentHandle = 0xB920u;
+    linear.reactorHandles = {0xB930u};
+    linear.xDictHandle = 0xB940u;
+    linear.setDwgType(0x777);
+    linear.setName("*D_LINEAR_TRANSACTION");
+    linear.setText("LINEAR DIMENSION \xCE\xA9");
+    linear.setStyle("STANDARD");
+    linear.setTextPoint(DRW_Coord(2.0, 3.0, 0.0));
+    linear.setDimPoint(DRW_Coord(1.0, 2.0, 0.0));
+    linear.setDef1Point(DRW_Coord(0.0, 0.0, 0.0));
+    linear.setDef2Point(DRW_Coord(5.0, 0.0, 0.0));
+    linear.setAngles(5.0, 30.0);
+    linear.setHandles(0xB950u, 0xB960u);
+    checkEntityDwgEncodeAllocationRollback(
+        t, linear, version, 21u,
+        version == DRW::AC1015 ? "AC1015 DIMENSION linear"
+        : version == DRW::AC1018 ? "AC1018 DIMENSION linear"
+        : version == DRW::AC1021 ? "AC1021 DIMENSION linear"
+                                 : "AC1024 DIMENSION linear");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -29172,6 +29254,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testRTextDwgEncodeAllocationRollback(context);
       std::cout << "RTEXT DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--aligned-linear-dim-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testAlignedLinearDimDwgEncodeAllocationRollback(context);
+      std::cout << "Aligned/linear DIMENSION DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

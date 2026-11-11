@@ -3492,6 +3492,19 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
   fixture was added. See the [allocation rollback
   receipt](docs/research/p6-rtext-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **P6 aligned/linear DIMENSION DWG encoder transaction safety:** both writers
+  now stage common data, dimension strings, body fields, and DIMSTYLE/block
+  handles through the shared transaction helper while preserving subtype
+  codes 22 and 21 and their field order. Generated UTF-8 profiles sweep 19
+  allocation failures each for AC1015/AC1018 and 23 each for AC1021/AC1024;
+  both dimension types pass at every version. Destination and all-stream
+  handle state rollback, prior class-ID restoration, same-object retry, and
+  alias controls pass. The focused selector and 27-test entity-writer
+  transaction cohort pass. Transaction evidence only; dimension semantics,
+  DIMSTYLE/block graph closure, producer coverage, native behavior, and broad
+  output support remain open. No DWG/DXF fixture was added. See the
+  [allocation rollback receipt](docs/research/p6-dimension-aligned-linear-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 After every slice: run its focused fast checks; update this queue and the
 relevant receipt; commit code, plan and receipt together; report the commit and
 next eligible slice, then continue. Keep fixtures out of commits unless already

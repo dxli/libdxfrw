@@ -29491,16 +29491,24 @@ static void putDimHandles(dwgBufferW *buf, const dwgHandle& dimStyleH, const dwg
 // ----------------------------------------------------------------------------
 bool DRW_DimAligned::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs;
-    oType = 22;
-    if (!encodeDwgCommon(version, buf)) return false;
-    if (!encodeDwgDimBase(version, buf, strBuf)) return false;
-    buf->put3BitDouble(getPt3());      // def1
-    buf->put3BitDouble(getPt4());      // def2
-    buf->put3BitDouble(getDefPoint()); // defPoint
-    buf->putBitDouble(getOb52() / ARAD);  // oblique: degrees → radians
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
-    putDimHandles(buf, dimStyleH, blockH, handleBuf);
-    return true;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            oType = 22;
+            if (!encodeDwgCommon(version, body)
+                || !encodeDwgDimBase(version, body, strings))
+                return false;
+            body->put3BitDouble(getPt3());      // def1
+            body->put3BitDouble(getPt4());      // def2
+            body->put3BitDouble(getDefPoint()); // defPoint
+            body->putBitDouble(getOb52() / ARAD); // oblique: degrees → radians
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
+            putDimHandles(body, dimStyleH, blockH, handles);
+            return body->isGood() && (strings == nullptr || strings->isGood())
+                && (handles == nullptr || handles->isGood());
+        });
 }
 
 // ----------------------------------------------------------------------------
@@ -29508,17 +29516,25 @@ bool DRW_DimAligned::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint3
 // ----------------------------------------------------------------------------
 bool DRW_DimLinear::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs;
-    oType = 21;
-    if (!encodeDwgCommon(version, buf)) return false;
-    if (!encodeDwgDimBase(version, buf, strBuf)) return false;
-    buf->put3BitDouble(getPt3());      // def1
-    buf->put3BitDouble(getPt4());      // def2
-    buf->put3BitDouble(getDefPoint()); // defPoint
-    buf->putBitDouble(getOb52() / ARAD);  // oblique: degrees → radians
-    buf->putBitDouble(getAn50() / ARAD);  // rotation angle: degrees → radians
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
-    putDimHandles(buf, dimStyleH, blockH, handleBuf);
-    return true;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            oType = 21;
+            if (!encodeDwgCommon(version, body)
+                || !encodeDwgDimBase(version, body, strings))
+                return false;
+            body->put3BitDouble(getPt3());      // def1
+            body->put3BitDouble(getPt4());      // def2
+            body->put3BitDouble(getDefPoint()); // defPoint
+            body->putBitDouble(getOb52() / ARAD); // oblique: degrees → radians
+            body->putBitDouble(getAn50() / ARAD); // rotation: degrees → radians
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
+            putDimHandles(body, dimStyleH, blockH, handles);
+            return body->isGood() && (strings == nullptr || strings->isGood())
+                && (handles == nullptr || handles->isGood());
+        });
 }
 
 // ----------------------------------------------------------------------------
