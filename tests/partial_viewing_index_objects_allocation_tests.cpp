@@ -2,12 +2,15 @@
 // Generated FIELD, path-object, and PARTIAL_VIEWING_INDEX allocation control.
 #include "dx_iface.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <iterator>
 #include <new>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -278,6 +281,26 @@ bool readbackMatches(const std::filesystem::path& path,
         || actualField.m_valueString != "2"
         || actualField.m_valueStringLength != 1)
         return false;
+    const auto rawHandleTagMatches = [](const DRW_RawDxfObject& raw,
+                                        std::uint32_t expectedHandle) {
+        const std::string expected = [&]() {
+            std::ostringstream text;
+            text << std::uppercase << std::hex << expectedHandle;
+            return text.str();
+        }();
+        const auto tag = std::find_if(raw.groups.begin(), raw.groups.end(),
+            [](const DRW_Variant& group) { return group.code() == 5; });
+        return tag != raw.groups.end()
+            && std::count_if(raw.groups.begin(), raw.groups.end(),
+                [](const DRW_Variant& group) { return group.code() == 5; }) == 1
+            && tag->type() == DRW_Variant::STRING
+            && expected == tag->c_str();
+    };
+    if (data.rawFields.size() != 1u || data.rawFieldLists.size() != 1u
+        || data.rawFields.front().name != "FIELD"
+        || data.rawFields.front().handle != actualField.handle
+        || !rawHandleTagMatches(data.rawFields.front(), actualField.handle))
+        return false;
     const DRW_Point& actualPoint = reader.points.front();
     if (actualPoint.handle != 0x34u
         || actualPoint.parentHandle != DRW::DxfModelSpaceBlockRecordHandle
@@ -318,6 +341,11 @@ bool readbackMatches(const std::filesystem::path& path,
     if (actualFieldList.handle != 0xD7B4u
         || actualFieldList.parentHandle != DRW::DwgNamedObjectsDictionaryHandle
         || actualFieldList.m_fieldHandles != std::vector<std::uint32_t>{0xD7B3u})
+        return false;
+    if (data.rawFieldLists.front().name != "FIELDLIST"
+        || data.rawFieldLists.front().handle != actualFieldList.handle
+        || !rawHandleTagMatches(data.rawFieldLists.front(),
+                                actualFieldList.handle))
         return false;
     const DRW_MotionPath& actualMotionPath = reader.motionPaths.front();
     if (actualMotionPath.handle != 0xD7B5u

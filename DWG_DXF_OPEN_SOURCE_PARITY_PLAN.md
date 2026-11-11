@@ -42,6 +42,16 @@ mark this screened source exhausted and resume only with a distinct,
 hash-pinned complete graph and authoritative layout evidence. No drawing fixture
 was added. See the [current-reader receipt](docs/research/p5-ac1021-architectural-field-current-reader-recheck-2026-11-11.json).
 
+**P5 generated FIELD/FIELDLIST raw-handle regression (2026-11-11):** the
+existing ASCII/Binary allocation/retry control now explicitly requires exactly
+one raw group-5 spelling per FIELD/FIELDLIST carrier and requires each to match
+the typed callback identity. It passes 44 ASCII and 42 Binary injected
+allocation offsets, destination/caller rollback, same-writer retry, and fresh
+`fileImport` readback. This narrows the earlier synthetic code-5 raw-capture
+failure to profiles beyond this generated input; it does not qualify physical
+FIELD semantics or strict output. Scratch DXFs are removed. See the
+[generated carrier receipt](docs/research/p5-field-fieldlist-generated-dxf-code5-carrier-2026-11-11.json).
+
 **P4 version-2 active-field regression expansion (2026-11-11):** the generated
 AC1024 control now covers active-bit placement and typed readback for
 geometrical, distance, radius/diameter, vertical and horizontal nodes, with
@@ -1064,12 +1074,13 @@ destination and caller state, retries the same writer, and passes typed
 readback ([SCALE receipt](docs/research/p6-dxf-scale-objects-allocation-failure-retry-2026-11-08.json),
 [DATALINK receipt](docs/research/p6-dxf-datalink-objects-allocation-failure-retry-2026-11-08.json)).
 The slices are committed as `6e8db601` and `c22619fe`. These close only the
-selected typed writer profiles. A local generated FIELD/FIELDLIST allocation
-prototype was rejected before commit: its DXF output reached the first FIELD
-record, but `fileImport` refused during raw-carrier capture at the FIELD code-5
-handle, before typed parsing or graph readback. The failure is not yet attributed
-to a production defect; preserve the existing strict FIELD/FIELDLIST support
-gate and do not use this synthetic graph to make claims. The post-unlock desktop
+selected typed writer profiles. An earlier local FIELD/FIELDLIST allocation
+prototype was rejected before commit because `fileImport` refused its FIELD
+code-5 raw-carrier capture. The existing generated control now explicitly
+proves group-5 raw identity retention for one minimal FIELD/FIELDLIST profile
+in ASCII and Binary, including its allocation retry/readback loop; this does
+not establish the earlier prototype's cause or qualify a physical source graph.
+Keep the strict FIELD/FIELDLIST support gate. The post-unlock desktop
 check still reports the Mac locked, so no new ODA/FreeCAD peer evidence is
 available. A minimal generated AC1027 TABLECONTENT writer slice then swept 12
 ASCII and 10 Binary callback allocation points. Every injected failure preserved
