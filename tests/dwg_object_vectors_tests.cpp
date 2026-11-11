@@ -573,6 +573,14 @@ public:
     std::int16_t dwgType() const { return oType; }
 };
 
+class ShapeCodecProbe final : public DRW_Shape {
+public:
+    using DRW_Shape::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+};
+
 class MeshCodecProbe final : public DRW_Mesh {
 public:
     using DRW_Mesh::parseDwg;
@@ -25692,6 +25700,33 @@ void testMLineDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testShapeDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1015, DRW::AC1018, DRW::AC1021,
+                                     DRW::AC1024}) {
+    ShapeCodecProbe shape;
+    shape.handle = 0xB210u + static_cast<std::uint32_t>(version);
+    shape.parentHandle = 0xB220u;
+    shape.reactorHandles = {0xB230u};
+    shape.xDictHandle = 0xB240u;
+    shape.setDwgType(0x777);
+    shape.m_insertionPoint = DRW_Coord(1.0, 2.0, 3.0);
+    shape.m_scale = 2.0;
+    shape.m_rotation = 0.5;
+    shape.m_widthFactor = 1.25;
+    shape.m_oblique = 0.125;
+    shape.m_thickness = 0.75;
+    shape.m_shapeIndex = 9;
+    shape.m_extrusion = DRW_Coord(0.0, 0.0, 1.0);
+    shape.m_shapeFileHandle = 0xB250u;
+    checkEntityDwgEncodeAllocationRollback(
+        t, shape, version, 33u,
+        version == DRW::AC1015 ? "AC1015 SHAPE"
+                               : version == DRW::AC1018 ? "AC1018 SHAPE"
+                               : version == DRW::AC1021 ? "AC1021 SHAPE"
+                                                        : "AC1024 SHAPE");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -28927,6 +28962,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testMLineDwgEncodeAllocationRollback(context);
       std::cout << "MLINE DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--shape-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testShapeDwgEncodeAllocationRollback(context);
+      std::cout << "SHAPE DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

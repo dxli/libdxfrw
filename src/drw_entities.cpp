@@ -11162,33 +11162,37 @@ bool DRW_Shape::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t b
         || !std::isfinite(m_thickness) || m_shapeFileHandle == 0) {
         return false;
     }
-    oType = 33;  // SHAPE class id — see dwgreader.cpp case 33
-    if (!encodeDwgCommon(version, buf)) return false;
+    return encodeEntityDwgTransaction(
+        oType, buf, nullptr, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            (void)strings;
+            oType = 33; // SHAPE class id — see dwgreader.cpp case 33
+            if (!encodeDwgCommon(version, body))
+                return false;
 
-    buf->put3BitDouble(m_insertionPoint);
-    buf->putBitDouble(m_scale);
-    buf->putBitDouble(m_rotation);
-    buf->putBitDouble(m_widthFactor);
-    buf->putBitDouble(m_oblique);
-    buf->putBitDouble(m_thickness);
-    buf->putBitShort(m_shapeIndex);
-    buf->put3BitDouble(m_extrusion);
+            body->put3BitDouble(m_insertionPoint);
+            body->putBitDouble(m_scale);
+            body->putBitDouble(m_rotation);
+            body->putBitDouble(m_widthFactor);
+            body->putBitDouble(m_oblique);
+            body->putBitDouble(m_thickness);
+            body->putBitShort(m_shapeIndex);
+            body->put3BitDouble(m_extrusion);
 
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
 
-    // Trailing SHAPEFILE style hard pointer (code 5), byte-count-sized.
-    dwgHandle sH;
-    sH.code = 5;
-    sH.ref  = m_shapeFileHandle;
-    sH.size = 0;
-    if (m_shapeFileHandle != 0) {
-        std::uint32_t t = m_shapeFileHandle;
-        while (t != 0) { t >>= 8; ++sH.size; }
-    } else {
-        sH.code = 0;  // null handle
-    }
-    (handleBuf ? handleBuf : buf)->putHandle(sH);
-    return true;
+            dwgHandle styleHandle;
+            styleHandle.code = DRW::DwgHardPointer;
+            styleHandle.ref = m_shapeFileHandle;
+            styleHandle.size = 0;
+            for (std::uint32_t value = m_shapeFileHandle; value != 0;
+                 value >>= 8)
+                ++styleHandle.size;
+            (handles != nullptr ? handles : body)->putHandle(styleHandle);
+            return true;
+        });
 }
 
 bool DRW_Ole2Frame::parseCode(int code, const std::unique_ptr<dxfReader>& reader) {
