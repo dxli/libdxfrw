@@ -11,14 +11,16 @@ class Probe final:public dx_iface {
 public:
  void addLType(const DRW_LType& v) override {dx_iface::addLType(v);if(v.handle==0x14u){if(model)duplicate=true;model=v;}}
  std::optional<DRW_LType> model;bool duplicate=false;unsigned tickets=0;bool ticketValid=false;unsigned rowTickets=0;bool rowTicketValid=false;
- bool wantsVerifiedTableCandidate(std::uint32_t h) const noexcept override {return h==5u||h==0x16u;}
+ bool wantsVerifiedTableCandidate(std::uint32_t h) const noexcept override {return h==5u||h==0x16u||h==0x14u||h==0x15u;}
  void verifiedTableCandidate(const DwgVerifiedTableCandidateTicket& t) noexcept override {
   if(t.kind()==DwgVerifiedTableCandidateKind::LTypeControl&&t.version()==DRW::AC1018
       &&t.handle()==5u&&t.frame().body().size()<=4096u){++tickets;ticketValid=true;}
   if(t.kind()==DwgVerifiedTableCandidateKind::LTypeRecord&&t.version()==DRW::AC1018
-      &&t.handle()==0x16u&&t.frame().body().size()<=4096u&&t.ltypeModel()
-      &&t.ltypeModel()->handle==0x16u&&t.ltypeModel()->name=="Continuous"){
-    ++rowTickets;rowTicketValid=true;
+      &&(t.handle()==0x14u||t.handle()==0x15u||t.handle()==0x16u)
+      &&t.frame().body().size()<=4096u&&t.ltypeModel()){
+    ++rowTickets;
+    const std::string expected=t.handle()==0x14u?"ByBlock":t.handle()==0x15u?"ByLayer":"Continuous";
+    if(t.ltypeModel()->handle==t.handle()&&t.ltypeModel()->name==expected)rowTicketValid=true;
   }
  }
 };
@@ -30,7 +32,7 @@ int main(int argc,char**argv){if(argc!=2&&argc!=4)return 2;auto data=std::make_u
  const bool read=p->fileImport(argv[1],data.get(),false);
  if(argc==2){std::cout<<"read="<<read<<" controlTickets="<<p->tickets<<" controlValid="<<p->ticketValid
   <<" rowTickets="<<p->rowTickets<<" rowValid="<<p->rowTicketValid<<"\n";
-  return !(read&&p->tickets==1u&&p->ticketValid&&p->rowTickets==1u&&p->rowTicketValid);}
+  return !(read&&p->tickets==1u&&p->ticketValid&&p->rowTickets==3u&&p->rowTicketValid);}
  const auto control=body(argv[2],5u,56);const auto row=body(argv[3],0x14u,57);
  DwgLTypeControlByBlockAc1018Candidate::Result r;const bool ok=read&&!p->duplicate&&p->model
   &&DwgLTypeControlByBlockAc1018Candidate::inspect(control,row,*p->model,r);
