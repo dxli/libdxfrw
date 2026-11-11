@@ -10988,6 +10988,201 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         }
     }
 
+    // ODA §20.4.96.1 places the selected title/header/data alignments
+    // before the selected row text heights. Exercise every selection mask,
+    // mixing them with the earlier scalar prefix and checking the raw order.
+    constexpr std::array<std::uint32_t, 3> rowAlignmentFlags = {{
+        0x00004000u, 0x00008000u, 0x00010000u
+    }};
+    constexpr std::array<std::uint32_t, 3> rowTextHeightFlags = {{
+        0x00100000u, 0x00200000u, 0x00400000u
+    }};
+    constexpr std::array<int, 3> expectedAlignments = {{1, 5, 9}};
+    constexpr std::array<double, 3> expectedTextHeights = {{0.0, 2.5, 4.75}};
+    for (unsigned selection = 0u; selection < 64u; ++selection) {
+        TableDwgCodecProbe table = makeEncodableAc1018Table();
+        table.m_tableOverrideFlags = 0x1Fu;
+        table.m_titleSuppressed = true;
+        table.m_headerSuppressed = true;
+        table.m_flowDirection = 1;
+        table.m_horizontalCellMargin = 1.25;
+        table.m_verticalCellMargin = 2.5;
+        for (std::size_t i = 0u; i < 3u; ++i) {
+            if ((selection & (1u << i)) != 0u) {
+                table.m_tableOverrideFlags |= rowAlignmentFlags[i];
+                table.m_tableRowAlignmentOverrides[i] = expectedAlignments[i];
+            }
+            if ((selection & (1u << (i + 3u))) != 0u) {
+                table.m_tableOverrideFlags |= rowTextHeightFlags[i];
+                table.m_tableRowHeightOverrides[i] = expectedTextHeights[i];
+            }
+        }
+        dwgBufferW body, handles, typePrefix;
+        typePrefix.putObjType(DRW::AC1018, 562u);
+        const std::uint64_t sizeBit = typePrefix.bitCount();
+        const bool encoded = table.encodeAsTableClass(DRW::AC1018, body, handles);
+        const std::uint64_t bodyEnd = body.bitCount();
+        constexpr std::int32_t sentinel = 0x51CA1234;
+        body.putBitLong(sentinel);
+        body.patchRawLong32AtBit(sizeBit, static_cast<std::uint32_t>(body.bitCount()));
+        appendBits(body, handles);
+        dwgBuffer input(body.data().data(), body.data().size());
+        TableDwgCodecProbe parsed;
+        const bool read = encoded && parsed.parseDwg(DRW::AC1018, &input);
+        bool valid = read && input.isGood() && parsed.m_semanticContentComplete
+            && parsed.m_tableOverrideFlags == table.m_tableOverrideFlags
+            && parsed.m_tableRowAlignmentOverrides == table.m_tableRowAlignmentOverrides
+            && parsed.m_tableRowHeightOverrides == table.m_tableRowHeightOverrides
+            && cursorBit(input) == bodyEnd;
+        const auto& ranges = parsed.m_content.m_subrecordRanges;
+        const auto range = std::find_if(ranges.cbegin(), ranges.cend(),
+            [](const DRW_DwgSubrecordRange& value) {
+                return value.m_name == "r2007-table-overrides";
+            });
+        if (valid && range != ranges.cend()) {
+            dwgBuffer wire(body.data().data(), body.data().size());
+            valid = setBitPosition(wire, range->m_startBit)
+                && wire.getBit() && static_cast<std::uint32_t>(wire.getBitLong())
+                    == table.m_tableOverrideFlags
+                && wire.getBit() && wire.getBitShort() == 1u
+                && wire.getBitDouble() == 1.25 && wire.getBitDouble() == 2.5;
+            for (std::size_t i = 0u; valid && i < 3u; ++i) {
+                if ((selection & (1u << i)) != 0u)
+                    valid = wire.getBitShort() == expectedAlignments[i];
+            }
+            for (std::size_t i = 0u; valid && i < 3u; ++i) {
+                if ((selection & (1u << (i + 3u))) != 0u)
+                    valid = wire.getBitDouble() == expectedTextHeights[i];
+            }
+            valid = valid && !wire.getBit() && !wire.getBit() && !wire.getBit()
+                && wire.isGood() && cursorBit(wire) == range->m_startBit + range->m_bitSize;
+        } else {
+            valid = false;
+        }
+        if (valid)
+            valid = input.getBitLong() == sentinel && input.isGood();
+        t.expect(valid, "AC1018 TABLE row alignment/text-height selection "
+                         + std::to_string(selection) + " preserves wire order and sentinel");
+        if (selection == 63u && valid) {
+            // Parsed nonempty override ranges have offsets but no retained raw
+            // value snapshot. A changed value must not bypass that source gate.
+            dwgBufferW refusedBody, refusedHandles;
+            refusedBody.putBit(true);
+            refusedHandles.putBit(false);
+            const auto beforeBody = refusedBody.data();
+            const auto beforeHandles = refusedHandles.data();
+            const auto beforeBodyBits = refusedBody.bitCount();
+            const auto beforeHandleBits = refusedHandles.bitCount();
+            const bool unboundRefused = !parsed.encodeAsTableClass(
+                DRW::AC1018, refusedBody, refusedHandles);
+            parsed.m_tableRowHeightOverrides[0] = 8.0;
+            const bool changedRefused = !parsed.encodeAsTableClass(
+                DRW::AC1018, refusedBody, refusedHandles);
+            t.expect(unboundRefused && changedRefused && refusedBody.data() == beforeBody
+                         && refusedHandles.data() == beforeHandles
+                         && refusedBody.bitCount() == beforeBodyBits
+                         && refusedHandles.bitCount() == beforeHandleBits,
+                     "AC1018 TABLE original and changed retained overrides refuse without source binding");
+        }
+    }
+
+    for (unsigned mutation = 0u; mutation < 8u; ++mutation) {
+        TableDwgCodecProbe baseline = makeEncodableAc1018Table();
+        baseline.m_tableOverrideFlags = rowAlignmentFlags[0] | rowTextHeightFlags[0];
+        baseline.m_tableRowAlignmentOverrides[0] = 1;
+        baseline.m_tableRowHeightOverrides[0] = 1.25;
+        TableDwgCodecProbe candidate = baseline;
+        switch (mutation) {
+        case 0: candidate.m_tableRowAlignmentOverrides[0] = 0; break;
+        case 1: candidate.m_tableRowAlignmentOverrides[0] = 10; break;
+        case 2: candidate.m_tableRowAlignmentOverrides[1] = 5; break;
+        case 3: candidate.m_tableRowHeightOverrides[0] =
+                    std::numeric_limits<double>::quiet_NaN(); break;
+        case 4: candidate.m_tableRowHeightOverrides[1] = 2.0; break;
+        case 5: candidate.m_tableOverrideFlags |= 0x00020000u; break;
+        case 6: candidate.m_tableRowHeightOverrides[0] =
+                    std::numeric_limits<double>::infinity(); break;
+        default: candidate.m_tableRowAlignmentOverrides[0] = -1; break;
+        }
+        dwgBufferW body, handles;
+        body.putBit(true);
+        handles.putBit(false);
+        const auto oldBody = body.data();
+        const auto oldHandles = handles.data();
+        const auto oldBodyBits = body.bitCount();
+        const auto oldHandleBits = handles.bitCount();
+        dwgBufferW expectedBody = body, expectedHandles = handles;
+        const bool expected = baseline.encodeAsTableClass(
+            DRW::AC1018, expectedBody, expectedHandles);
+        const bool refused = !candidate.encodeAsTableClass(
+            DRW::AC1018, body, handles)
+            && body.data() == oldBody && handles.data() == oldHandles
+            && body.bitCount() == oldBodyBits && handles.bitCount() == oldHandleBits;
+        candidate = baseline;
+        const bool retried = candidate.encodeAsTableClass(
+            DRW::AC1018, body, handles)
+            && body.data() == expectedBody.data()
+            && handles.data() == expectedHandles.data()
+            && body.bitCount() == expectedBody.bitCount()
+            && handles.bitCount() == expectedHandles.bitCount();
+        t.expect(expected && refused && retried,
+                 "AC1018 TABLE row-override mutation " + std::to_string(mutation)
+                     + " refuses atomically and retries into the same buffers");
+    }
+
+    {
+        TableDwgCodecProbe source = makeEncodableAc1018Table();
+        source.m_tableOverrideFlags = rowTextHeightFlags[0];
+        source.m_tableRowHeightOverrides[0] = 2.5;
+        dwgBufferW body, handles, typePrefix;
+        typePrefix.putObjType(DRW::AC1018, 562u);
+        const auto sizeBit = typePrefix.bitCount();
+        const bool encoded = source.encodeAsTableClass(DRW::AC1018, body, handles);
+        const auto bodyEnd = body.bitCount();
+        body.patchRawLong32AtBit(sizeBit, static_cast<std::uint32_t>(bodyEnd));
+        dwgBufferW full = body;
+        appendBits(full, handles);
+        dwgBuffer validInput(full.data().data(), full.data().size());
+        TableDwgCodecProbe parsed;
+        const bool valid = encoded && parsed.parseDwg(DRW::AC1018, &validInput)
+            && parsed.m_semanticContentComplete;
+        const auto& ranges = parsed.m_content.m_subrecordRanges;
+        const auto range = std::find_if(ranges.cbegin(), ranges.cend(),
+            [](const DRW_DwgSubrecordRange& value) {
+                return value.m_name == "r2007-table-overrides";
+            });
+        bool truncatedRejected = false;
+        bool correctedRetry = false;
+        if (valid && range != ranges.cend()) {
+            dwgBuffer wire(full.data().data(), full.data().size());
+            if (setBitPosition(wire, range->m_startBit) && wire.getBit()
+                && static_cast<std::uint32_t>(wire.getBitLong())
+                    == rowTextHeightFlags[0]) {
+                // Keep the BD tag and just one payload bit. Handle data begins
+                // immediately after the declared body, beyond that bound.
+                const std::uint64_t cut = cursorBit(wire) + 3u;
+                if (cut < bodyEnd) {
+                    dwgBufferW truncated;
+                    for (std::uint64_t bit = 0u; bit < cut; ++bit)
+                        truncated.putBit((body.data()[static_cast<std::size_t>(bit / 8u)]
+                            >> (7u - static_cast<unsigned>(bit & 7u))) & 1u);
+                    truncated.patchRawLong32AtBit(sizeBit, static_cast<std::uint32_t>(cut));
+                    appendBits(truncated, handles);
+                    dwgBuffer truncatedInput(truncated.data().data(), truncated.data().size());
+                    TableDwgCodecProbe retried;
+                    const bool malformedRead = retried.parseDwg(DRW::AC1018, &truncatedInput);
+                    truncatedRejected = !malformedRead || !retried.m_semanticContentComplete;
+                    dwgBuffer correctedInput(full.data().data(), full.data().size());
+                    correctedRetry = retried.parseDwg(DRW::AC1018, &correctedInput)
+                        && retried.m_semanticContentComplete
+                        && retried.m_tableRowHeightOverrides[0] == 2.5;
+                }
+            }
+        }
+        t.expect(valid && truncatedRejected && correctedRetry,
+                 "AC1018 TABLE truncated row-height payload stays incomplete and corrected input retries");
+    }
+
     TableDwgCodecProbe scalarOverrideTable = makeEncodableAc1018Table();
     scalarOverrideTable.m_tableOverrideFlags = 0x0000001Fu;
     scalarOverrideTable.m_titleSuppressed = true;

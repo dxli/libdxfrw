@@ -1209,6 +1209,26 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P5 AC1018 TABLE row overrides:** the DWG writer now emits the ODA
+  title/header/data alignment and row text-height fields when their six
+  selection bits are set. All 64 mixed selections preserve exact wire order,
+  explicit zero text height, readback and a following sentinel; invalid or
+  unselected residue fails atomically and retries, and a truncated height
+  stays incomplete before a corrected read. Generated whole-file TABLE and
+  TABLE/DBCOLOR outputs also retain all six fields on fresh libdxfrw readback.
+  Re-encoding a parsed TABLE with a nonempty retained override range remains
+  refused, including after modeled values change: the range currently stores
+  offsets and counts, not the source bytes or a value snapshot. Next add an
+  opt-in, out-of-band source binding that associates the exact raw TABLE frame
+  and import identity with a bounded reparse and immutable mask/value/range
+  snapshot, without changing the existing consumer object ABI. Require that
+  binding and exact modeled-field equality before admitting parsed replay;
+  test source identity, stale-range/value mutation refusal, corrected retry,
+  and fresh write/readback. Keep unsupported cells, dependencies and proxy
+  gates independent. LibreDWG reads the generated file but keeps its TABLE body
+  opaque; native rendering and physical producer qualification remain open. See the
+  [receipt](docs/research/p5-ac1018-table-row-alignment-height-dwg-writer-2026-11-10.json).
+
 - **P8 HELIX consumer carrier remains blocked:** a scratch LibreCAD_3
   candidate preserves an unchanged same-revision HELIX and refuses its own
   unremappable XDATA, while same-ID edits, replacement and deletion retain
@@ -3040,7 +3060,11 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    exact source spans and target roles are available; keep TABLEGEOMETRY,
    dynamic evaluation and native rendering claims gated. The generated
    pre-R24 TABLE scalar override profile for ODA §20.4.96.1 bits `0x01`–`0x10`
-   is implemented; selected title/header suppression, flow direction, and
+   is implemented; the AC1018 DWG writer also emits selected title/header/data
+   alignment and row text-height overrides with a 64-selection codec and
+   whole-file readback control. Row text-style, color and other DWG writer
+   overrides and source-bound re-encoding of parsed nonempty override ranges
+   remain open. Selected title/header suppression, flow direction, and
    margins have bounded DXF output/readback. Row heights, alignments, text
    styles, text colors, fill colors, and fill-enabled flags also have generated
    DXF mappings with refusal/retry controls. Border lineweight and visibility

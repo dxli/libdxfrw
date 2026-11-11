@@ -38367,6 +38367,13 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
     dwgRW output(path.string().c_str());
     TableStyleNodWholeFileAdapter producer(
         &output, &writerData, emitTable, emitTable, emitDbColor);
+    if (emitTable) {
+        // The selected zero is an explicit title text-height override, not
+        // an absent override. These are row styles, not physical row heights.
+        producer.table.m_tableOverrideFlags = 0x0071C000u;
+        producer.table.m_tableRowAlignmentOverrides = {{1, 5, 9}};
+        producer.table.m_tableRowHeightOverrides = {{0.0, 2.5, 4.75}};
+    }
     DRW_TableStyle missingOpaqueColor = producer.style;
     missingOpaqueColor.m_rowStyles[0].m_textColorCmc.m_method =
         dwgColor::NONE;
@@ -38507,6 +38514,11 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
         || table->numProxyGraph
             != static_cast<int>(generatedTableProxyCache().size())
         || table->m_tableStyleHandle != emittedStyleHandle
+        || !table->m_semanticContentComplete
+        || table->m_tableOverrideFlags != 0x0071C000u
+        || table->m_tableRowAlignmentOverrides != std::array<int, 3>{{1, 5, 9}}
+        || table->m_tableRowHeightOverrides
+            != std::array<double, 3>{{0.0, 2.5, 4.75}}
         || table->m_content.m_rows.size() != 3u
         || table->m_content.m_columns.size() != 3u
         || table->m_content.m_rows[0].m_cells.size() != 3u
