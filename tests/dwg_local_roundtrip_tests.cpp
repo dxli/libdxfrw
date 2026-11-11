@@ -38023,6 +38023,14 @@ bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
             && authorizedProxy.encodeDwg(
                 DRW::AC1018, &authorizedProxyBody, 0u, nullptr,
                 &authorizedProxyHandles);
+        DRW_Table withoutExtensionDictionary = authorizedProxy;
+        withoutExtensionDictionary.xDictHandle = 0u;
+        dwgBufferW withoutExtensionBody;
+        dwgBufferW withoutExtensionHandles;
+        const bool withoutExtensionEncoded =
+            withoutExtensionDictionary.encodeDwg(
+                DRW::AC1018, &withoutExtensionBody, 0u, nullptr,
+                &withoutExtensionHandles);
         bool authorizedProxyReadback = false;
         if (authorizedProxyEncoded) {
             dwgBufferW frame = authorizedProxyBody;
@@ -38084,6 +38092,8 @@ bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
                   << table.m_tableStyleHandle << " blockRecord=0x"
                   << table.blockRecH.ref << " ownerBlockRecord=0x"
                   << table.m_ownerBlockRecordHandle << std::dec
+                  << " xDictHandle=0x" << std::hex << table.xDictHandle
+                  << std::dec
                   << " blockHandleRole="
                   << static_cast<unsigned>(table.blockRecH.code) << '/'
                   << static_cast<unsigned>(table.blockRecH.rawCode) << '/'
@@ -38098,6 +38108,11 @@ bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
                   << " plotStyle=" << static_cast<int>(table.plotStyle)
                   << " color=" << table.color << " color24=" << table.color24
                   << " tableOverrideFlags=" << table.m_tableOverrideFlags
+                  << " withoutExtensionEncoded=" << withoutExtensionEncoded
+                  << " withoutExtensionBodyBits="
+                  << withoutExtensionBody.bitCount()
+                  << " withoutExtensionHandleBits="
+                  << withoutExtensionHandles.bitCount()
                   << " borderFlags=" << table.m_borderColorOverrideFlags
                   << '/' << table.m_borderLineweightOverrideFlags << '/'
                   << table.m_borderVisibilityOverrideFlags

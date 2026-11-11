@@ -1667,7 +1667,15 @@ created locally from scratch for the specific control.
   parsed ranges, identity, atomic delivery and full graph qualification remain
   open. A newly recreated ODA AC1018 source independently exhibits the same
   four absent bits, but the current physical codec probe refuses its authorized
-  output; investigate that refusal before claiming a positive source roundtrip.
+  output. **Refusal cause isolated (2026-11-11):** the physical AC1018 TABLE
+  has extension-dictionary handle `0xBB`; the direct `encodeDwg` overload
+  intentionally rejects any nonzero extension handle. After parsed proxy
+  authorization, a scratch clone with that handle cleared encodes 18,212 body
+  bits and 128 handle bits. This confirms the direct body profile is otherwise
+  encodable, but dropping the extension edge is lossy and does not exercise the
+  private extension-aware whole-writer route. Keep physical source output
+  refused until the dictionary/descendant graph is emitted and fresh readback
+  closes it. See the [direct-codec diagnostic receipt](docs/research/p5-ac1018-table-direct-codec-extension-gate-2026-11-11.json).
   See the [guard receipt](docs/research/p5-ac1018-table-stale-absent-mask-guard-2026-11-10.json).
 
 - **P5 AC1018 TABLE row overrides:** the DWG writer now emits the ODA
