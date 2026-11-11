@@ -22,7 +22,7 @@
   "generatedControl": {
     "fixture": "Created in memory at runtime; no DWG/DXF fixture is committed.",
     "profile": "Three-row/three-column AC1018 TABLE with empty retained per-cell masks, empty border masks, all three alignment and text-height override bits selected, attached empty extension dictionary, and typed readback.",
-    "failureRetry": "The existing compound extension refusal/mutation sweep preserves the destination and caller state; the corrected exact profile then writes successfully and is freshly read back.",
+    "failureRetry": "A one-bit-short retained table-level range span is refused with the prior destination and TABLE handle state preserved; the corrected metadata then succeeds on the same producer/writer path. The existing compound extension refusal/mutation sweep also preserves destination and caller state.",
     "readback": "Checks all three alignment values, all three heights including explicit zero, exact recognized range names/counts/raw handle codes/completion, extension dictionary parent/handle and the table geometry block."
   },
   "validation": {
@@ -41,11 +41,12 @@
         "libdxfrw_table_ac1018_zero_mask_scalar_extension_roundtrip"
       ]
     },
-    "diffCheck": "git diff --check passed"
+    "diffCheck": "git diff --check passed",
+    "targetSha256": "3a973a03bb290e380bcc6992a0644966b3cffd5020841a2a653153712f2d7842"
   },
   "sourceFiles": {
     "src/drw_entities.cpp": "e7a4844bce6d01008b5b60a3cb92f26fe77ffd2ff5a1f7245f6c54a5d4d83050",
-    "tests/dwg_local_roundtrip_tests.cpp": "65fa23e1c51eae5971eb0c15f9ba7835ef1025dde06b5e5c4fb6d4e862c216be"
+    "tests/dwg_local_roundtrip_tests.cpp": "a45ea275f549e6863015b63d407417d24f25fa36501f14a0bcc2c0e23177f91c"
   },
   "remaining": "No physical source with this exact retained-range plus scalar-mask profile has been qualified in this slice. Independent reader acceptance, producer prevalence, source-derived re-encoding, native precedence/rendering and other table ranges remain open."
 }

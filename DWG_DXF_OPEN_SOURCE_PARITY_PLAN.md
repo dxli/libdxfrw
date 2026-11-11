@@ -1572,8 +1572,8 @@ created locally from scratch for the specific control.
   complete mask span, and canonically re-encodes the values. Unknown flags,
   nonzero cell masks, unsupported row fields, and mismatched/incomplete range
   metadata still refuse. A generated whole-file test covers the extension
-  dictionary, selected scalar values, exact range metadata after readback,
-  failure/retry and destination preservation. This is generated transport
+  dictionary, selected scalar values, exact range metadata after readback, and
+  one-bit-short span refusal with destination preservation and corrected retry. This is generated transport
   evidence only; physical producer ordering, source-derived nonempty ranges,
   independent reader semantics, and native rendering remain unqualified. See
   [the scalar-range receipt](docs/research/p5-ac1018-table-zero-cell-mask-scalar-reencode-2026-11-11.json).

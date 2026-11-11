@@ -38686,6 +38686,33 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
                 return false;
             }
         }
+        if (emitZeroMaskScalarOverrides) {
+            producer.setRetainedZeroMaskRanges();
+            auto& ranges = producer.table.m_content.m_subrecordRanges;
+            if (ranges.empty() || ranges.back().m_bitSize <= 4u)
+                return false;
+            DRW_DwgSubrecordRange& tableRange = ranges.back();
+            const std::size_t correctBitSize = tableRange.m_bitSize;
+            tableRange.m_bitSize = correctBitSize - 1u;
+            {
+                std::ofstream previous(path, std::ios::binary | std::ios::trunc);
+                previous << sentinel;
+                previous.close();
+                producer.setExtensionMode(6);
+                const bool rejected = !output.write(&producer, DRW::AC1018, true);
+                std::ifstream afterStream(path, std::ios::binary);
+                const std::string after(
+                    (std::istreambuf_iterator<char>(afterStream)),
+                    std::istreambuf_iterator<char>());
+                if (!rejected || after != sentinel
+                    || producer.table.blockRecH.ref != 0u
+                    || producer.table.handle != 0xA720u) {
+                    std::cerr << "TABLE scalar range span mismatch was not atomic\n";
+                    return false;
+                }
+            }
+            tableRange.m_bitSize = correctBitSize;
+        }
         for (int mode : {1, 2, 3, 4, 5, 9, 10, 12, 13, 14, 15, 16, 17, 19}) {
             std::ofstream previous(path, std::ios::binary | std::ios::trunc);
             previous << sentinel;
