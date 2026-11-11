@@ -1209,6 +1209,16 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P8 LibreCAD_3 HELIX fallback:** a clean consumer snapshot `0beddae8`
+  built against libdxfrw `78b89125` with the provider's `-Werror` enabled.
+  After the known legacy-header and root-dictionary fixes were applied in
+  scratch, 65/65 focused export/round-trip tests passed. An authored HELIX
+  imports through the actual spline-only adapter and resaves/reopens with its
+  checked control points and knots, but the output is SPLINE and omits HELIX
+  metadata. This is bounded macOS consumer evidence; native HELIX semantics,
+  other platforms and the unpatched consumer's 16 failing tests remain open.
+  See the [receipt](docs/research/p8-librecad3-helix-spline-consumer-2026-11-10.json).
+
 - **P4 AC1032 LTYPE null-slot evidence:** ODA File Converter 27.1 with audit
   disabled converts the forum witness to 2010 ASCII DXF, retaining its three
   live LTYPE handles/names and owner; its output omits the DWG control's null
