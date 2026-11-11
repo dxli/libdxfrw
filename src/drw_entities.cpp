@@ -18174,20 +18174,28 @@ bool DRW_RText::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
 bool DRW_RText::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs,
                           dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs;
-    oType = kDwgClassNum;
-    if (!encodeDwgCommon(version, buf)) return false;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            oType = kDwgClassNum;
+            if (!encodeDwgCommon(version, body))
+                return false;
 
-    buf->put3BitDouble(basePoint);
-    buf->put3BitDouble(extPoint);
-    buf->putBitDouble(angle / ARAD);
-    buf->putBitDouble(height);
-    buf->putBitShort(bitShortFromInt(m_rTextFlags));
-    (strBuf ? strBuf : buf)->putVariableText(version, text);
+            body->put3BitDouble(basePoint);
+            body->put3BitDouble(extPoint);
+            body->putBitDouble(angle / ARAD);
+            body->putBitDouble(height);
+            body->putBitShort(bitShortFromInt(m_rTextFlags));
+            (strings ? strings : body)->putVariableText(version, text);
 
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
-    putHardPointerHandle(handleBuf ? handleBuf : buf,
-                         (styleH.ref == 0) ? 0x13 : styleH.ref);
-    return true;
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
+            dwgBufferW *handleTarget = handles ? handles : body;
+            putHardPointerHandle(handleTarget,
+                                 (styleH.ref == 0) ? 0x13 : styleH.ref);
+            return handleTarget->isGood();
+        });
 }
 
 void DRW_ArcAlignedText::applyArcApproximation(){

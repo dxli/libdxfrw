@@ -605,6 +605,14 @@ public:
     std::int16_t dwgType() const { return oType; }
 };
 
+class RTextCodecProbe final : public DRW_RText {
+public:
+    using DRW_RText::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+};
+
 class MeshCodecProbe final : public DRW_Mesh {
 public:
     using DRW_Mesh::encodeDwg;
@@ -25856,6 +25864,31 @@ void testToleranceDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testRTextDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1015, DRW::AC1018,
+                                     DRW::AC1021, DRW::AC1024}) {
+    RTextCodecProbe rtext;
+    rtext.handle = 0xB710u + static_cast<std::uint32_t>(version);
+    rtext.parentHandle = 0xB720u;
+    rtext.reactorHandles = {0xB730u};
+    rtext.xDictHandle = 0xB740u;
+    rtext.setDwgType(0x777);
+    rtext.basePoint = DRW_Coord(1.25, 2.5, 3.75);
+    rtext.extPoint = DRW_Coord(0.0, 0.0, 1.0);
+    rtext.angle = 30.0;
+    rtext.height = 2.5;
+    rtext.m_rTextFlags = 1;
+    rtext.text = "RTEXT_RETRY_\xCE\xA9";
+    rtext.styleH.code = DRW::DwgHardPointer;
+    rtext.styleH.ref = 0xB750u;
+    checkEntityDwgEncodeAllocationRollback(
+        t, rtext, version, DRW_RText::kDwgClassNum,
+        version == DRW::AC1015 ? "AC1015 RTEXT"
+        : version == DRW::AC1018 ? "AC1018 RTEXT"
+        : version == DRW::AC1021 ? "AC1021 RTEXT" : "AC1024 RTEXT");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -29131,6 +29164,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testToleranceDwgEncodeAllocationRollback(context);
       std::cout << "TOLERANCE DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--rtext-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testRTextDwgEncodeAllocationRollback(context);
+      std::cout << "RTEXT DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

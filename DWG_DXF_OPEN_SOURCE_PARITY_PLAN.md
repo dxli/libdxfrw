@@ -3480,6 +3480,18 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
   was added. See the [allocation rollback
   receipt](docs/research/p6-tolerance-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **P6 RTEXT DWG encoder transaction safety:** `DRW_RText::encodeDwg` now
+  stages body, detached text, and handle output with the shared transaction
+  helper, preserving the RTEXT class ID and STYLE hard pointer. Generated
+  UTF-8 profiles for AC1015/AC1018 sweep 16 injected allocation failures each;
+  AC1021/AC1024 sweep 21 each. Destination rollback, class-ID restoration,
+  same-object retry, handle-occurrence preservation, and stream-alias controls
+  pass. The focused selector and 26-test entity-writer transaction cohort
+  pass. This is transaction evidence only; RTEXT text/style meaning, producer
+  coverage, native behavior, and broader support remain open. No DWG/DXF
+  fixture was added. See the [allocation rollback
+  receipt](docs/research/p6-rtext-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 After every slice: run its focused fast checks; update this queue and the
 relevant receipt; commit code, plan and receipt together; report the commit and
 next eligible slice, then continue. Keep fixtures out of commits unless already
