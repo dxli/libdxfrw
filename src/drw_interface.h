@@ -329,10 +329,9 @@ public:
   /** Called for every spline */
   virtual void addSpline(const DRW_Spline *data) = 0;
 
-  /** Called for every helix (AcDbHelix). Default delegates nothing; the
-   *  base no-op lets readers add HELIX without forcing every consumer to
-   *  implement it. */
-  virtual void addHelix(const DRW_Helix *data) { (void)data; }
+  /** Called for every helix (AcDbHelix). Consumers without a typed helix
+   *  handler receive its inherited spline representation. */
+  virtual void addHelix(const DRW_Helix *data) { addSpline(data); }
 
   /** Called for every MESH (AcDbSubDMesh) subdivision-surface entity. Default
    *  no-op so readers can deliver MESH without forcing every consumer to

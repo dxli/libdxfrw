@@ -10276,6 +10276,10 @@ bool dxfRW::writePolyline(DRW_Polyline *ent) {
 bool dxfRW::writeSpline(DRW_Spline *ent){
     if (!preflightDxfWrite())
         return false;
+    // HELIX extends SPLINE in the public API.  Writing only the base class
+    // silently discards the axis and helix parameters; retain its entity type.
+    if (auto* helix = dynamic_cast<DRW_Helix*>(ent))
+        return writeHelix(helix);
     if (version > DRW::AC1009) {
         if (writer == nullptr || ent == nullptr
             || !ent->validateDxf()

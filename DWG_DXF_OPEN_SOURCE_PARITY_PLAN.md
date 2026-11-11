@@ -1210,6 +1210,15 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P6 HELIX spline dispatch and 2D fallback:** `writeSpline` now routes a
+  runtime HELIX to the typed HELIX writer, retaining its axis and parameters.
+  The default non-pure `addHelix` callback delegates to `addSpline`, so rebuilt
+  spline-only consumers receive its spline representation. ASCII/Binary
+  generated controls pass typed and legacy callback, regular SPLINE,
+  subtype refusal and retry, and R12 refusal/retry checks. Native evaluation
+  and already-built consumer compatibility remain open. See the
+  [receipt](docs/research/p6-dxf-spline-helix-preserving-dispatch-2026-11-10.json).
+
 - **P5 DWG cell-style no-loss validation:** CELLSTYLEMAP and R24 TABLESTYLE
   now refuse non-default data in fields omitted by absent style-data, margin,
   or border markers. Generated CELLSTYLEMAP mutations and an R24 TABLESTYLE
