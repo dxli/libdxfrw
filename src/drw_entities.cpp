@@ -8341,79 +8341,149 @@ bool DRW_Solid::encodeDwg(DRW::Version version, dwgBufferW *buf,
   }
 }
 
-bool DRW_LWPolyline::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
-    (void)bs; (void)strBuf;
-    if (buf == nullptr || !validatePayloadFields())
-        return false;
-    oType = 77;  // LWPOLYLINE class id — see dwgreader.cpp:1202
-    if (!encodeDwgCommon(version, buf)) return false;
+bool DRW_LWPolyline::encodeDwg(DRW::Version version, dwgBufferW *buf,
+                               std::uint32_t bs, dwgBufferW *strBuf,
+                               dwgBufferW *handleBuf) {
+  (void)bs;
+  (void)strBuf;
+  if (buf == nullptr || !validatePayloadFields())
+    return false;
+
+  dwgBufferW *const bodyTarget = buf;
+  dwgBufferW *const stringTarget = strBuf != nullptr ? strBuf : bodyTarget;
+  dwgBufferW *const handleTarget =
+      handleBuf != nullptr ? handleBuf : bodyTarget;
+  try {
+    dwgBufferW bodyStage = *bodyTarget;
+    std::optional<dwgBufferW> stringStageStorage;
+    dwgBufferW *stringStage = &bodyStage;
+    if (stringTarget != bodyTarget) {
+      stringStageStorage.emplace(*stringTarget);
+      stringStage = &*stringStageStorage;
+    }
+    std::optional<dwgBufferW> handleStageStorage;
+    dwgBufferW *handleStage = &bodyStage;
+    if (handleTarget == bodyTarget) {
+      handleStage = &bodyStage;
+    } else if (handleTarget == stringTarget) {
+      handleStage = stringStage;
+    } else {
+      handleStageStorage.emplace(*handleTarget);
+      handleStage = &*handleStageStorage;
+    }
+
+    buf = &bodyStage;
+    handleBuf = handleBuf != nullptr ? handleStage : nullptr;
+    struct ObjectTypeRollback {
+      decltype(oType) &value;
+      decltype(oType) original;
+      bool committed{false};
+      ~ObjectTypeRollback() {
+        if (!committed)
+          value = original;
+      }
+    } typeRollback{oType, oType};
+    oType = 77; // LWPOLYLINE class id — see dwgreader.cpp:1202
+    if (!encodeDwgCommon(version, buf))
+      return false;
 
     // DRW_LWPolyline::flags carries DXF-side bits (1=closed, 128=plinegen).
     // DWG-side flags are different: they signal which optional fields are
     // present.  Per parseDwg, bit 9 (0x200) = closed, bit 8 (0x100) =
     // plinegen.  Build the DWG flags from the DXF flags plus the data.
     std::uint16_t dwgFlags = 0;
-    if (flags & 1)   dwgFlags |= 0x200;   // closed
-    if (flags & 128) dwgFlags |= 0x100;   // plinegen
-    if (thickness != 0.0) dwgFlags |= 0x2;
-    if (width     != 0.0) dwgFlags |= 0x4;
-    if (elevation != 0.0) dwgFlags |= 0x8;
-    bool defaultExt = (extPoint.x == 0.0 && extPoint.y == 0.0 && extPoint.z == 1.0);
-    if (!defaultExt) dwgFlags |= 0x1;
+    if (flags & 1)
+      dwgFlags |= 0x200; // closed
+    if (flags & 128)
+      dwgFlags |= 0x100; // plinegen
+    if (thickness != 0.0)
+      dwgFlags |= 0x2;
+    if (width != 0.0)
+      dwgFlags |= 0x4;
+    if (elevation != 0.0)
+      dwgFlags |= 0x8;
+    bool defaultExt =
+        (extPoint.x == 0.0 && extPoint.y == 0.0 && extPoint.z == 1.0);
+    if (!defaultExt)
+      dwgFlags |= 0x1;
     // Detect per-vertex bulge / width data.
     bool anyBulge = false;
     bool anyWidth = false;
     bool anyVertexId = false;
-    for (const auto& v : vertlist) {
-        if (v && v->bulge    != 0.0) anyBulge = true;
-        if (v && (v->stawidth != 0.0 || v->endwidth != 0.0)) anyWidth = true;
-        if (v && v->identifier != 0) anyVertexId = true;
+    for (const auto &v : vertlist) {
+      if (v && v->bulge != 0.0)
+        anyBulge = true;
+      if (v && (v->stawidth != 0.0 || v->endwidth != 0.0))
+        anyWidth = true;
+      if (v && v->identifier != 0)
+        anyVertexId = true;
     }
-    if (anyBulge) dwgFlags |= 0x10;
-    if (anyWidth) dwgFlags |= 0x20;
-    if (version > DRW::AC1021 && anyVertexId) dwgFlags |= 0x400;
+    if (anyBulge)
+      dwgFlags |= 0x10;
+    if (anyWidth)
+      dwgFlags |= 0x20;
+    if (version > DRW::AC1021 && anyVertexId)
+      dwgFlags |= 0x400;
 
     buf->putBitShort(dwgFlags);
-    if (dwgFlags & 0x4)  buf->putBitDouble(width);
-    if (dwgFlags & 0x8)  buf->putBitDouble(elevation);
-    if (dwgFlags & 0x2)  buf->putBitDouble(thickness);
-    if (dwgFlags & 0x1)  buf->putExtrusion(extPoint, /*b_R2000_style=*/false);
+    if (dwgFlags & 0x4)
+      buf->putBitDouble(width);
+    if (dwgFlags & 0x8)
+      buf->putBitDouble(elevation);
+    if (dwgFlags & 0x2)
+      buf->putBitDouble(thickness);
+    if (dwgFlags & 0x1)
+      buf->putExtrusion(extPoint, /*b_R2000_style=*/false);
 
     const std::int32_t numVerts = static_cast<std::int32_t>(vertlist.size());
     buf->putBitLong(numVerts);
-    if (dwgFlags & 0x10) buf->putBitLong(numVerts);  // bulgesnum
+    if (dwgFlags & 0x10)
+      buf->putBitLong(numVerts); // bulgesnum
     if (version > DRW::AC1021 && (dwgFlags & 0x400)) {
-        buf->putBitLong(numVerts);                    // vertexIdCount
+      buf->putBitLong(numVerts); // vertexIdCount
     }
-    if (dwgFlags & 0x20) buf->putBitLong(numVerts);  // widthsnum
+    if (dwgFlags & 0x20)
+      buf->putBitLong(numVerts); // widthsnum
 
     if (numVerts > 0) {
-        // First vertex as 2RD.  Subsequent vertices as 2DD relative to
-        // the previous, with putDefaultDouble always emitting code 0b11
-        // (full RD); the reader's getDefaultDouble returns the raw value.
-        buf->putRawDouble(vertlist[0]->x);
-        buf->putRawDouble(vertlist[0]->y);
-        for (size_t i = 1; i < vertlist.size(); ++i) {
-            buf->putDefaultDouble(vertlist[i-1]->x, vertlist[i]->x);
-            buf->putDefaultDouble(vertlist[i-1]->y, vertlist[i]->y);
+      // First vertex as 2RD.  Subsequent vertices as 2DD relative to
+      // the previous, with putDefaultDouble always emitting code 0b11
+      // (full RD); the reader's getDefaultDouble returns the raw value.
+      buf->putRawDouble(vertlist[0]->x);
+      buf->putRawDouble(vertlist[0]->y);
+      for (size_t i = 1; i < vertlist.size(); ++i) {
+        buf->putDefaultDouble(vertlist[i - 1]->x, vertlist[i]->x);
+        buf->putDefaultDouble(vertlist[i - 1]->y, vertlist[i]->y);
+      }
+      if (dwgFlags & 0x10) {
+        for (const auto &v : vertlist)
+          buf->putBitDouble(v->bulge);
+      }
+      if (version > DRW::AC1021 && (dwgFlags & 0x400)) {
+        for (const auto &v : vertlist)
+          buf->putBitLong(static_cast<std::int32_t>(v->identifier));
+      }
+      if (dwgFlags & 0x20) {
+        for (const auto &v : vertlist) {
+          buf->putBitDouble(v->stawidth);
+          buf->putBitDouble(v->endwidth);
         }
-        if (dwgFlags & 0x10) {
-            for (const auto& v : vertlist)
-                buf->putBitDouble(v->bulge);
-        }
-        if (version > DRW::AC1021 && (dwgFlags & 0x400)) {
-            for (const auto& v : vertlist)
-                buf->putBitLong(static_cast<std::int32_t>(v->identifier));
-        }
-        if (dwgFlags & 0x20) {
-            for (const auto& v : vertlist) {
-                buf->putBitDouble(v->stawidth);
-                buf->putBitDouble(v->endwidth);
-            }
-        }
+      }
     }
 
-    return encodeDwgEntHandle(version, buf, handleBuf);
+    if (!encodeDwgEntHandle(version, buf, handleBuf) || !buf->isGood() ||
+        !stringStage->isGood() || !handleStage->isGood())
+      return false;
+    bodyTarget->swap(bodyStage);
+    if (stringTarget != bodyTarget)
+      stringTarget->swap(*stringStageStorage);
+    if (handleTarget != bodyTarget && handleTarget != stringTarget)
+      handleTarget->swap(*handleStageStorage);
+    typeRollback.committed = true;
+    return true;
+  } catch (const std::bad_alloc &) {
+    return false;
+  }
 }
 
 bool DRW_Block::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {

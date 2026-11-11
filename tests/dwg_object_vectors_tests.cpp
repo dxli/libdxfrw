@@ -424,6 +424,14 @@ public:
   std::uint16_t dwgType() const { return oType; }
 };
 
+class LWPolylineCodecProbe final : public DRW_LWPolyline {
+public:
+  using DRW_LWPolyline::encodeDwg;
+
+  void setDwgType(std::uint16_t value) { oType = value; }
+  std::uint16_t dwgType() const { return oType; }
+};
+
 class ViewportCodecProbe final : public DRW_Viewport {
 public:
   using DRW_Viewport::encodeDwg;
@@ -25187,6 +25195,44 @@ void test3dLineDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testLWPolylineDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+    LWPolylineCodecProbe polyline;
+    polyline.handle = version == DRW::AC1021 ? 0xAE10u : 0xAE20u;
+    polyline.parentHandle = 0xAE30u;
+    polyline.reactorHandles = {0xAE40u};
+    polyline.xDictHandle = 0xAE50u;
+    polyline.setDwgType(0x777u);
+    polyline.flags = 0x81;
+    polyline.width = 0.75;
+    polyline.elevation = 2.5;
+    polyline.thickness = 0.25;
+    polyline.extPoint = DRW_Coord(0.0, 0.0, 1.0);
+    auto first = polyline.addVertex();
+    first->x = 0.0;
+    first->y = 0.0;
+    first->bulge = 0.5;
+    first->stawidth = 0.25;
+    first->endwidth = 0.5;
+    auto second = polyline.addVertex();
+    second->x = 10.0;
+    second->y = 0.0;
+    second->identifier = 11;
+    second->bulge = -0.25;
+    second->stawidth = 0.5;
+    second->endwidth = 0.75;
+    auto third = polyline.addVertex();
+    third->x = 10.0;
+    third->y = 8.0;
+    third->identifier = 12;
+    third->stawidth = 0.75;
+    third->endwidth = 1.0;
+    checkEntityDwgEncodeAllocationRollback(
+        t, polyline, version, 77u,
+        version == DRW::AC1021 ? "AC1021 LWPOLYLINE" : "AC1024 LWPOLYLINE");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -28350,6 +28396,14 @@ int main(int argc, char** argv) {
       TestContext context;
       test3dLineDwgEncodeAllocationRollback(context);
       std::cout << "3DLINE DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 &&
+        std::string(argv[1]) == "--lwpolyline-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testLWPolylineDwgEncodeAllocationRollback(context);
+      std::cout << "LWPOLYLINE DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }
