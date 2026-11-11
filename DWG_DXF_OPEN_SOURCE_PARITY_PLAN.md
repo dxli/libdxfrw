@@ -1219,10 +1219,15 @@ created locally from scratch for the specific control.
   independent large/small axis and normal scales, planar and tilted geometry,
   full/partial endpoints, cancellation, refusal and corrected retry. These are
   bounded R12 approximation checks, not native-rendering or producer-wide
-  qualification. Finite vectors whose Euclidean norm exceeds binary64 remain
-  refused by the converter and shared DXF preflight; resolve that separately.
-  See the
-  [extreme R12 ellipse receipt](docs/research/p6-r12-ellipse-extreme-axis-stability-2026-11-11.json).
+  qualification. Follow-up ellipse-specific scaling admits tested finite-component
+  axes and normals even when their norms exceed binary64, including a partial
+  arc whose full minor axis is too large but sampled vertices are finite. Near-XY
+  tilted or elevated results now use 3D POLYLINE rather than discarding WCS Z.
+  Keep ratio-above-one normalization with overflowing norms, extreme cancellation
+  between an individually overflowing sampled term and a finite center, and
+  native/consumer semantics open. See the
+  [extreme R12 ellipse receipt](docs/research/p6-r12-ellipse-extreme-axis-stability-2026-11-11.json)
+  and [overflowing-norm follow-up](docs/research/p6-r12-ellipse-overflowing-vector-norm-2026-11-11.json).
 
 - **P6 legacy MTEXT main-subclass columns:** an explicitly scoped, bounded
   type-75-first profile now retains ordered column values in a distinct

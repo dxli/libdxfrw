@@ -9868,10 +9868,6 @@ void DRW_Ellipse::toPolyline(DRW_Polyline *pol, int parts){
     pol->extPoint = DRW_Coord(0.0, 0.0, 1.0);
 
     const double fullTurn = M_PIx2;
-    // Squaring finite coordinates can overflow or underflow even when their
-    // vector lengths and resulting vertices are representable.
-    const double normalLength = std::hypot(std::hypot(extPoint.x, extPoint.y), extPoint.z);
-    const double majorLength = std::hypot(std::hypot(secPoint.x, secPoint.y), secPoint.z);
     const double sweep = endparam - staparam;
     // Keep the established equal-parameter full-ellipse convention. A
     // distinct endpoint represents a partial arc unless it is exactly the
@@ -9885,19 +9881,32 @@ void DRW_Ellipse::toPolyline(DRW_Polyline *pol, int parts){
         || !std::isfinite(basePoint.y) || !std::isfinite(basePoint.z)
         || !std::isfinite(secPoint.x) || !std::isfinite(secPoint.y)
         || !std::isfinite(secPoint.z) || !std::isfinite(ratio)
+        || !std::isfinite(extPoint.x) || !std::isfinite(extPoint.y)
+        || !std::isfinite(extPoint.z)
         || ratio <= 0.0 || !std::isfinite(staparam)
         || !std::isfinite(endparam) || !std::isfinite(sweep)
-        || !std::isfinite(normalLength) || normalLength <= 0.0
-        || !std::isfinite(majorLength) || majorLength <= 0.0
         || (!fullEllipse && std::abs(sweep) > fullTurn))
         return;
 
-    const double nx = extPoint.x / normalLength;
-    const double ny = extPoint.y / normalLength;
-    const double nz = extPoint.z / normalLength;
-    const double ax = secPoint.x / majorLength;
-    const double ay = secPoint.y / majorLength;
-    const double az = secPoint.z / majorLength;
+    // Normalize after scaling by the largest component. The mathematical norm
+    // may exceed DBL_MAX even when the direction and each coordinate are
+    // finite; subnormal vectors likewise must not collapse during squaring.
+    const double normalScale = std::max({std::abs(extPoint.x), std::abs(extPoint.y), std::abs(extPoint.z)});
+    const double majorScale = std::max({std::abs(secPoint.x), std::abs(secPoint.y), std::abs(secPoint.z)});
+    if (normalScale == 0.0 || majorScale == 0.0) return;
+    const double normalX = extPoint.x / normalScale, normalY = extPoint.y / normalScale, normalZ = extPoint.z / normalScale;
+    const double majorX = secPoint.x / majorScale, majorY = secPoint.y / majorScale, majorZ = secPoint.z / majorScale;
+    // A component that vanishes while normalizing can still contribute a
+    // representable coordinate after multiplication by a very large axis.
+    // Refuse that unqualified mixed-scale profile instead of dropping it.
+    if ((extPoint.x != 0.0 && normalX == 0.0) || (extPoint.y != 0.0 && normalY == 0.0)
+        || (extPoint.z != 0.0 && normalZ == 0.0) || (secPoint.x != 0.0 && majorX == 0.0)
+        || (secPoint.y != 0.0 && majorY == 0.0) || (secPoint.z != 0.0 && majorZ == 0.0))
+        return;
+    const double normalLength = std::hypot(std::hypot(normalX, normalY), normalZ);
+    const double majorLength = std::hypot(std::hypot(majorX, majorY), majorZ);
+    const double nx = normalX / normalLength, ny = normalY / normalLength, nz = normalZ / normalLength;
+    const double ax = majorX / majorLength, ay = majorY / majorLength, az = majorZ / majorLength;
     const double normalMajorDot = nx * ax + ny * ay + nz * az;
     if (!std::isfinite(normalMajorDot) || std::abs(normalMajorDot) > 1.0e-8)
         return;
@@ -9906,13 +9915,26 @@ void DRW_Ellipse::toPolyline(DRW_Polyline *pol, int parts){
     double minorY = nz * ax - nx * az;
     double minorZ = nx * ay - ny * ax;
     const double minorLength = std::hypot(std::hypot(minorX, minorY), minorZ);
-    const double minorRadius = majorLength * ratio;
-    if (!std::isfinite(minorLength) || minorLength <= 0.0
-        || !std::isfinite(minorRadius) || minorRadius <= 0.0)
+    if (!std::isfinite(minorLength) || minorLength <= 0.0)
         return;
-    minorX = (minorX / minorLength) * minorRadius;
-    minorY = (minorY / minorLength) * minorRadius;
-    minorZ = (minorZ / minorLength) * minorRadius;
+    // Multiply exponents separately so a large overall radius and a small
+    // direction component do not overflow/underflow before they cancel.
+    const auto scaledProduct = [](double component, double scale, double norm,
+                                  double factor, double sine) {
+        if (component == 0.0 || sine == 0.0) return component * sine;
+        int e0 = 0, e1 = 0, e2 = 0, e3 = 0, e4 = 0;
+        const double m0 = std::frexp(component, &e0), m1 = std::frexp(scale, &e1);
+        const double m2 = std::frexp(norm, &e2), m3 = std::frexp(factor, &e3);
+        const double m4 = std::frexp(sine, &e4);
+        return std::ldexp((((m0 * m1) * m2) * m3) * m4, e0 + e1 + e2 + e3 + e4);
+    };
+    minorX /= minorLength;
+    minorY /= minorLength;
+    minorZ /= minorLength;
+    if (scaledProduct(minorX, majorScale, majorLength, ratio, 1.0) == 0.0
+        && scaledProduct(minorY, majorScale, majorLength, ratio, 1.0) == 0.0
+        && scaledProduct(minorZ, majorScale, majorLength, ratio, 1.0) == 0.0)
+        return;
 
     double start = staparam;
     double actualSweep = sweep;
@@ -9926,10 +9948,11 @@ void DRW_Ellipse::toPolyline(DRW_Polyline *pol, int parts){
         closed = true;
     }
 
-    const bool planarDefaultXY = std::abs(nx) <= 1.0e-12
-        && std::abs(ny) <= 1.0e-12 && nz > 0.0
-        && std::abs(basePoint.z) <= 1.0e-12
-        && std::abs(secPoint.z) <= majorLength * 1.0e-12;
+    // A tolerance on the direction alone can conceal a very large WCS Z
+    // displacement when the axis is large. Ordinary exact XY input keeps the
+    // legacy 2D route; any retained tilt/elevation requires 3D vertices.
+    const bool planarDefaultXY = extPoint.x == 0.0 && extPoint.y == 0.0
+        && extPoint.z > 0.0 && basePoint.z == 0.0 && secPoint.z == 0.0;
     const bool is3d = !planarDefaultXY;
     pol->flags = (closed ? 1 : 0) | (is3d ? 8 : 0);
 
@@ -9961,9 +9984,14 @@ void DRW_Ellipse::toPolyline(DRW_Polyline *pol, int parts){
         const double parameter = start + actualSweep * fraction;
         const double cosine = std::cos(parameter);
         const double sine = std::sin(parameter);
-        const double x = addCoordinates(basePoint.x, secPoint.x * cosine, minorX * sine);
-        const double y = addCoordinates(basePoint.y, secPoint.y * cosine, minorY * sine);
-        const double z = addCoordinates(basePoint.z, secPoint.z * cosine, minorZ * sine);
+        // Include sine before restoring the exponent: a partial arc can have
+        // representable vertices even when the full minor axis is too large.
+        const double x = addCoordinates(basePoint.x, secPoint.x * cosine,
+            scaledProduct(minorX, majorScale, majorLength, ratio, sine));
+        const double y = addCoordinates(basePoint.y, secPoint.y * cosine,
+            scaledProduct(minorY, majorScale, majorLength, ratio, sine));
+        const double z = addCoordinates(basePoint.z, secPoint.z * cosine,
+            scaledProduct(minorZ, majorScale, majorLength, ratio, sine));
         if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
             pol->vertlist.clear();
             pol->vertexcount = 0;

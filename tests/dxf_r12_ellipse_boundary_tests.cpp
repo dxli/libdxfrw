@@ -19,9 +19,16 @@ struct Writer : LC3CompatCheck {
     dxfRW& output; DRW_Ellipse* ellipse = nullptr; bool accepted = false;
 };
 struct CcwWriter : Writer, DRW_DxfR12CcwEllipseOptIn { using Writer::Writer; };
+struct CircleWriter : LC3CompatCheck {
+    explicit CircleWriter(dxfRW& w):output(w){}
+    void writeEntities() override {accepted=output.writeCircle(circle);}
+    bool finalizeDxfWrite() override {return accepted;}
+    dxfRW& output; DRW_Circle* circle=nullptr; bool accepted=false;
+};
 struct Reader : LC3CompatCheck {
     void addPolyline(const DRW_Polyline& value) override { polyline = value; ++count; }
-    DRW_Polyline polyline; int count = 0;
+    void addEllipse(const DRW_Ellipse& value) override { ellipse = value; ++ellipses; }
+    DRW_Polyline polyline; DRW_Ellipse ellipse; int count = 0, ellipses = 0;
 };
 std::string contents(const std::filesystem::path& path) {
     std::ifstream file(path, std::ios::binary);
@@ -134,24 +141,123 @@ bool extremeArithmetic(const std::filesystem::path& path, bool binary) {
     if (output.write(&writer,DRW::AC1009,binary) || writer.accepted || contents(path)!="sentinel") return false;
     e.basePoint={0.,0.,0.};
     if (!output.write(&writer,DRW::AC1009,binary) || !writer.accepted) return false;
-    // The current shared DXF preflight requires the vector norm itself to be
-    // finite. Keep these wider finite-component cases explicitly refused until
-    // all affected entity preflights and normalization routes are qualified.
+    // The normal's mathematical norm overflows but its unit direction and
+    // generated 3D coordinates are finite.
     e.secPoint={1.,-1.,0.}; e.extPoint={1.5e308,1.5e308,0.}; e.ratio=.5;
     e.staparam=.2; e.endparam=.4;
     direct.vertlist.clear(); e.toPolyline(&direct,8);
-    {std::ofstream existing(path,std::ios::binary|std::ios::trunc); existing<<"sentinel";}
-    if (!direct.vertlist.empty() || output.write(&writer,DRW::AC1009,binary)
-        || writer.accepted || contents(path)!="sentinel") return false;
-    e.extPoint={1.,1.,0.};
     if (!output.write(&writer,DRW::AC1009,binary) || !writer.accepted) return false;
+    dxfRW normalInput(path.string().c_str());Reader normalRead;
+    const DRW_Coord expectedNormal(std::cos(.2),-std::cos(.2),-std::sqrt(.5)*std::sin(.2));
+    if (direct.vertlist.size()!=2u || (direct.flags&8)==0
+        || !scaledNear(direct.vertlist.front()->basePoint,expectedNormal,1.)
+        || !normalInput.read(&normalRead,false) || normalRead.count!=1
+        || normalRead.polyline.vertlist.size()!=2u || (normalRead.polyline.flags&8)==0
+        || !scaledNear(normalRead.polyline.vertlist.front()->basePoint,expectedNormal,1.)) return false;
+    if (!output.write(&writer,DRW::AC1027,binary) || !writer.accepted) return false;
+    dxfRW modernNormalInput(path.string().c_str());Reader modernNormalRead;
+    if (!modernNormalInput.read(&modernNormalRead,false) || modernNormalRead.ellipses!=1
+        || modernNormalRead.ellipse.extPoint.x!=e.extPoint.x
+        || modernNormalRead.ellipse.extPoint.y!=e.extPoint.y) return false;
+    // Both major components are finite even though their combined norm is not.
     e.secPoint={1.5e308,1.5e308,0.}; e.extPoint={0.,0.,1.};
     direct.vertlist.clear(); e.toPolyline(&direct,8);
+    const DRW_Coord expectedMajor(1.5e308*std::cos(.2)-.75e308*std::sin(.2),
+                                  1.5e308*std::cos(.2)+.75e308*std::sin(.2),0.);
+    if (direct.vertlist.size()!=2u || !scaledNear(direct.vertlist.front()->basePoint,expectedMajor,1.e308)
+        || !output.write(&writer,DRW::AC1009,binary) || !writer.accepted) return false;
+    dxfRW majorInput(path.string().c_str());Reader majorRead;
+    if (!majorInput.read(&majorRead,false) || majorRead.count!=1 || majorRead.polyline.vertlist.size()!=2u
+        || !scaledNear(majorRead.polyline.vertlist.front()->basePoint,expectedMajor,1.e308)) return false;
+    if (!output.write(&writer,DRW::AC1027,binary) || !writer.accepted) return false;
+    dxfRW modernMajorInput(path.string().c_str());Reader modernMajorRead;
+    if (!modernMajorInput.read(&modernMajorRead,false) || modernMajorRead.ellipses!=1
+        || modernMajorRead.ellipse.secPoint.x!=e.secPoint.x
+        || modernMajorRead.ellipse.secPoint.y!=e.secPoint.y) return false;
+    // A small angular tilt is not a small WCS displacement at this scale.
+    // A 2D classic POLYLINE would let consumers discard the resulting Z.
+    e.extPoint={5.e-13,-5.e-13,1.}; e.ratio=.5;
+    direct.vertlist.clear(); e.toPolyline(&direct,8);
+    const double tiltedZ=(1.5e308*5.e-13)*std::sin(.2);
+    if (direct.vertlist.size()!=2u || (direct.flags&8)==0
+        || std::abs(direct.vertlist[0]->basePoint.z/tiltedZ-1.)>1.e-13
+        || !output.write(&writer,DRW::AC1009,binary) || !writer.accepted) return false;
+    for (bool applyExtrusion : {false,true}) {
+        dxfRW tiltedInput(path.string().c_str());Reader tiltedRead;
+        if (!tiltedInput.read(&tiltedRead,applyExtrusion) || tiltedRead.count!=1
+            || (tiltedRead.polyline.flags&8)==0 || tiltedRead.polyline.vertlist.size()!=2u
+            || std::abs(tiltedRead.polyline.vertlist[0]->basePoint.z/tiltedZ-1.)>1.e-13) return false;
+    }
+    // The major norm overflows while ratio is subnormal; the orthogonal Z
+    // component remains ordinary-sized and must not be lost to 0 or infinity.
+    e.extPoint={1.,-1.,0.}; e.ratio=1.e-308;
+    direct.vertlist.clear(); e.toPolyline(&direct,8);
+    const double expectedZ=1.5*std::sqrt(2.)*std::sin(.2);
+    if (direct.vertlist.size()!=2u || std::abs(direct.vertlist[0]->basePoint.z-expectedZ)>1.e-14
+        || !output.write(&writer,DRW::AC1009,binary) || !writer.accepted) return false;
+    dxfRW tinyRatioInput(path.string().c_str()); Reader tinyRatioRead;
+    if (!tinyRatioInput.read(&tinyRatioRead,false) || tinyRatioRead.count!=1
+        || tinyRatioRead.polyline.vertlist.size()!=2u
+        || std::abs(tinyRatioRead.polyline.vertlist[0]->basePoint.z-expectedZ)>1.e-14) return false;
+    // The full minor Z axis exceeds DBL_MAX, but a short partial arc samples
+    // finite Z values. Multiply the sine before restoring its exponent.
+    e.ratio=1.; e.staparam=.1; e.endparam=.2;
+    direct.vertlist.clear(); e.toPolyline(&direct,8);
+    const double partialZ=(1.5e308*std::sin(.1))*std::sqrt(2.);
+    if (direct.vertlist.size()!=2u || !std::isfinite(direct.vertlist[0]->basePoint.z)
+        || std::abs(direct.vertlist[0]->basePoint.z/partialZ-1.)>1.e-13
+        || !output.write(&writer,DRW::AC1009,binary) || !writer.accepted) return false;
+    dxfRW partialInput(path.string().c_str());Reader partialRead;
+    if (!partialInput.read(&partialRead,false) || partialRead.count!=1
+        || partialRead.polyline.vertlist.size()!=2u
+        || std::abs(partialRead.polyline.vertlist[0]->basePoint.z/partialZ-1.)>1.e-13) return false;
+    {std::ofstream existing(path,std::ios::binary|std::ios::trunc); existing<<"sentinel";}
+    e.staparam=0.;e.endparam=turn;
+    if (output.write(&writer,DRW::AC1009,binary) || writer.accepted || contents(path)!="sentinel") return false;
+    e.staparam=.1;e.endparam=.2;
+    if (!output.write(&writer,DRW::AC1009,binary) || !writer.accepted) return false;
+    // An individually overflowing minor contribution could cancel against the
+    // center to a finite coordinate. Until a robust shared-exponent sum is
+    // qualified, reject rather than publish an infinity or a rounded guess.
+    e.basePoint={0.,0.,-5.e307};e.staparam=1.2;e.endparam=1.3;
+    const double finiteResult=(1.5*std::sqrt(2.)*std::sin(1.2)-.5)*1.e308;
+    if (!std::isfinite(finiteResult)) return false;
+    direct.vertlist.clear();e.toPolyline(&direct,8);
     {std::ofstream existing(path,std::ios::binary|std::ios::trunc); existing<<"sentinel";}
     if (!direct.vertlist.empty() || output.write(&writer,DRW::AC1009,binary)
         || writer.accepted || contents(path)!="sentinel") return false;
-    e.secPoint={1.1e308,1.1e308,0.};
-    return output.write(&writer,DRW::AC1009,binary) && writer.accepted;
+    e.ratio=.5;
+    if (!output.write(&writer,DRW::AC1009,binary) || !writer.accepted) return false;
+    {std::ofstream existing(path,std::ios::binary|std::ios::trunc); existing<<"sentinel";}
+    e.basePoint={0.,0.,0.};e.extPoint={0.,0.,1.};e.staparam=.1;e.endparam=.2;
+    e.ratio=2.; // major/minor swapping is a separate, not-yet-qualified path
+    if (output.write(&writer,DRW::AC1009,binary) || writer.accepted || contents(path)!="sentinel") return false;
+    e.ratio=.5;
+    if (!output.write(&writer,DRW::AC1009,binary) || !writer.accepted) return false;
+    // A component lost during normalization can reappear after scaling by a
+    // huge axis. Refuse these mixed-scale cases rather than flattening them.
+    const double tiny=std::numeric_limits<double>::denorm_min();
+    e.secPoint={0.,max,0.};e.extPoint={tiny,0.,max};e.staparam=0.;e.endparam=turn/4.;
+    direct.vertlist.clear();e.toPolyline(&direct,8);
+    {std::ofstream existing(path,std::ios::binary|std::ios::trunc); existing<<"sentinel";}
+    if (!direct.vertlist.empty() || output.write(&writer,DRW::AC1009,binary)
+        || writer.accepted || contents(path)!="sentinel") return false;
+    e.extPoint={0.,0.,1.};
+    if (!output.write(&writer,DRW::AC1009,binary) || !writer.accepted) return false;
+    e.secPoint={tiny,max,0.};
+    direct.vertlist.clear();e.toPolyline(&direct,8);
+    {std::ofstream existing(path,std::ios::binary|std::ios::trunc); existing<<"sentinel";}
+    if (!direct.vertlist.empty() || output.write(&writer,DRW::AC1009,binary)
+        || writer.accepted || contents(path)!="sentinel") return false;
+    e.secPoint={0.,max,0.};
+    if (!output.write(&writer,DRW::AC1009,binary) || !writer.accepted) return false;
+    // The shared CIRCLE extrusion preflight is intentionally unchanged.
+    DRW_Circle circle;circle.radious=1.;circle.extPoint={1.5e308,1.5e308,0.};
+    CircleWriter circleWriter(output);circleWriter.circle=&circle;
+    {std::ofstream existing(path,std::ios::binary|std::ios::trunc); existing<<"sentinel";}
+    if (output.write(&circleWriter,DRW::AC1009,binary) || circleWriter.accepted || contents(path)!="sentinel") return false;
+    circle.extPoint={0.,0.,1.};
+    return output.write(&circleWriter,DRW::AC1009,binary) && circleWriter.accepted;
 }
 }
 int main() {

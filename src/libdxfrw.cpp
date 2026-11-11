@@ -672,27 +672,16 @@ bool isValidDxfEllipseGeometry(const DRW_Ellipse& ellipse) {
         || !isFiniteDxfCoord(ellipse.secPoint)
         || !std::isfinite(ellipse.ratio) || ellipse.ratio <= 0.0
         || !std::isfinite(ellipse.staparam)
-        || !std::isfinite(ellipse.endparam)
-        || !isValidDxfExtrusionDirection(ellipse.extPoint))
+        || !std::isfinite(ellipse.endparam))
         return false;
 
-    const double majorLength = std::hypot(
-        std::hypot(ellipse.secPoint.x, ellipse.secPoint.y),
-        ellipse.secPoint.z);
-    const double normalLength = std::hypot(
-        std::hypot(ellipse.extPoint.x, ellipse.extPoint.y),
-        ellipse.extPoint.z);
-    if (!std::isfinite(majorLength) || majorLength == 0.0
-        || !std::isfinite(normalLength) || normalLength == 0.0)
+    DRW_Coord majorUnit, normalUnit;
+    if (!normalizedDxfInfiniteLineDirection(ellipse.secPoint, majorUnit)
+        || !normalizedDxfInfiniteLineDirection(ellipse.extPoint, normalUnit))
         return false;
 
-    const double alignment =
-        (ellipse.secPoint.x / majorLength)
-            * (ellipse.extPoint.x / normalLength)
-        + (ellipse.secPoint.y / majorLength)
-            * (ellipse.extPoint.y / normalLength)
-        + (ellipse.secPoint.z / majorLength)
-            * (ellipse.extPoint.z / normalLength);
+    const double alignment = majorUnit.x * normalUnit.x
+        + majorUnit.y * normalUnit.y + majorUnit.z * normalUnit.z;
     // ObjectARX defines the major axis as perpendicular to the ellipse normal
     // within 1e-6. Normalize both vectors first so scaled DXF normals do not
     // change the geometric check.
