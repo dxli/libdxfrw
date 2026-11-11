@@ -2220,13 +2220,14 @@ bool parseSabPrefix(const std::uint8_t* data, std::size_t length,
         if (parsed.header.numRecords < 0)
             throw SabError();
 
-        // The pinned ACIS 21200 source and the supported 21800 witness use
-        // zero as an unspecified record count and terminate the stream with
-        // an explicit End-of-ACIS-data record. Keep this empirical profile
-        // version-scoped; do not treat arbitrary zero counts as complete.
+        // Pinned ACIS 21200, 21500 and 21800 sources use zero as an
+        // unspecified record count and terminate the stream with an explicit
+        // end marker. Keep this empirical profile version-scoped; do not
+        // treat arbitrary zero counts as complete.
         const bool unknownAcisRecordCount =
             parsed.header.signature == "ACIS BinaryFile"
             && (parsed.header.version == 21200
+                || parsed.header.version == 21500
                 || parsed.header.version == 21800)
             && parsed.header.numRecords == 0;
 
@@ -2349,7 +2350,8 @@ static bool convertSabToSatV1Impl(const std::uint8_t* data, std::size_t length,
     DRW_SabData sab;
     if (!drw_parseSab(data, length, sab)
         || sab.header.signature != "ACIS BinaryFile"
-        || sab.header.version != 21200
+        || (sab.header.version != 21200
+            && sab.header.version != 21500)
         || sab.records.empty()
         || sab.records.back().type != "End-of-ACIS-data")
         return false;
@@ -2364,7 +2366,9 @@ static bool convertSabToSatV1Impl(const std::uint8_t* data, std::size_t length,
     };
     const std::int32_t satVersion = satVersionForTarget(targetVersion);
     const std::int32_t historyFlags = targetVersion < DRW::AC1024
-        ? 0 : sab.header.flags;
+        ? 0 : (sab.header.flags & 1);
+    const std::int32_t satRecordCount = static_cast<std::int32_t>(
+        sab.records.size() - 1u);
 
     std::string text;
     std::size_t column = 0u;
@@ -2417,7 +2421,7 @@ static bool convertSabToSatV1Impl(const std::uint8_t* data, std::size_t length,
     };
 
     if (!appendInteger(satVersion, false)
-        || !appendInteger(sab.header.numRecords, false)
+        || !appendInteger(satRecordCount, false)
         || !appendInteger(sab.header.numEntities, false)
         || !appendInteger(historyFlags, false))
         return false;
@@ -2532,15 +2536,21 @@ static bool convertSabToSatV1Impl(const std::uint8_t* data, std::size_t length,
             case DRW_SabTag::Int:
             case DRW_SabTag::Pointer:
             case DRW_SabTag::Enum:
-            case DRW_SabTag::Unknown0x17:
                 if (token.tag == DRW_SabTag::Int
                     || token.tag == DRW_SabTag::Enum
-                    || token.tag == DRW_SabTag::Pointer
-                    || token.tag == DRW_SabTag::Unknown0x17)
+                    || token.tag == DRW_SabTag::Pointer)
                     rendered.push_back('$');
                 rendered += std::to_string(token.ival);
                 rendered.push_back(' ');
                 if (!appendRaw(rendered, true)) return false;
+                break;
+            case DRW_SabTag::Unknown0x17:
+                if (sab.header.version == 21200) {
+                    rendered = "$" + std::to_string(token.ival) + " ";
+                    if (!appendRaw(rendered, true)) return false;
+                } else if (!appendDouble(token.dval)) {
+                    return false;
+                }
                 break;
             case DRW_SabTag::Float:
             case DRW_SabTag::Double:

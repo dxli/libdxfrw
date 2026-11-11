@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <new>
+#include <string>
 #include <vector>
 
 namespace {
@@ -49,13 +50,15 @@ void appendRawDouble(std::vector<std::uint8_t>& bytes, double value) {
         bytes.push_back(static_cast<std::uint8_t>(bits >> shift));
 }
 
-std::vector<std::uint8_t> makeSab() {
+std::vector<std::uint8_t> makeSab(std::uint32_t version = 21200u,
+                                  bool addVersionedFloat = false,
+                                  std::uint32_t flags = 0u) {
     std::vector<std::uint8_t> bytes{
         'A','C','I','S',' ','B','i','n','a','r','y','F','i','l','e'};
-    appendU32(bytes, 21200u);
+    appendU32(bytes, version);
     appendU32(bytes, 0u);
     appendU32(bytes, 1u);
-    appendU32(bytes, 0u);
+    appendU32(bytes, flags);
     appendString(bytes, 7u, "P", 1u);
     appendString(bytes, 7u, "A", 1u);
     appendString(bytes, 7u, "D", 1u);
@@ -64,6 +67,10 @@ std::vector<std::uint8_t> makeSab() {
     appendDouble(bytes, 0.01);
     appendString(bytes, 13u, "body", 4u);
     bytes.push_back(10u);
+    if (addVersionedFloat) {
+        bytes.push_back(DRW_SabTag::Unknown0x17);
+        appendRawDouble(bytes, 1.25);
+    }
     bytes.push_back(17u);
     bytes.insert(bytes.end(), {0x0Eu,0x03u,'E','n','d',
                                0x0Eu,0x02u,'o','f',
@@ -136,6 +143,22 @@ int main() {
         || expected.empty()) {
         std::fprintf(stderr, "baseline SAT conversion failed\n");
         return 1;
+    }
+
+    const std::vector<std::uint8_t> sab21500 = makeSab(21500u, true, 0x18u);
+    std::vector<std::uint8_t> converted21500;
+    if (!drw_convertSabToSatV1(sab21500.data(), sab21500.size(),
+                               DRW::AC1024, converted21500)
+        || converted21500.empty()) {
+        std::fprintf(stderr, "ACIS 21500 SAT conversion failed\n");
+        return 7;
+    }
+    const std::string text21500(converted21500.begin(), converted21500.end());
+    if (text21500.find("21500 1 1 0") != 0u
+        || text21500.find("1.25 ") == std::string::npos
+        || text21500.find("1065353216") != std::string::npos) {
+        std::fprintf(stderr, "ACIS 21500 versioned float serialization mismatch\n");
+        return 8;
     }
 
     int firstSuccess = -1;

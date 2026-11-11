@@ -188,6 +188,16 @@ std::vector<std::uint8_t> minimalSab(
     return bytes;
 }
 
+std::vector<std::uint8_t> zeroCountAcisSab21500() {
+    std::vector<std::uint8_t> bytes = minimalSab();
+    const std::uint32_t version = 21500u;
+    for (std::size_t i = 0u; i < 4u; ++i) {
+        bytes[15u + i] = static_cast<std::uint8_t>(version >> (8u * i));
+        bytes[19u + i] = 0u;
+    }
+    return bytes;
+}
+
 std::vector<std::uint8_t> unprojectedRecordsSab(std::uint32_t recordCount) {
     const std::string signature = "ACIS BinaryFile";
     const std::string terminal = "End-of-ASM-data";
@@ -14087,6 +14097,23 @@ void testAcisBoundaries(TestContext& t) {
     t.expect(model.nodes.size() == 1
                  && model.nodesOfType("End-of-ACIS-data").empty(),
              "ACIS graph excludes terminal marker from typed node lookup");
+
+    const std::vector<std::uint8_t> zeroCount21500 =
+        zeroCountAcisSab21500();
+    DRW_SabData zeroCount21500Sab;
+    DRW_SabParseOutcome zeroCount21500Outcome;
+    t.expect(drw_parseSabWithOutcome(zeroCount21500.data(),
+                                     zeroCount21500.size(),
+                                     zeroCount21500Sab,
+                                     zeroCount21500Outcome)
+                 && zeroCount21500Outcome.complete
+                 && zeroCount21500Outcome.terminalRecordSeen
+                 && !zeroCount21500Outcome.recordCountKnown
+                 && zeroCount21500Sab.header.version == 21500
+                 && zeroCount21500Sab.records.size() == 1u
+                 && zeroCount21500Sab.records.back().type
+                        == "End-of-ACIS-data",
+             "ACIS 21500 zero record count requires and accepts terminal framing");
 
     std::vector<std::uint8_t> truncated = bytes;
     // Removing only RecordEnd is valid for the terminal marker at EOF; cut
