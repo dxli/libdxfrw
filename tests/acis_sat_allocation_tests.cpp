@@ -66,12 +66,36 @@ std::vector<std::uint8_t> makeSab(std::uint32_t version = 21200u,
     appendDouble(bytes, 0.1);
     appendDouble(bytes, 0.01);
     appendString(bytes, 13u, "body", 4u);
+    if (version == 700u) {
+        bytes.push_back(DRW_SabTag::Int);
+        appendU32(bytes, static_cast<std::uint32_t>(-1));
+        bytes.push_back(DRW_SabTag::Pointer);
+        appendU32(bytes, static_cast<std::uint32_t>(-1));
+        bytes.push_back(DRW_SabTag::Pointer);
+        appendU32(bytes, 2u);
+    }
     bytes.push_back(10u);
     if (addVersionedFloat) {
         bytes.push_back(DRW_SabTag::Unknown0x17);
         appendRawDouble(bytes, 1.25);
     }
     bytes.push_back(17u);
+    if (version == 700u) {
+        appendString(bytes, DRW_SabTag::EntityType, "plane-surface", 13u);
+        bytes.insert(bytes.end(), {DRW_SabTag::BoolFalse,
+                                   DRW_SabTag::BoolTrue,
+                                   DRW_SabTag::BoolFalse,
+                                   DRW_SabTag::BoolTrue,
+                                   DRW_SabTag::BoolFalse,
+                                   DRW_SabTag::RecordEnd});
+        appendString(bytes, DRW_SabTag::EntityType, "coedge", 6u);
+        bytes.insert(bytes.end(), {DRW_SabTag::BoolFalse,
+                                   DRW_SabTag::RecordEnd});
+        appendString(bytes, DRW_SabTag::EntityType, "straight-curve", 14u);
+        bytes.insert(bytes.end(), {DRW_SabTag::BoolTrue,
+                                   DRW_SabTag::BoolFalse,
+                                   DRW_SabTag::RecordEnd});
+    }
     bytes.insert(bytes.end(), {0x0Eu,0x03u,'E','n','d',
                                0x0Eu,0x02u,'o','f',
                                0x0Eu,0x04u,'A','C','I','S',
@@ -143,13 +167,88 @@ int main() {
     if (!drw_parseSabWithOutcome(sab700.data(), sab700.size(), parsed700,
                                  outcome700)
         || !outcome700.complete || outcome700.recordCountKnown
-        || !outcome700.terminalRecordSeen || parsed700.records.size() != 2u
+        || !outcome700.terminalRecordSeen || parsed700.records.size() != 5u
         || parsed700.header.version != 700
         || parsed700.header.numRecords != 0
         || parsed700.records.back().type != "End-of-ACIS-data") {
         std::fprintf(stderr,
                      "ACIS 700 zero-count terminal framing mismatch\n");
         return 9;
+    }
+    std::vector<std::uint8_t> converted700;
+    const std::string expected700Prefix =
+        "700 4 1 0 \n@1 P @1 A @1 D \n"
+        "1 0.10000000000000001 0.01 \nbody -1 $-1 $2 F #\n";
+    const bool converted700Ok = drw_convertSabToSatV1(
+        sab700.data(), sab700.size(), DRW::AC1024, converted700);
+    const std::string converted700Text(converted700.begin(),
+                                       converted700.end());
+    if (!converted700Ok || converted700Text.find(expected700Prefix) != 0u
+        || converted700Text.find(
+               "plane-surface forward_v F I F I #") == std::string::npos
+        || converted700Text.find("coedge forward #") == std::string::npos
+        || converted700Text.find("straight-curve F I #")
+               == std::string::npos) {
+        const std::string actual700(converted700.begin(), converted700.end());
+        std::fprintf(stderr, "ACIS 700 AC1024 SAT conversion mismatch: %s\n",
+                     actual700.substr(0u, 160u).c_str());
+        return 11;
+    }
+    std::vector<std::uint8_t> refused700{0xA5u, 0x5Au};
+    if (drw_convertSabToSatV1(sab700.data(), sab700.size(), DRW::AC1027,
+                              refused700)
+        || refused700 != std::vector<std::uint8_t>({0xA5u, 0x5Au})) {
+        std::fprintf(stderr,
+                     "ACIS 700 conversion escaped its AC1024 profile\n");
+        return 12;
+    }
+    int first700Success = -1;
+    for (int failIndex = 0; failIndex < 512; ++failIndex) {
+        std::vector<std::uint8_t> output{0xA5u, 0x5Au};
+        failAfter.store(failIndex, std::memory_order_relaxed);
+        bool converted = false;
+        bool threw = false;
+        try {
+            converted = drw_convertSabToSatV1(
+                sab700.data(), sab700.size(), DRW::AC1024, output);
+        } catch (...) {
+            threw = true;
+        }
+        failAfter.store(-1, std::memory_order_relaxed);
+        if (threw) {
+            std::fprintf(stderr,
+                         "ACIS 700 allocation %d escaped as an exception\n",
+                         failIndex);
+            return 13;
+        }
+        if (converted) {
+            if (output != converted700) {
+                std::fprintf(stderr,
+                             "ACIS 700 allocation sweep output mismatch\n");
+                return 14;
+            }
+            first700Success = failIndex;
+            break;
+        }
+        if (output != std::vector<std::uint8_t>({0xA5u, 0x5Au})) {
+            std::fprintf(stderr,
+                         "ACIS 700 allocation %d changed output on failure\n",
+                         failIndex);
+            return 15;
+        }
+        if (!drw_convertSabToSatV1(sab700.data(), sab700.size(),
+                                   DRW::AC1024, output)
+            || output != converted700) {
+            std::fprintf(stderr,
+                         "ACIS 700 allocation %d same-buffer retry failed\n",
+                         failIndex);
+            return 16;
+        }
+    }
+    if (first700Success < 8) {
+        std::fprintf(stderr, "ACIS 700 allocation sweep too short: %d\n",
+                     first700Success);
+        return 17;
     }
     std::vector<std::uint8_t> sab700WithoutTerminal = sab700;
     sab700WithoutTerminal.resize(sab700WithoutTerminal.size() - 19u);

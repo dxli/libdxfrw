@@ -10,10 +10,16 @@ terminal record is present. A generated in-memory framing test covers the
 positive case and missing-terminal refusal; the exact ODA payload now parses
 to an inventory projection of one body/lump/shell, six faces/loops, 24
 coedges, 12 edges and eight vertices. This is reader/framing and projected
-incidence evidence only: the producer sample has no independent semantic or
-native modeler qualification, SAT v1 conversion from v700 remains unsupported,
-and no support claim is promoted. The ODA output and online SAT remain in
-`/tmp`; no drawing fixture was committed. See the [ACIS 700 receipt](docs/research/p7-ac1024-oda-acis700-zero-count-framing-2026-11-11.json).
+incidence evidence only. The bounded AC1024 writer now converts this standard
+ACIS 7.00 carrier to SAT 700, including v700 string/integer/pointer/Boolean
+spellings. Its 1,297-token output matches ODA File Converter's independent DXF
+SAT export except for the expected creation timestamp and equivalent numeric
+exponent spellings. Generated controls cover those token classes, allocation
+rollback and same-buffer retry, and preserve caller output when v700 is
+requested for AC1027. This does not qualify
+native B-rep semantics, whole-source output admission, producer-wide behavior,
+or a 3D support claim. The ODA output and online SAT remain in `/tmp`; no
+drawing fixture was committed. See the [ACIS 700 receipt](docs/research/p7-ac1024-oda-acis700-zero-count-framing-2026-11-11.json).
 
 **P7 second source-distinct AC1024/21500 topology lift (2026-11-11):**
 LibreDWG 0.14 minJSON supplied the complete SAB payload for conference-room

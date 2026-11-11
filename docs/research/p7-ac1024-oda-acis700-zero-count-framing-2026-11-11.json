@@ -2,7 +2,7 @@
   "schema": "libdxfrw-research-receipt-v1",
   "date": "2026-11-11",
   "id": "p7-ac1024-oda-acis700-zero-count-framing-2026-11-11",
-  "purpose": "Reproduce and close a bounded ACIS 700 zero-record-count framing refusal in an AC1024 DWG, without claiming SAT conversion or 3D semantic support.",
+  "purpose": "Reproduce and close the bounded ACIS 700 zero-record-count framing refusal in an AC1024 DWG, then qualify the corresponding bounded AC1024 SAT 700 serialization against ODA's independent DXF export without claiming 3D semantic support.",
   "source": {
     "sat": {
       "url": "https://raw.githubusercontent.com/monozukuri-ai/cq-acis/main/corpus/data/ezdxf/cube_sat_700.sat",
@@ -26,6 +26,12 @@
       "sha256": "852227fac827598b14a3f3be19228d8ce3177e7c862d805767f6be6242505710",
       "version": "AC1024"
     },
+    "odaRoundTripDxf": {
+      "tool": "ODA File Converter 27.1.0.0",
+      "path": "/tmp/libdxfrw-acis21500/roundtrip-dxf/cube.dxf",
+      "sha256": "c1be24d46fbfae4f689b18041d2516a834f40b2a15e3999abf7a35222c8ee40e",
+      "operation": "Converted the generated AC1024 DWG back to ACAD2010 ASCII DXF; the 3DSOLID SAT carrier remains version 700."
+    },
     "extractor": {
       "tool": "LibreDWG 0.14",
       "command": "dwgread -O minJSON /tmp/libdxfrw-acis21500/dwg/cube.dwg -o /tmp/libdxfrw-acis21500/cube.json",
@@ -45,14 +51,14 @@
   },
   "implementation": {
     "files": {
-      "src/drw_acis.cpp": "Admits a zero ACIS record count as unknown for version 700 only, matching the existing version-scoped 21200/21500/21800 behavior. Completion still requires the explicit terminal marker and full input consumption.",
-      "tests/acis_sat_allocation_tests.cpp": "Adds an in-memory, locally generated ACIS 700 zero-count body/terminal vector and verifies complete parsing plus missing-terminal refusal. No external DWG/DXF/SAT fixture was added."
+      "src/drw_acis.cpp": "Admits a zero ACIS record count as unknown for version 700 only, matching the existing version-scoped 21200/21500/21800 behavior. Completion still requires the explicit terminal marker and full input consumption. The bounded SAT v1 serializer preserves SAT 700 only for AC1024, uses v700 @string, integer, pointer, and Boolean token spellings, and refuses the same carrier for AC1027.",
+      "tests/acis_sat_allocation_tests.cpp": "Adds in-memory, locally generated ACIS 700 framing and serializer controls for integer/pointer spellings, plane-surface interval/sense booleans, coedge sense and straight-curve booleans. It verifies complete parsing, missing-terminal refusal, AC1024 conversion, atomic AC1027 refusal, and allocation-failure rollback with same-buffer retry. No external DWG/DXF/SAT fixture was added."
     },
     "sourceHashes": {
-      "src/drw_acis.cpp": "4c5995857a69129f71481bdbd54cb4b1e3ed67a4a27ed23826eda07d7e1d58d4",
-      "tests/acis_sat_allocation_tests.cpp": "90a88955a22cd236c4b992f039fcff8ae7488916d1b476e16798806350322b01"
+      "src/drw_acis.cpp": "b27e53f71a8980fd56c8ee10b3f7082431121a271ce475f20895682fd49003d5",
+      "tests/acis_sat_allocation_tests.cpp": "370d211f1ab8b967f61eaec19a582a8b6248f42388c7c3189547a2c267c6704f"
     },
-    "scopeLimit": "No 700 SAT v1 serialization, DXF/DWG output admission, native acceptance, or semantic support claim is added."
+    "scopeLimit": "Only the selected standard ACIS 7.00 carrier to AC1024 SAT 700 serialization is qualified. This does not establish DXF/DWG output admission, native B-rep validity, independent geometry semantics, other producer profiles, or a 3D support claim."
   },
   "results": {
     "beforeChange": {
@@ -79,16 +85,24 @@
       },
       "brepValidityChecked": false
     },
+    "sat700SerializationComparison": {
+      "odaSatPath": "/tmp/libdxfrw-acis21500/oda-roundtrip.sat",
+      "odaSatSha256": "2ac28bcc2f03394abfddc2dac14d2c5dfe6c50a9babed80ff677c6b4cf688ff7",
+      "libdxfrwSatPath": "/tmp/libdxfrw-acis21500/libdxfrw-roundtrip.sat",
+      "libdxfrwSatSha256": "119ed8a97ce3d4d72d8d197157244f4f310fb0fccde6c0dd780becba1ef08920",
+      "comparison": "Both streams have 1,297 whitespace-delimited SAT tokens. All entity/header tokens match except the creation time and the two header scalars whose exponent spellings differ but represent the same values. All 1,294 remaining tokens match exactly.",
+      "independenceBoundary": "ODA produced the reference AC1024 DWG and DXF; the SAT tokens were independently decoded from ODA's DXF with ezdxf 1.4.5. This is exact carrier serialization agreement for this one input, not independent B-rep or source-geometry semantic evidence."
+    },
     "generatedControl": {
       "command": "cmake --build build-gcc --target libdxfrw_acis_sat_allocation_tests -j4 && ctest --test-dir build-gcc -R '^acis_sat_allocation_rollback_retry$' --output-on-failure",
-      "result": "PASS 1/1; generated complete terminal case and missing-terminal refusal both verified."
+      "result": "PASS 1/1; generated complete terminal parsing, missing-terminal refusal, v700 SAT 700 token grammar, AC1024 serialization, atomic AC1027 refusal, exhaustive reached-allocation failure rollback, and same-buffer retry verified."
     },
     "diffCheck": "PASS: git diff --check"
   },
   "authorityBoundary": {
     "odaReference": "https://www.opendesign.com/blog/2017/october/working-sat-and-sab-files-teigha",
     "use": "ODA describes DWG release-to-default SAT/SAB version mappings and the Autodesk-modified dialect boundary. The sample experiment is an ODA converter output observation only; it does not establish Autodesk producer behavior or resolve the separate ACIS 21500 header semantics.",
-    "semanticCeiling": "Framing plus structural inventory from one ODA-produced carrier. No independent semantic oracle, B-rep kernel, native acceptance, carrier writer, or producer-wide version profile is established."
+    "semanticCeiling": "Framing, structural inventory, and token-level AC1024 SAT 700 serialization agreement from one ODA-produced carrier. No independent geometry semantic oracle, B-rep kernel, native acceptance, output admission, or producer-wide version profile is established."
   },
-  "claimEffect": "Closes the parser's bounded ACIS 700 zero-count framing refusal for streams with an explicit terminal marker. Does not promote DWG, DXF, ACIS/ACDS, or 3D support claims."
+  "claimEffect": "Closes the parser's bounded ACIS 700 zero-count framing refusal for streams with an explicit terminal marker and implements the selected AC1024 SAT 700 serializer profile. Does not promote DWG, DXF, ACIS/ACDS, or 3D support claims."
 }

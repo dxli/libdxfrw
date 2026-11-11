@@ -2398,8 +2398,10 @@ static bool convertSabToSatV1Impl(const std::uint8_t* data, std::size_t length,
     DRW_SabData sab;
     if (!drw_parseSab(data, length, sab)
         || sab.header.signature != "ACIS BinaryFile"
-        || (sab.header.version != 21200
+        || (sab.header.version != 700
+            && sab.header.version != 21200
             && sab.header.version != 21500)
+        || (sab.header.version == 700 && targetVersion != DRW::AC1024)
         || sab.records.empty()
         || sab.records.back().type != "End-of-ACIS-data")
         return false;
@@ -2412,7 +2414,12 @@ static bool convertSabToSatV1Impl(const std::uint8_t* data, std::size_t length,
         if (version >= DRW::AC1015) return 400;
         return 106;
     };
-    const std::int32_t satVersion = satVersionForTarget(targetVersion);
+    // ODA's AC1024 write/read control preserves this selected standard ACIS
+    // 7.00 carrier as SAT 700 instead of upgrading its record grammar to the
+    // Autodesk-modified 21500 dialect. Keep that exact source profile scoped
+    // to AC1024; do not infer cross-version conversion.
+    const std::int32_t satVersion = sab.header.version == 700
+        ? 700 : satVersionForTarget(targetVersion);
     const std::int32_t historyFlags = targetVersion < DRW::AC1024
         ? 0 : (sab.header.flags & 1);
     const std::int32_t satRecordCount = static_cast<std::int32_t>(
@@ -2476,8 +2483,10 @@ static bool convertSabToSatV1Impl(const std::uint8_t* data, std::size_t length,
     // The header's scalar fields share a line in SAT v1.
     appendLineEnd();
 
-    const auto appendHeaderString = [&appendRaw](const std::string& value) {
-        return appendRaw(std::to_string(value.size()), false)
+    const auto appendHeaderString = [&appendRaw, &sab](const std::string& value) {
+        const std::string length = (sab.header.version == 700 ? "@" : "")
+            + std::to_string(value.size());
+        return appendRaw(length, false)
             && appendRaw(" ", false) && appendRaw(value, false)
             && appendRaw(" ", false);
     };
@@ -2493,11 +2502,14 @@ static bool convertSabToSatV1Impl(const std::uint8_t* data, std::size_t length,
         return false;
     appendLineEnd();
 
-    const auto booleanWord = [](const std::string& record, bool value,
+    const bool standardAcis700 = sab.header.version == 700;
+    const auto booleanWord = [standardAcis700](
+                                const std::string& record, bool value,
                                 unsigned& ordinal, std::string& word) {
         if (record != "face" && record != "varblendsplsur"
             && record != "attrib_var_blend" && record != "bdy_geom"
-            && record != "torus-surface")
+            && record != "torus-surface"
+            && !(standardAcis700 && record == "plane-surface"))
             ordinal = 0u;
         if (record == "sphere" || record == "plane" || record == "stripc"
             || record == "torus")
@@ -2511,9 +2523,21 @@ static bool convertSabToSatV1Impl(const std::uint8_t* data, std::size_t length,
             else
                 return false;
             ++ordinal;
+        } else if (standardAcis700 && record == "plane-surface") {
+            // Standard ACIS 7.00 spells the plane V sense and interval
+            // kinds with the same words used by the observed ODA AC1024
+            // SAT export. Preserve ordinal across the five Boolean fields.
+            if (ordinal == 0u)
+                word = value ? "reverse_v" : "forward_v";
+            else if (ordinal <= 4u)
+                word = value ? "F" : "I";
+            else
+                return false;
+            ++ordinal;
         } else if (record == "spline" || record == "edge"
                  || record == "meshsurf" || record == "pcurve"
-                 || record == "intcurve")
+                 || record == "intcurve"
+                 || (standardAcis700 && record == "coedge"))
             word = value ? "reversed" : "forward";
         else if (record == "surfcur" || record == "bldcur"
                  || record == "parcur" || record == "projcur"
@@ -2562,7 +2586,8 @@ static bool convertSabToSatV1Impl(const std::uint8_t* data, std::size_t length,
             word = values[ordinal][value ? 1 : 0];
             ordinal = (ordinal + 1u) % 2u;
         } else {
-            word = value ? "I" : "F";
+            word = value ? (standardAcis700 ? "F" : "I")
+                         : (standardAcis700 ? "I" : "F");
         }
         return true;
     };
@@ -2581,13 +2606,19 @@ static bool convertSabToSatV1Impl(const std::uint8_t* data, std::size_t length,
                 rendered.push_back(' ');
                 if (!appendRaw(rendered, true)) return false;
                 break;
-            case DRW_SabTag::Int:
             case DRW_SabTag::Pointer:
-            case DRW_SabTag::Enum:
-                if (token.tag == DRW_SabTag::Int
-                    || token.tag == DRW_SabTag::Enum
-                    || token.tag == DRW_SabTag::Pointer)
+                rendered = "$" + std::to_string(token.ival) + " ";
+                if (!appendRaw(rendered, true)) return false;
+                break;
+            case DRW_SabTag::Int:
+                if (sab.header.version != 700)
                     rendered.push_back('$');
+                rendered += std::to_string(token.ival);
+                rendered.push_back(' ');
+                if (!appendRaw(rendered, true)) return false;
+                break;
+            case DRW_SabTag::Enum:
+                rendered.push_back('$');
                 rendered += std::to_string(token.ival);
                 rendered.push_back(' ');
                 if (!appendRaw(rendered, true)) return false;
@@ -2605,7 +2636,9 @@ static bool convertSabToSatV1Impl(const std::uint8_t* data, std::size_t length,
                 if (!appendDouble(token.dval)) return false;
                 break;
             case DRW_SabTag::Str:
-                rendered = std::to_string(token.sval.size());
+                if (sab.header.version == 700)
+                    rendered = "@";
+                rendered += std::to_string(token.sval.size());
                 rendered.push_back(' ');
                 rendered += token.sval;
                 rendered.push_back(' ');
