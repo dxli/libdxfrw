@@ -1292,8 +1292,12 @@ created locally from scratch for the specific control.
   all handle roles to the same-vendor DXF projection. The 50 null references
   map to 17 text-style and 33 border-linetype fields; the final TABLESTYLE
   pointer is non-null. AC1018 needs inline body/text cursors and a separately
-  positioned handle cursor, so do not lift the existing version gate without
-  those boundaries. The XRECORD codepage 45, TABLESTYLE dependencies, and
+  positioned handle cursor. An opt-in bounded candidate now uses those cursors,
+  retains the source body and all 45 text and 51 body-handle spans, and matches
+  the physical walk. Its typed projection is partial and its caller-supplied
+  raw carrier is not source authentication; the normal version gate remains.
+  See the [candidate receipt](docs/research/p5-ac1018-tablecontent-candidate-observer-2026-11-11.json).
+  The XRECORD codepage 45, TABLESTYLE dependencies, and
   independent producer/native meaning remain unresolved. Retain populated-graph
   refusal. See the [descendant graph receipt](docs/research/p5-ac1018-table-descendant-graph-wire-2026-11-11.json)
   and [TABLECONTENT walk](docs/research/p5-ac1018-tablecontent-complete-body-walk-2026-11-11.json).
