@@ -1312,8 +1312,13 @@ created locally from scratch for the specific control.
   the physical walk. Its typed projection is partial and its caller-supplied
   raw carrier is not source authentication; the normal version gate remains.
   See the [candidate receipt](docs/research/p5-ac1018-tablecontent-candidate-observer-2026-11-11.json).
-  The XRECORD codepage 45, TABLESTYLE dependencies, and
-  independent producer/native meaning remain unresolved. Retain populated-graph
+  A controlled non-ASCII ODA conversion now supports UTF-8 for XRECORD value
+  codepage 45 in that producer profile, but also converts an input CP1252 euro
+  to U+0080. An independent XRECORD mapping and codepage-0 inheritance remain
+  unproven; do not change general decoding from this evidence. See the
+  [codepage probe](docs/research/p5-ac1018-xrecord-codepage45-utf8-controlled-probe-2026-11-11.json).
+  TABLESTYLE dependencies and independent producer/native meaning remain
+  unresolved. Retain populated-graph
   refusal. See the [descendant graph receipt](docs/research/p5-ac1018-table-descendant-graph-wire-2026-11-11.json)
   and [TABLECONTENT walk](docs/research/p5-ac1018-tablecontent-complete-body-walk-2026-11-11.json).
   An opt-in AC1018 DATATABLE observer now validates the selected four-column
