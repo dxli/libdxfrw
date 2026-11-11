@@ -32,6 +32,16 @@ and its actual constraint-group class/body spans are inspected. No sample was
 added to the repository and no support claim changes. See the
 [sample-screen receipt](docs/research/p4-ac1024-public-sample-screen-2026-11-11.json).
 
+**P5 AC1021 FIELD candidate current-reader recheck (2026-11-11):** the rebuilt
+`dwg2dxf` rechecked the hash-pinned architectural annotation sample (66 FIELD
+parse attempts). Four values carry unsupported flags `0x04`, sixteen carry
+`0x4C`, and one parsed candidate leaves an unexplained 146-bit body tail.
+Strict export remains refused at the FIELD/FIELDLIST serializer gate and
+publishes no output. This does not establish those flags or tail semantics;
+mark this screened source exhausted and resume only with a distinct,
+hash-pinned complete graph and authoritative layout evidence. No drawing fixture
+was added. See the [current-reader receipt](docs/research/p5-ac1021-architectural-field-current-reader-recheck-2026-11-11.json).
+
 **P4 version-2 active-field regression expansion (2026-11-11):** the generated
 AC1024 control now covers active-bit placement and typed readback for
 geometrical, distance, radius/diameter, vertical and horizontal nodes, with
