@@ -1494,6 +1494,18 @@ created locally from scratch for the specific control.
   unselected residue fails atomically and retries, and a truncated height
   stays incomplete before a corrected read. Generated whole-file TABLE and
   TABLE/DBCOLOR outputs also retain all six fields on fresh libdxfrw readback.
+  **Completed DWG row text-style handle slice (2026-11-11):** the AC1018
+  encoder now accepts the three ODA `0x20000`/`0x40000`/`0x80000` selections
+  only with corresponding non-null handles and writes their hard pointers
+  after cell handles in title/header/data order. The generated vector verifies
+  all three exact handles and the following-body sentinel; absent-mask residue,
+  missing and null handles refuse atomically. Whole-table preflight additionally
+  requires each target to be a unique emitted STYLE table record and checks a
+  supplied name against that target. An unresolved target is refused by the
+  graph-closure control. This is generated wire and local graph evidence only;
+  parsed-source replay, physical producer order, native precedence/rendering,
+  and whole-document support remain open. See the [DWG row text-style writer
+  receipt](docs/research/p5-ac1018-table-row-text-style-dwg-writer-2026-11-11.json).
   Re-encoding a parsed TABLE with a nonempty retained override range remains
   refused, including after modeled values change: the range currently stores
   offsets and counts, not the source bytes or a value snapshot. Next add an

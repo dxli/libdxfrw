@@ -11410,6 +11410,45 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  "AC1018 TABLE text-height cell override preserves following body sentinel");
     }
 
+    TableDwgCodecProbe rowTextStyleTable = makeEncodableAc1018Table();
+    rowTextStyleTable.m_tableOverrideFlags = 0x000E0000u;
+    rowTextStyleTable.m_tableRowTextStyleHandles = {{0xA900u, 0xAA00u, 0xAB00u}};
+    dwgBufferW rowTextStyleBody;
+    dwgBufferW rowTextStyleHandles;
+    dwgBufferW rowTextStyleTypePrefix;
+    rowTextStyleTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t rowTextStyleObjectSizeBit =
+        rowTextStyleTypePrefix.bitCount();
+    const bool rowTextStyleEncoded = rowTextStyleTable.encodeAsTableClass(
+        DRW::AC1018, rowTextStyleBody, rowTextStyleHandles);
+    const std::uint64_t rowTextStyleBodyEndBit = rowTextStyleBody.bitCount();
+    constexpr std::int32_t rowTextStyleSentinel = 0x51CAE007;
+    rowTextStyleBody.putBitLong(rowTextStyleSentinel);
+    rowTextStyleBody.patchRawLong32AtBit(
+        rowTextStyleObjectSizeBit,
+        static_cast<std::uint32_t>(rowTextStyleBody.bitCount()));
+    appendBits(rowTextStyleBody, rowTextStyleHandles);
+    dwgBuffer rowTextStyleInput(rowTextStyleBody.data().data(),
+                                rowTextStyleBody.data().size());
+    TableDwgCodecProbe rowTextStyleReadback;
+    const bool rowTextStyleRead = rowTextStyleEncoded
+        && rowTextStyleReadback.parseDwg(DRW::AC1018, &rowTextStyleInput);
+    const bool rowTextStyleMatches = rowTextStyleRead
+        && rowTextStyleInput.isGood()
+        && rowTextStyleReadback.m_semanticContentComplete
+        && rowTextStyleReadback.m_tableOverrideFlags == 0x000E0000u
+        && rowTextStyleReadback.m_tableRowTextStyleHandles
+            == std::array<std::uint32_t, 3>{{0xA900u, 0xAA00u, 0xAB00u}}
+        && cursorBit(rowTextStyleInput) == rowTextStyleBodyEndBit;
+    t.expect(rowTextStyleMatches,
+             "AC1018 TABLE title/header/data text-style handles follow the hard-pointer stream order");
+    if (rowTextStyleMatches) {
+        const std::int32_t sentinel = rowTextStyleInput.getBitLong();
+        t.expect(rowTextStyleInput.isGood()
+                     && sentinel == rowTextStyleSentinel,
+                 "AC1018 TABLE row text-style handles preserve the following body sentinel");
+    }
+
     TableDwgCodecProbe cellAlignmentTable = makeEncodableAc1018Table();
     DRW_TableCell& cellAlignmentCell =
         cellAlignmentTable.m_content.m_rows.front().m_cells.front();
@@ -11960,6 +11999,18 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             (void)tableFacade.rollbackDwgWriteTransaction(transaction);
             return false;
         }
+        const auto unresolvedTableRowTextStyleRefused = [&]() {
+            const std::uint32_t savedFlags = table.m_tableOverrideFlags;
+            const std::uint32_t savedHandle =
+                table.m_tableRowTextStyleHandles[0];
+            table.m_tableOverrideFlags |= 0x00020000u;
+            table.m_tableRowTextStyleHandles[0] = tableFacadeStyleHandle;
+            const bool refused =
+                !tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
+            table.m_tableOverrideFlags = savedFlags;
+            table.m_tableRowTextStyleHandles[0] = savedHandle;
+            return refused;
+        };
         DRW_Line geometryLine;
         geometryLine.handle = 0xA811u;
         geometryLine.parentHandle = DRW::NoHandle;
@@ -11981,6 +12032,8 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             const bool closedTableGraph = graphScopeClosed
                 && tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
             const bool expectedGraphMismatchRefused = !closedTableGraph;
+            const bool unresolvedTableRowTextStyle =
+                unresolvedTableRowTextStyleRefused();
             const bool savedHasAcDbColor = table.hasDwgAcDbColorHandle();
             const std::uint32_t savedAcDbColor = table.dwgAcDbColorHandle();
             table.setDwgAcDbColorHandle(true, 0xA911u);
@@ -12030,6 +12083,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                     > tableFacadeInitialBytes;
             if (!earlierGeometryWritten || !injectedFailureOccurred
                 || !graphScopeClosed || !expectedGraphMismatchRefused
+                || !unresolvedTableRowTextStyle
                 || !danglingAcDbColorRefused
                 || !mismatchedLayerRefused || !unresolvedLinetypeRefused
                 || !mismatchedNameRefused || !nonStyleObjectRefused
@@ -12047,6 +12101,8 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             const bool closedTableGraph = graphScopeClosed
                 && tableFacadeWriter->hasClosedAc1018TableBlockGraph(table);
             const bool expectedTableGraphClosure = true;
+            const bool unresolvedTableRowTextStyle =
+                unresolvedTableRowTextStyleRefused();
             const bool savedHasAcDbColor = table.hasDwgAcDbColorHandle();
             const std::uint32_t savedAcDbColor = table.dwgAcDbColorHandle();
             table.setDwgAcDbColorHandle(true, 0xA911u);
@@ -12090,6 +12146,7 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
             table.plotStyle = savedPlotStyle;
             if (!geometryWritten || !graphScopeClosed
                 || closedTableGraph != expectedTableGraphClosure
+                || !unresolvedTableRowTextStyle
                 || !danglingAcDbColorRefused
                 || !mismatchedLayerRefused || !unresolvedLinetypeRefused
                 || !mismatchedNameRefused || !nonStyleObjectRefused
@@ -12892,6 +12949,19 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
             table.m_tableRowTextStyleHandles[1] = 0xA900u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects a selected row text-style flag without its hard pointer",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_tableOverrideFlags = 0x00040000u;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects a null selected row text-style handle",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_tableOverrideFlags = 0x00040000u;
+            table.m_tableRowTextStyleHandles[1] = DRW::NoHandle;
         });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects table fill colors without writing",

@@ -15486,6 +15486,9 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
     constexpr std::array<std::uint32_t, 3> rowTextHeightFlags = {{
         0x00100000u, 0x00200000u, 0x00400000u
     }};
+    constexpr std::array<std::uint32_t, 3> rowTextStyleFlags = {{
+        0x00020000u, 0x00040000u, 0x00080000u
+    }};
     const auto validTableRowOverrides = [&]() {
         for (std::size_t i = 0u; i < rowAlignmentFlags.size(); ++i) {
             const bool hasAlignment =
@@ -15499,11 +15502,20 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
             const double height = m_tableRowHeightOverrides[i];
             if (hasTextHeight ? !std::isfinite(height) : height != 0.0)
                 return false;
+            const bool hasTextStyle =
+                (m_tableOverrideFlags & rowTextStyleFlags[i]) != 0u;
+            const std::uint32_t textStyleHandle =
+                m_tableRowTextStyleHandles[i];
+            if (hasTextStyle
+                    ? (textStyleHandle == 0u
+                        || textStyleHandle == DRW::NoHandle)
+                    : textStyleHandle != 0u)
+                return false;
         }
         return true;
     };
     const bool validTableScalarOverrides =
-        (m_tableOverrideFlags & ~0x0071C01Fu) == 0u
+        (m_tableOverrideFlags & ~0x007FC01Fu) == 0u
         && validTableRowOverrides()
         && (hasTitleSuppressed || !m_titleSuppressed)
         && (m_headerSuppressed == hasHeaderSuppressed)
@@ -15580,8 +15592,6 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
         || m_borderColorOverrideFlags != 0u
         || m_borderLineweightOverrideFlags != 0u
         || m_borderVisibilityOverrideFlags != 0u
-        || m_tableRowTextStyleHandles
-            != std::array<std::uint32_t, 3>{{0u, 0u, 0u}}
         || std::any_of(m_tableRowTextStyleNames.cbegin(),
                        m_tableRowTextStyleNames.cend(),
                        [](const UTF8STRING& name) { return !name.empty(); })
@@ -15965,7 +15975,7 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
                 stagedBody.putBitDouble(m_verticalCellMargin);
             // ODA §20.4.96.1: title/header/data alignments precede the
             // corresponding row text heights in the inline body. Text-style
-            // handle flags remain unsupported by this encoder profile.
+            // references are written in the parallel handle stream below.
             for (std::size_t i = 0u; i < rowAlignmentFlags.size(); ++i) {
                 if ((m_tableOverrideFlags & rowAlignmentFlags[i]) != 0u)
                     stagedBody.putBitShort(static_cast<std::uint16_t>(
@@ -15993,6 +16003,10 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
                     putHardPointerHandle(handles,
                                          cell.m_textStyleOverrideHandle);
             }
+        }
+        for (std::size_t i = 0u; i < rowTextStyleFlags.size(); ++i) {
+            if ((m_tableOverrideFlags & rowTextStyleFlags[i]) != 0u)
+                putHardPointerHandle(handles, m_tableRowTextStyleHandles[i]);
         }
         if (!stagedBody.isGood() || !handles->isGood())
             return false;

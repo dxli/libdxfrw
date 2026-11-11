@@ -1670,6 +1670,43 @@ bool dwgWriter15::hasClosedAc1018TableBlockGraph(
     if (styleClass == m_dwgClassDefinitions.cend())
         return false;
 
+    constexpr std::array<std::uint32_t, 3> rowTextStyleFlags{{
+        0x00020000u, 0x00040000u, 0x00080000u
+    }};
+    for (std::size_t index = 0u; index < rowTextStyleFlags.size(); ++index) {
+        const bool selected =
+            (table.m_tableOverrideFlags & rowTextStyleFlags[index]) != 0u;
+        const std::uint32_t target =
+            table.m_tableRowTextStyleHandles[index];
+        if (!selected) {
+            if (target != 0u)
+                return false;
+            continue;
+        }
+        if (target == 0u || target == DRW::NoHandle
+            || target == table.handle || target == table.m_tableStyleHandle
+            || !hasEmittedDwgObjectHandle(target))
+            return false;
+        const std::size_t styleNameMatches = static_cast<std::size_t>(
+            std::count_if(m_writingCtx.styleMap.cbegin(),
+                m_writingCtx.styleMap.cend(), [target](const auto& entry) {
+                    return entry.second == target;
+                }));
+        const std::size_t emittedStyleRecords = static_cast<std::size_t>(
+            std::count(m_emittedDwgTableRecordHandles.cbegin(),
+                       m_emittedDwgTableRecordHandles.cend(), target));
+        if (styleNameMatches != 1u
+            || (m_dwgTableRecordsComplete && emittedStyleRecords != 1u))
+            return false;
+        if (!table.m_tableRowTextStyleNames[index].empty()) {
+            const auto namedStyle = m_writingCtx.styleMap.find(
+                toUpperCase(table.m_tableRowTextStyleNames[index]));
+            if (namedStyle == m_writingCtx.styleMap.cend()
+                || namedStyle->second != target)
+                return false;
+        }
+    }
+
     const auto equalsAsciiNoCase = [](const std::string& value,
                                      const std::string& expected) {
         const std::size_t length = expected.size();
