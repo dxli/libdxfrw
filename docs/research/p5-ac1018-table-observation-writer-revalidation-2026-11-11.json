@@ -1,0 +1,32 @@
+{
+  "title": "AC1018 selected TABLE source observation writer revalidation",
+  "date": "2026-11-11",
+  "scope": "Writer lifecycle freshness checks for opt-in verified XRECORD/TABLE candidate observations and selected STYLE/LTYPE resource observations.",
+  "implementation": {
+    "staging": "dx_iface::writeObjects rechecks the selected observation bundle before staging OBJECTS records.",
+    "finalization": "dx_iface::finalizeDxfWrite rechecks the same bundle before final output publication.",
+    "selection": "The check verifies the exact selected XRECORD handles and source generation, then revalidates any selected TABLE candidates and selected STYLE/LTYPE resource observations.",
+    "semantics": "This is stale-source refusal only. It does not authorize raw replay, typed TABLE output, graph closure, or support claims."
+  },
+  "control": {
+    "test": "libdxfrw_dwg_table_candidate_binding",
+    "source": "Locally authored AC1018 generated DWG created and removed by the focused test.",
+    "assertions": [
+      "A complete selected TABLE candidate bundle passes the shared revalidation predicate used by both writer boundaries.",
+      "Mutation of the selected TABLEGEOMETRY frame causes both the source query and shared revalidation predicate to refuse.",
+      "Restoring the frame permits the same adapter to pass again.",
+      "Transplanting the candidate snapshot into a different import generation is refused."
+    ],
+    "result": "PASS; the generated control calls the shared predicate directly rather than executing a full DXF export."
+  },
+  "validation": {
+    "build": "cmake --build build-gcc --target libdxfrw_dwg_table_candidate_binding_tests -j4",
+    "focused_ctest": "ctest --test-dir build-gcc -R '^libdxfrw_dwg_table_candidate_binding$' --output-on-failure",
+    "result": "PASS: 1/1 CTest"
+  },
+  "limitations": [
+    "No TABLE/DATATABLE/TABLEGEOMETRY output is enabled by this check.",
+    "No physical or generated DWG/DXF fixture is committed.",
+    "Recursive resource closure, native semantics, and whole-source output remain open."
+  ]
+}

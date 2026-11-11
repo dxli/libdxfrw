@@ -42,6 +42,10 @@ public:
     static void transplant(dx_data& dst,const dx_data& src) {
         dst.m_verifiedTableCandidateSource=src.m_verifiedTableCandidateSource;
     }
+    static bool writerObservationCheck(const dx_iface& writer,
+            const dx_data& data) noexcept {
+        return writer.hasUnchangedVerifiedSourceObservations(data);
+    }
     static bool sealStage(dx_iface& a,int stage) noexcept {
         const auto* d=a.m_verifiedXRecordReadData;
         if(!d || !d->dwgReadOutcome.operationSucceeded || d->m_verifiedXRecordSource
@@ -408,6 +412,7 @@ bool runGeometry(const char* contentPath,const char* dataPath,const char* geomet
     CHECK_G(!reader.enableVerifiedTableCandidates(xrecords,contentHandle,dataHandle,rootHandle));
     dx_data baseline;CHECK_G(reader.fileImport(path.string(),&baseline,false));CHECK_G(liveGeometry(baseline));
     CHECK_G(dx_iface::hasUnchangedVerifiedXRecordSources(baseline,xrecords));
+    CHECK_G(DxIfaceStandardDwgCaptureTestAccess::writerObservationCheck(reader,baseline));
     Content c;Data t;Geometry g;c.handle=t.handle=g.handle=1u;
     CHECK_G(!dx_iface::readVerifiedTableCandidates(baseline,xrecords,contentHandle,dataHandle,c,t));
     CHECK_G(!dx_iface::readVerifiedTableCandidates(baseline,xrecords,contentHandle,dataHandle,0xcau,c,t,g));
@@ -415,10 +420,13 @@ bool runGeometry(const char* contentPath,const char* dataPath,const char* geomet
     auto& snapshot=DxIfaceStandardDwgCaptureTestAccess::raw(baseline,geometryHandle);
     snapshot.m_rawBytes[0]^=1u;
     CHECK_G(!liveGeometry(baseline));CHECK_G(!dx_iface::hasUnchangedVerifiedXRecordSource(baseline,rootHandle));
+    CHECK_G(!DxIfaceStandardDwgCaptureTestAccess::writerObservationCheck(reader,baseline));
     snapshot.m_rawBytes[0]^=1u;CHECK_G(liveGeometry(baseline));
+    CHECK_G(DxIfaceStandardDwgCaptureTestAccess::writerObservationCheck(reader,baseline));
     dx_data second;CHECK_G(reader.fileImport(path.string(),&second,false));CHECK_G(liveGeometry(second));
     DxIfaceStandardDwgCaptureTestAccess::transplant(second,baseline);
     CHECK_G(!liveGeometry(second));CHECK_G(!dx_iface::hasUnchangedVerifiedXRecordSource(second,rootHandle));
+    CHECK_G(!DxIfaceStandardDwgCaptureTestAccess::writerObservationCheck(reader,second));
     CHECK_G(reader.enableVerifiedTableCandidates(xrecords,contentHandle,dataHandle,0xcau));
     dx_data missing;(void)reader.fileImport(path.string(),&missing,false);
     CHECK_G(!liveGeometry(missing));CHECK_G(!dx_iface::hasUnchangedVerifiedXRecordSource(missing,rootHandle));

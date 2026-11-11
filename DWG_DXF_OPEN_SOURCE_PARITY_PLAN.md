@@ -1732,6 +1732,19 @@ created locally from scratch for the specific control.
   remaining LTYPE resource ordering, and font meaning remain open. These checks
   do not grant output permission or waive other gates. See the
   [writer-stage/finalization receipt](docs/research/p5-ac1018-style-resource-writer-stage-finalization-2026-11-11.json).
+  **Selected TABLE source-observation revalidation (2026-11-11):**
+  `writeObjects` now rechecks the selected XRECORD/TABLE candidate snapshot
+  before staging OBJECTS records, and `finalizeDxfWrite` repeats the check
+  before output publication. The shared check also verifies any selected
+  STYLE/LTYPE observation bundle against its owning adapter selection. A
+  generated AC1018 control passes for a complete candidate, refuses a mutated
+  TABLEGEOMETRY frame and a cross-import snapshot transplant, and passes again
+  after source restoration. This is lifecycle freshness refusal only; it does
+  not authorize replay, output, recursive graph closure or support claims. The
+  focused test directly exercises the shared revalidation predicate (not a
+  full DXF export), passed 1/1 and removes its scratch DWG; no fixture is
+  committed.
+  See the [revalidation receipt](docs/research/p5-ac1018-table-observation-writer-revalidation-2026-11-11.json).
   A bounded standalone
   LTYPE_CONTROL/ByBlock observer now checks selected frame fields and roles
   ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)).

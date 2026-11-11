@@ -29767,6 +29767,38 @@ bool dx_iface::hasUnchangedVerifiedXRecordSources(const dx_data& data,
         && hasUnchangedVerifiedXRecordSource(data,handles.front());
 }
 
+bool dx_iface::hasUnchangedVerifiedSourceObservations(
+        const dx_data& data) const noexcept {
+    if (m_verifiedXRecordSelected.empty()) {
+        if (data.m_verifiedXRecordSource || data.m_verifiedTableCandidateSource)
+            return false;
+    } else if (!hasUnchangedVerifiedXRecordSources(
+                   data, m_verifiedXRecordSelected)) {
+        return false;
+    }
+
+    if (m_verifiedStyleControlSelected == 0u) {
+        if (data.m_verifiedStyleResourceSource)
+            return false;
+    } else if (!hasUnchangedVerifiedStyleResourceSource(
+                   data, m_verifiedStyleControlSelected,
+                   m_verifiedStyleRecordSelected)) {
+        return false;
+    }
+
+    if (m_verifiedLTypeControlSelected == 0u) {
+        if (data.m_verifiedLTypeResourceSource)
+            return false;
+    } else if (!hasUnchangedVerifiedLTypeResourceSource(
+                   data, m_verifiedLTypeControlSelected,
+                   m_verifiedLTypeOrdinarySelected,
+                   m_verifiedLTypeByBlockSelected,
+                   m_verifiedLTypeByLayerSelected)) {
+        return false;
+    }
+    return true;
+}
+
 bool dx_iface::hasUnchangedVerifiedStyleResourceSource(
         const dx_data& data, std::uint32_t styleControl,
         std::uint32_t styleRecord) noexcept {
@@ -77853,6 +77885,10 @@ bool dx_iface::finalizeDxfWrite() {
         }
         return false;
     };
+    if (cData != nullptr
+        && !hasUnchangedVerifiedSourceObservations(*cData))
+        return failFinalization(
+            "verified source observation snapshots at finalization");
     if (cData != nullptr
         && cData->m_verifiedStyleResourceSource != nullptr) {
         finalizationPhase = "DWG STYLE source and emitted-row binding";

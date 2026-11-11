@@ -2090,6 +2090,11 @@ public:
             dxfW->writeRawDxfObject(nullptr);
             return;
         }
+        if (!hasUnchangedVerifiedSourceObservations(*cData)) {
+            objectWritePhase = "verified source observation snapshots";
+            dxfW->writeRawDxfObject(nullptr);
+            return;
+        }
         if (!hasUnchangedDxfMLineStyles()
             || !hasUnchangedDxfMLineConsumers()) {
             objectWritePhase = "DXF MLINE source snapshots";
@@ -3600,8 +3605,11 @@ private:
     friend class DxIfaceStyleResourceTestAccess;
     friend class DxIfaceMlineDependencyTestAccess;
     friend class DxIfaceDwgLtypeControlOutputTestAccess;
+    friend class DxIfaceStandardDwgCaptureTestAccess;
     bool mayOmitUnreferencedEmptyTextStyle(
         const DRW_Textstyle& style) const noexcept;
+    bool hasUnchangedVerifiedSourceObservations(
+        const dx_data& data) const noexcept;
     bool mlineRootDictionarySourceLiveProof(const dx_data&,std::size_t,std::size_t*) const noexcept;
     bool mlineStyleDictionarySourceLiveProof(const dx_data&,std::size_t,std::size_t*) const noexcept;
     bool mlineStyleBodiesSourceLiveProof(const dx_data&,std::size_t,std::size_t*) const noexcept;
