@@ -33251,97 +33251,110 @@ bool DRW_Viewport::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_
         || !layerOverrideReferences.empty()
         || (version > DRW::AC1014 && !drwHasEncodableDwgViewportAngles(*this)))
         return false;
-    ViewportAmbientCmc ambientCmc;
-    if (!prepareViewportAmbientCmc(version, *this, buf, strBuf, ambientCmc))
-        return false;
-    oType = 34;
-    // Use strBuf for TV strings in AC1024; for AC1015/AC1018 strings go inline.
-    dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
-    if (!encodeDwgCommon(version, buf)) return false;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            ViewportAmbientCmc ambientCmc;
+            if (!prepareViewportAmbientCmc(version, *this, body, strings,
+                                           ambientCmc))
+                return false;
+            oType = 34;
+            // Use detached strings in R2007+; older versions inline them.
+            dwgBufferW *stringOutput =
+                (strings != nullptr && version > DRW::AC1018)
+                    ? strings : body;
+            if (!encodeDwgCommon(version, body))
+                return false;
 
-    buf->putBitDouble(basePoint.x);
-    buf->putBitDouble(basePoint.y);
-    buf->putBitDouble(basePoint.z);
-    buf->putBitDouble(pswidth);
-    buf->putBitDouble(psheight);
+            body->putBitDouble(basePoint.x);
+            body->putBitDouble(basePoint.y);
+            body->putBitDouble(basePoint.z);
+            body->putBitDouble(pswidth);
+            body->putBitDouble(psheight);
 
-    if (version > DRW::AC1014) {
-        buf->putBitDouble(viewTarget.x);
-        buf->putBitDouble(viewTarget.y);
-        buf->putBitDouble(viewTarget.z);
-        buf->putBitDouble(viewDir.x);
-        buf->putBitDouble(viewDir.y);
-        buf->putBitDouble(viewDir.z);
-        buf->putBitDouble(twistAngle / ARAD);
-        buf->putBitDouble(viewHeight);
-        buf->putBitDouble(viewLength);    // lens length
-        buf->putBitDouble(frontClip);
-        buf->putBitDouble(backClip);
-        buf->putBitDouble(snapAngle / ARAD);
-        buf->putRawDouble(centerPX);
-        buf->putRawDouble(centerPY);
-        buf->putRawDouble(snapPX);
-        buf->putRawDouble(snapPY);
-        buf->putRawDouble(snapSpPX);
-        buf->putRawDouble(snapSpPY);
-        buf->putRawDouble(gridSpX);
-        buf->putRawDouble(gridSpY);
-        buf->putBitShort(static_cast<std::uint16_t>(circleZoom));
-    }
+            if (version > DRW::AC1014) {
+                body->putBitDouble(viewTarget.x);
+                body->putBitDouble(viewTarget.y);
+                body->putBitDouble(viewTarget.z);
+                body->putBitDouble(viewDir.x);
+                body->putBitDouble(viewDir.y);
+                body->putBitDouble(viewDir.z);
+                body->putBitDouble(twistAngle / ARAD);
+                body->putBitDouble(viewHeight);
+                body->putBitDouble(viewLength);
+                body->putBitDouble(frontClip);
+                body->putBitDouble(backClip);
+                body->putBitDouble(snapAngle / ARAD);
+                body->putRawDouble(centerPX);
+                body->putRawDouble(centerPY);
+                body->putRawDouble(snapPX);
+                body->putRawDouble(snapPY);
+                body->putRawDouble(snapSpPX);
+                body->putRawDouble(snapSpPY);
+                body->putRawDouble(gridSpX);
+                body->putRawDouble(gridSpY);
+                body->putBitShort(static_cast<std::uint16_t>(circleZoom));
+            }
 
-    if (version > DRW::AC1018)
-        buf->putBitShort(static_cast<std::uint16_t>(majorGridLines));
+            if (version > DRW::AC1018)
+                body->putBitShort(static_cast<std::uint16_t>(majorGridLines));
 
-    if (version > DRW::AC1014) {
-        buf->putBitLong(static_cast<std::int32_t>(frozenLayerHandles.size()));
-        buf->putBitLong(statusFlags);
-        sb->putVariableText(version, styleSheet);
-        buf->putRawChar8(static_cast<std::uint8_t>(renderMode));
-        buf->putBit(ucsAtOrigin ? 1 : 0);
-        buf->putBit(ucsPerViewport ? 1 : 0);
-        buf->put3BitDouble(ucsOrigin);
-        buf->put3BitDouble(ucsXAxis);
-        buf->put3BitDouble(ucsYAxis);
-        buf->putBitDouble(ucsElevation);
-        buf->putBitShort(static_cast<std::uint16_t>(ucsOrthographicType));
-    }
+            if (version > DRW::AC1014) {
+                body->putBitLong(
+                    static_cast<std::int32_t>(frozenLayerHandles.size()));
+                body->putBitLong(statusFlags);
+                stringOutput->putVariableText(version, styleSheet);
+                body->putRawChar8(static_cast<std::uint8_t>(renderMode));
+                body->putBit(ucsAtOrigin ? 1 : 0);
+                body->putBit(ucsPerViewport ? 1 : 0);
+                body->put3BitDouble(ucsOrigin);
+                body->put3BitDouble(ucsXAxis);
+                body->put3BitDouble(ucsYAxis);
+                body->putBitDouble(ucsElevation);
+                body->putBitShort(static_cast<std::uint16_t>(ucsOrthographicType));
+            }
 
-    if (version > DRW::AC1015)
-        buf->putBitShort(static_cast<std::uint16_t>(shadePlotMode));
+            if (version > DRW::AC1015)
+                body->putBitShort(static_cast<std::uint16_t>(shadePlotMode));
 
-    if (version > DRW::AC1018) {
-        buf->putBit(useDefaultLighting ? 1 : 0);
-        buf->putRawChar8(defaultLightingType);
-        buf->putBitDouble(brightness);
-        buf->putBitDouble(contrast);
-        writeViewportAmbientCmc(version, buf, strBuf, *this, ambientCmc);
-    }
+            if (version > DRW::AC1018) {
+                body->putBit(useDefaultLighting ? 1 : 0);
+                body->putRawChar8(defaultLightingType);
+                body->putBitDouble(brightness);
+                body->putBitDouble(contrast);
+                writeViewportAmbientCmc(version, body, strings, *this,
+                                        ambientCmc);
+            }
 
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
 
-    dwgBufferW *hb = (handleBuf != nullptr) ? handleBuf : buf;
+            dwgBufferW *handleOutput = handles != nullptr ? handles : body;
+            if (version < DRW::AC1015)
+                putTypedHandle(handleOutput, vpHeaderHandle, 5);
+            if (version > DRW::AC1014) {
+                const std::uint8_t frozenCode =
+                    version == DRW::AC1015 ? 5 : 4;
+                for (const std::uint32_t ref : frozenLayerHandles)
+                    putTypedHandle(handleOutput, ref, frozenCode);
+                putTypedHandle(handleOutput, clipBoundaryHandle, 4);
+                if (version == DRW::AC1015)
+                    putTypedHandle(handleOutput, vpHeaderHandle, 5);
+                putTypedHandle(handleOutput, namedUcsHandle, 5);
+                putTypedHandle(handleOutput, baseUcsHandle, 5);
+            }
+            if (version > DRW::AC1018) {
+                putTypedHandle(handleOutput, backgroundHandle, 4);
+                putTypedHandle(handleOutput, visualStyleHandle, 5);
+                putTypedHandle(handleOutput, shadePlotHandle, 4);
+                putTypedHandle(handleOutput, m_sunHandle, 3);
+            }
 
-    if (version < DRW::AC1015) {
-        putTypedHandle(hb, vpHeaderHandle, 5);
-    }
-    if (version > DRW::AC1014) {
-        const std::uint8_t frozenCode = version == DRW::AC1015 ? 5 : 4;
-        for (const std::uint32_t ref : frozenLayerHandles)
-            putTypedHandle(hb, ref, frozenCode);
-        putTypedHandle(hb, clipBoundaryHandle, 4);
-        if (version == DRW::AC1015)
-            putTypedHandle(hb, vpHeaderHandle, 5);
-        putTypedHandle(hb, namedUcsHandle, 5);
-        putTypedHandle(hb, baseUcsHandle, 5);
-    }
-    if (version > DRW::AC1018) {
-        putTypedHandle(hb, backgroundHandle, 4);
-        putTypedHandle(hb, visualStyleHandle, 5);
-        putTypedHandle(hb, shadePlotHandle, 4);
-        putTypedHandle(hb, m_sunHandle, 3);
-    }
-
-    return buf->isGood() && sb->isGood() && hb->isGood();
+            return body->isGood() && stringOutput->isGood()
+                && (strings == nullptr || strings->isGood())
+                && handleOutput->isGood();
+        });
 }
 
 DRW_Leader::DRW_Leader(const DRW_Leader& o)

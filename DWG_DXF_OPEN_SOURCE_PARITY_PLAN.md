@@ -3570,6 +3570,21 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
   fixture was added. See the [allocation rollback
   receipt](docs/research/p6-navisworks-model-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **P6 VIEWPORT DWG encoder transaction safety:** the writer now stages common
+  fields, detached stylesheet/CMC strings, body payload, and all versioned
+  handle roles with the shared transaction helper. Existing field order,
+  inline pre-R2007 text, R2007+ handle roles, and the refusal of named ambient
+  CMC when no distinct string stream is supplied remain unchanged. Generated
+  profile sweeps reach 19 allocation failures at AC1015/AC1018 and 27 at
+  AC1021/AC1024; destination, handle, class-code rollback, retry, and
+  alias-compatible profiles pass. The focused selector, existing ambient-CMC
+  wire/readback test, and 34-test entity-writer transaction cohort pass; the
+  selected CTest set is 35/35 with the IMAGE compound test. This is transaction
+  and bounded codec evidence only; VIEWPORT group-91 semantics, override
+  rendering, producer coverage, and native application behavior remain open.
+  No DWG/DXF fixture was added. See the [allocation rollback
+  receipt](docs/research/p6-viewport-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 After every slice: run its focused fast checks; update this queue and the
 relevant receipt; commit code, plan and receipt together; report the commit and
 next eligible slice, then continue. Keep fixtures out of commits unless already

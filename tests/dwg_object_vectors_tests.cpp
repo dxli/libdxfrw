@@ -470,6 +470,9 @@ public:
   using DRW_Viewport::parseDwg;
   using DRW_Viewport::resetDwgState;
 
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+
   bool encodeCommonPrefix(DRW::Version version, dwgBufferW *body,
                           dwgBufferW *strings) {
     oType = 34;
@@ -26388,6 +26391,37 @@ void testNavisworksModelDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testViewportDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1015, DRW::AC1018,
+                                     DRW::AC1021, DRW::AC1024}) {
+    ViewportCodecProbe viewport;
+    viewport.handle = 0xC500u + static_cast<std::uint32_t>(version);
+    viewport.parentHandle = 0xC510u;
+    viewport.reactorHandles = {0xC520u};
+    viewport.xDictHandle = 0xC530u;
+    viewport.setDwgType(0x777);
+    viewport.styleSheet = "Viewport transaction style";
+    viewport.vpHeaderHandle = 0xC540u;
+    viewport.frozenLayerHandles = {0xC550u, 0xC551u};
+    viewport.clipBoundaryHandle = 0xC560u;
+    viewport.namedUcsHandle = 0xC570u;
+    viewport.baseUcsHandle = 0xC580u;
+    viewport.backgroundHandle = 0xC590u;
+    viewport.visualStyleHandle = 0xC5A0u;
+    viewport.shadePlotHandle = 0xC5B0u;
+    viewport.m_sunHandle = 0xC5C0u;
+    if (version > DRW::AC1018) {
+      viewport.ambientColor = 256u;
+    }
+    checkEntityDwgEncodeAllocationRollback(
+        t, viewport, version, 34u,
+        version == DRW::AC1015 ? "AC1015 VIEWPORT"
+        : version == DRW::AC1018 ? "AC1018 VIEWPORT"
+        : version == DRW::AC1021 ? "AC1021 VIEWPORT"
+                                 : "AC1024 VIEWPORT");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -29719,6 +29753,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testNavisworksModelDwgEncodeAllocationRollback(context);
       std::cout << "NAVISWORKSMODEL DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--viewport-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testViewportDwgEncodeAllocationRollback(context);
+      std::cout << "VIEWPORT DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

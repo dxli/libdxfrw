@@ -2332,6 +2332,13 @@ if(LIBDXFRW_BUILD_TESTS)
         PROPERTIES
             LABELS "fast;dwg;object-vectors;navisworks;3d;generated;transaction"
             TIMEOUT 20)
+    add_test(NAME libdxfrw_viewport_dwg_encode_allocation_rollback
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --viewport-dwg-encode-allocation-rollback)
+    set_tests_properties(libdxfrw_viewport_dwg_encode_allocation_rollback
+        PROPERTIES
+            LABELS "fast;dwg;object-vectors;viewport;generated;transaction"
+            TIMEOUT 20)
     add_test(NAME libdxfrw_r2018_attribute_outer_annotative
         COMMAND libdxfrw_dwg_object_vectors_tests --r2018-attribute-outer)
     set_tests_properties(libdxfrw_r2018_attribute_outer_annotative PROPERTIES
