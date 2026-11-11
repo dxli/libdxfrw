@@ -1953,12 +1953,21 @@ created locally from scratch for the specific control.
   DXF per-row border-color output remains refused where one group-code value
   cannot represent three distinct row values. Physical producer ordering and
   native rendering remain unqualified. See the [DWG border CMC receipt](docs/research/p5-ac1018-table-border-cmc-dwg-writer-2026-11-11.json).
+  **Completed AC1018 shared-edge virtual ownership slice (2026-11-11):**
+  ODA §20.4.96.1's virtual-edge byte is now admitted for a bounded TABLE
+  profile. The writer emits a virtual-only override record when needed; parser
+  and writer require an in-bounds adjacent cell with the reciprocal edge bit,
+  exactly one non-virtual property owner, and no duplicate override on the
+  virtual edge. Generated parseback checks the typed masks and border value;
+  malformed duplicate ownership preserves destination buffers and corrected
+  retry succeeds. Physical producer ordering, native acceptance/rendering and
+  broader TABLE semantics remain open ([receipt](docs/research/p5-ac1018-table-virtual-edge-ownership-2026-11-11.json)).
   **Completed bounded zero-mask extension route (2026-11-11):** the writer
   now admits a TABLE with an extension dictionary and the exact known AC1018
   retained empty-mask range signature. It canonically re-encodes typed zero
   masks instead of replaying source offsets/bytes; the codec still rejects
   unknown names, versions, widths, counts, handle roles, incomplete ranges,
-  nonzero cell masks and unsupported table override masks. A generated whole-file
+  unsupported cell override ranges and unsupported table override masks. A generated whole-file
   control verifies extension graph closure, typed range readback, atomic
   failure/retry, and destination preservation (see the
   [receipt](docs/research/p5-ac1018-table-zero-mask-extension-dictionary-reencode-2026-11-11.json)).
@@ -6250,14 +6259,20 @@ Speed-oriented implementation sequence:
    Require bounded matching row/column counts, exactly the declared number
    of cells in each row, and one value-content item of type 1 per cell. Allow
    only the already validated table-scalar/per-cell override subset and the
-   bounded AC1018 merge-role layouts accepted by the direct codec. Keep data
+   bounded AC1018 merge-role and reciprocal virtual-edge layouts accepted by
+   the direct codec. Keep data
    links, fields, block content, attributes, unknown retained raw subrecords,
    and unexplained geometry/cache state refused. The one admitted retained
-   subrecord signature is AC1018-only: complete ordered 10-bit zero-mask cell
-   override spans for populated text cells followed by the complete 4-bit
-   zero-mask TABLE override tail. Validate every range and the matching model
-   fields; reject anything outside this profile before emitting bytes. See the
-   [retained-range codec receipt](docs/research/p5-ac1018-table-retained-zero-override-range-writer-2026-11-10.json).
+   subrecord sequence is AC1018-only: complete ordered cell override spans
+   whose count matches each typed cell mask and whose body-bit length matches
+   canonical encoding, followed by the complete table-level override span
+   matching its typed values. This includes the generated zero-mask signature,
+   selected scalar overrides and parsed nonempty cell overrides; arbitrary
+   retained records and raw-byte replay remain refused. Validate every range
+   and matching model field before emitting bytes. See the
+   [retained-range codec receipt](docs/research/p5-ac1018-table-retained-zero-override-range-writer-2026-11-10.json),
+   [parsed override receipt](docs/research/p5-ac1018-table-parsed-cell-override-reencode-2026-11-11.json),
+   and [virtual-edge receipt](docs/research/p5-ac1018-table-virtual-edge-ownership-2026-11-11.json).
 2. **Physical profile evidence remains partial.** The peer-converted AC1018
    TABLE body is independently readable and agrees on the 3-by-3 text values,
    dimensions, anonymous-block name, and 15-entity geometry census. The direct
@@ -6420,8 +6435,10 @@ Speed-oriented implementation sequence:
 5. The AC1018 text-cell reader maps the ODA §20.4.96.1 text-height and four
    physical-edge color/lineweight/visibility field sets into `DRW_TableCell`.
    It admits only indexed CMC states, bounded lineweights, Boolean visibility,
-   matching edge flags and nonvirtual selected edges. Generated controls cover
-   all four fields in wire order and preserve body cursor/retry behavior.
+   matching edge flags, and reciprocal virtual-edge ownership. Generated
+   controls cover all four fields in wire order and preserve body cursor/retry
+   behavior. The focused virtual-edge receipt also verifies that only the
+   adjacent non-virtual cell owns the shared border override.
    Strict DXF output supports these fields only where the legacy group-177 mask
    fits its 16-bit range; it requires every selected visibility value and
    rejects higher masks atomically. The [implementation receipt](docs/research/p5-ac1018-table-cell-four-edge-overrides-2026-11-02.json)

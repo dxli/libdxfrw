@@ -10485,6 +10485,122 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         }
     }
 
+    TableDwgCodecProbe virtualEdgeTable = encodedAc1018Table;
+    virtualEdgeTable.colcount = 2;
+    virtualEdgeTable.rowcount = 1;
+    DRW_TableColumn virtualEdgeColumn;
+    virtualEdgeColumn.m_width = 8.0;
+    virtualEdgeTable.m_content.m_columns.push_back(virtualEdgeColumn);
+    DRW_TableCell& virtualCell =
+        virtualEdgeTable.m_content.m_rows.front().m_cells.front();
+    virtualCell.m_edgeFlags = 2;
+    virtualCell.m_virtualEdgeFlags = 2u;
+    DRW_TableCell adjacentCell;
+    adjacentCell.m_type = 1;
+    adjacentCell.m_mergedWidth = 1;
+    adjacentCell.m_mergedHeight = 1;
+    adjacentCell.m_edgeFlags = 8;
+    adjacentCell.m_overrideFlags = 0x00000200u;
+    adjacentCell.m_borders[3].m_colorRgb = 7;
+    DRW_TableCellContent adjacentContent;
+    adjacentContent.m_type = 1;
+    adjacentContent.m_text = "adjacent edge owner";
+    adjacentCell.m_contents.push_back(adjacentContent);
+    virtualEdgeTable.m_content.m_rows.front().m_cells.push_back(adjacentCell);
+    dwgBufferW virtualEdgeBody;
+    dwgBufferW virtualEdgeHandles;
+    dwgBufferW virtualEdgeTypePrefix;
+    virtualEdgeTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t virtualEdgeObjectSizeBit =
+        virtualEdgeTypePrefix.bitCount();
+    const bool virtualEdgeBuilt = virtualEdgeTable.encodeAsTableClass(
+        DRW::AC1018, virtualEdgeBody, virtualEdgeHandles);
+    t.expect(virtualEdgeBuilt,
+             "AC1018 TABLE admits a reciprocal virtual edge with one adjacent border owner");
+    if (virtualEdgeBuilt) {
+        const std::uint64_t virtualEdgeBodyEndBit =
+            virtualEdgeBody.bitCount();
+        constexpr std::int32_t virtualEdgeSentinel = 0x71C0A21;
+        virtualEdgeBody.putBitLong(virtualEdgeSentinel);
+        virtualEdgeBody.patchRawLong32AtBit(
+            virtualEdgeObjectSizeBit, virtualEdgeBody.bitCount());
+        appendBits(virtualEdgeBody, virtualEdgeHandles);
+        dwgBuffer virtualEdgeInput(virtualEdgeBody.data().data(),
+                                   virtualEdgeBody.data().size());
+        TableDwgCodecProbe virtualEdgeReadback;
+        const bool virtualEdgeRead = virtualEdgeReadback.parseDwg(
+            DRW::AC1018, &virtualEdgeInput);
+        const auto& virtualRows = virtualEdgeReadback.m_content.m_rows;
+        const bool virtualEdgeFieldsMatch = virtualEdgeRead
+            && virtualEdgeInput.isGood()
+            && virtualEdgeReadback.m_semanticContentComplete
+            && virtualRows.size() == 1u
+            && virtualRows.front().m_cells.size() == 2u
+            && virtualRows.front().m_cells[0].m_edgeFlags == 2
+            && virtualRows.front().m_cells[0].m_virtualEdgeFlags == 2u
+            && virtualRows.front().m_cells[1].m_edgeFlags == 8
+            && virtualRows.front().m_cells[1].m_virtualEdgeFlags == 0u
+            && virtualRows.front().m_cells[1].m_overrideFlags == 0x200u
+            && virtualRows.front().m_cells[1].m_borders[3].m_colorRgb == 7
+            && cursorBit(virtualEdgeInput) == virtualEdgeBodyEndBit;
+        t.expect(virtualEdgeFieldsMatch,
+                 "AC1018 virtual edge and adjacent border owner parse as one shared override");
+        if (virtualEdgeFieldsMatch) {
+            t.expect(virtualEdgeInput.getBitLong() == virtualEdgeSentinel
+                         && virtualEdgeInput.isGood(),
+                     "AC1018 virtual edge encoding preserves the following-body sentinel");
+
+            const auto& virtualRanges =
+                virtualEdgeReadback.m_content.m_subrecordRanges;
+            std::vector<std::uint8_t> oneSidedVirtualBytes =
+                virtualEdgeBody.data();
+            const std::uint64_t oneSidedBit =
+                virtualRanges.front().m_startBit + 9u;
+            oneSidedVirtualBytes[static_cast<std::size_t>(oneSidedBit / 8u)]
+                |= static_cast<std::uint8_t>(
+                    1u << (7u - static_cast<unsigned>(oneSidedBit % 8u)));
+            dwgBuffer oneSidedVirtualInput(
+                oneSidedVirtualBytes.data(), oneSidedVirtualBytes.size());
+            TableDwgCodecProbe oneSidedVirtualReadback;
+            const bool oneSidedVirtualRead =
+                oneSidedVirtualReadback.parseDwg(
+                    DRW::AC1018, &oneSidedVirtualInput);
+            t.expect(oneSidedVirtualRead && oneSidedVirtualInput.isGood()
+                         && !oneSidedVirtualReadback
+                                .m_semanticContentComplete,
+                     "AC1018 source with an out-of-bounds virtual edge remains readable but semantically incomplete");
+
+            TableDwgCodecProbe invalidVirtualEdge = virtualEdgeTable;
+            DRW_TableCell& invalidVirtualCell =
+                invalidVirtualEdge.m_content.m_rows.front().m_cells.front();
+            invalidVirtualCell.m_overrideFlags = 0x00000080u;
+            invalidVirtualCell.m_borders[1].m_colorRgb = 4;
+            dwgBufferW invalidVirtualBody;
+            dwgBufferW invalidVirtualHandles;
+            invalidVirtualBody.putRawChar8(0xA9u);
+            invalidVirtualHandles.putRawChar8(0x9Au);
+            const auto invalidVirtualBodyBefore = invalidVirtualBody.data();
+            const auto invalidVirtualHandlesBefore =
+                invalidVirtualHandles.data();
+            const bool conflictingVirtualRefused =
+                !invalidVirtualEdge.encodeAsTableClass(
+                    DRW::AC1018, invalidVirtualBody, invalidVirtualHandles);
+            const bool conflictingVirtualPreserved =
+                invalidVirtualBody.data() == invalidVirtualBodyBefore
+                && invalidVirtualHandles.data()
+                    == invalidVirtualHandlesBefore;
+            invalidVirtualCell.m_overrideFlags = 0u;
+            invalidVirtualCell.m_borders[1].m_colorRgb = -1;
+            const bool correctedVirtualRetry =
+                invalidVirtualEdge.encodeAsTableClass(
+                    DRW::AC1018, invalidVirtualBody, invalidVirtualHandles);
+            t.expect(conflictingVirtualRefused
+                         && conflictingVirtualPreserved
+                         && correctedVirtualRetry,
+                     "AC1018 duplicate virtual-edge property refuses atomically and corrected retry succeeds");
+        }
+    }
+
     TableDwgCodecProbe mergedAc1018Table;
     mergedAc1018Table.handle = 0xA500u;
     mergedAc1018Table.name = "*T1";

@@ -536,6 +536,92 @@ bool validAc1018TableCellMergeLayout(
     return true;
 }
 
+// ODA §20.4.96.1 stores a shared border override in one cell. The adjacent
+// cell carries the same edge bit in m_edgeFlags and marks it virtual; it must
+// not carry a duplicate property override for that edge.
+bool validAc1018TableVirtualEdgeLayout(
+        const std::vector<DRW_TableRow>& rows) noexcept {
+    if (rows.empty() || rows.front().m_cells.empty())
+        return false;
+    const std::size_t columns = rows.front().m_cells.size();
+    constexpr std::array<std::uint32_t, 4> borderColorFlags = {{
+        0x00000040u, 0x00000080u, 0x00000100u, 0x00000200u
+    }};
+    constexpr std::array<std::uint32_t, 4> borderLineweightFlags = {{
+        0x00000400u, 0x00000800u, 0x00001000u, 0x00002000u
+    }};
+    constexpr std::array<std::uint32_t, 4> borderVisibilityFlags = {{
+        0x00004000u, 0x00008000u, 0x00010000u, 0x00020000u
+    }};
+    constexpr std::array<std::size_t, 4> adjacentEdge = {{2u, 3u, 0u, 1u}};
+
+    const auto hasBorderOverride = [&](const DRW_TableCell& cell,
+                                       std::size_t edge) {
+        return (cell.m_overrideFlags
+                & (borderColorFlags[edge] | borderLineweightFlags[edge]
+                   | borderVisibilityFlags[edge])) != 0u;
+    };
+    for (std::size_t row = 0u; row < rows.size(); ++row) {
+        if (rows[row].m_cells.size() != columns)
+            return false;
+        for (std::size_t column = 0u; column < columns; ++column) {
+            const DRW_TableCell& cell = rows[row].m_cells[column];
+            if (cell.m_edgeFlags < 0 || cell.m_edgeFlags > 15
+                || (cell.m_virtualEdgeFlags & ~0x0Fu) != 0u)
+                return false;
+            std::uint32_t expectedEdgeFlags = cell.m_virtualEdgeFlags;
+            for (std::size_t edge = 0u; edge < borderColorFlags.size();
+                 ++edge) {
+                if (hasBorderOverride(cell, edge))
+                    expectedEdgeFlags |= 1u << edge;
+                if ((cell.m_virtualEdgeFlags & (1u << edge)) == 0u)
+                    continue;
+                if (hasBorderOverride(cell, edge))
+                    return false;
+
+                std::size_t neighborRow = row;
+                std::size_t neighborColumn = column;
+                switch (edge) {
+                case 0u:
+                    if (row == 0u)
+                        return false;
+                    --neighborRow;
+                    break;
+                case 1u:
+                    if (column + 1u >= columns)
+                        return false;
+                    ++neighborColumn;
+                    break;
+                case 2u:
+                    if (row + 1u >= rows.size())
+                        return false;
+                    ++neighborRow;
+                    break;
+                case 3u:
+                    if (column == 0u)
+                        return false;
+                    --neighborColumn;
+                    break;
+                default:
+                    return false;
+                }
+                const DRW_TableCell& neighbor =
+                    rows[neighborRow].m_cells[neighborColumn];
+                const std::size_t opposite = adjacentEdge[edge];
+                const std::uint32_t oppositeBit = 1u << opposite;
+                if ((neighbor.m_edgeFlags & oppositeBit) == 0u
+                    || (neighbor.m_virtualEdgeFlags & oppositeBit) != 0u
+                    || !hasBorderOverride(neighbor, opposite))
+                    return false;
+            }
+            if (static_cast<std::uint32_t>(cell.m_edgeFlags)
+                != expectedEdgeFlags)
+                return false;
+        }
+    }
+    return true;
+}
+
 bool parseViewportLayerOverrideHandle(std::string_view text,
                                       std::uint64_t& handle) noexcept {
     if (text.empty() || text.size() > 16u)
@@ -2755,9 +2841,8 @@ bool validAc1018TableRetainedOverrideRanges(
     std::size_t cellRangeCount = 0u;
     for (const DRW_TableRow& row : content.m_rows) {
         for (const DRW_TableCell& cell : row.m_cells) {
-            if (cell.m_virtualEdgeFlags != 0u)
-                return false;
             if (cell.m_overrideFlags != 0u
+                || cell.m_virtualEdgeFlags != 0u
                 || (cell.m_contents.size() == 1u
                     && !cell.m_contents.front().m_text.empty()))
                 ++cellRangeCount;
@@ -2787,6 +2872,7 @@ bool validAc1018TableRetainedOverrideRanges(
     for (const DRW_TableRow& row : content.m_rows) {
         for (const DRW_TableCell& cell : row.m_cells) {
             const bool hasRange = cell.m_overrideFlags != 0u
+                || cell.m_virtualEdgeFlags != 0u
                 || (cell.m_contents.size() == 1u
                     && !cell.m_contents.front().m_text.empty());
             if (!hasRange)
@@ -4057,8 +4143,8 @@ bool parseR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
                     | borderVisibilityFlags[edge])) != 0u)
                 expectedEdgeFlags |= 1 << edge;
         }
-        if (cell.m_edgeFlags != expectedEdgeFlags
-            || cell.m_virtualEdgeFlags != 0)
+        expectedEdgeFlags |= cell.m_virtualEdgeFlags;
+        if (cell.m_edgeFlags != expectedEdgeFlags)
             semanticComplete = false;
     }
     if (ac1021TextAlignmentProfile
@@ -15898,6 +15984,7 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
         || m_content.m_rows.size() > kMaxTableRows
         || static_cast<std::size_t>(rowcount) != m_content.m_rows.size()
         || !validAc1018TableCellMergeLayout(m_content.m_rows, true)
+        || !validAc1018TableVirtualEdgeLayout(m_content.m_rows)
         || !m_content.m_fieldHandles.empty()
         || !m_content.m_mergedRanges.empty()
         || !validAc1018TableRetainedOverrideRanges(version, *this)
@@ -15943,7 +16030,7 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
     const auto isEncodableCell = [&](const DRW_TableCell& cell) {
         const bool hasCellTextHeightOverride =
             (cell.m_overrideFlags & 0x00000020u) != 0u;
-        int expectedCellEdgeFlags = 0;
+        int expectedCellEdgeFlags = cell.m_virtualEdgeFlags;
         bool validCellBorderOverrides = true;
         for (std::size_t edge = 0u;
              edge < cellBorderColorFlags.size(); ++edge) {
@@ -16022,7 +16109,8 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
             && zeroPoint(cell.m_geometryCenter)
             && cell.m_contentWidth == 0.0 && cell.m_contentHeight == 0.0
             && cell.m_geometryWidth == 0.0 && cell.m_geometryHeight == 0.0
-            && validCellOverrides && cell.m_virtualEdgeFlags == 0u
+            && validCellOverrides && cell.m_virtualEdgeFlags >= 0
+            && cell.m_virtualEdgeFlags <= 15
             && cell.m_contents.size() == 1u
             && cell.m_contents.front().m_type == 1
             && cell.m_contents.front().m_handle == 0u
@@ -16175,6 +16263,7 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
                 // Reproduce that bounded profile while retaining selected
                 // nonzero override records on generated models.
                 const bool hasOverrideRecord = cell.m_overrideFlags != 0u
+                    || cell.m_virtualEdgeFlags != 0u
                     || !cell.m_contents.front().m_text.empty();
                 stagedBody.putBit(hasOverrideRecord);
                 if (hasOverrideRecord) {
@@ -16768,10 +16857,11 @@ bool DRW_Table::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
     }
     if (version == DRW::AC1018 && cellsParseComplete
         && m_semanticContentComplete
-        && !validAc1018TableCellMergeLayout(m_content.m_rows, true)) {
+        && (!validAc1018TableCellMergeLayout(m_content.m_rows, true)
+            || !validAc1018TableVirtualEdgeLayout(m_content.m_rows))) {
         // Keep the source frame and decoded cells, but do not report complete
         // legacy TABLE semantics for an orphaned, overlapping, or out-of-range
-        // merge descriptor.
+        // merge descriptor or an invalid shared-edge override role.
         m_semanticContentComplete = false;
     }
     if (!cellsParseComplete || !m_semanticContentComplete)
