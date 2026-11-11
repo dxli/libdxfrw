@@ -1743,8 +1743,14 @@ created locally from scratch for the specific control.
   writer control now writes these exact three imported models, reimports the
   output under fresh source tickets, matches selected row values and verifies
   ordinary/ByLayer/ByBlock handle roles in ODA order. This is generated bounded
-  roundtrip evidence, not physical-source replay or native linetype appearance
-  qualification. The attempted physical
+  roundtrip evidence. The pinned physical source also passes this selected
+  route: the three reader-ticket-bound LTYPE rows are written to a scratch
+  AC1018 DWG, then reimported under fresh tickets with selected field values
+  matched and normative control order verified. Its mixed-case source names
+  normalize to uppercase; comparison uses ASCII case-insensitive identity.
+  Scratch output is removed. Neither selected route proves full-source
+  conversion, exact source spelling preservation or native linetype appearance.
+  The attempted physical
   CRC mutation could not locate the reader's decoded-buffer frame bytes as a
   contiguous span in the compressed source pages. The existing checksum helper
   handles locally generated pages; a source-backed physical CRC retry needs a

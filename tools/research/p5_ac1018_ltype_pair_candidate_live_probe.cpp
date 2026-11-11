@@ -113,6 +113,86 @@ DRW_UnsupportedObject body(const char* path,std::uint32_t handle,int type) {
  r.m_rawBytes.assign(std::istreambuf_iterator<char>(in),{});r.m_objectSize=static_cast<std::uint32_t>(r.m_rawBytes.size());return r;
 }
 int main(int argc,char**argv){
+ if(argc==4&&std::string(argv[1])=="--roundtrip-resource"){
+  const std::filesystem::path sourcePath(argv[2]),outputPath(argv[3]);
+  if(!std::filesystem::is_regular_file(sourcePath)||std::filesystem::exists(outputPath))return 30;
+  dx_iface sourceReader;dx_data source;
+  const bool sourceSelected=sourceReader.enableVerifiedLTypeResourceSource(5u,0x16u,0x14u,0x15u);
+  const bool sourceRead=sourceSelected&&sourceReader.fileImport(sourcePath.string(),&source,false);
+  const bool sourceBound=sourceRead&&dx_iface::hasUnchangedVerifiedLTypeResourceSource(
+      source,5u,0x16u,0x14u,0x15u);
+  if(!sourceBound)return 31;
+  struct Cleanup{std::filesystem::path p;~Cleanup(){std::error_code e;std::filesystem::remove(p,e);}}cleanup{outputPath};
+  dwgRW writer(outputPath.string().c_str());GeneratedSource generated(writer,&source.lineTypes);
+  const bool written=writer.write(&generated,DRW::AC1018,true)&&generated.generated;
+  if(!written)return 32;
+  dx_iface outputReader;dx_data output;
+  const bool outputSelected=outputReader.enableVerifiedLTypeResourceSource(
+      DRW::DwgLtypeControlHandle,generated.continuousHandle,
+      generated.byBlockHandle,generated.byLayerHandle);
+  const bool outputRead=outputSelected&&outputReader.fileImport(outputPath.string(),&output,false);
+  const bool outputBound=outputRead&&dx_iface::hasUnchangedVerifiedLTypeResourceSource(
+      output,DRW::DwgLtypeControlHandle,generated.continuousHandle,
+      generated.byBlockHandle,generated.byLayerHandle);
+  const auto sameValues=[&](std::uint32_t sourceHandle,std::uint32_t outputHandle){
+   const auto a=std::find_if(source.lineTypes.cbegin(),source.lineTypes.cend(),
+       [sourceHandle](const DRW_LType& row){return row.handle==sourceHandle;});
+   const auto b=std::find_if(output.lineTypes.cbegin(),output.lineTypes.cend(),
+       [outputHandle](const DRW_LType& row){return row.handle==outputHandle;});
+   const bool sameName=a!=source.lineTypes.cend()&&b!=output.lineTypes.cend()
+       &&a->name.size()==b->name.size()
+       &&std::equal(a->name.begin(),a->name.end(),b->name.begin(),
+          [](unsigned char left,unsigned char right){
+           const auto upper=[](unsigned char c){return c>='a'&&c<='z'
+             ?static_cast<unsigned char>(c-'a'+'A'):c;};
+           return upper(left)==upper(right);
+          });
+   return sameName&&a->desc==b->desc&&a->flags==b->flags
+       &&a->alignment==b->alignment&&a->length==b->length
+       &&a->size==b->size&&a->path==b->path
+       &&a->segments.size()==b->segments.size();
+  };
+  const bool valuesMatch=outputBound
+      &&sameValues(0x16u,generated.continuousHandle)
+      &&sameValues(0x14u,generated.byBlockHandle)
+      &&sameValues(0x15u,generated.byLayerHandle);
+  if(!valuesMatch){
+   for(const auto pair:{std::pair<std::uint32_t,std::uint32_t>{0x16u,generated.continuousHandle},
+       {0x14u,generated.byBlockHandle},{0x15u,generated.byLayerHandle}}){
+    const auto a=std::find_if(source.lineTypes.cbegin(),source.lineTypes.cend(),
+        [&](const DRW_LType& row){return row.handle==pair.first;});
+    const auto b=std::find_if(output.lineTypes.cbegin(),output.lineTypes.cend(),
+        [&](const DRW_LType& row){return row.handle==pair.second;});
+   if(a!=source.lineTypes.cend()&&b!=output.lineTypes.cend())
+     std::cerr<<"row="<<a->name<<"/"<<b->name<<" desc="<<a->desc.size()<<"/"<<b->desc.size()
+       <<" flags="<<a->flags<<"/"<<b->flags<<" align="<<a->alignment<<"/"<<b->alignment
+       <<" length="<<a->length<<"/"<<b->length<<" size="<<a->size<<"/"<<b->size
+       <<" path="<<a->path.size()<<"/"<<b->path.size()
+       <<" segments="<<a->segments.size()<<"/"<<b->segments.size()<<'\n';
+   }
+  }
+  Probe observer;dx_data observedOutput;
+  const bool observed=observer.fileImport(outputPath.string(),&observedOutput,false);
+  bool normativeOrder=false;
+  if(observed&&observer.controlFrame){
+   dwgBuffer body(observer.controlFrame->m_rawBytes.data(),
+       observer.controlFrame->m_rawBytes.size(),nullptr);DRW_ObjControl control;
+   normativeOrder=control.parseDwg(DRW::AC1018,&body,
+       static_cast<std::uint32_t>(observer.controlFrame->m_rawBytes.size()*8u))
+       &&body.isGood()&&control.orderedHandleSlots.size()==3u
+       &&control.orderedHandleRoles.size()==3u
+       &&control.orderedHandleSlots[0]==generated.continuousHandle
+       &&control.orderedHandleRoles[0]==2u
+       &&control.orderedHandleSlots[1]==generated.byLayerHandle
+       &&control.orderedHandleRoles[1]==3u
+       &&control.orderedHandleSlots[2]==generated.byBlockHandle
+       &&control.orderedHandleRoles[2]==3u;
+  }
+  std::cout<<"sourceBound="<<sourceBound<<" written="<<written
+      <<" outputBound="<<outputBound<<" valuesMatch="<<valuesMatch
+      <<" normativeOrder="<<normativeOrder<<'\n';
+  return outputBound&&valuesMatch&&normativeOrder?0:33;
+ }
  if(argc==7&&std::string(argv[1])=="--inspect-resource"){
   const auto parseHandle=[](const char* text,std::uint32_t& value){
    char* end=nullptr;const auto parsed=std::strtoul(text,&end,0);
