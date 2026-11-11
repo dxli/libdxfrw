@@ -106,6 +106,15 @@ public:
     bool enableVerifiedTableReciprocalSource(const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
         std::uint32_t tableEntity,std::uint32_t dictionary) noexcept;
+    // Stricter opt-in: unique live TABLE must match a bounded private reader
+    // snapshot. Still source evidence, never output or graph authorization.
+    bool enableVerifiedTableModelSource(const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        std::uint32_t tableEntity,std::uint32_t dictionary) noexcept;
+    static bool hasUnchangedVerifiedTableModelSource(const dx_data&,
+        const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        std::uint32_t tableEntity,std::uint32_t dictionary) noexcept;
     static bool readVerifiedTableReciprocalSource(const dx_data&,
         const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
@@ -3433,6 +3442,7 @@ private:
     bool wantsVerifiedXRecord(std::uint32_t handle) const noexcept override;
     void verifiedXRecord(const DwgVerifiedXRecordTicket&) noexcept override;
     std::uint32_t verifiedTableEntitySelection() const noexcept override;
+    bool wantsVerifiedTableEntityModel() const noexcept override;
     bool wantsVerifiedTableCandidate(std::uint32_t handle) const noexcept override;
     void verifiedTableCandidate(const DwgVerifiedTableCandidateTicket&) noexcept override;
     void finishVerifiedXRecordSource(bool successfulRead) noexcept;
@@ -3458,6 +3468,7 @@ private:
     bool m_verifiedTableRoundtripChildrenSelected{false};
     std::uint32_t m_verifiedTableEntitySelected{0u},m_verifiedTableDictionarySelected{0u};
     bool m_verifiedReciprocalTableSelected{false};
+    bool m_verifiedTableModelSelected{false};
     std::vector<dx_data::VerifiedTableCandidateSource> m_verifiedTableCandidatePending;
     std::size_t m_verifiedTableCandidatePendingBytes{0u};
     friend class DxWholeSourceTestAccess;
@@ -3525,6 +3536,7 @@ private:
     void finishPlotStyleSources(dx_data&) noexcept;
     bool replayTableBody(dx_data&,TableBody&,bool entitiesReady);
     static bool sameTableBodyModel(const DRW_Table&,const DRW_Table&,DRW::Version) noexcept;
+    static bool sameDwgTableModel(const DRW_Table&,const DRW_Table&) noexcept;
     static bool hasMatchedTableSource(const dx_data&,const std::shared_ptr<const TableBody>&) noexcept;
     static bool chargeTableBody(dx_data&,std::size_t,std::size_t,std::size_t=0u) noexcept;
     dx_data* m_tableSourceReadData{nullptr};

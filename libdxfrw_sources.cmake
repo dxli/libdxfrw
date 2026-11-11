@@ -65,6 +65,7 @@ set(LIBDXFRW_PRIVATE_HEADERS
     "${CMAKE_CURRENT_LIST_DIR}/src/intern/dwg_table_child_xrecord_ac1018_candidate.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/intern/dwg_table_extension_dictionary_ac1018_candidate.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/intern/dwg_table_entity_xdictionary_ac1018_candidate.h"
+    "${CMAKE_CURRENT_LIST_DIR}/src/intern/dwg_table_model_ac1018_candidate.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/intern/dwg_tablestyle_ac1018_candidate.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/intern/dwg_default_material.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/intern/dwg_fixed_handles.h"

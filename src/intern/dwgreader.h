@@ -1221,7 +1221,14 @@ private:
     std::uint64_t ordinal{0u};
     DRW_DwgFrameOffsetSpace space{DRW_DwgFrameOffsetSpace::Unknown};
     DwgObjectFrame frame;
+    std::shared_ptr<const DRW_Table> tableModel;
   };
+  std::shared_ptr<const DRW_Table> m_verifiedTableParsedModel;
+  std::vector<std::uint8_t> m_verifiedTableParsedBody;
+  std::uint32_t m_verifiedTableParsedHandle{0u},m_verifiedTableParsedOffset{0u};
+  std::uint64_t m_verifiedTableParsedOrdinal{0u};
+  DRW_DwgFrameOffsetSpace m_verifiedTableParsedSpace{DRW_DwgFrameOffsetSpace::Unknown};
+  std::uint16_t m_verifiedTableParsedClass{0u};
   std::vector<VerifiedTableCandidatePending> m_verifiedTableCandidates;
   std::size_t m_verifiedTableCandidateBytes{0u};
   bool m_verifiedTableCandidateFailed{false};

@@ -98,6 +98,13 @@ public:
         if(value.mtext)value.mtext->updateAngle();
         return true;
     }
+    // DWG snapshot profiles must not share mutable DXF accounting state.
+    static bool hasNoDxfAccountingLease(const DRW_Entity& value) noexcept {
+        return !value.m_dxfRetainedStringLease;
+    }
+    static bool hasNoEntityNativeWriteBindings(const DRW_Entity& value) noexcept {
+        return value.dwgEedAppIdWriteRefs.empty() && value.dwgEedLayerWriteRefs.empty();
+    }
     static bool hasNoNativeWriteBindings(const DRW_Attdef& value) noexcept {
         const auto empty=[](const DRW_Entity& entity) {
             return entity.dwgEedAppIdWriteRefs.empty()&&entity.dwgEedLayerWriteRefs.empty();

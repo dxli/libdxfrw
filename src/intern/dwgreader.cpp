@@ -19,6 +19,7 @@
 #include "drw_textcodec.h"
 #include "dwgobjectframe.h"
 #include "dwg_xrecord_verified_source.h"
+#include "dwg_table_model_ac1018_candidate.h"
 #include "dwgsafety.h"
 #include "proxygraphicdecoder.h"
 #include "dwgheadersection.h"
@@ -12594,6 +12595,36 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
             DRW_Table e;
             if (entryParse(e, buff, bs, ret)) {
               e.name = findTableName(DRW::BLOCK_RECORD, e.blockRecH.ref);
+              // This snapshot is private and provisional until the later
+              // committed-ledger/CRC reread and whole-read completion. Its
+              // allocation failure never alters the ordinary TABLE callback.
+              auto* sink=dynamic_cast<DwgVerifiedTableCandidateSink*>(&intfa);
+              if(sink && sink->wantsVerifiedTableEntityModel()
+                  && sink->verifiedTableEntitySelection()==obj.handle) {
+                try {
+                  constexpr std::size_t maxTotal=2u*1024u*1024u;
+                  constexpr auto modelBytes=DwgTableModelAc1018Candidate::ModelReservation;
+                  if(m_verifiedTableParsedModel || m_verifiedTableCandidateFailed
+                      || version!=DRW::AC1018 || cit->second->recName!="ACAD_TABLE"
+                      || cit->second->className!="AcDbTable" || encodedType!=oType
+                      || obj.sourceOffsetSpace!=DRW_DwgFrameOffsetSpace::DecodedBuffer
+                      || tmpByteStr.size()>65536u || !DwgTableModelAc1018Candidate::bounded(e)
+                      || m_verifiedXRecordPendingBytes>maxTotal
+                      || m_verifiedTableCandidateBytes>maxTotal-m_verifiedXRecordPendingBytes
+                      || modelBytes>maxTotal-m_verifiedXRecordPendingBytes-m_verifiedTableCandidateBytes
+                      || tmpByteStr.size()>maxTotal-m_verifiedXRecordPendingBytes-m_verifiedTableCandidateBytes-modelBytes)
+                    m_verifiedTableCandidateFailed=true;
+                  else {
+                    auto model=std::make_shared<const DRW_Table>(e);
+                    auto body=tmpByteStr;
+                    m_verifiedTableParsedHandle=obj.handle;m_verifiedTableParsedOffset=obj.loc;
+                    m_verifiedTableParsedOrdinal=obj.sourceOrdinal;m_verifiedTableParsedSpace=obj.sourceOffsetSpace;
+                    m_verifiedTableParsedClass=static_cast<std::uint16_t>(encodedType);
+                    m_verifiedTableParsedModel=std::move(model);m_verifiedTableParsedBody=std::move(body);
+                    m_verifiedTableCandidateBytes+=modelBytes+tmpByteStr.size();
+                  }
+                } catch(...) {m_verifiedTableCandidateFailed=true;}
+              }
               output.appendValue(e, &DRW_Interface::addTable);
               if (e.m_hasSemanticContent && !e.m_semanticContentComplete) {
                 // Keep the usable 2D TABLE prefix for existing consumers and
@@ -12922,7 +12953,16 @@ bool dwgReader::readDwgObjects(DRW_Interface &intfa, dwgBuffer *dbuf,
               pending.version=version;pending.classNumber=static_cast<std::uint16_t>(encoded);
               pending.handle=entry.m_handle;pending.offset=entry.m_sourceOffset;
               pending.ordinal=entry.m_sourceMapOrdinal;pending.space=entry.m_sourceOffsetSpace;
-              pending.frame=std::move(frame);m_verifiedTableCandidates.push_back(std::move(pending));
+              if(tableSink->wantsVerifiedTableEntityModel()) {
+                if(!m_verifiedTableParsedModel || m_verifiedTableParsedHandle!=entry.m_handle
+                    || m_verifiedTableParsedOffset!=entry.m_sourceOffset || m_verifiedTableParsedOrdinal!=entry.m_sourceMapOrdinal
+                    || m_verifiedTableParsedSpace!=entry.m_sourceOffsetSpace || m_verifiedTableParsedClass!=static_cast<std::uint16_t>(encoded)
+                    || m_verifiedTableParsedBody!=frame.body())m_verifiedTableCandidateFailed=true;
+                else pending.tableModel=m_verifiedTableParsedModel;
+              }
+              if(!m_verifiedTableCandidateFailed) {
+                pending.frame=std::move(frame);m_verifiedTableCandidates.push_back(std::move(pending));
+              }
               m_verifiedTableCandidateBytes+=static_cast<std::size_t>(size);
             }
           }
@@ -13257,7 +13297,7 @@ void dwgReader::deliverVerifiedTableCandidates(DRW_Interface& target) noexcept {
   for(const auto& item:pending) {
     if (!sink->wantsVerifiedTableCandidate(item.handle))return;
     DwgVerifiedTableCandidateTicket ticket(item.kind,item.version,item.classNumber,
-        item.handle,item.offset,item.ordinal,item.space,item.frame);
+        item.handle,item.offset,item.ordinal,item.space,item.frame,item.tableModel.get());
     sink->verifiedTableCandidate(ticket);
   }
 }

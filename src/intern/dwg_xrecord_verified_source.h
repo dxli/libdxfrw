@@ -8,6 +8,7 @@
 #include "dwgobjectframe.h"
 
 class dwgReader;
+class DRW_Table;
 
 class DwgVerifiedXRecordTicket final {
     friend class dwgReader;
@@ -51,9 +52,9 @@ class DwgVerifiedTableCandidateTicket final {
     DwgVerifiedTableCandidateTicket(DwgVerifiedTableCandidateKind kind,
             DRW::Version version,std::uint16_t classNumber,std::uint32_t handle,
             std::uint32_t offset,std::uint64_t ordinal,
-            DRW_DwgFrameOffsetSpace space,const DwgObjectFrame& frame) noexcept
+            DRW_DwgFrameOffsetSpace space,const DwgObjectFrame& frame,const DRW_Table* model) noexcept
         :kind_(kind),version_(version),classNumber_(classNumber),handle_(handle),
-         offset_(offset),ordinal_(ordinal),space_(space),frame_(frame) {}
+         offset_(offset),ordinal_(ordinal),space_(space),frame_(frame),model_(model) {}
 public:
     DwgVerifiedTableCandidateTicket(const DwgVerifiedTableCandidateTicket&)=delete;
     DwgVerifiedTableCandidateTicket& operator=(const DwgVerifiedTableCandidateTicket&)=delete;
@@ -65,6 +66,7 @@ public:
     std::uint64_t ordinal() const noexcept {return ordinal_;}
     DRW_DwgFrameOffsetSpace space() const noexcept {return space_;}
     const DwgObjectFrame& frame() const noexcept {return frame_;}
+    const DRW_Table* tableModel() const noexcept {return model_;}
 private:
     DwgVerifiedTableCandidateKind kind_;
     DRW::Version version_;
@@ -73,6 +75,7 @@ private:
     std::uint64_t ordinal_;
     DRW_DwgFrameOffsetSpace space_;
     const DwgObjectFrame& frame_;
+    const DRW_Table* model_;
 };
 
 class DwgVerifiedTableCandidateSink {
@@ -80,6 +83,7 @@ public:
     virtual ~DwgVerifiedTableCandidateSink()=default;
     // Private opt-in. Zero means no post-BLOCKS entity reread.
     virtual std::uint32_t verifiedTableEntitySelection() const noexcept {return 0u;}
+    virtual bool wantsVerifiedTableEntityModel() const noexcept {return false;}
     virtual bool wantsVerifiedTableCandidate(std::uint32_t handle) const noexcept=0;
     virtual void verifiedTableCandidate(const DwgVerifiedTableCandidateTicket&) noexcept=0;
 };

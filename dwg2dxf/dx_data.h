@@ -2686,6 +2686,7 @@ private:
         bool requiresTableRoundtripChildren{false};
         std::uint32_t selectedExtensionDictionary{0u},selectedTableEntity{0u};
         bool requiresReciprocalTableSource{false};
+        bool requiresUnchangedTableModel{false};
         std::vector<VerifiedXRecordSource> records;
     };
     struct VerifiedTableCandidateSource {
@@ -2696,6 +2697,7 @@ private:
         Kind kind{Kind::TableContent};
         DRW_DwgFramePublication publication;
         std::shared_ptr<const DRW_TableEntry> typedBaseline;
+        std::shared_ptr<const DRW_Table> tableModel;
     };
     struct VerifiedTableCandidateSources {
         std::shared_ptr<const unsigned char> importToken;
