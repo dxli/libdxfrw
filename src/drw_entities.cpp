@@ -32248,10 +32248,6 @@ bool DRW_Viewport::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
     case 63:
         // Groups 63, 421 and 431 are independent ambient color fields;
         // their order in a DXF record is not fixed.
-        if (!replaceDxfRetainedStringField(
-                reader, m_dxfRetainedAmbientColorNameBytes,
-                ambientColorName, std::string{}))
-            return false;
         ambientColor = static_cast<std::uint32_t>(reader->getInt32());
         ambientColorMethod = 0u;
         ambientColorDwgFlags = 0u;
@@ -32317,10 +32313,6 @@ bool DRW_Viewport::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
         contrast = reader->getDouble();
         break;
     case 421:
-        if (!replaceDxfRetainedStringField(
-                reader, m_dxfRetainedAmbientColorNameBytes,
-                ambientColorName, std::string{}))
-            return false;
         ambientColorRgb = reader->getInt32();
         ambientColorMethod = 0u;
         ambientColorDwgFlags = 0u;

@@ -1210,6 +1210,18 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P6 VIEWPORT DXF ambient color regression:** groups 63 and 421 no
+  longer clear a previously read group-431 color-book name or its retained
+  string lease. The existing ASCII/Binary ordering test failed before the fix;
+  after it, that test and the newly registered retained-owner-budget control
+  pass 2/2. This is DXF transport evidence only. See the [receipt](docs/research/p6-viewport-dxf-ambient-color-order-regression-2026-11-10.json).
+
+- **AC1024 RTM sample leads:** three 2009 producer-era leads were identified;
+  attempted downloads returned 403/404 and one catalog requires registration.
+  No bytes, hash, producer build, or
+  CLASSES failure were verified. Keep the discrepancy evidence-gated; see the
+  [source-leads receipt](docs/research/p6-ac1024-2009-autocad-producer-source-leads-2026-11-10.json).
+
 - **P6 UNDERLAY DWG encoder transaction safety:** PDF, DGN and DWF writers
   now stage their body and handle output with alias-aware publication. Nine
   generated AC1021/AC1024/AC1032 profiles sweep 150 allocation failures,

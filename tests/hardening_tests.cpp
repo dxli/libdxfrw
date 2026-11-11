@@ -14561,9 +14561,9 @@ void testDxfViewportTextOwnerBudget(TestContext& t) {
         t.expect(underCap && underBudgetLedger != nullptr
                      && underBudgetLedger->exceeded()
                      && underBudget.styleSheet == style
-                     && underBudget.ambientColorName.empty()
-                     && underBudgetLedger->used() == style.size(),
-                 "one-byte-under VIEWPORT color-name admission preserves the live style and prior color clearing");
+                     && underBudget.ambientColorName == "TEMP"
+                     && underBudgetLedger->used() == style.size() + 4u,
+                 "one-byte-under VIEWPORT color-name admission preserves the live style and prior color name");
         if (underBudgetLedger != nullptr) {
             underBudget.resetDwgState();
             t.expect(underBudgetLedger->used() == 0u,

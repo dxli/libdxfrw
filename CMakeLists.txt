@@ -2727,6 +2727,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_render_settings_text_owner_budget PROPERTIES
         LABELS "fast;dxf;reader;render-settings;resource-budget"
         TIMEOUT 10)
+    add_test(NAME libdxfrw_dxf_viewport_text_owner_budget
+        COMMAND libdxfrw_hardening_tests --dxf-viewport-text-owner-budget)
+    set_tests_properties(libdxfrw_dxf_viewport_text_owner_budget PROPERTIES
+        LABELS "fast;dxf;reader;viewport;resource-budget"
+        TIMEOUT 10)
     add_test(NAME libdxfrw_associative_subentity_handle_limit
         COMMAND libdxfrw_hardening_tests
             --dxf-associative-subentity-handle-limit)
