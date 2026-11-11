@@ -9868,12 +9868,10 @@ void DRW_Ellipse::toPolyline(DRW_Polyline *pol, int parts){
     pol->extPoint = DRW_Coord(0.0, 0.0, 1.0);
 
     const double fullTurn = M_PIx2;
-    const double normalLength = std::sqrt(
-        extPoint.x * extPoint.x + extPoint.y * extPoint.y
-        + extPoint.z * extPoint.z);
-    const double majorLength = std::sqrt(
-        secPoint.x * secPoint.x + secPoint.y * secPoint.y
-        + secPoint.z * secPoint.z);
+    // Squaring finite coordinates can overflow or underflow even when their
+    // vector lengths and resulting vertices are representable.
+    const double normalLength = std::hypot(std::hypot(extPoint.x, extPoint.y), extPoint.z);
+    const double majorLength = std::hypot(std::hypot(secPoint.x, secPoint.y), secPoint.z);
     const double sweep = endparam - staparam;
     // Keep the established equal-parameter full-ellipse convention. A
     // distinct endpoint represents a partial arc unless it is exactly the
@@ -9897,22 +9895,24 @@ void DRW_Ellipse::toPolyline(DRW_Polyline *pol, int parts){
     const double nx = extPoint.x / normalLength;
     const double ny = extPoint.y / normalLength;
     const double nz = extPoint.z / normalLength;
-    const double normalMajorDot = nx * secPoint.x + ny * secPoint.y
-        + nz * secPoint.z;
-    if (std::abs(normalMajorDot) > majorLength * 1.0e-8)
+    const double ax = secPoint.x / majorLength;
+    const double ay = secPoint.y / majorLength;
+    const double az = secPoint.z / majorLength;
+    const double normalMajorDot = nx * ax + ny * ay + nz * az;
+    if (!std::isfinite(normalMajorDot) || std::abs(normalMajorDot) > 1.0e-8)
         return;
 
-    double minorX = ny * secPoint.z - nz * secPoint.y;
-    double minorY = nz * secPoint.x - nx * secPoint.z;
-    double minorZ = nx * secPoint.y - ny * secPoint.x;
-    const double minorLength = std::sqrt(
-        minorX * minorX + minorY * minorY + minorZ * minorZ);
-    if (!std::isfinite(minorLength) || minorLength <= 0.0)
+    double minorX = ny * az - nz * ay;
+    double minorY = nz * ax - nx * az;
+    double minorZ = nx * ay - ny * ax;
+    const double minorLength = std::hypot(std::hypot(minorX, minorY), minorZ);
+    const double minorRadius = majorLength * ratio;
+    if (!std::isfinite(minorLength) || minorLength <= 0.0
+        || !std::isfinite(minorRadius) || minorRadius <= 0.0)
         return;
-    const double minorScale = majorLength * ratio / minorLength;
-    minorX *= minorScale;
-    minorY *= minorScale;
-    minorZ *= minorScale;
+    minorX = (minorX / minorLength) * minorRadius;
+    minorY = (minorY / minorLength) * minorRadius;
+    minorZ = (minorZ / minorLength) * minorRadius;
 
     double start = staparam;
     double actualSweep = sweep;
@@ -9947,14 +9947,29 @@ void DRW_Ellipse::toPolyline(DRW_Polyline *pol, int parts){
     }
     const int segments = static_cast<int>(requiredSegments);
     const int vertexCount = closed ? segments : segments + 1;
+    // Add an opposite-sign pair first. This avoids an overflowing
+    // intermediate when a finite center is cancelled by the axis terms.
+    const auto addCoordinates = [](double center, double major, double minor) {
+        if (std::signbit(center) != std::signbit(major))
+            return (center + major) + minor;
+        if (std::signbit(center) != std::signbit(minor))
+            return (center + minor) + major;
+        return (major + minor) + center;
+    };
     for (int i = 0; i < vertexCount; ++i) {
         const double fraction = static_cast<double>(i) / segments;
         const double parameter = start + actualSweep * fraction;
         const double cosine = std::cos(parameter);
         const double sine = std::sin(parameter);
-        const double x = basePoint.x + secPoint.x * cosine + minorX * sine;
-        const double y = basePoint.y + secPoint.y * cosine + minorY * sine;
-        const double z = basePoint.z + secPoint.z * cosine + minorZ * sine;
+        const double x = addCoordinates(basePoint.x, secPoint.x * cosine, minorX * sine);
+        const double y = addCoordinates(basePoint.y, secPoint.y * cosine, minorY * sine);
+        const double z = addCoordinates(basePoint.z, secPoint.z * cosine, minorZ * sine);
+        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
+            pol->vertlist.clear();
+            pol->vertexcount = 0;
+            pol->flags = 0;
+            return;
+        }
         DRW_Vertex vertex(x, y, z, 0.0);
         if (is3d)
             vertex.flags = 32;

@@ -1209,6 +1209,21 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-11)
 
+- **P6 R12 ellipse numerical stability:** the ellipse-to-polyline converter
+  now uses scaled length calculations for axes and normals whose norms are
+  finite, and constructs the minor direction before scaling. A locally authored full ellipse
+  with either a `1e200` or `1e-200` axis previously produced no vertices; it now
+  produces the requested vertices. Opposite-sign coordinate terms are combined
+  before the remaining term to avoid spurious intermediate overflow; genuinely
+  nonfinite vertices refuse atomically. Generated ASCII/Binary controls cover
+  independent large/small axis and normal scales, planar and tilted geometry,
+  full/partial endpoints, cancellation, refusal and corrected retry. These are
+  bounded R12 approximation checks, not native-rendering or producer-wide
+  qualification. Finite vectors whose Euclidean norm exceeds binary64 remain
+  refused by the converter and shared DXF preflight; resolve that separately.
+  See the
+  [extreme R12 ellipse receipt](docs/research/p6-r12-ellipse-extreme-axis-stability-2026-11-11.json).
+
 - **P6 legacy MTEXT main-subclass columns:** an explicitly scoped, bounded
   type-75-first profile now retains ordered column values in a distinct
   `DRW_MText`-derived immutable source carrier. It no longer replaces common

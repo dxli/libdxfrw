@@ -87,6 +87,72 @@ bool invalidRetry(const std::filesystem::path& path, bool binary) {
     ellipse.endparam = turn - 5.e-11;
     return output.write(&writer,DRW::AC1009,binary) && writer.accepted;
 }
+bool scaledNear(const DRW_Coord& a, const DRW_Coord& b, double scale) {
+    return std::abs(a.x/scale-b.x/scale)<1.e-13
+        && std::abs(a.y/scale-b.y/scale)<1.e-13
+        && std::abs(a.z/scale-b.z/scale)<1.e-13;
+}
+bool extreme(const std::filesystem::path& path, bool binary, bool threeD,
+             double scale, double normalScale, bool closed) {
+    DRW_Ellipse e;
+    e.basePoint = threeD ? DRW_Coord(2*scale,3*scale,4*scale) : DRW_Coord(2*scale,3*scale,0.);
+    e.secPoint={scale,0.,0.};
+    e.extPoint=threeD ? DRW_Coord(0.,normalScale,0.) : DRW_Coord(0.,0.,normalScale);
+    e.ratio=.5; e.staparam=0.; e.endparam=closed ? turn : turn/4.;
+    const std::size_t expected=closed ? 8u : 3u;
+    const auto check = [&](const DRW_Polyline& p) {
+        if (p.vertlist.size()!=expected || ((p.flags&1)!=0)!=closed
+            || ((p.flags&8)!=0)!=threeD || !p.vertlist.front() || !p.vertlist.back()) return false;
+        return scaledNear(p.vertlist.front()->basePoint,point(e,0.,threeD),scale)
+            && (closed || scaledNear(p.vertlist.back()->basePoint,point(e,turn/4.,threeD),scale));
+    };
+    DRW_Polyline direct; e.toPolyline(&direct,8);
+    if (!check(direct)) return false;
+    dxfRW output(path.string().c_str()); output.setEllipseParts(8); Writer writer(output); writer.ellipse=&e;
+    if (!output.write(&writer,DRW::AC1009,binary) || !writer.accepted) return false;
+    for (bool applyExtrusion : {false,true}) {
+        dxfRW input(path.string().c_str()); Reader reader;
+        if (!input.read(&reader,applyExtrusion) || reader.count!=1 || !check(reader.polyline)) return false;
+    }
+    return true;
+}
+bool extremeArithmetic(const std::filesystem::path& path, bool binary) {
+    DRW_Ellipse e; e.basePoint={1.5e308,0.,0.}; e.secPoint={1.1e308,1.1e308,0.};
+    e.extPoint={0.,0.,1.}; e.ratio=1.; e.staparam=turn/8.-.01; e.endparam=turn/8.+.01;
+    DRW_Polyline direct; e.toPolyline(&direct,8);
+    if (direct.vertlist.size()!=2u || !std::isfinite(direct.vertlist[0]->basePoint.x)
+        || !std::isfinite(direct.vertlist[1]->basePoint.x)) return false;
+    dxfRW output(path.string().c_str()); output.setEllipseParts(8); Writer writer(output); writer.ellipse=&e;
+    if (!output.write(&writer,DRW::AC1009,binary) || !writer.accepted) return false;
+    dxfRW input(path.string().c_str()); Reader reader;
+    if (!input.read(&reader,false) || reader.count!=1 || reader.polyline.vertlist.size()!=2u
+        || !scaledNear(reader.polyline.vertlist[0]->basePoint,direct.vertlist[0]->basePoint,1.e308)
+        || !scaledNear(reader.polyline.vertlist[1]->basePoint,direct.vertlist[1]->basePoint,1.e308)) return false;
+    const double max=std::numeric_limits<double>::max();
+    e.basePoint={max,0.,0.}; e.secPoint={max/2.,0.,0.};e.ratio=.5;e.staparam=0.;e.endparam=turn;
+    {std::ofstream existing(path,std::ios::binary|std::ios::trunc); existing<<"sentinel";}
+    if (output.write(&writer,DRW::AC1009,binary) || writer.accepted || contents(path)!="sentinel") return false;
+    e.basePoint={0.,0.,0.};
+    if (!output.write(&writer,DRW::AC1009,binary) || !writer.accepted) return false;
+    // The current shared DXF preflight requires the vector norm itself to be
+    // finite. Keep these wider finite-component cases explicitly refused until
+    // all affected entity preflights and normalization routes are qualified.
+    e.secPoint={1.,-1.,0.}; e.extPoint={1.5e308,1.5e308,0.}; e.ratio=.5;
+    e.staparam=.2; e.endparam=.4;
+    direct.vertlist.clear(); e.toPolyline(&direct,8);
+    {std::ofstream existing(path,std::ios::binary|std::ios::trunc); existing<<"sentinel";}
+    if (!direct.vertlist.empty() || output.write(&writer,DRW::AC1009,binary)
+        || writer.accepted || contents(path)!="sentinel") return false;
+    e.extPoint={1.,1.,0.};
+    if (!output.write(&writer,DRW::AC1009,binary) || !writer.accepted) return false;
+    e.secPoint={1.5e308,1.5e308,0.}; e.extPoint={0.,0.,1.};
+    direct.vertlist.clear(); e.toPolyline(&direct,8);
+    {std::ofstream existing(path,std::ios::binary|std::ios::trunc); existing<<"sentinel";}
+    if (!direct.vertlist.empty() || output.write(&writer,DRW::AC1009,binary)
+        || writer.accepted || contents(path)!="sentinel") return false;
+    e.secPoint={1.1e308,1.1e308,0.};
+    return output.write(&writer,DRW::AC1009,binary) && writer.accepted;
+}
 }
 int main() {
     const auto path=std::filesystem::temp_directory_path() /
@@ -111,5 +177,16 @@ int main() {
         }
     }
     for (bool binary : {false,true}) if (!invalidRetry(path,binary)) return 1;
+    for (bool binary : {false,true}) {
+        for (bool threeD : {false,true}) for (double scale : {1.e-200,1.e200})
+            for (double normalScale : {1.,scale}) for (bool closed : {false,true})
+                if (!extreme(path,binary,threeD,scale,normalScale,closed)) {
+                    std::cerr<<"extreme ellipse failed binary="<<binary<<" 3d="<<threeD
+                             <<" scale="<<scale<<" normal="<<normalScale<<'\n';return 1;
+                }
+        for (bool threeD : {false,true}) for (double normalScale : {1.e-200,1.e200})
+            if (!extreme(path,binary,threeD,1.,normalScale,false)) return 1;
+        if (!extremeArithmetic(path,binary)) {std::cerr<<"extreme ellipse arithmetic failed\n";return 1;}
+    }
     return 0;
 }
