@@ -261,6 +261,60 @@ bool directControls() {
         || !near(recovered.basePoint.y / maximum, 2.44 / std::sqrt(6.))
         || !near(recovered.basePoint.z / maximum, -1.48 / std::sqrt(3.)))
         return false;
+    const auto matchesCancellation = [&](const DRW_Coord& point) {
+        return std::isfinite(point.x) && std::isfinite(point.y)
+            && std::isfinite(point.z)
+            && std::fabs(point.x / maximum) < 1.e-15
+            && near(point.y / maximum, 2.44 / std::sqrt(6.))
+            && near(point.z / maximum, -1.48 / std::sqrt(3.));
+    };
+    DRW_Arc cancellationArc;
+    cancellationArc.basePoint = cancellation.basePoint;
+    cancellationArc.extPoint = cancellation.extPoint;
+    cancellationArc.haveExtrusion = true;
+    DRW_Arc recoveredArc;
+    if (!DRW_DxfLegacyExtrusion::toNativeOcs(cancellationArc, recoveredArc)
+        || !matchesCancellation(recoveredArc.basePoint)) return false;
+    DRW_Trace cancellationTrace;
+    cancellationTrace.basePoint = cancellationTrace.secPoint
+        = cancellationTrace.thirdPoint = cancellationTrace.fourPoint
+        = cancellation.basePoint;
+    cancellationTrace.extPoint = cancellation.extPoint;
+    cancellationTrace.haveExtrusion = true;
+    DRW_Trace recoveredTrace;
+    if (!DRW_DxfLegacyExtrusion::toNativeOcs(cancellationTrace, recoveredTrace)
+        || !matchesCancellation(recoveredTrace.basePoint)
+        || !matchesCancellation(recoveredTrace.secPoint)
+        || !matchesCancellation(recoveredTrace.thirdPoint)
+        || !matchesCancellation(recoveredTrace.fourPoint)) return false;
+    DRW_Solid cancellationSolid;
+    cancellationSolid.basePoint = cancellationSolid.secPoint
+        = cancellationSolid.thirdPoint = cancellationSolid.fourPoint
+        = cancellation.basePoint;
+    cancellationSolid.extPoint = cancellation.extPoint;
+    cancellationSolid.haveExtrusion = true;
+    DRW_Solid recoveredSolid;
+    if (!DRW_DxfLegacyExtrusion::toNativeOcs(cancellationSolid, recoveredSolid)
+        || !matchesCancellation(recoveredSolid.basePoint)
+        || !matchesCancellation(recoveredSolid.secPoint)
+        || !matchesCancellation(recoveredSolid.thirdPoint)
+        || !matchesCancellation(recoveredSolid.fourPoint)) return false;
+    DRW_Text cancellationText;
+    cancellationText.basePoint = cancellationText.secPoint = cancellation.basePoint;
+    cancellationText.extPoint = cancellation.extPoint;
+    cancellationText.haveExtrusion = true;
+    DRW_Text recoveredText;
+    if (!DRW_DxfLegacyExtrusion::toNativeOcs(cancellationText, recoveredText)
+        || !matchesCancellation(recoveredText.basePoint)
+        || !matchesCancellation(recoveredText.secPoint)) return false;
+    DRW_Insert cancellationInsert;
+    cancellationInsert.basePoint = cancellation.basePoint;
+    cancellationInsert.extPoint = cancellation.extPoint;
+    cancellationInsert.haveExtrusion = true;
+    DRW_Insert recoveredInsert;
+    if (!DRW_DxfLegacyExtrusion::toNativeOcs(cancellationInsert,
+                                              recoveredInsert)
+        || !matchesCancellation(recoveredInsert.basePoint)) return false;
     for (const DRW_Coord normal : {DRW_Coord{0.,0.,0.},
             DRW_Coord{std::numeric_limits<double>::infinity(),0.,1.},
             DRW_Coord{std::numeric_limits<double>::quiet_NaN(),0.,1.}}) {

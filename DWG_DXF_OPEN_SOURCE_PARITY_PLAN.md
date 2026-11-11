@@ -6,8 +6,9 @@ its inverse-basis dot products and uses compensated accumulation with fused
 product residuals. This avoids a false refusal when an intermediate sum
 overflows but the complete finite result is representable. The historical
 `applyExtrusion` path is unchanged; non-finite final coordinates still refuse.
-A generated near-`DBL_MAX` cancellation vector exercises the former overflow,
-and the focused legacy-extrusion CTest passes 1/1. This closes only that
+A generated near-`DBL_MAX` cancellation vector exercises the former overflow
+through all six shared recovery routes, and the focused legacy-extrusion CTest
+passes 1/1. This closes only that
 arithmetic case, not exact arithmetic, all finite transforms, native rendering,
 or producer qualification. See the [scaled-dot receipt](docs/research/p6-legacy-ocs-scaled-dot-overflow-2026-11-11.json).
 

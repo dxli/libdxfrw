@@ -7,7 +7,7 @@
     "normal": [1, 1, 1],
     "wcsCoordinate": ["-0.9 * DBL_MAX", "-0.9 * DBL_MAX", "0.32 * DBL_MAX"],
     "expectedNativeCoordinateOverDBL_MAX": [0, "2.44 / sqrt(6)", "-1.48 / sqrt(3)"],
-    "purpose": "The axis-Z dot product's first two terms overflow in the former implementation; the complete result is finite after the final cancelling term."
+    "purpose": "The axis-Z dot product's first two terms overflow in the former implementation; the complete result is finite after the final cancelling term. The control now covers CIRCLE, ARC, TRACE, SOLID, TEXT and INSERT recovery routes."
   },
   "validation": {
     "build": "cmake --build build-gcc --target libdxfrw_dxf_legacy_extrusion_tests -j4",
