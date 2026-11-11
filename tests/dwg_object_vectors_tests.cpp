@@ -408,6 +408,14 @@ public:
   std::uint16_t dwgType() const { return oType; }
 };
 
+class Face3dCodecProbe final : public DRW_3Dface {
+public:
+  using DRW_3Dface::encodeDwg;
+
+  void setDwgType(std::uint16_t value) { oType = value; }
+  std::uint16_t dwgType() const { return oType; }
+};
+
 class ViewportCodecProbe final : public DRW_Viewport {
 public:
   using DRW_Viewport::encodeDwg;
@@ -25134,6 +25142,25 @@ void testSolidDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void test3dFaceDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+    Face3dCodecProbe face;
+    face.handle = version == DRW::AC1021 ? 0xAE10u : 0xAE20u;
+    face.parentHandle = 0xAE30u;
+    face.reactorHandles = {0xAE40u};
+    face.xDictHandle = 0xAE50u;
+    face.setDwgType(0x777u);
+    face.basePoint = DRW_Coord(1.25, 2.5, 3.75);
+    face.secPoint = DRW_Coord(4.0, 2.5, 4.5);
+    face.thirdPoint = DRW_Coord(4.0, 5.0, 5.25);
+    face.fourPoint = DRW_Coord(1.25, 5.0, 4.0);
+    face.invisibleflag = DRW_3Dface::FirstEdge | DRW_3Dface::ThirdEdge;
+    checkEntityDwgEncodeAllocationRollback(
+        t, face, version, 28u,
+        version == DRW::AC1021 ? "AC1021 3DFACE" : "AC1024 3DFACE");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -28281,6 +28308,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testSolidDwgEncodeAllocationRollback(context);
       std::cout << "SOLID DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 &&
+        std::string(argv[1]) == "--3dface-dwg-encode-allocation-rollback") {
+      TestContext context;
+      test3dFaceDwgEncodeAllocationRollback(context);
+      std::cout << "3DFACE DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }
