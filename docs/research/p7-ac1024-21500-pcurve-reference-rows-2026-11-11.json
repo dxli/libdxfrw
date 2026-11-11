@@ -48,6 +48,35 @@
       "A pcurve dependency resolving to the wrong record type is rejected atomically."
     ]
   },
+  "independentTypedAccessorScreen": {
+    "repository": "https://github.com/hakanaktt/acadrust",
+    "revision": "ce8a148568e7a80a80f50797bf287a651d1259c7",
+    "workspace": "https://github.com/HakanSeven12/OpenCADStudio",
+    "workspaceRevision": "36981c6abe76e4b69d0a8ac5e210c35a0e8f681c",
+    "method": "The pinned SatDocument parser and SatPCurve/SatCoedge typed accessors were run against the exact SAT v1 text projections corresponding to the three source SAB payloads. No profile-specific pointer or token normalization was applied.",
+    "inputs": [
+      {
+        "file": "p7-conference-205-1703.sat",
+        "sha256": "1b0bbc0ec79676d8e7cfb742af5543dde1af310b55177cc3f4802d3b6d804c15"
+      },
+      {
+        "file": "p7-conference-242-1744.sat",
+        "sha256": "999436a2baa6b91548cd82321d696c27f828cb0c0a66be8a2c742236a3ead6a3"
+      },
+      {
+        "file": "p7-conference-279-1785.sat",
+        "sha256": "341ffea3b544f8ca91c38feced8e68b9ee94cd76ffcb60de71277aed2e80dabd"
+      }
+    ],
+    "resultPerInput": {
+      "declaredVersion": "215.0.0",
+      "records": 1102,
+      "pcurveRecords": 22,
+      "typedCoedgeToPCurveLinks": 0,
+      "decodedPCurveSplines": 0
+    },
+    "disposition": "Negative qualification result only. The parser accepts the SAT document framing, but its ACIS-7 typed pcurve/coedge accessor route does not interpret this ACIS 21.5 profile. Do not promote semantic support or infer 21.5 field offsets from this peer."
+  },
   "validation": {
     "command": "cmake --build build-gcc --target libdxfrw_graph_preservation_tests -j4 && ./build-gcc/libdxfrw_graph_preservation_tests",
     "build": "PASS",
@@ -62,6 +91,7 @@
   },
   "unresolved": [
     "The embedded exp_par_cur and nubs fields are not decoded or independently interpreted.",
+    "The pinned ACIS-7 typed pcurve accessors do not decode or link pcurves in these 21500 projections; a version/profile-aware independent route is still needed.",
     "Trim parameterization, surface correspondence, periodicity, and B-rep validity remain unqualified.",
     "The observed pointer-row shape is not established for other ACIS 21500 producers or revisions.",
     "No native CAD acceptance, whole-source output, or general DWG/DXF support claim follows."

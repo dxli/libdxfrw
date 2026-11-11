@@ -5074,6 +5074,15 @@ passes. This proves only the observed row shape and dependency identity;
 acceptance, and producer-wide ACIS 21500 support remain unresolved. No DWG/DXF
 fixture was added. See the [pcurve row receipt](docs/research/p7-ac1024-21500-pcurve-reference-rows-2026-11-11.json).
 
+**P7 independent typed-pcurve accessor screen (2026-11-11):** the pinned
+ACadRust revision `ce8a148568e7a80a80f50797bf287a651d1259c7` parses each of
+the three exact SAT projections as ACIS 215.0.0 and indexes 22 `pcurve` rows,
+but its ACIS-7 typed accessors resolve zero coedge-to-pcurve links and decode
+zero pcurve splines across all three files. The accessor route is therefore
+not semantic evidence for this modified profile; do not use its ACIS 7 schema
+or accessors to change production offsets. The exact SAT hashes and scratch
+probe command/results are recorded in the [pcurve row receipt](docs/research/p7-ac1024-21500-pcurve-reference-rows-2026-11-11.json).
+
 ## P4 — original bodies and complete document closure
 
 The AC1021 children-room source's bounded selected-output census is complete:
