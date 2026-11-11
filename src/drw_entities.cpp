@@ -8193,94 +8193,140 @@ bool DRW_Insert::encodeDwg(DRW::Version version, dwgBufferW *buf,
       static_cast<std::size_t>(std::numeric_limits<std::int32_t>::max()))
     return false;
 
-  // 2b.6: emit MINSERT (oType 8) when a column/row grid is present;
-  // otherwise a plain INSERT (oType 7). The reader keys the grid block off
-  // oType==8 (parseDwg :3189).
-  oType = isMInsert() ? 8 : 7;
-  if (!encodeDwgCommon(version, buf))
-    return false;
-
-  // INSERT body — mirror of DRW_Insert::parseDwg for R2000.
-  buf->putBitDouble(basePoint.x);
-  buf->putBitDouble(basePoint.y);
-  buf->putBitDouble(basePoint.z);
-
-  // dataFlags: pick the most compact form based on actual scales.
-  //   3 → all scales default to 1.0 (no emit)
-  //   2 → uniform scale (xscale RD only; yscale=zscale=xscale)
-  //   1 → xscale defaults to 1, yscale/zscale as DD against xscale
-  //   0 → xscale RD; yscale/zscale as DD against xscale
-  if (sameStoredDouble(xscale, 1.0) && sameStoredDouble(yscale, 1.0) &&
-      sameStoredDouble(zscale, 1.0)) {
-    buf->put2Bits(3);
-  } else if (sameStoredDouble(xscale, yscale) &&
-             sameStoredDouble(yscale, zscale)) {
-    buf->put2Bits(2);
-    buf->putRawDouble(xscale);
-  } else if (sameStoredDouble(xscale, 1.0)) {
-    // xscale is exactly 1.0 (parseDwg leaves it at its 1.0 default and
-    // never reads it in this branch), so it can be omitted; y and z are
-    // independent and go through the same DD-against-1.0 path parseDwg
-    // reads them with.
-    buf->put2Bits(1);
-    buf->putDefaultDouble(1.0, yscale);
-    buf->putDefaultDouble(1.0, zscale);
-  } else {
-    // Use dataFlags=0 (general case): RD x + DD y + DD z.
-    buf->put2Bits(0);
-    buf->putRawDouble(xscale);
-    buf->putDefaultDouble(xscale, yscale);
-    buf->putDefaultDouble(xscale, zscale);
-  }
-
-  buf->putBitDouble(angle); // radians
-  buf->putExtrusion(extPoint, /*b_R2000_style=*/false);
-  buf->putBit(hasAttrib ? 1 : 0);
-  if (hasAttrib && version > DRW::AC1015)
-    buf->putBitLong(static_cast<std::int32_t>(attribHandles.size()));
-  // hasAttrib==0 ⇒ the SINCE-R2004 num_owned BL is absent (parse :3184), so
-  // the MINSERT grid (oType==8) follows the hasAttrib bit directly. Field
-  // order mirrors parseDwg :3190-3193 (colcount BS, rowcount BS, colspace BD,
-  // rowspace BD) and libreDWG dwg.spec
-  // num_cols/num_rows/col_spacing/row_spacing.
-  if (oType == 8) { // MINSERT grid
-    buf->putBitShort(static_cast<std::uint16_t>(colcount));
-    buf->putBitShort(static_cast<std::uint16_t>(rowcount));
-    buf->putBitDouble(colspace);
-    buf->putBitDouble(rowspace);
-  }
-
-  if (!encodeDwgEntHandle(version, buf, handleBuf))
-    return false;
-
-  // BLOCK_RECORD hard pointer.
-  dwgHandle bhH;
-  bhH.code = (blockRecH.ref == 0) ? 0 : 5;
-  bhH.ref = blockRecH.ref;
-  bhH.size = 0;
-  if (bhH.ref != 0) {
-    std::uint32_t t = bhH.ref;
-    while (t != 0) {
-      t >>= 8;
-      ++bhH.size;
+  dwgBufferW *const bodyTarget = buf;
+  dwgBufferW *const stringTarget = strBuf != nullptr ? strBuf : bodyTarget;
+  dwgBufferW *const handleTarget =
+      handleBuf != nullptr ? handleBuf : bodyTarget;
+  try {
+    dwgBufferW bodyStage = *bodyTarget;
+    std::optional<dwgBufferW> stringStageStorage;
+    dwgBufferW *stringStage = &bodyStage;
+    if (stringTarget != bodyTarget) {
+      stringStageStorage.emplace(*stringTarget);
+      stringStage = &*stringStageStorage;
     }
-  }
-  (handleBuf ? handleBuf : buf)->putHandle(bhH);
-
-  if (hasAttrib) {
-    dwgBufferW *hb = handleBuf ? handleBuf : buf;
-    if (version < DRW::AC1018) {
-      for (const dwgHandle &attribHandle : attribHandles)
-        putDwgReference(hb, DRW::DwgSoftPointer, attribHandle.ref);
+    std::optional<dwgBufferW> handleStageStorage;
+    dwgBufferW *handleStage = &bodyStage;
+    if (handleTarget == bodyTarget) {
+      handleStage = &bodyStage;
+    } else if (handleTarget == stringTarget) {
+      handleStage = stringStage;
     } else {
-      const std::uint8_t attributeCode =
-          oType == 8 ? DRW::DwgSoftPointer : DRW::DwgHardOwnership;
-      for (const dwgHandle &attribHandle : attribHandles)
-        putDwgReference(hb, attributeCode, attribHandle.ref);
+      handleStageStorage.emplace(*handleTarget);
+      handleStage = &*handleStageStorage;
     }
-    putDwgReference(hb, DRW::DwgHardOwnership, seqendH.ref);
+
+    buf = &bodyStage;
+    handleBuf = handleBuf != nullptr ? handleStage : nullptr;
+    struct ObjectTypeRollback {
+      decltype(oType) &value;
+      decltype(oType) original;
+      bool committed{false};
+      ~ObjectTypeRollback() {
+        if (!committed)
+          value = original;
+      }
+    } typeRollback{oType, oType};
+
+    // 2b.6: emit MINSERT (oType 8) when a column/row grid is present;
+    // otherwise a plain INSERT (oType 7). The reader keys the grid block off
+    // oType==8 (parseDwg :3189).
+    oType = isMInsert() ? 8 : 7;
+    if (!encodeDwgCommon(version, buf))
+      return false;
+
+    // INSERT body — mirror of DRW_Insert::parseDwg for R2000.
+    buf->putBitDouble(basePoint.x);
+    buf->putBitDouble(basePoint.y);
+    buf->putBitDouble(basePoint.z);
+
+    // dataFlags: pick the most compact form based on actual scales.
+    //   3 → all scales default to 1.0 (no emit)
+    //   2 → uniform scale (xscale RD only; yscale=zscale=xscale)
+    //   1 → xscale defaults to 1, yscale/zscale as DD against xscale
+    //   0 → xscale RD; yscale/zscale as DD against xscale
+    if (sameStoredDouble(xscale, 1.0) && sameStoredDouble(yscale, 1.0) &&
+        sameStoredDouble(zscale, 1.0)) {
+      buf->put2Bits(3);
+    } else if (sameStoredDouble(xscale, yscale) &&
+               sameStoredDouble(yscale, zscale)) {
+      buf->put2Bits(2);
+      buf->putRawDouble(xscale);
+    } else if (sameStoredDouble(xscale, 1.0)) {
+      // xscale is exactly 1.0 (parseDwg leaves it at its 1.0 default and
+      // never reads it in this branch), so it can be omitted; y and z are
+      // independent and go through the same DD-against-1.0 path parseDwg
+      // reads them with.
+      buf->put2Bits(1);
+      buf->putDefaultDouble(1.0, yscale);
+      buf->putDefaultDouble(1.0, zscale);
+    } else {
+      // Use dataFlags=0 (general case): RD x + DD y + DD z.
+      buf->put2Bits(0);
+      buf->putRawDouble(xscale);
+      buf->putDefaultDouble(xscale, yscale);
+      buf->putDefaultDouble(xscale, zscale);
+    }
+
+    buf->putBitDouble(angle); // radians
+    buf->putExtrusion(extPoint, /*b_R2000_style=*/false);
+    buf->putBit(hasAttrib ? 1 : 0);
+    if (hasAttrib && version > DRW::AC1015)
+      buf->putBitLong(static_cast<std::int32_t>(attribHandles.size()));
+    // hasAttrib==0 ⇒ the SINCE-R2004 num_owned BL is absent (parse :3184), so
+    // the MINSERT grid (oType==8) follows the hasAttrib bit directly. Field
+    // order mirrors parseDwg :3190-3193 (colcount BS, rowcount BS, colspace BD,
+    // rowspace BD) and libreDWG dwg.spec
+    // num_cols/num_rows/col_spacing/row_spacing.
+    if (oType == 8) { // MINSERT grid
+      buf->putBitShort(static_cast<std::uint16_t>(colcount));
+      buf->putBitShort(static_cast<std::uint16_t>(rowcount));
+      buf->putBitDouble(colspace);
+      buf->putBitDouble(rowspace);
+    }
+
+    if (!encodeDwgEntHandle(version, buf, handleBuf))
+      return false;
+
+    // BLOCK_RECORD hard pointer.
+    dwgHandle bhH;
+    bhH.code = (blockRecH.ref == 0) ? 0 : 5;
+    bhH.ref = blockRecH.ref;
+    bhH.size = 0;
+    if (bhH.ref != 0) {
+      std::uint32_t t = bhH.ref;
+      while (t != 0) {
+        t >>= 8;
+        ++bhH.size;
+      }
+    }
+    (handleBuf ? handleBuf : buf)->putHandle(bhH);
+
+    if (hasAttrib) {
+      dwgBufferW *hb = handleBuf ? handleBuf : buf;
+      if (version < DRW::AC1018) {
+        for (const dwgHandle &attribHandle : attribHandles)
+          putDwgReference(hb, DRW::DwgSoftPointer, attribHandle.ref);
+      } else {
+        const std::uint8_t attributeCode =
+            oType == 8 ? DRW::DwgSoftPointer : DRW::DwgHardOwnership;
+        for (const dwgHandle &attribHandle : attribHandles)
+          putDwgReference(hb, attributeCode, attribHandle.ref);
+      }
+      putDwgReference(hb, DRW::DwgHardOwnership, seqendH.ref);
+    }
+    if (!buf->isGood() || !stringStage->isGood() || !handleStage->isGood())
+      return false;
+    bodyTarget->swap(bodyStage);
+    if (stringTarget != bodyTarget)
+      stringTarget->swap(*stringStageStorage);
+    if (handleTarget != bodyTarget && handleTarget != stringTarget)
+      handleTarget->swap(*handleStageStorage);
+    typeRollback.committed = true;
+    return true;
+  } catch (const std::bad_alloc &) {
+    return false;
   }
-  return buf->isGood() && (handleBuf == nullptr || handleBuf->isGood());
 }
 
 bool DRW_3Dface::encodeDwg(DRW::Version version, dwgBufferW *buf,

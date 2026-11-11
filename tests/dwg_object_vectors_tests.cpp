@@ -456,6 +456,14 @@ public:
   std::uint16_t dwgType() const { return oType; }
 };
 
+class InsertCodecProbe final : public DRW_Insert {
+public:
+  using DRW_Insert::encodeDwg;
+
+  void setDwgType(std::uint16_t value) { oType = value; }
+  std::uint16_t dwgType() const { return oType; }
+};
+
 class ViewportCodecProbe final : public DRW_Viewport {
 public:
   using DRW_Viewport::encodeDwg;
@@ -25337,6 +25345,37 @@ void testBlockDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testInsertDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+    const std::uint32_t baseHandle = version == DRW::AC1021 ? 0xAE10u : 0xAE20u;
+
+    InsertCodecProbe insert;
+    insert.handle = baseHandle;
+    insert.parentHandle = 0xAE30u;
+    insert.reactorHandles = {0xAE40u};
+    insert.xDictHandle = 0xAE50u;
+    insert.blockRecH.ref = 0xAE60u;
+    insert.seqendH.ref = DRW::NoHandle;
+    insert.setDwgType(0x777u);
+    insert.name = "TXN_INSERT";
+    insert.basePoint = DRW_Coord(1.25, 2.5, 3.75);
+    insert.angle = 0.5;
+    checkEntityDwgEncodeAllocationRollback(
+        t, insert, version, 7u,
+        version == DRW::AC1021 ? "AC1021 INSERT" : "AC1024 INSERT");
+
+    InsertCodecProbe minsert = insert;
+    minsert.handle = baseHandle + 1u;
+    minsert.colcount = 2;
+    minsert.rowcount = 3;
+    minsert.colspace = 4.5;
+    minsert.rowspace = 5.5;
+    checkEntityDwgEncodeAllocationRollback(
+        t, minsert, version, 8u,
+        version == DRW::AC1021 ? "AC1021 MINSERT" : "AC1024 MINSERT");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -28532,6 +28571,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testBlockDwgEncodeAllocationRollback(context);
       std::cout << "BLOCK/ENDBLK DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 &&
+        std::string(argv[1]) == "--insert-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testInsertDwgEncodeAllocationRollback(context);
+      std::cout << "INSERT/MINSERT DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }
