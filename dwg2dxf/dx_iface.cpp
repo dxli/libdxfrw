@@ -77416,6 +77416,23 @@ bool dx_iface::finalizeDxfWrite() {
         }
         return false;
     };
+    if (cData != nullptr
+        && cData->m_verifiedStyleResourceSource != nullptr) {
+        finalizationPhase = "DWG STYLE source and emitted-row binding";
+        if (!dxfW
+            || !hasUnchangedVerifiedStyleResourceSource(
+                *cData, m_verifiedStyleControlSelected,
+                m_verifiedStyleRecordSelected))
+            return failFinalization(
+                "DWG STYLE source snapshot at finalization");
+        const std::uint32_t emitted =
+            dxfW->dxfWriteEmittedSourceTableHandle(
+                m_verifiedStyleRecordSelected);
+        if (!dxfW->dxfWriteSourceTableHasIdentity(
+                m_verifiedStyleRecordSelected, emitted, "STYLE", 0x3u))
+            return failFinalization(
+                "DWG STYLE emitted TABLES record identity");
+    }
     if (m_selectedDwgAssociativeSource != nullptr
         && !hasUnchangedSelectedDwgAssociativeNetworks())
         return failFinalization(

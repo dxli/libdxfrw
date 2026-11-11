@@ -1932,6 +1932,16 @@ public:
         }
     }
     virtual void writeTextstyles() override{
+        const bool selectedSourcePair = cData != nullptr
+            && cData->m_verifiedStyleResourceSource != nullptr;
+        if (selectedSourcePair
+            && (!dxfW || !hasUnchangedVerifiedStyleResourceSource(
+                    *cData, m_verifiedStyleControlSelected,
+                    m_verifiedStyleRecordSelected))) {
+            if (dxfW != nullptr)
+                (void)dxfW->writeTextstyle(nullptr);
+            return;
+        }
         for (std::list<DRW_Textstyle>::iterator it=cData->textStyles.begin(); it != cData->textStyles.end(); ++it) {
             if (it->name.empty()) {
                 if (mayOmitUnreferencedEmptyTextStyle(*it)) {
@@ -1946,6 +1956,21 @@ public:
                 return;
             }
             dxfW->writeTextstyle(&(*it));
+        }
+        if (selectedSourcePair) {
+            if (dxfW == nullptr)
+                return;
+            const std::uint32_t emitted =
+                dxfW->dxfWriteEmittedSourceTableHandle(
+                    m_verifiedStyleRecordSelected);
+            if (emitted == 0u
+                || dxfW->dxfWriteRecordHandleCount(emitted) != 1u
+                || !dxfW->dxfWriteRecordHasIdentity(
+                    emitted, "STYLE", "TABLES")
+                || !dxfW->dxfWriteRecordHasOwner(emitted, 0x3u)) {
+                (void)dxfW->writeTextstyle(nullptr);
+                return;
+            }
         }
     }
     virtual void writeVports() override{

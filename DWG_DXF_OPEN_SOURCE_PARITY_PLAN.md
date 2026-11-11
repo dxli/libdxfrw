@@ -1613,15 +1613,15 @@ created locally from scratch for the specific control.
   TABLESTYLE graph. See the [STYLE_CONTROL source-binding
   receipt](docs/research/p5-ac1018-style-control-reader-source-binding-2026-11-11.json).
   Remaining resources, font meaning and output ordering remain open.
-  **Next source-capture slice:** the reader now stages an opt-in CRC-checked
-  STYLE record frame together with a private typed `DRW_Textstyle` snapshot;
-  the candidate is selected by source handle and bounded by the existing
-  provisional-ticket limits. This supplies the source/model pair needed for
-  writer-stage revalidation. The targeted build compiles, but runtime delivery,
-  exact physical STYLE frame/model comparison, rollback and output readback
-  have not been qualified. Keep output admission closed until those checks and
-  the ordered resource graph are implemented. See the [STYLE source-frame
-  capture receipt](docs/research/p5-ac1018-style-record-reader-source-capture-2026-11-11.json).
+  **STYLE source/model capture completed:** the reader stages an opt-in,
+  CRC-checked STYLE frame with a private typed `DRW_Textstyle` snapshot under
+  the existing provisional-ticket limits. The physical adapter diagnostic
+  binds the selected source pair and typed row, refuses STYLE/APPID mutations,
+  withholds tickets for a truncated retry input, and succeeds on the restored
+  source. The source still has an unrelated HEADER offset discrepancy. Keep
+  output admission closed; this is not field-span or output proof. See the
+  [STYLE source-frame capture receipt](docs/research/p5-ac1018-style-record-reader-source-capture-2026-11-11.json)
+  and [adapter source-binding receipt](docs/research/p5-ac1018-style-resource-adapter-binding-2026-11-11.json).
   **Adapter source binding (2026-11-11):** `dx_iface` now has a dedicated
   opt-in selection for a STYLE_CONTROL/STYLE pair. It retains both ticket
   frames under the import token, rechecks that the control's sole role-2 member
@@ -1638,6 +1638,18 @@ created locally from scratch for the specific control.
   integrity observation, so this remains an evidence query, never an output
   permit. See the
   [adapter source-binding receipt](docs/research/p5-ac1018-style-resource-adapter-binding-2026-11-11.json).
+  **Writer-stage/finalization revalidation (2026-11-11):** when this selected
+  source bundle is present, `writeTextstyles` rechecks the same-import source
+  and typed STYLE/APPID snapshot before emission, then verifies the staged
+  STYLE row is unique, owned by STYLE table handle `0x3`, and recorded in
+  TABLES. `finalizeDxfWrite`, which runs before `dxfRW` atomically publishes
+  output, repeats the source check and requires the completed source-to-output
+  STYLE row identity. The focused adapter target builds and the physical
+  source-binding/retry diagnostic passes. That diagnostic does not execute
+  `fileExport`; physical staged-output behavior, exact STYLE field bytes,
+  rollback/readback, ordered resource closure, and font meaning remain open.
+  These checks do not grant output permission or waive other gates. See the
+  [writer-stage/finalization receipt](docs/research/p5-ac1018-style-resource-writer-stage-finalization-2026-11-11.json).
   A bounded standalone
   LTYPE_CONTROL/ByBlock observer now checks selected frame fields and roles
   ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)).
