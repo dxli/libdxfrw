@@ -1246,6 +1246,22 @@ created locally from scratch for the specific control.
   independent normal/orientation result. See the [face-flag receipt](docs/research/p7-ac1024-21500-face-flag-projection-2026-11-11.json)
   and [generic projection receipt](docs/research/p7-ac1024-21500-generic-face-flags-2026-11-11.json).
 
+- **P7 AC1024 local transformed-body witness screen (2026-11-11):** the
+  hash-pinned local `visualization_-_conference_room.dwg` source
+  (`0579e4b5746593ff41d9326e488b1faddc0f7cc10e7db5317fc1d5b86f0132c4`)
+  contains 33 distinct 3DSOLID entities. LibreDWG 0.14 JSON exposes 33
+  complete inline `ACIS BinaryFile` payloads; after restoring the omitted
+  signature field, the current SAB parser accepts all 33 as version 21500 and
+  the rooted projection reports no body transform pointer for any of them.
+  The sorted handle/byte-count/payload-hash inventory is bound by
+  `a8668ad9600022b6e2eb4bc1b6e7dd2e9d7cf9b748932255b472078d6dd13b6c`.
+  This negative screen does not establish a version-wide absence rule or
+  transform semantics. Mark this local source exhausted for transform work;
+  resume that lane only with a new hash-pinned non-null transform witness or a
+  specifically scoped generated control backed by an independent placement
+  oracle. No external DWG/DXF fixture was added. See the [source-screen
+  receipt](docs/research/p7-ac1024-conference-room-transform-source-screen-2026-11-11.json).
+
 - **P6 R12 ellipse numerical stability:** the ellipse-to-polyline converter
   now uses scaled length calculations for axes and normals whose norms are
   finite, and constructs the minor direction before scaling. A locally authored full ellipse
