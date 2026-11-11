@@ -46,12 +46,20 @@
         "STYLE and APPID mutation are refused and restoration succeeds.",
         "Truncated scratch copy publishes no source receipt; retry with original bytes succeeds."
       ],
-      "scope_limit": "The diagnostic validates source binding and import retry. It does not call fileExport, execute the new writer-stage/finalization checks, prove serialized STYLE field equality, or perform DXF readback."
+      "source_bound_export_attempt": {
+        "target_version": "AC1018",
+        "result": "refused during output preparation before TABLES callbacks",
+        "diagnostic": "SUN owner graph closure: SUN graph requires a same-version AC1021+ source and target",
+        "style_writer_stage_reached": false,
+        "atomic_finalization_reached": false,
+        "readback_performed": false
+      },
+      "scope_limit": "The source-binding assertions pass. The export attempt exposes an unrelated AC1018 SUN graph preflight blocker, so this physical input does not execute the new writer-stage/finalization checks or prove serialized STYLE field equality/readback."
     },
     "diff_check": "passed"
   },
   "remaining": [
-    "Exercise the staged/finalization guard with a source-bound export that reaches STYLE and the pre-commit callback.",
+    "Create a bounded source-bound writer control that reaches STYLE and the pre-commit callback without bypassing the source's SUN graph gate; preserve and report that AC1018 whole-source blocker.",
     "Prove exact STYLE output bytes/fields and fresh ASCII/Binary readback under the selected output profile.",
     "Close ordered APPID/STYLE and remaining LTYPE dependencies, font meaning, producer breadth, and whole-source integrity before any output or support promotion."
   ]

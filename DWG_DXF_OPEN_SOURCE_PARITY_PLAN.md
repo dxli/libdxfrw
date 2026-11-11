@@ -1646,9 +1646,14 @@ created locally from scratch for the specific control.
   output, repeats the source check and requires the completed source-to-output
   STYLE row identity. The focused adapter target builds and the physical
   source-binding/retry diagnostic passes. That diagnostic does not execute
-  `fileExport`; physical staged-output behavior, exact STYLE field bytes,
-  rollback/readback, ordered resource closure, and font meaning remain open.
-  These checks do not grant output permission or waive other gates. See the
+  the STYLE writer stage: its real AC1018 export attempt stops during output
+  preparation because the unrelated SUN graph requires a same-version AC1021+
+  source and target. The TABLES callbacks and atomic finalization are not reached.
+  Keep that whole-source blocker intact; next build a bounded source-bound
+  writer control that reaches STYLE without bypassing SUN validation. Physical
+  staged-output behavior, exact STYLE field bytes, rollback/readback, ordered
+  resource closure, and font meaning remain open. These checks do not grant
+  output permission or waive other gates. See the
   [writer-stage/finalization receipt](docs/research/p5-ac1018-style-resource-writer-stage-finalization-2026-11-11.json).
   A bounded standalone
   LTYPE_CONTROL/ByBlock observer now checks selected frame fields and roles

@@ -38183,6 +38183,42 @@ bool inspectPhysicalStyleResourceAdapterBinding(
             && dx_iface::hasUnchangedVerifiedStyleResourceSource(
                 retryData, 0x3u, 0x11u);
     }
+    bool sourceBoundExportSucceeded = false;
+    bool sourceBoundStyleReadback = false;
+    if (restoredImportRetry) {
+        dx_data outputSource;
+        const bool outputSourceImported =
+            reader.fileImport(inputPath.string(), &outputSource, false);
+        const auto outputPath = std::filesystem::temp_directory_path()
+            / ("libdxfrw-style-resource-output-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + ".dxf");
+        sourceBoundExportSucceeded = outputSourceImported
+            && reader.fileExport(outputPath.string(), DRW::AC1018, false,
+                                 &outputSource, true);
+        if (sourceBoundExportSucceeded) {
+            dx_iface outputReader;
+            dx_data outputData;
+            const bool outputImported = outputReader.fileImport(
+                outputPath.string(), &outputData, false);
+            const auto sourceStyle = std::find_if(
+                outputSource.textStyles.begin(), outputSource.textStyles.end(),
+                [](const DRW_Textstyle& value) {
+                    return value.handle == 0x11u;
+                });
+            sourceBoundStyleReadback = outputImported
+                && sourceStyle != outputSource.textStyles.end()
+                && std::any_of(outputData.textStyles.begin(),
+                               outputData.textStyles.end(),
+                    [&sourceStyle](const DRW_Textstyle& value) {
+                        return value.name == sourceStyle->name
+                            && value.font == sourceStyle->font;
+                    });
+        }
+        std::error_code outputCleanupError;
+        std::filesystem::remove(outputPath, outputCleanupError);
+    }
     const bool passed = sourceBound && haveStyle && haveAppId
         && styleMutationRefused
         && styleRetryRestored && appIdMutationRefused && appIdRetryRestored
@@ -38196,6 +38232,8 @@ bool inspectPhysicalStyleResourceAdapterBinding(
               << " scratchWritten=" << scratchWritten
               << " partialImportWithheld=" << partialImportWithheld
               << " restoredImportRetry=" << restoredImportRetry
+              << " sourceBoundExportSucceeded=" << sourceBoundExportSucceeded
+              << " sourceBoundStyleReadback=" << sourceBoundStyleReadback
               << " result=" << (passed ? "PASS" : "FAIL") << '\n';
     return passed;
 }
