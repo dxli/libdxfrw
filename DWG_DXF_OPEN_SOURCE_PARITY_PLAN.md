@@ -21,6 +21,20 @@ native B-rep semantics, whole-source output admission, producer-wide behavior,
 or a 3D support claim. The ODA output and online SAT remain in `/tmp`; no
 drawing fixture was committed. See the [ACIS 700 receipt](docs/research/p7-ac1024-oda-acis700-zero-count-framing-2026-11-11.json).
 
+**P7 ACIS 700 native B-rep probe (2026-11-11):** the exact libdxfrw SAT 700
+output was parsed by pinned InventorLoader and built through FreeCAD 1.1.4's
+native Part API into one valid closed cube (6 faces, 12 edges, 8 vertices).
+Bounds are exactly ±388.5; analytic cube area and volume agree within
+1.3e-16 relative error. InventorLoader's header helper does not accept
+standard `@length` strings, so the hash-pinned probe applies a runtime-only
+one-method compatibility adjustment; its record parser and entity builders
+are unchanged. InventorLoader and FreeCAD Part share OpenCASCADE, and this
+does not exercise FreeCAD's GUI import route. Keep independent-kernel,
+Autodesk-native producer, broader profile, placement/history and whole-source
+output gates open. No drawing fixture was added. See the [native B-rep
+receipt](docs/research/p7-ac1024-acis700-freecad-cube-native-brep-2026-11-11.json)
+and [reproducible probe](tools/research/freecad_acis700_sat_probe.py).
+
 **P7 second source-distinct AC1024/21500 topology lift (2026-11-11):**
 LibreDWG 0.14 minJSON supplied the complete SAB payload for conference-room
 3DSOLID `0x1FB`; libdxfrw projected 626 records to SAT v1. The pinned
