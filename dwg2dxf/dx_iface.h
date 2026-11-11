@@ -28,6 +28,7 @@
 #include "intern/dwg_tablegeometry_ac1018_candidate.h"
 #include "intern/dwg_table_roundtrip_xrecord_ac1018_candidate.h"
 #include "intern/dwg_table_child_xrecord_ac1018_candidate.h"
+#include "intern/dwg_table_extension_dictionary_ac1018_candidate.h"
 namespace blockref_source_relation { struct Result; }
 
 #include <cstdint>
@@ -94,6 +95,16 @@ public:
     // Stricter nine-child wire observation; still not output authorization.
     bool enableVerifiedTableRoundtripChildren(const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry) noexcept;
+    // One-sided dictionary source evidence. Does not prove the selected TABLE
+    // exists, is a TABLE, or points back to this dictionary; no output authority.
+    bool enableVerifiedTableExtensionDictionary(const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        std::uint32_t tableEntity,std::uint32_t dictionary) noexcept;
+    static bool readVerifiedTableExtensionDictionary(const dx_data&,
+        const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        std::uint32_t tableEntity,std::uint32_t dictionary,
+        DwgTableExtensionDictionaryAc1018Candidate::Result& result) noexcept;
     static bool readVerifiedTableRoundtripChildren(const dx_data&,
         const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
@@ -3406,6 +3417,7 @@ private:
     std::uint32_t m_verifiedTableContentSelected{0u},m_verifiedDataTableSelected{0u},m_verifiedTableGeometrySelected{0u};
     bool m_verifiedTableRoundtripSelected{false};
     bool m_verifiedTableRoundtripChildrenSelected{false};
+    std::uint32_t m_verifiedTableEntitySelected{0u},m_verifiedTableDictionarySelected{0u};
     std::vector<dx_data::VerifiedTableCandidateSource> m_verifiedTableCandidatePending;
     std::size_t m_verifiedTableCandidatePendingBytes{0u};
     friend class DxWholeSourceTestAccess;

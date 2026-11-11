@@ -33,6 +33,9 @@ public:
     static const DRW_UnsupportedObject& standardRaw(const dx_data& d,std::uint32_t h) {
         return d.m_standardDwgObjectFrames.at({d.importGeneration,h}).raw;
     }
+    static DRW_DwgFramePublication& publication(dx_data& d,std::uint32_t h) {
+        return d.m_standardDwgObjectFrames.at({d.importGeneration,h}).publication;
+    }
     static void deliver(dx_iface& i,const DwgVerifiedTableCandidateTicket& ticket) noexcept {
         i.dx_iface::verifiedTableCandidate(ticket);
     }
@@ -44,8 +47,8 @@ public:
         if(!d || !d->dwgReadOutcome.operationSucceeded || d->m_verifiedXRecordSource
             || d->m_verifiedTableCandidateSource)return false;
         if(stage==1 && (a.m_verifiedXRecordPending.size()!=a.m_verifiedXRecordSelected.size()
-                        || a.m_verifiedTableCandidatePending.size()!=(a.m_verifiedTableGeometrySelected?3u:2u)))return false;
-        if(stage==2 && (!a.m_verifiedXRecordPending.empty() || a.m_verifiedTableCandidatePending.size()!=(a.m_verifiedTableGeometrySelected?3u:2u)))return false;
+                        || a.m_verifiedTableCandidatePending.size()!=(a.m_verifiedTableDictionarySelected?4u:a.m_verifiedTableGeometrySelected?3u:2u)))return false;
+        if(stage==2 && (!a.m_verifiedXRecordPending.empty() || a.m_verifiedTableCandidatePending.size()!=(a.m_verifiedTableDictionarySelected?4u:a.m_verifiedTableGeometrySelected?3u:2u)))return false;
         if(stage==3 && (!a.m_verifiedXRecordPending.empty() || !a.m_verifiedTableCandidatePending.empty()))return false;
         for(const auto& row:d->m_standardDwgObjectFrames)
             if(row.first.first==d->importGeneration && !row.second.payloadMatched)return false;
@@ -106,6 +109,8 @@ public:
             else x.m_values.emplace_back(1,UTF8STRING("LOCALLY_AUTHORED"));
             wrote=w.writeXRecord(&x)&&wrote;
         }
+        if(childrenProfile){DRW_Dictionary d;d.handle=0xbbu;d.parentHandle=0x9cu;d.hardOwner=1;d.cloning=1;d.setDwgCommonObjectState(0,1u,false);
+            d.m_entries.push_back({"ACAD_XREC_ROUNDTRI",rootHandle});wrote=w.writeDictionary(&d)&&wrote;}
         wrote=w.writeRawDwgObject(&content)&&w.writeRawDwgObject(&table)&&wrote;
         if(geometry.m_handle)wrote=w.writeRawDwgObject(&geometry)&&wrote;
     }
@@ -657,6 +662,24 @@ public:
         dx_iface::addXRecord(value);
     }
 };
+class SpoofDictionary final : public dx_iface {
+public:
+    bool enabled=true,seen=false;
+    void addDictionary(const DRW_Dictionary& value) override {
+        if(enabled && value.handle==0xbbu){seen=true;auto altered=value;
+            altered.m_entries[0].m_handle=0xcau;dx_iface::addDictionary(altered);return;}
+        dx_iface::addDictionary(value);
+    }
+};
+bool selectedDictionary(dx_iface& a){
+    return a.enableVerifiedTableExtensionDictionary(fullXrecords,contentHandle,dataHandle,geometryHandle,0x9cu,0xbbu);
+}
+bool liveDictionary(const dx_data& d){
+    DwgTableExtensionDictionaryAc1018Candidate::Result r;
+    return dx_iface::readVerifiedTableExtensionDictionary(d,fullXrecords,contentHandle,dataHandle,geometryHandle,0x9cu,0xbbu,r)
+        && r.handle==0xbbu && r.owner==0x9cu && r.root==rootHandle && r.dataEndBit==253u
+        && r.ownerStartBit==253u && r.ownerEndBit==269u && r.rootStartBit==269u && r.rootEndBit==285u;
+}
 bool runChildren(const char* contentPath,const char* dataPath,const char* geometryPath,const char* rootPath,
                  const std::filesystem::path& path) {
 #define CHECK_C(expr) do { if(!(expr)){std::cerr<<"child binding failed line "<<__LINE__<<'\n';return false;} } while(false)
@@ -665,6 +688,9 @@ bool runChildren(const char* contentPath,const char* dataPath,const char* geomet
     dx_iface source;dx_data initial;CHECK_C(source.fileImport(path.string(),&initial,false));
     std::ifstream f(rootPath,std::ios::binary);std::vector<std::uint8_t> expectedRoot((std::istreambuf_iterator<char>(f)),{});
     CHECK_C(replaceSelectedBody(path,DxIfaceStandardDwgCaptureTestAccess::standardRaw(initial,rootHandle),expectedRoot));
+    const auto writerDict=DxIfaceStandardDwgCaptureTestAccess::standardRaw(initial,0xbbu);
+    auto normalizedDict=writerDict.m_rawBytes;patchRawBits(normalizedDict,245u,'P',1u);
+    CHECK_C(replaceSelectedBody(path,writerDict,normalizedDict));
     dx_iface old;CHECK_C(old.enableVerifiedTableRoundtripCandidates(fullXrecords,contentHandle,dataHandle,geometryHandle));
     dx_data initialOld;CHECK_C(old.fileImport(path.string(),&initialOld,false));
     Content oc;Data ot;Geometry og;DwgTableRoundtripXRecordAc1018Candidate::Result oroot;
@@ -676,6 +702,101 @@ bool runChildren(const char* contentPath,const char* dataPath,const char* geomet
         ChildFixture::Options o;o.handle=h;o.empty=(h==0xbfu||h==0xc0u);if(h>=0xc1u)o.value=std::to_string(h-0xc0u);
         CHECK_C(replaceSelectedBody(path,DxIfaceStandardDwgCaptureTestAccess::standardRaw(initial,h),ChildFixture::build(o).raw.m_rawBytes));
     }
+    dx_iface extension;CHECK_C(selectedDictionary(extension));
+    CHECK_C(!extension.enableVerifiedTableExtensionDictionary(fullXrecords,contentHandle,dataHandle,geometryHandle,0x9cu,rootHandle));
+    dx_data dictBaseline;CHECK_C(extension.fileImport(path.string(),&dictBaseline,false));
+    CHECK_C(liveDictionary(dictBaseline));
+    CHECK_C(dx_iface::hasUnchangedVerifiedXRecordSources(dictBaseline,fullXrecords));
+    const auto dict=std::find_if(dictBaseline.dictionaries.begin(),dictBaseline.dictionaries.end(),[](const DRW_Dictionary& d){return d.handle==0xbbu;});
+    CHECK_C(dict!=dictBaseline.dictionaries.end());dict->m_entries[0].m_handle=0xcau;
+    CHECK_C(!liveDictionary(dictBaseline));CHECK_C(!dx_iface::hasUnchangedVerifiedXRecordSource(dictBaseline,rootHandle));
+    dict->m_entries[0].m_handle=rootHandle;CHECK_C(liveDictionary(dictBaseline));
+    auto& dictRaw=const_cast<DRW_UnsupportedObject&>(DxIfaceStandardDwgCaptureTestAccess::standardRaw(dictBaseline,0xbbu));
+    dictRaw.m_rawBytes[0]^=1u;CHECK_C(!liveDictionary(dictBaseline));dictRaw.m_rawBytes[0]^=1u;CHECK_C(liveDictionary(dictBaseline));
+    auto& pub=DxIfaceStandardDwgCaptureTestAccess::publication(dictBaseline,0xbbu);++pub.m_sourceMapOrdinal;
+    CHECK_C(!liveDictionary(dictBaseline));--pub.m_sourceMapOrdinal;CHECK_C(liveDictionary(dictBaseline));
+    const auto dictCopy=*dict;dictBaseline.dictionaries.push_back(dictCopy);CHECK_C(!liveDictionary(dictBaseline));dictBaseline.dictionaries.pop_back();CHECK_C(liveDictionary(dictBaseline));
+    dx_data another;CHECK_C(extension.fileImport(path.string(),&another,false));CHECK_C(liveDictionary(another));
+    DxIfaceStandardDwgCaptureTestAccess::transplant(another,dictBaseline);CHECK_C(!liveDictionary(another));
+    for(int stage=1;stage<=3;++stage){dx_iface a;CHECK_C(selectedDictionary(a));dx_data failed;
+        sealingAdapter=&a;sealingStage=stage;fault::predicate=sealFaultReady;fault::fired=false;
+        const bool ok=a.fileImport(path.string(),&failed,false);fault::predicate=nullptr;sealingAdapter=nullptr;
+        CHECK_C(ok && fault::fired && !liveDictionary(failed));CHECK_C(!dx_iface::hasUnchangedVerifiedXRecordSource(failed,rootHandle));
+        dx_data again;CHECK_C(a.fileImport(path.string(),&again,false));CHECK_C(liveDictionary(again));}
+    SpoofDictionary spoofDict;CHECK_C(selectedDictionary(spoofDict));dx_data spoofedDict;
+    (void)spoofDict.fileImport(path.string(),&spoofedDict,false);CHECK_C(spoofDict.seen && !liveDictionary(spoofedDict));
+    spoofDict.enabled=false;dx_data spoofRetryDict;CHECK_C(spoofDict.fileImport(path.string(),&spoofRetryDict,false));CHECK_C(liveDictionary(spoofRetryDict));
+    Reentry sameDict;dx_data reentered;sameDict.data=&reentered;sameDict.path=path.string();CHECK_C(selectedDictionary(sameDict));
+    (void)sameDict.fileImport(path.string(),&reentered,false);CHECK_C(sameDict.attempted && !liveDictionary(reentered));
+    dx_data retryDict;CHECK_C(sameDict.fileImport(path.string(),&retryDict,false));CHECK_C(liveDictionary(retryDict));
+    Reentry outerDict;dx_iface innerDict;dx_data crossDict;outerDict.data=&crossDict;outerDict.nested=&innerDict;outerDict.path=path.string();
+    CHECK_C(selectedDictionary(outerDict) && selectedDictionary(innerDict));(void)outerDict.fileImport(path.string(),&crossDict,false);
+    CHECK_C(outerDict.attempted && !liveDictionary(crossDict));dx_data crossDictRetry;
+    CHECK_C(outerDict.fileImport(path.string(),&crossDictRetry,false));CHECK_C(liveDictionary(crossDictRetry));
+
+    const auto dictOutput=path.string()+".dictionary.dxf";
+    {std::ofstream out(dictOutput,std::ios::binary|std::ios::trunc);out<<"DICTIONARY_SENTINEL";CHECK_C(static_cast<bool>(out));}
+    CHECK_C(!extension.fileExport(dictOutput,DRW::AC1018,false,&dictBaseline,false,true,dx_dxfSourceTextPolicy::Compatible,
+        DRW::DxfTextWritePolicy::Compatible,dx_dxfProxyGraphicsPolicy::Compatible,dx_dwgReadCompletenessPolicy::RequireComplete));
+    {std::ifstream in(dictOutput,std::ios::binary);const std::string value((std::istreambuf_iterator<char>(in)),{});CHECK_C(value=="DICTIONARY_SENTINEL");}
+    {std::error_code e;std::filesystem::remove(dictOutput,e);}
+    DwgTableExtensionDictionaryAc1018Candidate::Result dictResult;
+    fault::count=0;fault::counting=true;const bool countedDict=dx_iface::readVerifiedTableExtensionDictionary(
+        dictBaseline,fullXrecords,contentHandle,dataHandle,geometryHandle,0x9cu,0xbbu,dictResult);fault::counting=false;
+    const auto dictAllocations=fault::count;CHECK_C(countedDict && dictAllocations>0u);dictResult.handle=9u;
+    fault::remaining=static_cast<long>(dictAllocations-1u);fault::fired=false;
+    const bool dictOom=dx_iface::readVerifiedTableExtensionDictionary(dictBaseline,fullXrecords,contentHandle,dataHandle,geometryHandle,0x9cu,0xbbu,dictResult);
+    fault::remaining=-1;CHECK_C(!dictOom && fault::fired && !dictResult.handle);CHECK_C(liveDictionary(dictBaseline));
+    std::cout<<"dictionary query allocations="<<dictAllocations<<" (last fault sampled)\n";
+    const auto originalDict=DxIfaceStandardDwgCaptureTestAccess::standardRaw(dictBaseline,0xbbu);
+
+    {
+        auto candidateRaw=originalDict;auto candidateTyped=*dict;
+        DwgTableExtensionDictionaryAc1018Candidate::Result observed;
+        CHECK_C(DwgTableExtensionDictionaryAc1018Candidate::inspect(candidateRaw,candidateTyped,observed));
+        const auto reject=[&](){observed.handle=1u;return !DwgTableExtensionDictionaryAc1018Candidate::inspect(candidateRaw,candidateTyped,observed) && !observed.handle;};
+        for(std::size_t i=0;i<originalDict.m_rawBytes.size();++i){candidateRaw.m_rawBytes.assign(originalDict.m_rawBytes.begin(),originalDict.m_rawBytes.begin()+i);
+            candidateRaw.m_objectSize=static_cast<std::uint32_t>(i);CHECK_C(reject());}
+        candidateRaw=originalDict;candidateTyped.m_entries[0].m_name="WRONG";CHECK_C(reject());candidateTyped=*dict;
+        candidateTyped.handle++;CHECK_C(reject());candidateTyped=*dict;
+        candidateRaw.m_rawBytes.resize(4097u);candidateRaw.m_objectSize=4097u;CHECK_C(reject());candidateRaw=originalDict;
+        candidateRaw.m_rawBytes.back()|=1u;CHECK_C(reject());candidateRaw=originalDict;
+        patchRawBits(candidateRaw.m_rawBytes,93u,18u,1u);CHECK_C(reject());candidateRaw=originalDict;
+        patchRawBits(candidateRaw.m_rawBytes,261u,0xbcu,1u);CHECK_C(reject());candidateRaw=originalDict;
+        // Make the owner handle claim five bytes (>32 bits), with too little data remaining.
+        candidateRaw.m_rawBytes[258u/8u]^=static_cast<std::uint8_t>(1u<<(7u-258u%8u));CHECK_C(reject());candidateRaw=originalDict;
+        // Invalid BL selector 11 in item count; a two-bit replacement preserves frame width.
+        candidateRaw.m_rawBytes[63u/8u]|=static_cast<std::uint8_t>(1u<<(7u-63u%8u));
+        candidateRaw.m_rawBytes[64u/8u]|=static_cast<std::uint8_t>(1u<<(7u-64u%8u));CHECK_C(reject());candidateRaw=originalDict;
+        fault::count=0;fault::counting=true;const bool measured=DwgTableExtensionDictionaryAc1018Candidate::inspect(candidateRaw,candidateTyped,observed);fault::counting=false;
+        const auto allocations=fault::count;CHECK_C(measured && allocations>0u);
+        for(std::size_t i=0;i<allocations;++i){fault::remaining=static_cast<long>(i);CHECK_C(reject());fault::remaining=-1;
+            CHECK_C(DwgTableExtensionDictionaryAc1018Candidate::inspect(candidateRaw,candidateTyped,observed));}
+        std::cout<<"dictionary observer allocation faults swept="<<allocations<<"\n";
+    }
+    for(int mode=0;mode<6;++mode){auto changed=originalDict.m_rawBytes;
+        if(mode==0)changed[256u/8u]^=static_cast<std::uint8_t>(1u<<(7u-256u%8u));
+        if(mode==1)changed[272u/8u]^=static_cast<std::uint8_t>(1u<<(7u-272u%8u));
+        if(mode==2)patchRawBits(changed,261u,0x9du,1u);
+        if(mode==3)patchRawBits(changed,277u,0xcau,1u);
+        if(mode==4)patchRawBits(changed,101u,'X',1u);
+        if(mode==5)patchRawBits(changed,83u,0u,1u);
+        CHECK_C(replaceSelectedBody(path,originalDict,changed));
+        if(mode==2 || mode==3){dx_data prior;CHECK_C(reader.fileImport(path.string(),&prior,false));CHECK_C(liveChildren(prior));}
+        dx_data bad;(void)extension.fileImport(path.string(),&bad,false);CHECK_C(!liveDictionary(bad));
+        CHECK_C(!dx_iface::hasUnchangedVerifiedXRecordSource(bad,rootHandle));
+        auto current=originalDict;current.m_rawBytes=changed;CHECK_C(replaceSelectedBody(path,current,originalDict.m_rawBytes));
+        dx_data recovered;CHECK_C(extension.fileImport(path.string(),&recovered,false));CHECK_C(liveDictionary(recovered));
+    }
+    std::vector<std::uint8_t> dictOriginalFile;CHECK_C(corruptSelectedCrc(path,originalDict,dictOriginalFile));dx_data dictCrc;
+    (void)extension.fileImport(path.string(),&dictCrc,false);CHECK_C(!liveDictionary(dictCrc));
+    const auto& dictIntegrity=dictCrc.dwgReadOutcome.observations.integrity;
+    CHECK_C(!dictIntegrity.extractionOmitted && !dictIntegrity.reportedUpstreamDropped && !dictIntegrity.aggregateSaturated);
+    bool dictFailure=false;for(std::size_t i=0;i<dictIntegrity.retained;++i){const auto& row=dictIntegrity.rows[i];
+        CHECK_C(row.kind!=DwgIntegrityCheckKind::DataPageChecksum && row.kind!=DwgIntegrityCheckKind::DataPageCrc);
+        if(row.kind==DwgIntegrityCheckKind::ObjectFrameBounds && row.hasLogicalHandle && row.logicalHandle==0xbbu)dictFailure=true;}
+    CHECK_C(dictFailure);{std::ofstream out(path,std::ios::binary|std::ios::trunc);out.write(reinterpret_cast<const char*>(dictOriginalFile.data()),dictOriginalFile.size());CHECK_C(static_cast<bool>(out));}
+    dx_data dictRetry;CHECK_C(extension.fileImport(path.string(),&dictRetry,false));CHECK_C(liveDictionary(dictRetry));
     auto shortSet=fullXrecords;shortSet.pop_back();CHECK_C(!reader.enableVerifiedTableRoundtripChildren(shortSet,contentHandle,dataHandle,geometryHandle));
     auto duplicate=fullXrecords;duplicate[1]=duplicate[2];CHECK_C(!reader.enableVerifiedTableRoundtripChildren(duplicate,contentHandle,dataHandle,geometryHandle));
     dx_data baseline;CHECK_C(reader.fileImport(path.string(),&baseline,false));CHECK_C(liveChildren(baseline));

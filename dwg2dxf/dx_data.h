@@ -2663,14 +2663,17 @@ private:
         bool requiresTableCandidates{false};
         bool requiresTableRoundtripRoot{false};
         bool requiresTableRoundtripChildren{false};
+        std::uint32_t selectedExtensionDictionary{0u},selectedTableEntity{0u};
         std::vector<VerifiedXRecordSource> records;
     };
     struct VerifiedTableCandidateSource {
-        enum class Kind : std::uint8_t { TableContent, DataTable, TableGeometry };
+        enum class Kind : std::uint8_t { TableContent, DataTable, TableGeometry, ExtensionDictionary };
         DRW_UnsupportedObject raw;
         std::uint64_t ordinal{0u};
         DRW_DwgFrameOffsetSpace space{DRW_DwgFrameOffsetSpace::Unknown};
         Kind kind{Kind::TableContent};
+        DRW_DwgFramePublication publication;
+        std::shared_ptr<const DRW_TableEntry> typedBaseline;
     };
     struct VerifiedTableCandidateSources {
         std::shared_ptr<const unsigned char> importToken;

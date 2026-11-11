@@ -1350,7 +1350,10 @@ created locally from scratch for the specific control.
   and their code-4 parent roles in the same import; it accepts the observed
   five/six-pair shapes and does not assert the witness's cell-value semantics
   ([receipt](docs/research/p5-ac1018-table-nine-child-source-binding-2026-11-11.json)).
-  TABLE parent/dictionary, TABLESTYLE and recursive resources, independent
+  The reader-verified extension dictionary now binds its code-4 numeric owner
+  target and code-2 root entry ([receipt](docs/research/p5-ac1018-table-extension-dictionary-one-sided-binding-2026-11-11.json)).
+  The owner target has not yet been authenticated as a TABLE or linked back
+  from its entity frame. TABLESTYLE and recursive resources, independent
   meaning, and transactional output closure are still open.
   The selected TABLESTYLE branch now has a complete source walk through its
   dictionary, extension XRECORD and CELLSTYLEMAP, including STYLE and LTYPE

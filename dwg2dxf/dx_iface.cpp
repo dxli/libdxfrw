@@ -28931,6 +28931,7 @@ bool dx_iface::enableVerifiedXRecordSources(const std::vector<std::uint32_t>& ha
         m_verifiedXRecordSelected.swap(selected);
         m_verifiedTableContentSelected=0u;m_verifiedDataTableSelected=0u;m_verifiedTableGeometrySelected=0u;
         m_verifiedTableRoundtripSelected=false;m_verifiedTableRoundtripChildrenSelected=false;
+        m_verifiedTableEntitySelected=0u;m_verifiedTableDictionarySelected=0u;
         return true;
     } catch (...) { return false; }
 }
@@ -28949,6 +28950,7 @@ bool dx_iface::enableVerifiedTableCandidates(const std::vector<std::uint32_t>& x
         m_verifiedXRecordSelected.swap(selected);
         m_verifiedTableContentSelected=tableContent;m_verifiedDataTableSelected=dataTable;
         m_verifiedTableGeometrySelected=0u;m_verifiedTableRoundtripSelected=false;m_verifiedTableRoundtripChildrenSelected=false;
+        m_verifiedTableEntitySelected=0u;m_verifiedTableDictionarySelected=0u;
         return true;
     } catch (...) {return false;}
 }
@@ -28968,6 +28970,7 @@ bool dx_iface::enableVerifiedTableCandidates(const std::vector<std::uint32_t>& x
         m_verifiedXRecordSelected.swap(selected);
         m_verifiedTableContentSelected=tableContent;m_verifiedDataTableSelected=dataTable;
         m_verifiedTableGeometrySelected=tableGeometry;m_verifiedTableRoundtripSelected=false;m_verifiedTableRoundtripChildrenSelected=false;
+        m_verifiedTableEntitySelected=0u;m_verifiedTableDictionarySelected=0u;
         return true;
     } catch (...) {return false;}
 }
@@ -28984,6 +28987,18 @@ bool dx_iface::enableVerifiedTableRoundtripChildren(const std::vector<std::uint3
     if (xrecords.size()!=10u || !enableVerifiedTableRoundtripCandidates(xrecords,tableContent,dataTable,tableGeometry))return false;
     m_verifiedTableRoundtripChildrenSelected=true;
     return true;
+}
+
+bool dx_iface::enableVerifiedTableExtensionDictionary(const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t content,std::uint32_t table,std::uint32_t geometry,
+        std::uint32_t entity,std::uint32_t dictionary) noexcept {
+    if(!entity || entity==DRW::NoHandle || !dictionary || dictionary==DRW::NoHandle
+        || entity==dictionary || entity==content || entity==table || entity==geometry
+        || dictionary==content || dictionary==table || dictionary==geometry
+        || std::find(xrecords.cbegin(),xrecords.cend(),entity)!=xrecords.cend()
+        || std::find(xrecords.cbegin(),xrecords.cend(),dictionary)!=xrecords.cend())return false;
+    if(!enableVerifiedTableRoundtripChildren(xrecords,content,table,geometry))return false;
+    m_verifiedTableEntitySelected=entity;m_verifiedTableDictionarySelected=dictionary;return true;
 }
 
 bool dx_iface::enableVerifiedXRecordSource(std::uint32_t handle) noexcept {
@@ -29061,7 +29076,7 @@ bool dx_iface::wantsVerifiedTableCandidate(std::uint32_t handle) const noexcept 
         && m_verifiedXRecordReadData->m_verifiedXRecordImportToken==m_verifiedXRecordReadToken
         && m_verifiedXRecordReadData->importGeneration==m_verifiedXRecordReadGeneration
         && (handle==m_verifiedTableContentSelected || handle==m_verifiedDataTableSelected
-            || handle==m_verifiedTableGeometrySelected)
+            || handle==m_verifiedTableGeometrySelected || handle==m_verifiedTableDictionarySelected)
         && handle!=0u;
 }
 
@@ -29069,14 +29084,16 @@ void dx_iface::verifiedTableCandidate(const DwgVerifiedTableCandidateTicket& tic
     auto* data=m_verifiedXRecordReadData;
     using Kind=dx_data::VerifiedTableCandidateSource::Kind;
     const Kind kind=ticket.kind()==DwgVerifiedTableCandidateKind::TableContent?Kind::TableContent:
-        ticket.kind()==DwgVerifiedTableCandidateKind::DataTable?Kind::DataTable:Kind::TableGeometry;
+        ticket.kind()==DwgVerifiedTableCandidateKind::DataTable?Kind::DataTable:
+        ticket.kind()==DwgVerifiedTableCandidateKind::TableGeometry?Kind::TableGeometry:Kind::ExtensionDictionary;
     const auto selected=kind==Kind::TableContent?m_verifiedTableContentSelected:
-        kind==Kind::DataTable?m_verifiedDataTableSelected:m_verifiedTableGeometrySelected;
+        kind==Kind::DataTable?m_verifiedDataTableSelected:
+        kind==Kind::TableGeometry?m_verifiedTableGeometrySelected:m_verifiedTableDictionarySelected;
     const char* recordName=kind==Kind::TableContent?"TABLECONTENT":kind==Kind::DataTable?"DATATABLE":"TABLEGEOMETRY";
     const char* className=kind==Kind::TableContent?"AcDbTableContent":kind==Kind::DataTable?"AcDbDataTable":"AcDbTableGeometry";
     if (!data || !wantsVerifiedTableCandidate(ticket.handle())
         || ticket.handle()!=selected || selected==0u
-        || m_verifiedTableCandidatePending.size()>=(m_verifiedTableGeometrySelected?3u:2u)
+        || m_verifiedTableCandidatePending.size()>=(m_verifiedTableDictionarySelected?4u:m_verifiedTableGeometrySelected?3u:2u)
         || std::any_of(m_verifiedTableCandidatePending.cbegin(),m_verifiedTableCandidatePending.cend(),
             [&ticket,kind](const dx_data::VerifiedTableCandidateSource& p) {
                 return p.kind==kind || p.raw.m_handle==ticket.handle()
@@ -29090,6 +29107,33 @@ void dx_iface::verifiedTableCandidate(const DwgVerifiedTableCandidateTicket& tic
                         && p.publication.m_sourceOffset==ticket.offset());
             })) {m_verifiedXRecordFailed=true;return;}
     const dx_data::StandardDwgFrameKey key{data->importGeneration,ticket.handle()};
+    if(kind==Kind::ExtensionDictionary) {
+        const auto frame=data->m_standardDwgObjectFrames.find(key);
+        if(frame==data->m_standardDwgObjectFrames.end()) {m_verifiedXRecordFailed=true;return;}
+        const auto& raw=frame->second.raw;const auto& pub=frame->second.publication;
+        constexpr std::size_t maxTotal=2u*1024u*1024u;std::size_t retained=0u;
+        if(ticket.version()!=DRW::AC1018 || ticket.classNumber()!=dwgObjType::DICTIONARY
+            || !frame->second.publicationSeen || frame->second.generation!=data->importGeneration
+            || raw.m_version!=ticket.version() || raw.m_objectType!=dwgObjType::DICTIONARY
+            || raw.m_isEntity || raw.m_isCustomClass || raw.m_handle!=ticket.handle()
+            || raw.m_objectOffset!=ticket.offset() || raw.m_bodyBitSize!=ticket.frame().bodyBitSize()
+            || raw.m_objectSize!=ticket.frame().body().size() || raw.m_rawBytes!=ticket.frame().body()
+            || pub.m_version!=ticket.version() || pub.m_handle!=ticket.handle() || !pub.m_hasSourceLocation
+            || pub.m_sourceOffset!=ticket.offset() || pub.m_sourceMapOrdinal!=ticket.ordinal()
+            || pub.m_sourceOffsetSpace!=ticket.space() || pub.m_encodedType!=dwgObjType::DICTIONARY
+            || pub.m_resolvedType!=dwgObjType::DICTIONARY || pub.m_carrier!=DRW_DwgFramePublication::Carrier::TypedAndRaw
+            || !estimateAcDsHistoryDwgFrameBytes(raw,retained)
+            || !addVectorPayloadBytes(pub.m_reactorHandles,retained) || !addVectorPayloadBytes(pub.m_controlHandles,retained)
+            || !addStringPayloadBytes(pub.m_recordName,retained) || !addStringPayloadBytes(pub.m_className,retained)
+            || m_verifiedXRecordPendingBytes>maxTotal || m_verifiedTableCandidatePendingBytes>maxTotal-m_verifiedXRecordPendingBytes
+            || retained>maxTotal-m_verifiedXRecordPendingBytes-m_verifiedTableCandidatePendingBytes) {
+            m_verifiedXRecordFailed=true;return;
+        }
+        try {dx_data::VerifiedTableCandidateSource pending;pending.raw=raw;pending.publication=pub;
+            pending.ordinal=ticket.ordinal();pending.space=ticket.space();pending.kind=kind;
+            m_verifiedTableCandidatePending.push_back(std::move(pending));m_verifiedTableCandidatePendingBytes+=retained;
+        } catch(...) {m_verifiedXRecordFailed=true;}return;
+    }
     const auto found=data->m_opaqueDwgSourceFrames.find(key);
     if (found==data->m_opaqueDwgSourceFrames.end()
         || data->m_opaqueDwgSourceFrameIdentities.count(key)!=1u) {m_verifiedXRecordFailed=true;return;}
@@ -29157,13 +29201,14 @@ bool dx_iface::hasUnchangedVerifiedXRecordSource(const dx_data& data,
     }
     if (source->requiresTableCandidates) {
         const auto& candidates=data.m_verifiedTableCandidateSource;
-        if (!candidates || (candidates->records.size()!=2u && candidates->records.size()!=3u)) return false;
+        if (!candidates || (candidates->records.size()!=2u && candidates->records.size()!=3u && candidates->records.size()!=4u)) return false;
         std::uint32_t contentHandle=0u,dataHandle=0u,geometryHandle=0u;
         for(const auto& row:candidates->records) {
             using Kind=dx_data::VerifiedTableCandidateSource::Kind;
             if(row.kind==Kind::TableContent)contentHandle=row.raw.m_handle;
             else if(row.kind==Kind::DataTable)dataHandle=row.raw.m_handle;
             else if(row.kind==Kind::TableGeometry)geometryHandle=row.raw.m_handle;
+            else if(row.kind==Kind::ExtensionDictionary) {if(row.raw.m_handle!=source->selectedExtensionDictionary)return false;}
             else return false;
         }
         DwgTableContentAc1018Candidate::Result content;
@@ -29211,7 +29256,9 @@ bool dx_iface::validateVerifiedTableCandidates(const dx_data& data,
         || data.m_standardDwgObjectCaptureFailed || data.m_standardDwgObjectPayloadFailed
         || xrecords.records.empty() || xrecords.records.size()>64u
         || (xrecords.requiresTableRoundtripChildren && !xrecords.requiresTableRoundtripRoot)
-        || sources.records.size()!=(tableGeometry?3u:2u)
+        || ((xrecords.selectedExtensionDictionary!=0u)!=(xrecords.selectedTableEntity!=0u))
+        || (xrecords.selectedExtensionDictionary && !xrecords.requiresTableRoundtripChildren)
+        || sources.records.size()!=(xrecords.selectedExtensionDictionary?4u:tableGeometry?3u:2u)
         || (tableGeometry!=0u)!=(geometry!=nullptr)
         || tableContent==0u || dataTable==0u || tableContent==dataTable
         || (tableGeometry && (tableGeometry==tableContent || tableGeometry==dataTable))) return false;
@@ -29219,19 +29266,37 @@ bool dx_iface::validateVerifiedTableCandidates(const dx_data& data,
         const dx_data::VerifiedTableCandidateSource* contentSource=nullptr;
         const dx_data::VerifiedTableCandidateSource* dataSource=nullptr;
         const dx_data::VerifiedTableCandidateSource* geometrySource=nullptr;
+        const dx_data::VerifiedTableCandidateSource* dictionarySource=nullptr;
         for (const auto& row:sources.records) {
             const auto key=dx_data::StandardDwgFrameKey{sources.generation,row.raw.m_handle};
+            using Kind=dx_data::VerifiedTableCandidateSource::Kind;
+            if(row.kind==Kind::ExtensionDictionary) {
+                if(dictionarySource || row.raw.m_handle!=xrecords.selectedExtensionDictionary)return false;
+                const auto f=data.m_standardDwgObjectFrames.find(key);
+                if(f==data.m_standardDwgObjectFrames.end() || !f->second.publicationSeen || !f->second.payloadMatched
+                    || !f->second.sourceProfileBound || f->second.generation!=sources.generation
+                    || !row.typedBaseline || f->second.typedBaseline!=row.typedBaseline
+                    || !sameVerifiedXRecordRaw(f->second.raw,row.raw)
+                    || !sameVerifiedXRecordPublication(f->second.publication,row.publication))return false;
+                const DRW_Dictionary* live=nullptr;
+                for(const auto& candidate:data.dictionaries)if(candidate.handle==row.raw.m_handle) {
+                    if(live)return false;
+                    live=&candidate;
+                }
+                if(!live || !standardDwgModelsEqual(*row.typedBaseline,*live,row.raw.m_version,dwgObjType::DICTIONARY))return false;
+                dictionarySource=&row;continue;
+            }
             const auto found=data.m_opaqueDwgSourceFrames.find(key);
             if (found==data.m_opaqueDwgSourceFrames.end()
                 || data.m_opaqueDwgSourceFrameIdentities.count(key)!=1u
                 || !sameVerifiedXRecordRaw(found->second,row.raw)) return false;
-            using Kind=dx_data::VerifiedTableCandidateSource::Kind;
             if (row.kind==Kind::TableContent && row.raw.m_handle==tableContent && !contentSource) contentSource=&row;
             else if (row.kind==Kind::DataTable && row.raw.m_handle==dataTable && !dataSource) dataSource=&row;
             else if (row.kind==Kind::TableGeometry && row.raw.m_handle==tableGeometry && !geometrySource) geometrySource=&row;
             else return false;
         }
-        if (!contentSource || !dataSource || (tableGeometry && !geometrySource)) return false;
+        if (!contentSource || !dataSource || (tableGeometry && !geometrySource)
+            || (xrecords.selectedExtensionDictionary && !dictionarySource)) return false;
         for(std::size_t i=0;i<sources.records.size();++i)
             for(std::size_t j=0;j<i;++j) {
                 const auto& a=sources.records[i];const auto& b=sources.records[j];
@@ -29259,6 +29324,15 @@ bool dx_iface::validateVerifiedTableCandidates(const dx_data& data,
         };
         const auto root=member(parsedContent.parentHandle);
         if (root==xrecords.records.cend()) return false;
+        if(dictionarySource) {
+            const auto* dict=dynamic_cast<const DRW_Dictionary*>(dictionarySource->typedBaseline.get());
+            const auto* rootModel=dynamic_cast<const DRW_XRecord*>(root->typedBaseline.get());
+            DwgTableExtensionDictionaryAc1018Candidate::Result observed;
+            if(!dict || !rootModel || !DwgTableExtensionDictionaryAc1018Candidate::inspect(dictionarySource->raw,*dict,observed)
+                || observed.owner!=xrecords.selectedTableEntity || observed.root!=root->raw.m_handle
+                || rootModel->parentHandle!=dictionarySource->raw.m_handle
+                || rootModel->reactorHandles.size()!=1u || rootModel->reactorHandles[0]!=dictionarySource->raw.m_handle)return false;
+        }
         if (xrecords.requiresTableRoundtripRoot) {
             if (!geometrySource) return false;
             const auto* model=dynamic_cast<const DRW_XRecord*>(root->typedBaseline.get());
@@ -29359,6 +29433,26 @@ bool dx_iface::readVerifiedTableRoundtripChildren(const dx_data& data,
     } catch(...) {return fail();}
 }
 
+bool dx_iface::readVerifiedTableExtensionDictionary(const dx_data& data,
+        const std::vector<std::uint32_t>& xrecords,std::uint32_t contentHandle,
+        std::uint32_t tableHandle,std::uint32_t geometryHandle,std::uint32_t entity,
+        std::uint32_t dictionary,DwgTableExtensionDictionaryAc1018Candidate::Result& result) noexcept {
+    result={};
+    if(!data.m_verifiedXRecordSource || !data.m_verifiedTableCandidateSource
+        || data.m_verifiedXRecordSource->selectedExtensionDictionary!=dictionary
+        || data.m_verifiedXRecordSource->selectedTableEntity!=entity || !dictionary || !entity)return false;
+    DwgTableContentAc1018Candidate::Result content;DwgDataTableAc1018Candidate::Result table;
+    DwgTableGeometryAc1018Candidate::Result geometry;DwgTableRoundtripXRecordAc1018Candidate::Result root;
+    std::array<DwgTableChildXRecordAc1018Candidate::Result,9> children;
+    if(!readVerifiedTableRoundtripChildren(data,xrecords,contentHandle,tableHandle,geometryHandle,content,table,geometry,root,children))return false;
+    for(const auto& row:data.m_verifiedTableCandidateSource->records) {
+        if(row.kind!=dx_data::VerifiedTableCandidateSource::Kind::ExtensionDictionary)continue;
+        const auto* model=dynamic_cast<const DRW_Dictionary*>(row.typedBaseline.get());
+        return model && DwgTableExtensionDictionaryAc1018Candidate::inspect(row.raw,*model,result);
+    }
+    return false;
+}
+
 void dx_iface::finishVerifiedXRecordSource(bool successfulRead) noexcept {
     auto* data = m_verifiedXRecordReadData;
     if (!data) return;
@@ -29391,22 +29485,29 @@ void dx_iface::finishVerifiedXRecordSource(bool successfulRead) noexcept {
                 bundle->generation=m_verifiedXRecordReadGeneration;
                 bundle->requiresTableRoundtripRoot=m_verifiedTableRoundtripSelected;
                 bundle->requiresTableRoundtripChildren=m_verifiedTableRoundtripChildrenSelected;
+                bundle->selectedExtensionDictionary=m_verifiedTableDictionarySelected;
+                bundle->selectedTableEntity=m_verifiedTableEntitySelected;
                 bundle->requiresTableCandidates=m_verifiedTableContentSelected!=0u || m_verifiedDataTableSelected!=0u
                     || m_verifiedTableGeometrySelected!=0u;
                 bundle->records=std::move(m_verifiedXRecordPending);
                 std::shared_ptr<const dx_data::VerifiedTableCandidateSources> candidateOwner;
                 if (m_verifiedTableContentSelected || m_verifiedDataTableSelected || m_verifiedTableGeometrySelected) {
                     if (!m_verifiedTableContentSelected || !m_verifiedDataTableSelected
-                        || m_verifiedTableCandidatePending.size()!=(m_verifiedTableGeometrySelected?3u:2u)) complete=false;
+                        || m_verifiedTableCandidatePending.size()!=(m_verifiedTableDictionarySelected?4u:m_verifiedTableGeometrySelected?3u:2u)) complete=false;
                     else {
                         auto candidates=std::make_shared<dx_data::VerifiedTableCandidateSources>();
                         candidates->importToken=m_verifiedXRecordReadToken;
                         candidates->generation=m_verifiedXRecordReadGeneration;
                         candidates->records=std::move(m_verifiedTableCandidatePending);
+                        for(auto& row:candidates->records)if(row.kind==dx_data::VerifiedTableCandidateSource::Kind::ExtensionDictionary) {
+                            const auto found=data->m_standardDwgObjectFrames.find({data->importGeneration,row.raw.m_handle});
+                            if(found==data->m_standardDwgObjectFrames.end()){complete=false;break;}
+                            row.typedBaseline=found->second.typedBaseline;
+                        }
                         DwgTableContentAc1018Candidate::Result content;
                         DwgDataTableAc1018Candidate::Result table;
                         DwgTableGeometryAc1018Candidate::Result geometry;
-                        complete=validateVerifiedTableCandidates(*data,*bundle,*candidates,
+                        complete=complete && validateVerifiedTableCandidates(*data,*bundle,*candidates,
                             m_verifiedTableContentSelected,m_verifiedDataTableSelected,m_verifiedTableGeometrySelected,
                             content,table,m_verifiedTableGeometrySelected?&geometry:nullptr);
                         if (complete) candidateOwner=std::move(candidates);
