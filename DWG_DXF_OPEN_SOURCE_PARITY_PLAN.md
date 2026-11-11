@@ -3865,6 +3865,19 @@ consumer/platform qualification remains separate. Do not promote support from pa
 the local reader/writer loop, or LibreDWG comparison. Keep full-source
 IMAGEDEF and opaque-frame output gates separate.
 
+**Second AC1024 candidate screen (2026-11-11):** LibreDWG 0.14 successfully
+converts the local `visualization_-_conference_room.dwg` to DXF and exposes 30
+3DSOLID entities. The recovered group-1/3 carrier for handle `0x139` decodes to
+an ACIS 21500 header `21500 0 2 24`, but its 20,485-byte text ends mid
+`ellipse-curve`, has 330 record terminators, and lacks the ACIS end marker.
+The current libdxfrw reader fails earlier at `BAD_READ_TABLES` and publishes no
+source frames, so this is not an ACIS parser failure or a second topology
+witness. Keep the carrier excluded; do not infer the header's third-field
+meaning, coedge senses, or topology from this truncated peer projection. Resume
+only with complete independently extracted source bytes and a path that reaches
+the selected solid. The source provenance is not authenticated and the drawing
+was not added as a fixture. See the [candidate screen receipt](docs/research/p7-ac1024-conference-21500-independent-peer-framing-screen-2026-11-11.json).
+
 Use the pinned existing local source only as an opt-in/manual probe. During the
 edit loop, rebuild `libdxfrw_dwg_local_roundtrip` once and run the hash-pinned
 wrapper plus `dxf_acsh_torus_typed_roundtrip` and `dxf_acsh_cmc_loss_guard`;
