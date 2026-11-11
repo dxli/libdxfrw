@@ -3530,6 +3530,18 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
   was added. See the [allocation rollback
   receipt](docs/research/p6-dimension-diametric-angular-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **P6 ARC/ORDINATE DIMENSION DWG encoder transaction safety:** both writers
+  now stage common dimension data, strings, subtype body fields, and
+  DIMSTYLE/block handles through the shared transaction helper. Generated
+  AC1018/AC1021/AC1024 ARC_DIMENSION profiles sweep 17/22/22 allocation
+  failures; AC1015/AC1018/AC1021/AC1024 ORDINATE profiles sweep 17/17/22/22.
+  Rollback, class-code restoration, same-object retry, and alias controls pass.
+  The focused selector and 30-test entity-writer transaction cohort pass.
+  These are transaction controls only; dimension semantics, graph closure,
+  producer coverage, native behavior, and broad output support remain open.
+  No DWG/DXF fixture was added. See the [allocation rollback
+  receipt](docs/research/p6-dimension-arc-ordinate-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 After every slice: run its focused fast checks; update this queue and the
 relevant receipt; commit code, plan and receipt together; report the commit and
 next eligible slice, then continue. Keep fixtures out of commits unless already

@@ -29831,25 +29831,33 @@ bool DRW_DimArc::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs
 bool DRW_DimArc::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs,
                              dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs;
-    oType = DRW_DimArc::kDwgClassNum;  // assigned in writeDwgClasses; reader resolves via classesmap
-    if (!encodeDwgCommon(version, buf)) return false;
-    if (!encodeDwgDimBase(version, buf, strBuf)) return false;
-    buf->put3BitDouble(getDefPoint());   // arc dim-line arc point (code 10)
-    buf->put3BitDouble(getPt3());        // extension line 1 (code 13)
-    buf->put3BitDouble(getPt4());        // extension line 2 (code 14)
-    buf->put3BitDouble(getPt5());        // arc center (code 15)
-    buf->putBit(isPartial ? 1 : 0);
-    buf->putBitDouble(arcStartAngle);
-    buf->putBitDouble(arcEndAngle);
-    buf->putBit(hasLeader ? 1 : 0);
-    // ODA §20.4.19: leader points are UNCONDITIONAL — always written; default to ext-line pts
-    DRW_Coord lp1 = hasLeader ? getDxfArcPoint() : getPt3();
-    DRW_Coord lp2 = hasLeader ? leaderPt2   : getPt4();
-    buf->put3BitDouble(lp1);             // leader point 1 (code 16)
-    buf->put3BitDouble(lp2);             // leader point 2 (code 17)
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
-    putDimHandles(buf, dimStyleH, blockH, handleBuf);
-    return true;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            oType = DRW_DimArc::kDwgClassNum;
+            if (!encodeDwgCommon(version, body)
+                || !encodeDwgDimBase(version, body, strings))
+                return false;
+            body->put3BitDouble(getDefPoint()); // arc dim-line point (10)
+            body->put3BitDouble(getPt3());      // extension line 1 (13)
+            body->put3BitDouble(getPt4());      // extension line 2 (14)
+            body->put3BitDouble(getPt5());      // arc center (15)
+            body->putBit(isPartial ? 1 : 0);
+            body->putBitDouble(arcStartAngle);
+            body->putBitDouble(arcEndAngle);
+            body->putBit(hasLeader ? 1 : 0);
+            // ODA §20.4.19: leader points are unconditional.
+            const DRW_Coord lp1 = hasLeader ? getDxfArcPoint() : getPt3();
+            const DRW_Coord lp2 = hasLeader ? leaderPt2 : getPt4();
+            body->put3BitDouble(lp1);
+            body->put3BitDouble(lp2);
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
+            putDimHandles(body, dimStyleH, blockH, handles);
+            return body->isGood() && (strings == nullptr || strings->isGood())
+                && (handles == nullptr || handles->isGood());
+        });
 }
 
 // ----------------------------------------------------------------------------
@@ -29857,20 +29865,26 @@ bool DRW_DimArc::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t 
 // ----------------------------------------------------------------------------
 bool DRW_DimOrdinate::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs;
-    oType = 20;
-    if (!encodeDwgCommon(version, buf)) return false;
-    if (!encodeDwgDimBase(version, buf, strBuf)) return false;
-    buf->put3BitDouble(getDefPoint());  // origin/definition point (code 10)
-    buf->put3BitDouble(getPt3());       // feature location point (code 13)
-    buf->put3BitDouble(getPt4());       // leader end point (code 14)
-    // type2 byte encodes the x-vs-y ordinate flag (bit 6 / 0x40 of type, per
-    // 0B.1) — keeps the DWG byte round-trip self-consistent with the parse
-    // side while making the filter's `type & 64` check fire.
-    std::uint8_t type2byte = (type & 0x40) ? 1 : 0;
-    buf->putRawChar8(type2byte);
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
-    putDimHandles(buf, dimStyleH, blockH, handleBuf);
-    return true;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            oType = 20;
+            if (!encodeDwgCommon(version, body)
+                || !encodeDwgDimBase(version, body, strings))
+                return false;
+            body->put3BitDouble(getDefPoint()); // origin/definition point (10)
+            body->put3BitDouble(getPt3());      // feature location point (13)
+            body->put3BitDouble(getPt4());      // leader end point (14)
+            // type2 carries the x-vs-y ordinate flag (bit 6 / 0x40).
+            const std::uint8_t type2byte = (type & 0x40) ? 1 : 0;
+            body->putRawChar8(type2byte);
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
+            putDimHandles(body, dimStyleH, blockH, handles);
+            return body->isGood() && (strings == nullptr || strings->isGood())
+                && (handles == nullptr || handles->isGood());
+        });
 }
 
 bool DRW_Leader::parseCode(int code, const std::unique_ptr<dxfReader>& reader){

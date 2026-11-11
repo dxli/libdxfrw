@@ -716,6 +716,34 @@ public:
     }
 };
 
+class DimArcCodecProbe final : public DRW_DimArc {
+public:
+    using DRW_DimArc::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+    void setHandles(std::uint32_t dimStyle, std::uint32_t block) {
+        dimStyleH.code = DRW::DwgHardPointer;
+        dimStyleH.ref = dimStyle;
+        blockH.code = DRW::DwgHardPointer;
+        blockH.ref = block;
+    }
+};
+
+class DimOrdinateCodecProbe final : public DRW_DimOrdinate {
+public:
+    using DRW_DimOrdinate::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+    void setHandles(std::uint32_t dimStyle, std::uint32_t block) {
+        dimStyleH.code = DRW::DwgHardPointer;
+        dimStyleH.ref = dimStyle;
+        blockH.code = DRW::DwgHardPointer;
+        blockH.ref = block;
+    }
+};
+
 class MeshCodecProbe final : public DRW_Mesh {
 public:
     using DRW_Mesh::encodeDwg;
@@ -26151,6 +26179,62 @@ void testDiameterAngularDimDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testArcOrdinateDimDwgEncodeAllocationRollback(TestContext &t) {
+  const auto prepare = [](auto &dimension, std::uint32_t base) {
+    dimension.handle = base;
+    dimension.parentHandle = base + 1u;
+    dimension.reactorHandles = {base + 2u};
+    dimension.xDictHandle = base + 3u;
+    dimension.setDwgType(0x777);
+    dimension.setName("*D_DIMENSION_TRANSACTION");
+    dimension.setText("DIMENSION \xCE\xA9");
+    dimension.setStyle("STANDARD");
+    dimension.setTextPoint(DRW_Coord(2.0, 3.0, 0.0));
+    dimension.setHandles(base + 4u, base + 5u);
+  };
+
+  for (const DRW::Version version : {DRW::AC1018, DRW::AC1021,
+                                     DRW::AC1024}) {
+    const std::uint32_t base =
+        0xBE00u + static_cast<std::uint32_t>(version) * 0x10u;
+    DimArcCodecProbe arc;
+    prepare(arc, base);
+    arc.setArcDefPoint(DRW_Coord(2.0, 4.0, 0.0));
+    arc.setExtLine1(DRW_Coord(0.0, 0.0, 0.0));
+    arc.setExtLine2(DRW_Coord(3.0, 0.0, 0.0));
+    arc.setArcCenter(DRW_Coord(1.0, 1.0, 0.0));
+    arc.setLeaderPt1(DRW_Coord(1.0, 2.0, 0.0));
+    arc.leaderPt2 = DRW_Coord(2.0, 1.0, 0.0);
+    arc.arcStartAngle = 0.25;
+    arc.arcEndAngle = 1.25;
+    arc.isPartial = true;
+    arc.hasLeader = true;
+    checkEntityDwgEncodeAllocationRollback(
+        t, arc, version, DRW_DimArc::kDwgClassNum,
+        version == DRW::AC1018 ? "AC1018 DIMENSION arc"
+        : version == DRW::AC1021 ? "AC1021 DIMENSION arc"
+                                 : "AC1024 DIMENSION arc");
+  }
+
+  for (const DRW::Version version : {DRW::AC1015, DRW::AC1018,
+                                     DRW::AC1021, DRW::AC1024}) {
+    const std::uint32_t base =
+        0xBF00u + static_cast<std::uint32_t>(version) * 0x10u;
+    DimOrdinateCodecProbe ordinate;
+    prepare(ordinate, base);
+    ordinate.type = 0x40;
+    ordinate.setOriginPoint(DRW_Coord(1.0, 2.0, 0.0));
+    ordinate.setFirstLine(DRW_Coord(3.0, 4.0, 0.0));
+    ordinate.setSecondLine(DRW_Coord(5.0, 6.0, 0.0));
+    checkEntityDwgEncodeAllocationRollback(
+        t, ordinate, version, 20u,
+        version == DRW::AC1015 ? "AC1015 DIMENSION ordinate"
+        : version == DRW::AC1018 ? "AC1018 DIMENSION ordinate"
+        : version == DRW::AC1021 ? "AC1021 DIMENSION ordinate"
+                                 : "AC1024 DIMENSION ordinate");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -29458,6 +29542,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testDiameterAngularDimDwgEncodeAllocationRollback(context);
       std::cout << "Diametric/angular DIMENSION DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--arc-ordinate-dim-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testArcOrdinateDimDwgEncodeAllocationRollback(context);
+      std::cout << "Arc/ordinate DIMENSION DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }
