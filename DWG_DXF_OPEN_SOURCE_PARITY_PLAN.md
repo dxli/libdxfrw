@@ -1583,17 +1583,26 @@ created locally from scratch for the specific control.
   A generated standalone selected-frame test now covers valid-CRC payload
   mutation and a bad frame CRC with intact page checksums
   ([receipt](docs/research/p5-ac1018-tablestyle-xrecord-generated-reader-crc-2026-11-11.json));
-  a locally generated full-bundle test now verifies the positive stronger
-  capability, CRC-valid payload mutation rejection, selected-frame CRC failure,
-  same-reader retry and strict-output refusal ([receipt](docs/research/p5-ac1018-tablestyle-xrecord-generated-full-bundle-2026-11-11.json)).
-  This remains reader evidence only; capability revalidation at writer staging
-  and finalization, transactional output and recursive descendant closure stay
+  a locally generated full-bundle test now includes the CELLSTYLEMAP frame and
+  verifies both selected accessors, source style order `[3,1,2]`, CRC-valid
+  style-XRECORD mutation rejection, selected-XRECORD frame CRC failure,
+  same-reader retry and strict-output refusal
+  ([receipt](docs/research/p5-ac1018-tablestyle-xrecord-generated-full-bundle-2026-11-11.json)).
+  This exposed and fixed a bounded reader-capture limit: unselected AC1018
+  STYLE/LTYPE control tickets could fill the old eight-candidate cap before
+  the selected map ticket. The collector now allows sixteen candidates while
+  retaining per-frame, aggregate-byte and exact selected-set checks. This
+  remains reader evidence only; capability revalidation at writer staging and
+  finalization, transactional output and recursive descendant closure stay
   open.
   CELLSTYLEMAP is now joined to the reader-verified dictionary's second target,
   preserving source style order `[3,1,2]` and checking selected H4/H5 fields
   ([binding receipt](docs/research/p5-ac1018-cellstylemap-reader-source-binding-2026-11-11.json)).
-  This is a selected-field projection, not complete typed-model equality or
-  STYLE/LTYPE, APPID and font resource closure.
+  The generated full-bundle control now confirms that this binding composes
+  with the style-XRECORD path; map-frame CRC failure remains covered by the
+  separate reader-source controls, not the full-bundle test. This is a
+  selected-field projection, not complete typed-model equality or STYLE/LTYPE,
+  APPID and font resource closure.
   The AC1032 malformed-count dispatch test now passes: its
   generated common-parent and TABLESTYLE-specific owner roles were corrected
   to the distinct ODA §20.1 and §20.4.101.2 roles. The malformed count is

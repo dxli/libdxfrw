@@ -27,7 +27,7 @@ public:
 };
 class CompleteWriter final:public TableStyleNodWholeFileAdapter {
 public:
- CompleteWriter(dwgRW* w,dx_data* d,const char* contentPath,const char* dataPath,const char* geometryPath):TableStyleNodWholeFileAdapter(w,d,true,false,false) {
+ CompleteWriter(dwgRW* w,dx_data* d,const char* contentPath,const char* dataPath,const char* geometryPath,const char* cellStyleMapPath):TableStyleNodWholeFileAdapter(w,d,true,false,false) {
   setExtensionMode(6);useParsedBlockRecordMetadata(true);useParsedProxyCache(true);
   style.m_name="Standar";dictionary.m_entries[0].m_name="Standar";style.xDictHandle=0xdbu;style.reactorHandles={0x6au,0x9cu};style.setDwgCommonObjectState(2,0u,false);
   style.m_horizontalCellMargin=style.m_verticalCellMargin=1.5;
@@ -36,9 +36,10 @@ public:
   a=raw(contentPath,514,0xb9u,"TABLECONTENT","AcDbTableContent");
   b=raw(dataPath,517,0xbdu,"DATATABLE","AcDbDataTable");
   g=raw(geometryPath,515,0xbau,"TABLEGEOMETRY","AcDbTableGeometry");
+  cellStyleMap=raw(cellStyleMapPath,508,0xddu,"CELLSTYLEMAP","AcDbCellStyleMap");
  }
  DRW_UnsupportedObject raw(const char* path,int type,std::uint32_t h,const char* name,const char* cls){DRW_UnsupportedObject r;std::ifstream f(path,std::ios::binary);r.m_rawBytes.assign(std::istreambuf_iterator<char>(f),{});r.m_version=DRW::AC1018;r.m_objectType=type;r.m_handle=h;r.m_objectSize=r.m_rawBytes.size();r.m_isCustomClass=r.m_hasClassDefinition=true;r.m_recordName=name;r.m_className=cls;r.m_classAppName="LOCALLY_AUTHORED";r.m_classProxyFlag=0x401u;r.m_classEntityFlagRaw=0x1f3u;return r;}
- void writeDwgClasses() override {TableStyleNodWholeFileAdapter::writeDwgClasses();ready=ready&&m_writer->registerRawDwgObjectClass(&a)&&m_writer->registerRawDwgObjectClass(&b)&&m_writer->registerRawDwgObjectClass(&g);std::cerr<<"registered="<<ready<<" table class="<<table.getDwgClassNum()<<'\n';}
+ void writeDwgClasses() override {TableStyleNodWholeFileAdapter::writeDwgClasses();ready=ready&&m_writer->registerRawDwgObjectClass(&cellStyleMap)&&m_writer->registerRawDwgObjectClass(&a)&&m_writer->registerRawDwgObjectClass(&b)&&m_writer->registerRawDwgObjectClass(&g);std::cerr<<"registered="<<ready<<" table class="<<table.getDwgClassNum()<<'\n';}
  void writeObjects() override {
   if(!ready || !m_writer->writeDictionary(&dictionary) || !m_writer->writeTableStyle(&style)){ready=false;std::cerr<<"style failed\n";return;}
   DRW_Dictionary root;root.handle=0xbbu;root.parentHandle=0x9cu;root.hardOwner=1;root.cloning=1;root.setDwgCommonObjectState(0,1u,false);DRW_Dictionary populated=root;populated.handle=0xe0u;populated.m_entries.push_back({"ACAD_XREC_ROUNDTRI",0xbcu});
@@ -49,9 +50,9 @@ public:
    else {ChildFixture::Options o;o.handle=h;o.empty=(h==0xbfu || h==0xc0u);if(h>=0xc1u)o.value=std::to_string(h-0xc0u);x=ChildFixture::build(o).typed;}
    if(!m_writer->writeXRecord(&x)){std::cerr<<"x fail "<<std::hex<<h<<'\n';ready=false;return;}}
   DRW_XRecord x;x.handle=0xdcu;x.parentHandle=0xdbu;x.reactorHandles={0xdbu};x.setDwgCommonObjectState(1,1u,false);x.m_cloning=1;auto&e=x.m_dataEntries;e.emplace_back(102,UTF8STRING("ACAD_ROUNDTRIP_PRE2007_TABLESTYLE"));e.emplace_back(90,std::int32_t{4});e.emplace_back(91,std::int32_t{0});e.emplace_back(1,UTF8STRING(""));e.emplace_back(92,std::int32_t{4});e.emplace_back(93,std::int32_t{0});e.emplace_back(2,UTF8STRING(""));e.emplace_back(94,std::int32_t{4});e.emplace_back(95,std::int32_t{0});e.emplace_back(3,UTF8STRING(""));
-  ready=ready&&m_writer->writeXRecord(&x)&&m_writer->writeRawDwgObject(&a)&&m_writer->writeRawDwgObject(&b)&&m_writer->writeRawDwgObject(&g);std::cerr<<"objects="<<ready<<'\n';
+  ready=ready&&m_writer->writeXRecord(&x)&&m_writer->writeRawDwgObject(&cellStyleMap)&&m_writer->writeRawDwgObject(&a)&&m_writer->writeRawDwgObject(&b)&&m_writer->writeRawDwgObject(&g);std::cerr<<"objects="<<ready<<'\n';
  }
- DRW_UnsupportedObject a,b,g;
+ DRW_UnsupportedObject a,b,g,cellStyleMap;
 };
 namespace {
 void localHandle(dwgBufferW& b,unsigned role,std::uint32_t h){dwgHandle x;x.code=role;x.ref=h;b.putHandle(x);}
@@ -62,8 +63,12 @@ std::vector<std::uint8_t> styleXBody(int value=4){
  text(102,"ACAD_ROUNDTRIP_PRE2007_TABLESTYLE");integer(90,value);integer(91,0);text(1,"");integer(92,4);integer(93,0);text(2,"");integer(94,4);integer(95,0);text(3,"");b.putBitShort(1u);b.patchRawLong32AtBit(end,static_cast<std::uint32_t>(b.bitCount()));localHandle(b,4u,0xdbu);localHandle(b,4u,0xdbu);b.alignToByte();return b.data();
 }
 std::vector<std::uint8_t> fileBytes(const char* path){std::ifstream in(path,std::ios::binary);return {std::istreambuf_iterator<char>(in),{}};}
-bool enabled(dx_iface& a){return a.enableVerifiedTableStyleXRecordSource(fullXrecords,0xb9u,0xbdu,0xbau,0x9cu,0xe0u,0x6bu,0xdbu,0xdcu,0xddu);}
-bool verified(const dx_data& d){DwgTableStyleRoundtripXRecordAc1018Candidate::Result r;return dx_iface::readVerifiedTableStyleXRecordSource(d,fullXrecords,0xb9u,0xbdu,0xbau,0x9cu,0xe0u,0x6bu,0xdbu,0xdcu,0xddu,r)&&r.handle==0xdcu&&r.owner==0xdbu&&r.reactor==0xdbu;}
+bool enabled(dx_iface& a){return a.enableVerifiedTableCellStyleMapSource(fullXrecords,0xb9u,0xbdu,0xbau,0x9cu,0xe0u,0x6bu,0xdbu,0xdcu,0xddu);}
+bool verified(const dx_data& d){DwgTableStyleRoundtripXRecordAc1018Candidate::Result x;DwgCellStyleMapAc1018Candidate::Result map;
+ const bool xOk=dx_iface::readVerifiedTableStyleXRecordSource(d,fullXrecords,0xb9u,0xbdu,0xbau,0x9cu,0xe0u,0x6bu,0xdbu,0xdcu,0xddu,x);
+ const bool mapOk=dx_iface::readVerifiedTableCellStyleMapSource(d,fullXrecords,0xb9u,0xbdu,0xbau,0x9cu,0xe0u,0x6bu,0xdbu,0xdcu,0xddu,map);
+ const bool ok=xOk&&x.handle==0xdcu&&x.owner==0xdbu&&x.reactor==0xdbu&&mapOk&&map.handle==0xddu&&map.owner==0xdbu&&map.styles.size()==3u&&map.styles[0].id==3&&map.styles[1].id==1&&map.styles[2].id==2;
+ if(!ok)std::cerr<<"verified bundle x="<<xOk<<" xHandle="<<x.handle<<" xOwner="<<x.owner<<" xReactor="<<x.reactor<<" map="<<mapOk<<" mapHandle="<<map.handle<<" mapOwner="<<map.owner<<" styles="<<map.styles.size()<<'\n';return ok;}
 bool patchTable(const std::filesystem::path& path){
  std::ifstream input(path,std::ios::binary);std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(input)),{});
  const auto found=std::search_n(bytes.cbegin(),bytes.cend(),2000u,0xc2u);if(found==bytes.cend())return false;const auto at=static_cast<std::size_t>(found-bytes.cbegin());if(at<100u)return false;
@@ -73,10 +78,10 @@ bool patchTable(const std::filesystem::path& path){
   auto changed=entity.m_rawBytes;patchRawBits(changed,r.dictionaryStartBit+8u,0xe0u,1u);return replaceSelectedBody(path,entity,changed);
  }return false;
 }
-bool execute(const char* content,const char* data,const char* geometry,const char* rootPath,const char* stylePath,const char* styleDictPath,const std::filesystem::path& path){
+bool execute(const char* content,const char* data,const char* geometry,const char* rootPath,const char* stylePath,const char* styleDictPath,const char* cellStyleMapPath,const std::filesystem::path& path){
 #define CHECK_F(x) do{if(!(x)){std::cerr<<"full bundle failed at line "<<__LINE__<<'\n';return false;}}while(false)
  dx_data writerData;dwgRW writer(path.string().c_str());for(unsigned h=0xb9u;h<=0xddu;++h)writer.reserveHandle(h);writer.reserveHandle(0xe0u);writer.reserveHandle(0x9cu);writer.reserveHandle(0x6au);writer.reserveHandle(0x6bu);
- CompleteWriter authored(&writer,&writerData,content,data,geometry);CHECK_F(writer.write(&authored,DRW::AC1018,true)&&authored.ready);
+ CompleteWriter authored(&writer,&writerData,content,data,geometry,cellStyleMapPath);CHECK_F(writer.write(&authored,DRW::AC1018,true)&&authored.ready);
  dx_iface initialReader;dx_data initial;CHECK_F(initialReader.fileImport(path.string(),&initial,false));
  auto root=fileBytes(rootPath);patchRawBits(root,1675u,0xe0u,1u);patchRawBits(root,1691u,0xe0u,1u);CHECK_F(replaceSelectedBody(path,DxIfaceStandardDwgCaptureTestAccess::standardRaw(initial,0xbcu),root));
  for(unsigned h=0xbeu;h<=0xc6u;++h){ChildFixture::Options o;o.handle=h;o.empty=(h==0xbfu||h==0xc0u);if(h>=0xc1u)o.value=std::to_string(h-0xc0u);CHECK_F(replaceSelectedBody(path,DxIfaceStandardDwgCaptureTestAccess::standardRaw(initial,h),ChildFixture::build(o).raw.m_rawBytes));}
@@ -95,8 +100,8 @@ bool execute(const char* content,const char* data,const char* geometry,const cha
  std::vector<std::uint8_t> before;CHECK_F(corruptSelectedCrc(path,x,before));dx_data broken;(void)reader.fileImport(path.string(),&broken,false);CHECK_F(!verified(broken)&&!dx_iface::hasUnchangedVerifiedXRecordSource(broken,0xbcu));
  const auto& integrity=broken.dwgReadOutcome.observations.integrity;CHECK_F(!integrity.extractionOmitted&&!integrity.reportedUpstreamDropped&&!integrity.aggregateSaturated);bool target=false;for(std::size_t i=0;i<integrity.retained;++i){const auto& row=integrity.rows[i];CHECK_F(row.kind!=DwgIntegrityCheckKind::DataPageChecksum&&row.kind!=DwgIntegrityCheckKind::DataPageCrc);if(row.kind==DwgIntegrityCheckKind::ObjectFrameBounds&&row.hasLogicalHandle&&row.logicalHandle==0xdcu)target=true;}CHECK_F(target);
  {std::ofstream out(path,std::ios::binary|std::ios::trunc);out.write(reinterpret_cast<const char*>(before.data()),before.size());CHECK_F(static_cast<bool>(out));}dx_data retry;CHECK_F(reader.fileImport(path.string(),&retry,false)&&verified(retry));
- std::cout<<"locally authored full style XRECORD bundle, valid-CRC mismatch and selected frame CRC retry passed\n";return true;
+ std::cout<<"locally authored full style XRECORD/CELLSTYLEMAP bundle, XRECORD CRC failure and same-reader retry passed\n";return true;
 #undef CHECK_F
 }
 }
-int main(int argc,char** argv){if(argc!=8)return 2;const std::filesystem::path path(argv[7]);if(std::filesystem::exists(path))return 3;const bool ok=execute(argv[1],argv[2],argv[3],argv[4],argv[5],argv[6],path);std::error_code e;std::filesystem::remove(path,e);return ok?0:1;}
+int main(int argc,char** argv){if(argc!=9)return 2;const std::filesystem::path path(argv[8]);if(std::filesystem::exists(path))return 3;const bool ok=execute(argv[1],argv[2],argv[3],argv[4],argv[5],argv[6],argv[7],path);std::error_code e;std::filesystem::remove(path,e);return ok?0:1;}

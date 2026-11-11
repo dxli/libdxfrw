@@ -129,6 +129,11 @@ bool dwgReader::decodeDwgTemplate(DRW_Header& hdr, const std::uint8_t* data,
 }
 
 namespace {
+// Selected TABLE/TABLESTYLE graphs can share this collector with the
+// AC1018 STYLE/LTYPE control and record tickets. Keep capacity above the
+// selected graph's eight records while the aggregate-byte limits bound input.
+constexpr std::size_t maxVerifiedTableCandidateCount = 16u;
+
 bool isSpaceBlockRecordName(const std::string &name);
 bool isPaperSpaceBlockRecordName(const std::string &name);
 bool isModelSpaceBlockRecordName(const std::string &name);
@@ -8413,7 +8418,7 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
           dwgBuffer probe = dbuf->forkIndependent();
           DwgObjectFrame frame;
           if (m_verifiedTableCandidateFailed || duplicate
-              || m_verifiedTableCandidates.size() >= 8u
+              || m_verifiedTableCandidates.size() >= maxVerifiedTableCandidateCount
               || m_verifiedTableCandidateBytes > maxBody
               || !frame.readAt(probe, version, object.loc)
               || frame.body().size() > maxBody) {
@@ -8475,7 +8480,7 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
       DwgObjectFrame candidateFrame;dwgBuffer candidateBuffer=dbuf->forkIndependent();
       if (sourceIt == erasedObjectHandles.crend() || !ltype
           || !candidateFrame.readAt(candidateBuffer, version, object.loc)
-          || candidateFrame.body().size() > 4096u || m_verifiedTableCandidates.size() >= 8u) {
+          || candidateFrame.body().size() > 4096u || m_verifiedTableCandidates.size() >= maxVerifiedTableCandidateCount) {
         m_verifiedTableCandidates.clear();m_verifiedTableCandidateFailed=true;
       } else {
         try {
@@ -8508,7 +8513,7 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
             });
         if (sourceIt == erasedObjectHandles.crend() || style == nullptr
             || m_verifiedTableCandidateFailed || duplicate
-            || m_verifiedTableCandidates.size() >= 8u
+            || m_verifiedTableCandidates.size() >= maxVerifiedTableCandidateCount
             || frame.body().size() > maxBody
             || m_verifiedTableCandidateBytes > maxBody
             || frame.body().size()
@@ -13097,7 +13102,7 @@ bool dwgReader::readDwgObjects(DRW_Interface &intfa, dwgBuffer *dbuf,
               return p.kind==DwgVerifiedTableCandidateKind::TableEntity || p.handle==entry.m_handle
                   || p.ordinal==entry.m_sourceMapOrdinal || (p.space==entry.m_sourceOffsetSpace && p.offset==entry.m_sourceOffset);
             });
-        if(m_verifiedTableCandidateFailed || duplicate || m_verifiedTableCandidates.size()>=8u
+        if(m_verifiedTableCandidateFailed || duplicate || m_verifiedTableCandidates.size()>=maxVerifiedTableCandidateCount
             || entry.m_handle!=selectedEntity || entry.m_sourceOffsetSpace!=DRW_DwgFrameOffsetSpace::DecodedBuffer
             || entry.m_disposition!=DRW_DwgFrameDisposition::Published || entry.m_publicationCount!=1u
             || !sizeProbe.isGood() || size<0 || static_cast<std::size_t>(size)>maxBody
@@ -13388,7 +13393,7 @@ bool dwgReader::readDwgObjects(DRW_Interface &intfa, dwgBuffer *dbuf,
               return p.kind==*verifiedTableKind || p.handle==verifiedHandle
                   || p.ordinal==verifiedOrdinal || (p.space==verifiedSpace && p.offset==verifiedOffset);
             });
-        if (m_verifiedTableCandidateFailed || duplicate || m_verifiedTableCandidates.size()>=8u
+        if (m_verifiedTableCandidateFailed || duplicate || m_verifiedTableCandidates.size()>=maxVerifiedTableCandidateCount
             || !sizeProbe.isGood() || size<0 || static_cast<std::size_t>(size)>maxBody
             || m_verifiedXRecordPendingBytes>maxTotal
             || m_verifiedTableCandidateBytes>maxTotal-m_verifiedXRecordPendingBytes

@@ -6140,7 +6140,8 @@ target_link_libraries(libdxfrw_dwg_tablestyle_xrecord_full_bundle_tests PRIVATE 
 add_dependencies(libdxfrw_dwg_tablestyle_xrecord_full_bundle_tests
     libdxfrw_dwg_tablecontent_ac1018_candidate_tests libdxfrw_dwg_datatable_ac1018_candidate_tests
     libdxfrw_dwg_tablegeometry_ac1018_candidate_tests libdxfrw_dwg_table_roundtrip_xrecord_ac1018_candidate_tests
-    libdxfrw_dwg_tablestyle_ac1018_candidate_tests libdxfrw_dwg_tablestyle_extension_dictionary_ac1018_candidate_tests)
+    libdxfrw_dwg_tablestyle_ac1018_candidate_tests libdxfrw_dwg_tablestyle_extension_dictionary_ac1018_candidate_tests
+    libdxfrw_dwg_cellstylemap_ac1018_candidate_tests)
 add_test(NAME libdxfrw_dwg_tablestyle_xrecord_full_bundle COMMAND ${CMAKE_COMMAND}
     -DCONTENT_TEST=$<TARGET_FILE:libdxfrw_dwg_tablecontent_ac1018_candidate_tests>
     -DDATA_TEST=$<TARGET_FILE:libdxfrw_dwg_datatable_ac1018_candidate_tests>
@@ -6148,6 +6149,7 @@ add_test(NAME libdxfrw_dwg_tablestyle_xrecord_full_bundle COMMAND ${CMAKE_COMMAN
     -DROOT_TEST=$<TARGET_FILE:libdxfrw_dwg_table_roundtrip_xrecord_ac1018_candidate_tests>
     -DSTYLE_TEST=$<TARGET_FILE:libdxfrw_dwg_tablestyle_ac1018_candidate_tests>
     -DDICTIONARY_TEST=$<TARGET_FILE:libdxfrw_dwg_tablestyle_extension_dictionary_ac1018_candidate_tests>
+    -DMAP_TEST=$<TARGET_FILE:libdxfrw_dwg_cellstylemap_ac1018_candidate_tests>
     -DBIND_TEST=$<TARGET_FILE:libdxfrw_dwg_tablestyle_xrecord_full_bundle_tests>
     -DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/generated-tablestyle-xrecord-full-bundle
     -P ${CMAKE_CURRENT_SOURCE_DIR}/run_dwg_tablestyle_xrecord_full_bundle.cmake)
