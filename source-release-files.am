@@ -693,6 +693,7 @@ EXTRA_DIST = \
     tests/table_control_identity_controls.h \
     tests/table_dwg_codec_allocation_tests.cpp \
     tests/table_export_reuse_controls.h \
+    tests/table_extension_facade_allocation_tests.cpp \
     tests/table_geometry_dependency_controls.h \
     tests/table_geometry_dxf_tests.cpp \
     tests/table_geometry_source_observer.py \
