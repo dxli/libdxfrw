@@ -5,6 +5,7 @@
 #include <iostream>
 #include <iterator>
 #include <new>
+#include <string>
 namespace fault { long remaining=-1; std::size_t count=0; bool active=false; }
 void* operator new(std::size_t n) {
     if (fault::active) ++fault::count;
@@ -168,4 +169,10 @@ bool callerBody(const char* path){
     std::cout<<"caller-supplied body and typed fixture match expected spans\n";return true;
 }
 }
-int main(int argc,char** argv){if(argc>2||!generated()||(argc==2&&!callerBody(argv[1])))return 1;return 0;}
+int main(int argc,char** argv){
+    if(argc==3 && std::string(argv[1])=="--emit-body") {
+        const auto f=build();std::ofstream out(argv[2],std::ios::binary|std::ios::trunc);
+        out.write(reinterpret_cast<const char*>(f.raw.m_rawBytes.data()),f.raw.m_rawBytes.size());return out?0:1;
+    }
+    if(argc>2||!generated()||(argc==2&&!callerBody(argv[1])))return 1;return 0;
+}

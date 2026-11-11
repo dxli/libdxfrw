@@ -1569,12 +1569,14 @@ target_link_libraries(libdxfrw_dwg_table_candidate_binding_tests PRIVATE dxfrw)
 add_dependencies(libdxfrw_dwg_table_candidate_binding_tests
     libdxfrw_dwg_tablecontent_ac1018_candidate_tests
     libdxfrw_dwg_datatable_ac1018_candidate_tests
-    libdxfrw_dwg_tablegeometry_ac1018_candidate_tests)
+    libdxfrw_dwg_tablegeometry_ac1018_candidate_tests
+    libdxfrw_dwg_table_roundtrip_xrecord_ac1018_candidate_tests)
 add_test(NAME libdxfrw_dwg_table_candidate_binding
     COMMAND ${CMAKE_COMMAND}
         -DCONTENT_TEST=$<TARGET_FILE:libdxfrw_dwg_tablecontent_ac1018_candidate_tests>
         -DDATA_TEST=$<TARGET_FILE:libdxfrw_dwg_datatable_ac1018_candidate_tests>
         -DGEOMETRY_TEST=$<TARGET_FILE:libdxfrw_dwg_tablegeometry_ac1018_candidate_tests>
+        -DROOT_TEST=$<TARGET_FILE:libdxfrw_dwg_table_roundtrip_xrecord_ac1018_candidate_tests>
         -DBIND_TEST=$<TARGET_FILE:libdxfrw_dwg_table_candidate_binding_tests>
         -DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/generated-table-binding
         -P ${CMAKE_CURRENT_SOURCE_DIR}/run_dwg_table_candidate_binding.cmake)

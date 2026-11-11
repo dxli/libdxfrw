@@ -26,6 +26,7 @@
 #include "intern/dwg_datatable_ac1018_candidate.h"
 #include "intern/dwg_tablecontent_ac1018_candidate.h"
 #include "intern/dwg_tablegeometry_ac1018_candidate.h"
+#include "intern/dwg_table_roundtrip_xrecord_ac1018_candidate.h"
 namespace blockref_source_relation { struct Result; }
 
 #include <cstdint>
@@ -74,8 +75,9 @@ public:
     static bool hasUnchangedVerifiedXRecordSources(
         const dx_data&, const std::vector<std::uint32_t>& handles) noexcept;
     // Opt-in same-import source observations only; never authorizes output.
-    // Root XRECORD outgoing 360/361 roles and other graph dependencies remain
-    // unverified. Reader classification binds class kind/names/number only;
+    // Ordinary selections do not verify root XRECORD outgoing 360/361 pairs.
+    // The stricter opt-in checks those three pairs; other graph dependencies
+    // remain unverified. Reader classification binds class kind/names/number only;
     // other class metadata is callback data, not authenticated evidence.
     // Geometry selection binds its owner to the other candidates, not its
     // outgoing graph. Read with the overload matching the selected set; a
@@ -84,6 +86,17 @@ public:
         std::uint32_t tableContent,std::uint32_t dataTable) noexcept;
     bool enableVerifiedTableCandidates(const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry) noexcept;
+    // Binds the root XRECORD ordered references to all three selected frames.
+    // This remains a source observation; it is not a graph or output certificate.
+    bool enableVerifiedTableRoundtripCandidates(const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry) noexcept;
+    static bool readVerifiedTableRoundtripCandidates(const dx_data&,
+        const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        DwgTableContentAc1018Candidate::Result& content,
+        DwgDataTableAc1018Candidate::Result& table,
+        DwgTableGeometryAc1018Candidate::Result& geometry,
+        DwgTableRoundtripXRecordAc1018Candidate::Result& root) noexcept;
     static bool readVerifiedTableCandidates(const dx_data&,
         const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,
@@ -3379,6 +3392,7 @@ private:
     std::vector<dx_data::VerifiedXRecordSource> m_verifiedXRecordPending;
     std::size_t m_verifiedXRecordPendingBytes{0u};
     std::uint32_t m_verifiedTableContentSelected{0u},m_verifiedDataTableSelected{0u},m_verifiedTableGeometrySelected{0u};
+    bool m_verifiedTableRoundtripSelected{false};
     std::vector<dx_data::VerifiedTableCandidateSource> m_verifiedTableCandidatePending;
     std::size_t m_verifiedTableCandidatePendingBytes{0u};
     friend class DxWholeSourceTestAccess;

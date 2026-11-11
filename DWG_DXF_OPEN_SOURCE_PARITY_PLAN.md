@@ -1338,8 +1338,11 @@ created locally from scratch for the specific control.
   An opt-in root XRECORD observer now checks the 13 source-ordered pairs and
   extracts its three 360/361/360 data references without interpreting them as
   DWG H tokens ([receipt](docs/research/p5-ac1018-table-root-xrecord-ordered-candidate-2026-11-11.json)).
-  Next bind that observation to the verified root and match those targets to
-  all three selected custom frames; the bundle does not yet establish closure.
+  An explicit stronger bundle now binds that observation to the verified root
+  and matches all three ordered targets to the selected custom frames
+  ([receipt](docs/research/p5-ac1018-table-roundtrip-binding-2026-11-11.json)).
+  It remains source-profile evidence: TABLESTYLE and recursive resources,
+  independent meaning, and transactional output closure are still open.
   See the [DATATABLE candidate receipt](docs/research/p5-ac1018-datatable-candidate-observer-2026-11-11.json).
 
   The recreated AC1018 XRECORD `0xbc` is now independently walked to its

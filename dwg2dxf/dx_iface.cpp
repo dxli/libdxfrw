@@ -28930,6 +28930,7 @@ bool dx_iface::enableVerifiedXRecordSources(const std::vector<std::uint32_t>& ha
             return false;
         m_verifiedXRecordSelected.swap(selected);
         m_verifiedTableContentSelected=0u;m_verifiedDataTableSelected=0u;m_verifiedTableGeometrySelected=0u;
+        m_verifiedTableRoundtripSelected=false;
         return true;
     } catch (...) { return false; }
 }
@@ -28947,7 +28948,7 @@ bool dx_iface::enableVerifiedTableCandidates(const std::vector<std::uint32_t>& x
             }) || std::adjacent_find(selected.cbegin(),selected.cend())!=selected.cend()) return false;
         m_verifiedXRecordSelected.swap(selected);
         m_verifiedTableContentSelected=tableContent;m_verifiedDataTableSelected=dataTable;
-        m_verifiedTableGeometrySelected=0u;
+        m_verifiedTableGeometrySelected=0u;m_verifiedTableRoundtripSelected=false;
         return true;
     } catch (...) {return false;}
 }
@@ -28966,9 +28967,16 @@ bool dx_iface::enableVerifiedTableCandidates(const std::vector<std::uint32_t>& x
             }) || std::adjacent_find(selected.cbegin(),selected.cend())!=selected.cend()) return false;
         m_verifiedXRecordSelected.swap(selected);
         m_verifiedTableContentSelected=tableContent;m_verifiedDataTableSelected=dataTable;
-        m_verifiedTableGeometrySelected=tableGeometry;
+        m_verifiedTableGeometrySelected=tableGeometry;m_verifiedTableRoundtripSelected=false;
         return true;
     } catch (...) {return false;}
+}
+
+bool dx_iface::enableVerifiedTableRoundtripCandidates(const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry) noexcept {
+    if (!enableVerifiedTableCandidates(xrecords,tableContent,dataTable,tableGeometry)) return false;
+    m_verifiedTableRoundtripSelected=true;
+    return true;
 }
 
 bool dx_iface::enableVerifiedXRecordSource(std::uint32_t handle) noexcept {
@@ -29243,6 +29251,15 @@ bool dx_iface::validateVerifiedTableCandidates(const dx_data& data,
         };
         const auto root=member(parsedContent.parentHandle);
         if (root==xrecords.records.cend()) return false;
+        if (xrecords.requiresTableRoundtripRoot) {
+            if (!geometrySource) return false;
+            const auto* model=dynamic_cast<const DRW_XRecord*>(root->typedBaseline.get());
+            DwgTableRoundtripXRecordAc1018Candidate::Result observed;
+            if (!model || !DwgTableRoundtripXRecordAc1018Candidate::inspect(root->raw,*model,observed)
+                || observed.references[0].groupCode!=360 || observed.references[0].target!=tableContent
+                || observed.references[1].groupCode!=361 || observed.references[1].target!=tableGeometry
+                || observed.references[2].groupCode!=360 || observed.references[2].target!=dataTable) return false;
+        }
         for (const auto child:parsedTable.ownedChildren) {
             const auto found=member(child);
             if (found==xrecords.records.cend() || found==root) return false;
@@ -29281,6 +29298,27 @@ bool dx_iface::readVerifiedTableCandidates(const dx_data& data,
         *data.m_verifiedTableCandidateSource,tableContent,dataTable,tableGeometry,content,table,&geometry);
 }
 
+bool dx_iface::readVerifiedTableRoundtripCandidates(const dx_data& data,
+        const std::vector<std::uint32_t>& xrecords,std::uint32_t tableContent,
+        std::uint32_t dataTable,std::uint32_t tableGeometry,
+        DwgTableContentAc1018Candidate::Result& content,
+        DwgDataTableAc1018Candidate::Result& table,
+        DwgTableGeometryAc1018Candidate::Result& geometry,
+        DwgTableRoundtripXRecordAc1018Candidate::Result& root) noexcept {
+    content={};table={};geometry={};root={};
+    if (!data.m_verifiedXRecordSource || !data.m_verifiedXRecordSource->requiresTableRoundtripRoot
+        || !readVerifiedTableCandidates(data,xrecords,tableContent,dataTable,tableGeometry,content,table,geometry)) return false;
+    const auto& rows=data.m_verifiedXRecordSource->records;
+    const auto found=std::find_if(rows.cbegin(),rows.cend(),[&](const dx_data::VerifiedXRecordSource& row) {
+        return row.raw.m_handle==content.parentHandle;
+    });
+    const auto* model=found==rows.cend()?nullptr:dynamic_cast<const DRW_XRecord*>(found->typedBaseline.get());
+    if (!model || !DwgTableRoundtripXRecordAc1018Candidate::inspect(found->raw,*model,root)) {
+        content={};table={};geometry={};root={};return false;
+    }
+    return true;
+}
+
 void dx_iface::finishVerifiedXRecordSource(bool successfulRead) noexcept {
     auto* data = m_verifiedXRecordReadData;
     if (!data) return;
@@ -29311,6 +29349,7 @@ void dx_iface::finishVerifiedXRecordSource(bool successfulRead) noexcept {
                 auto bundle=std::make_shared<dx_data::VerifiedXRecordSources>();
                 bundle->importToken=m_verifiedXRecordReadToken;
                 bundle->generation=m_verifiedXRecordReadGeneration;
+                bundle->requiresTableRoundtripRoot=m_verifiedTableRoundtripSelected;
                 bundle->requiresTableCandidates=m_verifiedTableContentSelected!=0u || m_verifiedDataTableSelected!=0u
                     || m_verifiedTableGeometrySelected!=0u;
                 bundle->records=std::move(m_verifiedXRecordPending);

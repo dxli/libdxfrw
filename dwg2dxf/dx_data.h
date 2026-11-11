@@ -2661,6 +2661,7 @@ private:
         std::shared_ptr<const unsigned char> importToken;
         std::uint64_t generation{0u};
         bool requiresTableCandidates{false};
+        bool requiresTableRoundtripRoot{false};
         std::vector<VerifiedXRecordSource> records;
     };
     struct VerifiedTableCandidateSource {

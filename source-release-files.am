@@ -1006,6 +1006,7 @@ EXTRA_DIST = \
     tools/research/p5_ac1018_table_descendants_capture.cpp \
     tools/research/p5_ac1018_table_descendants_verify.py \
     tools/research/p5_ac1018_table_geometry_binding_probe.cpp \
+    tools/research/p5_ac1018_table_roundtrip_binding_probe.cpp \
     tools/research/p5_ac1018_table_xrecord_source_verify.py \
     tools/research/p5_ac1018_tablecontent_candidate_compare.py \
     tools/research/p5_ac1018_tablecontent_candidate_probe.cpp \
