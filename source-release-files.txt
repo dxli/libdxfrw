@@ -374,6 +374,7 @@ tests/acis_sat_allocation_tests.cpp
 tests/adapter_build_context_tests.py
 tests/appid_test_helpers.h
 tests/application_handle_width_controls.h
+tests/assoc_group_registry_allocation_tests.cpp
 tests/associative_constraint_group_test_helpers.h
 tests/associative_dependency_allocation_tests.cpp
 tests/associative_geometry_graph_allocation_tests.cpp
@@ -969,6 +970,8 @@ tools/qualify_material_source_order.py
 tools/replay_dwg_legacy_extrusion.cpp
 tools/research/ac1032_forum_assocnetwork_spans.py
 tools/research/ac1032_forum_constraint_group_spans.py
+tools/research/ac1032_forum_constraint_registry_spans.py
+tools/research/acadrust_constraint_group_probe.rs
 tools/research/audit_ac1027_source_references.py
 tools/research/decode_dxf_sat1.py
 tools/research/dwg_ac1032_object_section_probe.cpp
