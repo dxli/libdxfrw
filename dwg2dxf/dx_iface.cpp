@@ -31,6 +31,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include "dx_iface.h"
+#include "intern/dwgreader.h"
 #include "intern/dwg_table_model_ac1018_candidate.h"
 #include "intern/dwg_table_projection_ac1018_candidate.h"
 #include "dx_ac1027_plotstyle_wire.h"
@@ -28922,7 +28923,8 @@ bool sameVerifiedXRecordPublication(const DRW_DwgFramePublication& a,
 }
 
 bool dx_iface::enableVerifiedXRecordSources(const std::vector<std::uint32_t>& handles) noexcept {
-    if (m_verifiedXRecordReadData || handles.size()>64u) return false;
+    if (m_verifiedXRecordReadData || m_verifiedStyleControlSelected != 0u
+        || handles.size()>64u) return false;
     try {
         auto selected=handles;
         std::sort(selected.begin(),selected.end());
@@ -28939,9 +28941,23 @@ bool dx_iface::enableVerifiedXRecordSources(const std::vector<std::uint32_t>& ha
     } catch (...) { return false; }
 }
 
+bool dx_iface::enableVerifiedStyleResourceSource(
+        std::uint32_t styleControl, std::uint32_t styleRecord) noexcept {
+    if (m_verifiedXRecordReadData || !m_verifiedXRecordSelected.empty()
+        || m_verifiedTableContentSelected != 0u || m_verifiedDataTableSelected != 0u
+        || styleControl == 0u || styleControl == DRW::NoHandle
+        || styleRecord == 0u || styleRecord == DRW::NoHandle
+        || styleControl == styleRecord)
+        return false;
+    m_verifiedStyleControlSelected = styleControl;
+    m_verifiedStyleRecordSelected = styleRecord;
+    return true;
+}
+
 bool dx_iface::enableVerifiedTableCandidates(const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable) noexcept {
-    if (m_verifiedXRecordReadData || xrecords.empty() || xrecords.size()>64u
+    if (m_verifiedXRecordReadData || m_verifiedStyleControlSelected != 0u
+        || xrecords.empty() || xrecords.size()>64u
         || tableContent==0u || tableContent==DRW::NoHandle
         || dataTable==0u || dataTable==DRW::NoHandle || tableContent==dataTable) return false;
     try {
@@ -29165,13 +29181,192 @@ bool dx_iface::wantsVerifiedTableCandidate(std::uint32_t handle) const noexcept 
             || handle==m_verifiedTableGeometrySelected || handle==m_verifiedTableDictionarySelected
             || (m_verifiedReciprocalTableSelected && handle==m_verifiedTableEntitySelected)
             || handle==m_verifiedTableStyleSelected || handle==m_verifiedStyleDictionarySelected
-            || (m_verifiedCellStyleMapRequired && handle==m_verifiedCellStyleMapSelected))
+            || (m_verifiedCellStyleMapRequired && handle==m_verifiedCellStyleMapSelected)
+            || handle==m_verifiedStyleControlSelected
+            || handle==m_verifiedStyleRecordSelected)
         && handle!=0u;
+}
+
+namespace {
+bool verifiedStyleSourceModelMatches(const DRW_Textstyle& source,
+                                     const DRW_Textstyle& live,
+                                     const dx_data& data) noexcept {
+    if (source.tType != live.tType || source.handle != live.handle
+        || source.name != live.name
+        || source.parentHandle != live.parentHandle
+        || source.flags != live.flags || source.xDictHandle != live.xDictHandle
+        || source.reactorHandles != live.reactorHandles
+        || source.reactorCount() != live.reactorCount()
+        || source.extensionDictionaryFlag() != live.extensionDictionaryFlag()
+        || source.hasDataStorageBinaryData() != live.hasDataStorageBinaryData()
+        || source.hasDwgCommonLinkTail() != live.hasDwgCommonLinkTail()
+        || source.pendingLayerRefResolutions.size() != 0u
+        || live.pendingLayerRefResolutions.size() != 0u
+        || !live.pendingAppIdResolutions.empty()
+        || source.extData.size() != live.extData.size()
+        || source.appData.size() != live.appData.size()
+        || source.height != live.height || source.width != live.width
+        || source.oblique != live.oblique || source.genFlag != live.genFlag
+        || source.lastHeight != live.lastHeight || source.font != live.font
+        || source.bigFont != live.bigFont || source.fontFamily != live.fontFamily
+        || source.xrefBlockHandle.code != live.xrefBlockHandle.code
+        || source.xrefBlockHandle.rawCode != live.xrefBlockHandle.rawCode
+        || source.xrefBlockHandle.ref != live.xrefBlockHandle.ref)
+        return false;
+
+    for (std::size_t index = 0u; index < source.pendingAppIdResolutions.size();
+         ++index) {
+        const auto& reference = source.pendingAppIdResolutions[index];
+        if (reference.useRawHandleRef
+            || reference.indexInExtData >= source.extData.size()
+            || source.extData[reference.indexInExtData] == nullptr
+            || live.extData[reference.indexInExtData] == nullptr
+            || source.extData[reference.indexInExtData]->code() != 1001
+            || live.extData[reference.indexInExtData]->code() != 1001)
+            return false;
+        for (std::size_t prior = 0u; prior < index; ++prior) {
+            if (source.pendingAppIdResolutions[prior].indexInExtData
+                == reference.indexInExtData)
+                return false;
+        }
+        const DRW_AppId* appId = nullptr;
+        for (const auto& candidate : data.appIds) {
+            if (candidate.handle != reference.handleRef)
+                continue;
+            if (appId != nullptr)
+                return false;
+            appId = &candidate;
+        }
+        if (appId == nullptr
+            || !live.extData[reference.indexInExtData]->stringEquals(appId->name))
+            return false;
+    }
+    for (std::size_t index = 0u; index < source.extData.size(); ++index) {
+        const auto resolvedAppId = std::any_of(
+            source.pendingAppIdResolutions.cbegin(),
+            source.pendingAppIdResolutions.cend(),
+            [index](const auto& reference) {
+                return reference.indexInExtData == index;
+            });
+        if (!resolvedAppId
+            && ((source.extData[index] == nullptr) != (live.extData[index] == nullptr)
+                || (source.extData[index] != nullptr
+                    && !standardDwgVariantEqual(*source.extData[index],
+                                                *live.extData[index],
+                                                DRW::AC1018))))
+            return false;
+    }
+    auto sourceGroup = source.appData.cbegin();
+    auto liveGroup = live.appData.cbegin();
+    for (; sourceGroup != source.appData.cend(); ++sourceGroup, ++liveGroup) {
+        if (sourceGroup->size() != liveGroup->size())
+            return false;
+        auto sourceValue = sourceGroup->cbegin();
+        auto liveValue = liveGroup->cbegin();
+        for (; sourceValue != sourceGroup->cend(); ++sourceValue, ++liveValue) {
+            if (!standardDwgVariantEqual(*sourceValue, *liveValue,
+                                         DRW::AC1018))
+                return false;
+        }
+    }
+    return true;
+}
 }
 
 void dx_iface::verifiedTableCandidate(const DwgVerifiedTableCandidateTicket& ticket) noexcept {
     auto* data=m_verifiedXRecordReadData;
     using Kind=dx_data::VerifiedTableCandidateSource::Kind;
+    if (ticket.kind() == DwgVerifiedTableCandidateKind::StyleControl
+        || ticket.kind() == DwgVerifiedTableCandidateKind::StyleRecord) {
+        const bool isControl =
+            ticket.kind() == DwgVerifiedTableCandidateKind::StyleControl;
+        const auto expected = isControl ? m_verifiedStyleControlSelected
+                                        : m_verifiedStyleRecordSelected;
+        const auto expectedType = isControl ? DRW::DwgStyleControlObjectType
+                                            : DRW::DwgStyleObjectType;
+        constexpr std::size_t maxStyleResourceBytes = 16384u;
+        std::size_t styleModelBytes = 0u;
+        std::size_t styleModelItems = 0u;
+        const bool styleModelBounded = isControl
+            || (ticket.styleModel() != nullptr
+                && estimateTextStyleTypedBytes(*ticket.styleModel(),
+                                               styleModelBytes,
+                                               styleModelItems));
+        const std::size_t ticketBytes = ticket.frame().body().size()
+            + (isControl ? 0u : styleModelBytes);
+        if (data == nullptr || expected == 0u || ticket.handle() != expected
+            || ticket.version() != DRW::AC1018
+            || ticket.classNumber() != expectedType
+            || ticket.space() != DRW_DwgFrameOffsetSpace::DecodedBuffer
+            || ticket.frame().body().empty()
+            || ticket.frame().body().size() > 4096u
+            || !styleModelBounded
+            || m_verifiedStyleResourcePending.size() >= 2u
+            || m_verifiedStyleResourcePendingBytes > maxStyleResourceBytes
+            || ticketBytes > maxStyleResourceBytes
+                - m_verifiedStyleResourcePendingBytes) {
+            m_verifiedXRecordFailed = true;
+            return;
+        }
+        try {
+            dx_data::VerifiedTableCandidateSource pending;
+            pending.kind = isControl ? Kind::StyleControl : Kind::StyleRecord;
+            pending.ordinal = ticket.ordinal();
+            pending.space = ticket.space();
+            auto& raw = pending.raw;
+            raw.m_version = ticket.version();
+            raw.m_handle = ticket.handle();
+            raw.m_objectType = ticket.classNumber();
+            raw.m_objectOffset = ticket.offset();
+            raw.m_objectSize = static_cast<std::uint32_t>(
+                ticket.frame().body().size());
+            raw.m_bodyBitSize = ticket.frame().bodyBitSize();
+            raw.m_isEntity = false;
+            raw.m_isCustomClass = false;
+            raw.m_rawBytes = ticket.frame().body();
+            if (isControl) {
+                dwgBuffer body(raw.m_rawBytes.data(), raw.m_rawBytes.size(),
+                               nullptr);
+                DRW_ObjControl control;
+                if (!control.parseDwg(ticket.version(), &body,
+                                      ticket.frame().bodyBitSize())
+                    || !body.isGood() || control.handle != expected
+                    || control.orderedHandleSlots.size() != 1u
+                    || control.orderedHandleSlots.front()
+                        != m_verifiedStyleRecordSelected
+                    || control.orderedHandleRoles.size() != 1u
+                    || control.orderedHandleRoles.front() != 2u) {
+                    m_verifiedXRecordFailed = true;
+                    return;
+                }
+            } else {
+                if (ticket.styleModel() == nullptr
+                    || ticket.styleModel()->handle != expected
+                    || ticket.styleModel()->pendingLayerRefResolutions.size() != 0u) {
+                    m_verifiedXRecordFailed = true;
+                    return;
+                }
+                pending.styleModel = std::make_shared<DRW_Textstyle>(
+                    *ticket.styleModel());
+            }
+            const auto duplicate = std::any_of(
+                m_verifiedStyleResourcePending.cbegin(),
+                m_verifiedStyleResourcePending.cend(),
+                [expected](const auto& prior) {
+                    return prior.raw.m_handle == expected;
+                });
+            if (duplicate) {
+                m_verifiedXRecordFailed = true;
+                return;
+            }
+            m_verifiedStyleResourcePending.push_back(std::move(pending));
+            m_verifiedStyleResourcePendingBytes += ticketBytes;
+            return;
+        } catch (...) {
+            m_verifiedXRecordFailed = true;
+            return;
+        }
+    }
     const Kind kind=ticket.kind()==DwgVerifiedTableCandidateKind::TableContent?Kind::TableContent:
         ticket.kind()==DwgVerifiedTableCandidateKind::DataTable?Kind::DataTable:
         ticket.kind()==DwgVerifiedTableCandidateKind::TableGeometry?Kind::TableGeometry:
@@ -29381,6 +29576,75 @@ bool dx_iface::hasUnchangedVerifiedXRecordSources(const dx_data& data,
     const auto& bundle=data.m_verifiedXRecordSource;
     return bundle && verifiedXRecordSelectionMatches(*bundle,handles)
         && hasUnchangedVerifiedXRecordSource(data,handles.front());
+}
+
+bool dx_iface::hasUnchangedVerifiedStyleResourceSource(
+        const dx_data& data, std::uint32_t styleControl,
+        std::uint32_t styleRecord) noexcept {
+    const auto& bundle = data.m_verifiedStyleResourceSource;
+    if (!bundle || !bundle->importToken
+        || bundle->importToken != data.m_verifiedXRecordImportToken
+        || bundle->generation != data.importGeneration
+        || bundle->records.size() != 2u
+        || !data.dwgReadOutcome.operationSucceeded
+        || styleControl == 0u || styleRecord == 0u
+        || styleControl == styleRecord)
+        return false;
+    const dx_data::VerifiedTableCandidateSource* controlSource = nullptr;
+    const dx_data::VerifiedTableCandidateSource* styleSource = nullptr;
+    for (const auto& candidate : bundle->records) {
+        if (candidate.kind
+                == dx_data::VerifiedTableCandidateSource::Kind::StyleControl
+            && candidate.raw.m_handle == styleControl && controlSource == nullptr)
+            controlSource = &candidate;
+        else if (candidate.kind
+                == dx_data::VerifiedTableCandidateSource::Kind::StyleRecord
+            && candidate.raw.m_handle == styleRecord && styleSource == nullptr)
+            styleSource = &candidate;
+        else
+            return false;
+    }
+    if (controlSource == nullptr || styleSource == nullptr
+        || controlSource->raw.m_version != DRW::AC1018
+        || controlSource->raw.m_objectType != DRW::DwgStyleControlObjectType
+        || controlSource->raw.m_rawBytes.empty()
+        || controlSource->raw.m_objectSize
+            != controlSource->raw.m_rawBytes.size()
+        || controlSource->raw.m_rawBytes.size() > 4096u
+        || controlSource->space != DRW_DwgFrameOffsetSpace::DecodedBuffer
+        || controlSource->raw.m_objectOffset == styleSource->raw.m_objectOffset
+        || controlSource->ordinal == styleSource->ordinal
+        || styleSource->raw.m_version != DRW::AC1018
+        || styleSource->raw.m_objectType != DRW::DwgStyleObjectType
+        || styleSource->raw.m_handle != styleRecord
+        || styleSource->raw.m_rawBytes.empty()
+        || styleSource->raw.m_objectSize != styleSource->raw.m_rawBytes.size()
+        || styleSource->raw.m_rawBytes.size() > 4096u
+        || styleSource->space != DRW_DwgFrameOffsetSpace::DecodedBuffer
+        || styleSource->styleModel == nullptr)
+        return false;
+    dwgBuffer body(controlSource->raw.m_rawBytes.data(),
+                   controlSource->raw.m_rawBytes.size(), nullptr);
+    DRW_ObjControl control;
+    if (!control.parseDwg(DRW::AC1018, &body,
+                          controlSource->raw.m_bodyBitSize)
+        || !body.isGood() || control.handle != styleControl
+        || control.orderedHandleSlots.size() != 1u
+        || control.orderedHandleSlots.front() != styleRecord
+        || control.orderedHandleRoles.size() != 1u
+        || control.orderedHandleRoles.front() != 2u)
+        return false;
+    const DRW_Textstyle* liveStyle = nullptr;
+    for (const auto& candidate : data.textStyles) {
+        if (candidate.handle != styleRecord)
+            continue;
+        if (liveStyle != nullptr)
+            return false;
+        liveStyle = &candidate;
+    }
+    return liveStyle != nullptr
+        && verifiedStyleSourceModelMatches(*styleSource->styleModel,
+                                           *liveStyle, data);
 }
 
 bool dx_iface::validateVerifiedTableCandidates(const dx_data& data,
@@ -29805,6 +30069,83 @@ void dx_iface::finishVerifiedXRecordSource(bool successfulRead) noexcept {
     if (!data) return;
     data->m_verifiedXRecordSource.reset();
     data->m_verifiedTableCandidateSource.reset();
+    data->m_verifiedStyleResourceSource.reset();
+    if (successfulRead && !m_verifiedXRecordFailed
+        && m_verifiedStyleControlSelected != 0u
+        && m_verifiedStyleRecordSelected != 0u
+        && m_verifiedStyleResourcePending.size() == 2u
+        && m_verifiedXRecordReadToken
+        && data->m_verifiedXRecordImportToken == m_verifiedXRecordReadToken
+        && data->importGeneration == m_verifiedXRecordReadGeneration
+        && data->dwgReadOutcome.operationSucceeded) {
+        const dx_data::VerifiedTableCandidateSource* controlSource = nullptr;
+        const dx_data::VerifiedTableCandidateSource* styleSource = nullptr;
+        for (const auto& candidate : m_verifiedStyleResourcePending) {
+            if (candidate.kind
+                    == dx_data::VerifiedTableCandidateSource::Kind::StyleControl
+                && candidate.raw.m_handle == m_verifiedStyleControlSelected
+                && controlSource == nullptr)
+                controlSource = &candidate;
+            else if (candidate.kind
+                    == dx_data::VerifiedTableCandidateSource::Kind::StyleRecord
+                && candidate.raw.m_handle == m_verifiedStyleRecordSelected
+                && styleSource == nullptr)
+                styleSource = &candidate;
+            else {
+                controlSource = nullptr;
+                styleSource = nullptr;
+                break;
+            }
+        }
+        bool complete = controlSource != nullptr && styleSource != nullptr
+            && controlSource->raw.m_version == DRW::AC1018
+            && controlSource->raw.m_objectType == DRW::DwgStyleControlObjectType
+            && controlSource->raw.m_objectOffset != styleSource->raw.m_objectOffset
+            && controlSource->ordinal != styleSource->ordinal
+            && styleSource->raw.m_version == DRW::AC1018
+            && styleSource->raw.m_objectType == DRW::DwgStyleObjectType
+            && styleSource->styleModel != nullptr;
+        if (complete) {
+            dwgBuffer body(controlSource->raw.m_rawBytes.data(),
+                           controlSource->raw.m_rawBytes.size(), nullptr);
+            DRW_ObjControl control;
+            complete = control.parseDwg(
+                    DRW::AC1018, &body, controlSource->raw.m_bodyBitSize)
+                && body.isGood() && control.handle == m_verifiedStyleControlSelected
+                && control.orderedHandleSlots.size() == 1u
+                && control.orderedHandleSlots.front()
+                    == m_verifiedStyleRecordSelected
+                && control.orderedHandleRoles.size() == 1u
+                && control.orderedHandleRoles.front() == 2u;
+        }
+        const DRW_Textstyle* liveStyle = nullptr;
+        if (complete) {
+            for (const auto& candidate : data->textStyles) {
+                if (candidate.handle != m_verifiedStyleRecordSelected)
+                    continue;
+                if (liveStyle != nullptr) {
+                    complete = false;
+                    break;
+                }
+                liveStyle = &candidate;
+            }
+            complete = complete && liveStyle != nullptr
+                && verifiedStyleSourceModelMatches(
+                    *styleSource->styleModel, *liveStyle, *data);
+        }
+        if (complete) {
+            try {
+                auto bundle = std::make_shared<
+                    dx_data::VerifiedStyleResourceSources>();
+                bundle->importToken = m_verifiedXRecordReadToken;
+                bundle->generation = m_verifiedXRecordReadGeneration;
+                bundle->records = std::move(m_verifiedStyleResourcePending);
+                data->m_verifiedStyleResourceSource = std::move(bundle);
+            } catch (...) {
+                data->m_verifiedStyleResourceSource.reset();
+            }
+        }
+    }
     if (successfulRead && !m_verifiedXRecordFailed && !m_verifiedXRecordSelected.empty()
         && m_verifiedXRecordPending.size()==m_verifiedXRecordSelected.size()
         && m_verifiedXRecordReadToken
@@ -74459,7 +74800,10 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
         m_verifiedXRecordPendingBytes=0u;
         m_verifiedTableCandidatePending.clear();
         m_verifiedTableCandidatePendingBytes=0u;
-        if (!m_verifiedXRecordSelected.empty()) {
+        m_verifiedStyleResourcePending.clear();
+        m_verifiedStyleResourcePendingBytes=0u;
+        if (!m_verifiedXRecordSelected.empty()
+            || m_verifiedStyleControlSelected != 0u) {
             try {
                 fData->m_verifiedXRecordImportToken = std::make_shared<const unsigned char>(0u);
                 m_verifiedXRecordReadData = fData;
@@ -74474,6 +74818,8 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
                 owner.m_verifiedXRecordPendingBytes=0u;
                 owner.m_verifiedTableCandidatePending.clear();
                 owner.m_verifiedTableCandidatePendingBytes=0u;
+                owner.m_verifiedStyleResourcePending.clear();
+                owner.m_verifiedStyleResourcePendingBytes=0u;
                 owner.m_verifiedXRecordReadData = nullptr;
                 owner.m_verifiedXRecordReadToken.reset();
                 owner.m_verifiedXRecordReadGeneration = 0u;

@@ -1622,6 +1622,18 @@ created locally from scratch for the specific control.
   have not been qualified. Keep output admission closed until those checks and
   the ordered resource graph are implemented. See the [STYLE source-frame
   capture receipt](docs/research/p5-ac1018-style-record-reader-source-capture-2026-11-11.json).
+  **Adapter source binding (2026-11-11):** `dx_iface` now has a dedicated
+  opt-in selection for a STYLE_CONTROL/STYLE pair. It retains both ticket
+  frames under the import token, rechecks that the control's sole role-2 member
+  is the selected STYLE, and compares the source `DRW_Textstyle` snapshot with
+  the final same-import callback row. APPID EED slots must resolve through
+  exactly one typed APPID row with matching names; unsupported pending layer
+  references are refused. The typed snapshot uses the shared retained-byte
+  estimator and a 16 KiB pair budget. `hasUnchangedVerifiedStyleResourceSource` rechecks
+  the pair and typed row after import. The targeted adapter build passes, but
+  the new selection and mutation/refusal behavior have not yet been exercised
+  at runtime. This remains an evidence query, never an output permit. See the
+  [adapter source-binding receipt](docs/research/p5-ac1018-style-resource-adapter-binding-2026-11-11.json).
   A bounded standalone
   LTYPE_CONTROL/ByBlock observer now checks selected frame fields and roles
   ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)).

@@ -77,6 +77,13 @@ public:
     bool enableVerifiedXRecordSource(std::uint32_t handle) noexcept;
     // Empty disables observation; nonempty sets are all-or-none per import.
     bool enableVerifiedXRecordSources(const std::vector<std::uint32_t>& handles) noexcept;
+    // Selected AC1018 STYLE_CONTROL-to-STYLE source observation. It does not
+    // authorize resource replay or output.
+    bool enableVerifiedStyleResourceSource(std::uint32_t styleControl,
+                                           std::uint32_t styleRecord) noexcept;
+    static bool hasUnchangedVerifiedStyleResourceSource(
+        const dx_data&, std::uint32_t styleControl,
+        std::uint32_t styleRecord) noexcept;
     static bool hasUnchangedVerifiedXRecordSource(
         const dx_data&, std::uint32_t handle) noexcept;
     static bool hasUnchangedVerifiedXRecordSources(
@@ -3533,10 +3540,14 @@ private:
     bool m_verifiedTableProjectionSelected{false};
     std::uint32_t m_verifiedTableStyleSelected{0u};
     std::uint32_t m_verifiedStyleDictionarySelected{0u},m_verifiedStyleXRecordSelected{0u},m_verifiedCellStyleMapSelected{0u};
+    std::uint32_t m_verifiedStyleControlSelected{0u},m_verifiedStyleRecordSelected{0u};
     bool m_verifiedStyleXRecordRequired{false};
     bool m_verifiedCellStyleMapRequired{false};
     std::vector<dx_data::VerifiedTableCandidateSource> m_verifiedTableCandidatePending;
     std::size_t m_verifiedTableCandidatePendingBytes{0u};
+    std::vector<dx_data::VerifiedTableCandidateSource>
+        m_verifiedStyleResourcePending;
+    std::size_t m_verifiedStyleResourcePendingBytes{0u};
     friend class DxWholeSourceTestAccess;
     friend class DxIfaceMlineDependencyTestAccess;
     friend class DxIfaceDwgLtypeControlOutputTestAccess;
