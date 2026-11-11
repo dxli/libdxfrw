@@ -282,7 +282,10 @@ DRW_UnsupportedObject body(const char* path,std::uint32_t handle,int type) {
  r.m_rawBytes.assign(std::istreambuf_iterator<char>(in),{});r.m_objectSize=static_cast<std::uint32_t>(r.m_rawBytes.size());return r;
 }
 int main(int argc,char**argv){
- if(argc==3&&std::string(argv[1])=="--physical-crc-retry"){
+ if(argc==3&&(std::string(argv[1])=="--physical-crc-retry"
+      ||std::string(argv[1])=="--physical-row-crc-retry")){
+  const bool rowMode=std::string(argv[1])=="--physical-row-crc-retry";
+  const std::uint32_t selectedHandle=rowMode?0x14u:5u;
   const std::filesystem::path sourcePath(argv[2]);
   const std::filesystem::path path=sourcePath.parent_path()
       /(sourcePath.stem().string()+".p5-physical-crc-probe"+sourcePath.extension().string());
@@ -292,9 +295,11 @@ int main(int argc,char**argv){
   Probe probe;dx_data initial;
   const bool selected=probe.enableVerifiedLTypeResourceSource(5u,0x16u,0x14u,0x15u);
   const bool imported=selected&&probe.fileImport(path.string(),&initial,false);
-  if(!imported||probe.tickets!=1u||probe.rowTickets!=3u||!probe.controlFrame)return 44;
+  if(!imported||probe.tickets!=1u||probe.rowTickets!=3u
+      ||(rowMode?!probe.byBlockFrame:!probe.controlFrame))return 44;
+  const DRW_UnsupportedObject& selectedFrame=rowMode?*probe.byBlockFrame:*probe.controlFrame;
   std::vector<std::uint8_t> original;std::size_t physicalOffset=0u;
-  if(!corruptCompressedObjectFrameCrc(path,*probe.controlFrame,original,physicalOffset))return 41;
+  if(!corruptCompressedObjectFrameCrc(path,selectedFrame,original,physicalOffset))return 41;
   struct RestoreFile {const std::filesystem::path& path;const std::vector<std::uint8_t>& bytes;bool active{true};
    ~RestoreFile(){if(active){std::ofstream out(path,std::ios::binary|std::ios::trunc);
     out.write(reinterpret_cast<const char*>(bytes.data()),static_cast<std::streamsize>(bytes.size()));}}} restore{path,original};
@@ -302,7 +307,8 @@ int main(int argc,char**argv){
   bool frameDiagnostic=false,pageChecksumDiagnostic=false;
   const auto& rows=damaged.dwgReadOutcome.observations.integrity;
   for(std::size_t i=0u;i<rows.retained;++i){const auto& row=rows.rows[i];
-   if(row.kind==DwgIntegrityCheckKind::ObjectFrameBounds&&row.hasLogicalHandle&&row.logicalHandle==5u)frameDiagnostic=true;
+   if(row.kind==DwgIntegrityCheckKind::ObjectFrameBounds&&row.hasLogicalHandle
+       &&row.logicalHandle==selectedHandle)frameDiagnostic=true;
    if(row.kind==DwgIntegrityCheckKind::DataPageChecksum||row.kind==DwgIntegrityCheckKind::DataPageCrc)pageChecksumDiagnostic=true;}
   const bool noLeakedTickets=probe.tickets==0u&&probe.rowTickets==0u;
   {std::ofstream out(path,std::ios::binary|std::ios::trunc);
@@ -317,7 +323,8 @@ int main(int argc,char**argv){
       <<" noLeakedTickets="<<noLeakedTickets<<" retryRead="<<retryRead
       <<" retryBound="<<retryBound<<" retryControlTickets="<<probe.tickets
       <<" retryRowTickets="<<probe.rowTickets<<" retryControlValid="<<probe.ticketValid
-      <<" retryRowsValid="<<probe.rowTicketValid<<" physicalCompressedByte="<<physicalOffset<<'\n';
+      <<" retryRowsValid="<<probe.rowTicketValid<<" selectedHandle="<<selectedHandle
+      <<" physicalCompressedByte="<<physicalOffset<<'\n';
   return imported&&frameDiagnostic&&!pageChecksumDiagnostic&&noLeakedTickets&&retryBound?0:43;
  }
  if(argc==5&&std::string(argv[1])=="--dxf-roundtrip-resource"){

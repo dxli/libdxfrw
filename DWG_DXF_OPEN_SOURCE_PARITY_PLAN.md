@@ -1715,8 +1715,15 @@ created locally from scratch for the specific control.
   chosen decoded CRC byte to a unique literal in its compressed OBJECTS page,
   verifies that exactly one decoded byte changes, and reseals the page data and
   header checksums; the damaged read reports ObjectFrameBounds without a page
-  checksum error or leaked tickets. This closes the selected physical retry
-  action, not a general AC18 compressor or whole-file qualification
+  checksum error or leaked tickets. The same physical probe now repeats this
+  for the selected ByBlock LTYPE row `0x14`: its decoded frame CRC at offset
+  1465 maps to one compressed literal at file offset 1867. The damaged row
+  reports ObjectFrameBounds for `0x14` with no page-checksum diagnostic or
+  leaked tickets; restoring the temporary copy allows the same adapter to
+  reacquire the control and all three typed row tickets. Both physical probes
+  leave the original hash unchanged and remove their temporary copies. This
+  closes the selected control and ByBlock physical retry actions, not a general
+  AC18 compressor or whole-file qualification
   ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)). A current-source probe
   observes exactly one LTYPE_CONTROL ticket for handle 0x5 after complete
   AC1018 import with all 226 frames published. The selected ordinary member
