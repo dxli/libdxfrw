@@ -4175,6 +4175,18 @@ set_tests_properties(acis_sab21200_sat_v1_token_controls PROPERTIES
     TIMEOUT 30
 )
 
+# Keep the bounded DWG SAT-v1 extraction controls independently runnable for
+# the AC1015 and AC1018 modeler-version-1 profiles.
+add_test(
+    NAME dwg_sat_v1_bounded_extraction
+    COMMAND $<TARGET_FILE:libdxfrw_dwg_local_roundtrip>
+            --modeler-sat-v1-extraction
+)
+set_tests_properties(dwg_sat_v1_bounded_extraction PROPERTIES
+    LABELS "fast;dwg;3d;acis;generated"
+    TIMEOUT 30
+)
+
 add_executable(libdxfrw_acis_sat_allocation_tests
     acis_sat_allocation_tests.cpp)
 target_compile_features(libdxfrw_acis_sat_allocation_tests PRIVATE cxx_std_17)

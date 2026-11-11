@@ -10571,13 +10571,12 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
     if (!probe.isGood() || (stringStream != nullptr && !stringStream->isGood()))
         return fail();
 
-    // ODA v5.4.1 §20.4.41: R2000 AC1015 modeler version 1 stores SAT in
-    // length-prefixed blocks; modeler version 2 carries an inline ACIS file
-    // bounded by its signature and tagged End-of-ACIS-data marker. The
-    // AC1018/R2004, AC1021/R2007, and AC1024/R2010 layouts have separate
-    // bounded entity bodies that may contain following wireframe fields.
-    // Other versions and ambiguous/incomplete carriers stay opaque; never
-    // treat the remainder of a DWG frame as ACIS data.
+    // ODA v5.4.1 §20.4.41: modeler version 1 stores SAT in length-prefixed
+    // blocks; modeler version 2 carries an inline ACIS file. AC1018/R2004,
+    // AC1021/R2007, and AC1024/R2010 layouts have separate bounded entity
+    // bodies that may contain following wireframe fields. Other versions and
+    // ambiguous/incomplete carriers stay opaque; never treat the remainder
+    // of a DWG frame as ACIS data.
     const std::uint64_t modelerPayloadStartBit = currentDwgBit(&probe);
     std::vector<std::uint8_t> parsedInlineAcisPayload;
     std::vector<DRW_ModelerPayloadRange> parsedAcisPayloadRanges;
@@ -10634,7 +10633,8 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
             }
         }
 
-        if (v == DRW::AC1015 && parsedHasModelerData
+        if ((v == DRW::AC1015 || v == DRW::AC1018)
+            && parsedHasModelerData
             && parsedModelerVersion == 1) {
             dwgBuffer satProbe = probe.forkIndependent();
             std::vector<std::uint8_t> satPayload;
@@ -10771,15 +10771,17 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
         m_payloadRanges = std::move(parsedAcisPayloadRanges);
         m_dwgAcisPayload = std::move(parsedInlineAcisPayload);
         m_dwgSourceVersion = v;
-        if (v == DRW::AC1015 && m_modelerVersion == 1) {
-            DRW_DBG("  AC1015 SAT v1 payload bytes: ");
+        if ((v == DRW::AC1015 || v == DRW::AC1018)
+            && m_modelerVersion == 1) {
+            DRW_DBG("  SAT v1 payload bytes: ");
             DRW_DBG(m_dwgAcisPayload.size());
             DRW_DBG(" unknown bit: ");
             DRW_DBG(m_modelerDataUnknownBit);
             DRW_DBG("\n");
         }
-    } else if (v == DRW::AC1015 && parsedModelerVersion == 1) {
-        DRW_DBG("  AC1015 SAT v1 payload was not exactly bounded\n");
+    } else if ((v == DRW::AC1015 || v == DRW::AC1018)
+               && parsedModelerVersion == 1) {
+        DRW_DBG("  SAT v1 payload was not exactly bounded\n");
     }
     *sourceBuf = handleProbe;
     return true;

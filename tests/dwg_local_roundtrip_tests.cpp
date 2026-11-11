@@ -22158,6 +22158,50 @@ bool runModelerDwgSatV1Extraction() {
         return failStage("parse/qualify AC1015 SAT blocks");
     if (parsed.m_objectSize != frame.size())
         return failStage("complete DWG frame boundary");
+
+    // ODA §20.4.41 gives the same modeler-version-1 block framing for
+    // AC1018. This generated peer control keeps the R2004 case bounded and
+    // proves extraction without claiming physical-source semantics.
+    std::vector<std::uint8_t> ac1018Frame;
+    if (!buildModelerSatV1Frame(DRW::AC1018, blocks, declaredSizes, true,
+                                ac1018Frame))
+        return failStage("build AC1018 frame");
+    dwgBuffer ac1018Buffer(ac1018Frame.data(), ac1018Frame.size());
+    LocalModelerGeometry ac1018Parsed(DRW::E3DSOLID);
+    if (!ac1018Parsed.parseDwg(DRW::AC1018, &ac1018Buffer)
+        || !ac1018Buffer.isGood()
+        || ac1018Parsed.handle != 0x120u
+        || ac1018Parsed.m_modelerVersion != 1
+        || !ac1018Parsed.m_modelerDataUnknownBit
+        || ac1018Parsed.m_dwgSourceVersion != DRW::AC1018
+        || ac1018Parsed.m_dwgAcisPayload.size() != satText.size()
+        || ac1018Parsed.m_payloadRanges.size() != 2
+        || ac1018Parsed.m_objectSize != ac1018Frame.size())
+        return failStage("parse/qualify AC1018 SAT blocks");
+    std::vector<std::uint8_t> ac1018ExpectedPayload = satText;
+    for (std::uint8_t& value : ac1018ExpectedPayload) {
+        if (value == '\t')
+            value = ' ';
+    }
+    if (ac1018Parsed.m_dwgAcisPayload != ac1018ExpectedPayload)
+        return failStage("AC1018 de-obfuscated payload bytes");
+    std::size_t ac1018RangedBytes = 0;
+    for (const DRW_ModelerPayloadRange& range : ac1018Parsed.m_payloadRanges) {
+        if (range.m_kind != DRW_ModelerPayloadRange::Kind::Sat
+            || range.m_section != DRW_ModelerPayloadRange::Section::Body
+            || range.m_consistency !=
+                DRW_ModelerPayloadRange::Consistency::Exact
+            || range.m_confidence !=
+                DRW_ModelerPayloadRange::Confidence::DeclaredSize
+            || range.m_declaredByteSize != range.m_length)
+            return failStage("AC1018 payload range semantics");
+        ac1018RangedBytes += range.m_length;
+    }
+    if (ac1018RangedBytes != ac1018ExpectedPayload.size()
+        || ac1018Parsed.decodeWireframe()
+        || !ac1018Parsed.m_wireframe.empty())
+        return failStage("AC1018 range coverage or SAT/SAB separation");
+
     // dwgReader attaches this complete frame after entity parsing so the
     // adapter can preserve it for raw replay while the DXF writer uses only
     // the separately-qualified SAT payload.
@@ -22302,34 +22346,21 @@ bool runModelerDwgSatV1Extraction() {
     if (!rejected || !noPartialOutput)
         return failStage("reject source-version mismatch atomically");
 
-    // An incomplete SAT1 block sequence remains a successfully parsed typed
-    // entity but is not promoted to a qualified payload or writable DXF.
-    if (!buildModelerSatV1Frame(DRW::AC1015, blocks, declaredSizes, false,
-                                frame))
-        return failStage("build unterminated AC1015 frame");
-    dwgBuffer incompleteBuffer(frame.data(), frame.size());
-    LocalModelerGeometry incomplete(DRW::E3DSOLID);
-    if (!incomplete.parseDwg(DRW::AC1015, &incompleteBuffer)
-        || !incompleteBuffer.isGood()
-        || !incomplete.m_dwgAcisPayload.empty()
-        || !incomplete.m_payloadRanges.empty()
-        || incomplete.m_dwgSourceVersion != DRW::UNKNOWNV)
-        return failStage("keep unterminated carrier opaque");
-
-    // The same byte sequence is deliberately not interpreted using another
-    // revision's layout, even if the text resembles a valid SAT carrier.
-    if (!buildModelerSatV1Frame(DRW::AC1018, blocks, declaredSizes, true,
-                                frame))
-        return failStage("build AC1018 control frame");
-    dwgBuffer otherVersionBuffer(frame.data(), frame.size());
-    LocalModelerGeometry otherVersion(DRW::E3DSOLID);
-    const bool opaqueOtherVersion =
-        otherVersion.parseDwg(DRW::AC1018, &otherVersionBuffer)
-        && otherVersionBuffer.isGood()
-        && otherVersion.m_dwgAcisPayload.empty()
-        && otherVersion.m_payloadRanges.empty()
-        && otherVersion.m_dwgSourceVersion == DRW::UNKNOWNV;
-    return opaqueOtherVersion ? true : failStage("keep AC1018 carrier opaque");
+    // Incomplete SAT-v1 block sequences stay opaque in both admitted layouts.
+    for (DRW::Version version : {DRW::AC1015, DRW::AC1018}) {
+        if (!buildModelerSatV1Frame(version, blocks, declaredSizes, false,
+                                    frame))
+            return failStage("build unterminated SAT v1 frame");
+        dwgBuffer incompleteBuffer(frame.data(), frame.size());
+        LocalModelerGeometry incomplete(DRW::E3DSOLID);
+        if (!incomplete.parseDwg(version, &incompleteBuffer)
+            || !incompleteBuffer.isGood()
+            || !incomplete.m_dwgAcisPayload.empty()
+            || !incomplete.m_payloadRanges.empty()
+            || incomplete.m_dwgSourceVersion != DRW::UNKNOWNV)
+            return failStage("keep unterminated carrier opaque");
+    }
+    return true;
 }
 
 bool buildModelerInlineSabFrame(DRW::Version version,
@@ -39900,7 +39931,7 @@ int main(int argc, char** argv) {
     } else if (argc == 2
         && std::string(argv[1]) == "--modeler-sat-v1-extraction") {
         const bool passed = runModelerDwgSatV1Extraction();
-        std::cout << "AC1015 SAT-v1 extraction and chunk-cut controls: "
+        std::cout << "AC1015/AC1018 SAT-v1 extraction and chunk-cut controls: "
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     } else if (argc == 2 && std::string(argv[1]) == "--hatch-pattern-preservation") {
@@ -41519,7 +41550,7 @@ int main(int argc, char** argv) {
     expect(runModelerDwgVersionValidation(),
            "local DWG modeler version range and empty-body validation", failures);
     expect(runModelerDwgSatV1Extraction(),
-           "local AC1015 DWG SAT v1 bounded extraction and DXF text carrier",
+           "local AC1015/AC1018 DWG SAT v1 bounded extraction and AC1015 DXF text carrier",
            failures);
     expect(runModelerDxfWriterMatrix(directory, keepOutputs),
            "DXF modeler version/entity schema, SAT boundary and history matrix",
