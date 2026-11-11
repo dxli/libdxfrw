@@ -7369,6 +7369,83 @@ bool drw_extractAcisWireframeWithReport(
     }
 }
 
+namespace {
+
+bool makeObserved21500RootedView(const DRW_AcisModel& source,
+                                 DRW_AcisModel& view,
+                                 int& failedNodeIndex) {
+    failedNodeIndex = -1;
+    if (!isObservedAcis21500(source.header)
+        || source.nodes.size()
+            > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+        return false;
+    const auto rootedPointerCount = [](const std::string& type)
+        -> std::size_t {
+        if (type == "body" || type == "lump") return 4u;
+        if (type == "shell" || type == "face") return 6u;
+        if (type == "loop") return 4u;
+        if (type == "coedge") return 7u;
+        if (type == "edge") return 5u;
+        if (type == "vertex") return 3u;
+        if (type == "point") return 1u;
+        if (type == "transform") return 0u;
+        if (type == "plane-surface" || type == "cone-surface"
+            || type == "torus-surface" || type == "sphere-surface"
+            || type == "straight-curve" || type == "ellipse-curve"
+            || type == "intcurve-curve")
+            return 1u;
+        return std::numeric_limits<std::size_t>::max();
+    };
+    try {
+        DRW_AcisModel candidate = source;
+        for (std::size_t index = 0u; index < candidate.nodes.size(); ++index) {
+            DRW_AcisNode& node = candidate.nodes[index];
+            failedNodeIndex = static_cast<int>(index);
+            if (node.index != failedNodeIndex || node.type != node.record.type)
+                return false;
+
+            const bool recordPrefix = !isEndMarker(node.type)
+                && node.record.tokens.size() >= 3u
+                && node.record.tokens[0].tag == DRW_SabTag::EntityType
+                && node.record.tokens[0].sval == node.type
+                && node.record.tokens[1].tag == DRW_SabTag::Pointer
+                && node.record.tokens[2].tag == DRW_SabTag::Int;
+            const std::size_t expected = rootedPointerCount(node.type);
+            if (expected != std::numeric_limits<std::size_t>::max()
+                && !recordPrefix)
+                return false;
+            if (!recordPrefix)
+                continue;
+            const long long rawAttributePointer =
+                node.record.tokens[1].ival;
+            const int expectedAttributePointer = rawAttributePointer >= 0
+                    && static_cast<unsigned long long>(rawAttributePointer)
+                        < candidate.nodes.size()
+                ? static_cast<int>(rawAttributePointer) : -1;
+            if (node.refs.empty()
+                || node.refs.front() != expectedAttributePointer)
+                return false;
+            if (expected != std::numeric_limits<std::size_t>::max()
+                && node.refs.size() != expected + 1u)
+                return false;
+
+            // ACIS 21500 retains this common attribute pointer in the model's
+            // reference vector. The rooted reader's already admitted 21800
+            // view excludes it while keeping the raw tokens and record index
+            // unchanged. Only exact source row shapes above are normalized.
+            node.refs.erase(node.refs.begin());
+        }
+        candidate.header.version = 21800;
+        view = std::move(candidate);
+        failedNodeIndex = -1;
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+} // namespace
+
 bool drw_extractAcisBodyWireframes(
     const DRW_AcisModel& model, std::vector<DRW_AcisBodyProjection>& out,
     DRW_AcisRootedProjectionReport& report,
@@ -7384,6 +7461,45 @@ bool drw_extractAcisBodyWireframes(
         report.failedNodeIndex = nodeIndex;
         report.failedPointerOrdinal = pointerOrdinal;
     };
+    if (isObservedAcis21500(model.header)) {
+        DRW_AcisModel rootedView;
+        int failedNodeIndex = -1;
+        if (!makeObserved21500RootedView(model, rootedView, failedNodeIndex)) {
+            fail(failedNodeIndex < 0
+                     ? DRW_AcisProjectionFailure::UnsupportedProfile
+                     : DRW_AcisProjectionFailure::InvalidModel,
+                 failedNodeIndex);
+            return false;
+        }
+        const bool projected = drw_extractAcisBodyWireframes(
+            rootedView, out, report, limits);
+        const auto hasObservedRecordPrefix = [&model](int nodeIndex) {
+            if (nodeIndex < 0
+                || static_cast<std::size_t>(nodeIndex) >= model.nodes.size())
+                return false;
+            const DRW_SabRecord& record =
+                model.nodes[static_cast<std::size_t>(nodeIndex)].record;
+            return !isEndMarker(record.type) && record.tokens.size() >= 3u
+                && record.tokens[0].tag == DRW_SabTag::EntityType
+                && record.tokens[0].sval == record.type
+                && record.tokens[1].tag == DRW_SabTag::Pointer
+                && record.tokens[2].tag == DRW_SabTag::Int;
+        };
+        // The internal rooted walker uses the 21800 semantic reference rows.
+        // Restore the skipped common attribute-pointer slot in public source
+        // ordinals so graph links and failures still address the 21500 row.
+        for (DRW_AcisBodyProjection& body : out) {
+            for (DRW_AcisBodyGraphLink& link : body.graphLinks) {
+                if (hasObservedRecordPrefix(link.sourceNodeIndex))
+                    ++link.pointerOrdinal;
+            }
+        }
+        if (report.failedPointerOrdinal
+                != std::numeric_limits<std::size_t>::max()
+            && hasObservedRecordPrefix(report.failedNodeIndex))
+            ++report.failedPointerOrdinal;
+        return projected;
+    }
     try {
         if (model.header.signature != "ACIS BinaryFile"
             || model.header.version != 21800) {

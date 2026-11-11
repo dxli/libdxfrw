@@ -1223,6 +1223,20 @@ created locally from scratch for the specific control.
   source/topology and independent-kernel qualification separately. See the
   [21500 incidence receipt](docs/research/p7-ac1024-21500-sab-incidence-observation-2026-11-11.json).
 
+- **P7 ACIS 21500 rooted geometry graph:** the same hash-pinned AC1024 inline
+  SAB now passes an exact common-prefix and pointer-row-shape gate into the
+  existing rooted geometry walker. It projects one body with 85 reachable
+  geometry-graph records, 8 vertices, 12 edges and 6 faces; all six face-loop
+  chains contain four coedges, close, have reciprocal links and continuous
+  endpoints, and match the parsed incidence census. The public graph-link
+  ordinals are restored to the original 21500 source rows. A generated
+  attribute-pointer mismatch refuses atomically. The rooted projection excludes
+  common attribute-pointer dependencies, leaves transforms and units
+  unapplied, and reports no B-rep validity check; this is not complete SAB or
+  AcDS closure, native/kernel acceptance, output qualification, or a support
+  claim. The header's third integer remains semantically unqualified. See the
+  [rooted 21500 receipt](docs/research/p7-ac1024-21500-sab-rooted-geometry-graph-2026-11-11.json).
+
 - **P6 R12 ellipse numerical stability:** the ellipse-to-polyline converter
   now uses scaled length calculations for axes and normals whose norms are
   finite, and constructs the minor direction before scaling. A locally authored full ellipse

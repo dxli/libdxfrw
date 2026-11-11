@@ -263,12 +263,14 @@ std::vector<std::uint8_t> vertexSab(std::uint32_t version = 1u,
 }
 
 std::vector<std::uint8_t> rootedVertexBodySab(
-    std::uint32_t bodyCount = 1u, bool shareFirstPointWithPriorBodies = false) {
+    std::uint32_t bodyCount = 1u, bool shareFirstPointWithPriorBodies = false,
+    std::uint32_t sabVersion = 21800u) {
     const std::string signature = "ACIS BinaryFile";
-    const std::string terminal = "End-of-ASM-data";
+    const std::string terminal = sabVersion >= 21800u
+        ? "End-of-ASM-data" : "End-of-ACIS-data";
     const std::uint32_t recordCount = bodyCount * 14u + 1u;
     std::vector<std::uint8_t> bytes(signature.begin(), signature.end());
-    appendU32(bytes, 21800u);
+    appendU32(bytes, sabVersion);
     appendU32(bytes, recordCount);
     appendU32(bytes, recordCount - 1u);
     appendU32(bytes, 0u);
@@ -289,7 +291,8 @@ std::vector<std::uint8_t> rootedVertexBodySab(
         const double xOffset = static_cast<double>(bodyIndex) * 100.0;
         const auto startRecord = [&](const std::string& type,
                                      std::int32_t attributePointer = -1) {
-            appendSabRecordType(bytes, type, attributePointer, entityId++);
+            appendSabRecordType(bytes, type, attributePointer, entityId++,
+                                sabVersion >= 21500u);
         };
         const auto pointer = [&](std::int32_t value) {
             bytes.push_back(static_cast<std::uint8_t>(DRW_SabTag::Pointer));
@@ -323,6 +326,7 @@ std::vector<std::uint8_t> rootedVertexBodySab(
         endRecord();
         startRecord("coedge");
         pointer(-1); pointer(6); pointer(6); pointer(-1); pointer(7);
+        bytes.push_back(static_cast<std::uint8_t>(DRW_SabTag::BoolFalse));
         pointer(4); pointer(-1); endRecord();
         startRecord("edge");
         pointer(-1); pointer(8); pointer(9); pointer(6); pointer(10);
@@ -14620,6 +14624,70 @@ void testSab21800RecordHeaderAlignment(TestContext& t) {
                         bodies.front().wireframe.vertices[1].point,
                         4, 5, 6),
              "SAB 21800 rooted body uses type-specific reference ordinals after shared prefix");
+
+    const std::vector<std::uint8_t> body21500Bytes =
+        rootedVertexBodySab(1u, false, 21500u);
+    DRW_SabData body21500Sab;
+    const bool body21500Parsed = drw_parseSab(
+        body21500Bytes.data(), body21500Bytes.size(), body21500Sab);
+    const DRW_AcisModel body21500Model = drw_buildAcisModel(body21500Sab);
+    std::vector<DRW_AcisBodyProjection> bodies21500;
+    DRW_AcisRootedProjectionReport report21500;
+    const bool projected21500 = body21500Parsed
+        && drw_extractAcisBodyWireframes(
+            body21500Model, bodies21500, report21500);
+    const auto body21500LumpLink = bodies21500.empty()
+        ? std::vector<DRW_AcisBodyGraphLink>::const_iterator()
+        : std::find_if(
+              bodies21500.front().graphLinks.begin(),
+              bodies21500.front().graphLinks.end(),
+              [](const DRW_AcisBodyGraphLink& link) {
+                  return link.sourceNodeIndex == 0
+                      && link.targetNodeIndex == 1;
+              });
+    t.expect(body21500Parsed && body21500Sab.header.version == 21500
+                 && body21500Model.nodes.size() == 15u
+                 && body21500Model.nodes.front().refs.size() == 5u
+                 && projected21500 && bodies21500.size() == 1u
+                 && report21500.bodyCount == 1u
+                 && bodies21500.front().bodyGraphProjected
+                 && bodies21500.front().bodyNodeIndex == 0
+                 && body21500LumpLink
+                        != bodies21500.front().graphLinks.end()
+                 && body21500LumpLink->pointerOrdinal == 2u
+                 && bodies21500.front().bodyTransformNodeIndex == 13
+                 && bodies21500.front().wireframe.vertices.size() == 2u
+                 && bodies21500.front().wireframe.faces.size() == 1u
+                 && bodies21500.front().wireframe.faces.front().loops.size()
+                        == 1u
+                 && bodies21500.front().wireframe.faces.front().loops.front()
+                        .coedgeRingClosed
+                 && bodies21500.front().wireframe.faces.front().loops.front()
+                        .coedgeLinksReciprocal
+                 && bodies21500.front().wireframe.faces.front().loops.front()
+                        .hasCoedgeEndpointChainObservation
+                 && !bodies21500.front().wireframe.faces.front().loops.front()
+                        .coedgeEndpointChainContinuous
+                 && bodies21500.front().wireframe.faces.front().loops.front()
+                        .coedgeEndpointDiscontinuityCount == 1u
+                 && acisCoordNear(
+                        bodies21500.front().wireframe.vertices[0].point,
+                        1, 2, 3)
+                 && acisCoordNear(
+                        bodies21500.front().wireframe.vertices[1].point,
+                        4, 5, 6),
+             "ACIS 21500 exact prefixed record rows project a bounded rooted body graph");
+
+    DRW_AcisModel bad21500Attribute = body21500Model;
+    bad21500Attribute.nodes.front().refs.front() = 1;
+    std::vector<DRW_AcisBodyProjection> rejected21500;
+    DRW_AcisRootedProjectionReport rejected21500Report;
+    t.expect(!drw_extractAcisBodyWireframes(
+                 bad21500Attribute, rejected21500, rejected21500Report)
+                 && rejected21500.empty()
+                 && rejected21500Report.failure
+                        == DRW_AcisProjectionFailure::InvalidModel,
+             "ACIS 21500 rooted projection refuses an attribute-pointer mismatch atomically");
 
     const std::vector<std::uint8_t> twoBodyBytes = rootedVertexBodySab(2u);
     DRW_SabData twoBodySab;
