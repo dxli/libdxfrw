@@ -137,6 +137,40 @@ void operator delete(void* memory, std::size_t) noexcept { std::free(memory); }
 void operator delete[](void* memory, std::size_t) noexcept { std::free(memory); }
 
 int main() {
+    const std::vector<std::uint8_t> sab700 = makeSab(700u);
+    DRW_SabData parsed700;
+    DRW_SabParseOutcome outcome700;
+    if (!drw_parseSabWithOutcome(sab700.data(), sab700.size(), parsed700,
+                                 outcome700)
+        || !outcome700.complete || outcome700.recordCountKnown
+        || !outcome700.terminalRecordSeen || parsed700.records.size() != 2u
+        || parsed700.header.version != 700
+        || parsed700.header.numRecords != 0
+        || parsed700.records.back().type != "End-of-ACIS-data") {
+        std::fprintf(stderr,
+                     "ACIS 700 zero-count terminal framing mismatch\n");
+        return 9;
+    }
+    std::vector<std::uint8_t> sab700WithoutTerminal = sab700;
+    sab700WithoutTerminal.resize(sab700WithoutTerminal.size() - 19u);
+    DRW_SabData partial700;
+    DRW_SabParseOutcome partialOutcome700;
+    if (drw_parseSabWithOutcome(sab700WithoutTerminal.data(),
+                                sab700WithoutTerminal.size(), partial700,
+                                partialOutcome700)
+        || partialOutcome700.complete || partialOutcome700.terminalRecordSeen
+        || !partial700.records.empty()
+        || drw_parseSab(sab700WithoutTerminal.data(),
+                        sab700WithoutTerminal.size(), partial700)) {
+        std::fprintf(stderr,
+                     "ACIS 700 missing-terminal mismatch: complete=%d "
+                     "terminal=%d records=%zu\n",
+                     partialOutcome700.complete ? 1 : 0,
+                     partialOutcome700.terminalRecordSeen ? 1 : 0,
+                     partial700.records.size());
+        return 10;
+    }
+
     const std::vector<std::uint8_t> sab = makeSab();
     std::vector<std::uint8_t> expected;
     if (!drw_convertSabToSatV1(sab.data(), sab.size(), DRW::AC1024, expected)

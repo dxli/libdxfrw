@@ -2267,11 +2267,14 @@ bool parseSabPrefix(const std::uint8_t* data, std::size_t length,
 
         // Pinned ACIS 21200, 21500 and 21800 sources use zero as an
         // unspecified record count and terminate the stream with an explicit
-        // end marker. Keep this empirical profile version-scoped; do not
-        // treat arbitrary zero counts as complete.
+        // end marker. For 700, one ODA-authored AC1024 DWG carrying an ACIS
+        // 7.00 SAB shows the same framing; see the P7 zero-count receipt.
+        // Keep this empirical profile version-scoped; do not treat arbitrary
+        // zero counts as complete.
         const bool unknownAcisRecordCount =
             parsed.header.signature == "ACIS BinaryFile"
-            && (parsed.header.version == 21200
+            && (parsed.header.version == 700
+                || parsed.header.version == 21200
                 || parsed.header.version == 21500
                 || parsed.header.version == 21800)
             && parsed.header.numRecords == 0;

@@ -1,0 +1,94 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "date": "2026-11-11",
+  "id": "p7-ac1024-oda-acis700-zero-count-framing-2026-11-11",
+  "purpose": "Reproduce and close a bounded ACIS 700 zero-record-count framing refusal in an AC1024 DWG, without claiming SAT conversion or 3D semantic support.",
+  "source": {
+    "sat": {
+      "url": "https://raw.githubusercontent.com/monozukuri-ai/cq-acis/main/corpus/data/ezdxf/cube_sat_700.sat",
+      "sha256": "343766d21e6653260aebed3a9c09171c3c7ab3d2f76ed7427642cc02f4ff58dd",
+      "header": "700 0 1 0",
+      "records": 118,
+      "terminal": "End-of-ACIS-data",
+      "provenance": "Public cube SAT sample. The downloaded SAT remained under /tmp and was not committed as a fixture."
+    },
+    "generatedDxf": {
+      "tool": "ezdxf 1.4.5",
+      "target": "AC1024 / R2010 ASCII DXF",
+      "operation": "Created a 3DSOLID and assigned the SAT 700 lines to its SAT carrier.",
+      "path": "/tmp/libdxfrw-acis21500/source/cube.dxf",
+      "sha256": "b3b50ee9e81781fc1d8f9937be64e4833dd6b6d8f1e6b64850e586ce7ea846dc"
+    },
+    "generatedDwg": {
+      "tool": "ODA File Converter 27.1.0.0",
+      "command": "ODAFileConverter /tmp/libdxfrw-acis21500/source /tmp/libdxfrw-acis21500/dwg ACAD2010 DWG 0 0 '*.dxf'",
+      "path": "/tmp/libdxfrw-acis21500/dwg/cube.dwg",
+      "sha256": "852227fac827598b14a3f3be19228d8ce3177e7c862d805767f6be6242505710",
+      "version": "AC1024"
+    },
+    "extractor": {
+      "tool": "LibreDWG 0.14",
+      "command": "dwgread -O minJSON /tmp/libdxfrw-acis21500/dwg/cube.dwg -o /tmp/libdxfrw-acis21500/cube.json",
+      "entity": "3DSOLID",
+      "handle": "0x2F",
+      "payloadBytes": 7007,
+      "payloadSha256": "4b5919bc0188358a279ba833aec5d879fa2067ba8af42a8ea86e585d420fb8a8",
+      "header": {
+        "signature": "ACIS BinaryFile",
+        "version": 700,
+        "recordCount": 0,
+        "thirdInteger": 1,
+        "flags": 0
+      },
+      "integrityScope": "The generated DWG has other reader integrity warnings; this receipt qualifies only the extracted modeler payload and parser framing behavior."
+    }
+  },
+  "implementation": {
+    "files": {
+      "src/drw_acis.cpp": "Admits a zero ACIS record count as unknown for version 700 only, matching the existing version-scoped 21200/21500/21800 behavior. Completion still requires the explicit terminal marker and full input consumption.",
+      "tests/acis_sat_allocation_tests.cpp": "Adds an in-memory, locally generated ACIS 700 zero-count body/terminal vector and verifies complete parsing plus missing-terminal refusal. No external DWG/DXF/SAT fixture was added."
+    },
+    "sourceHashes": {
+      "src/drw_acis.cpp": "4c5995857a69129f71481bdbd54cb4b1e3ed67a4a27ed23826eda07d7e1d58d4",
+      "tests/acis_sat_allocation_tests.cpp": "90a88955a22cd236c4b992f039fcff8ae7488916d1b476e16798806350322b01"
+    },
+    "scopeLimit": "No 700 SAT v1 serialization, DXF/DWG output admission, native acceptance, or semantic support claim is added."
+  },
+  "results": {
+    "beforeChange": {
+      "operation": "drw_parseSabWithOutcome on the exact extracted payload",
+      "result": "Rejected after 115 record starts and 1211 tags because header recordCount=0 was treated as a literal count."
+    },
+    "afterChange": {
+      "operation": "drw_parseSabWithOutcome, drw_buildAcisModel, drw_extractAcisWireframeWithReport on the exact extracted payload",
+      "parse": true,
+      "complete": true,
+      "terminalSeen": true,
+      "recordCountKnown": false,
+      "recordsIncludingTerminal": 115,
+      "modelInventory": {
+        "bodies": 1,
+        "lumps": 1,
+        "shells": 1,
+        "faces": 6,
+        "loops": 6,
+        "coedges": 24,
+        "edges": 12,
+        "vertices": 8,
+        "projectionDiagnostics": 0
+      },
+      "brepValidityChecked": false
+    },
+    "generatedControl": {
+      "command": "cmake --build build-gcc --target libdxfrw_acis_sat_allocation_tests -j4 && ctest --test-dir build-gcc -R '^acis_sat_allocation_rollback_retry$' --output-on-failure",
+      "result": "PASS 1/1; generated complete terminal case and missing-terminal refusal both verified."
+    },
+    "diffCheck": "PASS: git diff --check"
+  },
+  "authorityBoundary": {
+    "odaReference": "https://www.opendesign.com/blog/2017/october/working-sat-and-sab-files-teigha",
+    "use": "ODA describes DWG release-to-default SAT/SAB version mappings and the Autodesk-modified dialect boundary. The sample experiment is an ODA converter output observation only; it does not establish Autodesk producer behavior or resolve the separate ACIS 21500 header semantics.",
+    "semanticCeiling": "Framing plus structural inventory from one ODA-produced carrier. No independent semantic oracle, B-rep kernel, native acceptance, carrier writer, or producer-wide version profile is established."
+  },
+  "claimEffect": "Closes the parser's bounded ACIS 700 zero-count framing refusal for streams with an explicit terminal marker. Does not promote DWG, DXF, ACIS/ACDS, or 3D support claims."
+}
