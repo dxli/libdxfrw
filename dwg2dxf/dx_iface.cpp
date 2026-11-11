@@ -29642,9 +29642,32 @@ bool dx_iface::hasUnchangedVerifiedStyleResourceSource(
             return false;
         liveStyle = &candidate;
     }
-    return liveStyle != nullptr
-        && verifiedStyleSourceModelMatches(*styleSource->styleModel,
-                                           *liveStyle, data);
+    if (liveStyle == nullptr
+        || !verifiedStyleSourceModelMatches(*styleSource->styleModel,
+                                            *liveStyle, data))
+        return false;
+    for (const auto& reference : styleSource->styleModel->pendingAppIdResolutions) {
+        const DRW_AppId* liveAppId = nullptr;
+        for (const auto& candidate : data.appIds) {
+            if (candidate.handle != reference.handleRef)
+                continue;
+            if (liveAppId != nullptr)
+                return false;
+            liveAppId = &candidate;
+        }
+        const auto sourceAppId = data.m_standardDwgAppIdSources.find(
+            {data.importGeneration, reference.handleRef});
+        if (liveAppId == nullptr
+            || sourceAppId == data.m_standardDwgAppIdSources.end()
+            || !sourceAppId->second
+            || sourceAppId->second->handle != liveAppId->handle
+            || !standardDwgCommonEqual(*sourceAppId->second, *liveAppId,
+                                       DRW::AC1018)
+            || sourceAppId->second->unknown71 != liveAppId->unknown71
+            || !sourceAppId->second->sameDwgNameSource(*liveAppId))
+            return false;
+    }
+    return true;
 }
 
 bool dx_iface::validateVerifiedTableCandidates(const dx_data& data,

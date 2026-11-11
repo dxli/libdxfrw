@@ -1718,9 +1718,14 @@ created locally from scratch for the specific control.
   leaked tickets, then restores and retries through the same adapter. This is
   generated row-frame failure/retry evidence only. That source-profile order
   contradicts ODA for the phantom pair and stays isolated. Physical
-  producer-file CRC corruption/
-  retry, STYLE EED/APPID dependencies and remaining resource closure remain
-  open ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)). ODA §20.4.57 specifies ByLayer then
+  producer-file CRC corruption/retry and remaining LTYPE resource closure remain
+  open. The selected AC1018 STYLE EED APPID edge now also requires a matching
+  immutable same-import APPID row snapshot, including common fields, unknown71
+  and source-name bytes; name/metadata mutation refusal and restoration pass in
+  the focused physical-source diagnostic. This closes only the selected STYLE
+  APPID binding, not broader APPID closure or font semantics
+  ([STYLE resource receipt](docs/research/p5-ac1018-style-resource-adapter-binding-2026-11-11.json);
+  [LTYPE receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)). ODA §20.4.57 specifies ByLayer then
   ByBlock, while this pinned source and LibreDWG report ByBlock then ByLayer.
   Treat that as a source anomaly. The observer now exposes a separate normative
   order check with exact ByLayer/ByBlock spans; same-import source binding and

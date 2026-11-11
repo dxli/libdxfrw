@@ -90,6 +90,8 @@ public:
             imported.m_verifiedXRecordImportToken;
         output.m_verifiedStyleResourceSource =
             imported.m_verifiedStyleResourceSource;
+        output.m_standardDwgAppIdSources =
+            imported.m_standardDwgAppIdSources;
         output.textStyles.push_back(*selected);
         output.appIds = imported.appIds;
         return writer.enableVerifiedStyleResourceSource(0x3u, 0x11u)
@@ -38154,6 +38156,8 @@ bool inspectPhysicalStyleResourceAdapterBinding(
     bool styleRetryRestored = false;
     bool appIdMutationRefused = false;
     bool appIdRetryRestored = false;
+    bool appIdMetadataMutationRefused = false;
+    bool appIdMetadataRetryRestored = false;
     bool partialImportWithheld = false;
     bool restoredImportRetry = false;
     if (sourceBound && style != data.textStyles.end()) {
@@ -38175,6 +38179,17 @@ bool inspectPhysicalStyleResourceAdapterBinding(
                 data, 0x3u, 0x11u);
         appId->name = originalName;
         appIdRetryRestored =
+            dx_iface::hasUnchangedVerifiedStyleResourceSource(
+                data, 0x3u, 0x11u);
+    }
+    if (appIdRetryRestored && appId != data.appIds.end()) {
+        const auto originalUnknown71 = appId->unknown71;
+        appId->unknown71 = static_cast<std::int16_t>(originalUnknown71 ^ 1);
+        appIdMetadataMutationRefused =
+            !dx_iface::hasUnchangedVerifiedStyleResourceSource(
+                data, 0x3u, 0x11u);
+        appId->unknown71 = originalUnknown71;
+        appIdMetadataRetryRestored =
             dx_iface::hasUnchangedVerifiedStyleResourceSource(
                 data, 0x3u, 0x11u);
     }
@@ -38404,6 +38419,7 @@ bool inspectPhysicalStyleResourceAdapterBinding(
     const bool passed = sourceBound && haveStyle && haveAppId
         && styleMutationRefused
         && styleRetryRestored && appIdMutationRefused && appIdRetryRestored
+        && appIdMetadataMutationRefused && appIdMetadataRetryRestored
         && scratchWritten && partialImportWithheld && restoredImportRetry
         && generatedGuardPrepared && generatedMutationRefused
         && generatedDestinationPreserved && generatedAsciiRetry
@@ -38415,6 +38431,10 @@ bool inspectPhysicalStyleResourceAdapterBinding(
               << " styleRetryRestored=" << styleRetryRestored
               << " appIdMutationRefused=" << appIdMutationRefused
               << " appIdRetryRestored=" << appIdRetryRestored
+              << " appIdMetadataMutationRefused="
+              << appIdMetadataMutationRefused
+              << " appIdMetadataRetryRestored="
+              << appIdMetadataRetryRestored
               << " scratchWritten=" << scratchWritten
               << " partialImportWithheld=" << partialImportWithheld
               << " restoredImportRetry=" << restoredImportRetry
