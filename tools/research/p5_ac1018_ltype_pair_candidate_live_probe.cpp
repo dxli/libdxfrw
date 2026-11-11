@@ -19,6 +19,8 @@
 #include <cstdlib>
 #include <cstdint>
 #include <vector>
+#include <array>
+#include <cctype>
 
 class GeneratedSource final:public dx_iface {
 public:
@@ -74,8 +76,11 @@ public:
       &&t.frame().body().size()<=4096u&&t.ltypeModel()){
     ++rowTickets;
     const std::string expected=(t.handle()==15u||t.handle()==0x14u)?"BYBLOCK":(t.handle()==16u||t.handle()==0x15u)?"BYLAYER":"CONTINUOUS";
-    if(t.ltypeModel()->handle==t.handle()&&t.ltypeModel()->name==expected)rowTicketValid=true;
+    std::string actual=t.ltypeModel()->name;
+    std::transform(actual.begin(),actual.end(),actual.begin(),[](unsigned char c){return static_cast<char>(std::toupper(c));});
+    if(t.ltypeModel()->handle==t.handle()&&actual==expected)rowTicketValid=true;
     if(t.handle()==15u||t.handle()==0x14u){byBlockFrameModel=*t.ltypeModel();DRW_UnsupportedObject raw;raw.m_version=t.version();raw.m_handle=t.handle();raw.m_objectType=57;
+      raw.m_objectOffset=t.offset();
       raw.m_objectSize=static_cast<std::uint32_t>(t.frame().body().size());raw.m_bodyBitSize=0u;raw.m_rawBytes=t.frame().body();byBlockFrame=std::move(raw);}
   }
  }
@@ -130,11 +135,191 @@ bool corruptObjectFrameCrc(const std::filesystem::path& path,const DRW_Unsupport
  dwgBuffer verify(damaged.data(),damaged.size(),nullptr);if(frame.readAt(verify,DRW::AC1018,frameAt))return false;
  std::ofstream output(path,std::ios::binary|std::ios::trunc);output.write(reinterpret_cast<const char*>(damaged.data()),static_cast<std::streamsize>(damaged.size()));return static_cast<bool>(output);
 }
+// Map decoded bytes back to their source literals. The actual page decode is
+// independently checked with dwgCompressor before any source mutation.
+struct R2004DecodeTrace {
+ std::vector<std::uint8_t> output;
+ std::vector<std::int32_t> compressedByteForOutput;
+ std::size_t outputBytes{0};
+};
+bool traceR2004Lz(const std::uint8_t* input,std::size_t inputSize,
+                  std::size_t outputSize,R2004DecodeTrace& trace){
+ if(!input||inputSize<2u||outputSize==0u)return false;
+ trace={};trace.output.assign(outputSize,0u);
+ trace.compressedByteForOutput.assign(outputSize,-1);
+ std::size_t in=0u,out=0u;
+ const auto readByte=[&](std::uint8_t& value){if(in>=inputSize)return false;value=input[in++];return true;};
+ const auto literalLength=[&](std::uint64_t& length){
+  std::uint8_t value=0u;if(!readByte(value))return false;
+  if(value>0x0fu){--in;length=0u;return true;}
+  std::uint64_t total=0u;
+  if(value==0u){total=0x0fu;if(!readByte(value))return false;
+   while(value==0u){total+=0xffu;if(!readByte(value))return false;}}
+  length=total+value+3u;return true;
+ };
+ const auto longOffset=[&](std::uint64_t& value){
+  value=0u;std::uint8_t b=0u;if(!readByte(b))return false;
+  while(b==0u){value+=0xffu;if(!readByte(b))return false;}
+  value+=b;return true;
+ };
+ const auto twoOffset=[&](std::uint32_t& distance,std::uint64_t& literals){
+  std::uint8_t first=0u,second=0u;if(!readByte(first)||!readByte(second))return false;
+  distance=(first>>2u)|(static_cast<std::uint32_t>(second)<<6u);
+  literals=first&3u;return true;
+ };
+ std::uint64_t literals=0u;if(!literalLength(literals))return false;
+ for(std::uint64_t i=0u;i<literals&&out<outputSize;++i){
+  const std::size_t source=in;std::uint8_t value=0u;if(!readByte(value))return false;
+  trace.output[out]=value;trace.compressedByteForOutput[out]=static_cast<std::int32_t>(source);++out;
+ }
+ while(out<outputSize&&in<inputSize){
+  std::uint8_t opcode=0u;if(!readByte(opcode))return false;
+  if(opcode==0x11u)break;
+  std::uint64_t copied=0u;std::uint32_t distance=0u;
+  if(opcode==0x10u){
+   if(!longOffset(copied))return false;copied+=9u;
+   if(!twoOffset(distance,literals))return false;distance+=0x3fffu;
+   if(literals==0u&&!literalLength(literals))return false;
+  }else if(opcode>=0x12u&&opcode<0x20u){
+   const std::uint32_t low=opcode&7u;
+   if(low==0u){if(!longOffset(copied))return false;copied+=9u;}else copied=low+2u;
+   if(!twoOffset(distance,literals))return false;
+   distance+=0x3fffu+static_cast<std::uint32_t>((opcode&8u)<<11u);
+   if(literals==0u&&!literalLength(literals))return false;
+  }else if(opcode==0x20u){
+   if(!longOffset(copied)||!twoOffset(distance,literals))return false;copied+=0x21u;
+   if(literals==0u&&!literalLength(literals))return false;
+  }else if(opcode>0x20u&&opcode<0x40u){
+   copied=opcode-0x1eu;if(!twoOffset(distance,literals))return false;
+   if(literals==0u&&!literalLength(literals))return false;
+  }else if(opcode>0x3fu){
+   copied=((opcode&0xf0u)>>4u)-1u;std::uint8_t second=0u;if(!readByte(second))return false;
+   distance=(static_cast<std::uint32_t>(second)<<2u)|((opcode&0x0cu)>>2u);
+   literals=opcode&3u;if(literals==0u&&!literalLength(literals))return false;
+  }else return false;
+  if(distance>=out)return false;
+  for(std::uint64_t i=0u;i<copied&&out<outputSize;++i){
+   const std::size_t source=out-static_cast<std::size_t>(distance)-1u;
+   trace.output[out]=trace.output[source];
+   trace.compressedByteForOutput[out]=trace.compressedByteForOutput[source];++out;
+  }
+  for(std::uint64_t i=0u;i<literals&&out<outputSize;++i){
+   const std::size_t source=in;std::uint8_t value=0u;if(!readByte(value))return false;
+   trace.output[out]=value;trace.compressedByteForOutput[out]=static_cast<std::int32_t>(source);++out;
+  }
+ }
+ trace.outputBytes=out;return out==outputSize;
+}
+bool corruptCompressedObjectFrameCrc(const std::filesystem::path& path,
+    const DRW_UnsupportedObject& source,std::vector<std::uint8_t>& original,
+    std::size_t& changedPhysicalOffset){
+ std::ifstream input(path,std::ios::binary);std::vector<char> chars((std::istreambuf_iterator<char>(input)),{});
+ if(!input||source.m_rawBytes.empty()||source.m_objectOffset==0u)return false;
+ original.reserve(chars.size());for(const auto c:chars)original.push_back(static_cast<std::uint8_t>(c));
+ for(std::size_t pageAt=0x100u;pageAt+32u<=original.size();pageAt+=0x20u){
+  std::array<std::uint8_t,32u> header{};std::copy_n(original.data()+pageAt,header.size(),header.data());
+  dwgCompressor::decrypt18Hdr(header.data(),header.size(),pageAt);
+  const std::uint32_t pageType=get32(header.data()),section=get32(header.data()+4u);
+  const std::uint32_t compressedSize=get32(header.data()+8u),pageBytes=get32(header.data()+12u);
+  const std::uint32_t startOffset=get32(header.data()+16u);
+  if(pageType!=0x4163043bu||section!=7u||compressedSize==0u
+      ||compressedSize>=pageBytes||pageBytes>0x7400u
+      ||compressedSize>original.size()-pageAt-32u
+      ||source.m_objectOffset<startOffset
+      ||source.m_objectOffset-startOffset>=0x7400u)continue;
+  const std::uint32_t dataChecksum=dwgUtil::checksum18(0u,original.data()+pageAt+32u,compressedSize);
+  const std::uint32_t storedHeaderChecksum=get32(header.data()+24u);
+  if(dataChecksum!=get32(header.data()+28u))continue;
+  put32(header.data()+24u,0u);
+  if(dwgUtil::checksum18(dataChecksum,header.data(),header.size())!=storedHeaderChecksum)continue;
+  R2004DecodeTrace trace;dwgCompressor decoder;
+  std::vector<std::uint8_t> decoded(0x7400u,0u);
+  if(!decoder.decompress18(original.data()+pageAt+32u,decoded.data(),compressedSize,decoded.size())
+      ||!traceR2004Lz(original.data()+pageAt+32u,compressedSize,decoded.size(),trace)
+      ||trace.output!=decoded)return false;
+  const std::uint64_t localOffset=source.m_objectOffset-startOffset;
+  if(localOffset>=decoded.size())return false;
+  dwgBuffer frameBuffer(decoded.data(),decoded.size(),nullptr);DwgObjectFrame frame;
+  if(!frame.readAt(frameBuffer,DRW::AC1018,localOffset)||frame.body()!=source.m_rawBytes
+      ||frameBuffer.getPosition()<2u)return false;
+  const std::size_t crcOffset=static_cast<std::size_t>(frameBuffer.getPosition()-2u);
+  const std::int32_t compressedByte=trace.compressedByteForOutput[crcOffset];
+  if(compressedByte<0)return false;
+  const auto occurrences=std::count(trace.compressedByteForOutput.begin(),
+      trace.compressedByteForOutput.end(),compressedByte);
+  if(occurrences!=1)return false;
+  std::vector<std::uint8_t> damaged=original;
+  const std::size_t compressedAt=pageAt+32u+static_cast<std::size_t>(compressedByte);
+  damaged[compressedAt]^=1u;
+  R2004DecodeTrace damagedTrace;std::vector<std::uint8_t> damagedDecoded(0x7400u,0u);
+  dwgCompressor damagedDecoder;
+  if(!damagedDecoder.decompress18(damaged.data()+pageAt+32u,damagedDecoded.data(),compressedSize,damagedDecoded.size())
+      ||!traceR2004Lz(damaged.data()+pageAt+32u,compressedSize,damagedDecoded.size(),damagedTrace)
+      ||damagedTrace.output!=damagedDecoded)return false;
+  for(std::size_t i=0u;i<decoded.size();++i)
+    if((decoded[i]!=damagedDecoded[i])!=(i==crcOffset))return false;
+  dwgBuffer damagedFrameBuffer(damagedDecoded.data(),damagedDecoded.size(),nullptr);
+  DwgObjectFrame damagedFrame;
+  if(damagedFrame.readAt(damagedFrameBuffer,DRW::AC1018,localOffset))return false;
+  std::array<std::uint8_t,32u> changedHeader{};
+  std::copy_n(damaged.data()+pageAt,changedHeader.size(),changedHeader.data());
+  dwgCompressor::decrypt18Hdr(changedHeader.data(),changedHeader.size(),pageAt);
+  const std::uint32_t changedDataChecksum=dwgUtil::checksum18(0u,
+      damaged.data()+pageAt+32u,compressedSize);
+  put32(changedHeader.data()+28u,changedDataChecksum);put32(changedHeader.data()+24u,0u);
+  put32(changedHeader.data()+24u,dwgUtil::checksum18(changedDataChecksum,
+      changedHeader.data(),changedHeader.size()));
+  dwgCompressor::decrypt18Hdr(changedHeader.data(),changedHeader.size(),pageAt);
+  std::copy(changedHeader.begin(),changedHeader.end(),damaged.begin()+static_cast<std::ptrdiff_t>(pageAt));
+  std::ofstream output(path,std::ios::binary|std::ios::trunc);
+  output.write(reinterpret_cast<const char*>(damaged.data()),static_cast<std::streamsize>(damaged.size()));
+  if(!output)return false;changedPhysicalOffset=compressedAt;return true;
+ }
+ return false;
+}
 DRW_UnsupportedObject body(const char* path,std::uint32_t handle,int type) {
  std::ifstream in(path,std::ios::binary);DRW_UnsupportedObject r;r.m_version=DRW::AC1018;r.m_handle=handle;r.m_objectType=type;
  r.m_rawBytes.assign(std::istreambuf_iterator<char>(in),{});r.m_objectSize=static_cast<std::uint32_t>(r.m_rawBytes.size());return r;
 }
 int main(int argc,char**argv){
+ if(argc==3&&std::string(argv[1])=="--physical-crc-retry"){
+  const std::filesystem::path sourcePath(argv[2]);
+  const std::filesystem::path path=sourcePath.parent_path()
+      /(sourcePath.stem().string()+".p5-physical-crc-probe"+sourcePath.extension().string());
+  if(!std::filesystem::is_regular_file(sourcePath)||std::filesystem::exists(path)
+      ||!std::filesystem::copy_file(sourcePath,path))return 40;
+  struct RemoveCopy {const std::filesystem::path& path;~RemoveCopy(){std::error_code e;std::filesystem::remove(path,e);}} removeCopy{path};
+  Probe probe;dx_data initial;
+  const bool selected=probe.enableVerifiedLTypeResourceSource(5u,0x16u,0x14u,0x15u);
+  const bool imported=selected&&probe.fileImport(path.string(),&initial,false);
+  if(!imported||probe.tickets!=1u||probe.rowTickets!=3u||!probe.controlFrame)return 44;
+  std::vector<std::uint8_t> original;std::size_t physicalOffset=0u;
+  if(!corruptCompressedObjectFrameCrc(path,*probe.controlFrame,original,physicalOffset))return 41;
+  struct RestoreFile {const std::filesystem::path& path;const std::vector<std::uint8_t>& bytes;bool active{true};
+   ~RestoreFile(){if(active){std::ofstream out(path,std::ios::binary|std::ios::trunc);
+    out.write(reinterpret_cast<const char*>(bytes.data()),static_cast<std::streamsize>(bytes.size()));}}} restore{path,original};
+  probe.reset();dx_data damaged;const bool damagedRead=probe.fileImport(path.string(),&damaged,false);
+  bool frameDiagnostic=false,pageChecksumDiagnostic=false;
+  const auto& rows=damaged.dwgReadOutcome.observations.integrity;
+  for(std::size_t i=0u;i<rows.retained;++i){const auto& row=rows.rows[i];
+   if(row.kind==DwgIntegrityCheckKind::ObjectFrameBounds&&row.hasLogicalHandle&&row.logicalHandle==5u)frameDiagnostic=true;
+   if(row.kind==DwgIntegrityCheckKind::DataPageChecksum||row.kind==DwgIntegrityCheckKind::DataPageCrc)pageChecksumDiagnostic=true;}
+  const bool noLeakedTickets=probe.tickets==0u&&probe.rowTickets==0u;
+  {std::ofstream out(path,std::ios::binary|std::ios::trunc);
+   out.write(reinterpret_cast<const char*>(original.data()),static_cast<std::streamsize>(original.size()));
+   if(!out)return 42;}
+  restore.active=false;probe.reset();dx_data retry;
+  const bool retryRead=probe.fileImport(path.string(),&retry,false);
+  const bool retryBound=retryRead&&probe.tickets==1u&&probe.rowTickets==3u
+      &&probe.ticketValid&&probe.rowTicketValid&&probe.controlFrame;
+  std::cout<<"imported="<<imported<<" damagedRead="<<damagedRead
+      <<" frameDiagnostic="<<frameDiagnostic<<" pageChecksumDiagnostic="<<pageChecksumDiagnostic
+      <<" noLeakedTickets="<<noLeakedTickets<<" retryRead="<<retryRead
+      <<" retryBound="<<retryBound<<" retryControlTickets="<<probe.tickets
+      <<" retryRowTickets="<<probe.rowTickets<<" retryControlValid="<<probe.ticketValid
+      <<" retryRowsValid="<<probe.rowTicketValid<<" physicalCompressedByte="<<physicalOffset<<'\n';
+  return imported&&frameDiagnostic&&!pageChecksumDiagnostic&&noLeakedTickets&&retryBound?0:43;
+ }
  if(argc==5&&std::string(argv[1])=="--dxf-roundtrip-resource"){
   const std::filesystem::path sourcePath(argv[2]),asciiPath(argv[3]),binaryPath(argv[4]);
   if(!std::filesystem::is_regular_file(sourcePath)||std::filesystem::exists(asciiPath)

@@ -1710,7 +1710,13 @@ created locally from scratch for the specific control.
   AC18 page/header checksums, requires an ObjectFrameBounds diagnostic without
   a page-checksum diagnostic or leaked tickets, restores the bytes and retries
   through the same adapter. This proves generated CRC rollback/retry;
-  corruption/retry on the physical producer file remains open
+  a hash-pinned physical AC1018 source now also passes selected control-frame
+  CRC corruption and same-adapter retry. The physical mutation maps only the
+  chosen decoded CRC byte to a unique literal in its compressed OBJECTS page,
+  verifies that exactly one decoded byte changes, and reseals the page data and
+  header checksums; the damaged read reports ObjectFrameBounds without a page
+  checksum error or leaked tickets. This closes the selected physical retry
+  action, not a general AC18 compressor or whole-file qualification
   ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)). A current-source probe
   observes exactly one LTYPE_CONTROL ticket for handle 0x5 after complete
   AC1018 import with all 226 frames published. The selected ordinary member
