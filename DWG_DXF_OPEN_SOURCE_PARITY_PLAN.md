@@ -1209,6 +1209,18 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P8 HELIX consumer carrier remains blocked:** a scratch LibreCAD_3
+  candidate preserves an unchanged same-revision HELIX and refuses its own
+  unremappable XDATA, while same-ID edits, replacement and deletion retain
+  the existing SPLINE behavior. It is not graph-safe: an independent LINE's
+  group-1005 reference to the source HELIX is dropped while the HELIX handle
+  is reminted, and an expected fail-closed test fails. Do not publish the
+  prototype. Next bind import-generation source identity, collect typed and
+  raw inbound/outbound references across sections, plan output handles before
+  early sections, and reject unresolved or opaque edges atomically. Verify
+  both consumers, edits/identity reuse and ASCII/Binary readback. See the
+  [prototype receipt](docs/research/p8-lc3-helix-carrier-graph-prototype-2026-11-10.json).
+
 - **P6 DIMENSION runtime safety:** the DXF writer now validates each public
   dimension subtype tag against the runtime type before any subtype downcast.
   Generic dimension objects and matching consumer subclasses remain admitted.
