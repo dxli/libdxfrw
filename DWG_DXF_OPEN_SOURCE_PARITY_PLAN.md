@@ -1,16 +1,27 @@
 # DWG/DXF parity — remaining implementation plan
 
-**Latest P6 local implementation slice (2026-11-11, scaled OCS inverse):**
+**Latest P6 local implementation slices (2026-11-11, scaled OCS dot products):**
 the explicit legacy-extrusion recovery API now scales finite coordinates before
 its inverse-basis dot products and uses compensated accumulation with fused
-product residuals. This avoids a false refusal when an intermediate sum
-overflows but the complete finite result is representable. The historical
-`applyExtrusion` path is unchanged; non-finite final coordinates still refuse.
-A generated near-`DBL_MAX` cancellation vector exercises the former overflow
-through all six shared recovery routes, and the focused legacy-extrusion CTest
-passes 1/1. This closes only that
-arithmetic case, not exact arithmetic, all finite transforms, native rendering,
-or producer qualification. See the [scaled-dot receipt](docs/research/p6-legacy-ocs-scaled-dot-overflow-2026-11-11.json).
+product residuals. The HATCH/MPOLYGON forward OCS-to-WCS path applies the same
+approach only for high-magnitude finite coordinates. Generated near-`DBL_MAX`
+cancellation vectors exercise both false-refusal and intermediate-overflow
+cases; the focused legacy-extrusion and HATCH OCS/WCS CTests pass 1/1 each.
+These close only the tested arithmetic cases, not exact arithmetic, all finite
+transforms, native rendering, or producer qualification. See the [inverse
+scaled-dot receipt](docs/research/p6-legacy-ocs-scaled-dot-overflow-2026-11-11.json)
+and [forward scaled-dot receipt](docs/research/p6-legacy-ocs-forward-scaled-dot-overflow-2026-11-11.json).
+
+**P6 OCS-to-WCS forward overflow slice (2026-11-11):** the HATCH boundary
+point/vector conversion (also inherited by MPOLYGON) now attempts the same
+scaled compensated dot-product approach for finite coordinates above
+`DBL_MAX/4`. A generated near-`DBL_MAX` vector previously overflowed the first
+two terms of a WCS component even though the third term made the final result
+finite. The focused HATCH OCS/WCS selector passes 1/1. Ordinary-magnitude
+inputs keep the existing arithmetic path; a failed stable attempt falls back
+to that path. This closes only the generated arithmetic case, not all extreme
+inputs or native rendering/producer qualification. No drawing fixture was
+added. See the [forward scaled-dot receipt](docs/research/p6-legacy-ocs-forward-scaled-dot-overflow-2026-11-11.json).
 
 **Latest P7 implementation slice (2026-11-11, ACIS 700 zero-count framing):**
 an ODA File Converter 27.1.0.0-produced AC1024 DWG from the known cube SAT

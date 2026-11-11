@@ -338,8 +338,67 @@ bool hasStableOcsBasis(const DRW_Coord& direction) noexcept {
     return calculateStableOcsAxes(direction, axisX, axisY, axisZ);
 }
 
+bool scaledCompensatedDot(const double* coefficients,
+                          const DRW_Coord& coordinate,
+                          double& result) noexcept {
+    const double scale = std::max({std::fabs(coordinate.x),
+                                   std::fabs(coordinate.y),
+                                   std::fabs(coordinate.z)});
+    if (!std::isfinite(scale)) return false;
+    if (scale == 0.0) {
+        result = 0.0;
+        return true;
+    }
+    const double values[] = {coordinate.x / scale,
+                             coordinate.y / scale,
+                             coordinate.z / scale};
+    double sum = 0.0;
+    double correction = 0.0;
+    for (std::size_t i = 0; i < 3u; ++i) {
+        const double product = coefficients[i] * values[i];
+        const double next = sum + product;
+        if (std::fabs(sum) >= std::fabs(product))
+            correction += (sum - next) + product;
+        else
+            correction += (product - next) + sum;
+        sum = next;
+        correction += std::fma(coefficients[i], values[i], -product);
+    }
+    const double normalized = sum + correction;
+    result = normalized * scale;
+    return std::isfinite(normalized) && std::isfinite(result);
+}
+
+bool transformOcsCoordinateStable(const DRW_Coord& normal,
+                                  const DRW_Coord& coordinate,
+                                  DRW_Coord& result) noexcept {
+    if (!std::isfinite(coordinate.x) || !std::isfinite(coordinate.y)
+        || !std::isfinite(coordinate.z)) return false;
+    DRW_Coord axisX, axisY, axisZ;
+    if (!calculateStableOcsAxes(normal, axisX, axisY, axisZ)) return false;
+    DRW_Coord candidate;
+    const double xCoefficients[] = {axisX.x, axisY.x, axisZ.x};
+    const double yCoefficients[] = {axisX.y, axisY.y, axisZ.y};
+    const double zCoefficients[] = {axisX.z, axisY.z, axisZ.z};
+    if (!scaledCompensatedDot(xCoefficients, coordinate, candidate.x)
+        || !scaledCompensatedDot(yCoefficients, coordinate, candidate.y)
+        || !scaledCompensatedDot(zCoefficients, coordinate, candidate.z))
+        return false;
+    result = candidate;
+    return true;
+}
+
 DRW_Coord transformOcsCoordinate(DRW_Coord normal,
                                  const DRW_Coord& coordinate) {
+    const double scale = std::max({std::fabs(coordinate.x),
+                                   std::fabs(coordinate.y),
+                                   std::fabs(coordinate.z)});
+    if (std::isfinite(scale)
+        && scale > std::numeric_limits<double>::max() / 4.0) {
+        DRW_Coord stableResult;
+        if (transformOcsCoordinateStable(normal, coordinate, stableResult))
+            return stableResult;
+    }
     DRW_Coord axisX;
     DRW_Coord axisY;
     calculateOcsAxes(normal, axisX, axisY);

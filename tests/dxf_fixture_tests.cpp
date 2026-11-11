@@ -26814,6 +26814,26 @@ void testHatchOcsWcsCoordinateMapping(TestContext& t) {
     t.expect(equalPoint(hatch.boundaryPointToWcs(localPoint),
                         -2.0, 3.0, -4.0),
              "negative WCS Z extrusion follows the arbitrary-axis rule");
+
+    hatch.extPoint = DRW_Coord(-0.5598695611870558,
+                               -0.5866966310980342,
+                                0.5850924179259470);
+    const double largest = std::numeric_limits<double>::max();
+    const DRW_Coord largeOcsVector(-0.8696819267698970 * largest,
+                                    0.9829157734821004 * largest,
+                                    0.14921939908714688 * largest);
+    const DRW_Coord largeWcsVector =
+        hatch.boundaryVectorToWcs(largeOcsVector);
+    t.expect(std::isfinite(largeWcsVector.x)
+                 && std::isfinite(largeWcsVector.y)
+                 && std::isfinite(largeWcsVector.z)
+                 && std::abs(largeWcsVector.x / largest
+                             - (-0.31568660864772236)) < 1e-14
+                 && std::abs(largeWcsVector.y / largest
+                             - 0.9289141273359566) < 1e-14
+                 && std::abs(largeWcsVector.z / largest
+                             - 0.8844190238400710) < 1e-14,
+             "HATCH OCS vector avoids overflowing an intermediate sum when the WCS result is finite");
 }
 
 bool writeUnderlayOcsControl(const std::filesystem::path& path,
