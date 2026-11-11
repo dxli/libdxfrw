@@ -640,6 +640,67 @@ bool insertControls(const std::filesystem::path& dir, bool binary) {
     retryInput.inserts[1] = original;
     return retryWriter.write(&retryInput,DRW::AC1027,binary);
 }
+
+template<class T>
+bool unstableBasisControl() {
+    T source;
+    source.basePoint = {0., 1e308, 0.};
+    source.extPoint = {1e-170, 1e-170, 1.};
+    source.haveExtrusion = true;
+    source.layer = "SOURCE";
+    source.applyExtrusion();
+    const DRW_Coord before = source.basePoint;
+    T output;
+    output.basePoint = {7., 8., 9.};
+    output.layer = "SENTINEL";
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(source, output)
+        || output.basePoint.x != 7. || output.basePoint.y != 8.
+        || output.basePoint.z != 9. || output.layer != "SENTINEL"
+        || source.basePoint.x != before.x || source.basePoint.y != before.y
+        || source.basePoint.z != before.z || source.layer != "SOURCE") return false;
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(source, source)
+        || source.basePoint.x != before.x || source.basePoint.y != before.y
+        || source.basePoint.z != before.z || source.layer != "SOURCE") return false;
+    // The caller asserts no legacy transformation was applied: a nonzero
+    // extreme normal remains a no-op and must not trigger the new check.
+    source.haveExtrusion = false;
+    if (!DRW_DxfLegacyExtrusion::toNativeOcs(source, output)
+        || output.basePoint.x != before.x || output.basePoint.y != before.y
+        || output.basePoint.z != before.z || output.layer != "SOURCE") return false;
+    // Correcting the direction permits retry; uniform subnormal direction
+    // components also normalize safely and retain the prior behavior.
+    const double tiny = std::numeric_limits<double>::denorm_min();
+    for (const DRW_Coord normal : {DRW_Coord{3., 4., -5.},
+                                   DRW_Coord{tiny, tiny, tiny}}) {
+        source.extPoint = normal;
+        source.basePoint = {2., 3., 4.};
+        source.haveExtrusion = true;
+        source.applyExtrusion();
+        if (!DRW_DxfLegacyExtrusion::toNativeOcs(source, output)
+            || !same(output.basePoint, DRW_Coord{2., 3., 4.})) return false;
+    }
+    return true;
+}
+
+bool unstableBasisControls(const std::filesystem::path& dir, bool binary) {
+    if (!unstableBasisControl<DRW_Circle>() || !unstableBasisControl<DRW_Arc>()
+        || !unstableBasisControl<DRW_Trace>() || !unstableBasisControl<DRW_Solid>()
+        || !unstableBasisControl<DRW_Text>() || !unstableBasisControl<DRW_Insert>())
+        return false;
+    const auto path = dir / (binary ? "basis-retry-binary.dxf" : "basis-retry-ascii.dxf");
+    { std::ofstream f(path, std::ios::binary); f << "unchanged"; }
+    Adapter input; input.convert = true;
+    DRW_Circle circle; circle.radious = 1.; circle.basePoint = {0., 1e308, 0.};
+    circle.extPoint = {1e-170, 1e-170, 1.}; circle.haveExtrusion = true;
+    circle.applyExtrusion(); input.circles.push_back(circle);
+    dxfRW writer(path.string().c_str()); input.writer = &writer;
+    if (writer.write(&input, DRW::AC1027, binary)) return false;
+    { std::ifstream in(path, std::ios::binary);
+      if (std::string((std::istreambuf_iterator<char>(in)), {}) != "unchanged") return false; }
+    input.circles[0].extPoint = {0., 0., 1.};
+    input.circles[0].basePoint = {2., 3., 4.};
+    return writer.write(&input, DRW::AC1027, binary);
+}
 } // namespace
 
 int main(int argc, char** argv) {
@@ -656,6 +717,7 @@ int main(int argc, char** argv) {
         pass = traceControls(dir, binary) && pass;
         pass = textControls(dir, binary) && pass;
         pass = insertControls(dir, binary) && pass;
+        pass = unstableBasisControls(dir, binary) && pass;
     }
     pass = dwgRoundTrip(dir) && pass;
     pass = dwgRefusalAndRetry(dir / "ac1024-retry.dwg") && pass;

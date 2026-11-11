@@ -18,7 +18,9 @@
 //
 // Exact built-in runtime types for both input and output, and matching input
 // entity tags, are required to avoid slicing or partially overwriting derived
-// payloads. A zero/nonfinite normal,
+// payloads. For an applied extrusion, a direction or basis whose nonzero
+// components or cross-products were lost or subnormal is refused because
+// the inverse cannot reliably recover the original coordinates. A zero/nonfinite normal,
 // nonfinite fields, type mismatch or unrepresentable result fails without
 // changing the output; the input and output may alias. The returned copy is for
 // native DXF OCS or AC1024 DWG output. Other DWG revisions are unqualified.

@@ -293,6 +293,51 @@ void calculateOcsAxes(DRW_Coord direction, DRW_Coord& axisX,
     axisY.unitize();
 }
 
+// Conservative admission for explicit nonmutating OCS conversions. The
+// historical applyExtrusion methods retain their legacy behavior, but a
+// conversion that promises recoverable geometry must refuse a basis whose
+// nonzero components or products were lost before multiplying coordinates.
+bool calculateStableOcsAxes(const DRW_Coord& direction, DRW_Coord& axisX,
+                            DRW_Coord& axisY, DRW_Coord& axisZ) noexcept {
+    if (!std::isfinite(direction.x) || !std::isfinite(direction.y)
+        || !std::isfinite(direction.z)
+        || (direction.x == 0.0 && direction.y == 0.0 && direction.z == 0.0))
+        return false;
+    const auto lostOrSubnormal = [](double original, double normalized) {
+        return original != 0.0 && (normalized == 0.0
+            || std::fpclassify(normalized) == FP_SUBNORMAL);
+    };
+    const DRW_Coord normal = extrusionUnitVector(direction);
+    if (lostOrSubnormal(direction.x, normal.x)
+        || lostOrSubnormal(direction.y, normal.y)
+        || lostOrSubnormal(direction.z, normal.z)) return false;
+    calculateOcsAxes(direction, axisX, axisY);
+    axisZ = DRW_Coord(
+        axisX.y * axisY.z - axisX.z * axisY.y,
+        axisX.z * axisY.x - axisX.x * axisY.z,
+        axisX.x * axisY.y - axisX.y * axisY.x);
+    for (const double component : {axisX.x, axisX.y, axisX.z,
+                                   axisY.x, axisY.y, axisY.z,
+                                   axisZ.x, axisZ.y, axisZ.z}) {
+        if (!std::isfinite(component) || std::fpclassify(component) == FP_SUBNORMAL)
+            return false;
+    }
+    if (lostOrSubnormal(normal.x, axisZ.x)
+        || lostOrSubnormal(normal.y, axisZ.y)
+        || lostOrSubnormal(normal.z, axisZ.z)) return false;
+    const bool polar = std::fabs(normal.x) < 0.015625
+        && std::fabs(normal.y) < 0.015625;
+    return !((polar && ((normal.x != 0.0 && normal.y != 0.0 && axisY.x == 0.0)
+                        || (normal.y != 0.0 && normal.z != 0.0 && axisY.z == 0.0)))
+             || (!polar && ((normal.x != 0.0 && normal.z != 0.0 && axisY.x == 0.0)
+                            || (normal.y != 0.0 && normal.z != 0.0 && axisY.y == 0.0))));
+}
+
+bool hasStableOcsBasis(const DRW_Coord& direction) noexcept {
+    DRW_Coord axisX, axisY, axisZ;
+    return calculateStableOcsAxes(direction, axisX, axisY, axisZ);
+}
+
 DRW_Coord transformOcsCoordinate(DRW_Coord normal,
                                  const DRW_Coord& coordinate) {
     DRW_Coord axisX;
@@ -9377,6 +9422,7 @@ bool validLegacyDxfExtrusion(const DRW_Circle& value) noexcept {
 
 bool restoreLegacyDxfCenter(DRW_Circle& value) noexcept {
     if (!value.haveExtrusion) return true;
+    if (!hasStableOcsBasis(value.extPoint)) return false;
     const DRW_Coord center = inverseTransformOcsCoordinate(value.extPoint,
                                                             value.basePoint);
     if (!std::isfinite(center.x) || !std::isfinite(center.y)
@@ -9395,6 +9441,7 @@ bool restoreLegacyDxfTrace(DRW_Trace& value) noexcept {
         || (value.extPoint.x == 0.0 && value.extPoint.y == 0.0
             && value.extPoint.z == 0.0)) return false;
     if (!value.haveExtrusion) return true;
+    if (!hasStableOcsBasis(value.extPoint)) return false;
     DRW_Coord* const points[] = {&value.basePoint, &value.secPoint,
                                  &value.thirdPoint, &value.fourPoint};
     for (DRW_Coord* point : points) {
@@ -9483,6 +9530,7 @@ bool DRW_DxfLegacyExtrusion::toNativeOcs(const DRW_Text& input,
     try {
         DRW_Text candidate(input);
         if (candidate.haveExtrusion) {
+            if (!hasStableOcsBasis(candidate.extPoint)) return false;
             candidate.basePoint = inverseTransformOcsCoordinate(
                 candidate.extPoint, candidate.basePoint);
             candidate.secPoint = inverseTransformOcsCoordinate(
@@ -9514,6 +9562,7 @@ bool DRW_DxfLegacyExtrusion::toNativeOcs(const DRW_Insert& input,
     try {
         DRW_Insert candidate(input);
         if (candidate.haveExtrusion) {
+            if (!hasStableOcsBasis(candidate.extPoint)) return false;
             candidate.basePoint = inverseTransformOcsCoordinate(
                 candidate.extPoint, candidate.basePoint);
             if (!finite(candidate.basePoint)) return false;
@@ -16598,40 +16647,9 @@ bool DRW_DxfGeometry::lwPolylineVerticesToWcs(
         || !std::isfinite(n.x) || !std::isfinite(n.y) || !std::isfinite(n.z)
         || (n.x == 0.0 && n.y == 0.0 && n.z == 0.0))
         return false;
-    // A tiny direction component or basis product can lose precision before
-    // multiplication by a large coordinate would make its contribution
-    // significant. Fail closed for those extremes; do not change the shared
-    // axis calculation used by legacy 2D consumers.
-    const auto lostOrSubnormal = [](double original, double normalized) {
-        return original != 0.0 && (normalized == 0.0
-            || std::fpclassify(normalized) == FP_SUBNORMAL);
-    };
-    const DRW_Coord normal = extrusionUnitVector(n);
-    if (lostOrSubnormal(n.x, normal.x) || lostOrSubnormal(n.y, normal.y)
-        || lostOrSubnormal(n.z, normal.z)) return false;
     try {
-        DRW_Coord axisX, axisY;
-        calculateOcsAxes(n, axisX, axisY);
-        const DRW_Coord axisZ(
-            axisX.y * axisY.z - axisX.z * axisY.y,
-            axisX.z * axisY.x - axisX.x * axisY.z,
-            axisX.x * axisY.y - axisX.y * axisY.x);
-        for (const double component : {axisX.x, axisX.y, axisX.z,
-                                       axisY.x, axisY.y, axisY.z,
-                                       axisZ.x, axisZ.y, axisZ.z}) {
-            if (!std::isfinite(component) || std::fpclassify(component) == FP_SUBNORMAL)
-                return false;
-        }
-        if (lostOrSubnormal(normal.x, axisZ.x)
-            || lostOrSubnormal(normal.y, axisZ.y)
-            || lostOrSubnormal(normal.z, axisZ.z)) return false;
-        const bool polar = std::fabs(normal.x) < 0.015625
-            && std::fabs(normal.y) < 0.015625;
-        if ((polar && ((normal.x != 0.0 && normal.y != 0.0 && axisY.x == 0.0)
-                       || (normal.y != 0.0 && normal.z != 0.0 && axisY.z == 0.0)))
-            || (!polar && ((normal.x != 0.0 && normal.z != 0.0 && axisY.x == 0.0)
-                           || (normal.y != 0.0 && normal.z != 0.0 && axisY.y == 0.0))))
-            return false;
+        DRW_Coord axisX, axisY, axisZ;
+        if (!calculateStableOcsAxes(n, axisX, axisY, axisZ)) return false;
         std::vector<DRW_Coord> converted;
         converted.reserve(input.vertlist.size());
         for (const auto& vertex : input.vertlist) {

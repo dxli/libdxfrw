@@ -5855,6 +5855,16 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 
 ## P6 — residual semantic and version audit
 
+Explicit legacy-extrusion recovery now refuses applied OCS bases whose
+nonzero components or cross-products are lost or subnormal, reusing the
+existing LWPOLYLINE stability guard. This prevents a successful but inaccurate
+inverse for the generated mixed-scale CIRCLE witness and applies to ARC,
+TRACE, SOLID, TEXT and INSERT. Native/no-extrusion behavior and legacy 2D
+callbacks are unchanged. Ordinary finite arithmetic can still round, and the
+helper cannot reconstruct information already lost before it was called; full
+finite-coordinate, 3D renderer and producer qualification remain open
+([receipt](docs/research/p6-legacy-ocs-inverse-stability-2026-11-11.json)).
+
 AC1027 DWG LIGHT hotspot/falloff angles are now converted from radians to DXF
 degrees in a per-import, per-record converter carrier, preserving the public
 DWG callbacks and the degree-valued DXF callbacks. A generated source and an
