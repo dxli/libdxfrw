@@ -4848,6 +4848,19 @@ this source. See the
 [online-sample receipt](docs/research/p6-ac1024-online-sample-rtm-nonreproduction-2026-11-09.json)
 and the public [`nextgis/dwg_samples` source](https://github.com/nextgis/dwg_samples).
 
+A separate test-corpus candidate, Apache Tika's `testDWGmech2010.dwg`, is
+AC1024 (467,023 bytes; SHA-256
+`b588a667d6474708fcf45ed89c428bf87287c765f8ac5025f59ebd20c37630a4`), matching
+the independent TNYCL/cadkit corpus manifest. The current reader reaches
+`dwgReader24::readDwgClasses END`, reports `operationSucceeded=true` and
+`legacyError=0`, and publishes all 7,241 observed frames with zero entity/object
+parse failures. Strict DXF output is refused later because the read disposition
+is not strict-complete. The test-corpus filename does not establish the DWG
+producer build, so this does not reproduce or resolve the AutoCAD 2010 RTM
+report. Keep the class-size path unchanged until the exact failing input/hash or
+a provenance-qualified RTM witness is available. The external file remains in
+`/tmp`; no fixture was added ([screen receipt](docs/research/p6-ac1024-tika-testdwgmech2010-class-screen-2026-11-11.json)).
+
 **Expanded external AC1024 sample screen (2026-11-09):** downloaded 18 DWGs
 from LibreDWG's public `test/test-data/2010` directory and all 18 DWGs in
 Autodesk's historically indexed sample collection to `/private/tmp`. The
