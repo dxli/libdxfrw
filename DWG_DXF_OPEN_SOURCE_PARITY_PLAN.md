@@ -1246,21 +1246,22 @@ created locally from scratch for the specific control.
   independent normal/orientation result. See the [face-flag receipt](docs/research/p7-ac1024-21500-face-flag-projection-2026-11-11.json)
   and [generic projection receipt](docs/research/p7-ac1024-21500-generic-face-flags-2026-11-11.json).
 
-- **P7 AC1024 local transformed-body witness screen (2026-11-11):** the
-  hash-pinned local `visualization_-_conference_room.dwg` source
-  (`0579e4b5746593ff41d9326e488b1faddc0f7cc10e7db5317fc1d5b86f0132c4`)
-  contains 33 distinct 3DSOLID entities. LibreDWG 0.14 JSON exposes 33
-  complete inline `ACIS BinaryFile` payloads; after restoring the omitted
-  signature field, the current SAB parser accepts all 33 as version 21500 and
-  the rooted projection reports no body transform pointer for any of them.
-  The sorted handle/byte-count/payload-hash inventory is bound by
-  `a8668ad9600022b6e2eb4bc1b6e7dd2e9d7cf9b748932255b472078d6dd13b6c`.
-  This negative screen does not establish a version-wide absence rule or
-  transform semantics. Mark this local source exhausted for transform work;
-  resume that lane only with a new hash-pinned non-null transform witness or a
-  specifically scoped generated control backed by an independent placement
-  oracle. No external DWG/DXF fixture was added. See the [source-screen
-  receipt](docs/research/p7-ac1024-conference-room-transform-source-screen-2026-11-11.json).
+- **P7 AC1024 local transformed-body witness screen (2026-11-11):** the four
+  hash-pinned local visualization DWGs already used for opaque-carrier work
+  contain 129 distinct inline 3DSOLID SAB payloads (aerial 5, conference room
+  33, condominium 76, sun-and-sky 15). LibreDWG 0.14 JSON identifies all 129 as
+  `ACIS BinaryFile`; the current parser accepts all as version 21500 and its
+  rooted projection reports no body transform pointer for any. The condominium
+  JSON contains a bare `nan` emitted in a Sweep field; a scratch-only repair
+  changed only that token to JSON `NaN` before inventory. Per-source and
+  combined payload-index digests are recorded in the [corpus receipt](docs/research/p7-ac1024-local-transform-source-corpus-screen-2026-11-11.json);
+  the [conference-room receipt](docs/research/p7-ac1024-conference-room-transform-source-screen-2026-11-11.json)
+  retains its detailed single-source scan. This negative screen is bounded to
+  these four files; it establishes no version-wide absence rule or transform
+  semantics. Mark these sources exhausted for transform work. Resume only with
+  a new hash-pinned non-null transform witness or a specifically scoped
+  generated control backed by an independent placement oracle. No external
+  DWG/DXF fixture was added.
   The from-scratch ACIS 21500 rooted-graph control now also asserts the exact
   transform literal, all twelve retained candidate components, the resolved
   body pointer, and explicit unapplied transform/unit status. The focused
