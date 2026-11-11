@@ -1595,11 +1595,15 @@ created locally from scratch for the specific control.
   `0x11` callback binds its EED reference to APPID `0x12` (`ACAD`) while the
   ordinary resolved `ACAD`/`Arial` strings remain intact. This closes only the
   selected reference-to-row join. APPID_CONTROL siblings `0xcd`/`0xd7` now
-  also reach typed same-import rows with unchanged DWG name source tokens; their
-  complete physical body spans, font meaning, STYLE_CONTROL and output ordering
-  remain open; see the [STYLE
-  EED APPID binding receipt](docs/research/p5-ac1018-style-eed-appid-reader-binding-2026-11-11.json).
-  Bind those records and remaining siblings before claiming resource closure.
+  also reach typed same-import rows with unchanged DWG name source tokens. A
+  scratch-archive capture after CRC validation now binds both sibling bodies to
+  the selected source with exact name, xref, control-owner, null-xref and pad
+  spans; the bit walker checks their roles against ODA §§20.4.65–20.4.66 and
+  LibreDWG 0.14. This closes only these two APPID bodies in this selected file;
+  it does not qualify producer-wide APPID closure or fonts. See the [resource
+  wire receipt](docs/research/p5-ac1018-table-style-ltype-resource-wire-2026-11-11.json)
+  and [STYLE EED APPID binding receipt](docs/research/p5-ac1018-style-eed-appid-reader-binding-2026-11-11.json).
+  STYLE_CONTROL, remaining resources, font meaning and output ordering remain open.
   A bounded standalone
   LTYPE_CONTROL/ByBlock observer now checks selected frame fields and roles
   ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)).

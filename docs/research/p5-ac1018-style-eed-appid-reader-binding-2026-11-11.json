@@ -21,14 +21,30 @@
     "objectParseFailures": 0,
     "selectedStyleHandle": "0x11",
     "callbackCount": 1,
-    "appIdReferences": ["0x12"],
-    "allAppIdsResolve": true,
-    "resolvedAppIdRow": {"handle": "0x12", "name": "ACAD"},
-    "typedAppIdControlSiblings": [
-      {"handle": "0xcd", "name": "ACAD_DSTYLE_DIMJOGGED_JOGANGLE_SYMBOL", "unchangedDwgNameSource": true},
-      {"handle": "0xd7", "name": "ACAD_MLEADERVER", "unchangedDwgNameSource": true}
+    "appIdReferences": [
+      "0x12"
     ],
-    "resolvedStyleEed": {"group1001": "ACAD", "group1000": "Arial"},
+    "allAppIdsResolve": true,
+    "resolvedAppIdRow": {
+      "handle": "0x12",
+      "name": "ACAD"
+    },
+    "typedAppIdControlSiblings": [
+      {
+        "handle": "0xcd",
+        "name": "ACAD_DSTYLE_DIMJOGGED_JOGANGLE_SYMBOL",
+        "unchangedDwgNameSource": true
+      },
+      {
+        "handle": "0xd7",
+        "name": "ACAD_MLEADERVER",
+        "unchangedDwgNameSource": true
+      }
+    ],
+    "resolvedStyleEed": {
+      "group1001": "ACAD",
+      "group1000": "Arial"
+    },
     "styleFont": "arial.ttf"
   },
   "validation": {
@@ -36,7 +52,7 @@
     "result": "PASS. Build succeeded; focused physical-source diagnostic returned 0 and reported one selected STYLE 0x11 callback, APPID handle 0x12 resolving to the typed ACAD row, both additional APPID_CONTROL rows resolving to typed rows with unchanged DWG name sources, and resolved ACAD/Arial EED strings."
   },
   "remaining": [
-    "APPID_CONTROL sibling rows 0xcd and 0xd7 now bind to typed same-import rows with unchanged name-field source tokens; their complete physical body field spans and any additional dependencies remain unqualified.",
+    "The two sibling APPID rows now have CRC-checked selected-source body spans and ODA/LibreDWG cross-checks in the companion resource-wire receipt; broader producer-profile closure and dependencies outside these rows remain open.",
     "STYLE_CONTROL and remaining LTYPE/STYLE resources remain open.",
     "Font resolution/rendering, physical source-to-output ordering, recursive graph closure, transactional output/readback, independent consumer semantics, and Linux/Windows qualification remain open."
   ],
