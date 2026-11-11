@@ -18,5 +18,10 @@ struct Result {
 // Failure clears result and no unobserved typed fields are certified.
 bool inspect(const DRW_UnsupportedObject& control,const DRW_UnsupportedObject& byBlock,
              const DRW_LType& typed,Result&) noexcept;
+// ODA v5.4.1 §20.4.57 normative order: ordinary entries, then ByLayer,
+// then ByBlock. Separate from inspect(), which records the pinned anomalous
+// source order. Both are bounded projections, not source tickets.
+bool inspectNormativeOrder(const DRW_UnsupportedObject& control,const DRW_UnsupportedObject& byBlock,
+                           const DRW_LType& typed,Result&) noexcept;
 }
 #endif

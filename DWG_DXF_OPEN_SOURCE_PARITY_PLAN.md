@@ -1414,8 +1414,9 @@ created locally from scratch for the specific control.
   STYLE_CONTROL, ordinary LTYPE rows and the ByLayer sibling still need
   same-import identity and role binding. ODA §20.4.57 specifies ByLayer then
   ByBlock, while this pinned source and LibreDWG report ByBlock then ByLayer.
-  Treat that as a source anomaly; add normative-order controls separately and
-  do not generalize this profile. See the [resource wire receipt](docs/research/p5-ac1018-table-style-ltype-resource-wire-2026-11-11.json).
+  Treat that as a source anomaly. The observer now exposes a separate normative
+  order check with exact ByLayer/ByBlock spans; same-import source binding and
+  output remain open. See the [resource wire receipt](docs/research/p5-ac1018-table-style-ltype-resource-wire-2026-11-11.json).
   See the [DATATABLE candidate receipt](docs/research/p5-ac1018-datatable-candidate-observer-2026-11-11.json).
 
   The recreated AC1018 XRECORD `0xbc` is now independently walked to its

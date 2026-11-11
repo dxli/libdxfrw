@@ -32,8 +32,9 @@ bool common(dwgBuffer& b,const DRW_UnsupportedObject& raw,int type,std::uint32_t
         &&within(b,end)&&bs(b,end,0u)&&bl(b,end,0)&&b.getBit()==1u&&within(b,end);
 }
 }
-bool inspect(const DRW_UnsupportedObject& control,const DRW_UnsupportedObject& row,
-             const DRW_LType& typed,Result& result) noexcept {
+namespace {
+bool inspectOrder(const DRW_UnsupportedObject& control,const DRW_UnsupportedObject& row,
+                  const DRW_LType& typed,Result& result,bool normative) noexcept {
     result={};
     if(!metadata(control,56)||!metadata(row,57)||control.m_handle==row.m_handle
         ||typed.tType!=DRW::LTYPE||typed.handle!=row.m_handle||typed.parentHandle!=control.m_handle
@@ -49,8 +50,11 @@ bool inspect(const DRW_UnsupportedObject& control,const DRW_UnsupportedObject& r
         const auto controlTotal=static_cast<std::uint64_t>(control.m_rawBytes.size())*8u;
         if(!common(c,control,56,r.controlDataEndBit)||!bl(c,r.controlDataEndBit,1)
             ||bit(c)!=r.controlDataEndBit)return false;
-        Ref nullOwner;if(!handle(c,4u,nullOwner,true)||!handle(c,2u,r.ordinary)
-            ||!handle(c,3u,r.byBlockPhantom)||!handle(c,3u,r.byLayerPhantom))return false;
+        Ref nullOwner,firstPhantom,secondPhantom;
+        if(!handle(c,4u,nullOwner,true)||!handle(c,2u,r.ordinary)
+            ||!handle(c,3u,firstPhantom)||!handle(c,3u,secondPhantom))return false;
+        if(normative){r.byLayerPhantom=firstPhantom;r.byBlockPhantom=secondPhantom;}
+        else {r.byBlockPhantom=firstPhantom;r.byLayerPhantom=secondPhantom;}
         r.controlHandleEndBit=bit(c);if(!padding(c,controlTotal))return false;
         r.control=control.m_handle;r.byBlock=row.m_handle;
         if(r.byBlockPhantom.target!=r.byBlock||r.ordinary.target==r.control||r.ordinary.target==r.byBlock
@@ -79,5 +83,14 @@ bool inspect(const DRW_UnsupportedObject& control,const DRW_UnsupportedObject& r
             ||row.m_xDictFlag!=1u||row.m_xDictHandle!=0u))return false;
         result=r;return true;
     }catch(...){result={};return false;}
+}
+}
+bool inspect(const DRW_UnsupportedObject& control,const DRW_UnsupportedObject& row,
+             const DRW_LType& typed,Result& result) noexcept {
+    return inspectOrder(control,row,typed,result,false);
+}
+bool inspectNormativeOrder(const DRW_UnsupportedObject& control,const DRW_UnsupportedObject& row,
+                           const DRW_LType& typed,Result& result) noexcept {
+    return inspectOrder(control,row,typed,result,true);
 }
 }

@@ -59,7 +59,14 @@ bool generated(){auto c=control();auto r=row();auto t=typed();Result v;
     Options o;o.nullRole=3u;if(!reject(control(o),row(o),typed(o)))return false;o={};o.ordinaryRole=3u;if(!reject(control(o),row(o),typed(o)))return false;
     o={};o.phantomRole=2u;if(!reject(control(o),row(o),typed(o)))return false;o={};o.otherRole=2u;if(!reject(control(o),row(o),typed(o)))return false;
     o={};o.ownerRole=3u;if(!reject(control(o),row(o),typed(o)))return false;o={};o.xrefRole=4u;if(!reject(control(o),row(o),typed(o)))return false;
-    o={};o.reverse=true;if(!reject(control(o),row(o),typed(o)))return false;o={};o.invalidCount=true;if(!reject(control(o),row(o),typed(o)))return false;
+    o={};o.reverse=true;c=control(o);r=row(o);t=typed(o);
+    if(!reject(c,r,t))return false;
+    if(!DwgLTypeControlByBlockAc1018Candidate::inspectNormativeOrder(c,r,t,v)
+        ||v.byLayerPhantom.target!=0x15u||v.byLayerPhantom.startBit!=97u||v.byLayerPhantom.endBit!=113u
+        ||v.byBlockPhantom.target!=0x14u||v.byBlockPhantom.startBit!=113u||v.byBlockPhantom.endBit!=129u)return false;
+    c=control();r=row();t=typed();
+    if(DwgLTypeControlByBlockAc1018Candidate::inspectNormativeOrder(c,r,t,v)||!clear(v))return false;
+    o={};o.invalidCount=true;if(!reject(control(o),row(o),typed(o)))return false;
     o={};o.reservedCount=true;if(!reject(control(o),row(o),typed(o)))return false;o={};o.eed=true;if(!reject(control(o),row(o),typed(o)))return false;
     o={};o.reactors=true;if(!reject(control(o),row(o),typed(o)))return false;o={};o.xdict=true;if(!reject(control(o),row(o),typed(o)))return false;
     o={};o.badName=true;if(!reject(control(o),row(o),typed(o)))return false;o={};o.badArea=true;if(!reject(control(o),row(o),typed(o)))return false;
