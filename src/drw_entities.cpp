@@ -15491,26 +15491,43 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
     constexpr std::array<std::uint32_t, 3> rowTextColorFlags = {{
         0x00000020u, 0x00000040u, 0x00000080u
     }};
+    constexpr std::array<std::uint32_t, 3> rowFillNoneFlags = {{
+        0x00000100u, 0x00000200u, 0x00000400u
+    }};
+    constexpr std::array<std::uint32_t, 3> rowFillColorFlags = {{
+        0x00000800u, 0x00001000u, 0x00002000u
+    }};
     constexpr std::array<std::uint32_t, 3> rowTextHeightFlags = {{
         0x00100000u, 0x00200000u, 0x00400000u
     }};
     constexpr std::array<std::uint32_t, 3> rowTextStyleFlags = {{
         0x00020000u, 0x00040000u, 0x00080000u
     }};
+    const auto validIndexColor = [](const DRW_DwgCmColor& value) {
+        return !value.hasRgbColor && value.flags == 0u && value.rgb24 == -1
+            && value.colorName.empty() && value.bookName.empty()
+            && ((value.method == 0xC0u && value.index == 256u)
+                || (value.method == 0xC1u && value.index == 0u)
+                || (value.method == 0xC3u && value.index >= 1u
+                    && value.index <= 255u));
+    };
     const auto validTableRowOverrides = [&]() {
         for (std::size_t i = 0u; i < rowAlignmentFlags.size(); ++i) {
             const bool hasTextColor =
                 (m_tableOverrideFlags & rowTextColorFlags[i]) != 0u;
             const DRW_DwgCmColor& textColor = m_tableRowTextColors[i];
-            const bool validIndexColor = !textColor.hasRgbColor
-                && textColor.flags == 0u
-                && textColor.rgb24 == -1 && textColor.colorName.empty()
-                && textColor.bookName.empty()
-                && ((textColor.method == 0xC0u && textColor.index == 256u)
-                    || (textColor.method == 0xC1u && textColor.index == 0u)
-                    || (textColor.method == 0xC3u && textColor.index >= 1u
-                        && textColor.index <= 255u));
-            if (hasTextColor ? !validIndexColor : !defaultColor(textColor))
+            if (hasTextColor ? !validIndexColor(textColor)
+                             : !defaultColor(textColor))
+                return false;
+            const bool hasFillNone =
+                (m_tableOverrideFlags & rowFillNoneFlags[i]) != 0u;
+            if (!hasFillNone && m_tableRowFillNone[i])
+                return false;
+            const bool hasFillColor =
+                (m_tableOverrideFlags & rowFillColorFlags[i]) != 0u;
+            const DRW_DwgCmColor& fillColor = m_tableRowFillColors[i];
+            if (hasFillColor ? !validIndexColor(fillColor)
+                             : !defaultColor(fillColor))
                 return false;
             const bool hasAlignment =
                 (m_tableOverrideFlags & rowAlignmentFlags[i]) != 0u;
@@ -15536,7 +15553,7 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
         return true;
     };
     const bool validTableScalarOverrides =
-        (m_tableOverrideFlags & ~0x007FC0FFu) == 0u
+        (m_tableOverrideFlags & ~0x007FFFFFu) == 0u
         && validTableRowOverrides()
         && (hasTitleSuppressed || !m_titleSuppressed)
         && (m_headerSuppressed == hasHeaderSuppressed)
@@ -15616,14 +15633,6 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
         || std::any_of(m_tableRowTextStyleNames.cbegin(),
                        m_tableRowTextStyleNames.cend(),
                        [](const UTF8STRING& name) { return !name.empty(); })
-        || std::any_of(m_tableRowFillNone.cbegin(),
-                       m_tableRowFillNone.cend(),
-                       [](bool value) { return value; })
-        || std::any_of(m_tableRowFillColors.cbegin(),
-                       m_tableRowFillColors.cend(),
-                       [&](const DRW_DwgCmColor& color) {
-                           return !defaultColor(color);
-                       })
         || std::any_of(m_tableBorderColors.cbegin(),
                        m_tableBorderColors.cend(),
                        [&](const DRW_DwgCmColor& color) {
@@ -15992,6 +16001,18 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
             for (std::size_t i = 0u; i < rowTextColorFlags.size(); ++i) {
                 if ((m_tableOverrideFlags & rowTextColorFlags[i]) != 0u) {
                     const DRW_DwgCmColor& color = m_tableRowTextColors[i];
+                    stagedBody.putCmColor(
+                        version, color.method, color.index, color.rgb24,
+                        color.colorName, color.bookName, strBuf);
+                }
+            }
+            for (std::size_t i = 0u; i < rowFillNoneFlags.size(); ++i) {
+                if ((m_tableOverrideFlags & rowFillNoneFlags[i]) != 0u)
+                    stagedBody.putBit(m_tableRowFillNone[i]);
+            }
+            for (std::size_t i = 0u; i < rowFillColorFlags.size(); ++i) {
+                if ((m_tableOverrideFlags & rowFillColorFlags[i]) != 0u) {
+                    const DRW_DwgCmColor& color = m_tableRowFillColors[i];
                     stagedBody.putCmColor(
                         version, color.method, color.index, color.rgb24,
                         color.colorName, color.bookName, strBuf);

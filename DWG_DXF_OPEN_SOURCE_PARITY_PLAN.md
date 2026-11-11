@@ -1516,6 +1516,14 @@ created locally from scratch for the specific control.
   The focused DWG and DXF adapter tests pass. This is generated codec evidence
   only: physical producer ordering, native rendering/style precedence and
   parsed-source replay remain open. See the [row text-color writer receipt](docs/research/p5-ac1018-table-row-colors-dwg-writer-2026-11-11.json).
+  **Completed DWG row fill slice (2026-11-11):** the AC1018 writer now emits
+  selected title/header/data fill-none Booleans followed by their selected
+  CMC index fill colors, then row alignments, matching ODA §20.4.96.1. The
+  generated vector checks all three slots, differing fill-none states, exact
+  wire order, normalized CMC indices, readback and a following-body sentinel.
+  Unsupported truecolor and unselected fill state remain fail-closed. The same
+  focused DWG and DXF adapter tests pass. No producer/native claim is implied;
+  see the [row fill writer receipt](docs/research/p5-ac1018-table-row-fill-dwg-writer-2026-11-11.json).
   Re-encoding a parsed TABLE with a nonempty retained override range remains
   refused, including after modeled values change: the range currently stores
   offsets and counts, not the source bytes or a value snapshot. Next add an
