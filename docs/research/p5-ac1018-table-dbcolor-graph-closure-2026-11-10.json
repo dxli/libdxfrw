@@ -17,7 +17,7 @@
     "result": "PASS: AC1018 TABLE encoder allocation failures injected=19 rollback=PASS retry=PASS; AC1018/AC1021 TABLE cell override vectors: PASS"
   },
   "limitations": [
-    "The positive TABLE-to-DBCOLOR graph path still needs an end-to-end full-file output/readback control.",
+    "This graph-closure receipt predates the successful positive whole-file TABLE-to-DBCOLOR control; see p5-ac1018-table-dbcolor-whole-file-readback-2026-11-10.json for that later evidence.",
     "The class check does not establish native color/rendering semantics.",
     "No support claim is promoted."
   ]
