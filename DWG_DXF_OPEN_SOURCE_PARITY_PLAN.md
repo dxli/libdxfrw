@@ -1261,6 +1261,16 @@ created locally from scratch for the specific control.
   [generated empty-graph receipt](docs/research/p5-ac1018-table-empty-extension-graph-2026-11-11.json),
   and [caught-exception receipt](docs/research/p5-table-extension-caught-exception-2026-11-11.json).
 
+  Recursive source closure also requires DATATABLE `0xbd`'s nine hard-owned
+  XRECORDs `0xbe`–`0xc6`, whose source bodies and owner links are now
+  independently walked and cross-checked against LibreDWG and a same-vendor
+  ODA DXF conversion. TABLEGEOMETRY's selected zero-cell profile and DATATABLE
+  scalar columns also match that conversion. The source strings' codepage 45,
+  TABLECONTENT interior and 50 null handle-field identities, TABLESTYLE
+  dependencies, and producer/native meaning remain unresolved. Treat this as
+  source evidence only; retain populated-graph refusal. Reproduce the walk
+  using the [descendant graph receipt](docs/research/p5-ac1018-table-descendant-graph-wire-2026-11-11.json).
+
   The recreated AC1018 XRECORD `0xbc` is now independently walked to its
   exact data, owner and reactor boundaries. Its three group-102 strings carry
   RS lengths and codepage byte 45; the supplied ODA text says RC length, and
