@@ -32658,10 +32658,72 @@ bool DRW_MLine::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t b
 // DRW_Vertex::encodeDwg — OT varies by flags
 // ---------------------------------------------------------------------------
 
+namespace {
+
+template <typename Writer>
+bool encodeEntityDwgTransaction(std::int16_t &objectType, dwgBufferW *body,
+                                dwgBufferW *strings, dwgBufferW *handles,
+                                Writer &&writer) {
+    if (body == nullptr)
+        return false;
+
+    dwgBufferW *const bodyTarget = body;
+    dwgBufferW *const stringTarget = strings != nullptr ? strings : bodyTarget;
+    dwgBufferW *const handleTarget = handles != nullptr ? handles : bodyTarget;
+    struct ObjectTypeRollback {
+        std::int16_t &value;
+        std::int16_t original;
+        bool committed{false};
+        ~ObjectTypeRollback() {
+            if (!committed)
+                value = original;
+        }
+    } typeRollback{objectType, objectType};
+
+    try {
+        dwgBufferW bodyStage = *bodyTarget;
+        std::optional<dwgBufferW> stringStageStorage;
+        dwgBufferW *stringStage = &bodyStage;
+        if (stringTarget != bodyTarget) {
+            stringStageStorage.emplace(*stringTarget);
+            stringStage = &*stringStageStorage;
+        }
+        std::optional<dwgBufferW> handleStageStorage;
+        dwgBufferW *handleStage = &bodyStage;
+        if (handleTarget == bodyTarget) {
+            handleStage = &bodyStage;
+        } else if (handleTarget == stringTarget) {
+            handleStage = stringStage;
+        } else {
+            handleStageStorage.emplace(*handleTarget);
+            handleStage = &*handleStageStorage;
+        }
+
+        if (!writer(&bodyStage, strings != nullptr ? stringStage : nullptr,
+                    handles != nullptr ? handleStage : nullptr))
+            return false;
+        if (!bodyStage.isGood() || !stringStage->isGood() ||
+            !handleStage->isGood())
+            return false;
+
+        bodyTarget->swap(bodyStage);
+        if (stringTarget != bodyTarget)
+            stringTarget->swap(*stringStageStorage);
+        if (handleTarget != bodyTarget && handleTarget != stringTarget)
+            handleTarget->swap(*handleStageStorage);
+        typeRollback.committed = true;
+        return true;
+    } catch (const std::bad_alloc &) {
+        return false;
+    }
+}
+
+} // namespace
+
 bool DRW_Vertex::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs,
                              dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs; (void)strBuf;
-    if (buf == nullptr || !validatePayloadFields())
+    if (!validatePayloadFields())
         return false;
     const double tangentRadians = tgdir / ARAD;
     const bool is2D = m_dwgSubtype == DwgSubtype::Vertex2D
@@ -32669,48 +32731,53 @@ bool DRW_Vertex::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t 
     if (is2D && tgdir != 0.0
         && (tangentRadians == 0.0 || std::fpclassify(tangentRadians) == FP_SUBNORMAL))
         return false;
-    switch (m_dwgSubtype) {
-    case DwgSubtype::Vertex2D:     oType = 0x0A; break;
-    case DwgSubtype::Vertex3D:     oType = 0x0B; break;
-    case DwgSubtype::Mesh:         oType = 0x0C; break;
-    case DwgSubtype::Polyface:     oType = 0x0D; break;
-    case DwgSubtype::PolyfaceFace: oType = 0x0E; break;
-    case DwgSubtype::Auto:
-        if ((flags & 64) != 0)
-            oType = 0x0D;  // VERTEX_PFACE coordinate vertex
-        else if ((flags & 128) != 0)
-            oType = 0x0E;  // VERTEX_PFACE_FACE
-        else if ((flags & 16) != 0)
-            oType = 0x0C;  // VERTEX_MESH
-        else if ((flags & 32) != 0 || (flags & 8) != 0)
-            oType = 0x0B;  // VERTEX_3D
-        else
-            oType = 0x0A;  // VERTEX_2D
-        break;
-    }
+    return encodeEntityDwgTransaction(
+        oType, buf, nullptr, handleBuf,
+        [this, version, tangentRadians](dwgBufferW *body, dwgBufferW *strings,
+                                       dwgBufferW *handles) {
+            (void)strings;
+            switch (m_dwgSubtype) {
+            case DwgSubtype::Vertex2D:     oType = 0x0A; break;
+            case DwgSubtype::Vertex3D:     oType = 0x0B; break;
+            case DwgSubtype::Mesh:         oType = 0x0C; break;
+            case DwgSubtype::Polyface:     oType = 0x0D; break;
+            case DwgSubtype::PolyfaceFace: oType = 0x0E; break;
+            case DwgSubtype::Auto:
+                if ((flags & 64) != 0)
+                    oType = 0x0D;  // VERTEX_PFACE coordinate vertex
+                else if ((flags & 128) != 0)
+                    oType = 0x0E;  // VERTEX_PFACE_FACE
+                else if ((flags & 16) != 0)
+                    oType = 0x0C;  // VERTEX_MESH
+                else if ((flags & 32) != 0 || (flags & 8) != 0)
+                    oType = 0x0B;  // VERTEX_3D
+                else
+                    oType = 0x0A;  // VERTEX_2D
+                break;
+            }
 
-    if (!encodeDwgCommon(version, buf)) return false;
-
-    if (oType == 0x0A) {
-        buf->putRawChar8(static_cast<std::uint8_t>(flags));
-        buf->put3BitDouble(basePoint);
-        buf->putBitDouble(stawidth);
-        buf->putBitDouble(endwidth);
-        buf->putBitDouble(bulge);
-        if (version > DRW::AC1021)
-            buf->putBitLong(static_cast<std::int32_t>(identifier));
-        buf->putBitDouble(tangentRadians);
-    } else if (oType == 0x0B || oType == 0x0C || oType == 0x0D) {
-        buf->putRawChar8(static_cast<std::uint8_t>(flags));
-        buf->put3BitDouble(basePoint);
-    } else {  // 0x0E pface face
-        buf->putBitShort(static_cast<std::uint16_t>(vindex1));
-        buf->putBitShort(static_cast<std::uint16_t>(vindex2));
-        buf->putBitShort(static_cast<std::uint16_t>(vindex3));
-        buf->putBitShort(static_cast<std::uint16_t>(vindex4));
-    }
-
-    return encodeDwgEntHandle(version, buf, handleBuf);
+            if (!encodeDwgCommon(version, body))
+                return false;
+            if (oType == 0x0A) {
+                body->putRawChar8(static_cast<std::uint8_t>(flags));
+                body->put3BitDouble(basePoint);
+                body->putBitDouble(stawidth);
+                body->putBitDouble(endwidth);
+                body->putBitDouble(bulge);
+                if (version > DRW::AC1021)
+                    body->putBitLong(static_cast<std::int32_t>(identifier));
+                body->putBitDouble(tangentRadians);
+            } else if (oType == 0x0B || oType == 0x0C || oType == 0x0D) {
+                body->putRawChar8(static_cast<std::uint8_t>(flags));
+                body->put3BitDouble(basePoint);
+            } else { // 0x0E pface face
+                body->putBitShort(static_cast<std::uint16_t>(vindex1));
+                body->putBitShort(static_cast<std::uint16_t>(vindex2));
+                body->putBitShort(static_cast<std::uint16_t>(vindex3));
+                body->putBitShort(static_cast<std::uint16_t>(vindex4));
+            }
+            return encodeDwgEntHandle(version, body, handles);
+        });
 }
 
 bool DRW_SeqEnd::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs) {
@@ -32741,10 +32808,15 @@ bool DRW_SeqEnd::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs
 bool DRW_SeqEnd::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs,
                            dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs; (void)strBuf;
-    oType = 0x06;
-    if (!encodeDwgCommon(version, buf))
-        return false;
-    return encodeDwgEntHandle(version, buf, handleBuf);
+    return encodeEntityDwgTransaction(
+        oType, buf, nullptr, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            (void)strings;
+            oType = 0x06;
+            return encodeDwgCommon(version, body) &&
+                   encodeDwgEntHandle(version, body, handles);
+        });
 }
 
 // ---------------------------------------------------------------------------
@@ -32754,93 +32826,108 @@ bool DRW_SeqEnd::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t 
 bool DRW_Polyline::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs,
                                dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs; (void)strBuf;
-    if (buf == nullptr || !validatePayloadFields())
+    if (!validatePayloadFields())
         return false;
-    // Determine object type from stored flags (mirror of parseDwg dispatch).
-    if (flags & 64)       oType = 0x1D;  // POLYLINE_PFACE
-    else if (flags & 16)  oType = 0x1E;  // POLYLINE_MESH
-    else if (flags & 8)   oType = 0x10;  // POLYLINE_3D
-    else                  oType = 0x0F;  // POLYLINE_2D
+    const dwgBufferW *const legacyLookupBuffer =
+        handleBuf != nullptr ? handleBuf : buf;
+    std::uint32_t legacyPrevious = 0u;
+    std::uint32_t legacyNext = 0u;
+    const bool plannedLegacy = version == DRW::AC1015 &&
+        ScopedDwgLegacyEntityLinks::lookup(legacyLookupBuffer, legacyPrevious,
+                                           legacyNext);
+    return encodeEntityDwgTransaction(
+        oType, buf, nullptr, handleBuf,
+        [this, version, plannedLegacy, legacyPrevious,
+         legacyNext](dwgBufferW *body, dwgBufferW *strings,
+                     dwgBufferW *handles) {
+            (void)strings;
+            std::optional<ScopedDwgLegacyEntityLinks> legacyScope;
+            if (plannedLegacy)
+                legacyScope.emplace(body, handles != nullptr ? handles : body,
+                                    legacyPrevious, legacyNext);
 
-    if (!encodeDwgCommon(version, buf)) return false;
+            // Determine object type from stored flags (mirror of parseDwg dispatch).
+            if (flags & 64)       oType = 0x1D;  // POLYLINE_PFACE
+            else if (flags & 16)  oType = 0x1E;  // POLYLINE_MESH
+            else if (flags & 8)   oType = 0x10;  // POLYLINE_3D
+            else                  oType = 0x0F;  // POLYLINE_2D
 
-    if (oType == 0x0F) {
-        buf->putBitShort(static_cast<std::uint16_t>(flags));
-        buf->putBitShort(static_cast<std::uint16_t>(curvetype));
-        buf->putBitDouble(defstawidth);
-        buf->putBitDouble(defendwidth);
-        buf->putThickness(thickness, version > DRW::AC1014);
-        buf->putBitDouble(basePoint.z);
-        buf->putExtrusion(extPoint, version > DRW::AC1014);
-    } else if (oType == 0x10) {
-        // curvetype → 2 RC flag bytes (mirror of parser decode)
-        std::uint8_t rc1 = 0;
-        if      (curvetype == 5) rc1 = 1;
-        else if (curvetype == 6) rc1 = 2;
-        else if (curvetype == 8) rc1 = 3;
-        buf->putRawChar8(rc1);
-        buf->putRawChar8(static_cast<std::uint8_t>(flags & 1));  // bit 0 = closed
-    } else if (oType == 0x1D) {
-        buf->putBitShort(static_cast<std::uint16_t>(vertexcount));
-        buf->putBitShort(static_cast<std::uint16_t>(facecount));
-    } else {  // 0x1E MESH
-        buf->putBitShort(static_cast<std::uint16_t>(flags & ~16));  // strip reader-added bit 4
-        buf->putBitShort(static_cast<std::uint16_t>(curvetype));
-        buf->putBitShort(static_cast<std::uint16_t>(vertexcount));  // M count
-        buf->putBitShort(static_cast<std::uint16_t>(facecount));    // N count
-        buf->putBitShort(static_cast<std::uint16_t>(smoothM));      // mDensity, DXF 73
-        buf->putBitShort(static_cast<std::uint16_t>(smoothN));      // nDensity, DXF 74
-    }
+            if (!encodeDwgCommon(version, body))
+                return false;
 
-    // AC2004+ (>AC1015): emit vertex count before the handle section.
-    std::int32_t ooCount = static_cast<std::int32_t>(vertlist.size());
-    if (version > DRW::AC1015)
-        buf->putBitLong(ooCount);
-
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
-
-    dwgBufferW *hb = (handleBuf != nullptr) ? handleBuf : buf;
-
-    std::uint32_t legacyPrevious = 0, legacyNext = 0;
-    const bool plannedLegacy = version == DRW::AC1015
-        && ScopedDwgLegacyEntityLinks::lookup(hb, legacyPrevious, legacyNext);
-    if (plannedLegacy) {
-        // ODA §20.4.16–17: legacy first/last vertices are soft pointers;
-        // the separate SEQEND is a hard owner.
-        dwgHandle first, last, seqEnd;
-        first.code = last.code = DRW::DwgSoftPointer;
-        first.ref = vertlist.empty() ? 0u : vertlist.front()->handle;
-        last.ref = vertlist.empty() ? 0u : vertlist.back()->handle;
-        seqEnd.code = DRW::DwgHardOwnership;
-        seqEnd.ref = seqEndH.ref;
-        hb->putHandle(first); hb->putHandle(last); hb->putHandle(seqEnd);
-    } else {
-        if (version < DRW::AC1018) {
-            putAbsHandle(hb, vertlist.empty() ? 0u : vertlist.front()->handle);
-            putAbsHandle(hb, vertlist.empty() ? 0u : vertlist.back()->handle);
-        } else if (oType == 0x0F || oType == 0x10) {
-            // ODA §20.4.16–17: R2004+ POLYLINE owns each VERTEX and
-            // its SEQEND. Keep mesh and polyface framing on their existing
-            // path until those distinct records are independently qualified.
-            for (const auto& v : vertlist) {
-                dwgHandle vertex;
-                vertex.code = DRW::DwgHardOwnership;
-                vertex.ref = v ? v->handle : 0u;
-                hb->putHandle(vertex);
+            if (oType == 0x0F) {
+                body->putBitShort(static_cast<std::uint16_t>(flags));
+                body->putBitShort(static_cast<std::uint16_t>(curvetype));
+                body->putBitDouble(defstawidth);
+                body->putBitDouble(defendwidth);
+                body->putThickness(thickness, version > DRW::AC1014);
+                body->putBitDouble(basePoint.z);
+                body->putExtrusion(extPoint, version > DRW::AC1014);
+            } else if (oType == 0x10) {
+                std::uint8_t rc1 = 0;
+                if      (curvetype == 5) rc1 = 1;
+                else if (curvetype == 6) rc1 = 2;
+                else if (curvetype == 8) rc1 = 3;
+                body->putRawChar8(rc1);
+                body->putRawChar8(static_cast<std::uint8_t>(flags & 1));
+            } else if (oType == 0x1D) {
+                body->putBitShort(static_cast<std::uint16_t>(vertexcount));
+                body->putBitShort(static_cast<std::uint16_t>(facecount));
+            } else {
+                body->putBitShort(static_cast<std::uint16_t>(flags & ~16));
+                body->putBitShort(static_cast<std::uint16_t>(curvetype));
+                body->putBitShort(static_cast<std::uint16_t>(vertexcount));
+                body->putBitShort(static_cast<std::uint16_t>(facecount));
+                body->putBitShort(static_cast<std::uint16_t>(smoothM));
+                body->putBitShort(static_cast<std::uint16_t>(smoothN));
             }
-            dwgHandle seqEnd;
-            seqEnd.code = DRW::DwgHardOwnership;
-            seqEnd.ref = seqEndH.ref;
-            hb->putHandle(seqEnd);
-            return true;
-        } else {
-            for (const auto& v : vertlist)
-                putAbsHandle(hb, v ? v->handle : 0u);
-        }
-        putAbsHandle(hb, seqEndH.ref);
-    }
 
-    return true;
+            const std::int32_t ooCount =
+                static_cast<std::int32_t>(vertlist.size());
+            if (version > DRW::AC1015)
+                body->putBitLong(ooCount);
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
+
+            dwgBufferW *const handleOutput =
+                handles != nullptr ? handles : body;
+            if (plannedLegacy) {
+                dwgHandle first, last, seqEnd;
+                first.code = last.code = DRW::DwgSoftPointer;
+                first.ref = vertlist.empty() ? 0u : vertlist.front()->handle;
+                last.ref = vertlist.empty() ? 0u : vertlist.back()->handle;
+                seqEnd.code = DRW::DwgHardOwnership;
+                seqEnd.ref = seqEndH.ref;
+                handleOutput->putHandle(first);
+                handleOutput->putHandle(last);
+                handleOutput->putHandle(seqEnd);
+            } else {
+                if (version < DRW::AC1018) {
+                    putAbsHandle(handleOutput,
+                                 vertlist.empty() ? 0u : vertlist.front()->handle);
+                    putAbsHandle(handleOutput,
+                                 vertlist.empty() ? 0u : vertlist.back()->handle);
+                } else if (oType == 0x0F || oType == 0x10) {
+                    for (const auto &vertex : vertlist) {
+                        dwgHandle vertexHandle;
+                        vertexHandle.code = DRW::DwgHardOwnership;
+                        vertexHandle.ref = vertex ? vertex->handle : 0u;
+                        handleOutput->putHandle(vertexHandle);
+                    }
+                    dwgHandle seqEnd;
+                    seqEnd.code = DRW::DwgHardOwnership;
+                    seqEnd.ref = seqEndH.ref;
+                    handleOutput->putHandle(seqEnd);
+                    return true;
+                } else {
+                    for (const auto &vertex : vertlist)
+                        putAbsHandle(handleOutput,
+                                     vertex ? vertex->handle : 0u);
+                }
+                putAbsHandle(handleOutput, seqEndH.ref);
+            }
+            return true;
+        });
 }
 
 // ---------------------------------------------------------------------------

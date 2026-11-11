@@ -533,6 +533,30 @@ public:
     std::uint16_t dwgType() const { return oType; }
 };
 
+class VertexCodecProbe final : public DRW_Vertex {
+public:
+    using DRW_Vertex::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+};
+
+class SeqEndCodecProbe final : public DRW_SeqEnd {
+public:
+    using DRW_SeqEnd::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+};
+
+class PolylineCodecProbe final : public DRW_Polyline {
+public:
+    using DRW_Polyline::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+};
+
 class MeshCodecProbe final : public DRW_Mesh {
 public:
     using DRW_Mesh::parseDwg;
@@ -25471,6 +25495,118 @@ void testAttribAttdefDwgEncodeAllocationRollback(TestContext &t) {
                                          "AC1032 multiline ATTDEF");
 }
 
+void testVertexPolylineDwgEncodeAllocationRollback(TestContext &t) {
+  struct VertexProfile {
+    DRW_Vertex::DwgSubtype subtype;
+    std::uint16_t encodedType;
+    const char *label;
+  };
+  const VertexProfile vertexProfiles[] = {
+      {DRW_Vertex::DwgSubtype::Vertex2D, 0x0Au, "VERTEX_2D"},
+      {DRW_Vertex::DwgSubtype::Vertex3D, 0x0Bu, "VERTEX_3D"},
+      {DRW_Vertex::DwgSubtype::Mesh, 0x0Cu, "VERTEX_MESH"},
+      {DRW_Vertex::DwgSubtype::Polyface, 0x0Du, "VERTEX_PFACE"},
+      {DRW_Vertex::DwgSubtype::PolyfaceFace, 0x0Eu, "VERTEX_PFACE_FACE"},
+  };
+  for (const VertexProfile &profile : vertexProfiles) {
+    VertexCodecProbe vertex;
+    vertex.handle = 0xAF10u + profile.encodedType;
+    vertex.parentHandle = 0xAF20u;
+    vertex.reactorHandles = {0xAF30u};
+    vertex.xDictHandle = 0xAF40u;
+    vertex.setDwgType(0x777);
+    vertex.setDwgSubtype(profile.subtype);
+    vertex.basePoint = DRW_Coord(1.25, 2.5, 3.75);
+    vertex.stawidth = 0.25;
+    vertex.endwidth = 0.5;
+    vertex.bulge = 0.125;
+    vertex.identifier = 7;
+    vertex.tgdir = 15.0;
+    vertex.vindex1 = 1;
+    vertex.vindex2 = 2;
+    vertex.vindex3 = 3;
+    vertex.vindex4 = 4;
+    checkEntityDwgEncodeAllocationRollback(
+        t, vertex, DRW::AC1024, profile.encodedType,
+        std::string("AC1024 ") + profile.label);
+  }
+
+  for (const DRW::Version version : {DRW::AC1015, DRW::AC1021, DRW::AC1024}) {
+    SeqEndCodecProbe seqEnd;
+    seqEnd.handle = 0xAF50u;
+    seqEnd.parentHandle = 0xAF51u;
+    seqEnd.reactorHandles = {0xAF52u};
+    seqEnd.xDictHandle = 0xAF53u;
+    seqEnd.setDwgType(0x777);
+    checkEntityDwgEncodeAllocationRollback(
+        t, seqEnd, version, 0x06u,
+        version == DRW::AC1015 ? "AC1015 SEQEND"
+                               : version == DRW::AC1021 ? "AC1021 SEQEND"
+                                                       : "AC1024 SEQEND");
+  }
+
+  for (const DRW::Version version : {DRW::AC1018, DRW::AC1021, DRW::AC1024}) {
+    PolylineCodecProbe polyline;
+    polyline.handle = 0xAF60u;
+    polyline.parentHandle = 0xAF61u;
+    polyline.reactorHandles = {0xAF62u};
+    polyline.xDictHandle = 0xAF63u;
+    polyline.setDwgType(0x777);
+    polyline.setDwgSeqEndHandle(0xAF70u);
+    auto first = std::make_shared<DRW_Vertex>(1.0, 2.0, 0.0, 0.0);
+    first->handle = 0xAF71u;
+    auto second = std::make_shared<DRW_Vertex>(3.0, 4.0, 0.0, 0.25);
+    second->handle = 0xAF72u;
+    polyline.appendVertex(first);
+    polyline.appendVertex(second);
+    checkEntityDwgEncodeAllocationRollback(
+        t, polyline, version, 0x0Fu,
+        version == DRW::AC1018 ? "AC1018 POLYLINE_2D"
+                               : version == DRW::AC1021 ? "AC1021 POLYLINE_2D"
+                                                       : "AC1024 POLYLINE_2D");
+  }
+
+  // The staged POLYLINE writer must preserve its legacy link scope across the
+  // private stream buffers used for atomic encoding.
+  DRW_TextCodec codec;
+  codec.setVersion(DRW::AC1015, false);
+  PolylineCodecProbe legacyPolyline;
+  legacyPolyline.handle = 0xAF80u;
+  legacyPolyline.parentHandle = 0xAF81u;
+  legacyPolyline.setDwgType(0x777);
+  legacyPolyline.setDwgSeqEndHandle(0xAF90u);
+  auto legacyVertex = std::make_shared<DRW_Vertex>(5.0, 6.0, 0.0, 0.0);
+  legacyVertex->handle = 0xAF91u;
+  legacyPolyline.appendVertex(legacyVertex);
+  dwgBufferW legacyBody(&codec), legacyHandles(&codec);
+  legacyBody.putBitLong(0x31u);
+  legacyHandles.putBitLong(0x42u);
+  const auto legacyBodyBefore = legacyBody.data();
+  const auto legacyHandlesBefore = legacyHandles.data();
+  bool legacyEncoded = false;
+  {
+    ScopedDwgLegacyEntityLinks links(&legacyBody, &legacyHandles, 0xAF7Fu,
+                                     0xAF82u);
+    legacyEncoded = legacyPolyline.encodeDwg(DRW::AC1015, &legacyBody, 0u,
+                                              nullptr, &legacyHandles);
+  }
+  const auto hasLegacyLink = [&legacyHandles](std::uint32_t reference) {
+    return std::any_of(
+        legacyHandles.handleOccurrences().cbegin(),
+        legacyHandles.handleOccurrences().cend(),
+        [reference](const DRW::DwgHandleWriteOccurrence &occurrence) {
+          return occurrence.code == DRW::DwgSoftPointer &&
+                 occurrence.reference == reference;
+        });
+  };
+  t.expect(legacyEncoded && legacyPolyline.dwgType() == 0x0Fu &&
+               legacyBody.data() != legacyBodyBefore &&
+               legacyHandles.data() != legacyHandlesBefore &&
+               hasLegacyLink(0xAF7Fu) && hasLegacyLink(0xAF82u) &&
+               legacyBody.isGood() && legacyHandles.isGood(),
+           "AC1015 POLYLINE preserves scoped legacy links while staging output");
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -28682,6 +28818,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testAttribAttdefDwgEncodeAllocationRollback(context);
       std::cout << "ATTRIB/ATTDEF DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--vertex-polyline-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testVertexPolylineDwgEncodeAllocationRollback(context);
+      std::cout << "VERTEX/POLYLINE/SEQEND DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }
