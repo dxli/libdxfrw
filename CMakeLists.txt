@@ -2332,6 +2332,13 @@ if(LIBDXFRW_BUILD_TESTS)
         PROPERTIES
             LABELS "fast;dwg;object-vectors;navisworks;3d;generated;transaction"
             TIMEOUT 20)
+    add_test(NAME libdxfrw_pointcloud_dwg_representability
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --pointcloud-dwg-representability)
+    set_tests_properties(libdxfrw_pointcloud_dwg_representability
+        PROPERTIES
+            LABELS "fast;dwg;object-vectors;pointcloud;generated;representability"
+            TIMEOUT 20)
     add_test(NAME libdxfrw_pointcloud_dwg_encode_allocation_rollback
         COMMAND libdxfrw_dwg_object_vectors_tests
             --pointcloud-dwg-encode-allocation-rollback)

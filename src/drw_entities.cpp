@@ -26041,6 +26041,28 @@ bool DRW_PointCloud::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint3
         || !std::isfinite(intensityStyle.highThreshold)) {
         return false;
     }
+    const auto equals = [](const DRW_Coord& point, double x, double y, double z) {
+        return point.x == x && point.y == y && point.z == z;
+    };
+    // LibreDWG's POINTCLOUD grammar omits the extended fields for source-file
+    // lists and before R2013b. Require model defaults for fields omitted by
+    // the selected layout.
+    if ((sourceFileCount != 0 || version <= DRW::AC1024)
+        && (definitionHandle != 0 || reactorHandle != 0 || showIntensity
+            || intensityScheme != 0 || intensityStyle.minIntensity != 0.0
+            || intensityStyle.maxIntensity != 0.0
+            || intensityStyle.lowThreshold != 0.0
+            || intensityStyle.highThreshold != 0.0 || showClipping
+            || clippingCount != 0 || !clippings.empty()))
+        return false;
+    if (sourceFileCount != 0
+        && (!equals(extentsMin, 0.0, 0.0, 0.0)
+            || !equals(extentsMax, 0.0, 0.0, 0.0) || pointCount != 0
+            || !ucsName.empty() || !equals(ucsOrigin, 0.0, 0.0, 0.0)
+            || !equals(ucsXDirection, 1.0, 0.0, 0.0)
+            || !equals(ucsYDirection, 0.0, 1.0, 0.0)
+            || !equals(ucsZDirection, 0.0, 0.0, 1.0)))
+        return false;
     for (const DRW_PointCloudClipping& clipping : clippings) {
         if (clipping.type < 1 || clipping.type > 3
             || clipping.vertexCount < 0
@@ -26048,11 +26070,13 @@ bool DRW_PointCloud::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint3
             || clipping.vertices.size() != static_cast<std::size_t>(clipping.vertexCount)
             || (clipping.type != 3 && clipping.vertexCount != 2)
             || !std::isfinite(clipping.zMin)
-            || !std::isfinite(clipping.zMax)) {
+            || !std::isfinite(clipping.zMax)
+            || (clipping.type != 1
+                && (clipping.zMin != 0.0 || clipping.zMax != 0.0))) {
             return false;
         }
         for (const DRW_Coord& vertex : clipping.vertices) {
-            if (!finite(vertex))
+            if (!finite(vertex) || vertex.z != 0.0)
                 return false;
         }
     }

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -26405,6 +26406,117 @@ void testNavisworksModelDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testPointCloudDwgRepresentability(TestContext &t) {
+  using Mutation = std::pair<const char *, std::function<void(PointCloudCodecProbe &)>>;
+  const std::vector<Mutation> extended = {
+      {"definition", [](PointCloudCodecProbe &p) { p.definitionHandle = 42; }},
+      {"reactor", [](PointCloudCodecProbe &p) { p.reactorHandle = 43; }},
+      {"show intensity", [](PointCloudCodecProbe &p) { p.showIntensity = true; }},
+      {"scheme", [](PointCloudCodecProbe &p) { p.intensityScheme = 1; }},
+      {"min intensity", [](PointCloudCodecProbe &p) { p.intensityStyle.minIntensity = 1; }},
+      {"max intensity", [](PointCloudCodecProbe &p) { p.intensityStyle.maxIntensity = 1; }},
+      {"low threshold", [](PointCloudCodecProbe &p) { p.intensityStyle.lowThreshold = 1; }},
+      {"high threshold", [](PointCloudCodecProbe &p) { p.intensityStyle.highThreshold = 1; }},
+      {"show clipping", [](PointCloudCodecProbe &p) { p.showClipping = true; }},
+      {"clipping", [](PointCloudCodecProbe &p) {
+         DRW_PointCloudClipping c; c.type = 2; c.vertexCount = 2;
+         c.vertices = {DRW_Coord(0, 0, 0), DRW_Coord(1, 1, 0)};
+         p.clippingCount = 1; p.clippings = {c}; }}
+  };
+  const std::vector<Mutation> sourceOnly = {
+      {"extents min", [](PointCloudCodecProbe &p) { p.extentsMin.x = 1; }},
+      {"extents max", [](PointCloudCodecProbe &p) { p.extentsMax.y = 1; }},
+      {"point count", [](PointCloudCodecProbe &p) { p.pointCount = 1; }},
+      {"ucs name", [](PointCloudCodecProbe &p) { p.ucsName = "UCS"; }},
+      {"ucs origin", [](PointCloudCodecProbe &p) { p.ucsOrigin.z = 1; }},
+      {"ucs x", [](PointCloudCodecProbe &p) { p.ucsXDirection.x = 2; }},
+      {"ucs y", [](PointCloudCodecProbe &p) { p.ucsYDirection.y = 2; }},
+      {"ucs z", [](PointCloudCodecProbe &p) { p.ucsZDirection.z = 2; }}
+  };
+  const auto check = [&](DRW::Version version, const PointCloudCodecProbe &base,
+                         const Mutation &mutation) {
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    body.putBitLong(0x5A17u);
+    strings.putVariableText(version, "sentinel");
+    dwgHandle seed; seed.code = DRW::DwgSoftPointer; seed.size = 1;
+    seed.ref = seed.ref64 = 0xAAu; handles.putHandle(seed);
+    dwgBufferW expectedBody = body, expectedStrings = strings, expectedHandles = handles;
+    PointCloudCodecProbe expected = base;
+    const bool clean = expected.encodeDwg(version, &expectedBody, 0,
+                                          &expectedStrings, &expectedHandles);
+    const auto bodyBefore = body.data(), stringsBefore = strings.data(),
+               handlesBefore = handles.data();
+    const auto bodyBits = body.bitCount(), stringBits = strings.bitCount(),
+               handleBits = handles.bitCount();
+    const auto handleCount = handles.handleOccurrences().size();
+    PointCloudCodecProbe actual = base;
+    mutation.second(actual);
+    const bool refused = !actual.encodeDwg(version, &body, 0, &strings, &handles)
+        && actual.dwgType() == base.dwgType() && body.data() == bodyBefore
+        && strings.data() == stringsBefore && handles.data() == handlesBefore
+        && body.bitCount() == bodyBits && strings.bitCount() == stringBits
+        && handles.bitCount() == handleBits
+        && handles.handleOccurrences().size() == handleCount;
+    actual = base;
+    const bool retried = actual.encodeDwg(version, &body, 0, &strings, &handles)
+        && body.data() == expectedBody.data() && body.bitCount() == expectedBody.bitCount()
+        && strings.data() == expectedStrings.data() && strings.bitCount() == expectedStrings.bitCount()
+        && handles.data() == expectedHandles.data() && handles.bitCount() == expectedHandles.bitCount()
+        && handles.handleOccurrences().size() == expectedHandles.handleOccurrences().size();
+    t.expect(clean && refused && retried, std::string("POINTCLOUD omitted ") + mutation.first
+             + " refuses atomically and retries for version " + std::to_string(version));
+  };
+  for (const DRW::Version version : {DRW::AC1021, DRW::AC1024,
+                                     DRW::AC1027, DRW::AC1032}) {
+    PointCloudCodecProbe base;
+    base.handle = 0xC810u;
+    base.parentHandle = 0xC820u;
+    base.setDwgType(0x777);
+    base.savedFilename = "test.pcg";
+    base.sourceFileCount = 1;
+    base.sourceFiles = {"source.pcg"};
+    for (const auto &mutation : extended) check(version, base, mutation);
+    for (const auto &mutation : sourceOnly) check(version, base, mutation);
+    if (version <= DRW::AC1024) {
+      base.sourceFileCount = 0;
+      base.sourceFiles.clear();
+      for (const auto &mutation : extended) check(version, base, mutation);
+    } else {
+      base.sourceFileCount = 0;
+      base.sourceFiles.clear();
+      for (int type : {1, 2, 3}) {
+        DRW_PointCloudClipping clip;
+        clip.type = type;
+        clip.vertexCount = type == 3 ? 3 : 2;
+        clip.vertices.assign(static_cast<std::size_t>(clip.vertexCount), DRW_Coord(1, 2, 0));
+        base.clippingCount = 1;
+        base.clippings = {clip};
+        if (type == 1) {
+          DRW_TextCodec codec;
+          codec.setVersion(version, false);
+          PointCloudCodecProbe zero = base, withDepth = base;
+          withDepth.clippings[0].zMin = -2.0;
+          withDepth.clippings[0].zMax = 4.0;
+          dwgBufferW zeroBody(&codec), zeroStrings(&codec), zeroHandles(&codec);
+          dwgBufferW depthBody(&codec), depthStrings(&codec), depthHandles(&codec);
+          const bool zeroOk = zero.encodeDwg(version, &zeroBody, 0, &zeroStrings, &zeroHandles);
+          const bool depthOk = withDepth.encodeDwg(version, &depthBody, 0, &depthStrings, &depthHandles);
+          t.expect(zeroOk && depthOk && zeroBody.data() != depthBody.data(),
+                   "POINTCLOUD type 1 clip retains nonzero depth fields");
+        }
+        check(version, base, {"clip vertex z", [](PointCloudCodecProbe &p) {
+          p.clippings[0].vertices[0].z = 1; }});
+        if (type != 1) {
+          check(version, base, {"clip zMin", [](PointCloudCodecProbe &p) { p.clippings[0].zMin = 1; }});
+          check(version, base, {"clip zMax", [](PointCloudCodecProbe &p) { p.clippings[0].zMax = 1; }});
+        }
+      }
+    }
+  }
+}
+
 void testPointCloudDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024,
                                      DRW::AC1027, DRW::AC1032}) {
@@ -29849,6 +29961,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testNavisworksModelDwgEncodeAllocationRollback(context);
       std::cout << "NAVISWORKSMODEL DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--pointcloud-dwg-representability") {
+      TestContext context;
+      testPointCloudDwgRepresentability(context);
+      std::cout << "POINTCLOUD DWG representability: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }
