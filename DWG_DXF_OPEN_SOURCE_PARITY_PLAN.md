@@ -1407,6 +1407,18 @@ created locally from scratch for the specific control.
   added and this remains local transaction evidence only. See the
   [selected-reactor rollback receipt](docs/research/p6-dxf-image-selected-reactor-allocation-rollback-2026-11-11.json).
 
+- **P5 AC1018 TABLE whole-file allocation rollback:** the isolated TABLE
+  facade test now also injects failures through the complete DWG write, beyond
+  its existing exhaustive `writeTable()` allocation sweep. Six sparse offsets
+  across 1,690 calibrated whole-operation allocations (first, second, quartile,
+  midpoint, third-quartile and final) preserve the destination and writer-owned
+  TABLE identity state. The same writer and adapter retry to byte-identical
+  output; fresh readback verifies the 3x3 TABLE, all 15 `*T1` children, and the
+  TABLESTYLE/NOD graph. The focused two-test cohort passes 2/2 in 1.94 seconds.
+  This covers the generated AC1018 transaction path only; native rendering,
+  independent cell semantics and broader producer profiles remain open. See
+  the [whole-file allocation receipt](docs/research/p5-ac1018-table-whole-file-allocation-rollback-2026-11-11.json).
+
 - **P7 ACIS 21500 bounded face/loop/coedge incidence observation:** the
   hash-pinned AC1024 inline SAB at entity `0x183` now projects the observed
   21500 face→loop, loop→coedge, coedge next/previous/partner/edge/loop/pcurve,
@@ -6305,8 +6317,7 @@ for the bounded generated profile. The generated whole-file route now also
 covers class registration, `*T` geometry, graph closure, late refusal rollback,
 same-facade retry and fresh readback (see the [whole-file TABLE
 receipt](docs/research/p5-ac1018-table-whole-file-cached-geometry-2026-11-10.json)).
-Physical source-to-output proof, native/independent cell semantics and rendering,
-and whole-file allocation-failure injection remain open. See the [TABLE
+Whole-file allocation failure now has six sparse probes across 1,690 calibrated allocations for this generated profile; the direct TABLE-record sweep remains exhaustive at 115 offsets. Physical source-to-output proof, native/independent cell semantics and rendering remain open. See the [TABLE
 allocation receipt](docs/research/p5-ac1018-table-codec-allocation-rollback-2026-11-08.json)
 and the [updated encoder-readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 
