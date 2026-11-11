@@ -2831,7 +2831,7 @@ bool isValidSplinePayloadData(const DRW_Spline& spline) {
 }
 
 bool differsFromUnitWeight(double weight) {
-    return std::fabs(weight - 1.0) > 1e-12;
+    return weight != 1.0;
 }
 
 //! \brief Compare two doubles by stored representation.

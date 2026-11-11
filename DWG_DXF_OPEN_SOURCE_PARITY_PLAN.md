@@ -1209,6 +1209,19 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-11)
 
+- **P6 SPLINE/HELIX near-unit rational weights:** SPLINE and HELIX DXF output,
+  and their shared DWG spline-body encoder, now mark a weight as non-unit
+  using exact comparison rather than a `1e-12` deadband. This preserves the
+  rational indicator when a finite weight differs from 1 by one representable
+  binary64 step; explicit rational flags and the existing all-unit behavior
+  remain unchanged. Generated ASCII/Binary DXF controls verify exact weight
+  readback for both entity types. Direct body-bit, sentinel and parser checks
+  cover the six DWG writer versions, including the R2013 boundary. Nonfinite
+  DXF weights refuse atomically and retry after correction. This is a bounded
+  encoder consistency fix, not native curve or producer qualification; those
+  P6/P8 gates remain open. See the
+  [weight precision receipt](docs/research/p6-spline-rational-near-unit-weights-2026-11-11.json).
+
 - **P5 AC1018 TABLE extension dictionary:** the newly recreated audited ODA
   source's TABLE `0x9c` has an extension-dictionary hard-owner reference to
   DICTIONARY `0xbb`; its `ACAD_XREC_ROUNDTRIP` entry owns XRECORD `0xbc`,

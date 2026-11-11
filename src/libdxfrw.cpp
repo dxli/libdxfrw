@@ -1961,7 +1961,7 @@ void writeDxfSplineBody(dxfWriter *writer, DRW_Spline *ent) {
     }
     int flags = ent->flags;
     if (std::any_of(ent->weightlist.begin(), ent->weightlist.end(),
-                    [](double weight) { return std::fabs(weight - 1.0) > 1e-12; })) {
+                    [](double weight) { return weight != 1.0; })) {
         flags |= 0x04;
     }
     writer->writeInt16(70, flags);

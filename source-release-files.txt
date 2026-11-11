@@ -680,6 +680,7 @@ tests/samples/README.md
 tests/scale_objects_allocation_tests.cpp
 tests/semantic_differential_adapter.cpp
 tests/spatial_filter_objects_allocation_tests.cpp
+tests/spline_rational_weight_precision_tests.cpp
 tests/structural_source_controls.h
 tests/style_font_controls.h
 tests/sunstudy_objects_allocation_tests.cpp
