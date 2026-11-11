@@ -12,6 +12,18 @@ semantics, native acceptance, whole-source output or platform support. No
 fixture was added. See the
 [topology-lift receipt](docs/research/p7-ac1024-conference-21500-opencadkernel-topology-lift-2026-11-11.json).
 
+**P7 ACIS 21500 header third-integer cross-version screen (2026-11-11):**
+the two source-distinct AC1024/21500 inline SABs each contain `asmheader` at
+record 0 and one rooted `body` at record 1, while the raw third header integer
+is `2`. The ACIS 7.0 save-file reference describes a related field as the count
+of saved entities, and the cadmpeg open-source boundary specification gives an
+exclusive first-owned-record interpretation for ACIS 217/218 only. These are
+cross-version analogies, not 21500 schema evidence; the samples cannot
+distinguish a top-level-entity count from a boundary index. Preserve the raw
+value and do not validate it against body counts or use it to derive boundaries.
+Resolve only with a version-qualified ACIS 21.5 producer/schema witness,
+preferably a multi-root source. See the [cross-version header screen](docs/research/p7-acis-21500-header-third-integer-cross-version-screen-2026-11-11.json).
+
 **P4 AC1024 version-2 inline constraint-node slice (2026-11-11):** the
 reader now handles the bounded R2010 inline envelope for positive-count
 version-2 groups: detached class name, sparse node ID, raw status byte,
