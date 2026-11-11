@@ -3,6 +3,7 @@
 #include "dx_iface.h"
 #include "libdwgr.h"
 #include "intern/dwgobjectframe.h"
+#include "intern/dwgreader.h"
 #include "intern/dwgutil.h"
 #include "intern/dwg_fixed_handles.h"
 #include "intern/dwg_ltype_control_byblock_ac1018_candidate.h"
@@ -13,17 +14,34 @@
 #include <memory>
 #include <optional>
 #include <algorithm>
+#include <list>
 #include <cstdlib>
 #include <cstdint>
 #include <vector>
 
 class GeneratedSource final:public dx_iface {
 public:
- explicit GeneratedSource(dwgRW& writer):writer_(writer){}
+ explicit GeneratedSource(dwgRW& writer,const std::list<DRW_LType>* sourceRows=nullptr)
+     :writer_(writer),sourceRows_(sourceRows){}
  void writeHeader(DRW_Header& header) override {header.vars.clear();}
  void collectDwgAppIds() override {}
  void writeBlocks() override {} void writeBlockRecords() override {} void writeEntities() override {}
  void writeLTypes() override {
+  if(sourceRows_!=nullptr){
+   const auto findRow=[this](const char* name)->std::optional<DRW_LType>{
+    const auto found=std::find_if(sourceRows_->cbegin(),sourceRows_->cend(),
+        [name](const DRW_LType& row){return row.name==name;});
+    return found==sourceRows_->cend()?std::nullopt:std::optional<DRW_LType>(*found);
+   };
+   auto byblock=findRow("ByBlock");if(!byblock)byblock=findRow("BYBLOCK");
+   auto bylayer=findRow("ByLayer");if(!bylayer)bylayer=findRow("BYLAYER");
+   auto continuous=findRow("Continuous");if(!continuous)continuous=findRow("CONTINUOUS");
+   if(!byblock||!bylayer||!continuous)return;
+   generated=writer_.addLType(&*byblock)&&writer_.addLType(&*bylayer)
+       &&writer_.addLType(&*continuous);
+   byBlockHandle=byblock->handle;byLayerHandle=bylayer->handle;
+   continuousHandle=continuous->handle;return;
+  }
   DRW_LType byblock;byblock.handle=0x14u;byblock.name="ByBlock";byblock.flags=0x40;byblock.length=0.;byblock.alignment=65;
   DRW_LType bylayer;bylayer.handle=0x15u;bylayer.name="ByLayer";bylayer.flags=0x40;bylayer.length=0.;bylayer.alignment=65;
   DRW_LType continuous;continuous.handle=0x16u;continuous.name="Continuous";continuous.desc="Solid line";continuous.flags=0;continuous.length=0.;continuous.alignment=65;
@@ -34,7 +52,7 @@ public:
  void writeViews() override {} void writeUCSs() override {} void writeDimstyles() override {} void writeAppId() override {}
  bool generated{false};
  std::uint32_t byBlockHandle{0u},byLayerHandle{0u},continuousHandle{0u};
-private:dwgRW& writer_;
+private:dwgRW& writer_;const std::list<DRW_LType>* sourceRows_{nullptr};
 };
 class Probe final:public dx_iface {
 public:
@@ -48,7 +66,7 @@ public:
       &&t.handle()==5u&&t.frame().body().size()<=4096u){++tickets;ticketValid=true;
     DRW_UnsupportedObject raw;raw.m_version=t.version();raw.m_handle=t.handle();raw.m_objectType=56;
     raw.m_objectOffset=t.offset();raw.m_objectSize=static_cast<std::uint32_t>(t.frame().body().size());
-    raw.m_bodyBitSize=t.frame().bodyBitSize();raw.m_rawBytes=t.frame().body();controlFrame=std::move(raw);
+    raw.m_bodyBitSize=0u;raw.m_rawBytes=t.frame().body();controlFrame=std::move(raw);
   }
   if(t.kind()==DwgVerifiedTableCandidateKind::LTypeRecord&&t.version()==DRW::AC1018
       &&(t.handle()==15u||t.handle()==16u||t.handle()==17u||t.handle()==0x14u||t.handle()==0x15u||t.handle()==0x16u)
@@ -57,7 +75,7 @@ public:
     const std::string expected=(t.handle()==15u||t.handle()==0x14u)?"BYBLOCK":(t.handle()==16u||t.handle()==0x15u)?"BYLAYER":"CONTINUOUS";
     if(t.ltypeModel()->handle==t.handle()&&t.ltypeModel()->name==expected)rowTicketValid=true;
     if(t.handle()==15u||t.handle()==0x14u){byBlockFrameModel=*t.ltypeModel();DRW_UnsupportedObject raw;raw.m_version=t.version();raw.m_handle=t.handle();raw.m_objectType=57;
-      raw.m_objectSize=static_cast<std::uint32_t>(t.frame().body().size());raw.m_bodyBitSize=t.frame().bodyBitSize();raw.m_rawBytes=t.frame().body();byBlockFrame=std::move(raw);}
+      raw.m_objectSize=static_cast<std::uint32_t>(t.frame().body().size());raw.m_bodyBitSize=0u;raw.m_rawBytes=t.frame().body();byBlockFrame=std::move(raw);}
   }
  }
 };
@@ -163,6 +181,64 @@ int main(int argc,char**argv){
           generated.byBlockHandle,generated.byLayerHandle);
    }
   }
+  const std::filesystem::path ltypeRoundtripPath(path.string()+".ltype-roundtrip.dwg");
+  struct RoundtripCleanup{std::filesystem::path p;~RoundtripCleanup(){std::error_code e;std::filesystem::remove(p,e);}} roundtripCleanup{ltypeRoundtripPath};
+  bool ltypeRoundtripWritten=false,ltypeRoundtripBound=false;
+  bool ltypeRoundtripValuesMatch=false,ltypeRoundtripNormativeOrder=false;
+  if(ltypeSourceBound&&!std::filesystem::exists(ltypeRoundtripPath)){
+   dwgRW outputWriter(ltypeRoundtripPath.string().c_str());
+   GeneratedSource outputSource(outputWriter,&ltypeData.lineTypes);
+   ltypeRoundtripWritten=outputWriter.write(&outputSource,DRW::AC1018,true)
+       &&outputSource.generated;
+   if(ltypeRoundtripWritten){
+    dx_iface outputReader;dx_data outputData;
+    const bool outputSelected=outputReader.enableVerifiedLTypeResourceSource(
+        DRW::DwgLtypeControlHandle,outputSource.continuousHandle,
+        outputSource.byBlockHandle,outputSource.byLayerHandle);
+    const bool outputImported=outputSelected
+        &&outputReader.fileImport(ltypeRoundtripPath.string(),&outputData,false);
+    ltypeRoundtripBound=outputImported
+        &&dx_iface::hasUnchangedVerifiedLTypeResourceSource(outputData,
+          DRW::DwgLtypeControlHandle,outputSource.continuousHandle,
+          outputSource.byBlockHandle,outputSource.byLayerHandle);
+    const auto sameSelectedValues=[&](std::uint32_t sourceHandle,std::uint32_t outputHandle){
+     const auto sourceRow=std::find_if(ltypeData.lineTypes.cbegin(),ltypeData.lineTypes.cend(),
+         [sourceHandle](const DRW_LType& row){return row.handle==sourceHandle;});
+     const auto outputRow=std::find_if(outputData.lineTypes.cbegin(),outputData.lineTypes.cend(),
+         [outputHandle](const DRW_LType& row){return row.handle==outputHandle;});
+     return sourceRow!=ltypeData.lineTypes.cend()&&outputRow!=outputData.lineTypes.cend()
+         &&sourceRow->name==outputRow->name&&sourceRow->desc==outputRow->desc
+         &&sourceRow->flags==outputRow->flags&&sourceRow->alignment==outputRow->alignment
+         &&sourceRow->length==outputRow->length&&sourceRow->size==outputRow->size
+         &&sourceRow->path==outputRow->path&&sourceRow->segments.size()==outputRow->segments.size();
+    };
+    ltypeRoundtripValuesMatch=ltypeRoundtripBound
+        &&sameSelectedValues(generated.continuousHandle,outputSource.continuousHandle)
+        &&sameSelectedValues(generated.byBlockHandle,outputSource.byBlockHandle)
+        &&sameSelectedValues(generated.byLayerHandle,outputSource.byLayerHandle);
+    Probe outputProbe;dx_data observedOutput;
+    const bool observedOutputRead=outputProbe.fileImport(
+        ltypeRoundtripPath.string(),&observedOutput,false);
+    if(observedOutputRead&&outputProbe.tickets==1u&&outputProbe.rowTickets==3u
+        &&outputProbe.controlFrame){
+     dwgBuffer controlBody(outputProbe.controlFrame->m_rawBytes.data(),
+         outputProbe.controlFrame->m_rawBytes.size(),nullptr);
+     DRW_ObjControl parsedControl;
+     ltypeRoundtripNormativeOrder=parsedControl.parseDwg(DRW::AC1018,
+         &controlBody,static_cast<std::uint32_t>(
+           outputProbe.controlFrame->m_rawBytes.size()*8u))
+         &&controlBody.isGood()&&parsedControl.handle==DRW::DwgLtypeControlHandle
+         &&parsedControl.orderedHandleSlots.size()==3u
+         &&parsedControl.orderedHandleRoles.size()==3u
+         &&parsedControl.orderedHandleRoles[0]==2u
+         &&parsedControl.orderedHandleSlots[0]==outputSource.continuousHandle
+         &&parsedControl.orderedHandleRoles[1]==3u
+         &&parsedControl.orderedHandleSlots[1]==outputSource.byLayerHandle
+         &&parsedControl.orderedHandleRoles[2]==3u
+         &&parsedControl.orderedHandleSlots[2]==outputSource.byBlockHandle;
+    }
+   }
+  }
   auto data=std::make_unique<dx_data>();Probe probe;
   {std::ofstream broken(path,std::ios::binary|std::ios::trunc);broken.write(original.data(),20);if(!broken)return 6;}
   const bool failedRead=probe.fileImport(path.string(),data.get(),false);
@@ -172,9 +248,14 @@ int main(int argc,char**argv){
   const bool ok=ltypeSelection&&xrecordSelection&&duplicateSelection
       &&ltypeSourceBound&&ltypeWrongSelectionRefused
       &&ltypeAllRowMutationsRefused&&ltypeAllRowRestoresAccepted
+      &&ltypeRoundtripWritten&&ltypeRoundtripBound&&ltypeRoundtripValuesMatch
+      &&ltypeRoundtripNormativeOrder
       &&!failedRead&&!leaked&&read&&probe.tickets==1u&&probe.ticketValid
       &&probe.rowTickets==3u&&probe.rowTicketValid;
-  if(!ok)return 8;
+  if(!ok){std::cerr<<"roundtripWritten="<<ltypeRoundtripWritten
+      <<" roundtripBound="<<ltypeRoundtripBound
+      <<" roundtripValuesMatch="<<ltypeRoundtripValuesMatch
+      <<" roundtripNormativeOrder="<<ltypeRoundtripNormativeOrder<<'\n';return 8;}
   std::vector<std::uint8_t> originalBytes;if(!probe.controlFrame||!corruptObjectFrameCrc(path,*probe.controlFrame,originalBytes))return 9;
   probe.reset();auto damaged=std::make_unique<dx_data>();const bool damagedRead=probe.fileImport(path.string(),damaged.get(),false);
   bool controlDiagnostic=false;const auto& integrity=damaged->dwgReadOutcome.observations.integrity;
@@ -203,6 +284,10 @@ int main(int argc,char**argv){
     <<" ltypeSourceBound="<<ltypeSourceBound<<" ltypeWrongSelectionRefused="<<ltypeWrongSelectionRefused
     <<" ltypeAllRowMutationsRefused="<<ltypeAllRowMutationsRefused
     <<" ltypeAllRowRestoresAccepted="<<ltypeAllRowRestoresAccepted
+    <<" ltypeRoundtripWritten="<<ltypeRoundtripWritten
+    <<" ltypeRoundtripBound="<<ltypeRoundtripBound
+    <<" ltypeRoundtripValuesMatch="<<ltypeRoundtripValuesMatch
+    <<" ltypeRoundtripNormativeOrder="<<ltypeRoundtripNormativeOrder
     <<" failedRead="<<failedRead<<" leakedTickets="<<leaked
     <<" retryRead="<<read<<" crcRead="<<damagedRead<<" crcDiagnostic="<<controlDiagnostic
     <<" crcLeakedTickets="<<leakedCrcTickets<<" crcRetry="<<crcRetry

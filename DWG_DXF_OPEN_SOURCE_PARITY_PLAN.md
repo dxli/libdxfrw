@@ -1728,17 +1728,23 @@ created locally from scratch for the specific control.
   control and three typed LTYPE row snapshots under one successful import
   token/generation, and rechecks exact source-frame membership, control handle
   roles/order and all selected live row fields before reporting the bundle
-  unchanged. A generated AC1018 source passes that query, refuses a mutated
-  Continuous description and accepts restoration; invalid/duplicate handles
-  and mixing this ticket selection with XRECORD tickets are rejected. The
+  unchanged. A generated AC1018 source passes that query; independently
+  mutating Continuous, ByBlock or ByLayer descriptions refuses the query and
+  restoring each row reopens it. Wrong/duplicate handles and mixing this ticket
+  selection with XRECORD tickets are rejected. The
   pinned physical source passes the same bundle query for control `0x5`,
   Continuous `0x16`, ByBlock `0x14` and ByLayer `0x15` from one finalized
   import. Generated mutation controls now independently change each of the
   three selected rows and require refusal followed by acceptance after restore;
   a wrong handle binding also refuses. This remains an exact selected-source
   identity check: the physical phantom ordering anomaly stays isolated, and
-  physical-frame CRC damage/retry, broader resource/dependency closure, target
-  emission, strict graph output and readback remain open. The attempted physical
+  physical-frame CRC damage/retry, broader resource/dependency closure and
+  full-source strict output/readback remain open. A generated source-derived
+  writer control now writes these exact three imported models, reimports the
+  output under fresh source tickets, matches selected row values and verifies
+  ordinary/ByLayer/ByBlock handle roles in ODA order. This is generated bounded
+  roundtrip evidence, not physical-source replay or native linetype appearance
+  qualification. The attempted physical
   CRC mutation could not locate the reader's decoded-buffer frame bytes as a
   contiguous span in the compressed source pages. The existing checksum helper
   handles locally generated pages; a source-backed physical CRC retry needs a
