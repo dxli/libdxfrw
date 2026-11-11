@@ -1430,6 +1430,16 @@ created locally from scratch for the specific control.
   Treat that as a source anomaly. The observer now exposes a separate normative
   order check with exact ByLayer/ByBlock spans; same-import source binding and
   output remain open. See the [resource wire receipt](docs/research/p5-ac1018-table-style-ltype-resource-wire-2026-11-11.json).
+  **Completed writer correction (2026-11-11):** the DWG writer now emits the
+  two final hard-owned phantom references in ODA's normative ByLayer, ByBlock
+  order. The reader continues to accept the prior libdxfrw hard-owned order and
+  the separately recognized historical all-soft profile for compatibility.
+  Generated boundary controls pass across AC1015/18/21/24/27/32, including
+  normative output, old-order read compatibility, malformed-input refusal and
+  retry. This fixes generated wire order only; the pinned physical ByBlock,
+  ByLayer source remains anomalous and isolated, and this does not qualify
+  source replay, whole-file output, or support claims. See the [writer order
+  receipt](docs/research/p5-ltype-writer-normative-phantom-order-2026-11-11.json).
   See the [DATATABLE candidate receipt](docs/research/p5-ac1018-datatable-candidate-observer-2026-11-11.json).
 
   The recreated AC1018 XRECORD `0xbc` is now independently walked to its

@@ -26,8 +26,8 @@ std::vector<std::uint32_t> children(unsigned count, bool legacy = false) {
     }
     std::vector<std::uint32_t> result{DRW::DwgLtypeContinuousHandle};
     for(unsigned i=1;i<count;++i)result.push_back(0x1000u+i);
-    result.push_back(DRW::DwgLtypeByBlockHandle);
     result.push_back(DRW::DwgLtypeByLayerHandle);
+    result.push_back(DRW::DwgLtypeByBlockHandle);
     return result;
 }
 bool slots(const DRW_ObjControl& control,unsigned count,bool legacy = false) {

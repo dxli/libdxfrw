@@ -15388,6 +15388,7 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
       // hard-owned phantom records observed in ODA-produced sources.
       bool legacyWriterOrder = true;
       bool odaOrder = true;
+      bool previousCurrentWriterOrder = true;
       std::unordered_set<std::uint32_t> seen;
       try {
         for (std::int32_t i = 0; valid && i < count + 2; ++i) {
@@ -15412,18 +15413,28 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
               odaOrder = odaOrder
                   && child.code == DRW::DwgSoftOwnership
                   && (i != 0 || child.ref == DRW::DwgLtypeContinuousHandle);
+              previousCurrentWriterOrder = previousCurrentWriterOrder
+                  && child.code == DRW::DwgSoftOwnership
+                  && (i != 0 || child.ref == DRW::DwgLtypeContinuousHandle);
             } else {
               const std::uint32_t odaPhantoms[] = {
+                  DRW::DwgLtypeByLayerHandle,
+                  DRW::DwgLtypeByBlockHandle};
+              const std::uint32_t previousWriterPhantoms[] = {
                   DRW::DwgLtypeByBlockHandle,
                   DRW::DwgLtypeByLayerHandle};
               odaOrder = odaOrder
                   && child.code == DRW::DwgHardOwnership
                   && child.ref == odaPhantoms[i - count];
+              previousCurrentWriterOrder = previousCurrentWriterOrder
+                  && child.code == DRW::DwgHardOwnership
+                  && child.ref == previousWriterPhantoms[i - count];
             }
           }
         }
       } catch (...) { return false; }
-      valid = valid && (legacyWriterOrder || odaOrder);
+      valid = valid
+          && (legacyWriterOrder || odaOrder || previousCurrentWriterOrder);
       std::uint64_t end = 0;
       valid = valid && controlCurrentBit(legacy, end) && end <= totalBits
           && totalBits - end <= 7u;

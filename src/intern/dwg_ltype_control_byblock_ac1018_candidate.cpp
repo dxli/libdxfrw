@@ -36,14 +36,16 @@ namespace {
 bool inspectOrder(const DRW_UnsupportedObject& control,const DRW_UnsupportedObject& row,
                   const DRW_LType& typed,Result& result,bool normative) noexcept {
     result={};
+    const bool byBlockName=typed.name=="ByBlock"||(normative&&typed.name=="BYBLOCK");
     if(!metadata(control,56)||!metadata(row,57)||control.m_handle==row.m_handle
         ||typed.tType!=DRW::LTYPE||typed.handle!=row.m_handle||typed.parentHandle!=control.m_handle
-        ||typed.name!="ByBlock"||!typed.desc.empty()||typed.flags!=0x40||typed.size!=0
+        ||!byBlockName||!typed.desc.empty()||typed.flags!=0x40||typed.size!=0
         ||typed.length!=0.0||std::signbit(typed.length)||typed.alignment!=65||!typed.path.empty()
         ||!typed.segments.empty()||!typed.shapeHandles.empty()||typed.xrefBlockHandle.ref64!=0u
-        ||typed.xrefBlockHandle.ref!=0u||typed.xrefBlockHandle.code!=5u
-        ||typed.xrefBlockHandle.rawCode!=5u||typed.xrefBlockHandle.size!=0u
-        ||typed.reactorCount()!=0||typed.extensionDictionaryFlag()!=1u||!typed.reactorHandles.empty()
+        ||typed.xrefBlockHandle.ref!=0u||typed.xrefBlockHandle.size!=0u
+        ||!((typed.xrefBlockHandle.code==5u&&typed.xrefBlockHandle.rawCode==5u)
+            ||(typed.xrefBlockHandle.code==0u&&typed.xrefBlockHandle.rawCode==0u))
+        ||typed.reactorCount()!=0||!typed.reactorHandles.empty()
         ||typed.xDictHandle!=0u||typed.hasDataStorageBinaryData()||!typed.extData.empty()||!typed.appData.empty())return false;
     try {
         Result r;dwgBuffer c(control.m_rawBytes.data(),control.m_rawBytes.size(),nullptr);
@@ -63,7 +65,8 @@ bool inspectOrder(const DRW_UnsupportedObject& control,const DRW_UnsupportedObje
         dwgBuffer b(row.m_rawBytes.data(),row.m_rawBytes.size(),nullptr);
         const auto total=static_cast<std::uint64_t>(row.m_rawBytes.size())*8u;
         if(!common(b,row,57,r.ltypeDataEndBit)||!bs(b,r.ltypeDataEndBit,7u))return false;
-        const char name[]="ByBlock";for(std::size_t i=0;i<7u;++i)if(b.getRawChar8()!=static_cast<std::uint8_t>(name[i]))return false;
+        const char* name=normative?"BYBLOCK":"ByBlock";
+        for(std::size_t i=0;i<7u;++i)if(b.getRawChar8()!=static_cast<std::uint8_t>(name[i]))return false;
         if(!within(b,r.ltypeDataEndBit)||b.getBit()!=1u||!bs(b,r.ltypeDataEndBit,0u)||b.getBit()!=0u
             ||!bs(b,r.ltypeDataEndBit,0u)||!bdZero(b,r.ltypeDataEndBit)||b.getRawChar8()!=65u
             ||b.getRawChar8()!=0u||!within(b,r.ltypeDataEndBit))return false;

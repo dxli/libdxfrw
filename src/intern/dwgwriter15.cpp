@@ -7968,10 +7968,9 @@ bool dwgWriter15::writeDwgObjects() {
         };
         for (auto& p : m_pendingLTypes) ltypeChildren.push_back(p.first);
         // ODA §20.4.57 excludes BYLAYER and BYBLOCK from Numentries and
-        // places their hard-owner handles last. Its physical producer
-        // outputs resolve in BYBLOCK, BYLAYER order for the observed profile.
-        ltypeChildren.push_back(reservedHandle::LTYPE_BYBLOCK);
+        // places their hard-owner handles last, in BYLAYER then BYBLOCK order.
         ltypeChildren.push_back(reservedHandle::LTYPE_BYLAYER);
+        ltypeChildren.push_back(reservedHandle::LTYPE_BYBLOCK);
         // numEntries excludes BYBLOCK/BYLAYER phantoms (reader adds +2)
         if (!emitControlObject(
                 DRW::DwgLTypeControlObjectType, reservedHandle::LTYPE_CONTROL,

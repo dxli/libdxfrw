@@ -30,9 +30,9 @@ DRW_UnsupportedObject control(const Options& o={}){dwgBufferW b;b.putObjType(DRW
     DRW_UnsupportedObject r;r.m_version=DRW::AC1018;r.m_handle=o.control;r.m_objectType=56;r.m_rawBytes=b.data();
     if(o.badPadding)r.m_rawBytes.back()|=1u;
     r.m_objectSize=static_cast<std::uint32_t>(r.m_rawBytes.size());return r;}
-DRW_UnsupportedObject row(const Options& o={}){dwgBufferW b;b.putObjType(DRW::AC1018,57u);auto end=b.bitCount();b.putRawLong32(0u);
+DRW_UnsupportedObject row(const Options& o={},bool uppercaseName=false){dwgBufferW b;b.putObjType(DRW::AC1018,57u);auto end=b.bitCount();b.putRawLong32(0u);
     h(b,0u,o.row);b.putBitShort(0u);b.putBitLong(0);b.putBit(true);b.putBitShort(7u);
-    const std::string name=o.badName?"ByBlokk":"ByBlock";for(auto c:name)b.putRawChar8(static_cast<std::uint8_t>(c));
+    const std::string name=o.badName?"ByBlokk":(uppercaseName?"BYBLOCK":"ByBlock");for(auto c:name)b.putRawChar8(static_cast<std::uint8_t>(c));
     b.putBit(true);b.putBitShort(0u);b.putBit(false);b.putBitShort(0u);b.putBitDouble(o.negativeZero?-0.:0.);b.putRawChar8(65u);b.putRawChar8(0u);
     for(int i=0;i<256;++i)b.putRawChar8(o.badArea&&i==255?1u:0u);
     b.patchRawLong32AtBit(end,static_cast<std::uint32_t>(static_cast<std::int64_t>(b.bitCount())+o.rowEnd));
@@ -59,7 +59,7 @@ bool generated(){auto c=control();auto r=row();auto t=typed();Result v;
     Options o;o.nullRole=3u;if(!reject(control(o),row(o),typed(o)))return false;o={};o.ordinaryRole=3u;if(!reject(control(o),row(o),typed(o)))return false;
     o={};o.phantomRole=2u;if(!reject(control(o),row(o),typed(o)))return false;o={};o.otherRole=2u;if(!reject(control(o),row(o),typed(o)))return false;
     o={};o.ownerRole=3u;if(!reject(control(o),row(o),typed(o)))return false;o={};o.xrefRole=4u;if(!reject(control(o),row(o),typed(o)))return false;
-    o={};o.reverse=true;c=control(o);r=row(o);t=typed(o);
+    o={};o.reverse=true;c=control(o);r=row(o,true);t=typed(o);t.name="BYBLOCK";
     if(!reject(c,r,t))return false;
     if(!DwgLTypeControlByBlockAc1018Candidate::inspectNormativeOrder(c,r,t,v)
         ||v.byLayerPhantom.target!=0x15u||v.byLayerPhantom.startBit!=97u||v.byLayerPhantom.endBit!=113u

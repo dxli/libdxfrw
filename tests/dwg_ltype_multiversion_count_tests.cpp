@@ -29,8 +29,8 @@ std::vector<std::uint32_t> children(unsigned count, bool legacyOrder = false) {
     }
     std::vector<std::uint32_t> result{DRW::DwgLtypeContinuousHandle};
     for (unsigned i=1; i<count; ++i) result.push_back(0x1000u+i);
-    result.push_back(DRW::DwgLtypeByBlockHandle);
     result.push_back(DRW::DwgLtypeByLayerHandle);
+    result.push_back(DRW::DwgLtypeByBlockHandle);
     return result;
 }
 bool slots(const DRW_ObjControl& obj, unsigned count,
@@ -41,7 +41,8 @@ bool slots(const DRW_ObjControl& obj, unsigned count,
 }
 struct Body {std::vector<std::uint8_t> data;std::uint32_t handleBits;};
 Body build(DRW::Version version,unsigned count,bool legacy,int corruption=0,
-           bool forceLong=false,bool legacyOrder=false) {
+           bool forceLong=false,bool legacyOrder=false,
+           bool previousCurrentWriterOrder=false) {
     dwgBufferW b;
     b.putObjType(version,DRW::DwgLTypeControlObjectType);
     const auto sizeBit=b.bitCount();
@@ -66,6 +67,8 @@ Body build(DRW::Version version,unsigned count,bool legacy,int corruption=0,
     b.putHandle(ref(corruption==1?0:DRW::DwgSoftPointer,0));
     b.putHandle(ref(DRW::DwgHardOwnership,0));
     auto values=children(count, legacyOrder);
+    if (previousCurrentWriterOrder && !legacyOrder)
+        std::swap(values[count], values[count + 1u]);
     if(corruption==2)values[0]=DRW::DwgLtypeByLayerHandle;
     if(corruption==3)values[3]=DRW::DwgLtypeContinuousHandle;
     for(std::size_t i=0;i<values.size();++i) {
@@ -84,12 +87,16 @@ Body build(DRW::Version version,unsigned count,bool legacy,int corruption=0,
     return {std::move(data),handleBits};
 }
 bool parse(const Body& b,DRW::Version version,unsigned count,
-           DRW_ObjControl& object,bool legacyOrder=false) {
+           DRW_ObjControl& object,bool legacyOrder=false,
+           bool previousCurrentWriterOrder=false) {
     dwgBuffer in(const_cast<std::uint8_t*>(b.data.data()),b.data.size());
     if (!object.parseDwg(version,&in,b.handleBits)
-        || !slots(object,count,legacyOrder)
         || object.orderedHandleRoles.size() != count + 2u)
         return false;
+    auto expected=children(count,legacyOrder);
+    if(previousCurrentWriterOrder&&!legacyOrder)
+        std::swap(expected[count],expected[count+1u]);
+    if(object.orderedHandleSlots!=expected)return false;
     for (std::size_t index = 0; index < object.orderedHandleRoles.size(); ++index) {
         const std::uint8_t expected = legacyOrder
             ? DRW::DwgSoftOwnership
@@ -206,7 +213,8 @@ int main(int argc,char** argv){
         std::cout<<"physical ODA LTYPE_CONTROL PASS\n";return 0;
     }
     if(argc!=1)return 2;
-    for(auto version:{DRW::AC1018,DRW::AC1024,DRW::AC1027,DRW::AC1032}) {
+    for(auto version:{DRW::AC1018,
+                      DRW::AC1024,DRW::AC1027,DRW::AC1032}) {
         for(unsigned count:{255u,256u,257u}) {
             bool wire=false;
             if(version==DRW::AC1018)wire=DwgBlockRecordXrefWireTestAccess::check<dwgWriter18>(count);
@@ -243,6 +251,14 @@ int main(int argc,char** argv){
             auto oldWriterProfile=build(version,257,false,7,false,true);
             if(!parse(oldWriterProfile,version,257,c,true)) {
                 std::cerr<<"legacy writer-order profile rejected version="
+                    <<version<<'\n';return 1;
+            }
+        }
+        {
+            auto previousWriterProfile=build(version,257,false,7,false,false,true);
+            DRW_ObjControl control;
+            if(!parse(previousWriterProfile,version,257,control,false,true)) {
+                std::cerr<<"previous current-writer phantom order rejected version="
                     <<version<<'\n';return 1;
             }
         }

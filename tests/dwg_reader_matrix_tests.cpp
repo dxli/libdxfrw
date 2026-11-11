@@ -93,9 +93,9 @@ public:
             const bool fixedIdentityMatches = index == 0u
                 ? child.ref == DRW::DwgLtypeContinuousHandle
                 : (index == count
-                       ? child.ref == DRW::DwgLtypeByBlockHandle
+                       ? child.ref == DRW::DwgLtypeByLayerHandle
                        : (index == count + 1u
-                              ? child.ref == DRW::DwgLtypeByLayerHandle
+                              ? child.ref == DRW::DwgLtypeByBlockHandle
                               : true));
             if (!body.isGood() || child.code != expectedRole
                 || !fixedIdentityMatches) return false;
@@ -7929,8 +7929,8 @@ std::vector<std::uint8_t> makeAc1015LtypeCountBody(
     for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(count) + 2u; ++i) {
         std::uint32_t ref = i == 0u ? DRW::DwgLtypeContinuousHandle
             : (i < count ? 0x1000u + i
-                         : (i == count ? DRW::DwgLtypeByBlockHandle
-                                       : DRW::DwgLtypeByLayerHandle));
+                         : (i == count ? DRW::DwgLtypeByLayerHandle
+                                       : DRW::DwgLtypeByBlockHandle));
         if ((corruption == 7 && i == 0u)
             || (corruption == 8 && i == count + 1u))
             ref = 0u;
@@ -7960,8 +7960,8 @@ void testAc1015LtypeControlCountBoundary(TestContext& t) {
             const bool ok = control.parseDwg(DRW::AC1015, &input, 0);
             t.expect(ok && control.orderedHandleSlots.size() == static_cast<std::size_t>(count) + 2u
                          && control.orderedHandleSlots.front() == DRW::DwgLtypeContinuousHandle
-                         && control.orderedHandleSlots[count] == DRW::DwgLtypeByBlockHandle
-                         && control.orderedHandleSlots[count + 1u] == DRW::DwgLtypeByLayerHandle,
+                         && control.orderedHandleSlots[count] == DRW::DwgLtypeByLayerHandle
+                         && control.orderedHandleSlots[count + 1u] == DRW::DwgLtypeByBlockHandle,
                      std::string("AC1015 LTYPE_CONTROL ") + (legacy ? "old BS " : "spec BL ")
                          + std::to_string(count) + " preserves following handles");
         }
