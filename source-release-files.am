@@ -389,6 +389,7 @@ EXTRA_DIST = \
     tests/attdef_source_tests.cpp \
     tests/attdef_xrecord_controls.h \
     tests/attribute_subclass_alignment_tests.cpp \
+    tests/background_objects_allocation_tests.cpp \
     tests/block_children_source_controls.h \
     tests/block_control_reactor_tests.cpp \
     tests/block_delivery_controls.h \
@@ -412,11 +413,13 @@ EXTRA_DIST = \
     tests/compound_source_profile_controls.h \
     tests/consumer_cxx17_contract.cpp \
     tests/datalink_objects_allocation_tests.cpp \
+    tests/dbcolor_objects_allocation_tests.cpp \
     tests/debug_state_tests.cpp \
     tests/dependency_controls.h \
     tests/diagnostic_tests.cpp \
     tests/dictionary_default_objects_allocation_tests.cpp \
     tests/dictionary_role_controls.h \
+    tests/dimassoc_dwg_encoder_allocation_tests.cpp \
     tests/dimassoc_physical_transport_tests.cpp \
     tests/dimstyle_optional_handle_tests.cpp \
     tests/dwg2dxf_adapter_tests.cpp \
@@ -467,6 +470,7 @@ EXTRA_DIST = \
     tests/dwg_mtext_rotation_direction_tests.cpp \
     tests/dwg_object_vectors_tests.cpp \
     tests/dwg_plotstyle_nod_admission_tests.cpp \
+    tests/dwg_pointcloudex_cropped_fields_tests.cpp \
     tests/dwg_polyline_1018_1024_membership_tests.cpp \
     tests/dwg_polyline_cross_scope_group_tests.cpp \
     tests/dwg_polyline_cross_scope_tests.cpp \
@@ -497,13 +501,16 @@ EXTRA_DIST = \
     tests/dxf_lwpoly_wcs_vertices_tests.cpp \
     tests/dxf_mline_source_dependency_tests.cpp \
     tests/dxf_no_raw_sections_tests.cpp \
+    tests/dxf_pointcloud_omitted_fields_tests.cpp \
     tests/dxf_r12_ellipse_wrap_tests.cpp \
     tests/dxf_sectionobject_411_tests.cpp \
     tests/dxf_sectionobject_vertices_tests.cpp \
     tests/dxf_sparse_material_raw_tests.cpp \
+    tests/dxf_spline_helix_dispatch_tests.cpp \
     tests/dxf_sun_color_order_tests.cpp \
     tests/dxf_symbol_output_tests.cpp \
     tests/dxf_viewport_ambient_color_order_tests.cpp \
+    tests/dxf_viewport_status_domain_tests.cpp \
     tests/dxf_whole_source_tests.cpp \
     tests/dxf_xdata_int16_tests.cpp \
     tests/effective_ownership_controls.h \
@@ -571,6 +578,7 @@ EXTRA_DIST = \
     tests/gbk_codepage_tests.cpp \
     tests/gcc_overloaded_virtual_probe.py \
     tests/generated_raw_dwg_object.h \
+    tests/geodata_objects_allocation_tests.cpp \
     tests/graph_preservation_tests.cpp \
     tests/hardening_tests.cpp \
     tests/hatch_reference_tests.cpp \
@@ -595,7 +603,6 @@ EXTRA_DIST = \
     tests/material_dwg_test_helpers.h \
     tests/material_normal_role_tests.cpp \
     tests/material_objects_allocation_tests.cpp \
-    tests/table_dwg_codec_allocation_tests.cpp \
     tests/modeler_block_census_tests.cpp \
     tests/modeler_dxf_writer_matrix_tests.cpp \
     tests/modeler_sat_dxf_compare.cpp \
@@ -604,6 +611,7 @@ EXTRA_DIST = \
     tests/numeric_locale_tests.cpp \
     tests/oTypes.md \
     tests/object_physical_controls.h \
+    tests/partial_viewing_index_objects_allocation_tests.cpp \
     tests/persistent_manager_test_helpers.h \
     tests/plotsettings_objects_allocation_tests.cpp \
     tests/plotstyle_source_controls.h \
@@ -668,6 +676,7 @@ EXTRA_DIST = \
     tests/samples/README.md \
     tests/scale_objects_allocation_tests.cpp \
     tests/semantic_differential_adapter.cpp \
+    tests/spatial_filter_objects_allocation_tests.cpp \
     tests/structural_source_controls.h \
     tests/style_font_controls.h \
     tests/sunstudy_objects_allocation_tests.cpp \
@@ -679,6 +688,7 @@ EXTRA_DIST = \
     tests/table_content_dxf_tests.cpp \
     tests/table_content_reference_observer.py \
     tests/table_control_identity_controls.h \
+    tests/table_dwg_codec_allocation_tests.cpp \
     tests/table_export_reuse_controls.h \
     tests/table_geometry_dependency_controls.h \
     tests/table_geometry_dxf_tests.cpp \
@@ -959,9 +969,15 @@ EXTRA_DIST = \
     tools/qualify_material_source_order.py \
     tools/replay_dwg_legacy_extrusion.cpp \
     tools/research/audit_ac1027_source_references.py \
+    tools/research/decode_dxf_sat1.py \
+    tools/research/freecad_imported_sat_torus_bound_probe.py \
+    tools/research/freecad_torus_bound_probe.py \
     tools/research/inventory_cover_peer_body_handles.py \
     tools/research/run_acsh_torus_source_probe.py \
+    tools/research/tablegeometry_dwg_span_scan.cpp \
+    tools/research/tablegeometry_physical_span_verify.py \
     tools/research/verify_ac1024_civil_assoc_edge_profile.py \
+    tools/research/verify_ac1027_material_graph_minjson.py \
     tools/research/verify_cover_dictionary_edges.py \
     tools/research/verify_cover_tablestyle_raw_spans.py \
     tools/research/verify_libredwg_tablestyle_peer_tail.py \

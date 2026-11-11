@@ -1209,6 +1209,14 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P8 source-release inventory:** regenerated both tracked-file lists at
+  `c43dfaa2`, adding 17 missing test/tool sources. A 999-file scratch archive
+  passed exact-byte and extracted no-Git inventory checks; extracted CMake
+  configured and built the three recent point-cloud/HELIX test targets, whose
+  focused CTests passed 3/3. Regenerate again after adding tracked files. This
+  is not an Autotools distcheck or native-platform qualification. See the
+  [receipt](docs/research/p8-source-release-tracked-inventory-refresh-2026-11-10.json).
+
 - **P6 HELIX spline dispatch and 2D fallback:** `writeSpline` now routes a
   runtime HELIX to the typed HELIX writer, retaining its axis and parameters.
   The default non-pure `addHelix` callback delegates to `addSpline`, so rebuilt
