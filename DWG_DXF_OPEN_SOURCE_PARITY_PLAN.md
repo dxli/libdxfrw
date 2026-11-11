@@ -1,5 +1,20 @@
 # DWG/DXF parity — remaining implementation plan
 
+**P6/P7 output slice (2026-11-11, AC1018 plot-style default graph):**
+the hash-pinned AC1018 pulley sample contains a typed
+`DICTIONARYWDFLT` at `0x242C` and fixed type-80 `PLACEHOLDER` at `0x242D`,
+with the `ACAD_PLOTSTYLENAME` NOD entry, `Normal` dictionary entry, default
+target, owner and reactor roles closed. The writer now admits same-revision
+AC1018 output for this already-bounded profile; its other version paths and
+class/source checks are unchanged. The physical ASCII and Binary partial-output
+control proves malformed-reactor refusal preserves the destination and
+qualification ledger, corrected same-adapter retry succeeds, and both outputs
+freshly read back with the graph identities and references intact. The profile
+qualifies only its two callbacks (2 of 20); strict whole-file output still
+refuses the other 18 opaque callbacks. This does not establish whole-file
+conversion or broader AC1018 support. See the
+[AC1018 default-graph receipt](docs/research/p6-ac1018-dictionary-default-same-version-output-2026-11-11.json).
+
 **P7 follow-up (2026-11-11, unused AC1018 WIPEOUTVARIABLES CLASS row):**
 the hash-pinned AC1018 pulley source declares one published
 `WIPEOUTVARIABLES` CLASS row with `num_instances=0`, AppName

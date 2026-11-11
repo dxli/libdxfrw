@@ -53235,7 +53235,8 @@ bool physicalSortEntsOwnerScopeQualification(
 bool physicalDictionaryDefaultOutputReadback(
         const std::filesystem::path& sourcePath,
         bool requireAc1018 = false,
-        bool sameVersionAc1021 = false) {
+        bool sameVersionAc1021 = false,
+        bool ac1018PulleyProfile = false) {
     dx_iface sourceReader;
     dx_data source;
     if (!sourceReader.fileImport(sourcePath.string(), &source, false)
@@ -53246,18 +53247,23 @@ bool physicalDictionaryDefaultOutputReadback(
             && source.sourceVersion != DRW::AC1018)
         || (requireAc1018 && source.sourceVersion != DRW::AC1018)
         || (sameVersionAc1021 && source.sourceVersion != DRW::AC1021)
+        || (ac1018PulleyProfile
+            && source.sourceVersion != DRW::AC1018)
         || !source.hasSingleSuccessfulDictionaryDefaultImport()
         || !source.hasNamedObjectDictionary
         || source.dictionaryWithDefaults.size() != 1u
         || source.placeholders.size() != 1u
         || !source.rawDictionaryWithDefaults.empty()
         || !source.rawPlaceholders.empty()
-        || source.dictionaryWithDefaults.front().handle != 0x0eu
-        || source.placeholders.front().handle != 0x0fu)
+        || source.dictionaryWithDefaults.front().handle
+            != (ac1018PulleyProfile ? 0x242Cu : 0x0eu)
+        || source.placeholders.front().handle
+            != (ac1018PulleyProfile ? 0x242Du : 0x0fu))
         return fail("physical dictionary-default source is not the admitted AC1015/AC1018/AC1021/AC1024 typed pair");
 
-    const DRW::Version targetVersion = sameVersionAc1021
-        ? DRW::AC1021 : DRW::AC1024;
+    const DRW::Version targetVersion = ac1018PulleyProfile
+        ? DRW::AC1018
+        : sameVersionAc1021 ? DRW::AC1021 : DRW::AC1024;
 
     const std::uint32_t sourceDictionaryHandle =
         source.dictionaryWithDefaults.front().handle;
@@ -53269,8 +53275,10 @@ bool physicalDictionaryDefaultOutputReadback(
     const DRW_UnsupportedObject* placeholderFrame =
         DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
             source, source.importGeneration, sourcePlaceholderHandle);
-    if (sourceDictionaryHandle != 0x0eu
-        || sourcePlaceholderHandle != 0x0fu
+    if (sourceDictionaryHandle
+            != (ac1018PulleyProfile ? 0x242Cu : 0x0eu)
+        || sourcePlaceholderHandle
+            != (ac1018PulleyProfile ? 0x242Du : 0x0fu)
         || dictionaryFrame == nullptr || placeholderFrame == nullptr
         || dictionaryFrame->m_objectType != 500
         || dictionaryFrame->m_handle != sourceDictionaryHandle
@@ -53288,7 +53296,8 @@ bool physicalDictionaryDefaultOutputReadback(
         || placeholderFrame->m_isEntity)
         return fail("physical dictionary-default callbacks do not match their source-bound object identities");
 
-    if (source.sourceVersion == DRW::AC1018) {
+    if (source.sourceVersion == DRW::AC1018
+        && !ac1018PulleyProfile) {
         if (source.dwgReadOutcome.opaqueViewCallbacks != 23u)
             return fail("physical AC1018 dictionary-default source callback census changed");
         auto invalidTextStyle = std::find_if(
@@ -53601,11 +53610,19 @@ bool physicalDictionaryDefaultOutputReadback(
                 != std::vector<std::uint32_t>{outputDictionary.handle})
             return fail("physical PLACEHOLDER owner and reactor roles changed on readback");
 
+        const std::size_t expectedQualified = ac1018PulleyProfile
+            ? 2u : 21u;
+        const std::size_t expectedCallbacks = ac1018PulleyProfile
+            ? 20u : 23u;
         if (source.sourceVersion == DRW::AC1018
             && (DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualificationCount(
-                    source) != 21u
-                || source.dwgReadOutcome.opaqueViewCallbacks != 23u))
-            return fail("AC1018 composed output did not qualify exactly twenty-one identities in the 23-callback source census");
+                    source) != expectedQualified
+                || source.dwgReadOutcome.opaqueViewCallbacks
+                    != expectedCallbacks))
+            return fail("AC1018 composed output qualification census mismatch: qualified="
+                + std::to_string(DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualificationCount(source))
+                + " callbacks="
+                + std::to_string(source.dwgReadOutcome.opaqueViewCallbacks));
 
     }
     std::cerr << "Physical DICTIONARYWDFLT/PLACEHOLDER ASCII and binary output, "
@@ -89426,6 +89443,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--dictionary-default-physical-ac1018-output-readback")
         return physicalDictionaryDefaultOutputReadback(argv[2], true) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--dictionary-default-physical-ac1018-pulley-output-readback")
+        return physicalDictionaryDefaultOutputReadback(argv[2], true, false, true) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--dictionary-default-ac1021-same-version-output-readback")
         return physicalDictionaryDefaultOutputReadback(argv[2], false, true) ? 0 : 1;

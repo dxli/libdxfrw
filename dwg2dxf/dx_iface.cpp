@@ -53239,7 +53239,10 @@ bool dx_iface::inspectDwgDictionaryDefaultOutput(
         && m_dwgLayoutOutputSourceVersion == DRW::AC1021
         && !m_dwgLayoutOutputSources.empty();
     const DRW::Version expectedTargetVersion =
-        m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1027
+        m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1018
+            && view.version == DRW::AC1018
+            ? DRW::AC1018
+            : m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1027
             ? DRW::AC1027
             : (m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1021
                 && (selectedAc1021LayoutProfile
