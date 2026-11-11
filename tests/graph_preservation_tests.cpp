@@ -315,7 +315,11 @@ std::vector<std::uint8_t> rootedVertexBodySab(
         pointer(1); endRecord();
         startRecord("face");
         pointer(-1); pointer(-1); pointer(4); pointer(2); pointer(-1);
-        pointer(5); endRecord();
+        pointer(5);
+        bytes.push_back(static_cast<std::uint8_t>(DRW_SabTag::BoolFalse));
+        bytes.push_back(static_cast<std::uint8_t>(DRW_SabTag::BoolTrue));
+        bytes.push_back(static_cast<std::uint8_t>(DRW_SabTag::BoolTrue));
+        endRecord();
         startRecord("loop");
         pointer(-1); pointer(-1); pointer(6); pointer(3); endRecord();
         startRecord("plane-surface");
@@ -14658,6 +14662,12 @@ void testSab21800RecordHeaderAlignment(TestContext& t) {
                  && bodies21500.front().bodyTransformNodeIndex == 13
                  && bodies21500.front().wireframe.vertices.size() == 2u
                  && bodies21500.front().wireframe.faces.size() == 1u
+                 && bodies21500.front().wireframe.faces.front().hasSense
+                 && !bodies21500.front().wireframe.faces.front().senseReversed
+                 && bodies21500.front().wireframe.faces.front().hasDoubleSided
+                 && bodies21500.front().wireframe.faces.front().doubleSided
+                 && bodies21500.front().wireframe.faces.front().hasContainment
+                 && bodies21500.front().wireframe.faces.front().containmentIn
                  && bodies21500.front().wireframe.faces.front().loops.size()
                         == 1u
                  && bodies21500.front().wireframe.faces.front().loops.front()

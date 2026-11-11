@@ -1236,6 +1236,11 @@ created locally from scratch for the specific control.
   AcDS closure, native/kernel acceptance, output qualification, or a support
   claim. The header's third integer remains semantically unqualified. See the
   [rooted 21500 receipt](docs/research/p7-ac1024-21500-sab-rooted-geometry-graph-2026-11-11.json).
+  A follow-up generated vector now verifies the face sense/double-sided flag
+  sequence after the six geometry pointers. On the same source hash, the local
+  parser reports one forward and five reversed faces, all single-sided; this is
+  source-profile parser observation, not an independent orientation or
+  containment oracle. See the [face-flag receipt](docs/research/p7-ac1024-21500-face-flag-projection-2026-11-11.json).
 
 - **P6 R12 ellipse numerical stability:** the ellipse-to-polyline converter
   now uses scaled length calculations for axes and normals whose norms are
