@@ -1750,6 +1750,16 @@ created locally from scratch for the specific control.
   normalize to uppercase; comparison uses ASCII case-insensitive identity.
   Scratch output is removed. Neither selected route proves full-source
   conversion, exact source spelling preservation or native linetype appearance.
+  The same physical source's mandatory Continuous/ByBlock/ByLayer records also
+  pass ASCII and Binary AC1018 DXF write/readback for names, descriptions,
+  alignment, lengths and pattern values. DWG group-70 bit 64 is absent in the
+  DXF result; Autodesk documents that as the last-edited “referenced” flag,
+  which DXF readers may ignore and writers need not set
+  ([LTYPE DXF groups](https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-F57A316C-94A2-416C-8280-191E34B182AC.htm)).
+  The DXF codec emits these three mandatory canonical records itself; this
+  profile matches them with only bit 64 excluded from exact flag equality.
+  This codec route bypasses whole-source adapter finalization and is not strict
+  export, physical graph closure or native rendering evidence.
   The attempted physical
   CRC mutation could not locate the reader's decoded-buffer frame bytes as a
   contiguous span in the compressed source pages. The existing checksum helper

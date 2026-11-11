@@ -2,6 +2,7 @@
 // reader-private source/CRC ticket and does not prove graph or output closure.
 #include "dx_iface.h"
 #include "libdwgr.h"
+#include "libdxfrw.h"
 #include "intern/dwgobjectframe.h"
 #include "intern/dwgreader.h"
 #include "intern/dwgutil.h"
@@ -79,6 +80,27 @@ public:
   }
  }
 };
+class DxfLtypeSource final:public dx_iface {
+public:
+ void writeHeader(DRW_Header& header) override {header.vars.clear();}
+ void collectDwgAppIds() override {}
+ void writeBlocks() override {}
+ void writeBlockRecords() override {}
+ void writeEntities() override {}
+ void writeLayers() override {}
+ void writeTextstyles() override {}
+ void writeVports() override {}
+ void writeViews() override {}
+ void writeUCSs() override {}
+ void writeDimstyles() override {}
+ void writeAppId() override {}
+ bool finalizeDxfWrite() override {return true;}
+ // dxfRW emits its three mandatory linetypes before this callback. The
+ // selected source profile contains only those rows, so replaying them here
+ // would duplicate TABLE entries.
+ void writeLTypes() override {}
+ bool complete{true};
+};
 std::uint32_t get32(const std::uint8_t* p){return static_cast<std::uint32_t>(p[0])|static_cast<std::uint32_t>(p[1])<<8u
  |static_cast<std::uint32_t>(p[2])<<16u|static_cast<std::uint32_t>(p[3])<<24u;}
 void put32(std::uint8_t* p,std::uint32_t n){for(unsigned i=0;i<4u;++i)p[i]=static_cast<std::uint8_t>(n>>(i*8u));}
@@ -113,6 +135,64 @@ DRW_UnsupportedObject body(const char* path,std::uint32_t handle,int type) {
  r.m_rawBytes.assign(std::istreambuf_iterator<char>(in),{});r.m_objectSize=static_cast<std::uint32_t>(r.m_rawBytes.size());return r;
 }
 int main(int argc,char**argv){
+ if(argc==5&&std::string(argv[1])=="--dxf-roundtrip-resource"){
+  const std::filesystem::path sourcePath(argv[2]),asciiPath(argv[3]),binaryPath(argv[4]);
+  if(!std::filesystem::is_regular_file(sourcePath)||std::filesystem::exists(asciiPath)
+      ||std::filesystem::exists(binaryPath)||asciiPath==binaryPath)return 30;
+  struct Cleanup{std::filesystem::path a,b;~Cleanup(){std::error_code e;std::filesystem::remove(a,e);std::filesystem::remove(b,e);}}cleanup{asciiPath,binaryPath};
+  dx_iface sourceReader;dx_data source;
+  const bool selected=sourceReader.enableVerifiedLTypeResourceSource(5u,0x16u,0x14u,0x15u);
+  const bool imported=selected&&sourceReader.fileImport(sourcePath.string(),&source,false);
+  const bool sourceBound=imported&&dx_iface::hasUnchangedVerifiedLTypeResourceSource(
+      source,5u,0x16u,0x14u,0x15u);
+  if(!sourceBound)return 31;
+  const auto check=[&](const std::filesystem::path& outputPath,bool binary){
+   dxfRW writer(outputPath.string().c_str());DxfLtypeSource outputSource;
+   const bool written=writer.write(&outputSource,DRW::AC1018,binary)&&outputSource.complete;
+   if(!written){const auto diagnostic=writer.getLastDiagnostic();
+    std::cerr<<"DXF write failed binary="<<binary<<" error="<<writer.getError()
+        <<" code="<<diagnostic.code<<" message="<<diagnostic.message<<'\n';return false;}
+   dx_iface readbackReader;dx_data readback;
+   if(!readbackReader.fileImport(outputPath.string(),&readback,false)){
+    std::cerr<<"DXF readback failed binary="<<binary<<" error="<<readback.dxfReadOutcome.error
+        <<" version="<<static_cast<int>(readback.sourceVersion)<<'\n';return false;
+   }
+   const auto equalName=[](std::string_view left,std::string_view right){
+    return left.size()==right.size()&&std::equal(left.begin(),left.end(),right.begin(),
+     [](unsigned char a,unsigned char b){
+      const auto upper=[](unsigned char c){return c>='a'&&c<='z'
+        ?static_cast<unsigned char>(c-'a'+'A'):c;};return upper(a)==upper(b);
+     });
+   };
+   for(const auto handle:{0x16u,0x14u,0x15u}){
+    const auto expected=std::find_if(source.lineTypes.cbegin(),source.lineTypes.cend(),
+        [handle](const DRW_LType& row){return row.handle==handle;});
+    if(expected==source.lineTypes.cend())return false;
+    const auto actual=std::find_if(readback.lineTypes.cbegin(),readback.lineTypes.cend(),
+        [&expected,&equalName](const DRW_LType& row){return equalName(row.name,expected->name);});
+    if(actual==readback.lineTypes.cend()){
+     std::cerr<<"DXF row missing="<<expected->name<<" binary="<<binary<<'\n';return false;
+    }
+    if(actual->desc!=expected->desc
+        ||(actual->flags&~64)!=(expected->flags&~64)
+        ||actual->alignment!=expected->alignment
+        ||actual->length!=expected->length||actual->size!=expected->size
+        ||actual->path!=expected->path||actual->segments.size()!=expected->segments.size()){
+     std::cerr<<"DXF row mismatch="<<expected->name<<" binary="<<binary
+       <<" flags="<<expected->flags<<"/"<<actual->flags
+       <<" desc="<<expected->desc<<"/"<<actual->desc
+       <<" alignment="<<expected->alignment<<"/"<<actual->alignment
+       <<" length="<<expected->length<<"/"<<actual->length
+       <<" size="<<expected->size<<"/"<<actual->size<<'\n';return false;
+    }
+   }
+   return true;
+  };
+  const bool ascii=check(asciiPath,false),binary=check(binaryPath,true);
+  std::cout<<"sourceBound="<<sourceBound<<" asciiReadback="<<ascii
+      <<" binaryReadback="<<binary<<'\n';
+  return ascii&&binary?0:32;
+ }
  if(argc==4&&std::string(argv[1])=="--roundtrip-resource"){
   const std::filesystem::path sourcePath(argv[2]),outputPath(argv[3]);
   if(!std::filesystem::is_regular_file(sourcePath)||std::filesystem::exists(outputPath))return 30;
