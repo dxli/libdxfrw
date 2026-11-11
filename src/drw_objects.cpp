@@ -31439,6 +31439,14 @@ bool DRW_AssociativeObject::parseCode(
 }
 
 bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
+    return parseDwgConstraintCandidate(version, buf, bs, nullptr, nullptr);
+}
+
+bool DRW_AssociativeObject::parseDwgConstraintCandidate(
+        DRW::Version version, dwgBuffer *buf, std::uint32_t bs,
+        DRW_ConstraintGroupCandidate* candidate, bool* candidateParsed) {
+    if (candidateParsed != nullptr)
+        *candidateParsed = false;
     const auto fail = [this, buf]() {
         if (buf != nullptr)
             buf->invalidate();
@@ -33840,7 +33848,7 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
 
         // The AutoCAD 2024 source at 0x2A8 and an independent primitive walk
         // agree with the peer's fixed-prefix candidate. Keep its remaining
-        // node table opaque: the peer fails there and its schema is disputed.
+        // node table opaque: LibreDWG fails there and its schema is disputed.
         const std::uint64_t groupStart = currentObjectDwgBit(buf);
         dwgBuffer bodyProbe = buf->forkIndependent();
         dwgBuffer handleProbe = hBuff.forkIndependent();
@@ -33909,6 +33917,9 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
         std::int32_t classCount = 0, registeredCount = 0;
         bool rootFlag = false;
         constexpr std::int32_t maxCandidateRegistryItems = 256;
+        std::vector<UTF8STRING> candidateClassNames;
+        std::array<std::int32_t, maxCandidateRegistryItems> candidateClasses{};
+        std::array<bool, maxCandidateRegistryItems> candidateFlags{};
         bool registryComplete = prefixComplete
             && readBitLongWithinBody(&registryBody, version, objectDataEnd,
                                      nextNodeId)
@@ -33923,6 +33934,25 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
                                      classCount)
             && classCount > 0 && classCount <= maxCandidateRegistryItems;
         for (std::int32_t i = 0; registryComplete && i < classCount; ++i) {
+            if (candidate != nullptr) {
+                UTF8STRING className;
+                registryComplete = readAssocConstraintClassNameWithinBounds(
+                    &registryBody, &registryText, version, objectDataEnd,
+                    stringDataEnd, className);
+                // Only publish the exact ASCII class names witnessed for
+                // this candidate. A tolerant TU decoder must not turn an
+                // unrecognized or malformed class slot into claimed data.
+                registryComplete = registryComplete
+                    && (className == "AcConstrainedBoundedLine"
+                        || className == "AcConstrainedArc"
+                        || className == "AcConstrainedImplicitPoint"
+                        || className == "AcPointCurveConstraint"
+                        || className == "AcCenterPointConstraint"
+                        || className == "AcTangentConstraint");
+                if (registryComplete)
+                    candidateClassNames.push_back(std::move(className));
+                continue;
+            }
             std::int32_t codeUnits = 0;
             std::uint64_t textBits = 0;
             registryComplete = readBitShortWithinBody(
@@ -33960,7 +33990,12 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
                 && std::find(seenIds.begin(), seenIds.begin() + seenCount,
                              nodeId) == seenIds.begin() + seenCount;
             if (registryComplete)
-                seenIds[static_cast<std::size_t>(seenCount++)] = nodeId;
+            {
+                const auto position = static_cast<std::size_t>(seenCount++);
+                seenIds[position] = nodeId;
+                candidateClasses[position] = classIndex;
+                candidateFlags[position] = registryFlag;
+            }
         }
         if (registryComplete) {
             m_constraintNextNodeIdRead = true;
@@ -33968,6 +34003,159 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
             DRW_DBG("AC1032 constraint-group candidate seed/classes/registry=");
             DRW_DBG(nextNodeId); DRW_DBG("/"); DRW_DBG(classCount);
             DRW_DBG("/"); DRW_DBG(registeredCount); DRW_DBG("\n");
+        }
+        bool candidateTextBounded = false;
+        if (candidate != nullptr && candidateParsed != nullptr && registryComplete) {
+            dwgBuffer candidateTextEnd = registryText.forkIndependent();
+            candidateTextBounded = consumeZeroPaddingWithinBounds(
+                &candidateTextEnd, stringDataEnd, 7u);
+        }
+        if (candidateTextBounded) {
+            // Decode only the peer-witnessed classes on independent cursors.
+            // This remains a candidate: neither the registry/status meanings
+            // nor the graph and native constraint behavior are qualified.
+            DRW_ConstraintGroupCandidate staged;
+            staged.m_sourceHandle = handle;
+            staged.m_nextNodeIdCandidate = nextNodeId;
+            staged.m_rootId = rootId;
+            staged.m_rootConnectionCount = rootConnections;
+            staged.m_rootFlag = rootFlag;
+            staged.m_classNames = std::move(candidateClassNames);
+            dwgBuffer nodeBody = registryBody.forkIndependent();
+            dwgBuffer nodeHandles = handleProbe.forkIndependent();
+            bool nodesGood = DRW::reserve(staged.m_registeredNodes,
+                                           registeredCount);
+            for (std::int32_t i = 0; nodesGood && i < registeredCount; ++i) {
+                const auto pos = static_cast<std::size_t>(i);
+                DRW_ConstraintNodeCandidate node;
+                node.m_registryFlag = candidateFlags[pos];
+                node.m_classIndex = candidateClasses[pos];
+                node.m_fields.m_className = staged.m_classNames[
+                    static_cast<std::size_t>(node.m_classIndex - 1)];
+                node.m_bodyStartBit = currentObjectDwgBit(&nodeBody);
+                node.m_handleStartBit = currentObjectDwgBit(&nodeHandles);
+                std::int32_t nodeId = 0, connectionCount = 0;
+                nodesGood = readBitLongWithinBody(&nodeBody, version,
+                                                  objectDataEnd, nodeId)
+                    && nodeId == seenIds[pos]
+                    && readBitLongWithinBody(&nodeBody, version,
+                                              objectDataEnd, connectionCount)
+                    && connectionCount >= 0
+                    && connectionCount <= maxCandidateRegistryItems
+                    && countFitsObjectBody(&nodeBody, version, objectDataEnd,
+                                           connectionCount, 2u)
+                    && DRW::reserve(node.m_fields.m_connections,
+                                    connectionCount);
+                node.m_fields.m_nodeId = nodeId;
+                for (std::int32_t j = 0; nodesGood && j < connectionCount; ++j) {
+                    std::int32_t connection = 0;
+                    nodesGood = readBitLongWithinBody(&nodeBody, version,
+                                                       objectDataEnd, connection)
+                        && connection >= 0 && connection <= nextNodeId;
+                    if (nodesGood)
+                        node.m_fields.m_connections.push_back(connection);
+                }
+                if (nodesGood && dictionaryBitRangeAvailable(
+                        &nodeBody, version, objectDataEnd, 8u)) {
+                    node.m_statusRaw = nodeBody.getRawChar8();
+                    nodesGood = nodeBody.isGood();
+                } else {
+                    nodesGood = false;
+                }
+                const auto readGeometryHandle = [&](bool nullable) {
+                    dwgHandle ref;
+                    if (!readBoundedObjectHandle(nodeHandles, 0u, false, ref,
+                                                 handleEndBit)
+                        || ref.code != DRW::DwgSoftPointer
+                        || (!nullable && ref.ref64 == 0u))
+                        return false;
+                    node.m_fields.m_hasGeometryDependency = true;
+                    node.m_fields.m_geometryDependencyCode = ref.code;
+                    node.m_fields.m_geometryDependencyHandle = ref.ref64;
+                    return true;
+                };
+                const auto readVector = [&](DRW_Coord& value) {
+                    return read3BitDoubleWithinBody(&nodeBody, version,
+                                                    objectDataEnd, value);
+                };
+                const auto readDouble = [&](double& value) {
+                    return readBitDoubleWithinBody(&nodeBody, version,
+                                                   objectDataEnd, value);
+                };
+                const auto& className = node.m_fields.m_className;
+                if (nodesGood && className == "AcConstrainedBoundedLine") {
+                    node.m_fields.m_dataKind = DRW_AssociativeConstraintNode::DataKind::BoundedLine;
+                    node.m_fields.m_hasPoint = true;
+                    nodesGood = readGeometryHandle(false)
+                        && readBitLongWithinBody(&nodeBody, version, objectDataEnd,
+                                                 node.m_fields.m_geometryNodeId)
+                        && readVector(node.m_fields.m_point)
+                        && readVector(node.m_fields.m_direction)
+                        && readBitWithinBody(&nodeBody, version, objectDataEnd,
+                                             node.m_fields.m_isRay)
+                        && readVector(node.m_fields.m_startPoint)
+                        && readVector(node.m_fields.m_endPoint);
+                } else if (nodesGood && className == "AcConstrainedArc") {
+                    node.m_fields.m_dataKind = DRW_AssociativeConstraintNode::DataKind::Arc;
+                    node.m_fields.m_hasReserved = true;
+                    nodesGood = readGeometryHandle(false)
+                        && readBitLongWithinBody(&nodeBody, version, objectDataEnd,
+                                                 node.m_fields.m_geometryNodeId)
+                        && readVector(node.m_fields.m_center)
+                        && readVector(node.m_fields.m_normal)
+                        && readVector(node.m_fields.m_direction)
+                        && readDouble(node.m_fields.m_radius)
+                        && readDouble(node.m_fields.m_startParameter)
+                        && readDouble(node.m_fields.m_endParameter)
+                        && readDouble(node.m_fields.m_reserved)
+                        && readVector(node.m_fields.m_startPoint)
+                        && readVector(node.m_fields.m_endPoint);
+                } else if (nodesGood && className == "AcConstrainedImplicitPoint") {
+                    node.m_fields.m_dataKind = DRW_AssociativeConstraintNode::DataKind::ImplicitPoint;
+                    nodesGood = readGeometryHandle(true)
+                        && readBitLongWithinBody(&nodeBody, version, objectDataEnd,
+                                                 node.m_fields.m_geometryNodeId);
+                    if (nodesGood && node.m_fields.m_geometryDependencyHandle != 0u) {
+                        node.m_fields.m_hasPoint = true;
+                        nodesGood = readVector(node.m_fields.m_point);
+                    }
+                    if (nodesGood && dictionaryBitRangeAvailable(
+                            &nodeBody, version, objectDataEnd, 8u)) {
+                        node.m_fields.m_pointType = nodeBody.getRawChar8();
+                        nodesGood = nodeBody.isGood();
+                    } else {
+                        nodesGood = false;
+                    }
+                    nodesGood = nodesGood
+                        && readBitLongWithinBody(&nodeBody, version, objectDataEnd,
+                                                 node.m_fields.m_pointIndex)
+                        && readBitLongWithinBody(&nodeBody, version, objectDataEnd,
+                                                 node.m_fields.m_curveNodeId);
+                } else if (nodesGood && (className == "AcPointCurveConstraint"
+                            || className == "AcCenterPointConstraint"
+                            || className == "AcTangentConstraint")) {
+                    node.m_fields.m_hasActiveFlag = true;
+                    nodesGood = readBitLongWithinBody(&nodeBody, version, objectDataEnd,
+                                                      node.m_fields.m_ownerId)
+                        && readBitWithinBody(&nodeBody, version, objectDataEnd,
+                                             node.m_fields.m_isImplied)
+                        && readBitWithinBody(&nodeBody, version, objectDataEnd,
+                                             node.m_fields.m_isActive);
+                } else {
+                    nodesGood = false;
+                }
+                if (nodesGood) {
+                    // m_classDataParsed stays false: this peer-derived body
+                    // is not a completed inline-node or output profile.
+                    node.m_bodyEndBit = currentObjectDwgBit(&nodeBody);
+                    node.m_handleEndBit = currentObjectDwgBit(&nodeHandles);
+                    staged.m_registeredNodes.push_back(std::move(node));
+                }
+            }
+            if (nodesGood && currentObjectDwgBit(&nodeBody) == objectDataEnd) {
+                *candidate = std::move(staged);
+                *candidateParsed = true;
+            }
         }
         auto status = makeAssocPrefixStatus(
             DRW_AssociativePrefixStatus::Kind::AcDbAssoc2dConstraintGroup,
@@ -34306,6 +34494,37 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
     return ret;
     } catch (...) {
         return fail();
+    }
+}
+
+bool drwDecodeConstraintGroupCandidate(
+        const DRW_UnsupportedObject& raw,
+        DRW_ConstraintGroupCandidate& result) {
+    static_assert(std::is_nothrow_move_assignable<DRW_ConstraintGroupCandidate>::value,
+                  "candidate publication must not throw");
+    if (raw.m_version != DRW::AC1032 || raw.m_isEntity
+        || raw.m_recordName != "ACDBASSOC2DCONSTRAINTGROUP"
+        || raw.m_rawBytes.empty()
+        || raw.m_rawBytes.size() != raw.m_objectSize
+        || static_cast<std::uint64_t>(raw.m_bodyBitSize)
+               > static_cast<std::uint64_t>(raw.m_rawBytes.size()) * 8u)
+        return false;
+    try {
+        DRW_TextCodec decoder;
+        decoder.setVersion(DRW::AC1032, false);
+        dwgBuffer input(raw.m_rawBytes.data(), raw.m_rawBytes.size(), &decoder);
+        DRW_AssociativeObject object(raw.m_recordName);
+        DRW_ConstraintGroupCandidate staged;
+        bool parsed = false;
+        if (!object.parseDwgConstraintCandidate(raw.m_version, &input,
+                                                raw.m_bodyBitSize,
+                                                &staged, &parsed)
+            || !parsed || !input.isGood() || staged.m_sourceHandle != raw.m_handle)
+            return false;
+        result = std::move(staged);
+        return true;
+    } catch (...) {
+        return false;
     }
 }
 

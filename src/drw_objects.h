@@ -7484,6 +7484,41 @@ struct DRW_AssociativeConstraintNode {
   std::vector<std::int32_t> m_rigidSetGeometryIds;
 };
 
+//! Peer-derived, partial AC1032 registered constraint-node candidate.
+//! The fields are peer-interpreted observations of a bounded DWG profile,
+//! not a complete constraint graph or authorization for DXF/DWG output.
+//! Arc start/end parameters are the curve domain; start/end points are the
+//! separately stored trim points. m_fields.m_classDataParsed remains false.
+//! Bit intervals are relative to the first byte of the raw object payload.
+struct DRW_ConstraintNodeCandidate {
+  DRW_AssociativeConstraintNode m_fields;
+  bool m_registryFlag = false;
+  std::int32_t m_classIndex = 0; // one-based position in m_classNames
+  std::uint8_t m_statusRaw = 0;
+  std::uint64_t m_bodyStartBit = 0;
+  std::uint64_t m_bodyEndBit = 0;
+  std::uint64_t m_handleStartBit = 0;
+  std::uint64_t m_handleEndBit = 0;
+};
+
+//! Opt-in candidate, deliberately separate from the existing inline-node
+//! representation. The registry excludes the distinct root node.
+struct DRW_ConstraintGroupCandidate {
+  std::uint32_t m_sourceHandle = 0;
+  std::int32_t m_nextNodeIdCandidate = 0;
+  std::int32_t m_rootId = 0;
+  std::int32_t m_rootConnectionCount = 0;
+  bool m_rootFlag = false;
+  std::vector<UTF8STRING> m_classNames;
+  std::vector<DRW_ConstraintNodeCandidate> m_registeredNodes;
+};
+
+//! Decode the witnessed AC1032 peer-derived candidate from a raw object.
+//! Returns false for unsupported, malformed, or incomplete profiles and
+//! preserves `result` on failure. This does not qualify graph/output support.
+[[nodiscard]] bool drwDecodeConstraintGroupCandidate(
+    const DRW_UnsupportedObject& raw, DRW_ConstraintGroupCandidate& result);
+
 //! Shell parser for ACDBASSOC* action/dependency/action-param objects.
 class DRW_AssociativeObject : public DRW_TableEntry {
   SETOBJFRIENDS
@@ -7562,6 +7597,12 @@ protected:
   void reset();
   bool parseDwg(DRW::Version version, dwgBuffer *buf,
                 std::uint32_t bs = 0) override;
+  bool parseDwgConstraintCandidate(DRW::Version version, dwgBuffer *buf,
+                                   std::uint32_t bs,
+                                   DRW_ConstraintGroupCandidate* candidate,
+                                   bool* candidateParsed);
+  friend bool drwDecodeConstraintGroupCandidate(
+      const DRW_UnsupportedObject&, DRW_ConstraintGroupCandidate&);
 
 public:
   UTF8STRING m_recordName;

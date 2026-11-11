@@ -1209,6 +1209,20 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P4 AC1032 opt-in constraint-node candidates:** the standalone
+  `drwDecodeConstraintGroupCandidate` decoder takes an existing raw carrier
+  and returns a separate peer-derived partial result without changing the
+  existing object layout, callback, or output admission. It preserves the
+  root/registry distinction, class indexes, registry flags, raw node status,
+  connections, bounded spans, and witnessed line, arc, implicit-point and
+  constraint fields. Arc curve-domain parameters and trim points stay
+  separate; the existing node completion flag remains false. The hash-pinned
+  source's 13 registered identities/statuses and physical body spans pass;
+  generated malformed/refusal/retry controls and 383 allocation-failure
+  offsets pass. Native constraint behavior, status meanings, additional
+  classes/producers, complete graph closure and output remain open. See the
+  [candidate receipt](docs/research/p4-ac1032-constraint-candidate-api-2026-11-10.json).
+
 - **P6 POINT and HATCH subtype preservation:** public POINT and HATCH writers
   now route supported built-in descendants to their typed serializers, and
   refuse context-dependent or unsupported descendants instead of dropping
@@ -1238,8 +1252,9 @@ created locally from scratch for the specific control.
   group exposes its version-2 two-action fixed prefix and, after validating a
   bounded peer-interpreted registry, its candidate seed and registered count.
   The 13 registered entries exclude root 0, so `m_constraintNodeCount` and
-  `m_constraintNodes` remain untouched. Class string slots are bounded opaque
-  bytes; class names and node bodies are not published. Completion flags remain
+  `m_constraintNodes` remain untouched. In the standard callback, class
+  string slots are bounded opaque bytes and node bodies are not published;
+  the separate opt-in candidate API is described above. Completion flags remain
   false, raw bytes are retained, and output gates stay closed. Independent
   primitive walkers agree with the source spans; section decompression remains
   shared with libdxfrw. ACadRust's strict read finds root 0 and IDs 1–13; its
@@ -1255,9 +1270,10 @@ created locally from scratch for the specific control.
   curve-domain values `0..2π` differ from the entity's trim angles and must not
   be substituted for them. The node model does not retain per-node status or
   registry flags, and the registry count excludes the root; do not publish
-  complete-looking node shells. Next define a nonmisleading partial-data API,
-  validate status/registry semantics and decode node bodies with refusal/retry,
-  then close the dependency and whole-source graph. See the
+  complete-looking node shells. The separate opt-in candidate API now retains
+  selected fields with explicit partial semantics. Next validate status and
+  registry meanings, qualify additional node classes and producers, and close
+  the dependency and whole-source graph. See the
   [registry receipt](docs/research/p4-ac1032-forum-constraint-registry-candidate-2026-11-10.json)
   and [node-span receipt](docs/research/p4-ac1032-forum-constraint-node-spans-2026-11-10.json).
 
