@@ -1223,8 +1223,11 @@ created locally from scratch for the specific control.
   axes and normals even when their norms exceed binary64, including a partial
   arc whose full minor axis is too large but sampled vertices are finite. Near-XY
   tilted or elevated results now use 3D POLYLINE rather than discarding WCS Z.
-  Keep ratio-above-one normalization with overflowing norms, extreme cancellation
-  between an individually overflowing sampled term and a finite center, and
+  The sampled coordinate accumulator now keeps center, major and minor terms in
+  shared-exponent form until after compensated summation. A generated partial
+  ellipse whose minor term alone exceeds `DBL_MAX` now emits both finite vertices
+  after cancellation against its finite center; the fast extreme-axis control
+  passes. Keep ratio-above-one axis normalization with overflowing norms and
   native/consumer semantics open. See the
   [extreme R12 ellipse receipt](docs/research/p6-r12-ellipse-extreme-axis-stability-2026-11-11.json)
   and [overflowing-norm follow-up](docs/research/p6-r12-ellipse-overflowing-vector-norm-2026-11-11.json).

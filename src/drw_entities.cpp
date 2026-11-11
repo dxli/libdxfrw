@@ -9996,23 +9996,68 @@ void DRW_Ellipse::toPolyline(DRW_Polyline *pol, int parts){
     const double minorLength = std::hypot(std::hypot(minorX, minorY), minorZ);
     if (!std::isfinite(minorLength) || minorLength <= 0.0)
         return;
-    // Multiply exponents separately so a large overall radius and a small
-    // direction component do not overflow/underflow before they cancel.
+    // Keep products as a mantissa and exponent until all three WCS terms have
+    // been added. A sampled minor-axis term can exceed DBL_MAX while its sum
+    // with a finite center remains representable.
+    struct ScaledValue { double mantissa; int exponent; };
     const auto scaledProduct = [](double component, double scale, double norm,
                                   double factor, double sine) {
-        if (component == 0.0 || sine == 0.0) return component * sine;
+        if (component == 0.0 || sine == 0.0)
+            return ScaledValue{0.0, 0};
         int e0 = 0, e1 = 0, e2 = 0, e3 = 0, e4 = 0;
-        const double m0 = std::frexp(component, &e0), m1 = std::frexp(scale, &e1);
-        const double m2 = std::frexp(norm, &e2), m3 = std::frexp(factor, &e3);
+        const double m0 = std::frexp(component, &e0);
+        const double m1 = std::frexp(scale, &e1);
+        const double m2 = std::frexp(norm, &e2);
+        const double m3 = std::frexp(factor, &e3);
         const double m4 = std::frexp(sine, &e4);
-        return std::ldexp((((m0 * m1) * m2) * m3) * m4, e0 + e1 + e2 + e3 + e4);
+        double mantissa = ((((m0 * m1) * m2) * m3) * m4);
+        int adjustment = 0;
+        mantissa = std::frexp(mantissa, &adjustment);
+        return ScaledValue{mantissa, e0 + e1 + e2 + e3 + e4 + adjustment};
+    };
+    const auto scaledCoordinate = [&scaledProduct](double center, double major,
+            double minorComponent, double scale, double norm, double factor,
+            double cosine, double sine) {
+        ScaledValue terms[3]{};
+        int count = 0;
+        const auto append = [&terms, &count](ScaledValue value) {
+            if (value.mantissa != 0.0) terms[count++] = value;
+        };
+        if (center != 0.0) {
+            int exponent = 0;
+            append({std::frexp(center, &exponent), exponent});
+        }
+        if (major != 0.0 && cosine != 0.0) {
+            int majorExponent = 0, cosineExponent = 0, adjustment = 0;
+            double mantissa = std::frexp(major, &majorExponent)
+                * std::frexp(cosine, &cosineExponent);
+            mantissa = std::frexp(mantissa, &adjustment);
+            append({mantissa, majorExponent + cosineExponent + adjustment});
+        }
+        append(scaledProduct(minorComponent, scale, norm, factor, sine));
+        if (count == 0) return 0.0;
+
+        int commonExponent = terms[0].exponent;
+        for (int i = 1; i < count; ++i)
+            commonExponent = std::max(commonExponent, terms[i].exponent);
+        double sum = 0.0;
+        double correction = 0.0;
+        for (int i = 0; i < count; ++i) {
+            const double value = std::ldexp(terms[i].mantissa,
+                                             terms[i].exponent - commonExponent);
+            const double next = sum + value;
+            correction += std::abs(sum) >= std::abs(value)
+                ? (sum - next) + value : (value - next) + sum;
+            sum = next;
+        }
+        return std::ldexp(sum + correction, commonExponent);
     };
     minorX /= minorLength;
     minorY /= minorLength;
     minorZ /= minorLength;
-    if (scaledProduct(minorX, majorScale, majorLength, ratio, 1.0) == 0.0
-        && scaledProduct(minorY, majorScale, majorLength, ratio, 1.0) == 0.0
-        && scaledProduct(minorZ, majorScale, majorLength, ratio, 1.0) == 0.0)
+    if (scaledProduct(minorX, majorScale, majorLength, ratio, 1.0).mantissa == 0.0
+        && scaledProduct(minorY, majorScale, majorLength, ratio, 1.0).mantissa == 0.0
+        && scaledProduct(minorZ, majorScale, majorLength, ratio, 1.0).mantissa == 0.0)
         return;
 
     double start = staparam;
@@ -10049,15 +10094,6 @@ void DRW_Ellipse::toPolyline(DRW_Polyline *pol, int parts){
     }
     const int segments = static_cast<int>(requiredSegments);
     const int vertexCount = closed ? segments : segments + 1;
-    // Add an opposite-sign pair first. This avoids an overflowing
-    // intermediate when a finite center is cancelled by the axis terms.
-    const auto addCoordinates = [](double center, double major, double minor) {
-        if (std::signbit(center) != std::signbit(major))
-            return (center + major) + minor;
-        if (std::signbit(center) != std::signbit(minor))
-            return (center + minor) + major;
-        return (major + minor) + center;
-    };
     for (int i = 0; i < vertexCount; ++i) {
         const double fraction = static_cast<double>(i) / segments;
         const double parameter = start + actualSweep * fraction;
@@ -10065,12 +10101,12 @@ void DRW_Ellipse::toPolyline(DRW_Polyline *pol, int parts){
         const double sine = std::sin(parameter);
         // Include sine before restoring the exponent: a partial arc can have
         // representable vertices even when the full minor axis is too large.
-        const double x = addCoordinates(basePoint.x, secPoint.x * cosine,
-            scaledProduct(minorX, majorScale, majorLength, ratio, sine));
-        const double y = addCoordinates(basePoint.y, secPoint.y * cosine,
-            scaledProduct(minorY, majorScale, majorLength, ratio, sine));
-        const double z = addCoordinates(basePoint.z, secPoint.z * cosine,
-            scaledProduct(minorZ, majorScale, majorLength, ratio, sine));
+        const double x = scaledCoordinate(basePoint.x, secPoint.x, minorX,
+            majorScale, majorLength, ratio, cosine, sine);
+        const double y = scaledCoordinate(basePoint.y, secPoint.y, minorY,
+            majorScale, majorLength, ratio, cosine, sine);
+        const double z = scaledCoordinate(basePoint.z, secPoint.z, minorZ,
+            majorScale, majorLength, ratio, cosine, sine);
         if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
             pol->vertlist.clear();
             pol->vertexcount = 0;

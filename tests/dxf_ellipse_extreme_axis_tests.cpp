@@ -43,6 +43,46 @@ struct BoundaryReader : LC3CompatCheck {
     int count=0;DRW_Coord axis;double ratio=0.;
 };
 bool close(double a,double b) {return std::abs(a-b)<=1e-12*std::max(1.,std::abs(b));}
+bool cancelledOverflowingMinorTerm() {
+    DRW_Ellipse ellipse;
+    ellipse.basePoint={0.,-1.5e308,0.};
+    ellipse.secPoint={1.5e308,0.,0.};
+    ellipse.extPoint={0.,0.,1.};
+    ellipse.ratio=1.5;
+    ellipse.staparam=1.4;
+    ellipse.endparam=1.7;
+    if(!std::isinf((ellipse.secPoint.x*std::sin(ellipse.staparam))
+            *ellipse.ratio)) return false;
+    DRW_Polyline polyline;
+    ellipse.toPolyline(&polyline,4);
+    if(polyline.vertlist.size()!=2u || !polyline.vertlist[0]
+        || !polyline.vertlist[1]) return false;
+    for(const auto& vertex:polyline.vertlist)
+        if(!std::isfinite(vertex->basePoint.x)
+            || !std::isfinite(vertex->basePoint.y)
+            || !std::isfinite(vertex->basePoint.z)) return false;
+    const double expectedY=1.5e308*(1.5*std::sin(1.4)-1.0);
+    if(!close(polyline.vertlist.front()->basePoint.y/1.5e308,
+              expectedY/1.5e308)) return false;
+
+    // This was the previously documented cancellation gap: the normalized
+    // minor direction points along Z, and its sampled term overflows before
+    // being combined with the finite negative center.
+    ellipse.basePoint={0.,0.,-5e307};
+    ellipse.secPoint={1.5e308,1.5e308,0.};
+    ellipse.extPoint={1.,-1.,0.};
+    ellipse.ratio=1.;
+    ellipse.staparam=1.2;
+    ellipse.endparam=1.3;
+    if(!std::isinf((1.5e308*std::sqrt(2.))*std::sin(1.2))) return false;
+    polyline.vertlist.clear();
+    ellipse.toPolyline(&polyline,4);
+    if(polyline.vertlist.size()!=2u || !polyline.vertlist.front()
+        || !std::isfinite(polyline.vertlist.front()->basePoint.z)) return false;
+    const double expectedZ=1.5e308*(std::sqrt(2.)*std::sin(1.2)-1.0/3.0);
+    return close(polyline.vertlist.front()->basePoint.z/1.5e308,
+                 expectedZ/1.5e308);
+}
 int main() {
     const auto path=std::filesystem::temp_directory_path()/
         ("libdxfrw-extreme-ellipse-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".dxf");
@@ -102,6 +142,10 @@ int main() {
         if(adapter.edge->endparam!=1e308)return 1;
         adapter.edge->staparam=.25;adapter.edge->endparam=1.25;
         if(!writer.write(&adapter,DRW::AC1027,binary)||!adapter.accepted)return 1;
+    }
+    if(!cancelledOverflowingMinorTerm()) {
+        std::cerr<<"finite ELLIPSE coordinate lost to overflowing minor term\n";
+        return 1;
     }
     std::cout<<"extreme ELLIPSE axis normalization and retry PASS\n";return 0;
 }
