@@ -1235,6 +1235,26 @@ created locally from scratch for the specific control.
   [generated empty-graph receipt](docs/research/p5-ac1018-table-empty-extension-graph-2026-11-11.json),
   and [caught-exception receipt](docs/research/p5-table-extension-caught-exception-2026-11-11.json).
 
+  The recreated AC1018 XRECORD `0xbc` is now independently walked to its
+  exact data, owner and reactor boundaries. Its three group-102 strings carry
+  RS lengths and codepage byte 45; the supplied ODA text says RC length, and
+  the typed writer substitutes codepage 0. Neither the correct interpretation
+  of 45 nor the three opaque descendant bodies is established. The pinned
+  verifier and actual-import observations are in the [wire receipt](docs/research/p5-ac1018-table-xrecord-source-wire-2026-11-11.json).
+  Next implement an **opt-in sealed source capability** inside the import
+  aggregate, constructed only after a successful generation-bound publication
+  matches the exact raw frame and immutable typed baseline. Bind an import-unique
+  token, source version, frame ordinal/offset/space/size/type/handle, body and
+  CRC-validation provenance from `DwgObjectFrame::readAt`; the callback body
+  alone does not contain the original CRC. Carry it out of band, without adding
+  ordinary callbacks or changing `DRW_XRecord` layout or global ordered-entry
+  authority. First test generated CRC-valid and corrupt frames, coincident
+  identities across imports, source and model mutations, refusal/rollback and
+  same-writer retry. Revalidate the sealed baseline at staging and finalization;
+  recompute output framing/CRC only when replay is actually admitted. Keep the
+  physical subtree refused until all three opaque descendants, their source-bound
+  owner/target roles, class identities and transactional closure are proven.
+
 - **P5 AC1018 TABLE stale absent-mask guard:** when retained source ranges
   describe four absent TABLE override masks, the direct encoder now refuses a
   nonzero modeled TABLE mask, including selected zero text height. A changed
