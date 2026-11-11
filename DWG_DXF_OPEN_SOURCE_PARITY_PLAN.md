@@ -1,5 +1,19 @@
 # DWG/DXF parity — remaining implementation plan
 
+**P4 source-graph slice (2026-11-11, AC1032 associative network):** the
+hash-pinned AutoCAD forum attachment now has an exact local closure check for
+the selected NOD `0xC` → dictionary `0x2A6` → root network `0x2A7` →
+model-space dictionary chain `0x1CE`/`0x2A4` → child network `0x2A5` →
+constraint group `0x2A8` → geometry dependencies `0x2A9`/`0x2AA`. The check
+requires exact dictionary keys, owner/owning-network values, action ownership,
+target types and group/dependency owners. It also requires
+`m_networkFieldsParsed`, `m_constraintGroupBodyParsed`, and
+`m_constraintNodesParsed` to remain false. This proves selected source graph
+closure only; the attachment's producer is unverified, ODA has no
+class-specific schema, source integrity warnings remain, and AC1032 output and
+support gates stay closed. See the
+[graph-closure receipt](docs/research/p4-ac1032-forum-associative-graph-closure-2026-11-11.json).
+
 **P6/P7 output slice (2026-11-11, AC1018 plot-style default graph):**
 the hash-pinned AC1018 pulley sample contains a typed
 `DICTIONARYWDFLT` at `0x242C` and fixed type-80 `PLACEHOLDER` at `0x242D`,
@@ -3034,11 +3048,14 @@ so that part is not independent. Both network CRCs pass in LibreDWG. The
 containing source still reports an LTYPE_CONTROL integrity error and HEADER/
 BLOCK_CONTROL warnings; LibreDWG fails to decode the constraint group and
 warns about unmapped `0x2B5`, which is also HEADER HANDSEED. Its warning has
-no attributed reference and is not proof of a dangling graph edge. Keep
-`m_networkFieldsParsed=false`, AC1032 output refused, and full dependency and
-whole-source gates open. The next ready work is source-backed qualification
-of the constraint-group body and owner/action dependencies; see the
-[source-span receipt](docs/research/p4-ac1032-forum-assocnetwork-source-spans-2026-11-10.json).
+no attributed reference and is not proof of a dangling graph edge. The local
+source graph now closes across the NOD, root and model-space dictionaries,
+both networks, the constraint group, and its two geometry-dependency targets;
+see the [graph-closure receipt](docs/research/p4-ac1032-forum-associative-graph-closure-2026-11-11.json).
+Keep `m_networkFieldsParsed=false`, AC1032 output refused, and whole-source
+gates open. Remaining work is the exact class-version-2 wire/semantic schema,
+native constraint evaluation, and complete dependency evidence from an
+eligible producer; see the [source-span receipt](docs/research/p4-ac1032-forum-assocnetwork-source-spans-2026-11-10.json).
 
 **Generated regression slice completed (2026-11-09):** a from-scratch AC1032
 class-version-2 dispatch control now checks separate base/network action-index

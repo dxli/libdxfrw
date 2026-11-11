@@ -54093,6 +54093,127 @@ bool physicalAc1032AssociativeNetworkCandidateProfile(
     return true;
 }
 
+bool physicalAc1032AssociativeGraphClosure(
+        const std::filesystem::path& sourcePath) {
+    dx_iface reader;
+    dx_data data;
+    if (!reader.fileImport(sourcePath.string(), &data, false)
+        || data.sourceFormat != dx_source_format::DWG
+        || data.sourceVersion != DRW::AC1032)
+        return fail("physical AC1032 associative graph did not import as AC1032 DWG");
+
+    const auto dictionary = [&data](std::uint32_t handle)
+            -> const DRW_Dictionary* {
+        const auto found = std::find_if(data.dictionaries.begin(),
+            data.dictionaries.end(), [handle](const DRW_Dictionary& value) {
+                return value.handle == handle;
+            });
+        return found == data.dictionaries.end() ? nullptr : &*found;
+    };
+    const auto associative = [&data](std::uint32_t handle)
+            -> const DRW_AssociativeObject* {
+        const auto found = std::find_if(data.dwgAssociativeObjects.begin(),
+            data.dwgAssociativeObjects.end(),
+            [handle](const DRW_AssociativeObject& value) {
+                return value.handle == handle;
+            });
+        return found == data.dwgAssociativeObjects.end() ? nullptr : &*found;
+    };
+    const auto dictionaryEdge = [](const DRW_Dictionary* source,
+                                   const char* name,
+                                   std::uint32_t target) {
+        return source != nullptr && source->hasCompleteDwgEntries()
+            && std::count_if(source->m_entries.begin(), source->m_entries.end(),
+                [name, target](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == name && entry.m_handle == target;
+                }) == 1;
+    };
+    const DRW_Dictionary* rootDictionary = dictionary(0x2A6u);
+    const DRW_Dictionary* blockRecordDictionary = dictionary(0x1CEu);
+    const DRW_Dictionary* modelSpaceDictionary = dictionary(0x2A4u);
+    const DRW_AssociativeObject* root = associative(0x2A7u);
+    const DRW_AssociativeObject* child = associative(0x2A5u);
+    const DRW_AssociativeObject* constraintGroup = associative(0x2A8u);
+    const DRW_AssociativeObject* firstDependency = associative(0x2A9u);
+    const DRW_AssociativeObject* secondDependency = associative(0x2AAu);
+    const auto actionEdge = [](const DRW_AssociativeObject* source,
+                               bool owned, std::uint32_t target) {
+        return source != nullptr && source->m_actions.size() == 1u
+            && source->m_actions.front().m_isOwned == owned
+            && source->m_actions.front().m_handle == target;
+    };
+    const bool constraintTargets = constraintGroup != nullptr
+        && constraintGroup->m_constraintActionsParsed
+        && constraintGroup->m_constraintActions.size() == 2u
+        && std::count(constraintGroup->m_constraintActions.begin(),
+                      constraintGroup->m_constraintActions.end(), 0x2A9u) == 1
+        && std::count(constraintGroup->m_constraintActions.begin(),
+                      constraintGroup->m_constraintActions.end(), 0x2AAu) == 1;
+    const auto objectSummary = [](const DRW_AssociativeObject* object) {
+        return object == nullptr ? std::string("missing")
+            : "handle=" + std::to_string(object->handle)
+                + " record=" + object->m_recordName
+                + " owner=" + std::to_string(object->parentHandle)
+                + " network=" + std::to_string(object->m_owningNetworkHandle)
+                + " actions=" + std::to_string(object->m_actions.size())
+                + " groupActions="
+                + std::to_string(object->m_constraintActions.size());
+    };
+    if (blockRecordDictionary == nullptr
+        || blockRecordDictionary->parentHandle != 0x1Fu
+        || data.namedObjectDictionary.handle != 0xCu
+        || !dictionaryEdge(&data.namedObjectDictionary,
+                           "ACAD_ASSOCNETWORK", 0x2A6u)
+        || rootDictionary == nullptr
+        || rootDictionary->parentHandle != data.namedObjectDictionary.handle
+        || !dictionaryEdge(rootDictionary, "ACAD_ASSOCNETWORK", 0x2A7u)
+        || modelSpaceDictionary == nullptr
+        || modelSpaceDictionary->parentHandle
+            != blockRecordDictionary->handle
+        || !dictionaryEdge(modelSpaceDictionary, "ACAD_ASSOCNETWORK", 0x2A5u)
+        || root == nullptr || root->m_recordName != "ACDBASSOCNETWORK"
+        || root->parentHandle != rootDictionary->handle
+        || root->m_owningNetworkHandle != 0u
+        || !actionEdge(root, false, 0x2A5u)
+        || child == nullptr || child->m_recordName != "ACDBASSOCNETWORK"
+        || child->parentHandle != modelSpaceDictionary->handle
+        || child->m_owningNetworkHandle != root->handle
+        || !actionEdge(child, true, 0x2A8u)
+        || constraintGroup == nullptr
+        || constraintGroup->m_recordName != "ACDBASSOC2DCONSTRAINTGROUP"
+        || constraintGroup->parentHandle != child->handle
+        || constraintGroup->m_owningNetworkHandle != child->handle
+        || !constraintTargets
+        || firstDependency == nullptr
+        || firstDependency->m_recordName != "ACDBASSOCGEOMDEPENDENCY"
+        || firstDependency->parentHandle != constraintGroup->handle
+        || secondDependency == nullptr
+        || secondDependency->m_recordName != "ACDBASSOCGEOMDEPENDENCY"
+        || secondDependency->parentHandle != constraintGroup->handle
+        || root->m_networkFieldsParsed || child->m_networkFieldsParsed
+        || constraintGroup->m_constraintGroupBodyParsed
+        || constraintGroup->m_constraintNodesParsed)
+        return fail("AC1032 associative graph closure mismatch: nod="
+            + std::to_string(data.namedObjectDictionary.handle)
+            + " rootDictionary=" + (rootDictionary == nullptr
+                ? std::string("missing") : std::to_string(rootDictionary->parentHandle))
+            + " blockRecordDictionary=" + (blockRecordDictionary == nullptr
+                ? std::string("missing") : std::to_string(blockRecordDictionary->parentHandle))
+            + " modelDictionary=" + (modelSpaceDictionary == nullptr
+                ? std::string("missing") : std::to_string(modelSpaceDictionary->parentHandle))
+            + " root{" + objectSummary(root) + "} child{" + objectSummary(child)
+            + "} group{" + objectSummary(constraintGroup) + "} deps={"
+            + objectSummary(firstDependency) + "},{"
+            + objectSummary(secondDependency) + "} targets="
+            + std::to_string(constraintTargets));
+
+    std::cout << "Physical AC1032 associative graph closure PASS: NOD -> "
+                 "root dictionary -> root network -> model-space dictionary -> "
+                 "child network -> constraint group -> two geometry dependencies; "
+                 "network and constraint semantic/output gates remain closed\n";
+    return true;
+}
+
 bool physicalAssociativeNetworkInventory(
         const std::filesystem::path& sourcePath) {
     dx_iface reader;
@@ -89467,6 +89588,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--assocnetwork-ac1032-candidate-profile")
         return physicalAc1032AssociativeNetworkCandidateProfile(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--assocnetwork-ac1032-graph-closure")
+        return physicalAc1032AssociativeGraphClosure(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--assocnetwork-source-inventory")
         return physicalAssociativeNetworkInventory(argv[2]) ? 0 : 1;
