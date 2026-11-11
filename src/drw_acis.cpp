@@ -3225,8 +3225,12 @@ static bool extractAcisWireframeImpl(const DRW_AcisModel& model,
             face.shellNodeIndex = isStrictAcis21800(model.header)
                 ? pointerRefOfType(model, *faceNode, 3u, "shell", budget)
                 : refOfType(model, *faceNode, "shell", budget);
-            if (model.header.signature == "ACIS BinaryFile"
-                && model.header.version == 21800) {
+            const bool strict21800Face =
+                isStrictAcis21800(model.header);
+            const bool observed21500Face =
+                isObservedAcis21500(model.header)
+                && faceNode->refs.size() == 7u;
+            if (strict21800Face || observed21500Face) {
                 const AcisBooleanFields flags = booleanFieldsAfterPointerCount(
                     model.header, *faceNode, 6u, budget);
                 if (flags.count >= 1u) {

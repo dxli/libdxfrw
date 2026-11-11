@@ -14635,6 +14635,32 @@ void testSab21800RecordHeaderAlignment(TestContext& t) {
     const bool body21500Parsed = drw_parseSab(
         body21500Bytes.data(), body21500Bytes.size(), body21500Sab);
     const DRW_AcisModel body21500Model = drw_buildAcisModel(body21500Sab);
+    DRW_AcisBrep unrooted21500;
+    const bool unrooted21500Parsed = body21500Parsed
+        && drw_extractAcisWireframe(body21500Model, unrooted21500);
+    t.expect(unrooted21500Parsed && unrooted21500.faces.size() == 1u
+                 && unrooted21500.faces.front().hasSense
+                 && !unrooted21500.faces.front().senseReversed
+                 && unrooted21500.faces.front().hasDoubleSided
+                 && unrooted21500.faces.front().doubleSided
+                 && unrooted21500.faces.front().hasContainment
+                 && unrooted21500.faces.front().containmentIn,
+             "ACIS 21500 generic projection preserves bounded face sense and sidedness flags");
+    DRW_AcisModel wrongWidth21500 = body21500Model;
+    const auto wrongWidthFace = std::find_if(
+        wrongWidth21500.nodes.begin(), wrongWidth21500.nodes.end(),
+        [](const DRW_AcisNode& node) { return node.type == "face"; });
+    if (wrongWidthFace != wrongWidth21500.nodes.end()
+        && !wrongWidthFace->refs.empty())
+        wrongWidthFace->refs.pop_back();
+    DRW_AcisBrep wrongWidth21500Projection;
+    t.expect(wrongWidthFace != wrongWidth21500.nodes.end()
+                 && drw_extractAcisWireframe(
+                        wrongWidth21500, wrongWidth21500Projection)
+                 && !wrongWidth21500Projection.faces.empty()
+                 && !wrongWidth21500Projection.faces.front().hasSense
+                 && !wrongWidth21500Projection.faces.front().hasDoubleSided,
+             "ACIS 21500 generic projection does not apply face flag roles to a different row width");
     std::vector<DRW_AcisBodyProjection> bodies21500;
     DRW_AcisRootedProjectionReport report21500;
     const bool projected21500 = body21500Parsed

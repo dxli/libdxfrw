@@ -1240,7 +1240,11 @@ created locally from scratch for the specific control.
   sequence after the six geometry pointers. On the same source hash, the local
   parser reports one forward and five reversed faces, all single-sided; this is
   source-profile parser observation, not an independent orientation or
-  containment oracle. See the [face-flag receipt](docs/research/p7-ac1024-21500-face-flag-projection-2026-11-11.json).
+  containment oracle. The generic wireframe API now uses the same exact face
+  row-width guard and preserves the bounded sense/sidedness candidate fields;
+  generated rooted and unrooted controls agree. This does not establish an
+  independent normal/orientation result. See the [face-flag receipt](docs/research/p7-ac1024-21500-face-flag-projection-2026-11-11.json)
+  and [generic projection receipt](docs/research/p7-ac1024-21500-generic-face-flags-2026-11-11.json).
 
 - **P6 R12 ellipse numerical stability:** the ellipse-to-polyline converter
   now uses scaled length calculations for axes and normals whose norms are
