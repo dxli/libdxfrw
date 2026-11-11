@@ -269,6 +269,8 @@ src/intern/dwg_tablestyle_ac1018_candidate.cpp
 src/intern/dwg_tablestyle_ac1018_candidate.h
 src/intern/dwg_tablestyle_extension_dictionary_ac1018_candidate.cpp
 src/intern/dwg_tablestyle_extension_dictionary_ac1018_candidate.h
+src/intern/dwg_tablestyle_roundtrip_xrecord_ac1018_candidate.cpp
+src/intern/dwg_tablestyle_roundtrip_xrecord_ac1018_candidate.h
 src/intern/dwg_xrecord_verified_source.h
 src/intern/dwgbuffer.cpp
 src/intern/dwgbuffer.h
@@ -513,6 +515,7 @@ tests/dwg_tablestyle_ac1018_candidate_tests.cpp
 tests/dwg_tablestyle_extension_dictionary_ac1018_candidate_tests.cpp
 tests/dwg_tablestyle_extension_dictionary_reader_lease_tests.cpp
 tests/dwg_tablestyle_reader_source_tests.cpp
+tests/dwg_tablestyle_roundtrip_xrecord_ac1018_candidate_tests.cpp
 tests/dwg_text_alignment_elevation_tests.cpp
 tests/dwg_text_style_resolution_tests.cpp
 tests/dwg_vertex_tangent_units_tests.cpp
@@ -1050,6 +1053,7 @@ tools/research/p5_ac1018_tablestyle_candidate_live_probe.cpp
 tools/research/p5_ac1018_tablestyle_dictionary_binding_probe.cpp
 tools/research/p5_ac1018_tablestyle_graph_capture.cpp
 tools/research/p5_ac1018_tablestyle_graph_verify.py
+tools/research/p5_ac1018_tablestyle_roundtrip_xrecord_probe.cpp
 tools/research/p5_table_root_xrecord_candidate_probe.cpp
 tools/research/p5_xrecord_codepage45_verify.py
 tools/research/p5_xrecord_codepage_capture.cpp
