@@ -1,0 +1,34 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "date": "2026-11-11",
+  "id": "p4-ac1024-public-sample-screen-2026-11-11",
+  "purpose": "Find online AC1024 DWG samples that could supply independent physical evidence for the unresolved R2010 version-2 associative constraint-group layout.",
+  "search": {
+    "queries": [
+      "AC1024 DWG sample dimension constraints ACDBASSOCCONSTRAINTGROUP download AutoCAD 2010",
+      "AC1024 DWG sample repository 3D solid AutoCAD 2010 GitHub",
+      "AutoCAD LT 2010 sample DWG parametric constraints"
+    ],
+    "result": "No newly identified file has a verified hash, exact AC1024 header, and reported version-2 constraint-group contents."
+  },
+  "candidates": [
+    {
+      "url": "https://github.com/nextgis/dwg_samples",
+      "sourceClaim": "Repository README says samples were produced with trial AutoCAD 2016 M.49.0.0 and lists 2010 DWG/DXF pairs, including point3d_2010.dwg.",
+      "qualification": "Candidate catalog only. The listed point sample is not constraint-group evidence; this search did not fetch or hash a new file."
+    },
+    {
+      "url": "https://www.autodesk.com/support/technical/article/caas/tsarticles/ts/01em4r6LLJgnQQVBlk5GqD.html",
+      "sourceClaim": "Autodesk's AutoCAD LT sample listing includes air_suspension.dwg and states that its sample collection applies to AutoCAD LT 2010 and later.",
+      "qualification": "The accessible listing does not identify a per-file DWG version, producer build, or constraint-group inventory. The file remains an unverified candidate."
+    },
+    {
+      "url": "https://blog.jtbworld.com/2009/06/where-are-the-sample-dwg-files-for-autocad.html?m=0",
+      "sourceClaim": "The article links the historical AutoCAD 2010 sample set, including mechanical_example-imperial.dwg and four visualization files.",
+      "qualification": "Those sample sources are already represented in the local AC1024 corpus and prior receipts; this is not a new witness."
+    }
+  ],
+  "nextAction": "Acquire an unexamined candidate file, record its exact bytes and six-byte version header, then inventory its ACDBASSOCCONSTRAINTGROUP class versions, bounded body spans, node classes, and graph targets. Do not promote the generated version-2 parser profile without that physical evidence.",
+  "fixturePolicy": "No downloaded or generated DWG/DXF fixture was added to the repository.",
+  "claimEffect": "Research inventory only. The generated AC1024 version-2 constraint-group parser profile remains unqualified by a physical producer witness; output and support claims remain unchanged."
+}

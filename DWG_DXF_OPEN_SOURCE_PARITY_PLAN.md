@@ -15,6 +15,23 @@ scratch data, not a producer witness, and this does not qualify native semantics
 or support claims. See the
 [version-2 inline receipt](docs/research/p4-ac1024-assoc-constraint-group-r2010-v2-inline-generated-2026-11-11.json).
 
+**P4 AC1024 public-sample screen (2026-11-11):** the search found no new
+hash-verifiable producer witness for the version-2 constraint-group layout.
+The public [nextgis DWG sample repository](https://github.com/nextgis/dwg_samples)
+documents AutoCAD 2016 M.49.0.0 as its producer and lists AC1024-era 2010
+DWG/DXF pairs, including a 3D POINT pair; those simple entity fixtures do not
+establish constraint-group coverage. Autodesk's [AutoCAD LT sample catalog](https://www.autodesk.com/support/technical/article/caas/tsarticles/ts/01em4r6LLJgnQQVBlk5GqD.html)
+lists additional possible candidates such as `air_suspension.dwg` and says the
+collection applies to LT 2010 and later, but does not provide a per-file saved
+version or constraint inventory in the accessible listing. The already-held
+AutoCAD 2010 sample set, including `mechanical_example-imperial.dwg`, remains
+the only verified local corpus used by the related P4 work; do not treat the
+catalog listings or the peer's producer statement as a new physical witness.
+Resume only after a candidate file is obtained, its bytes/version are pinned,
+and its actual constraint-group class/body spans are inspected. No sample was
+added to the repository and no support claim changes. See the
+[sample-screen receipt](docs/research/p4-ac1024-public-sample-screen-2026-11-11.json).
+
 **P4 version-2 active-field regression expansion (2026-11-11):** the generated
 AC1024 control now covers active-bit placement and typed readback for
 geometrical, distance, radius/diameter, vertical and horizontal nodes, with
