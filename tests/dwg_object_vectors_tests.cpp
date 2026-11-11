@@ -416,6 +416,14 @@ public:
   std::uint16_t dwgType() const { return oType; }
 };
 
+class Line3dCodecProbe final : public DRW_3DLine {
+public:
+  using DRW_3DLine::encodeDwg;
+
+  void setDwgType(std::uint16_t value) { oType = value; }
+  std::uint16_t dwgType() const { return oType; }
+};
+
 class ViewportCodecProbe final : public DRW_Viewport {
 public:
   using DRW_Viewport::encodeDwg;
@@ -25161,6 +25169,24 @@ void test3dFaceDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void test3dLineDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+    Line3dCodecProbe line;
+    line.handle = version == DRW::AC1021 ? 0xAE10u : 0xAE20u;
+    line.parentHandle = 0xAE30u;
+    line.reactorHandles = {0xAE40u};
+    line.xDictHandle = 0xAE50u;
+    line.setDwgType(0x777u);
+    line.basePoint = DRW_Coord(1.25, 2.5, 3.75);
+    line.secPoint = DRW_Coord(4.0, 5.0, 6.0);
+    line.extPoint = DRW_Coord(0.0, 0.0, 1.0);
+    line.thickness = 0.5;
+    checkEntityDwgEncodeAllocationRollback(
+        t, line, version, DRW_3DLine::kDwgClassNum,
+        version == DRW::AC1021 ? "AC1021 3DLINE" : "AC1024 3DLINE");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -28316,6 +28342,14 @@ int main(int argc, char** argv) {
       TestContext context;
       test3dFaceDwgEncodeAllocationRollback(context);
       std::cout << "3DFACE DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 &&
+        std::string(argv[1]) == "--3dline-dwg-encode-allocation-rollback") {
+      TestContext context;
+      test3dLineDwgEncodeAllocationRollback(context);
+      std::cout << "3DLINE DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

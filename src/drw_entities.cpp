@@ -7297,24 +7297,71 @@ bool DRW_3DLine::parseDwg(DRW::Version version, dwgBuffer *buf,
 bool DRW_3DLine::encodeDwg(DRW::Version version, dwgBufferW *buf,
                            std::uint32_t bs, dwgBufferW *strBuf,
                            dwgBufferW *handleBuf) {
-    (void)bs;
-    if (version < DRW::AC1015 || buf == nullptr)
-        return false;
+  (void)bs;
+  if (version < DRW::AC1015 || buf == nullptr)
+    return false;
+
+  dwgBufferW *const bodyTarget = buf;
+  dwgBufferW *const stringTarget = strBuf != nullptr ? strBuf : bodyTarget;
+  dwgBufferW *const handleTarget =
+      handleBuf != nullptr ? handleBuf : bodyTarget;
+  try {
+    dwgBufferW bodyStage = *bodyTarget;
+    std::optional<dwgBufferW> stringStageStorage;
+    dwgBufferW *stringStage = &bodyStage;
+    if (stringTarget != bodyTarget) {
+      stringStageStorage.emplace(*stringTarget);
+      stringStage = &*stringStageStorage;
+    }
+    std::optional<dwgBufferW> handleStageStorage;
+    dwgBufferW *handleStage = &bodyStage;
+    if (handleTarget == bodyTarget) {
+      handleStage = &bodyStage;
+    } else if (handleTarget == stringTarget) {
+      handleStage = stringStage;
+    } else {
+      handleStageStorage.emplace(*handleTarget);
+      handleStage = &*handleStageStorage;
+    }
+
+    buf = &bodyStage;
+    strBuf = strBuf != nullptr ? stringStage : nullptr;
+    handleBuf = handleBuf != nullptr ? handleStage : nullptr;
+    struct ObjectTypeRollback {
+      decltype(oType) &value;
+      decltype(oType) original;
+      bool committed{false};
+      ~ObjectTypeRollback() {
+        if (!committed)
+          value = original;
+      }
+    } typeRollback{oType, oType};
 
     // 3DLINE is a modern custom class. Its class ordinal is writer-local,
     // while the body remains the fixed raw-double layout used by the reader.
     oType = kDwgClassNum;
     if (!encodeDwgCommon(version, buf, strBuf))
-        return false;
+      return false;
 
-    for (const double coordinate : {basePoint.x, basePoint.y, basePoint.z,
-                                   secPoint.x, secPoint.y, secPoint.z,
-                                   extPoint.x, extPoint.y, extPoint.z,
-                                   thickness}) {
-        buf->putRawDouble(coordinate);
+    for (const double coordinate :
+         {basePoint.x, basePoint.y, basePoint.z, secPoint.x, secPoint.y,
+          secPoint.z, extPoint.x, extPoint.y, extPoint.z, thickness}) {
+      buf->putRawDouble(coordinate);
     }
 
-    return encodeDwgEntHandle(version, buf, handleBuf);
+    if (!encodeDwgEntHandle(version, buf, handleBuf) || !buf->isGood() ||
+        !stringStage->isGood() || !handleStage->isGood())
+      return false;
+    bodyTarget->swap(bodyStage);
+    if (stringTarget != bodyTarget)
+      stringTarget->swap(*stringStageStorage);
+    if (handleTarget != bodyTarget && handleTarget != stringTarget)
+      handleTarget->swap(*handleStageStorage);
+    typeRollback.committed = true;
+    return true;
+  } catch (const std::bad_alloc &) {
+    return false;
+  }
 }
 
 bool DRW_Circle::encodeDwg(DRW::Version version, dwgBufferW *buf,
