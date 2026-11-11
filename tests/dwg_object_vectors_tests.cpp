@@ -557,6 +557,14 @@ public:
     std::int16_t dwgType() const { return oType; }
 };
 
+class LeaderCodecProbe final : public DRW_Leader {
+public:
+    using DRW_Leader::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+};
+
 class MeshCodecProbe final : public DRW_Mesh {
 public:
     using DRW_Mesh::parseDwg;
@@ -25607,6 +25615,36 @@ void testVertexPolylineDwgEncodeAllocationRollback(TestContext &t) {
            "AC1015 POLYLINE preserves scoped legacy links while staging output");
 }
 
+void testLeaderDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1015, DRW::AC1018, DRW::AC1021,
+                                     DRW::AC1024}) {
+    LeaderCodecProbe leader;
+    leader.handle = 0xB010u + static_cast<std::uint32_t>(version);
+    leader.parentHandle = 0xB020u;
+    leader.reactorHandles = {0xB030u};
+    leader.xDictHandle = 0xB040u;
+    leader.setDwgType(0x777);
+    leader.flag = 3;
+    leader.leadertype = 1;
+    leader.origin = DRW_Coord(1.0, 2.0, 3.0);
+    leader.extrusionPoint = DRW_Coord(0.0, 0.0, 1.0);
+    leader.horizdir = DRW_Coord(1.0, 0.0, 0.0);
+    leader.offsetblock = DRW_Coord(0.25, 0.5, 0.75);
+    leader.offsettext = DRW_Coord(0.1, 0.2, 0.3);
+    leader.textheight = 2.0;
+    leader.textwidth = 4.0;
+    leader.vertexlist = {
+        std::make_shared<DRW_Coord>(DRW_Coord(1.0, 2.0, 3.0)),
+        std::make_shared<DRW_Coord>(DRW_Coord(4.0, 5.0, 6.0))};
+    checkEntityDwgEncodeAllocationRollback(
+        t, leader, version, 45u,
+        version == DRW::AC1015 ? "AC1015 LEADER"
+                               : version == DRW::AC1018 ? "AC1018 LEADER"
+                               : version == DRW::AC1021 ? "AC1021 LEADER"
+                                                        : "AC1024 LEADER");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -28826,6 +28864,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testVertexPolylineDwgEncodeAllocationRollback(context);
       std::cout << "VERTEX/POLYLINE/SEQEND DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--leader-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testLeaderDwgEncodeAllocationRollback(context);
+      std::cout << "LEADER DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

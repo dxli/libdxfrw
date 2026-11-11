@@ -116,6 +116,64 @@ bool hasOnlyDwgRepresentableAppData(const DRW_Entity& entity) {
     }
     return parsedReactors == entity.reactorHandles;
 }
+
+template <typename Writer>
+bool encodeEntityDwgTransaction(std::int16_t &objectType, dwgBufferW *body,
+                                dwgBufferW *strings, dwgBufferW *handles,
+                                Writer &&writer) {
+    if (body == nullptr)
+        return false;
+
+    dwgBufferW *const bodyTarget = body;
+    dwgBufferW *const stringTarget = strings != nullptr ? strings : bodyTarget;
+    dwgBufferW *const handleTarget = handles != nullptr ? handles : bodyTarget;
+    struct ObjectTypeRollback {
+        std::int16_t &value;
+        std::int16_t original;
+        bool committed{false};
+        ~ObjectTypeRollback() {
+            if (!committed)
+                value = original;
+        }
+    } typeRollback{objectType, objectType};
+
+    try {
+        dwgBufferW bodyStage = *bodyTarget;
+        std::optional<dwgBufferW> stringStageStorage;
+        dwgBufferW *stringStage = &bodyStage;
+        if (stringTarget != bodyTarget) {
+            stringStageStorage.emplace(*stringTarget);
+            stringStage = &*stringStageStorage;
+        }
+        std::optional<dwgBufferW> handleStageStorage;
+        dwgBufferW *handleStage = &bodyStage;
+        if (handleTarget == bodyTarget) {
+            handleStage = &bodyStage;
+        } else if (handleTarget == stringTarget) {
+            handleStage = stringStage;
+        } else {
+            handleStageStorage.emplace(*handleTarget);
+            handleStage = &*handleStageStorage;
+        }
+
+        if (!writer(&bodyStage, strings != nullptr ? stringStage : nullptr,
+                    handles != nullptr ? handleStage : nullptr))
+            return false;
+        if (!bodyStage.isGood() || !stringStage->isGood() ||
+            !handleStage->isGood())
+            return false;
+
+        bodyTarget->swap(bodyStage);
+        if (stringTarget != bodyTarget)
+            stringTarget->swap(*stringStageStorage);
+        if (handleTarget != bodyTarget && handleTarget != stringTarget)
+            handleTarget->swap(*handleStageStorage);
+        typeRollback.committed = true;
+        return true;
+    } catch (const std::bad_alloc &) {
+        return false;
+    }
+}
 }
 
 ScopedDwgLegacyEntityLinks::ScopedDwgLegacyEntityLinks(
@@ -32658,68 +32716,6 @@ bool DRW_MLine::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t b
 // DRW_Vertex::encodeDwg — OT varies by flags
 // ---------------------------------------------------------------------------
 
-namespace {
-
-template <typename Writer>
-bool encodeEntityDwgTransaction(std::int16_t &objectType, dwgBufferW *body,
-                                dwgBufferW *strings, dwgBufferW *handles,
-                                Writer &&writer) {
-    if (body == nullptr)
-        return false;
-
-    dwgBufferW *const bodyTarget = body;
-    dwgBufferW *const stringTarget = strings != nullptr ? strings : bodyTarget;
-    dwgBufferW *const handleTarget = handles != nullptr ? handles : bodyTarget;
-    struct ObjectTypeRollback {
-        std::int16_t &value;
-        std::int16_t original;
-        bool committed{false};
-        ~ObjectTypeRollback() {
-            if (!committed)
-                value = original;
-        }
-    } typeRollback{objectType, objectType};
-
-    try {
-        dwgBufferW bodyStage = *bodyTarget;
-        std::optional<dwgBufferW> stringStageStorage;
-        dwgBufferW *stringStage = &bodyStage;
-        if (stringTarget != bodyTarget) {
-            stringStageStorage.emplace(*stringTarget);
-            stringStage = &*stringStageStorage;
-        }
-        std::optional<dwgBufferW> handleStageStorage;
-        dwgBufferW *handleStage = &bodyStage;
-        if (handleTarget == bodyTarget) {
-            handleStage = &bodyStage;
-        } else if (handleTarget == stringTarget) {
-            handleStage = stringStage;
-        } else {
-            handleStageStorage.emplace(*handleTarget);
-            handleStage = &*handleStageStorage;
-        }
-
-        if (!writer(&bodyStage, strings != nullptr ? stringStage : nullptr,
-                    handles != nullptr ? handleStage : nullptr))
-            return false;
-        if (!bodyStage.isGood() || !stringStage->isGood() ||
-            !handleStage->isGood())
-            return false;
-
-        bodyTarget->swap(bodyStage);
-        if (stringTarget != bodyTarget)
-            stringTarget->swap(*stringStageStorage);
-        if (handleTarget != bodyTarget && handleTarget != stringTarget)
-            handleTarget->swap(*handleStageStorage);
-        typeRollback.committed = true;
-        return true;
-    } catch (const std::bad_alloc &) {
-        return false;
-    }
-}
-
-} // namespace
-
 bool DRW_Vertex::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs,
                              dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs; (void)strBuf;
@@ -32941,60 +32937,61 @@ bool DRW_Leader::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t 
     // optional display metadata. Until the DWG writer can resolve and emit the
     // target through its document-wide identity map, refuse a non-null source
     // reference rather than silently serializing AnnotH as null below.
-    if (buf == nullptr || !validatePayloadFields() || annotHandle != 0u
+    if (!validatePayloadFields() || annotHandle != 0u
         || AnnotH.ref != 0u || AnnotH.ref64 != 0u)
         return false;
-    oType = 45;
-    if (!encodeDwgCommon(version, buf)) return false;
+    return encodeEntityDwgTransaction(
+        oType, buf, nullptr, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            (void)strings;
+            oType = 45;
+            if (!encodeDwgCommon(version, body))
+                return false;
 
-    buf->putBit(0);                                              // unknown bit
-    buf->putBitShort(static_cast<std::uint16_t>(flag));          // annotation type
-    buf->putBitShort(static_cast<std::int16_t>(leadertype));           // pathType (DXF code 72)
-    buf->putBitLong(static_cast<std::int32_t>(vertexlist.size()));
-    for (const auto& vp : vertexlist)
-        buf->put3BitDouble(*vp);
-    buf->put3BitDouble(origin);                                 // leader plane origin
-    // ODA §20.4.47: Extrusion is plain 3DPOINT (3BD), not BE — matches parseDwg.
-    buf->put3BitDouble(extrusionPoint);
+            body->putBit(0);
+            body->putBitShort(static_cast<std::uint16_t>(flag));
+            body->putBitShort(static_cast<std::int16_t>(leadertype));
+            body->putBitLong(static_cast<std::int32_t>(vertexlist.size()));
+            for (const auto &point : vertexlist)
+                body->put3BitDouble(*point);
+            body->put3BitDouble(origin);
+            body->put3BitDouble(extrusionPoint);
+            body->put3BitDouble(horizdir);
+            body->put3BitDouble(offsetblock);
+            if (leaderHasEndpointProjection(version))
+                body->put3BitDouble(offsettext);
+            if (version < DRW::AC1015)
+                body->putBitDouble(0.0);
+            if (leaderHasTextBox(version)) {
+                body->putBitDouble(textheight);
+                body->putBitDouble(textwidth);
+            }
+            body->putBit(static_cast<std::uint8_t>(hookline));
+            body->putBit(static_cast<std::uint8_t>(arrow));
+            body->putBitShort(0);
+            if (version < DRW::AC1015) {
+                body->putBitDouble(0.0);
+                body->putBit(0);
+                body->putBit(0);
+                body->putBitShort(0);
+                body->putBitShort(static_cast<std::uint16_t>(coloruse));
+                body->putBit(0);
+                body->putBit(0);
+            } else {
+                body->putBit(0);
+                body->putBit(0);
+            }
 
-    buf->put3BitDouble(horizdir);
-    buf->put3BitDouble(offsetblock);
-
-    if (leaderHasEndpointProjection(version))
-        buf->put3BitDouble(offsettext);                         // endpoint projection
-
-    if (version < DRW::AC1015)
-        buf->putBitDouble(0.0);                                  // dimgap (pre-R2000)
-
-    if (leaderHasTextBox(version)) {
-        buf->putBitDouble(textheight);
-        buf->putBitDouble(textwidth);
-    }
-
-    buf->putBit(static_cast<std::uint8_t>(hookline));
-    buf->putBit(static_cast<std::uint8_t>(arrow));
-
-    buf->putBitShort(0);        // arrowHeadType (present in every DWG version)
-    if (version < DRW::AC1015) {
-        buf->putBitDouble(0.0); // dimasz
-        buf->putBit(0);         // unk
-        buf->putBit(0);         // unk
-        buf->putBitShort(0);    // unk short
-        buf->putBitShort(static_cast<std::uint16_t>(coloruse)); // byBlock color
-        buf->putBit(0);         // unk
-        buf->putBit(0);         // unk
-    } else {
-        buf->putBit(0);         // unk
-        buf->putBit(0);         // unk
-    }
-
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
-
-    dwgBufferW *hb = (handleBuf != nullptr) ? handleBuf : buf;
-    putAbsHandle(hb, 0);       // AnnotH — null (no annotation entity)
-    putAbsHandle(hb, (dimStyleH.ref == 0u) ? 0x15u : dimStyleH.ref);
-
-    return buf->isGood() && hb->isGood();
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
+            dwgBufferW *const handleOutput =
+                handles != nullptr ? handles : body;
+            putAbsHandle(handleOutput, 0);
+            putAbsHandle(handleOutput,
+                         dimStyleH.ref == 0u ? 0x15u : dimStyleH.ref);
+            return true;
+        });
 }
 
 // ---------------------------------------------------------------------------
