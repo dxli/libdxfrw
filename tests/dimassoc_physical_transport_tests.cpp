@@ -2,11 +2,14 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdint>
+#include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <map>
 #include <memory>
+#include <new>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -21,8 +24,17 @@
 #include "intern/dxfreader.h"
 #include "intern/dxfwriter.h"
 #include "libdwgr.h"
+#include "lc3_compat_check.cpp"
 
 namespace {
+
+long allocationsBeforeFailure = -1;
+std::size_t failedAllocations = 0;
+
+struct AllocationFailure {
+    explicit AllocationFailure(long count) { allocationsBeforeFailure = count; }
+    ~AllocationFailure() { allocationsBeforeFailure = -1; }
+};
 
 class DimensionAssociationProbe final : public DRW_DimensionAssociation {
 public:
@@ -148,6 +160,40 @@ public:
     DRW_DimensionAssociation association;
     bool classRegistered = false;
     bool objectWritten = false;
+};
+
+class DimensionAssociationDxfExport final : public LC3CompatCheck {
+public:
+    DimensionAssociationDxfExport(dxfRW& output,
+                                  const DimensionAssociationProbe& source)
+        : output(output), source(source) {}
+
+    dxfRW& output;
+    DimensionAssociationProbe source;
+    long failAt = -1;
+    long reached = 0;
+    bool emitted = false;
+
+    void writeObjects() override {
+        auto emit = [this]() {
+            auto mutableSource = source;
+            emitted = output.writeDimensionAssociation(&mutableSource);
+        };
+        if (failAt < 0) {
+            emit();
+            return;
+        }
+
+        const std::size_t failuresBefore = failedAllocations;
+        try {
+            AllocationFailure failure(failAt);
+            emit();
+            reached = failAt - allocationsBeforeFailure;
+        } catch (...) {
+            reached = static_cast<long>(failedAllocations - failuresBefore);
+            throw;
+        }
+    }
 };
 
 bool sameVariant(const DRW_Variant& left, const DRW_Variant& right) {
@@ -436,6 +482,108 @@ bool emitAndReadback(const DimensionAssociationProbe& source,
                   << output.m_hasUnrepresentableDetail << '\n';
         return false;
     }
+    return true;
+}
+
+bool allocationRollbackRetry(bool binary) {
+    dwgRW unusedDwgWriter("");
+    DimensionAssociationAuthor authored(unusedDwgWriter);
+    DimensionAssociationProbe source;
+    static_cast<DRW_DimensionAssociation&>(source) = authored.association;
+    const auto remap = makeHandleRemap(source);
+    const std::string sentinel = "DIMASSOC-RECORD-SENTINEL";
+
+    const auto outputPath = std::filesystem::temp_directory_path()
+        / (binary ? "libdxfrw-dimassoc-allocation-retry-binary.dxf"
+                  : "libdxfrw-dimassoc-allocation-retry-ascii.dxf");
+    const std::string outputPathString = outputPath.string();
+    const auto writeSentinel = [&]() {
+        std::ofstream output(outputPath, std::ios::binary | std::ios::trunc);
+        output.write(sentinel.data(),
+                     static_cast<std::streamsize>(sentinel.size()));
+        return output.good();
+    };
+    const auto destinationIsSentinel = [&]() {
+        std::ifstream input(outputPath, std::ios::binary);
+        const std::string value((std::istreambuf_iterator<char>(input)),
+                                std::istreambuf_iterator<char>());
+        return input.good() || input.eof() ? value == sentinel : false;
+    };
+    const auto readbackIsExact = [&]() {
+        dx_data data;
+        DimensionAssociationCapture capture;
+        const bool imported = capture.fileImport(outputPathString, &data,
+                                                  false);
+        return imported && capture.associations.size() == 1u
+            && sameAssociation(source, capture.associations.front(), remap);
+    };
+
+    if (!writeSentinel()) {
+        std::cerr << "could not seed DIMASSOC destination sentinel\n";
+        return false;
+    }
+    dxfRW calibrationCodec(outputPathString.c_str());
+    calibrationCodec.setHandleRemap(remap);
+    DimensionAssociationDxfExport calibration(calibrationCodec, source);
+    calibration.failAt = 1000000;
+    const bool calibrated = calibrationCodec.write(
+        &calibration, DRW::AC1024, binary);
+    const long allocationCount = calibration.reached;
+    if (!calibrated || !calibration.emitted || allocationCount <= 0) {
+        std::remove(outputPathString.c_str());
+        std::cerr << "DIMASSOC allocation calibration failed; allocations="
+                  << allocationCount << '\n';
+        return false;
+    }
+
+    std::size_t failures = 0;
+    for (long offset = 0; offset < allocationCount; ++offset) {
+        if (!writeSentinel()) {
+            std::remove(outputPathString.c_str());
+            return false;
+        }
+        dxfRW codec(outputPathString.c_str());
+        codec.setHandleRemap(remap);
+        DimensionAssociationDxfExport exporter(codec, source);
+        exporter.failAt = offset;
+        bool wrote = false;
+        const std::size_t before = failedAllocations;
+        try {
+            wrote = codec.write(&exporter, DRW::AC1024, binary);
+        } catch (const std::bad_alloc&) {
+            allocationsBeforeFailure = -1;
+        }
+        allocationsBeforeFailure = -1;
+        if (wrote || failedAllocations == before
+            || !destinationIsSentinel()) {
+            std::remove(outputPathString.c_str());
+            std::cerr << "DIMASSOC " << (binary ? "binary" : "ASCII")
+                      << " allocation offset=" << offset
+                      << " wrote=" << wrote
+                      << " failedAllocations=" << failedAllocations - before
+                      << " destinationPreserved="
+                      << destinationIsSentinel() << '\n';
+            return false;
+        }
+        exporter.failAt = -1;
+        exporter.emitted = false;
+        if (!codec.write(&exporter, DRW::AC1024, binary)
+            || !exporter.emitted || !readbackIsExact()) {
+            std::remove(outputPathString.c_str());
+            std::cerr << "DIMASSOC corrected retry/readback failed at offset "
+                      << offset << '\n';
+            return false;
+        }
+        ++failures;
+    }
+    if (failures != static_cast<std::size_t>(allocationCount))
+        return false;
+    std::remove(outputPathString.c_str());
+    std::cout << "DIMASSOC " << (binary ? "binary" : "ASCII")
+              << ": record-allocations=" << allocationCount
+              << ", whole-file destination rollback and corrected same-writer"
+                 " readback retries="
+              << failures << '\n';
     return true;
 }
 
@@ -856,6 +1004,24 @@ bool runAdapterClosureRetryRoundtrip(const std::string& outputPath,
 
 } // namespace
 
+void* operator new(std::size_t size) {
+    if (allocationsBeforeFailure == 0) {
+        ++failedAllocations;
+        throw std::bad_alloc();
+    }
+    if (allocationsBeforeFailure > 0)
+        --allocationsBeforeFailure;
+    if (void* value = std::malloc(size == 0 ? 1 : size))
+        return value;
+    throw std::bad_alloc();
+}
+
+void* operator new[](std::size_t size) { return ::operator new(size); }
+void operator delete(void* value) noexcept { std::free(value); }
+void operator delete[](void* value) noexcept { std::free(value); }
+void operator delete(void* value, std::size_t) noexcept { std::free(value); }
+void operator delete[](void* value, std::size_t) noexcept { std::free(value); }
+
 int main(int argc, char** argv) {
     if (argc == 3 && std::string(argv[1]) == "--stale-generation-output")
         return runStaleGenerationOutput(argv[2]) ? 0 : 1;
@@ -863,6 +1029,9 @@ int main(int argc, char** argv) {
         return runAdapterClosureRetryRoundtrip(argv[2], false) ? 0 : 1;
     if (argc == 3 && std::string(argv[1]) == "--adapter-closure-retry-binary")
         return runAdapterClosureRetryRoundtrip(argv[2], true) ? 0 : 1;
+    if (argc == 2 && std::string(argv[1]) == "--allocation-rollback-retry")
+        return allocationRollbackRetry(false) && allocationRollbackRetry(true)
+            ? 0 : 1;
     if (argc == 3 && std::string(argv[1]) == "--generate-dimassoc") {
         dwgRW writer(argv[2]);
         DimensionAssociationAuthor author(writer);

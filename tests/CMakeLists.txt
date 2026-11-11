@@ -1917,6 +1917,12 @@ add_test(NAME dwg2dxf_dimassoc_adapter_closure_retry_binary
 set_tests_properties(dwg2dxf_dimassoc_adapter_closure_retry_binary PROPERTIES
     LABELS "fast;dwg;dxf;dimassoc;adapter;graph;retry;generated"
     TIMEOUT 30)
+add_test(NAME libdxfrw_dimassoc_dxf_allocation_rollback_retry
+    COMMAND libdxfrw_dimassoc_physical_transport_tests
+        --allocation-rollback-retry)
+set_tests_properties(libdxfrw_dimassoc_dxf_allocation_rollback_retry PROPERTIES
+    LABELS "fast;dxf;dimassoc;allocation;transaction;generated"
+    TIMEOUT 120)
 add_test(NAME dwg2dxf_sunstudy_dxf_graph
     COMMAND ${CMAKE_COMMAND}
         "-DADAPTER_TEST=$<TARGET_FILE:libdxfrw_dwg2dxf_adapter_tests>"

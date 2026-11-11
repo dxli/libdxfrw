@@ -1386,6 +1386,16 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-11)
 
+- **P6 DIMASSOC whole-file allocation rollback:** the generated AC1024 ASCII
+  and Binary DXF control now injects failure at all 21 reached allocations
+  inside the DIMASSOC record callback. Every failed `dxfRW::write()` preserves
+  a preexisting destination; the same writer/adapter then retries and fresh
+  typed readback matches the modeled association and remapped handles. This
+  verifies the outer operation transaction because a generic low-level ostream
+  record writer cannot retract bytes already accepted by its destination. It
+  adds no physical graph, native semantic, or support evidence; no fixture was
+  added. See the [whole-file allocation receipt](docs/research/p6-dimassoc-dxf-whole-file-allocation-rollback-2026-11-11.json).
+
 - **P7 ACIS 21500 bounded face/loop/coedge incidence observation:** the
   hash-pinned AC1024 inline SAB at entity `0x183` now projects the observed
   21500 face→loop, loop→coedge, coedge next/previous/partner/edge/loop/pcurve,
