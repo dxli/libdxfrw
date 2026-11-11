@@ -3,6 +3,7 @@
 #include "drw_entities.h"
 #include "intern/dwg_fixed_handles.h"
 #include "intern/dwgbufferw.h"
+#include "intern/dwgwriter15.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -59,6 +60,7 @@ public:
 TableProbe makeTable() {
     TableProbe table;
     table.handle = 0xA500u;
+    table.name = "*T1";
     table.setDwgLayerHandle(DRW::DwgLayer0Handle);
     table.blockRecH.ref = 0xA600u;
     table.m_tableStyleHandle = 0xA700u;
@@ -186,6 +188,32 @@ bool run() {
               << ", destination rollback and same-object retry=PASS\n";
     return exercised == allocationCount;
 }
+
+bool rejectedHandleLedgerFailures() {
+    DRW_Header header;
+    dwgWriter15 writer(nullptr, &header);
+    {
+        AllocationFailure failFirst(0);
+        writer.recordRejectedDwgHandle(0xA740u);
+    }
+    if (!writer.rejectedDwgHandleOverflow()
+        || writer.rejectedDwgHandleCount() != 0u)
+        return false;
+    writer.restoreRejectedDwgHandles(0u, false);
+    writer.recordRejectedDwgHandle(0xA740u);
+    if (writer.rejectedDwgHandleOverflow()
+        || writer.rejectedDwgHandleCount() != 1u)
+        return false;
+    writer.restoreRejectedDwgHandles(0u, false);
+    for (std::size_t i = 0u; i < 100001u; ++i)
+        writer.recordRejectedDwgHandle(0xA740u);
+    if (!writer.rejectedDwgHandleOverflow()
+        || writer.rejectedDwgHandleCount() != 100000u)
+        return false;
+    writer.restoreRejectedDwgHandles(0u, false);
+    return !writer.rejectedDwgHandleOverflow()
+        && writer.rejectedDwgHandleCount() == 0u;
+}
 } // namespace
 
 void* operator new(std::size_t size) {
@@ -211,7 +239,8 @@ void operator delete[](void* value, std::size_t) noexcept { std::free(value); }
 
 int main() {
     const std::size_t before = failedAllocations;
-    if (!run() || failedAllocations == before) {
+    if (!run() || !rejectedHandleLedgerFailures()
+        || failedAllocations == before) {
         std::cerr << "AC1018 TABLE allocation rollback/retry failed\n";
         return 1;
     }

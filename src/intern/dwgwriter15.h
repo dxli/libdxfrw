@@ -263,6 +263,20 @@ public:
     bool writeVisualStyle(const DRW_VisualStyle& style);
     bool writeDictionary(const DRW_Dictionary& dictionary);
     bool hasEmittedDwgDictionary(std::uint32_t handle) const;
+    // Duplicate attempts remain visible to final TABLE graph validation even
+    // if the individual object frame is rolled back. Explicit facade scopes
+    // snapshot and restore this bounded ledger separately.
+    void recordRejectedDwgHandle(std::uint32_t handle) noexcept;
+    void recordUntrackedDwgObjectFailure() noexcept {
+        m_rejectedDwgHandleOverflow = true;
+    }
+    std::size_t rejectedDwgHandleCount() const noexcept {
+        return m_rejectedDwgObjectHandles.size();
+    }
+    bool rejectedDwgHandleOverflow() const noexcept {
+        return m_rejectedDwgHandleOverflow;
+    }
+    void restoreRejectedDwgHandles(std::size_t count, bool overflow) noexcept;
     bool writeXRecord(const DRW_XRecord& xrecord);
     bool writePlotSettings(const DRW_PlotSettings& plotSettings);
     bool writeLayout(const DRW_Layout& layout);
@@ -309,6 +323,7 @@ protected:
         std::size_t objectMapSize {0};
         std::size_t emittedLayoutAssociationCount {0};
         std::size_t emittedLayoutDictionaryCount {0};
+        std::size_t emittedEmptyExtensionDictionaryCount {0};
         std::uint32_t currentHandle {0};
         bool frameWriteError {false};
         bool entityEedWriteFailure {false};
@@ -886,6 +901,11 @@ private:
         std::vector<DRW::DwgNamedObjectDictionaryEntry> entries;
     };
 
+    struct EmittedEmptyExtensionDictionary {
+        std::uint32_t handle {0};
+        std::uint32_t parentHandle {0};
+    };
+
     struct EmittedDwgTableStyle {
         std::uint32_t handle {0};
         std::uint32_t parentHandle {0};
@@ -920,6 +940,9 @@ private:
     std::vector<EmittedLayoutAssociation> m_emittedLayoutAssociations;
     std::vector<EmittedLayoutDictionary> m_emittedLayoutDictionaries;
     std::vector<EmittedDwgDictionary> m_emittedDwgDictionaries;
+    std::vector<EmittedEmptyExtensionDictionary> m_emittedEmptyExtensionDictionaries;
+    std::vector<std::uint32_t> m_rejectedDwgObjectHandles;
+    bool m_rejectedDwgHandleOverflow {false};
     std::vector<EmittedDwgTableStyle> m_emittedDwgTableStyles;
     std::unordered_map<std::string, std::uint32_t> m_userBlockHandles;
     // Lazily sorted handle-to-vector-index view for repeated owner lookups.

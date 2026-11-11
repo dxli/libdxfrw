@@ -1238,6 +1238,27 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_table_ac1018_whole_file_roundtrip PROPERTIES
         LABELS "fast;dwg;generated;tables;graph;geometry;writer;readback"
         TIMEOUT 30)
+    add_test(NAME libdxfrw_table_ac1018_empty_extension_roundtrip
+        COMMAND libdxfrw_dwg_local_roundtrip
+            --table-ac1018-empty-extension-roundtrip)
+    set_tests_properties(libdxfrw_table_ac1018_empty_extension_roundtrip
+        PROPERTIES LABELS "fast;dwg;generated;tables;graph;transaction;readback"
+        TIMEOUT 30)
+    add_executable(libdxfrw_table_extension_facade_allocation_tests
+        tests/table_extension_facade_allocation_tests.cpp
+        tests/modeler_dxf_writer_matrix_tests.cpp
+        tests/modeler_block_census_tests.cpp
+        tests/hatch_reference_tests.cpp
+        ${_libdxfrw_root_test_adapter_source})
+    target_compile_features(libdxfrw_table_extension_facade_allocation_tests
+        PRIVATE cxx_std_17)
+    target_include_directories(libdxfrw_table_extension_facade_allocation_tests
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(libdxfrw_table_extension_facade_allocation_tests PRIVATE dxfrw)
+    add_test(NAME libdxfrw_table_extension_facade_allocation_retry
+        COMMAND libdxfrw_table_extension_facade_allocation_tests)
+    set_tests_properties(libdxfrw_table_extension_facade_allocation_retry
+        PROPERTIES LABELS "fast;dwg;generated;tables;allocation;retry" TIMEOUT 120)
     add_test(NAME libdxfrw_table_ac1018_dbcolor_whole_file_roundtrip
         COMMAND libdxfrw_dwg_local_roundtrip
             --table-ac1018-dbcolor-whole-file-roundtrip)

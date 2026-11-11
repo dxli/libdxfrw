@@ -952,7 +952,8 @@ private:
                                    bool hasHandle = false,
                                    bool secondary = false);
     void recordOperationDiagnosticForError(DRW::error value);
-    [[nodiscard]] bool recordWriteResult(WriteSkipKind kind, bool ok);
+    [[nodiscard]] bool recordWriteResult(WriteSkipKind kind, bool ok,
+                                         bool knownObjectFailure = false);
     [[nodiscard]] bool writeObjectTransaction(
         WriteSkipKind kind, const std::function<bool()>& write,
         bool allowIdempotentNoFrame = false);

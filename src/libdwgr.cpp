@@ -591,6 +591,9 @@ struct dwgRW::DwgWriteTransaction {
     std::function<bool()> entityFrameBatchRollback;
     std::uint64_t token {0};
     std::size_t successfulEntityWrites {0};
+    std::size_t pendingTableGraphCount {std::numeric_limits<std::size_t>::max()};
+    std::size_t rejectedDwgHandleCount {0};
+    bool rejectedDwgHandleOverflow {false};
     WriteSkipCounters writeSkipCounters;
     bool requiredWriteFailure {false};
     bool suppressFailureCounters {false};
@@ -1454,6 +1457,8 @@ bool dwgRW::rollbackLastDwgObjectWrite(bool restoreCallerState) {
     }
     if (restoreCallerState)
         restoreEntityWriteStates(transaction.entityMutations);
+    if (transaction.pendingTableGraphCount <= m_pendingTableGraphValidation.size())
+        m_pendingTableGraphValidation.resize(transaction.pendingTableGraphCount);
     forgetCallerMutations(transaction.entityMutations);
     m_lastWriteTransaction.reset();
     m_lastSuccessfulEntityHandle = 0;
@@ -1478,6 +1483,11 @@ std::uint64_t dwgRW::beginDwgWriteTransaction(bool suppressFailureCounters,
         : writer->checkpointCompoundWrite();
     transaction->token = token;
     transaction->successfulEntityWrites = m_successfulEntityWrites;
+    transaction->pendingTableGraphCount = m_pendingTableGraphValidation.size();
+    if (const auto* native = dynamic_cast<const dwgWriter15*>(writer.get())) {
+        transaction->rejectedDwgHandleCount = native->rejectedDwgHandleCount();
+        transaction->rejectedDwgHandleOverflow = native->rejectedDwgHandleOverflow();
+    }
     transaction->writeSkipCounters = m_writeSkipCounters;
     transaction->requiredWriteFailure = m_requiredWriteFailure;
     transaction->suppressFailureCounters = suppressFailureCounters;
@@ -1527,9 +1537,17 @@ bool dwgRW::rollbackDwgWriteTransaction(std::uint64_t token) {
     const bool requiredWriteFailure = transaction.requiredWriteFailure;
     const bool suppressFailureCounters = transaction.suppressFailureCounters;
     const bool trackCallerMutations = transaction.trackCallerMutations;
+    const std::size_t pendingTableGraphCount = transaction.pendingTableGraphCount;
+    const std::size_t rejectedDwgHandleCount = transaction.rejectedDwgHandleCount;
+    const bool rejectedDwgHandleOverflow = transaction.rejectedDwgHandleOverflow;
     const auto entityMutations = transaction.entityMutations;
     const auto tableMutations = transaction.tableMutations;
     writer->rollbackCompoundWrite(transaction.checkpoint);
+    if (auto* native = dynamic_cast<dwgWriter15*>(writer.get()))
+        native->restoreRejectedDwgHandles(rejectedDwgHandleCount,
+                                           rejectedDwgHandleOverflow);
+    if (pendingTableGraphCount <= m_pendingTableGraphValidation.size())
+        m_pendingTableGraphValidation.resize(pendingTableGraphCount);
     m_dwgWriteTransactions.pop_back();
     m_lastWriteTransaction.reset();
     if (suppressFailureCounters)
@@ -1547,7 +1565,8 @@ bool dwgRW::rollbackDwgWriteTransaction(std::uint64_t token) {
     return true;
 }
 
-bool dwgRW::recordWriteResult(WriteSkipKind kind, bool ok) {
+bool dwgRW::recordWriteResult(WriteSkipKind kind, bool ok,
+                              bool knownObjectFailure) {
     if (ok)
         return true;
 
@@ -1556,6 +1575,13 @@ bool dwgRW::recordWriteResult(WriteSkipKind kind, bool ok) {
     const auto* native = dynamic_cast<const dwgWriter15*>(writer.get());
     if (native != nullptr && native->legacyModelChainActive())
         markDwgWriteFailure();
+    // A failed public write without captured identity may have targeted a
+    // TABLE extension handle before the common frame boundary. Keep that
+    // profile fail-closed while preserving ordinary soft-failure behavior.
+    if (!knownObjectFailure) {
+        if (auto* mutableNative = dynamic_cast<dwgWriter15*>(writer.get()))
+            mutableNative->recordUntrackedDwgObjectFailure();
+    }
 
     switch (kind) {
     case WriteSkipKind::Entity:
@@ -1674,13 +1700,17 @@ bool dwgRW::writeFixedObjectFrameTransaction(
         && objectWriter->buffer().size() > checkpoint.bufferSize;
     if (!ok) {
         objectWriter->rollbackEntityFrame(checkpoint, true);
+        if (object->handle != 0u && object->handle != DRW::NoHandle)
+            objectWriter->recordRejectedDwgHandle(object->handle);
+        else
+            objectWriter->recordUntrackedDwgObjectFailure();
         objectWriter->rollbackDwgClassInstance(classCheckpoint);
         if (mutationTarget != nullptr)
             restoreTableWriteState(mutation);
     } else if (mutationTarget != nullptr) {
         rememberCallerMutation(mutation);
     }
-    return recordWriteResult(kind, ok);
+    return recordWriteResult(kind, ok, true);
 }
 
 bool dwgRW::encodeEntityForWrite(DRW_Entity *ent,
@@ -1823,6 +1853,7 @@ bool dwgRW::encodeEntityForWrite(DRW_Entity *ent,
     }
     auto transaction = std::make_unique<DwgWriteTransaction>();
     transaction->usesWriterEntityRollback = usesWriterEntityRollback;
+    transaction->pendingTableGraphCount = m_pendingTableGraphValidation.size();
     if (!usesWriterEntityRollback)
         transaction->checkpoint = std::move(checkpoint);
     transaction->entityMutations = mutations;
@@ -2830,6 +2861,19 @@ bool dwgRW::registerTableEntityClass(DRW_Table *table) {
     }
 }
 
+// Writer-only codec: ordinary direct TABLE encoding keeps rejecting non-null
+// extension dictionaries. Final publication still requires graph closure.
+class DRW_DwgTableExtensionWriterAccess final : public DRW_Table {
+public:
+    explicit DRW_DwgTableExtensionWriterAccess(const DRW_Table& source)
+        : DRW_Table(source) {}
+    bool encodeDwg(DRW::Version version, dwgBufferW *buf,
+                   std::uint32_t bs, dwgBufferW *strBuf,
+                   dwgBufferW *handleBuf) override {
+        return encodeDwgWithExtension(version, buf, bs, strBuf, handleBuf, true);
+    }
+};
+
 bool dwgRW::writeTable(DRW_Table *ent) {
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::Entity, false);
@@ -2848,8 +2892,44 @@ bool dwgRW::writeTable(DRW_Table *ent) {
         return recordWriteResult(WriteSkipKind::Entity, false);
     }
 
-    if (!encodeEntityForWrite(ent))
-        return false;
+    if (ent->xDictHandle == 0u) {
+        if (!encodeEntityForWrite(ent))
+            return false;
+    } else {
+        // A parsed source needs its own source binding and dependency proof.
+        if (typeid(*ent) != typeid(DRW_Table)
+            || !ent->m_content.m_subrecordRanges.empty()) {
+            markDwgWriteFailure();
+            return recordWriteResult(WriteSkipKind::Entity, false);
+        }
+        bool stagedWritten = false;
+        bool encodingStarted = false;
+        bool checkpointReady = false;
+        dwgWriter::CompoundWriteCheckpoint checkpoint;
+        try {
+            DRW_DwgTableExtensionWriterAccess staged(*ent);
+            checkpoint = writer->checkpointCompoundWrite();
+            checkpointReady = true;
+            // Retained rollback pointers always refer to the caller, not the
+            // short-lived codec copy.
+            encodingStarted = true;
+            if (!encodeEntityForWrite(&staged, ent)) {
+                markDwgWriteFailure();
+                return false;
+            }
+            stagedWritten = true;
+            DwgEntityWriteState written = captureEntityWriteState(&staged);
+            written.entity = ent;
+            restoreEntityWriteState(written);
+        } catch (...) {
+            if (stagedWritten)
+                (void)rollbackLastDwgObjectWrite(true);
+            else if (encodingStarted && checkpointReady)
+                writer->rollbackCompoundWrite(checkpoint);
+            markDwgWriteFailure();
+            return recordWriteResult(WriteSkipKind::Entity, false);
+        }
+    }
     try {
         m_pendingTableGraphValidation.push_back(*ent);
     } catch (...) {
@@ -3835,11 +3915,21 @@ std::uint32_t dwgRW::defineBlock(const DRW_Block_Record& record) {
 }
 
 bool dwgRW::beginBlockContent(std::uint32_t blockRecordHandle) {
-    return writer != nullptr && writer->beginBlockContent(blockRecordHandle);
+    const bool ok = writer != nullptr && writer->beginBlockContent(blockRecordHandle);
+    if (!ok) {
+        if (auto* native = dynamic_cast<dwgWriter15*>(writer.get()))
+            native->recordUntrackedDwgObjectFailure();
+    }
+    return ok;
 }
 
 bool dwgRW::endBlockContent() {
-    return writer != nullptr && writer->endBlockContent();
+    const bool ok = writer != nullptr && writer->endBlockContent();
+    if (!ok) {
+        if (auto* native = dynamic_cast<dwgWriter15*>(writer.get()))
+            native->recordUntrackedDwgObjectFailure();
+    }
+    return ok;
 }
 
 bool dwgRW::addLType(DRW_LType *ent) {
@@ -4525,9 +4615,17 @@ bool dwgRW::writeDictionary(DRW_Dictionary *object) {
         markDwgWriteFailure();
         return recordWriteResult(WriteSkipKind::Object, false);
     }
-    return writeFixedObjectFrameTransaction(
+    const bool wrote = writeFixedObjectFrameTransaction(
         WriteSkipKind::Object, w, object, nullptr,
         [w, object] { return w->writeDictionary(*object); });
+    if (!wrote && object->handle != 0u
+        && std::any_of(m_pendingTableGraphValidation.cbegin(),
+                       m_pendingTableGraphValidation.cend(),
+                       [object](const DRW_Table& table) {
+                           return table.xDictHandle == object->handle;
+                       }))
+        markDwgWriteFailure();
+    return wrote;
 }
 
 bool dwgRW::writeXRecord(DRW_XRecord *object) {

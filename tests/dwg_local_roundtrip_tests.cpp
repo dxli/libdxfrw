@@ -38092,8 +38092,30 @@ bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
 
 namespace {
 
+#ifdef LIBDXFRW_TABLE_FACADE_ALLOC_SWEEP
+void tableFacadeAllocationBegin();
+void tableFacadeAllocationEnd();
+#endif
+
 class TableStyleNodWholeFileAdapter final : public dx_iface {
 public:
+    class RejectedPoint final : public DRW_Point {
+    public:
+        bool encodeDwg(DRW::Version, dwgBufferW*, std::uint32_t,
+                       dwgBufferW*, dwgBufferW*) override { return false; }
+    };
+    class DerivedTable final : public DRW_Table {
+    public:
+        DerivedTable(const DRW_Table& source, bool& called)
+            : DRW_Table(source), m_called(called) {}
+        bool encodeDwg(DRW::Version, dwgBufferW*, std::uint32_t,
+                       dwgBufferW*, dwgBufferW*) override {
+            m_called = true;
+            return false;
+        }
+    private:
+        bool& m_called;
+    };
     explicit TableStyleNodWholeFileAdapter(dwgRW* writer, dx_data* data,
                                            bool emitTable = false,
                                            bool omitTableStyleRoot = false,
@@ -38153,6 +38175,25 @@ public:
     void writeBlocks() override {
         if (!m_emitTable)
             return;
+        if (m_extensionMode == 10 || m_extensionMode == 12
+            || m_extensionMode == 15) {
+            DRW_Dictionary early;
+            early.handle = kExtensionHandle;
+            early.parentHandle = table.handle;
+            if (!m_writer->writeDictionary(&early)) {
+                ready = false;
+                return;
+            }
+            if (m_extensionMode == 10) {
+                (void)m_writer->writeDictionary(&early);
+            } else if (m_extensionMode == 12) {
+                RejectedPoint collision;
+                collision.handle = kExtensionHandle;
+                (void)m_writer->writePoint(&collision);
+            } else {
+                (void)m_writer->beginBlockContent(0xA741u);
+            }
+        }
         const std::uint32_t blockRecord = m_writer->defineBlock(
             "*T1", DRW_Coord(0.0, 0.0, 0.0));
         if (blockRecord == 0u || !m_writer->beginBlockContent(blockRecord)) {
@@ -38236,6 +38277,30 @@ public:
     }
     void writeBlockRecords() override {}
     void writeEntities() override {
+        if (m_extensionMode == 14) {
+            DerivedTable derived(table, m_derivedCodecCalled);
+            (void)m_writer->writeTable(&derived);
+            return;
+        }
+        if (m_testExtensionRollback && m_emitTable && ready) {
+            const std::uint32_t savedExtension = table.xDictHandle;
+            const auto token = m_writer->beginDwgWriteTransaction(false, true, false);
+            table.xDictHandle = 0xA741u;
+            const bool staged = token != 0u && m_writer->writeTable(&table);
+            const bool rolledBack = token != 0u
+                && m_writer->rollbackDwgWriteTransaction(token);
+            table.xDictHandle = savedExtension;
+            if (!staged || !rolledBack) {
+                ready = false;
+                return;
+            }
+        }
+        #ifdef LIBDXFRW_TABLE_FACADE_ALLOC_SWEEP
+        struct AllocationScope {
+            AllocationScope() { tableFacadeAllocationBegin(); }
+            ~AllocationScope() { tableFacadeAllocationEnd(); }
+        } allocationScope;
+        #endif
         if (m_emitTable && (!ready || !m_writer->writeTable(&table)))
             ready = false;
     }
@@ -38252,11 +38317,53 @@ public:
         }
         if (ready && m_emitDbColor && !m_writer->writeDbColor(&dbColor))
             ready = false;
+        if (!ready || m_extensionMode == 0 || m_extensionMode == 1
+            || m_extensionMode == 10 || m_extensionMode == 12
+            || m_extensionMode == 15)
+            return;
+        if (m_extensionMode == 4) {
+            DRW_XRecord wrongType;
+            wrongType.handle = kExtensionHandle;
+            wrongType.parentHandle = table.handle;
+            ready = m_writer->writeXRecord(&wrongType);
+            return;
+        }
+        DRW_Dictionary extension;
+        extension.handle = kExtensionHandle;
+        extension.parentHandle = m_extensionMode == 2 ? 0xA721u : table.handle;
+        if (m_extensionMode == 3)
+            extension.m_entries.push_back({"UNSUPPORTED", 0xA722u});
+        ready = m_writer->writeDictionary(&extension);
+        if (ready && m_extensionMode == 5)
+            ready = m_writer->writeDictionary(&extension);
+        if (ready && m_extensionMode == 7)
+            (void)m_writer->writeDictionary(&dictionary); // unrelated soft failure
+        if (ready && m_extensionMode == 9) {
+            DRW_XRecord collision;
+            collision.handle = kExtensionHandle;
+            collision.parentHandle = table.handle;
+            (void)m_writer->writeXRecord(&collision);
+        }
+        if (ready && m_extensionMode == 11) {
+            const auto token = m_writer->beginDwgWriteTransaction(true, false, false);
+            const bool rejected = token != 0u && !m_writer->writeDictionary(&extension);
+            const bool rolledBack = token != 0u
+                && m_writer->rollbackDwgWriteTransaction(token);
+            ready = rejected && rolledBack;
+        }
+        if (ready && m_extensionMode == 13) {
+            RejectedPoint collision;
+            collision.handle = kExtensionHandle;
+            (void)m_writer->writePoint(&collision);
+        }
+        if (ready && m_extensionMode == 16)
+            (void)m_writer->beginBlockContent(0xA741u);
     }
 
     static constexpr std::uint32_t kDictionaryHandle = 0xA6FFu;
     static constexpr std::uint32_t kStyleHandle = 0xA700u;
     static constexpr std::uint32_t kDbColorHandle = 0xA730u;
+    static constexpr std::uint32_t kExtensionHandle = 0xA740u;
     dwgRW* m_writer {nullptr};
     dx_data* m_data {nullptr};
     DRW_Dictionary dictionary;
@@ -38273,6 +38380,15 @@ public:
     }
     void useParsedProxyCache(bool use) noexcept {
         m_useParsedProxyCache = use;
+    }
+    void setExtensionMode(int mode) noexcept {
+        m_extensionMode = mode;
+        m_derivedCodecCalled = false;
+        table.xDictHandle = mode == 0 ? 0u : kExtensionHandle;
+    }
+    bool derivedCodecCalled() const noexcept { return m_derivedCodecCalled; }
+    void testExtensionRollback(bool test) noexcept {
+        m_testExtensionRollback = test;
     }
 
 private:
@@ -38330,6 +38446,9 @@ private:
     bool m_emitDbColor {false};
     bool m_useParsedBlockRecordMetadata {false};
     bool m_useParsedProxyCache {false};
+    int m_extensionMode {0};
+    bool m_testExtensionRollback {false};
+    bool m_derivedCodecCalled {false};
 };
 
 class TableDbColorWholeFileReadback final : public dx_iface {
@@ -38344,7 +38463,8 @@ public:
 
 bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
                                          bool emitTable = false,
-                                         bool emitDbColor = false) {
+                                         bool emitDbColor = false,
+                                         bool emitExtension = false) {
     const auto nonce = std::chrono::steady_clock::now()
                            .time_since_epoch().count();
     const auto path = retainedOutput != nullptr
@@ -38367,6 +38487,8 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
     dwgRW output(path.string().c_str());
     TableStyleNodWholeFileAdapter producer(
         &output, &writerData, emitTable, emitTable, emitDbColor);
+    if (emitExtension && !output.reserveHandle(producer.kExtensionHandle))
+        return false;
     if (emitTable) {
         // The selected zero is an explicit title text-height override, not
         // an absent override. These are row styles, not physical row heights.
@@ -38416,6 +38538,58 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
         producer.setOmitTableStyleRoot(false);
         producer.useParsedBlockRecordMetadata(true);
         producer.useParsedProxyCache(true);
+    }
+    if (emitExtension) {
+        const std::string sentinel = "preserve destination during extension refusal\n";
+        {
+            std::ofstream previous(path, std::ios::binary | std::ios::trunc);
+            previous << sentinel;
+            previous.close();
+            producer.setExtensionMode(6);
+            producer.table.m_content.m_subrecordRanges.push_back(
+                DRW_DwgSubrecordRange{});
+            const bool rejected = !output.write(&producer, DRW::AC1018, true);
+            producer.table.m_content.m_subrecordRanges.clear();
+            std::ifstream afterStream(path, std::ios::binary);
+            const std::string after((std::istreambuf_iterator<char>(afterStream)),
+                                    std::istreambuf_iterator<char>());
+            if (!rejected || after != sentinel || producer.table.blockRecH.ref != 0u) {
+                std::cerr << "TABLE parsed-range extension refusal failed\n";
+                return false;
+            }
+        }
+        for (int mode : {1, 2, 3, 4, 5, 9, 10, 12, 13, 14, 15, 16}) {
+            std::ofstream previous(path, std::ios::binary | std::ios::trunc);
+            previous << sentinel;
+            previous.close();
+            producer.setExtensionMode(mode);
+            const bool rejected = !output.write(&producer, DRW::AC1018, true);
+            std::ifstream afterStream(path, std::ios::binary);
+            const std::string after((std::istreambuf_iterator<char>(afterStream)),
+                                    std::istreambuf_iterator<char>());
+            if (!rejected || after != sentinel || producer.derivedCodecCalled()
+                || producer.table.handle != 0xA720u
+                || producer.table.blockRecH.ref != 0u) {
+                std::cerr << "TABLE extension refusal/rollback failed mode="
+                          << mode << " rejected=" << rejected
+                          << " destination=" << (after == sentinel)
+                          << " handle=" << producer.table.handle
+                          << " block=" << producer.table.blockRecH.ref << '\n';
+                return false;
+            }
+        }
+        producer.setExtensionMode(7);
+        if (!output.write(&producer, DRW::AC1018, true) || !producer.ready) {
+            std::cerr << "unrelated dictionary failure changed TABLE latch behavior\n";
+            return false;
+        }
+        producer.setExtensionMode(11);
+        if (!output.write(&producer, DRW::AC1018, true) || !producer.ready) {
+            std::cerr << "rolled-back duplicate poisoned TABLE extension graph\n";
+            return false;
+        }
+        producer.setExtensionMode(6);
+        producer.testExtensionRollback(true);
     }
     if (!output.write(&producer, DRW::AC1018, true) || !producer.ready) {
         const DRW_OperationDiagnostic diagnostic = output.getLastDiagnostic();
@@ -38527,6 +38701,18 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
         || !table->m_content.m_rows[0].m_cells[2].m_isMerged) {
         return false;
     }
+    if (emitExtension) {
+        const auto matches = std::count_if(readData.dictionaries.cbegin(),
+            readData.dictionaries.cend(), [&](const DRW_Dictionary& entry) {
+                return entry.handle == producer.kExtensionHandle
+                    && entry.parentHandle == table->handle
+                    && entry.m_entries.empty();
+            });
+        if (table->xDictHandle != producer.kExtensionHandle || matches != 1) {
+            std::cerr << "TABLE extension dictionary fresh readback mismatch\n";
+            return false;
+        }
+    }
     if (emitDbColor) {
         if (!table->hasDwgAcDbColorHandle()
             || table->dwgAcDbColorHandle()
@@ -38633,6 +38819,33 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 2
+        && std::string(argv[1]) == "--table-ac1018-extension-expect-refusal") {
+        const auto path = std::filesystem::temp_directory_path()
+            / "libdxfrw-table-extension-disabled-common-header.dwg";
+        const std::string sentinel = "extension disabled sentinel\n";
+        {
+            std::ofstream out(path, std::ios::binary | std::ios::trunc);
+            out << sentinel;
+        }
+        dx_data data;
+        dwgRW output(path.string().c_str());
+        TableStyleNodWholeFileAdapter producer(&output, &data, true, false, false);
+        const bool reserved = output.reserveHandle(producer.kExtensionHandle);
+        producer.setExtensionMode(6);
+        const bool rejected = reserved && !output.write(&producer, DRW::AC1018, true);
+        std::ifstream in(path, std::ios::binary);
+        const std::string after((std::istreambuf_iterator<char>(in)),
+                                std::istreambuf_iterator<char>());
+        std::error_code ignored;
+        std::filesystem::remove(path, ignored);
+        const bool passed = rejected && after == sentinel
+            && producer.table.handle == 0xA720u
+            && producer.table.blockRecH.ref == 0u;
+        std::cout << "Disabled common header TABLE extension refusal: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    }
     if (argc == 3
         && std::string(argv[1]) == "--inspect-physical-table-codec") {
         return inspectPhysicalTableDirectCodec(argv[2]) ? 0 : 1;
@@ -38650,6 +38863,14 @@ int main(int argc, char** argv) {
         const bool passed = testTableStyleNodWholeFileRoundTrip(
             argc == 3 ? argv[2] : nullptr, true);
         std::cout << "AC1018 TABLE cached-geometry whole-file round-trip: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    }
+    if ((argc == 2 || argc == 3)
+        && std::string(argv[1]) == "--table-ac1018-empty-extension-roundtrip") {
+        const bool passed = testTableStyleNodWholeFileRoundTrip(
+            argc == 3 ? argv[2] : nullptr, true, false, true);
+        std::cout << "AC1018 TABLE empty extension round-trip: "
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     }

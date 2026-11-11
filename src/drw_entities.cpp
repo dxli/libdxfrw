@@ -15120,6 +15120,16 @@ void DRW_Table::resetDwgState() {
 bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
                           std::uint32_t bs, dwgBufferW *strBuf,
                           dwgBufferW *handleBuf) {
+    return encodeDwgWithExtension(version, buf, bs, strBuf, handleBuf, false);
+}
+
+bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
+                          std::uint32_t bs, dwgBufferW *strBuf,
+                          dwgBufferW *handleBuf, bool allowExtensionDictionary) {
+#if !LIBDXFRW_FULL_COMMON_HEADER
+    if (allowExtensionDictionary && xDictHandle != 0u)
+        return false;
+#endif
     (void)bs;
     const auto zeroPoint = [](const DRW_Coord& point) {
         return point.x == 0.0 && point.y == 0.0 && point.z == 0.0;
@@ -15223,7 +15233,8 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || (!hasAcDbColorH && !colorName.empty())
         || m_tableStyleHandle == 0 || !attribHandles.empty()
         || !attlist.empty()
-        || xDictHandle != 0u
+        || (xDictHandle != 0u && !allowExtensionDictionary)
+        || (xDictHandle != 0u && !m_content.m_subrecordRanges.empty())
         || seqendH.code != 0u || seqendH.size != 0u
         || seqendH.rawCode != 0u || seqendH.ref != DRW::NoHandle
         || seqendH.ref64 != DRW::NoHandle || seqEndEntity != nullptr

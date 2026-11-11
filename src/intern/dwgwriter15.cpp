@@ -1581,6 +1581,35 @@ bool dwgWriter15::hasClosedAc1018TableBlockGraph(
         || std::toupper(static_cast<unsigned char>(table.name[1])) != 'T')
         return false;
 
+    if (table.xDictHandle != 0u) {
+        if (table.xDictHandle == DRW::NoHandle
+            || table.xDictHandle == table.handle
+            || table.xDictHandle == table.blockRecH.ref
+            || table.xDictHandle == table.m_tableStyleHandle
+            || !hasEmittedDwgObjectHandle(table.xDictHandle))
+            return false;
+        if (m_rejectedDwgHandleOverflow
+            || std::find(m_rejectedDwgObjectHandles.cbegin(),
+                         m_rejectedDwgObjectHandles.cend(), table.xDictHandle)
+                != m_rejectedDwgObjectHandles.cend())
+            return false;
+        const auto matches = std::count_if(
+            m_emittedEmptyExtensionDictionaries.cbegin(),
+            m_emittedEmptyExtensionDictionaries.cend(),
+            [&table](const EmittedEmptyExtensionDictionary& entry) {
+                return entry.handle == table.xDictHandle
+                    && entry.parentHandle == table.handle;
+            });
+        const auto sameHandle = std::count_if(
+            m_emittedEmptyExtensionDictionaries.cbegin(),
+            m_emittedEmptyExtensionDictionaries.cend(),
+            [&table](const EmittedEmptyExtensionDictionary& entry) {
+                return entry.handle == table.xDictHandle;
+            });
+        if (matches != 1 || sameHandle != 1)
+            return false;
+    }
+
     const auto layer = m_writingCtx.layerMap.find(toUpperCase(table.layer));
     if (table.layer.empty() || layer == m_writingCtx.layerMap.cend()
         || layer->second != table.dwgLayerHandle()
@@ -1761,6 +1790,8 @@ dwgWriter15::checkpointEntityFrame() const {
         m_emittedLayoutAssociations.size();
     checkpoint.emittedLayoutDictionaryCount =
         m_emittedLayoutDictionaries.size();
+    checkpoint.emittedEmptyExtensionDictionaryCount =
+        m_emittedEmptyExtensionDictionaries.size();
     checkpoint.currentHandle = m_currentHandle;
     checkpoint.frameWriteError = m_frameWriteError;
     checkpoint.entityEedWriteFailure = m_entityEedWriteFailure;
@@ -1793,6 +1824,11 @@ void dwgWriter15::rollbackEntityFrame(
         <= m_emittedLayoutDictionaries.size()) {
         m_emittedLayoutDictionaries.resize(
             checkpoint.emittedLayoutDictionaryCount);
+    }
+    if (checkpoint.emittedEmptyExtensionDictionaryCount
+        <= m_emittedEmptyExtensionDictionaries.size()) {
+        m_emittedEmptyExtensionDictionaries.resize(
+            checkpoint.emittedEmptyExtensionDictionaryCount);
     }
 
     if (checkpoint.blockOwnedEntityRecorded) {
@@ -1973,6 +2009,8 @@ dwgWriter::CompoundWriteCheckpoint dwgWriter15::checkpointCompoundWrite() const 
     checkpoint.emittedLayoutDictionaryCount =
         m_emittedLayoutDictionaries.size();
     checkpoint.emittedDwgDictionaryCount = m_emittedDwgDictionaries.size();
+    checkpoint.emittedEmptyExtensionDictionaryCount =
+        m_emittedEmptyExtensionDictionaries.size();
     checkpoint.emittedDwgTableStyleCount = m_emittedDwgTableStyles.size();
     checkpoint.userBlockEntityCounts.reserve(m_userBlocks.size());
     checkpoint.userBlockInsertCounts.reserve(m_userBlocks.size());
@@ -2090,6 +2128,11 @@ void dwgWriter15::rollbackCompoundWrite(
         <= m_emittedDwgDictionaries.size()) {
         m_emittedDwgDictionaries.resize(
             checkpoint.emittedDwgDictionaryCount);
+    }
+    if (checkpoint.emittedEmptyExtensionDictionaryCount
+        <= m_emittedEmptyExtensionDictionaries.size()) {
+        m_emittedEmptyExtensionDictionaries.resize(
+            checkpoint.emittedEmptyExtensionDictionaryCount);
     }
     if (checkpoint.emittedDwgTableStyleCount
         <= m_emittedDwgTableStyles.size()) {
@@ -4794,6 +4837,27 @@ bool dwgWriter15::writeDictionary(const DRW_Dictionary& dictionary) {
         [&object](const DRW::DwgNamedObjectDictionaryEntry& entry) {
             return entry.childHandle == object.handle;
         });
+    const bool capturesEmptyExtension = m_version == DRW::AC1018
+        && typeid(dictionary) == typeid(DRW_Dictionary)
+        && !capturesRegisteredDictionary
+        && object.handle != 0u && object.handle != DRW::NoHandle
+        && object.parentHandle != 0u && object.parentHandle != DRW::NoHandle
+        && object.handle != object.parentHandle && object.m_entries.empty()
+        && object.hasCompleteDwgEntries() && object.name.empty()
+        && object.flags == 0 && object.extData.empty() && object.appData.empty()
+        && object.reactorHandles.empty() && object.reactorCount() == 0
+        && object.xDictHandle == 0u && !object.hasDataStorageBinaryData()
+        && !object.hasDwgCommonLinkTail()
+        && object.pendingAppIdResolutions.empty()
+        && object.pendingLayerRefResolutions.empty();
+    if (capturesEmptyExtension) {
+        try {
+            m_emittedEmptyExtensionDictionaries.reserve(
+                m_emittedEmptyExtensionDictionaries.size() + 1u);
+        } catch (...) {
+            return false;
+        }
+    }
     EmittedDwgDictionary emittedDwgDictionary;
     EmittedLayoutDictionary emittedLayoutDictionary;
     if (capturesRegisteredDictionary) {
@@ -4834,6 +4898,9 @@ bool dwgWriter15::writeDictionary(const DRW_Dictionary& dictionary) {
     }
     if (capturesRegisteredDictionary)
         m_emittedDwgDictionaries.push_back(std::move(emittedDwgDictionary));
+    if (capturesEmptyExtension)
+        m_emittedEmptyExtensionDictionaries.push_back(
+            {object.handle, object.parentHandle});
     if (capturesLayoutDictionary)
         m_emittedLayoutDictionaries.push_back(
             std::move(emittedLayoutDictionary));
@@ -4847,6 +4914,27 @@ bool dwgWriter15::hasEmittedDwgDictionary(std::uint32_t handle) const {
                        [handle](const EmittedDwgDictionary& dictionary) {
                            return dictionary.handle == handle;
                        });
+}
+
+void dwgWriter15::recordRejectedDwgHandle(std::uint32_t handle) noexcept {
+    if (handle == 0u || handle == DRW::NoHandle)
+        return;
+    try {
+        if (m_rejectedDwgObjectHandles.size() >= 100000u) {
+            m_rejectedDwgHandleOverflow = true;
+            return;
+        }
+        m_rejectedDwgObjectHandles.push_back(handle);
+    } catch (...) {
+        m_rejectedDwgHandleOverflow = true;
+    }
+}
+
+void dwgWriter15::restoreRejectedDwgHandles(std::size_t count,
+                                             bool overflow) noexcept {
+    if (count <= m_rejectedDwgObjectHandles.size())
+        m_rejectedDwgObjectHandles.resize(count);
+    m_rejectedDwgHandleOverflow = overflow;
 }
 
 // XRECORD (ODA fixed type 0x4f = 79) — no class registration required.
@@ -9469,6 +9557,7 @@ void dwgWriter15::finishObject() {
     // retains its independent uniqueness validation as a defense-in-depth
     // check on the serialized object map.
     if (hasEmittedDwgObjectHandle(m_currentHandle)) {
+        recordRejectedDwgHandle(m_currentHandle);
         m_frameWriteError = true;
         return;
     }

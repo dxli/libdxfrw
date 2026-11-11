@@ -2038,6 +2038,7 @@ struct DRW_TableContent {
 class DRW_Table : public DRW_Insert {
     SETENTFRIENDS
     friend class dxfTable::Decoder;
+    friend class DRW_DwgTableExtensionWriterAccess;
 public:
     DRW_Table() {
         eType = DRW::TABLE;
@@ -2135,6 +2136,11 @@ public:
                                  dwgBufferW *strBuf=nullptr,
                                  dwgBufferW *handleBuf=nullptr) override;
 
+private:
+    [[nodiscard]] bool encodeDwgWithExtension(DRW::Version version,
+                                 dwgBufferW *buf, std::uint32_t bs,
+                                 dwgBufferW *strBuf, dwgBufferW *handleBuf,
+                                 bool allowExtensionDictionary);
 protected:
     void resetDwgState();
     bool parseCode(int code, const std::unique_ptr<dxfReader>& reader) override;

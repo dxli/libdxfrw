@@ -1207,24 +1207,29 @@ generated controls should cover the ordinary edit/retry loop. Keep test DWG/DXF
 fixtures out of commits unless they already exist in LibreCAD/libdxfrw or were
 created locally from scratch for the specific control.
 
-### Current execution checkpoint (2026-11-10)
+### Current execution checkpoint (2026-11-11)
 
 - **P5 AC1018 TABLE extension dictionary:** the newly recreated audited ODA
   source's TABLE `0x9c` has an extension-dictionary hard-owner reference to
   DICTIONARY `0xbb`; its `ACAD_XREC_ROUNDTRIP` entry owns XRECORD `0xbc`,
   which references TABLECONTENT `0xb9`, TABLEGEOMETRY `0xba` and DATATABLE
-  `0xbd`. The encoder correctly refuses the nonzero extension handle. The
-  common entity writer can emit its hard-owner wire role, but the TABLE final
-  graph validator has no extension-dictionary ledger or recursive proof. Next
-  add transactional receipts for non-NOD dictionaries with identity, type,
-  owner, membership, and rollback; verify a generated empty-dictionary graph
-  first, then qualify populated source dependencies and XRECORD ownership,
-  reactor and embedded handle roles before admitting this physical profile.
-  Include wrong owner/type, missing/duplicate targets, late failure and retry,
-  exact wire role and whole-file fresh readback. Keep the guard until full
-  closure is proved. LibreDWG's decoded TABLECONTENT fields are unreliable for
+  `0xbd`. A generated range-empty TABLE with an empty fixed extension
+  dictionary now passes transactional DWG output and fresh readback; the
+  non-NOD dictionary receipt validates identity, type, owner and empty
+  membership. Wrong owner/type, missing and populated targets, collision
+  attempts, nested rollback and retry are covered. Direct TABLE encoding and
+  parsed source ranges remain refused, and unidentified failed frame attempts
+  reaching common facade accounting conservatively block the extension
+  profile. This is not accounting for every public API failure: non-emitting
+  administrative operations and exceptions intercepted by a consumer inside
+  its callback are not fully tracked. Qualify that exception boundary before
+  making broader failure-coverage claims. Next qualify the physical
+  populated graph: XRECORD membership, owner/reactor and embedded handle roles,
+  all referenced object bodies, source binding and transactional closure.
+  LibreDWG's decoded TABLECONTENT fields are unreliable for
   this file; its object identities and links are bounded observations, not
-  semantic proof. See the [physical graph receipt](docs/research/p5-ac1018-table-extension-dictionary-physical-graph-2026-11-10.json).
+  semantic proof. See the [physical graph receipt](docs/research/p5-ac1018-table-extension-dictionary-physical-graph-2026-11-10.json)
+  and [generated empty-graph receipt](docs/research/p5-ac1018-table-empty-extension-graph-2026-11-11.json).
 
 - **P5 AC1018 TABLE stale absent-mask guard:** when retained source ranges
   describe four absent TABLE override masks, the direct encoder now refuses a
