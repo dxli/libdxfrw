@@ -1210,6 +1210,24 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P4 AC1032 AecObjects handle-map tail:** four CRC-valid groups and a
+  CRC-valid terminator precede 262 unclaimed bytes. LibreDWG reports four
+  networks but also missing handles and object errors; the current integrity
+  refusal remains. Obtain authoritative tail/completeness evidence or a clean
+  producer-attested witness before using this source for graph qualification.
+  See the [diagnostic](docs/research/p4-ac1032-aecobjects-handles-tail-and-peer-network-2026-11-10.json).
+
+- **P7 torus bounds diagnostic:** a new FreeCAD 1.1.4 torus constructed
+  from the previously recorded source-derived parameters has an optimal
+  non-triangulated box within `1.1e-7` per bound of the analytic box, before
+  and after tessellation. Its ordinary `BoundBox` changes with tessellation;
+  FreeCAD's pinned source calls `BRepBndLib::Add` and clears the box gap.
+  This supplies a reproducible method for the pending comparison, not a
+  re-import of the original SAT. Next recover that exact hash-pinned SAT and
+  repeat `optimalBoundingBox(False, False)` on its imported solid before
+  resolving the source-carrier discrepancy. Source topology and independent
+  kernel qualification remain open. See the [receipt](docs/research/p7-freecad-analytic-torus-optimal-bounds-2026-11-10.json).
+
 - **P6 POINTCLOUD DXF no-loss preflight:** classic AC1021/AC1024 output now
   refuses newer nondefault reference/intensity fields, and cropped
   POINTCLOUDEX output refuses nonzero integers omitted by that profile.
