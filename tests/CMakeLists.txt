@@ -6186,3 +6186,11 @@ target_include_directories(libdxfrw_dwg_ltype_table_ticket_tests PRIVATE ${CMAKE
 target_link_libraries(libdxfrw_dwg_ltype_table_ticket_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dwg_ltype_table_ticket COMMAND libdxfrw_dwg_ltype_table_ticket_tests)
 set_tests_properties(libdxfrw_dwg_ltype_table_ticket PROPERTIES LABELS "dwg;fast;table" TIMEOUT 30)
+
+add_executable(p5_ac1018_ltype_pair_candidate_live_probe
+    ${CMAKE_SOURCE_DIR}/tools/research/p5_ac1018_ltype_pair_candidate_live_probe.cpp
+    ${_libdxfrw_test_adapter_source})
+target_compile_features(p5_ac1018_ltype_pair_candidate_live_probe PRIVATE cxx_std_17)
+target_compile_options(p5_ac1018_ltype_pair_candidate_live_probe PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(p5_ac1018_ltype_pair_candidate_live_probe PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/dwg2dxf)
+target_link_libraries(p5_ac1018_ltype_pair_candidate_live_probe PRIVATE dxfrw)
