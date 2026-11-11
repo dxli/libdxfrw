@@ -15867,6 +15867,17 @@ bool dxfRW::writePointCloud(DRW_PointCloud *ent){
         m_writeError = true;
         return false;
     }
+    // These fields are emitted only by the later POINTCLOUD DXF profile.
+    if (version <= DRW::AC1024
+        && (ent->definitionHandle != 0u || ent->reactorHandle != 0u
+            || ent->intensityScheme != 0
+            || ent->intensityStyle.minIntensity != 0.0
+            || ent->intensityStyle.maxIntensity != 0.0
+            || ent->intensityStyle.lowThreshold != 0.0
+            || ent->intensityStyle.highThreshold != 0.0)) {
+        m_writeError = true;
+        return false;
+    }
     if (!finite(ent->origin) || !finite(ent->extentsMin)
         || !finite(ent->extentsMax) || !finite(ent->ucsOrigin)
         || !finite(ent->ucsXDirection) || !finite(ent->ucsYDirection)
@@ -15963,7 +15974,9 @@ bool dxfRW::writePointCloudEx(DRW_PointCloudEx *ent){
         || ent->classVersion > std::numeric_limits<std::uint16_t>::max()
         || ent->croppingCount < 0
         || ent->croppingCount > static_cast<int>(DRW_PointCloudEx::kMaxItems)
-        || ent->croppings.size() != static_cast<std::size_t>(ent->croppingCount)) {
+        || ent->croppings.size() != static_cast<std::size_t>(ent->croppingCount)
+        || (ent->croppingCount != 0
+            && (ent->unknownInt0 != 0 || ent->unknownInt1 != 0))) {
         m_writeError = true;
         return false;
     }

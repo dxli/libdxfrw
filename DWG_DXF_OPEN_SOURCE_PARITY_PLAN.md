@@ -1210,6 +1210,14 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P6 POINTCLOUD DXF no-loss preflight:** classic AC1021/AC1024 output now
+  refuses newer nondefault reference/intensity fields, and cropped
+  POINTCLOUDEX output refuses nonzero integers omitted by that profile.
+  Generated ASCII/Binary controls verify each refusal, destination and source
+  preservation, corrected same-facade retry and readback; later classic and
+  zero-crop EX values still roundtrip. The focused test passes; native producer
+  semantics remain open. See the [receipt](docs/research/p6-dxf-pointcloud-omitted-fields-refusal-2026-11-10.json).
+
 - **P6 POINTCLOUDEX DWG encoder transaction safety:** cropped and uncropped
   AC1027/AC1032 profiles now stage body, strings and handles; 138 injected
   allocation failures preserve prior state and retry exactly. The focused
