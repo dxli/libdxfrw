@@ -1223,8 +1223,18 @@ created locally from scratch for the specific control.
   164-offset whole-parser allocation/reset/retry sweep; the focused cohort
   passes 5/5. The physical source still publishes 145/145 frames with zero
   entity/object failures and refuses strict output at existing integrity gates.
-  Next establish node bodies, dependency semantics and graph closure. See the
-  [registry receipt](docs/research/p4-ac1032-forum-constraint-registry-candidate-2026-11-10.json).
+  A subsequent independent bounded primitive walk matches all 13 peer-candidate
+  node body and handle spans. The selected bounded-line and arc nodes reference
+  the geometry dependencies whose LINE/ARC targets, owners and reactor links
+  match LibreDWG; line endpoints and arc trim points match those entities. Arc
+  curve-domain values `0..2π` differ from the entity's trim angles and must not
+  be substituted for them. The node model does not retain per-node status or
+  registry flags, and the registry count excludes the root; do not publish
+  complete-looking node shells. Next define a nonmisleading partial-data API,
+  validate status/registry semantics and decode node bodies with refusal/retry,
+  then close the dependency and whole-source graph. See the
+  [registry receipt](docs/research/p4-ac1032-forum-constraint-registry-candidate-2026-11-10.json)
+  and [node-span receipt](docs/research/p4-ac1032-forum-constraint-node-spans-2026-11-10.json).
 
 - **P6 DXF primitive subtype dispatch:** built-in derived LINE, RAY, CIRCLE,
   TRACE, TEXT and ATTRIB inputs now route to their typed writers instead of
