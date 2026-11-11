@@ -37995,7 +37995,7 @@ bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
     std::cout << "physical TABLE probe revision="
               << static_cast<int>(data.sourceVersion)
               << " tables=" << data.tables.size() << '\n';
-    bool encodedOneTable = false;
+    bool diagnosedOneTable = false;
     for (DRW_Table& table : data.tables) {
         dwgBufferW body;
         dwgBufferW handles;
@@ -38031,6 +38031,9 @@ bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
             withoutExtensionDictionary.encodeDwg(
                 DRW::AC1018, &withoutExtensionBody, 0u, nullptr,
                 &withoutExtensionHandles);
+        const bool directExtensionGate = table.xDictHandle != 0u
+            && !encoded && proxyAuthorized && !authorizedProxyEncoded
+            && withoutExtensionEncoded;
         bool authorizedProxyReadback = false;
         if (authorizedProxyEncoded) {
             dwgBufferW frame = authorizedProxyBody;
@@ -38113,6 +38116,7 @@ bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
                   << withoutExtensionBody.bitCount()
                   << " withoutExtensionHandleBits="
                   << withoutExtensionHandles.bitCount()
+                  << " directExtensionGate=" << directExtensionGate
                   << " borderFlags=" << table.m_borderColorOverrideFlags
                   << '/' << table.m_borderLineweightOverrideFlags << '/'
                   << table.m_borderVisibilityOverrideFlags
@@ -38184,9 +38188,10 @@ bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
                       << static_cast<unsigned>(range.m_rawHandleCode)
                       << " complete=" << range.m_parseComplete << '\n';
         }
-        encodedOneTable = encodedOneTable || encoded;
+        diagnosedOneTable = diagnosedOneTable || directExtensionGate;
     }
-    return !data.tables.empty() && encodedOneTable;
+    return data.sourceVersion == DRW::AC1018 && data.tables.size() == 1u
+        && diagnosedOneTable;
 }
 
 } // namespace

@@ -1673,7 +1673,9 @@ created locally from scratch for the specific control.
   authorization, a scratch clone with that handle cleared encodes 18,212 body
   bits and 128 handle bits. This confirms the direct body profile is otherwise
   encodable, but dropping the extension edge is lossy and does not exercise the
-  private extension-aware whole-writer route. Keep physical source output
+  private extension-aware whole-writer route. The focused diagnostic now exits
+  successfully only when the intact source is refused and the handle-cleared
+  comparison encodes. Keep physical source output
   refused until the dictionary/descendant graph is emitted and fresh readback
   closes it. See the [direct-codec diagnostic receipt](docs/research/p5-ac1018-table-direct-codec-extension-gate-2026-11-11.json).
   See the [guard receipt](docs/research/p5-ac1018-table-stale-absent-mask-guard-2026-11-10.json).

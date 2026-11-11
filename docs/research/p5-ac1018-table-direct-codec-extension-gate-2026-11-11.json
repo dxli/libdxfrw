@@ -20,7 +20,7 @@
   },
   "validation": {
     "command": "cmake --build build-gcc --target libdxfrw_dwg_local_roundtrip -j4 && build-gcc/libdxfrw_dwg_local_roundtrip --inspect-physical-table-codec /private/tmp/p5-ac1018-oda-audited-output/acad_table_simple.dwg",
-    "result": "Build passed. Diagnostic printed direct refusal and successful no-extension comparison; selector retains its refusal exit because it requires an unmodified physical TABLE to encode."
+    "result": "Build passed. The selector now exits 0 only when the one-table AC1018 source has a nonzero extension handle, direct encoding refuses even after proxy authorization, and the no-extension comparison encodes. A repeat run exited 0."
   },
   "remaining": [
     "Exercise the normal extension-aware whole-writer route for this exact source only after source identity and descendant graph binding are complete.",
