@@ -1412,9 +1412,10 @@ created locally from scratch for the specific control.
   ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)).
   It is not reader-bound: STYLE EED/APPID, APPID_CONTROL siblings,
   STYLE_CONTROL, ordinary LTYPE rows and the ByLayer sibling still need
-  same-import identity and role binding. The observed ByBlock/ByLayer phantom
-  order conflicts with ODA prose and stays confined to this source profile
-  until independently resolved. See the [resource wire receipt](docs/research/p5-ac1018-table-style-ltype-resource-wire-2026-11-11.json).
+  same-import identity and role binding. ODA §20.4.57 specifies ByLayer then
+  ByBlock, while this pinned source and LibreDWG report ByBlock then ByLayer.
+  Treat that as a source anomaly; add normative-order controls separately and
+  do not generalize this profile. See the [resource wire receipt](docs/research/p5-ac1018-table-style-ltype-resource-wire-2026-11-11.json).
   See the [DATATABLE candidate receipt](docs/research/p5-ac1018-datatable-candidate-observer-2026-11-11.json).
 
   The recreated AC1018 XRECORD `0xbc` is now independently walked to its
