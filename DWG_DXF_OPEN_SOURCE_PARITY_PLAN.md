@@ -1712,8 +1712,13 @@ created locally from scratch for the specific control.
   import and control selection; the live probe verifies the typed names and
   frame tickets for ByBlock 0x14, ByLayer 0x15 and Continuous 0x16. Their
   reader-issued ticket bodies now pass the bounded same-import control/ByBlock
-  selected-field and role join. That source-profile order contradicts ODA for
-  the phantom pair and stays isolated. Physical producer-file CRC corruption/
+  selected-field and role join. The generated retry control also corrupts the
+  selected BYBLOCK row frame CRC independently, requires an ObjectFrameBounds
+  diagnostic for its ticket-derived handle with no page-checksum diagnostic or
+  leaked tickets, then restores and retries through the same adapter. This is
+  generated row-frame failure/retry evidence only. That source-profile order
+  contradicts ODA for the phantom pair and stays isolated. Physical
+  producer-file CRC corruption/
   retry, STYLE EED/APPID dependencies and remaining resource closure remain
   open ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)). ODA §20.4.57 specifies ByLayer then
   ByBlock, while this pinned source and LibreDWG report ByBlock then ByLayer.

@@ -118,10 +118,27 @@ int main(int argc,char**argv){
   {std::ofstream restored(path,std::ios::binary|std::ios::trunc);restored.write(reinterpret_cast<const char*>(originalBytes.data()),static_cast<std::streamsize>(originalBytes.size()));if(!restored)return 11;}
   probe.reset();auto retryData=std::make_unique<dx_data>();const bool crcRetryRead=probe.fileImport(path.string(),retryData.get(),false);
   const bool crcRetry=crcRetryRead&&probe.tickets==1u&&probe.ticketValid&&probe.rowTickets==3u&&probe.rowTicketValid;
+  const auto byBlockHandle=probe.byBlockFrame?probe.byBlockFrame->m_handle:0u;
+  std::vector<std::uint8_t> rowOriginalBytes;
+  if(!probe.byBlockFrame||!corruptObjectFrameCrc(path,*probe.byBlockFrame,rowOriginalBytes))return 13;
+  probe.reset();auto rowDamagedData=std::make_unique<dx_data>();
+  const bool rowDamagedRead=probe.fileImport(path.string(),rowDamagedData.get(),false);
+  bool rowControlDiagnostic=false;const auto& rowIntegrity=rowDamagedData->dwgReadOutcome.observations.integrity;
+  for(std::size_t i=0;i<rowIntegrity.retained;++i){const auto& row=rowIntegrity.rows[i];
+   if(row.kind==DwgIntegrityCheckKind::ObjectFrameBounds&&row.hasLogicalHandle&&row.logicalHandle==byBlockHandle)rowControlDiagnostic=true;
+   if(row.kind==DwgIntegrityCheckKind::DataPageChecksum||row.kind==DwgIntegrityCheckKind::DataPageCrc)return 14;}
+  const bool rowCrcLeakedTickets=probe.tickets!=0u||probe.rowTickets!=0u;
+  {std::ofstream restored(path,std::ios::binary|std::ios::trunc);restored.write(reinterpret_cast<const char*>(rowOriginalBytes.data()),static_cast<std::streamsize>(rowOriginalBytes.size()));if(!restored)return 15;}
+  probe.reset();auto rowRetryData=std::make_unique<dx_data>();
+  const bool rowRetryRead=probe.fileImport(path.string(),rowRetryData.get(),false);
+  const bool rowRetry=rowRetryRead&&probe.tickets==1u&&probe.ticketValid&&probe.rowTickets==3u&&probe.rowTicketValid;
   std::cout<<"generated=1 failedRead="<<failedRead<<" leakedTickets="<<leaked
     <<" retryRead="<<read<<" crcRead="<<damagedRead<<" crcDiagnostic="<<controlDiagnostic
-    <<" crcLeakedTickets="<<leakedCrcTickets<<" crcRetry="<<crcRetry<<"\n";
-  return !damagedRead&&controlDiagnostic&&!leakedCrcTickets&&crcRetry?0:12;
+    <<" crcLeakedTickets="<<leakedCrcTickets<<" crcRetry="<<crcRetry
+    <<" rowCrcRead="<<rowDamagedRead<<" rowCrcDiagnostic="<<rowControlDiagnostic
+    <<" rowCrcLeakedTickets="<<rowCrcLeakedTickets<<" rowCrcRetry="<<rowRetry<<"\n";
+  return !damagedRead&&controlDiagnostic&&!leakedCrcTickets&&crcRetry
+      &&!rowDamagedRead&&rowControlDiagnostic&&!rowCrcLeakedTickets&&rowRetry?0:16;
  }
  if(argc==3&&std::string(argv[1])=="--emit-dwg"){
   std::ifstream existing(argv[2],std::ios::binary);if(existing)return 3;
