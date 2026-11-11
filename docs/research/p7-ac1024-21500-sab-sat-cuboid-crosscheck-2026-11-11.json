@@ -73,6 +73,20 @@
       "satHeader": "21500 115 2 0",
       "bytes": 6983,
       "sha256": "b7a6cad6a6714f02ac36832d5767041c606b31258b6a9b8cebd2b1ccf8e1e971"
+    },
+    "topLevelInventory": {
+      "record0": "asmheader",
+      "record1": "body",
+      "bodyRecord1PointerTargets": [
+        2,
+        -1,
+        3,
+        -1,
+        -1
+      ],
+      "record2": "ref_vt-eye-attrib",
+      "record3": "lump",
+      "interpretation": "The body at index 1 points to record index 2, matching the ACIS 217/218 entity-count-boundary description for this source shape. This is a cross-version structural match, not proof of the 21500 header field semantics."
     }
   },
   "independentReader": {
@@ -174,8 +188,13 @@
         "source": "ACadRust SAT parser documentation",
         "url": "https://docs.rs/acadrust/latest/src/acadrust/entities/acis/parser.rs.html",
         "finding": "Parses the third SAT header integer into a num_bodies field; this parser interpretation alone does not prove the 21500 SAB producer semantics."
+      },
+      {
+        "source": "Spatial ACIS SAT Save File Format 7.0, Save File Header",
+        "url": "https://paulbourke.net/dataformats/sat/sat.pdf",
+        "finding": "Defines header integer 3 as the count of entities in the original entity list saved to the part file. This is authoritative ACIS-format evidence for SAT Format 7.0, but does not by itself prove the ACIS 21500 SAB profile uses the same definition."
       }
     ],
-    "conclusion": "The former two-bodies-versus-one-body discrepancy was an unsupported relabeling of numEntities. Preserve the raw field value and observed body-record census separately until eligible version-specific evidence establishes their relationship."
+    "conclusion": "The former two-bodies-versus-one-body discrepancy was an unsupported relabeling of numEntities. ACIS SAT Format 7.0 defines the corresponding third header integer as a saved entity-list count. In this source the body at index 1 points first to record 2, matching the later ACIS 217/218 entity-count-boundary description. These sources and this observed structure reject the body-count interpretation, but do not establish the exact 21500 SAB definition; preserve the raw field and record census separately pending version-qualified evidence."
   }
 }
