@@ -19,7 +19,9 @@ that extractor only for AC1015, leaving the same bounded AC1018 profile raw.
 The extractor now admits AC1018 and retains the exact per-block spans. A
 generated AC1015/AC1018 fast control, registered as
 `dwg_sat_v1_bounded_extraction`, checks decoding, exact range coverage,
-missing-terminator refusal, and SAT/SAB separation; it passes. The scratch
+missing-terminator refusal, and SAT/SAB separation; AC1015/AC1018 same-revision
+ASCII/Binary DXF output and fresh typed readback; and cross-revision output
+refusal. It passes. The scratch
 AC1018 sample has seven modeler-version-1 `3DSOLID` records; the parser reports
 payload lengths of 14,581, 1,289, 9,986, 2,417, 2,430, 233,110 and 234,503
 bytes, matching the independent LibreDWG 0.14 SAT text projection lengths.

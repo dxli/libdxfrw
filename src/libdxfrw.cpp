@@ -2086,11 +2086,13 @@ bool canWriteDxfSatTextPayload(
     return true;
 }
 
-bool hasQualifiedAc1015SatV1Payload(const DRW_ModelerGeometry& entity) {
+bool hasQualifiedSatV1Payload(const DRW_ModelerGeometry& entity,
+                             DRW::Version targetVersion) {
     const bool hasOnlyRetainedDwgFrame = entity.m_rawBytes.empty()
         || (entity.m_dxfPayloadChunks.empty()
             && entity.m_rawBytes.size() == entity.m_objectSize);
-    if (entity.m_dwgSourceVersion != DRW::AC1015
+    if ((targetVersion != DRW::AC1015 && targetVersion != DRW::AC1018)
+        || entity.m_dwgSourceVersion != targetVersion
         || entity.m_modelerVersion != 1 || entity.m_isEmpty
         || !entity.m_hasModelerData
         || entity.m_objectSize == 0 || entity.m_dwgAcisPayload.empty()
@@ -16939,8 +16941,7 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
         m_writeError = true;
         return false;
     }
-    const bool writeAc1015SatV1 = version == DRW::AC1015
-        && hasQualifiedAc1015SatV1Payload(*ent);
+    const bool writeSatV1 = hasQualifiedSatV1Payload(*ent, version);
     const bool writeAc1021InlineSab21200 =
         (version == DRW::AC1021 || version == DRW::AC1024)
         && hasQualifiedAc1021InlineSab21200Payload(*ent);
@@ -16971,8 +16972,8 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
     DRW_DBG("dxfRW::writeModelerGeometry R2013+ ACDSDATA SAB qualified: ");
     DRW_DBG(writeR2013PlusSab);
     DRW_DBG("\n");
-    DRW_DBG("dxfRW::writeModelerGeometry AC1015 SAT v1 qualified: ");
-    DRW_DBG(writeAc1015SatV1);
+    DRW_DBG("dxfRW::writeModelerGeometry same-version SAT v1 qualified: ");
+    DRW_DBG(writeSatV1);
     DRW_DBG("\n");
     DRW_DBG("dxfRW::writeModelerGeometry AC1021 inline SAB 21200 qualified: ");
     DRW_DBG(writeAc1021InlineSab21200);
@@ -17001,7 +17002,7 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
     DRW_DBG(" unknown bit: ");
     DRW_DBG(ent->m_modelerDataUnknownBit);
     DRW_DBG("\n");
-    const bool hasUnqualifiedDwgPayload = !writeAc1015SatV1
+    const bool hasUnqualifiedDwgPayload = !writeSatV1
         && !writeAc1021InlineSab21200
         && !writeR2013PlusSab
         && (ent->m_bodyBitSize != 0
@@ -17011,7 +17012,7 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
         || ent->hasDataStorageBinaryData() || ent->hasDataStorageRecord
         || !ent->dataStorageData.empty());
     if (hasUnqualifiedDwgPayload
-        || (!writeAc1015SatV1 && !writeAc1021InlineSab21200
+        || (!writeSatV1 && !writeAc1021InlineSab21200
             && !writeR2013PlusSab
             && !ent->m_rawBytes.empty()
             && (version > DRW::AC1024
@@ -17049,7 +17050,7 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
         writer->writeInt16(70, writeAc1021InlineSab21200
             ? 1 : ent->m_modelerVersion);
     }
-    if (writeAc1015SatV1) {
+    if (writeSatV1) {
         if (!writeDxfSatV1Text(writer.get(), ent->m_dwgAcisPayload))
             return failDxfWrite();
     } else if (writeAc1021InlineSab21200) {

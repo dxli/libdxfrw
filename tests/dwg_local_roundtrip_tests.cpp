@@ -22333,6 +22333,62 @@ bool runModelerDwgSatV1Extraction() {
     std::filesystem::remove(output, ec);
     std::filesystem::remove(reexportOutput, ec);
 
+    // AC1018 now uses the same source-revision SAT-v1 carrier contract in
+    // DXF. Exercise both text encodings and a fresh public readback.
+    ac1018Parsed.m_rawBytes = ac1018Frame;
+    for (bool binary : {false, true}) {
+        const std::filesystem::path ac1018Output =
+            std::filesystem::temp_directory_path()
+            / (binary ? "libdxfrw-modeler-ac1018-satv1-binary.dxf"
+                      : "libdxfrw-modeler-ac1018-satv1-ascii.dxf");
+        std::filesystem::remove(ac1018Output, ec);
+        dx_data ac1018Source;
+        ac1018Source.mBlock->ent.push_back(
+            new DRW_ModelerGeometry(ac1018Parsed));
+        dx_iface ac1018Exporter;
+        if (!ac1018Exporter.fileExport(ac1018Output.string(), DRW::AC1018,
+                                       binary, &ac1018Source, false))
+            return failStage("export AC1018 SAT-v1 DXF carrier");
+        dx_data ac1018Imported;
+        dx_iface ac1018Importer;
+        if (!ac1018Importer.fileImport(ac1018Output.string(),
+                                       &ac1018Imported, false))
+            return failStage("import AC1018 SAT-v1 DXF carrier");
+        bool ac1018ReadbackMatches = false;
+        for (const DRW_Entity* entity : ac1018Imported.mBlock->ent) {
+            if (entity == nullptr || entity->eType != DRW::E3DSOLID)
+                continue;
+            const auto* decoded =
+                static_cast<const DRW_ModelerGeometry*>(entity);
+            ac1018ReadbackMatches = decoded->m_rawBytes == expectedDxfPayload
+                && decoded->m_dxfPayloadChunks.size() >= 2u
+                && decoded->m_modelerVersion == 1
+                && decoded->m_dwgAcisPayload.empty()
+                && decoded->m_dwgSourceVersion == DRW::UNKNOWNV;
+            break;
+        }
+        std::filesystem::remove(ac1018Output, ec);
+        if (!ac1018ReadbackMatches)
+            return failStage("AC1018 ASCII/Binary typed SAT readback");
+    }
+
+    const std::filesystem::path crossVersionOutput =
+        std::filesystem::temp_directory_path()
+        / "libdxfrw-modeler-ac1018-satv1-cross-version-refusal.dxf";
+    std::filesystem::remove(crossVersionOutput, ec);
+    dx_data ac1018CrossVersionSource;
+    ac1018CrossVersionSource.mBlock->ent.push_back(
+        new DRW_ModelerGeometry(ac1018Parsed));
+    dx_iface ac1018CrossVersionExporter;
+    const bool ac1018CrossVersionRefused =
+        !ac1018CrossVersionExporter.fileExport(
+            crossVersionOutput.string(), DRW::AC1015, false,
+            &ac1018CrossVersionSource, false)
+        && !std::filesystem::exists(crossVersionOutput);
+    std::filesystem::remove(crossVersionOutput, ec);
+    if (!ac1018CrossVersionRefused)
+        return failStage("reject AC1018 SAT-v1 cross-version output");
+
     DRW_ModelerGeometry mismatched(parsed);
     mismatched.m_dwgSourceVersion = DRW::AC1018;
     dx_data rejectedSource;
@@ -41550,7 +41606,7 @@ int main(int argc, char** argv) {
     expect(runModelerDwgVersionValidation(),
            "local DWG modeler version range and empty-body validation", failures);
     expect(runModelerDwgSatV1Extraction(),
-           "local AC1015/AC1018 DWG SAT v1 bounded extraction and AC1015 DXF text carrier",
+           "local AC1015/AC1018 SAT v1 extraction and same-revision ASCII/Binary DXF carriers",
            failures);
     expect(runModelerDxfWriterMatrix(directory, keepOutputs),
            "DXF modeler version/entity schema, SAT boundary and history matrix",
