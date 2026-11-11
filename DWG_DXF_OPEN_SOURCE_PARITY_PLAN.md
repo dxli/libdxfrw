@@ -1380,7 +1380,11 @@ created locally from scratch for the specific control.
   The style XRECORD's ten ordered data groups and owner/reactor roles are now
   joined to the reader-verified dictionary's first target
   ([binding receipt](docs/research/p5-ac1018-tablestyle-roundtrip-xrecord-source-binding-2026-11-11.json));
-  a generated full-bundle positive and selected-frame CRC mutation remain open.
+  A generated standalone selected-frame test now covers valid-CRC payload
+  mutation and a bad frame CRC with intact page checksums
+  ([receipt](docs/research/p5-ac1018-tablestyle-xrecord-generated-reader-crc-2026-11-11.json));
+  a generated full-bundle positive and the same failures through that stronger
+  gate remain open.
   CELLSTYLEMAP is now joined to the reader-verified dictionary's second target,
   preserving source style order `[3,1,2]` and checking selected H4/H5 fields
   ([binding receipt](docs/research/p5-ac1018-cellstylemap-reader-source-binding-2026-11-11.json)).
