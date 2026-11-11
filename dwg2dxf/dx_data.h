@@ -2695,7 +2695,7 @@ private:
         std::vector<VerifiedXRecordSource> records;
     };
     struct VerifiedTableCandidateSource {
-        enum class Kind : std::uint8_t { TableContent, DataTable, TableGeometry, ExtensionDictionary, TableEntity, TableStyle, StyleExtensionDictionary, CellStyleMap, StyleControl, StyleRecord };
+        enum class Kind : std::uint8_t { TableContent, DataTable, TableGeometry, ExtensionDictionary, TableEntity, TableStyle, StyleExtensionDictionary, CellStyleMap, StyleControl, StyleRecord, LTypeControl, LTypeRecord };
         DRW_UnsupportedObject raw;
         std::uint64_t ordinal{0u};
         DRW_DwgFrameOffsetSpace space{DRW_DwgFrameOffsetSpace::Unknown};
@@ -2704,6 +2704,7 @@ private:
         std::shared_ptr<const DRW_TableEntry> typedBaseline;
         std::shared_ptr<const DRW_Table> tableModel;
         std::shared_ptr<const DRW_Textstyle> styleModel;
+        std::shared_ptr<const DRW_LType> ltypeModel;
     };
     struct VerifiedTableCandidateSources {
         std::shared_ptr<const unsigned char> importToken;
@@ -2720,6 +2721,18 @@ private:
     };
     std::shared_ptr<const VerifiedStyleResourceSources>
         m_verifiedStyleResourceSource;
+    struct VerifiedLTypeResourceSources {
+        std::shared_ptr<const unsigned char> importToken;
+        std::uint64_t generation{0u};
+        std::uint32_t controlHandle{0u};
+        std::uint32_t ordinaryHandle{0u};
+        std::uint32_t byBlockHandle{0u};
+        std::uint32_t byLayerHandle{0u};
+        bool normativePhantomOrder{false};
+        std::vector<VerifiedTableCandidateSource> records;
+    };
+    std::shared_ptr<const VerifiedLTypeResourceSources>
+        m_verifiedLTypeResourceSource;
     // Source-bound staging only. Never replay these bytes as DXF, and never
     // use these counts to waive strict semantic/output completeness.
     using StandardDwgFrameKey = std::pair<std::uint64_t, std::uint32_t>;

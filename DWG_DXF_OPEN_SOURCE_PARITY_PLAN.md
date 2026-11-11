@@ -1723,9 +1723,20 @@ created locally from scratch for the specific control.
   diagnostic for its ticket-derived handle with no page-checksum diagnostic or
   leaked tickets, then restores and retries through the same adapter. This is
   generated row-frame failure/retry evidence only. That source-profile order
-  contradicts ODA for the phantom pair and stays isolated. Physical
-  producer-file CRC corruption/retry and remaining LTYPE resource closure remain
-  open. The selected AC1018 STYLE EED APPID edge now also requires a matching
+  contradicts ODA for the phantom pair and stays isolated. The opt-in
+  `enableVerifiedLTypeResourceSource` capability now seals the CRC-checked
+  control and three typed LTYPE row snapshots under one successful import
+  token/generation, and rechecks exact source-frame membership, control handle
+  roles/order and all selected live row fields before reporting the bundle
+  unchanged. A generated AC1018 source passes that query, refuses a mutated
+  Continuous description and accepts restoration; invalid/duplicate handles
+  and mixing this ticket selection with XRECORD tickets are rejected. The
+  pinned physical source passes the same bundle query for control `0x5`,
+  Continuous `0x16`, ByBlock `0x14` and ByLayer `0x15` from one finalized
+  import. This remains an exact selected-source identity check: the physical
+  phantom ordering anomaly stays isolated, and physical-frame CRC damage/retry,
+  broader resource/dependency closure, target emission, strict graph output and
+  readback remain open. The selected AC1018 STYLE EED APPID edge now also requires a matching
   immutable same-import APPID row snapshot, including common fields, unknown71
   and source-name bytes; name/metadata mutation refusal and restoration pass in
   the focused physical-source diagnostic. This closes only the selected STYLE
@@ -1733,9 +1744,11 @@ created locally from scratch for the specific control.
   ([STYLE resource receipt](docs/research/p5-ac1018-style-resource-adapter-binding-2026-11-11.json);
   [LTYPE receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)). ODA §20.4.57 specifies ByLayer then
   ByBlock, while this pinned source and LibreDWG report ByBlock then ByLayer.
-  Treat that as a source anomaly. The observer now exposes a separate normative
-  order check with exact ByLayer/ByBlock spans; same-import source binding and
-  output remain open. See the [resource wire receipt](docs/research/p5-ac1018-table-style-ltype-resource-wire-2026-11-11.json).
+  Treat that as a source anomaly. The observer exposes a separate normative
+  order check with exact ByLayer/ByBlock spans; the new same-import query binds
+  the four selected source frames but does not authorize replay or output. See
+  the [resource wire receipt](docs/research/p5-ac1018-table-style-ltype-resource-wire-2026-11-11.json)
+  and [LTYPE source receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json).
   **Completed writer correction (2026-11-11):** the DWG writer now emits the
   two final hard-owned phantom references in ODA's normative ByLayer, ByBlock
   order. The reader continues to accept the prior libdxfrw hard-owned order and

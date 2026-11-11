@@ -4,6 +4,7 @@
 #include "libdwgr.h"
 #include "intern/dwgobjectframe.h"
 #include "intern/dwgutil.h"
+#include "intern/dwg_fixed_handles.h"
 #include "intern/dwg_ltype_control_byblock_ac1018_candidate.h"
 #include <fstream>
 #include <filesystem>
@@ -12,6 +13,7 @@
 #include <memory>
 #include <optional>
 #include <algorithm>
+#include <cstdlib>
 #include <cstdint>
 #include <vector>
 
@@ -26,10 +28,12 @@ public:
   DRW_LType bylayer;bylayer.handle=0x15u;bylayer.name="ByLayer";bylayer.flags=0x40;bylayer.length=0.;bylayer.alignment=65;
   DRW_LType continuous;continuous.handle=0x16u;continuous.name="Continuous";continuous.desc="Solid line";continuous.flags=0;continuous.length=0.;continuous.alignment=65;
   generated=writer_.addLType(&byblock)&&writer_.addLType(&bylayer)&&writer_.addLType(&continuous);
+  byBlockHandle=byblock.handle;byLayerHandle=bylayer.handle;continuousHandle=continuous.handle;
  }
  void writeLayers() override {} void writeTextstyles() override {} void writeVports() override {}
  void writeViews() override {} void writeUCSs() override {} void writeDimstyles() override {} void writeAppId() override {}
  bool generated{false};
+ std::uint32_t byBlockHandle{0u},byLayerHandle{0u},continuousHandle{0u};
 private:dwgRW& writer_;
 };
 class Probe final:public dx_iface {
@@ -91,21 +95,70 @@ DRW_UnsupportedObject body(const char* path,std::uint32_t handle,int type) {
  r.m_rawBytes.assign(std::istreambuf_iterator<char>(in),{});r.m_objectSize=static_cast<std::uint32_t>(r.m_rawBytes.size());return r;
 }
 int main(int argc,char**argv){
+ if(argc==7&&std::string(argv[1])=="--inspect-resource"){
+  const auto parseHandle=[](const char* text,std::uint32_t& value){
+   char* end=nullptr;const auto parsed=std::strtoul(text,&end,0);
+   if(text==end||*end!='\0'||parsed==0u||parsed>0xfffffffful)return false;
+   value=static_cast<std::uint32_t>(parsed);return true;
+  };
+  std::uint32_t control=0u,ordinary=0u,byBlock=0u,byLayer=0u;
+  if(!parseHandle(argv[3],control)||!parseHandle(argv[4],ordinary)
+      ||!parseHandle(argv[5],byBlock)||!parseHandle(argv[6],byLayer))return 2;
+  dx_iface reader;dx_data data;
+  const bool selected=reader.enableVerifiedLTypeResourceSource(
+      control,ordinary,byBlock,byLayer);
+  const bool imported=selected&&reader.fileImport(argv[2],&data,false);
+  const bool bound=imported&&dx_iface::hasUnchangedVerifiedLTypeResourceSource(
+      data,control,ordinary,byBlock,byLayer);
+  std::cout<<"selected="<<selected<<" imported="<<imported
+      <<" operationSucceeded="<<data.dwgReadOutcome.operationSucceeded
+      <<" sourceBound="<<bound<<" generation="<<data.importGeneration<<'\n';
+  return bound?0:1;
+ }
  if(argc==3&&std::string(argv[1])=="--self-test"){
   const std::filesystem::path path(argv[2]);if(std::filesystem::exists(path))return 3;
   struct Cleanup{std::filesystem::path p;~Cleanup(){std::error_code e;std::filesystem::remove(p,e);}} cleanup{path};
+  dx_iface selectedLtype,selectedXrecord,duplicateLtype;
+  const bool ltypeSelection=selectedLtype.enableVerifiedLTypeResourceSource(5u,0x16u,0x14u,0x15u)
+      &&!selectedLtype.enableVerifiedXRecordSource(0xbcu);
+  const bool xrecordSelection=selectedXrecord.enableVerifiedXRecordSource(0xbcu)
+      &&!selectedXrecord.enableVerifiedLTypeResourceSource(5u,0x16u,0x14u,0x15u);
+  const bool duplicateSelection=!duplicateLtype.enableVerifiedLTypeResourceSource(5u,0x16u,0x16u,0x15u);
   dwgRW writer(path.string().c_str());GeneratedSource generated(writer);
   if(!writer.write(&generated,DRW::AC1018,true)||!generated.generated)return 4;
   std::ifstream source(path,std::ios::binary);
   const std::vector<char> original((std::istreambuf_iterator<char>(source)),{});
   if(!source||original.size()<64u)return 5;
+  dx_iface ltypeReader;dx_data ltypeData;
+  const bool ltypeSelected=ltypeReader.enableVerifiedLTypeResourceSource(
+      DRW::DwgLtypeControlHandle,generated.continuousHandle,
+      generated.byBlockHandle,generated.byLayerHandle);
+  const bool ltypeImported=ltypeSelected&&ltypeReader.fileImport(path.string(),&ltypeData,false);
+  bool ltypeSourceBound=ltypeImported&&dx_iface::hasUnchangedVerifiedLTypeResourceSource(
+      ltypeData,DRW::DwgLtypeControlHandle,generated.continuousHandle,
+      generated.byBlockHandle,generated.byLayerHandle);
+  bool ltypeMutationRefused=false,ltypeRestoreAccepted=false;
+  if(ltypeSourceBound) {
+   const auto row=std::find_if(ltypeData.lineTypes.begin(),ltypeData.lineTypes.end(),
+       [&generated](const DRW_LType& value){return value.handle==generated.continuousHandle;});
+   if(row==ltypeData.lineTypes.end())ltypeSourceBound=false;
+   else {const auto description=row->desc;row->desc+="_MUTATED";
+    ltypeMutationRefused=!dx_iface::hasUnchangedVerifiedLTypeResourceSource(ltypeData,
+        DRW::DwgLtypeControlHandle,generated.continuousHandle,
+        generated.byBlockHandle,generated.byLayerHandle);
+    row->desc=description;ltypeRestoreAccepted=dx_iface::hasUnchangedVerifiedLTypeResourceSource(ltypeData,
+        DRW::DwgLtypeControlHandle,generated.continuousHandle,
+        generated.byBlockHandle,generated.byLayerHandle);}
+  }
   auto data=std::make_unique<dx_data>();Probe probe;
   {std::ofstream broken(path,std::ios::binary|std::ios::trunc);broken.write(original.data(),20);if(!broken)return 6;}
   const bool failedRead=probe.fileImport(path.string(),data.get(),false);
   const bool leaked=probe.tickets!=0u||probe.rowTickets!=0u;
   {std::ofstream restored(path,std::ios::binary|std::ios::trunc);restored.write(original.data(),static_cast<std::streamsize>(original.size()));if(!restored)return 7;}
   const bool read=probe.fileImport(path.string(),data.get(),false);
-  const bool ok=!failedRead&&!leaked&&read&&probe.tickets==1u&&probe.ticketValid
+  const bool ok=ltypeSelection&&xrecordSelection&&duplicateSelection
+      &&ltypeSourceBound&&ltypeMutationRefused&&ltypeRestoreAccepted
+      &&!failedRead&&!leaked&&read&&probe.tickets==1u&&probe.ticketValid
       &&probe.rowTickets==3u&&probe.rowTicketValid;
   if(!ok)return 8;
   std::vector<std::uint8_t> originalBytes;if(!probe.controlFrame||!corruptObjectFrameCrc(path,*probe.controlFrame,originalBytes))return 9;
@@ -132,7 +185,9 @@ int main(int argc,char**argv){
   probe.reset();auto rowRetryData=std::make_unique<dx_data>();
   const bool rowRetryRead=probe.fileImport(path.string(),rowRetryData.get(),false);
   const bool rowRetry=rowRetryRead&&probe.tickets==1u&&probe.ticketValid&&probe.rowTickets==3u&&probe.rowTicketValid;
-  std::cout<<"generated=1 failedRead="<<failedRead<<" leakedTickets="<<leaked
+  std::cout<<"generated=1 ltypeSelected="<<ltypeSelected<<" ltypeImported="<<ltypeImported
+    <<" ltypeSourceBound="<<ltypeSourceBound<<" ltypeMutationRefused="<<ltypeMutationRefused
+    <<" ltypeRestoreAccepted="<<ltypeRestoreAccepted<<" failedRead="<<failedRead<<" leakedTickets="<<leaked
     <<" retryRead="<<read<<" crcRead="<<damagedRead<<" crcDiagnostic="<<controlDiagnostic
     <<" crcLeakedTickets="<<leakedCrcTickets<<" crcRetry="<<crcRetry
     <<" rowCrcRead="<<rowDamagedRead<<" rowCrcDiagnostic="<<rowControlDiagnostic

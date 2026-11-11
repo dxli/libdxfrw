@@ -84,6 +84,14 @@ public:
     static bool hasUnchangedVerifiedStyleResourceSource(
         const dx_data&, std::uint32_t styleControl,
         std::uint32_t styleRecord) noexcept;
+    // Bounded AC1018 LTYPE_CONTROL plus Continuous/ByBlock/ByLayer source
+    // observation. This never authorizes output or a producer-wide order.
+    bool enableVerifiedLTypeResourceSource(std::uint32_t controlHandle,
+        std::uint32_t ordinaryHandle, std::uint32_t byBlockHandle,
+        std::uint32_t byLayerHandle) noexcept;
+    static bool hasUnchangedVerifiedLTypeResourceSource(const dx_data&,
+        std::uint32_t controlHandle, std::uint32_t ordinaryHandle,
+        std::uint32_t byBlockHandle, std::uint32_t byLayerHandle) noexcept;
     static bool hasUnchangedVerifiedXRecordSource(
         const dx_data&, std::uint32_t handle) noexcept;
     static bool hasUnchangedVerifiedXRecordSources(
@@ -3553,6 +3561,10 @@ private:
     std::uint32_t m_verifiedTableStyleSelected{0u};
     std::uint32_t m_verifiedStyleDictionarySelected{0u},m_verifiedStyleXRecordSelected{0u},m_verifiedCellStyleMapSelected{0u};
     std::uint32_t m_verifiedStyleControlSelected{0u},m_verifiedStyleRecordSelected{0u};
+    std::uint32_t m_verifiedLTypeControlSelected{0u};
+    std::uint32_t m_verifiedLTypeOrdinarySelected{0u};
+    std::uint32_t m_verifiedLTypeByBlockSelected{0u};
+    std::uint32_t m_verifiedLTypeByLayerSelected{0u};
     bool m_verifiedStyleXRecordRequired{false};
     bool m_verifiedCellStyleMapRequired{false};
     std::vector<dx_data::VerifiedTableCandidateSource> m_verifiedTableCandidatePending;
@@ -3560,6 +3572,9 @@ private:
     std::vector<dx_data::VerifiedTableCandidateSource>
         m_verifiedStyleResourcePending;
     std::size_t m_verifiedStyleResourcePendingBytes{0u};
+    std::vector<dx_data::VerifiedTableCandidateSource>
+        m_verifiedLTypeResourcePending;
+    std::size_t m_verifiedLTypeResourcePendingBytes{0u};
     friend class DxWholeSourceTestAccess;
     friend class DxIfaceStyleResourceTestAccess;
     friend class DxIfaceMlineDependencyTestAccess;
