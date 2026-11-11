@@ -2741,8 +2741,10 @@ bool appendDwgSubrecordRange(
     return true;
 }
 
-bool validAc1018TableEmptyOverrideRanges(
-        DRW::Version version, const DRW_TableContent& content) {
+bool validAc1018TableRetainedOverrideRanges(
+        DRW::Version version, const DRW_Table& table) {
+    const DRW_TableContent& content = table.m_content;
+    const std::uint32_t tableOverrideFlags = table.m_tableOverrideFlags;
     const std::vector<DRW_DwgSubrecordRange>& ranges =
         content.m_subrecordRanges;
     if (ranges.empty())
@@ -2779,10 +2781,56 @@ bool validAc1018TableEmptyOverrideRanges(
     }
 
     const DRW_DwgSubrecordRange& tableRange = ranges.back();
-    return tableRange.m_name == "r2007-table-overrides"
+    constexpr std::uint32_t supportedTableMask =
+        0x00004000u | 0x00008000u | 0x00010000u
+        | 0x00100000u | 0x00200000u | 0x00400000u;
+    const std::uint32_t expectedMaskCount = tableOverrideFlags == 0u ? 0u : 1u;
+    dwgBufferW expectedTableRange;
+    bool supportedValues =
+        (tableOverrideFlags & ~supportedTableMask) == 0u;
+    for (std::size_t i = 0u; supportedValues && i < 3u; ++i) {
+        const bool hasAlignment =
+            (tableOverrideFlags & (0x00004000u << i)) != 0u;
+        const int alignment = table.m_tableRowAlignmentOverrides[i];
+        const bool hasTextHeight =
+            (tableOverrideFlags & (0x00100000u << i)) != 0u;
+        const double textHeight = table.m_tableRowHeightOverrides[i];
+        supportedValues = (hasAlignment
+                ? (alignment >= 1 && alignment <= 9) : alignment == 0)
+            && (hasTextHeight ? std::isfinite(textHeight)
+                              : textHeight == 0.0);
+    }
+    if (!supportedValues)
+        return false;
+    try {
+        expectedTableRange.putBit(tableOverrideFlags != 0u);
+        if (tableOverrideFlags != 0u) {
+            expectedTableRange.putBitLong(
+                static_cast<std::int32_t>(tableOverrideFlags));
+            for (std::size_t i = 0u; i < 3u; ++i) {
+                if ((tableOverrideFlags & (0x00004000u << i)) != 0u)
+                    expectedTableRange.putBitShort(static_cast<std::uint16_t>(
+                        table.m_tableRowAlignmentOverrides[i]));
+            }
+            for (std::size_t i = 0u; i < 3u; ++i) {
+                if ((tableOverrideFlags & (0x00100000u << i)) != 0u)
+                    expectedTableRange.putBitDouble(
+                        table.m_tableRowHeightOverrides[i]);
+            }
+        }
+        expectedTableRange.putBit(false);
+        expectedTableRange.putBit(false);
+        expectedTableRange.putBit(false);
+    } catch (...) {
+        return false;
+    }
+    return (tableOverrideFlags & ~supportedTableMask) == 0u
+        && tableRange.m_name == "r2007-table-overrides"
         && tableRange.m_version == DRW::AC1018
-        && tableRange.m_count == 0u && tableRange.m_rawHandleCode == 0u
-        && tableRange.m_bitSize == 4u
+        && tableRange.m_count == expectedMaskCount
+        && tableRange.m_rawHandleCode == 0u
+        && expectedTableRange.isGood()
+        && tableRange.m_bitSize == expectedTableRange.bitCount()
         && tableRange.m_parseComplete
         && tableRange.m_startBit >= previousEndBit
         && tableRange.m_bitSize
@@ -15777,11 +15825,7 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
         || !validAc1018TableCellMergeLayout(m_content.m_rows, true)
         || !m_content.m_fieldHandles.empty()
         || !m_content.m_mergedRanges.empty()
-        || !validAc1018TableEmptyOverrideRanges(version, m_content)
-        // A retained four-bit range proves that all four source masks were
-        // absent. Do not silently reinterpret it as a new TABLE override.
-        || (!m_content.m_subrecordRanges.empty()
-            && m_tableOverrideFlags != 0u)
+        || !validAc1018TableRetainedOverrideRanges(version, *this)
         || !m_content.m_name.empty() || !m_content.m_description.empty()
         || m_content.m_overrideStyleType != 4
         || (m_content.m_tableStyleHandle != 0u
