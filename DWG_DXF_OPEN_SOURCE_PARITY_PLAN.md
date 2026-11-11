@@ -1733,10 +1733,17 @@ created locally from scratch for the specific control.
   and mixing this ticket selection with XRECORD tickets are rejected. The
   pinned physical source passes the same bundle query for control `0x5`,
   Continuous `0x16`, ByBlock `0x14` and ByLayer `0x15` from one finalized
-  import. This remains an exact selected-source identity check: the physical
-  phantom ordering anomaly stays isolated, and physical-frame CRC damage/retry,
-  broader resource/dependency closure, target emission, strict graph output and
-  readback remain open. The selected AC1018 STYLE EED APPID edge now also requires a matching
+  import. Generated mutation controls now independently change each of the
+  three selected rows and require refusal followed by acceptance after restore;
+  a wrong handle binding also refuses. This remains an exact selected-source
+  identity check: the physical phantom ordering anomaly stays isolated, and
+  physical-frame CRC damage/retry, broader resource/dependency closure, target
+  emission, strict graph output and readback remain open. The attempted physical
+  CRC mutation could not locate the reader's decoded-buffer frame bytes as a
+  contiguous span in the compressed source pages. The existing checksum helper
+  handles locally generated pages; a source-backed physical CRC retry needs a
+  bounded page edit/recompression path and must not patch a guessed byte range.
+  The selected AC1018 STYLE EED APPID edge now also requires a matching
   immutable same-import APPID row snapshot, including common fields, unknown71
   and source-name bytes; name/metadata mutation refusal and restoration pass in
   the focused physical-source diagnostic. This closes only the selected STYLE

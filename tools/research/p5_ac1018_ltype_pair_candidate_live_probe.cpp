@@ -42,7 +42,7 @@ public:
  void addLType(const DRW_LType& v) override {dx_iface::addLType(v);if(v.name=="BYBLOCK"||v.name=="ByBlock"){if(model)duplicate=true;model=v;}}
  std::optional<DRW_LType> model;bool duplicate=false;unsigned tickets=0;bool ticketValid=false;unsigned rowTickets=0;bool rowTicketValid=false;
  std::optional<DRW_UnsupportedObject> controlFrame,byBlockFrame;std::optional<DRW_LType> byBlockFrameModel;
- bool wantsVerifiedTableCandidate(std::uint32_t h) const noexcept override {return h==5u||h==15u||h==16u||h==17u||h==0x14u||h==0x15u;}
+ bool wantsVerifiedTableCandidate(std::uint32_t h) const noexcept override {return h==5u||h==15u||h==16u||h==17u||h==0x14u||h==0x15u||h==0x16u;}
  void verifiedTableCandidate(const DwgVerifiedTableCandidateTicket& t) noexcept override {
   if(t.kind()==DwgVerifiedTableCandidateKind::LTypeControl&&t.version()==DRW::AC1018
       &&t.handle()==5u&&t.frame().body().size()<=4096u){++tickets;ticketValid=true;
@@ -137,18 +137,31 @@ int main(int argc,char**argv){
   bool ltypeSourceBound=ltypeImported&&dx_iface::hasUnchangedVerifiedLTypeResourceSource(
       ltypeData,DRW::DwgLtypeControlHandle,generated.continuousHandle,
       generated.byBlockHandle,generated.byLayerHandle);
-  bool ltypeMutationRefused=false,ltypeRestoreAccepted=false;
+  bool ltypeAllRowMutationsRefused=true,ltypeAllRowRestoresAccepted=true;
+  bool ltypeWrongSelectionRefused=false;
   if(ltypeSourceBound) {
-   const auto row=std::find_if(ltypeData.lineTypes.begin(),ltypeData.lineTypes.end(),
-       [&generated](const DRW_LType& value){return value.handle==generated.continuousHandle;});
-   if(row==ltypeData.lineTypes.end())ltypeSourceBound=false;
-   else {const auto description=row->desc;row->desc+="_MUTATED";
-    ltypeMutationRefused=!dx_iface::hasUnchangedVerifiedLTypeResourceSource(ltypeData,
-        DRW::DwgLtypeControlHandle,generated.continuousHandle,
-        generated.byBlockHandle,generated.byLayerHandle);
-    row->desc=description;ltypeRestoreAccepted=dx_iface::hasUnchangedVerifiedLTypeResourceSource(ltypeData,
-        DRW::DwgLtypeControlHandle,generated.continuousHandle,
-        generated.byBlockHandle,generated.byLayerHandle);}
+   ltypeWrongSelectionRefused=!dx_iface::hasUnchangedVerifiedLTypeResourceSource(
+       ltypeData,DRW::DwgLtypeControlHandle,generated.byBlockHandle,
+       generated.continuousHandle,generated.byLayerHandle);
+   const std::array<std::uint32_t,3> selectedRows{{generated.continuousHandle,
+       generated.byBlockHandle,generated.byLayerHandle}};
+   for(const auto handle:selectedRows) {
+    const auto row=std::find_if(ltypeData.lineTypes.begin(),ltypeData.lineTypes.end(),
+        [handle](const DRW_LType& value){return value.handle==handle;});
+    if(row==ltypeData.lineTypes.end()) {
+     ltypeAllRowMutationsRefused=false;ltypeAllRowRestoresAccepted=false;continue;
+    }
+    const auto description=row->desc;row->desc+="_MUTATED";
+    ltypeAllRowMutationsRefused=ltypeAllRowMutationsRefused
+        &&!dx_iface::hasUnchangedVerifiedLTypeResourceSource(ltypeData,
+          DRW::DwgLtypeControlHandle,generated.continuousHandle,
+          generated.byBlockHandle,generated.byLayerHandle);
+    row->desc=description;
+    ltypeAllRowRestoresAccepted=ltypeAllRowRestoresAccepted
+        &&dx_iface::hasUnchangedVerifiedLTypeResourceSource(ltypeData,
+          DRW::DwgLtypeControlHandle,generated.continuousHandle,
+          generated.byBlockHandle,generated.byLayerHandle);
+   }
   }
   auto data=std::make_unique<dx_data>();Probe probe;
   {std::ofstream broken(path,std::ios::binary|std::ios::trunc);broken.write(original.data(),20);if(!broken)return 6;}
@@ -157,7 +170,8 @@ int main(int argc,char**argv){
   {std::ofstream restored(path,std::ios::binary|std::ios::trunc);restored.write(original.data(),static_cast<std::streamsize>(original.size()));if(!restored)return 7;}
   const bool read=probe.fileImport(path.string(),data.get(),false);
   const bool ok=ltypeSelection&&xrecordSelection&&duplicateSelection
-      &&ltypeSourceBound&&ltypeMutationRefused&&ltypeRestoreAccepted
+      &&ltypeSourceBound&&ltypeWrongSelectionRefused
+      &&ltypeAllRowMutationsRefused&&ltypeAllRowRestoresAccepted
       &&!failedRead&&!leaked&&read&&probe.tickets==1u&&probe.ticketValid
       &&probe.rowTickets==3u&&probe.rowTicketValid;
   if(!ok)return 8;
@@ -186,8 +200,10 @@ int main(int argc,char**argv){
   const bool rowRetryRead=probe.fileImport(path.string(),rowRetryData.get(),false);
   const bool rowRetry=rowRetryRead&&probe.tickets==1u&&probe.ticketValid&&probe.rowTickets==3u&&probe.rowTicketValid;
   std::cout<<"generated=1 ltypeSelected="<<ltypeSelected<<" ltypeImported="<<ltypeImported
-    <<" ltypeSourceBound="<<ltypeSourceBound<<" ltypeMutationRefused="<<ltypeMutationRefused
-    <<" ltypeRestoreAccepted="<<ltypeRestoreAccepted<<" failedRead="<<failedRead<<" leakedTickets="<<leaked
+    <<" ltypeSourceBound="<<ltypeSourceBound<<" ltypeWrongSelectionRefused="<<ltypeWrongSelectionRefused
+    <<" ltypeAllRowMutationsRefused="<<ltypeAllRowMutationsRefused
+    <<" ltypeAllRowRestoresAccepted="<<ltypeAllRowRestoresAccepted
+    <<" failedRead="<<failedRead<<" leakedTickets="<<leaked
     <<" retryRead="<<read<<" crcRead="<<damagedRead<<" crcDiagnostic="<<controlDiagnostic
     <<" crcLeakedTickets="<<leakedCrcTickets<<" crcRetry="<<crcRetry
     <<" rowCrcRead="<<rowDamagedRead<<" rowCrcDiagnostic="<<rowControlDiagnostic
