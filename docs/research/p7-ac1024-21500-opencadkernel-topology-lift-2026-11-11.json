@@ -24,7 +24,7 @@
     "satParser": "ACadRust",
     "satParserRevision": "ce8a148568e7a80a80f50797bf287a651d1259c7",
     "probe": "/private/tmp/opencadstudio-p7/crates/ocs_acis/tests/libdxfrw_ac1024_21500_probe.rs",
-    "probeSha256": "695ad7e09d551ea574531aeb8dfe88a29e92a8c163c48483f0983c0a9b458880",
+    "probeSha256": "507ca0f1e8e70466d64911f173e020316ff53e36c84a4101e03dcdf6d102d06b",
     "probeStatus": "scratch-only; not committed in either repository"
   },
   "bridgeNormalization": {
@@ -35,6 +35,11 @@
       "loop": "remove token 2",
       "pointPlaneSurfaceStraightCurve": "remove token 0",
       "vertex": "retain the first two null pointers and the final point pointer"
+    },
+    "coedgeSense": {
+      "observedTokens": "F parses as SatToken::False; I parses as SatToken::Ident(\"I\") in pinned ACadRust.",
+      "kernelMapping": "F → forward; I → reversed",
+      "evidence": "Mapping both tokens to forward produced 12 SameSidedEdge flaws; mapping I to reversed removes them and closes the four affected loop traversals. This is one source/profile result, not a general parser rule."
     },
     "scope": "One hash-pinned source projection only. These scratch edits do not change libdxfrw output or establish a version-wide SAT layout."
   },
@@ -62,23 +67,30 @@
       "faceAndCoedgeOrientationFields": "all 6 face and 24 coedge fields match the normalized typed source profile"
     },
     "kernelValidation": {
-      "passed": false,
-      "flawCount": 16,
-      "openLoops": 4,
-      "sameSidedEdges": 12,
+      "passed": true,
+      "flawCount": 0,
+      "openLoops": 0,
+      "sameSidedEdges": 0,
       "otherFlaws": 0
     }
   },
   "validation": {
     "command": "LIBDXFRW_AC1024_SAT=/private/tmp/p7-aerial-solid.sat CARGO_TARGET_DIR=/private/tmp/opencad-p7-target cargo test --manifest-path /private/tmp/opencadstudio-p7/Cargo.toml -p ocs_acis --test libdxfrw_ac1024_21500_probe -- --nocapture",
-    "result": "PASS for the explicit source incidence/orientation assertions; OpenCADKernel body validation reports the 16 listed topology-orientation flaws.",
+    "result": "PASS: explicit source incidence/orientation assertions pass, kernel loss is empty, and OpenCADKernel body validation reports zero flaws after the documented scratch-only row and F/I sense normalization.",
     "noDrawingFixtureCommitted": true
+  },
+  "libdxfrwRegression": {
+    "file": "tests/graph_preservation_tests.cpp",
+    "change": "The generated ACIS 21500 two-coedge loop control now also emits true sense booleans for both coedges and asserts retained sense flags [1,1], continuous traversal, and exact reversed endpoint pairs [7,6] and [6,7]. The SAB bytes are authored in memory.",
+    "command": "cmake --build build-gcc --target libdxfrw_graph_preservation_tests -j4 && build-gcc/libdxfrw_graph_preservation_tests",
+    "result": "PASS: Graph/preservation tests",
+    "sourceFileSha256": "546a77e788f126be449a192b628883e58fe11bc91bf9799eea076329072fa71a"
   },
   "unresolved": [
     "Determine which additional 21500 fields are semantic versus producer-specific using authoritative or independent source evidence; do not promote the scratch normalization to a format rule.",
-    "Resolve the four OpenCADKernel open-loop and twelve same-sided-edge flaws against an independent source-native topology/orientation oracle.",
+    "Independently corroborate the F/I sense interpretation with version-specific normative or native producer evidence; this kernel result is bounded to one source and one kernel.",
     "Establish the meaning of the 21500 header entity-count field and validate the source body as a B-rep.",
     "Complete DWG entity/owner/AcDs/SAB association, placement/units, native importer acceptance, output binding and consumer/platform qualification."
   ],
-  "claimEffect": "Adds one bounded independent implementation path that reconstructs the selected source incidence in OpenCADKernel after explicit scratch row normalization. Does not prove ACIS 21500 schema, valid B-rep semantics, native acceptance, output qualification or support claims."
+  "claimEffect": "Adds one bounded independent-kernel result: after explicit scratch-only row and sense normalization, the selected source incidence lifts to a zero-flaw OpenCADKernel B-rep. Does not prove ACIS 21500 schema, native acceptance, output qualification or broader support claims."
 }
