@@ -190,6 +190,64 @@ public:
 
 class DxIfaceStandardDwgCaptureTestAccess {
 public:
+    static bool prepareEmptyWipeoutVariablesClass(dx_iface& iface,
+                                                   const std::string& appName,
+                                                   std::int32_t instances) {
+        if (iface.cData == nullptr)
+            return false;
+        dx_data& data = *iface.cData;
+        data.sourceFormat = dx_source_format::DWG;
+        data.sourceVersion = DRW::AC1018;
+        data.importGeneration = 1u;
+        data.dwgReadOutcome.attempted = true;
+        data.dwgReadOutcome.operationSucceeded = true;
+        data.dwgReadOutcome.error = DRW::BAD_NONE;
+        data.dwgReadOutcome.sourceVersion = DRW::AC1018;
+        data.dwgClassCoverage.m_status =
+            DRW_DwgClassCoverageStatus::FinalizedComplete;
+        data.dwgClassCoverage.m_complete = true;
+        DRW_DwgClassCoverageEntry entry;
+        entry.m_streamOrdinal = 0u;
+        entry.m_classNumber = 508u;
+        entry.m_recordName = "WIPEOUTVARIABLES";
+        entry.m_className = "AcDbWipeoutVariables";
+        entry.m_appName = appName;
+        entry.m_entityFlagRaw = 0x1F3u;
+        entry.m_instanceCount = instances;
+        entry.m_dwgVersion = 23;
+        entry.m_state = DRW_DwgClassCoverageState::Published;
+        entry.m_reason = DRW_DwgClassCoverageReason::None;
+        data.dwgClassCoverage.m_entries.push_back(entry);
+
+        auto rows = std::make_shared<dx_class_evidence::Rows>();
+        rows->status = data.dwgClassCoverage.m_status;
+        rows->complete = data.dwgClassCoverage.m_complete;
+        rows->entries.push_back(dx_class_evidence::fields(entry));
+        const std::array<std::string, 3> names{{
+            entry.m_appName, entry.m_className, entry.m_recordName}};
+        for (std::size_t n = 0u; n < names.size(); ++n) {
+            auto& span = rows->entries.front().names[n];
+            span.offset = rows->text.size();
+            span.size = names[n].size();
+            rows->text.insert(rows->text.end(), names[n].begin(),
+                              names[n].end());
+        }
+
+        data.m_classEvidenceFallback = false;
+        data.m_classEvidenceGeneration = 1u;
+        data.m_classEvidenceAttempt = 1u;
+        dx_data::ClassEvidenceImport evidence;
+        evidence.result.state = dx_class_evidence::State::Joined;
+        evidence.result.attempt = 1u;
+        evidence.result.generation = 1u;
+        evidence.result.version = DRW::AC1018;
+        evidence.result.rows = 1u;
+        evidence.rows = std::move(rows);
+        evidence.closed = true;
+        data.m_classEvidenceImports.emplace(1u, std::move(evidence));
+        return iface.prepareDwgWipeoutVariablesOutput(DRW::AC1018, false);
+    }
+
     static bool prepareMLineStyleOutputSource(dx_iface& iface,
                                               DRW::Version target) {
         return iface.prepareDwgMLineStyles(target);
@@ -86330,6 +86388,29 @@ bool rasterVariablesDwgAdapterTransport(
     return true;
 }
 
+bool wipeoutVariablesEmptyClassGate() {
+    dx_data unusedClassData;
+    dx_iface unusedClassAdapter;
+    unusedClassAdapter.cData = &unusedClassData;
+    if (!DxIfaceStandardDwgCaptureTestAccess::
+            prepareEmptyWipeoutVariablesClass(
+                unusedClassAdapter,
+                "WipeOut|AutoCAD Express Tool|expresstools@autodesk.com",
+                0))
+        return fail("unused WIPEOUTVARIABLES class with a complete zero-instance source row was refused");
+
+    dx_data populatedClassData;
+    dx_iface populatedClassAdapter;
+    populatedClassAdapter.cData = &populatedClassData;
+    if (DxIfaceStandardDwgCaptureTestAccess::
+            prepareEmptyWipeoutVariablesClass(
+                populatedClassAdapter,
+                "WipeOut|AutoCAD Express Tool|expresstools@autodesk.com",
+                1))
+        return fail("noncanonical populated WIPEOUTVARIABLES class bypassed source-frame reconciliation");
+    return true;
+}
+
 bool wipeoutVariablesDwgAdapterTransport(bool directNod = false,
                                          DRW::Version revision = DRW::AC1027,
                                          bool frameOne = false,
@@ -88886,6 +88967,10 @@ int main(int argc, char** argv) {
         return wipeoutVariablesDwgAdapterTransport(
             true, DRW::AC1032, true, argv[2]) ? 0 : 1;
     }
+    if (argc == 2
+        && std::string(argv[1])
+            == "--wipeoutvariables-empty-class-gate")
+        return wipeoutVariablesEmptyClassGate() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--wipeoutvariables-dwg-direct-nod")
         return wipeoutVariablesDwgAdapterTransport(true) ? 0 : 1;

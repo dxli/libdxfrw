@@ -1,5 +1,22 @@
 # DWG/DXF parity — remaining implementation plan
 
+**P7 follow-up (2026-11-11, unused AC1018 WIPEOUTVARIABLES CLASS row):**
+the hash-pinned AC1018 pulley source declares one published
+`WIPEOUTVARIABLES` CLASS row with `num_instances=0`, AppName
+`WipeOut|AutoCAD Express Tool|expresstools@autodesk.com`, and no corresponding
+OBJECTS frames. The adapter previously required canonical AppName metadata
+before checking the zero-instance case, stopping strict conversion despite
+there being no class instance to emit. The gate now first validates the source
+class state/name and exact equality of declared instances, captured source
+frames, and typed callbacks; only a reconciled zero/zero/zero row bypasses the
+canonical class-identity check. Populated classes remain under the canonical
+identity and graph gates. Generated control passes for the unused noncanonical
+row and refuses a nonzero declared count with no matching frames. On the same
+physical sample, all 9,161 source frames publish with zero entity/object parse
+failures and export advances past this gate, then fails during LAYER table
+serialization; no DXF is published. This is not whole-file output or support
+qualification. See the [empty-class gate receipt](docs/research/p7-ac1018-empty-wipeout-class-gate-2026-11-11.json).
+
 **P4/P6 implementation slice (2026-11-11, AC1018 VX_CONTROL routing):**
 the frame classifier treated fixed OBJECTS type 70 as an entity because it
 was absent from the fixed-object list, although the hash-pinned AC1018 sample

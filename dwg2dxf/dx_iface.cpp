@@ -81053,19 +81053,19 @@ bool dx_iface::prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
                               "ACDBWIPEOUTVARIABLES")))
         return fail("source CLASS is unpublished, proxy, entity, or unsupported name");
 
-    DRW_Class canonicalClass;
-    if (!dxfRW::dxfClassForRecordName("WIPEOUTVARIABLES", canonicalClass)
-        || !sameAsciiName(canonicalClass.className,
-                          sourceClass->m_className)
-        || !sameAsciiName(canonicalClass.appName, sourceClass->m_appName))
-        return fail("source CLASS identity differs from canonical WIPEOUTVARIABLES");
-
     if (static_cast<std::size_t>(sourceClass->m_instanceCount)
             != sourceFrameCount
         || sourceFrameCount != typedCount)
         return fail("CLASS instance count, opaque frames, and typed callbacks differ");
     if (typedCount == 0u)
         return true;
+
+    DRW_Class canonicalClass;
+    if (!dxfRW::dxfClassForRecordName("WIPEOUTVARIABLES", canonicalClass)
+        || !sameAsciiName(canonicalClass.className,
+                          sourceClass->m_className)
+        || !sameAsciiName(canonicalClass.appName, sourceClass->m_appName))
+        return fail("source CLASS identity differs from canonical WIPEOUTVARIABLES");
     if (generation == 0u || !cData->hasNamedObjectDictionary
         || cData->namedObjectDictionary.handle == 0u
         || cData->namedObjectDictionary.handle == DRW::NoHandle

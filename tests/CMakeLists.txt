@@ -3269,6 +3269,15 @@ set_tests_properties(dwg2dxf_wipeoutvariables_dwg_adapter_transport PROPERTIES
 )
 
 add_test(
+    NAME dwg2dxf_wipeoutvariables_empty_class_gate
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --wipeoutvariables-empty-class-gate
+)
+set_tests_properties(dwg2dxf_wipeoutvariables_empty_class_gate PROPERTIES
+    LABELS "fast;dwg;adapter;wipeout;generated"
+    TIMEOUT 30
+)
+
+add_test(
     NAME dwg2dxf_wipeoutvariables_ac1027_direct_nod
     COMMAND libdxfrw_dwg2dxf_adapter_tests --wipeoutvariables-dwg-direct-nod
 )
