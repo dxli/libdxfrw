@@ -412,6 +412,7 @@ EXTRA_DIST = \
     tests/cli_optional_build_tests.py \
     tests/compound_body_controls.h \
     tests/compound_source_profile_controls.h \
+    tests/constraint_group_candidate_api_tests.cpp \
     tests/consumer_cxx17_contract.cpp \
     tests/datalink_objects_allocation_tests.cpp \
     tests/dbcolor_objects_allocation_tests.cpp \
@@ -981,6 +982,7 @@ EXTRA_DIST = \
     tools/research/freecad_imported_sat_torus_bound_probe.py \
     tools/research/freecad_torus_bound_probe.py \
     tools/research/inventory_cover_peer_body_handles.py \
+    tools/research/p4_forum_ltype_oda_compare.py \
     tools/research/run_acsh_torus_source_probe.py \
     tools/research/tablegeometry_dwg_span_scan.cpp \
     tools/research/tablegeometry_physical_span_verify.py \
