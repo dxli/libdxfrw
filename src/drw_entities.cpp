@@ -11462,29 +11462,28 @@ bool DRW_Ole2Frame::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32
             && m_declaredPayloadLength != m_payloadBytes.size())) {
         return false;
     }
-    oType = 74;  // OLE2FRAME class id — see dwgreader.cpp case 74
-    if (!encodeDwgCommon(version, buf)) return false;
+    return encodeEntityDwgTransaction(
+        oType, buf, nullptr, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            (void)strings;
+            oType = 74; // OLE2FRAME class id — see dwgreader.cpp case 74
+            if (!encodeDwgCommon(version, body))
+                return false;
 
-    buf->putBitShort(m_flags);
-    if (version > DRW::AC1014)
-        buf->putBitShort(m_mode);
-    // Emit the actual captured length so the reader's data_size matches the
-    // bytes that follow (avoids a declared-vs-actual mismatch on re-read).
-    const std::uint32_t payloadLen = static_cast<std::uint32_t>(m_payloadBytes.size());
-    buf->putBitLong(static_cast<std::int32_t>(payloadLen));
-    if (payloadLen > 0)
-        buf->putBytes(m_payloadBytes.data(), m_payloadBytes.size());
-    // R2000+ Unknown RC (ODA §20.4.88): emitted UNCONDITIONALLY for version >
-    // AC1014. parseDwg reads it whenever bytes remain before the handle stream
-    // (which is always — handle data always follows), so gating the write on
-    // m_hasR2000TrailingByte desynced a directly-constructed OLE2FRAME (the
-    // default false): the parser consumed the first handle byte as this RC and
-    // shifted the entity handle stream. Default m_r2000TrailingByte is 0, so
-    // constructed entities align and round-tripped ones keep the captured byte.
-    if (version > DRW::AC1014)
-        buf->putRawChar8(m_r2000TrailingByte);
-
-    return encodeDwgEntHandle(version, buf, handleBuf);
+            body->putBitShort(m_flags);
+            if (version > DRW::AC1014)
+                body->putBitShort(m_mode);
+            const std::uint32_t payloadLength =
+                static_cast<std::uint32_t>(m_payloadBytes.size());
+            body->putBitLong(static_cast<std::int32_t>(payloadLength));
+            if (payloadLength > 0)
+                body->putBytes(m_payloadBytes.data(), m_payloadBytes.size());
+            // ODA §20.4.88: the R2000+ unknown RC is present before handles.
+            if (version > DRW::AC1014)
+                body->putRawChar8(m_r2000TrailingByte);
+            return encodeDwgEntHandle(version, body, handles);
+        });
 }
 
 bool DRW_OleFrame::parseCode(int code, const std::unique_ptr<dxfReader>& reader) {

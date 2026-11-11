@@ -581,6 +581,14 @@ public:
     std::int16_t dwgType() const { return oType; }
 };
 
+class Ole2FrameCodecProbe final : public DRW_Ole2Frame {
+public:
+    using DRW_Ole2Frame::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+};
+
 class MeshCodecProbe final : public DRW_Mesh {
 public:
     using DRW_Mesh::parseDwg;
@@ -25727,6 +25735,32 @@ void testShapeDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testOle2FrameDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1015, DRW::AC1018, DRW::AC1021,
+                                     DRW::AC1024}) {
+    Ole2FrameCodecProbe frame;
+    frame.handle = 0xB310u + static_cast<std::uint32_t>(version);
+    frame.parentHandle = 0xB320u;
+    frame.reactorHandles = {0xB330u};
+    frame.xDictHandle = 0xB340u;
+    frame.setDwgType(0x777);
+    frame.m_flags = 2;
+    frame.m_mode = 1;
+    frame.m_payloadBytes = {0x00u, 0x4Fu, 0x4Cu, 0x45u, 0xFFu};
+    frame.m_declaredPayloadLength =
+        static_cast<std::uint32_t>(frame.m_payloadBytes.size());
+    frame.m_payloadPresent = true;
+    frame.m_hasR2000TrailingByte = true;
+    frame.m_r2000TrailingByte = 0x5Au;
+    checkEntityDwgEncodeAllocationRollback(
+        t, frame, version, 74u,
+        version == DRW::AC1015 ? "AC1015 OLE2FRAME"
+                               : version == DRW::AC1018 ? "AC1018 OLE2FRAME"
+                               : version == DRW::AC1021 ? "AC1021 OLE2FRAME"
+                                                        : "AC1024 OLE2FRAME");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -28970,6 +29004,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testShapeDwgEncodeAllocationRollback(context);
       std::cout << "SHAPE DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--ole2frame-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testOle2FrameDwgEncodeAllocationRollback(context);
+      std::cout << "OLE2FRAME DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }
