@@ -1573,7 +1573,9 @@ created locally from scratch for the specific control.
   same-import STYLE_CONTROL/STYLE and LTYPE_CONTROL/Continuous/ByBlock/ByLayer
   source tickets are now joined to the selected CELLSTYLEMAP; its three
   text-style targets and eighteen border linetype targets are revalidated
-  against those reader-bound resources. Physical mutation, selector
+  against those reader-bound resources. The physical mutation probe now also
+  changes the STYLE EED's selected APPID row and confirms the composed query
+  refuses it until restoration. Physical mutation, selector
   correction/retry, legacy mode and strict-output refusal controls pass; a
   portable generated CTest also rejects duplicate, absent, overlapping and
   conflicting selector inputs while preserving valid selection after refusal
