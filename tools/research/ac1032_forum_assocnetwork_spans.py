@@ -95,8 +95,8 @@ def inspect(data, *, handle, offset, size, body_end, fields, handles):
 def fields(action_index, is_owned):
     return [("class_version", "BS", 2), ("geometry_status", "BL", 0),
             ("action_index", "BL", action_index), ("max_assoc_dep_index", "BL", 0),
-            ("num_deps", "BL", 0), ("parameter_class_version", "BS", 0),
-            ("num_owned_params", "BL", 0), ("value_class_version", "BS", 0),
+            ("num_deps", "BL", 0), ("reserved_before_owned_params", "BS", 0),
+            ("num_owned_params", "BL", 0), ("reserved_before_values", "BS", 0),
             ("num_values", "BL", 0), ("network_version", "BS", 0),
             ("network_action_index", "BL", 1), ("num_actions", "BL", 1),
             ("action_is_owned", "B", is_owned), ("num_owned_actions", "BL", 0)]

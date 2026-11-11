@@ -88,7 +88,7 @@
             "value": 0
           },
           {
-            "field": "parameter_class_version",
+            "field": "reserved_before_owned_params",
             "kind": "BS",
             "start_bit": 74,
             "end_bit": 76,
@@ -102,7 +102,7 @@
             "value": 0
           },
           {
-            "field": "value_class_version",
+            "field": "reserved_before_values",
             "kind": "BS",
             "start_bit": 78,
             "end_bit": 80,
@@ -235,7 +235,7 @@
             "value": 0
           },
           {
-            "field": "parameter_class_version",
+            "field": "reserved_before_owned_params",
             "kind": "BS",
             "start_bit": 66,
             "end_bit": 68,
@@ -249,7 +249,7 @@
             "value": 0
           },
           {
-            "field": "value_class_version",
+            "field": "reserved_before_values",
             "kind": "BS",
             "start_bit": 70,
             "end_bit": 72,
@@ -362,10 +362,10 @@
     "extractorSha256": "dbdd4a556468c3fd012ad32b95be775bb193be21e36aa54a744d8f0c1f75349e",
     "extractorBuild": "c++ -std=c++17 -I src tools/research/dwg_ac1032_object_section_probe.cpp build-gcc/libdxfrw.a -o /private/tmp/p4-forum-objects-extract",
     "walker": "tools/research/ac1032_forum_assocnetwork_spans.py",
-    "walkerSha256": "a7e9fe853bf8699e06a5a5b121ae94680b7235fd3e32dbe8bc471a3836427b07",
+    "walkerSha256": "55b974538008476799b9e6bebb7e5f0543f53d1691014f4a36d9d02a7454748c",
     "walkerCommand": "python3 tools/research/ac1032_forum_assocnetwork_spans.py /private/tmp/p4-autodesk-forum-constraints.dwg /private/tmp/p4-forum-objects.bin",
-    "outputSha256": "2d21055023c059aa4af7029dd890fbb128b7b73944229a096e7ee50813eff077",
+    "outputSha256": "ecc71e235044490959f98604a3989ec9cc143bafd918c613e8695d2ce0f953f8",
     "validation": "PASS re-extracted object-section hash; wrong source hash, out-of-bounds cursor and truncated field rejected; Python compilation and git diff --check pass. No DWG/DXF fixture committed."
   },
-  "decision": "This supplies a distinct source-bound candidate class-version-2 network, direct primitive bit spans and a published native owner-chain observation. Class-specific schema, graph dependency and whole-file integrity remain incomplete; retain fieldsParsed=false, AC1032 writer/strict-output refusal and existing support gates. Next examine the unqualified ACDBASSOC2DCONSTRAINTGROUP body and required owner/action dependencies against independent producer evidence; do not use missing 0x2B5 as a claimed dangling edge without source-reference attribution."
+  "decision": "This supplies a distinct source-bound candidate class-version-2 network, direct primitive bit spans and a published native owner-chain observation. Class-specific schema, graph dependency and whole-file integrity remain incomplete; retain fieldsParsed=false, AC1032 writer/strict-output refusal and existing support gates. Next examine the unqualified ACDBASSOC2DCONSTRAINTGROUP body and required owner/action dependencies against independent producer evidence; do not use missing 0x2B5 as a claimed dangling edge without source-reference attribution. The two zero BS values before owned-parameter and value counts are named reserved candidates; their semantics are not established."
 }
