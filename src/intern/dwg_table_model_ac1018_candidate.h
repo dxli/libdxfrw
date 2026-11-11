@@ -6,7 +6,10 @@
 #include "drw_entities.h"
 #include "dxfattdef.h"
 #include "dxfentitiesauth.h"
+#include "dxftable.h"
 #include <cstddef>
+#include <cstring>
+#include <tuple>
 #include <typeinfo>
 namespace DwgTableModelAc1018Candidate {
 // A conservative fixed charge covers container/control-block overhead and all
@@ -50,6 +53,50 @@ inline bool bounded(const DRW_Table& t) noexcept {
                 || value.m_value.rawDwgLayerReference()!=0u)return false;
         }
     }
+    return true;
+}
+
+// Exact modeled equality for an immutable source snapshot. This is deliberately
+// separate from source identity, dependency closure, and output eligibility.
+// Check paired vector sizes before indexing: callback copies are mutable and a
+// stale or adversarial copy must fail closed rather than read past a vector.
+inline bool sameModel(const DRW_Table& a,const DRW_Table& b) noexcept {
+    if(!bounded(a)||!bounded(b)
+        ||!dxfTable::Decoder::sameModel(a,b,dxfEntitiesAuth::VariantAccess::equal)
+        ||a.proxyGraphicsProvenance().resourceIndicesRemappedForDxf!=b.proxyGraphicsProvenance().resourceIndicesRemappedForDxf
+        ||a.m_tableRowAlignmentOverrides.size()!=b.m_tableRowAlignmentOverrides.size()
+        ||a.m_tableRowTextStyleHandles.size()!=b.m_tableRowTextStyleHandles.size()
+        ||a.m_tableRowTextStyleNames.size()!=b.m_tableRowTextStyleNames.size()
+        ||a.m_tableRowFillNone.size()!=b.m_tableRowFillNone.size()
+        ||a.m_tableRowHeightOverrides.size()!=b.m_tableRowHeightOverrides.size()
+        ||a.m_tableRowTextColors.size()!=b.m_tableRowTextColors.size()
+        ||a.m_tableRowFillColors.size()!=b.m_tableRowFillColors.size()
+        ||a.m_tableBorderColors.size()!=b.m_tableBorderColors.size()
+        ||a.m_tableBorderLineweights.size()!=b.m_tableBorderLineweights.size()
+        ||a.m_tableBorderVisibilities.size()!=b.m_tableBorderVisibilities.size()
+        ||a.m_hasTableBorderLineweightOverrides.size()!=b.m_hasTableBorderLineweightOverrides.size()
+        ||a.m_hasTableBorderVisibilityOverrides.size()!=b.m_hasTableBorderVisibilityOverrides.size())return false;
+    if(a.m_tableRowAlignmentOverrides!=b.m_tableRowAlignmentOverrides
+        ||a.m_tableRowTextStyleHandles!=b.m_tableRowTextStyleHandles
+        ||a.m_tableRowTextStyleNames!=b.m_tableRowTextStyleNames
+        ||a.m_tableRowFillNone!=b.m_tableRowFillNone
+        ||a.m_tableBorderLineweights!=b.m_tableBorderLineweights
+        ||a.m_tableBorderVisibilities!=b.m_tableBorderVisibilities
+        ||a.m_hasTableBorderLineweightOverrides!=b.m_hasTableBorderLineweightOverrides
+        ||a.m_hasTableBorderVisibilityOverrides!=b.m_hasTableBorderVisibilityOverrides)return false;
+    const auto sameReal=[](double x,double y) noexcept{return std::memcmp(&x,&y,sizeof(x))==0;};
+    const auto sameColor=[](const DRW_DwgCmColor& x,const DRW_DwgCmColor& y) noexcept {
+        return std::tie(x.method,x.flags,x.index,x.rgb24,x.hasRgbColor,x.colorName,x.bookName,x.sourceVersion)
+            ==std::tie(y.method,y.flags,y.index,y.rgb24,y.hasRgbColor,y.colorName,y.bookName,y.sourceVersion);
+    };
+    for(std::size_t i=0;i<a.m_tableRowHeightOverrides.size();++i)
+        if(!sameReal(a.m_tableRowHeightOverrides[i],b.m_tableRowHeightOverrides[i])
+            ||!sameColor(a.m_tableRowTextColors[i],b.m_tableRowTextColors[i])
+            ||!sameColor(a.m_tableRowFillColors[i],b.m_tableRowFillColors[i]))return false;
+    for(std::size_t i=0;i<a.m_tableBorderColors.size();++i)
+        if(!sameColor(a.m_tableBorderColors[i],b.m_tableBorderColors[i]))return false;
+    for(std::size_t i=0;i<a.m_content.m_subrecordRanges.size();++i)
+        if(a.m_content.m_subrecordRanges[i].m_rawHandleCode!=b.m_content.m_subrecordRanges[i].m_rawHandleCode)return false;
     return true;
 }
 }

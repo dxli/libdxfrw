@@ -62356,30 +62356,7 @@ bool dx_iface::sameTableBodyModel(const DRW_Table& a,const DRW_Table& b,DRW::Ver
 }
 
 bool dx_iface::sameDwgTableModel(const DRW_Table& a,const DRW_Table& b) noexcept {
-    if(!DwgTableModelAc1018Candidate::bounded(a) || !DwgTableModelAc1018Candidate::bounded(b)
-        || !sameTableBodyModel(a,b,DRW::AC1018)
-        || a.proxyGraphicsProvenance().resourceIndicesRemappedForDxf!=b.proxyGraphicsProvenance().resourceIndicesRemappedForDxf
-        || a.m_tableRowAlignmentOverrides!=b.m_tableRowAlignmentOverrides
-        || a.m_tableRowTextStyleHandles!=b.m_tableRowTextStyleHandles
-        || a.m_tableRowTextStyleNames!=b.m_tableRowTextStyleNames
-        || a.m_tableRowFillNone!=b.m_tableRowFillNone
-        || a.m_tableBorderLineweights!=b.m_tableBorderLineweights
-        || a.m_tableBorderVisibilities!=b.m_tableBorderVisibilities
-        || a.m_hasTableBorderLineweightOverrides!=b.m_hasTableBorderLineweightOverrides
-        || a.m_hasTableBorderVisibilityOverrides!=b.m_hasTableBorderVisibilityOverrides)return false;
-    const auto sameColor=[](const DRW_DwgCmColor& x,const DRW_DwgCmColor& y) noexcept {
-        return std::tie(x.method,x.flags,x.index,x.rgb24,x.hasRgbColor,x.colorName,x.bookName,x.sourceVersion)
-            ==std::tie(y.method,y.flags,y.index,y.rgb24,y.hasRgbColor,y.colorName,y.bookName,y.sourceVersion);
-    };
-    for(std::size_t i=0;i<a.m_tableRowHeightOverrides.size();++i)
-        if(!retainedDoubleEqual(a.m_tableRowHeightOverrides[i],b.m_tableRowHeightOverrides[i])
-            || !sameColor(a.m_tableRowTextColors[i],b.m_tableRowTextColors[i])
-            || !sameColor(a.m_tableRowFillColors[i],b.m_tableRowFillColors[i]))return false;
-    for(std::size_t i=0;i<a.m_tableBorderColors.size();++i)
-        if(!sameColor(a.m_tableBorderColors[i],b.m_tableBorderColors[i]))return false;
-    for(std::size_t i=0;i<a.m_content.m_subrecordRanges.size();++i)
-        if(a.m_content.m_subrecordRanges[i].m_rawHandleCode!=b.m_content.m_subrecordRanges[i].m_rawHandleCode)return false;
-    return true;
+    return DwgTableModelAc1018Candidate::sameModel(a,b);
 }
 
 void dx_iface::finishTableBodies(dx_data& data) noexcept {
