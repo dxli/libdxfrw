@@ -1630,9 +1630,13 @@ created locally from scratch for the specific control.
   exactly one typed APPID row with matching names; unsupported pending layer
   references are refused. The typed snapshot uses the shared retained-byte
   estimator and a 16 KiB pair budget. `hasUnchangedVerifiedStyleResourceSource` rechecks
-  the pair and typed row after import. The targeted adapter build passes, but
-  the new selection and mutation/refusal behavior have not yet been exercised
-  at runtime. This remains an evidence query, never an output permit. See the
+  the pair and typed row after import. The targeted adapter build and physical
+  diagnostic now pass: one complete 226-frame import binds the pair, STYLE and
+  APPID mutations are refused and recover on restoration, a half-length
+  scratch copy publishes no receipt, and the same adapter binds the original
+  bytes on retry. The diagnostic source retains an unrelated HEADER offset
+  integrity observation, so this remains an evidence query, never an output
+  permit. See the
   [adapter source-binding receipt](docs/research/p5-ac1018-style-resource-adapter-binding-2026-11-11.json).
   A bounded standalone
   LTYPE_CONTROL/ByBlock observer now checks selected frame fields and roles

@@ -38105,6 +38105,101 @@ bool inspectPhysicalStyleEedAppIdBinding(
     return passed;
 }
 
+bool inspectPhysicalStyleResourceAdapterBinding(
+    const std::filesystem::path& inputPath) {
+    dx_iface reader;
+    dx_data data;
+    const bool selected = reader.enableVerifiedStyleResourceSource(0x3u, 0x11u);
+    const bool imported = selected
+        && reader.fileImport(inputPath.string(), &data, false);
+    const bool sourceBound = imported
+        && dx_iface::hasUnchangedVerifiedStyleResourceSource(data, 0x3u, 0x11u);
+    auto style = std::find_if(data.textStyles.begin(), data.textStyles.end(),
+        [](const DRW_Textstyle& value) { return value.handle == 0x11u; });
+    auto appId = std::find_if(data.appIds.begin(), data.appIds.end(),
+        [](const DRW_AppId& value) { return value.handle == 0x12u; });
+    const bool haveStyle = style != data.textStyles.end();
+    const bool haveAppId = appId != data.appIds.end();
+    bool styleMutationRefused = false;
+    bool styleRetryRestored = false;
+    bool appIdMutationRefused = false;
+    bool appIdRetryRestored = false;
+    bool partialImportWithheld = false;
+    bool restoredImportRetry = false;
+    if (sourceBound && style != data.textStyles.end()) {
+        const double originalHeight = style->height;
+        style->height = originalHeight + 0.125;
+        styleMutationRefused =
+            !dx_iface::hasUnchangedVerifiedStyleResourceSource(
+                data, 0x3u, 0x11u);
+        style->height = originalHeight;
+        styleRetryRestored =
+            dx_iface::hasUnchangedVerifiedStyleResourceSource(
+                data, 0x3u, 0x11u);
+    }
+    if (styleRetryRestored && appId != data.appIds.end()) {
+        const std::string originalName = appId->name;
+        appId->name += "_MUTATED";
+        appIdMutationRefused =
+            !dx_iface::hasUnchangedVerifiedStyleResourceSource(
+                data, 0x3u, 0x11u);
+        appId->name = originalName;
+        appIdRetryRestored =
+            dx_iface::hasUnchangedVerifiedStyleResourceSource(
+                data, 0x3u, 0x11u);
+    }
+
+    std::ifstream sourceStream(inputPath, std::ios::binary);
+    const std::string sourceBytes(
+        (std::istreambuf_iterator<char>(sourceStream)),
+        std::istreambuf_iterator<char>());
+    const auto scratchPath = std::filesystem::temp_directory_path()
+        / ("libdxfrw-style-resource-truncated-"
+           + std::to_string(std::chrono::steady_clock::now()
+                                .time_since_epoch().count())
+           + ".dwg");
+    bool scratchWritten = false;
+    if (sourceStream.is_open() && sourceBytes.size() > 12u) {
+        std::ofstream scratch(scratchPath, std::ios::binary);
+        const auto prefixBytes = sourceBytes.size() / 2u;
+        scratch.write(sourceBytes.data(),
+                      static_cast<std::streamsize>(prefixBytes));
+        scratchWritten = scratch.good();
+    }
+    if (scratchWritten) {
+        const bool partialImport =
+            reader.fileImport(scratchPath.string(), &data, false);
+        partialImportWithheld = !partialImport
+            && !dx_iface::hasUnchangedVerifiedStyleResourceSource(
+                data, 0x3u, 0x11u);
+    }
+    std::error_code cleanupError;
+    std::filesystem::remove(scratchPath, cleanupError);
+    if (partialImportWithheld) {
+        dx_data retryData;
+        const bool retryImport =
+            reader.fileImport(inputPath.string(), &retryData, false);
+        restoredImportRetry = retryImport
+            && dx_iface::hasUnchangedVerifiedStyleResourceSource(
+                retryData, 0x3u, 0x11u);
+    }
+    const bool passed = sourceBound && haveStyle && haveAppId
+        && styleMutationRefused
+        && styleRetryRestored && appIdMutationRefused && appIdRetryRestored
+        && scratchWritten && partialImportWithheld && restoredImportRetry;
+    std::cout << "physical STYLE resource adapter binding selected=" << selected
+              << " imported=" << imported << " sourceBound=" << sourceBound
+              << " styleMutationRefused=" << styleMutationRefused
+              << " styleRetryRestored=" << styleRetryRestored
+              << " appIdMutationRefused=" << appIdMutationRefused
+              << " appIdRetryRestored=" << appIdRetryRestored
+              << " scratchWritten=" << scratchWritten
+              << " partialImportWithheld=" << partialImportWithheld
+              << " restoredImportRetry=" << restoredImportRetry
+              << " result=" << (passed ? "PASS" : "FAIL") << '\n';
+    return passed;
+}
+
 bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
     dx_iface reader;
     dx_data data;
@@ -39284,6 +39379,10 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--inspect-physical-style-eed-appid") {
         return inspectPhysicalStyleEedAppIdBinding(argv[2]) ? 0 : 1;
+    }
+    if (argc == 3
+        && std::string(argv[1]) == "--inspect-physical-style-resource-adapter") {
+        return inspectPhysicalStyleResourceAdapterBinding(argv[2]) ? 0 : 1;
     }
     if ((argc == 2 || argc == 3)
         && std::string(argv[1]) == "--tablestyle-nod-whole-file-roundtrip") {

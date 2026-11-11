@@ -10,12 +10,14 @@
     "output_policy": "The source query does not authorize DWG/DXF replay, output ordering, graph closure or support claims."
   },
   "validation": {
-    "command": "cmake --build build-gcc --target libdxfrw_dwg_local_roundtrip -j4",
-    "result": "PASS: library, root adapter and local round-trip executable compiled and linked.",
-    "runtime": "Not run for this slice. Ticket delivery, same-import STYLE/APPID matching, mutation invalidation, and failed-import withholding remain unqualified."
+    "build_command": "cmake --build build-gcc --target libdxfrw_dwg_local_roundtrip -j4",
+    "build_result": "PASS: library, root adapter and local round-trip executable compiled and linked.",
+    "runtime_command": "build-gcc/libdxfrw_dwg_local_roundtrip --inspect-physical-style-resource-adapter /private/tmp/p5-desc-input/input.dwg",
+    "runtime_result": "PASS for the selected source/profile: source SHA256 1ba45d704ed7cc846ea4d6d08c7c78062f8090842ebc9e9a4cdefcb44ea6ab2a imported as AC1018, all 226 source frames published, sourceBound=1, STYLE mutation refused and restoration passed, APPID mutation refused and restoration passed, a half-length scratch copy failed at BAD_READ_FILE_HEADER with no source receipt, and the same adapter bound the original bytes on retry using a fresh dx_data object.",
+    "remaining_runtime": "This diagnostic does not test writer staging/finalization or output rollback/readback. The physical source retains an unrelated HEADER offset integrity observation."
   },
   "next": [
-    "Add and run focused fast controls for the physical pair, same-import APPID binding, duplicate/mutated typed STYLE refusal, incomplete import withholding, and corrected same-adapter retry.",
+    "Add a portable generated fast control for the physical pair, same-import APPID binding, duplicate/mutated typed STYLE refusal, incomplete import withholding, and corrected same-adapter retry; the current physical diagnostic covers these behaviors for this selected source only.",
     "Revalidate the selected profile at writer staging and finalization, then prove output ordering, atomic rollback and fresh independent readback before any admission change.",
     "Close the STYLE/LTYPE/APPID dependency graph and font/native consumer semantics separately."
   ],
