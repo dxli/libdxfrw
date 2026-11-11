@@ -38256,6 +38256,23 @@ bool inspectPhysicalStyleResourceAdapterBinding(
     bool generatedAsciiReadback = false;
     bool generatedBinaryRetry = false;
     bool generatedBinaryReadback = false;
+    const auto styleAppIdEedClosed = [](const DRW_Textstyle& style,
+                                        const dx_data& owner) {
+        bool sawAppId = false;
+        for (const DRW_Variant* value : style.extData) {
+            if (value == nullptr || value->code() != 1001)
+                continue;
+            sawAppId = true;
+            std::size_t matches = 0u;
+            for (const DRW_AppId& appId : owner.appIds) {
+                if (value->stringEquals(appId.name))
+                    ++matches;
+            }
+            if (matches != 1u)
+                return false;
+        }
+        return sawAppId;
+    };
     if (restoredImportRetry) {
         dx_iface generatedWriter;
         dx_data generatedImported;
@@ -38301,10 +38318,11 @@ bool inspectPhysicalStyleResourceAdapterBinding(
                 generatedAsciiReadback = imported
                     && std::any_of(outputData.textStyles.begin(),
                                    outputData.textStyles.end(),
-                        [&generatedStyle](const DRW_Textstyle& value) {
+                        [&](const DRW_Textstyle& value) {
                             return value.name == generatedStyle->name
                                 && value.font == generatedStyle->font
-                                && value.height == generatedStyle->height;
+                                && value.height == generatedStyle->height
+                                && styleAppIdEedClosed(value, outputData);
                         });
             }
             std::error_code cleanupError;
@@ -38325,10 +38343,11 @@ bool inspectPhysicalStyleResourceAdapterBinding(
                 generatedBinaryReadback = imported
                     && std::any_of(outputData.textStyles.begin(),
                                    outputData.textStyles.end(),
-                        [&generatedStyle](const DRW_Textstyle& value) {
+                        [&](const DRW_Textstyle& value) {
                             return value.name == generatedStyle->name
                                 && value.font == generatedStyle->font
-                                && value.height == generatedStyle->height;
+                                && value.height == generatedStyle->height
+                                && styleAppIdEedClosed(value, outputData);
                         });
             }
             std::filesystem::remove(binaryPath, cleanupError);

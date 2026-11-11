@@ -1649,13 +1649,14 @@ created locally from scratch for the specific control.
   from the completed physical import. Its mutation attempt fails without
   changing an existing destination, then corrected same-adapter retry succeeds
   in ASCII and Binary; fresh imports read back the selected name, font, and
-  height. This exercises staging, finalization, retry, and typed readback for
-  that generated model, not full physical-source output or exact field-byte
+  height, and each group-1001 STYLE EED name resolves to exactly one APPID
+  row. This exercises staging, finalization, retry, and typed resource closure
+  for that generated model, not full physical-source output or exact field-byte
   equality. No DWG/DXF fixture is written or committed. The separate full
   AC1018 source export attempt still stops during output preparation because
   its unrelated SUN graph requires a same-version AC1021+ source and target;
   preserve that blocker and do not bypass it to promote STYLE output. Exact
-  physical STYLE field bytes, ordered resource closure, and font meaning remain
+  physical STYLE field bytes, remaining LTYPE resource ordering, and font meaning remain
   open. These checks do not grant output permission or waive other gates. See the
   [writer-stage/finalization receipt](docs/research/p5-ac1018-style-resource-writer-stage-finalization-2026-11-11.json).
   A bounded standalone
