@@ -1209,6 +1209,14 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P4 AC1032 LTYPE null-slot evidence:** ODA File Converter 27.1 with audit
+  disabled converts the forum witness to 2010 ASCII DXF, retaining its three
+  live LTYPE handles/names and owner; its output omits the DWG control's null
+  counted slot. Autodesk documents deleted symbol-table entries, but does not
+  identify this specific DWG slot as deleted. Retain the strict null-member
+  error until authoritative slot semantics or a native rewrite establishes
+  lossless omission. See the [comparison receipt](docs/research/p4-ac1032-forum-ltype-oda-no-audit-2026-11-10.json).
+
 - **P4 AC1032 constraint-group registry candidate:** the source-bound `0x2A8`
   group exposes its version-2 two-action fixed prefix and, after validating a
   bounded peer-interpreted registry, its candidate seed and registered count.
