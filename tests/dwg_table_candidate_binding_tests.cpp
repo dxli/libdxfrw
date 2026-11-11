@@ -42,8 +42,8 @@ public:
         if(!d || !d->dwgReadOutcome.operationSucceeded || d->m_verifiedXRecordSource
             || d->m_verifiedTableCandidateSource)return false;
         if(stage==1 && (a.m_verifiedXRecordPending.size()!=a.m_verifiedXRecordSelected.size()
-                        || a.m_verifiedTableCandidatePending.size()!=2u))return false;
-        if(stage==2 && (!a.m_verifiedXRecordPending.empty() || a.m_verifiedTableCandidatePending.size()!=2u))return false;
+                        || a.m_verifiedTableCandidatePending.size()!=(a.m_verifiedTableGeometrySelected?3u:2u)))return false;
+        if(stage==2 && (!a.m_verifiedXRecordPending.empty() || a.m_verifiedTableCandidatePending.size()!=(a.m_verifiedTableGeometrySelected?3u:2u)))return false;
         if(stage==3 && (!a.m_verifiedXRecordPending.empty() || !a.m_verifiedTableCandidatePending.empty()))return false;
         for(const auto& row:d->m_standardDwgObjectFrames)
             if(row.first.first==d->importGeneration && !row.second.payloadMatched)return false;
@@ -55,6 +55,8 @@ constexpr std::uint32_t contentHandle=0xb9u,rootHandle=0xbcu,dataHandle=0xbdu;
 const std::vector<std::uint32_t> xrecords{0xbcu,0xbeu,0xbfu,0xc0u};
 using Content=DwgTableContentAc1018Candidate::Result;
 using Data=DwgDataTableAc1018Candidate::Result;
+using Geometry=DwgTableGeometryAc1018Candidate::Result;
+constexpr std::uint32_t geometryHandle=0xbau;
 
 DRW_UnsupportedObject raw(const char* path,bool content) {
     std::ifstream f(path,std::ios::binary);
@@ -69,10 +71,11 @@ DRW_UnsupportedObject raw(const char* path,bool content) {
 }
 class Writer final : public dx_iface {
 public:
-    Writer(dwgRW& output,DRW_UnsupportedObject a,DRW_UnsupportedObject b,std::size_t big=0u)
-        :w(output),content(std::move(a)),table(std::move(b)),bigSize(big){}
+    Writer(dwgRW& output,DRW_UnsupportedObject a,DRW_UnsupportedObject b,std::size_t big=0u,DRW_UnsupportedObject g={})
+        :w(output),content(std::move(a)),table(std::move(b)),geometry(std::move(g)),bigSize(big){}
     void writeHeader(DRW_Header& h) override {h.vars.clear();}
-    void writeDwgClasses() override {registered=w.registerRawDwgObjectClass(&content)&&w.registerRawDwgObjectClass(&table);}
+    void writeDwgClasses() override {registered=w.registerRawDwgObjectClass(&content)&&w.registerRawDwgObjectClass(&table)
+        && (!geometry.m_handle || w.registerRawDwgObjectClass(&geometry));}
     void collectDwgAppIds() override {}
     void writeBlocks() override {} void writeBlockRecords() override {} void writeEntities() override {}
     void writeLTypes() override {} void writeLayers() override {} void writeTextstyles() override {}
@@ -88,13 +91,14 @@ public:
             wrote=w.writeXRecord(&x)&&wrote;
         }
         wrote=w.writeRawDwgObject(&content)&&w.writeRawDwgObject(&table)&&wrote;
+        if(geometry.m_handle)wrote=w.writeRawDwgObject(&geometry)&&wrote;
     }
     bool finalizeDwgWrite() override{return wrote;}
     bool finalizeDwgWriteStructure() override{return true;}
-    dwgRW& w;DRW_UnsupportedObject content,table;std::size_t bigSize;bool registered=false,wrote=false;
+    dwgRW& w;DRW_UnsupportedObject content,table,geometry;std::size_t bigSize;bool registered=false,wrote=false;
 };
-bool write(const std::filesystem::path& path,DRW_UnsupportedObject a,DRW_UnsupportedObject b,std::size_t big=0u) {
-    dwgRW output(path.string().c_str());Writer writer(output,std::move(a),std::move(b),big);
+bool write(const std::filesystem::path& path,DRW_UnsupportedObject a,DRW_UnsupportedObject b,std::size_t big=0u,const DRW_UnsupportedObject* geometry=nullptr) {
+    dwgRW output(path.string().c_str());Writer writer(output,std::move(a),std::move(b),big,geometry?*geometry:DRW_UnsupportedObject{});
     return output.write(&writer,DRW::AC1018,true)&&writer.wrote;
 }
 bool selected(dx_iface& a){return a.enableVerifiedTableCandidates(xrecords,contentHandle,dataHandle);}
@@ -107,14 +111,16 @@ bool live(const dx_data& d) {
 class FaultAdapter final : public dx_iface {
 public:
     enum class Injection {None,Candidate,Ticket};
-    Injection injection{Injection::None};mutable bool armed=false;bool ticket=false;
+    Injection injection{Injection::None};mutable bool armed=false;bool ticket=false;mutable bool wantedTarget=false;unsigned targetTickets=0;std::uint32_t target=dataHandle;
     bool wantsVerifiedTableCandidate(std::uint32_t h) const noexcept override {
-        if(h!=contentHandle && h!=dataHandle)return false;
-        if(injection==Injection::Candidate && h==dataHandle && !armed){armed=true;fault::remaining=0;}
+        if(h!=contentHandle && h!=dataHandle && h!=geometryHandle)return false;
+        if(h==target)wantedTarget=true;
+        if(injection==Injection::Candidate && h==target && !armed){armed=true;fault::remaining=0;}
         return true;
     }
     void verifiedTableCandidate(const DwgVerifiedTableCandidateTicket& value) noexcept override {
-        if(injection==Injection::Ticket && value.handle()==dataHandle){ticket=true;fault::remaining=0;}
+        if(value.handle()==target)++targetTickets;
+        if(injection==Injection::Ticket && value.handle()==target){ticket=true;fault::remaining=0;}
         DxIfaceStandardDwgCaptureTestAccess::deliver(*this,value);fault::remaining=-1;
     }
 };
@@ -132,9 +138,9 @@ bool sealFaultReady() noexcept {
 }
 class Spoofing final : public dx_iface {
 public:
-    int mode{0};bool seen=false;
+    int mode{0};bool seen=false;std::uint32_t target=contentHandle;
     void addUnsupportedObject(const DRW_UnsupportedObject& value) override {
-        if(value.m_handle==contentHandle && mode) {
+        if(value.m_handle==target && mode) {
             seen=true;auto altered=value;
             if(mode==1)altered.m_className="Other";
             else if(mode==2)altered.m_recordName="OTHER";
@@ -146,9 +152,9 @@ public:
 };
 class Throwing final : public dx_iface {
 public:
-    bool fail=true,seen=false;
+    bool fail=true,seen=false;std::uint32_t target=dataHandle;
     void addUnsupportedObject(const DRW_UnsupportedObject& value) override {
-        if(value.m_handle==dataHandle && fail){seen=true;throw std::runtime_error("callback failure");}
+        if(value.m_handle==target && fail){seen=true;throw std::runtime_error("callback failure");}
         dx_iface::addUnsupportedObject(value);
     }
 };
@@ -316,5 +322,116 @@ bool run(const char* contentPath,const char* dataPath,const char* wrongPath,
     std::cout<<"combined source-binding, mutation, failure and retry controls passed\n";
     return true;
 }
+DRW_UnsupportedObject rawGeometry(const char* path) {
+    auto value=raw(path,true);value.m_objectType=515;value.m_handle=geometryHandle;
+    value.m_recordName="TABLEGEOMETRY";value.m_className="AcDbTableGeometry";return value;
 }
-int main(int argc,char**argv){if(argc!=6)return 2;std::filesystem::path p(argv[5]);if(std::filesystem::exists(p))return 2;const bool ok=run(argv[1],argv[2],argv[3],argv[4],p);std::error_code e;std::filesystem::remove(p,e);return ok?0:1;}
+bool selectedGeometry(dx_iface& a) {
+    return a.enableVerifiedTableCandidates(xrecords,contentHandle,dataHandle,geometryHandle);
+}
+bool liveGeometry(const dx_data& d) {
+    Content c;Data t;Geometry g;
+    return dx_iface::readVerifiedTableCandidates(d,xrecords,contentHandle,dataHandle,geometryHandle,c,t,g)
+        && c.handle==contentHandle && t.handle==dataHandle && g.handle==geometryHandle
+        && c.parentHandle==rootHandle && t.parentHandle==rootHandle && g.parentHandle==rootHandle;
+}
+bool runGeometry(const char* contentPath,const char* dataPath,const char* geometryPath,
+                 const char* badGeometryPath,const std::filesystem::path& path) {
+#define CHECK_G(expr) do { if(!(expr)){std::cerr<<"geometry binding failed line "<<__LINE__<<'\n';return false;} } while(false)
+    auto content=raw(contentPath,true),table=raw(dataPath,false),geometry=rawGeometry(geometryPath);
+    CHECK_G(!geometry.m_rawBytes.empty());CHECK_G(write(path,content,table,0,&geometry));
+    dx_iface reader;CHECK_G(selectedGeometry(reader));
+    CHECK_G(!reader.enableVerifiedTableCandidates(xrecords,contentHandle,dataHandle,DRW::NoHandle));
+    CHECK_G(!reader.enableVerifiedTableCandidates(xrecords,contentHandle,dataHandle,contentHandle));
+    CHECK_G(!reader.enableVerifiedTableCandidates(xrecords,contentHandle,dataHandle,dataHandle));
+    CHECK_G(!reader.enableVerifiedTableCandidates(xrecords,contentHandle,dataHandle,rootHandle));
+    dx_data baseline;CHECK_G(reader.fileImport(path.string(),&baseline,false));CHECK_G(liveGeometry(baseline));
+    CHECK_G(dx_iface::hasUnchangedVerifiedXRecordSources(baseline,xrecords));
+    Content c;Data t;Geometry g;c.handle=t.handle=g.handle=1u;
+    CHECK_G(!dx_iface::readVerifiedTableCandidates(baseline,xrecords,contentHandle,dataHandle,c,t));
+    CHECK_G(!dx_iface::readVerifiedTableCandidates(baseline,xrecords,contentHandle,dataHandle,0xcau,c,t,g));
+    CHECK_G(!c.handle && !t.handle && !g.handle);
+    auto& snapshot=DxIfaceStandardDwgCaptureTestAccess::raw(baseline,geometryHandle);
+    snapshot.m_rawBytes[0]^=1u;
+    CHECK_G(!liveGeometry(baseline));CHECK_G(!dx_iface::hasUnchangedVerifiedXRecordSource(baseline,rootHandle));
+    snapshot.m_rawBytes[0]^=1u;CHECK_G(liveGeometry(baseline));
+    dx_data second;CHECK_G(reader.fileImport(path.string(),&second,false));CHECK_G(liveGeometry(second));
+    DxIfaceStandardDwgCaptureTestAccess::transplant(second,baseline);
+    CHECK_G(!liveGeometry(second));CHECK_G(!dx_iface::hasUnchangedVerifiedXRecordSource(second,rootHandle));
+    CHECK_G(reader.enableVerifiedTableCandidates(xrecords,contentHandle,dataHandle,0xcau));
+    dx_data missing;(void)reader.fileImport(path.string(),&missing,false);
+    CHECK_G(!liveGeometry(missing));CHECK_G(!dx_iface::hasUnchangedVerifiedXRecordSource(missing,rootHandle));
+    CHECK_G(selectedGeometry(reader));dx_data retry;CHECK_G(reader.fileImport(path.string(),&retry,false));CHECK_G(liveGeometry(retry));
+    for(int stage=1;stage<=3;++stage) {
+        dx_iface a;CHECK_G(selectedGeometry(a));dx_data failed;sealingAdapter=&a;sealingStage=stage;
+        fault::predicate=sealFaultReady;fault::fired=false;const bool ok=a.fileImport(path.string(),&failed,false);
+        fault::predicate=nullptr;sealingAdapter=nullptr;
+        CHECK_G(ok && fault::fired);CHECK_G(!liveGeometry(failed));
+        CHECK_G(!dx_iface::hasUnchangedVerifiedXRecordSource(failed,rootHandle));
+        dx_data again;CHECK_G(a.fileImport(path.string(),&again,false));CHECK_G(liveGeometry(again));
+    }
+    for(const auto injection:{FaultAdapter::Injection::Candidate,FaultAdapter::Injection::Ticket}) {
+        FaultAdapter a;CHECK_G(selectedGeometry(a));a.target=geometryHandle;a.injection=injection;fault::fired=false;dx_data failed;
+        const bool ok=a.fileImport(path.string(),&failed,false);fault::remaining=-1;
+        CHECK_G(ok && fault::fired);CHECK_G(!liveGeometry(failed));
+        CHECK_G(!dx_iface::hasUnchangedVerifiedXRecordSource(failed,rootHandle));
+        CHECK_G(injection!=FaultAdapter::Injection::Ticket || a.ticket);
+        a.injection=FaultAdapter::Injection::None;dx_data again;
+        CHECK_G(a.fileImport(path.string(),&again,false));CHECK_G(liveGeometry(again));
+    }
+    Reentry same;dx_data sameData;same.data=&sameData;same.path=path.string();CHECK_G(selectedGeometry(same));
+    (void)same.fileImport(path.string(),&sameData,false);CHECK_G(same.attempted && !liveGeometry(sameData));
+    CHECK_G(!dx_iface::hasUnchangedVerifiedXRecordSource(sameData,rootHandle));
+    dx_data sameRetry;CHECK_G(same.fileImport(path.string(),&sameRetry,false));CHECK_G(liveGeometry(sameRetry));
+    Reentry outer;dx_iface inner;dx_data cross;outer.data=&cross;outer.nested=&inner;outer.path=path.string();
+    CHECK_G(selectedGeometry(outer) && selectedGeometry(inner));(void)outer.fileImport(path.string(),&cross,false);
+    CHECK_G(outer.attempted && !liveGeometry(cross));CHECK_G(!dx_iface::hasUnchangedVerifiedXRecordSource(cross,rootHandle));
+    dx_data crossRetry;CHECK_G(outer.fileImport(path.string(),&crossRetry,false));CHECK_G(liveGeometry(crossRetry));
+    Throwing throwing;throwing.target=geometryHandle;CHECK_G(selectedGeometry(throwing));dx_data thrown;
+    (void)throwing.fileImport(path.string(),&thrown,false);CHECK_G(throwing.seen && !liveGeometry(thrown));
+    CHECK_G(!dx_iface::hasUnchangedVerifiedXRecordSource(thrown,rootHandle));
+    throwing.fail=false;dx_data throwRetry;CHECK_G(throwing.fileImport(path.string(),&throwRetry,false));CHECK_G(liveGeometry(throwRetry));
+    for(int mode=1;mode<=3;++mode) {
+        Spoofing spoof;spoof.target=geometryHandle;spoof.mode=mode;CHECK_G(selectedGeometry(spoof));dx_data altered;
+        (void)spoof.fileImport(path.string(),&altered,false);CHECK_G(spoof.seen && !liveGeometry(altered));
+        CHECK_G(!dx_iface::hasUnchangedVerifiedXRecordSource(altered,rootHandle));
+        spoof.mode=0;dx_data fresh;CHECK_G(spoof.fileImport(path.string(),&fresh,false));CHECK_G(liveGeometry(fresh));
+    }
+    const auto bad=path.string()+".geometry-bad.dwg";
+    struct Cleanup {std::filesystem::path p;~Cleanup(){std::error_code e;std::filesystem::remove(p,e);}} cleanup{bad};
+    auto badGeometry=rawGeometry(badGeometryPath);CHECK_G(write(bad,content,table,0,&badGeometry));dx_data badData;
+    (void)reader.fileImport(bad,&badData,false);CHECK_G(!liveGeometry(badData));
+    CHECK_G(!dx_iface::hasUnchangedVerifiedXRecordSource(badData,rootHandle));
+    dx_data good;CHECK_G(reader.fileImport(path.string(),&good,false));CHECK_G(liveGeometry(good));
+    const auto output=path.string()+".geometry.dxf";Cleanup outputCleanup{output};
+    {std::ofstream f(output,std::ios::binary|std::ios::trunc);f<<"SOURCE_SENTINEL";CHECK_G(static_cast<bool>(f));}
+    CHECK_G(!reader.fileExport(output,DRW::AC1018,false,&good,false,true,dx_dxfSourceTextPolicy::Compatible,
+        DRW::DxfTextWritePolicy::Compatible,dx_dxfProxyGraphicsPolicy::Compatible,dx_dwgReadCompletenessPolicy::RequireComplete));
+    {std::ifstream f(output,std::ios::binary);const std::string value((std::istreambuf_iterator<char>(f)),{});CHECK_G(value=="SOURCE_SENTINEL");}
+    std::vector<std::uint8_t> original;CHECK_G(corruptSelectedCrc(path,DxIfaceStandardDwgCaptureTestAccess::raw(good,geometryHandle),original));
+    dx_data crcBad;(void)reader.fileImport(path.string(),&crcBad,false);CHECK_G(!liveGeometry(crcBad));
+    CHECK_G(!dx_iface::hasUnchangedVerifiedXRecordSource(crcBad,rootHandle));
+    const auto& integrity=crcBad.dwgReadOutcome.observations.integrity;
+    CHECK_G(!integrity.extractionOmitted && !integrity.reportedUpstreamDropped && !integrity.aggregateSaturated);
+    bool targetFailure=false;
+    for(std::size_t i=0;i<integrity.retained;++i) {
+        const auto& row=integrity.rows[i];CHECK_G(row.kind!=DwgIntegrityCheckKind::DataPageChecksum && row.kind!=DwgIntegrityCheckKind::DataPageCrc);
+        if(row.kind==DwgIntegrityCheckKind::ObjectFrameBounds && row.hasLogicalHandle && row.logicalHandle==geometryHandle)targetFailure=true;
+    }
+    CHECK_G(targetFailure);
+    {std::ofstream f(path,std::ios::binary|std::ios::trunc);f.write(reinterpret_cast<const char*>(original.data()),original.size());CHECK_G(static_cast<bool>(f));}
+    dx_data crcRetry;CHECK_G(reader.fileImport(path.string(),&crcRetry,false));CHECK_G(liveGeometry(crcRetry));
+    auto oversized=geometry;oversized.m_rawBytes.resize(4097u,0u);oversized.m_objectSize=4097u;
+    CHECK_G(write(bad,content,table,0,&oversized));dx_data quota;FaultAdapter quotaReader;
+    quotaReader.target=geometryHandle;CHECK_G(selectedGeometry(quotaReader));
+    CHECK_G(quotaReader.fileImport(bad,&quota,false));CHECK_G(quotaReader.wantedTarget && quotaReader.targetTickets==0u);CHECK_G(!liveGeometry(quota));
+    CHECK_G(!dx_iface::hasUnchangedVerifiedXRecordSource(quota,rootHandle));
+    dx_data quotaRetry;CHECK_G(quotaReader.fileImport(path.string(),&quotaRetry,false));
+    CHECK_G(quotaReader.targetTickets==1u && liveGeometry(quotaRetry));
+    std::cout<<"geometry bundle failure and retry controls passed\n";
+#undef CHECK_G
+    return true;
+}
+
+}
+int main(int argc,char**argv){if(argc!=8)return 2;std::filesystem::path p(argv[5]);if(std::filesystem::exists(p))return 2;const bool ok=run(argv[1],argv[2],argv[3],argv[4],p) && runGeometry(argv[1],argv[2],argv[6],argv[7],p);std::error_code e;std::filesystem::remove(p,e);return ok?0:1;}

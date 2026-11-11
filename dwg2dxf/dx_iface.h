@@ -25,6 +25,7 @@
 #include "intern/dwg_xrecord_verified_source.h"
 #include "intern/dwg_datatable_ac1018_candidate.h"
 #include "intern/dwg_tablecontent_ac1018_candidate.h"
+#include "intern/dwg_tablegeometry_ac1018_candidate.h"
 namespace blockref_source_relation { struct Result; }
 
 #include <cstdint>
@@ -76,13 +77,24 @@ public:
     // Root XRECORD outgoing 360/361 roles and other graph dependencies remain
     // unverified. Reader classification binds class kind/names/number only;
     // other class metadata is callback data, not authenticated evidence.
+    // Geometry selection binds its owner to the other candidates, not its
+    // outgoing graph. Read with the overload matching the selected set; a
+    // three-candidate selection cannot be read as a two-candidate bundle.
     bool enableVerifiedTableCandidates(const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable) noexcept;
+    bool enableVerifiedTableCandidates(const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry) noexcept;
     static bool readVerifiedTableCandidates(const dx_data&,
         const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,
         DwgTableContentAc1018Candidate::Result& content,
         DwgDataTableAc1018Candidate::Result& table) noexcept;
+    static bool readVerifiedTableCandidates(const dx_data&,
+        const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        DwgTableContentAc1018Candidate::Result& content,
+        DwgDataTableAc1018Candidate::Result& table,
+        DwgTableGeometryAc1018Candidate::Result& geometry) noexcept;
     bool wantsDxfSparseMaterialRawCapture() const noexcept override {
         // Old subclasses may override callbacks without retaining raw records.
         // They must explicitly opt in instead of inheriting this policy.
@@ -3355,9 +3367,10 @@ private:
         const std::vector<std::uint32_t>& handles) noexcept;
     static bool validateVerifiedTableCandidates(const dx_data&,
         const dx_data::VerifiedXRecordSources&,const dx_data::VerifiedTableCandidateSources&,
-        std::uint32_t tableContent,std::uint32_t dataTable,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
         DwgTableContentAc1018Candidate::Result& content,
-        DwgDataTableAc1018Candidate::Result& table) noexcept;
+        DwgDataTableAc1018Candidate::Result& table,
+        DwgTableGeometryAc1018Candidate::Result* geometry) noexcept;
     std::vector<std::uint32_t> m_verifiedXRecordSelected;
     dx_data* m_verifiedXRecordReadData{nullptr};
     std::shared_ptr<const unsigned char> m_verifiedXRecordReadToken;
@@ -3365,7 +3378,7 @@ private:
     bool m_verifiedXRecordFailed{false};
     std::vector<dx_data::VerifiedXRecordSource> m_verifiedXRecordPending;
     std::size_t m_verifiedXRecordPendingBytes{0u};
-    std::uint32_t m_verifiedTableContentSelected{0u},m_verifiedDataTableSelected{0u};
+    std::uint32_t m_verifiedTableContentSelected{0u},m_verifiedDataTableSelected{0u},m_verifiedTableGeometrySelected{0u};
     std::vector<dx_data::VerifiedTableCandidateSource> m_verifiedTableCandidatePending;
     std::size_t m_verifiedTableCandidatePendingBytes{0u};
     friend class DxWholeSourceTestAccess;

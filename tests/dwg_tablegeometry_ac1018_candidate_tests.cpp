@@ -184,6 +184,16 @@ bool physical(const char* path) {
 }
 }
 int main(int argc,char** argv) {
+    if (argc==3 && (std::string(argv[1])=="--emit-body"
+                    || std::string(argv[1])=="--emit-bad-role")) {
+        Options options;
+        if (std::string(argv[1])=="--emit-bad-role") options.cellRole=5u;
+        const auto raw=build(options);
+        std::ofstream output(argv[2],std::ios::binary|std::ios::trunc);
+        output.write(reinterpret_cast<const char*>(raw.m_rawBytes.data()),
+                     static_cast<std::streamsize>(raw.m_rawBytes.size()));
+        return output ? 0 : 1;
+    }
     if (argc>2 || !generated() || (argc==2 && !physical(argv[1]))) return 1;
     return 0;
 }

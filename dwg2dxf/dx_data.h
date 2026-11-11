@@ -2664,10 +2664,11 @@ private:
         std::vector<VerifiedXRecordSource> records;
     };
     struct VerifiedTableCandidateSource {
+        enum class Kind : std::uint8_t { TableContent, DataTable, TableGeometry };
         DRW_UnsupportedObject raw;
         std::uint64_t ordinal{0u};
         DRW_DwgFrameOffsetSpace space{DRW_DwgFrameOffsetSpace::Unknown};
-        bool tableContent{false};
+        Kind kind{Kind::TableContent};
     };
     struct VerifiedTableCandidateSources {
         std::shared_ptr<const unsigned char> importToken;

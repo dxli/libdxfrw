@@ -13052,6 +13052,8 @@ bool dwgReader::readDwgObjects(DRW_Interface &intfa, dwgBuffer *dbuf,
         verifiedTableKind=DwgVerifiedTableCandidateKind::TableContent;
       else if (cls.recName=="DATATABLE" && cls.className=="AcDbDataTable")
         verifiedTableKind=DwgVerifiedTableCandidateKind::DataTable;
+      else if (cls.recName=="TABLEGEOMETRY" && cls.className=="AcDbTableGeometry")
+        verifiedTableKind=DwgVerifiedTableCandidateKind::TableGeometry;
       if (verifiedTableKind)
         verifiedTableClass=static_cast<std::uint16_t>(lease.classification->encodedType);
     }
@@ -13103,7 +13105,7 @@ bool dwgReader::readDwgObjects(DRW_Interface &intfa, dwgBuffer *dbuf,
       try {
         constexpr std::size_t maxTotal=2u*1024u*1024u;
         const std::size_t maxBody=*verifiedTableKind==DwgVerifiedTableCandidateKind::TableContent
-            ?65536u:1024u*1024u;
+            ?65536u:*verifiedTableKind==DwgVerifiedTableCandidateKind::TableGeometry?4096u:1024u*1024u;
         dwgBuffer sizeProbe=dbuf->forkIndependent();
         const bool positioned=sizeProbe.setPosition(verifiedOffset);
         const std::int32_t size=positioned?sizeProbe.getModularShort():-1;
@@ -13112,7 +13114,7 @@ bool dwgReader::readDwgObjects(DRW_Interface &intfa, dwgBuffer *dbuf,
               return p.kind==*verifiedTableKind || p.handle==verifiedHandle
                   || p.ordinal==verifiedOrdinal || (p.space==verifiedSpace && p.offset==verifiedOffset);
             });
-        if (m_verifiedTableCandidateFailed || duplicate || m_verifiedTableCandidates.size()>=2u
+        if (m_verifiedTableCandidateFailed || duplicate || m_verifiedTableCandidates.size()>=3u
             || !sizeProbe.isGood() || size<0 || static_cast<std::size_t>(size)>maxBody
             || m_verifiedXRecordPendingBytes>maxTotal
             || m_verifiedTableCandidateBytes>maxTotal-m_verifiedXRecordPendingBytes
