@@ -1419,8 +1419,10 @@ created locally from scratch for the specific control.
   handle 0x16 is also staged with its typed Continuous model under the same
   import and control selection; the live probe verifies the typed names and
   frame tickets for ByBlock 0x14, ByLayer 0x15 and Continuous 0x16. Their
-  physical order remains contrary to ODA for the phantom pair. Live CRC
-  corruption/retry and STYLE EED/APPID dependencies remain unqualified ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)). ODA §20.4.57 specifies ByLayer then
+  reader-issued ticket bodies now pass the bounded same-import control/ByBlock
+  selected-field and role join. That source-profile order contradicts ODA for
+  the phantom pair and stays isolated. Live CRC corruption/retry and STYLE
+  EED/APPID dependencies remain unqualified ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)). ODA §20.4.57 specifies ByLayer then
   ByBlock, while this pinned source and LibreDWG report ByBlock then ByLayer.
   Treat that as a source anomaly. The observer now exposes a separate normative
   order check with exact ByLayer/ByBlock spans; same-import source binding and

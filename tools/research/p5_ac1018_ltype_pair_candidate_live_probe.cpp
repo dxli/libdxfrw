@@ -11,16 +11,23 @@ class Probe final:public dx_iface {
 public:
  void addLType(const DRW_LType& v) override {dx_iface::addLType(v);if(v.handle==0x14u){if(model)duplicate=true;model=v;}}
  std::optional<DRW_LType> model;bool duplicate=false;unsigned tickets=0;bool ticketValid=false;unsigned rowTickets=0;bool rowTicketValid=false;
+ std::optional<DRW_UnsupportedObject> controlFrame,byBlockFrame;std::optional<DRW_LType> byBlockFrameModel;
  bool wantsVerifiedTableCandidate(std::uint32_t h) const noexcept override {return h==5u||h==0x16u||h==0x14u||h==0x15u;}
  void verifiedTableCandidate(const DwgVerifiedTableCandidateTicket& t) noexcept override {
   if(t.kind()==DwgVerifiedTableCandidateKind::LTypeControl&&t.version()==DRW::AC1018
-      &&t.handle()==5u&&t.frame().body().size()<=4096u){++tickets;ticketValid=true;}
+      &&t.handle()==5u&&t.frame().body().size()<=4096u){++tickets;ticketValid=true;
+    DRW_UnsupportedObject raw;raw.m_version=t.version();raw.m_handle=t.handle();raw.m_objectType=56;
+    raw.m_objectOffset=t.offset();raw.m_objectSize=static_cast<std::uint32_t>(t.frame().body().size());
+    raw.m_bodyBitSize=t.frame().bodyBitSize();raw.m_rawBytes=t.frame().body();controlFrame=std::move(raw);
+  }
   if(t.kind()==DwgVerifiedTableCandidateKind::LTypeRecord&&t.version()==DRW::AC1018
       &&(t.handle()==0x14u||t.handle()==0x15u||t.handle()==0x16u)
       &&t.frame().body().size()<=4096u&&t.ltypeModel()){
     ++rowTickets;
     const std::string expected=t.handle()==0x14u?"ByBlock":t.handle()==0x15u?"ByLayer":"Continuous";
     if(t.ltypeModel()->handle==t.handle()&&t.ltypeModel()->name==expected)rowTicketValid=true;
+    if(t.handle()==0x14u){byBlockFrameModel=*t.ltypeModel();DRW_UnsupportedObject raw;raw.m_version=t.version();raw.m_handle=t.handle();raw.m_objectType=57;
+      raw.m_objectSize=static_cast<std::uint32_t>(t.frame().body().size());raw.m_bodyBitSize=t.frame().bodyBitSize();raw.m_rawBytes=t.frame().body();byBlockFrame=std::move(raw);}
   }
  }
 };
@@ -30,9 +37,13 @@ DRW_UnsupportedObject body(const char* path,std::uint32_t handle,int type) {
 }
 int main(int argc,char**argv){if(argc!=2&&argc!=4)return 2;auto data=std::make_unique<dx_data>();auto p=std::make_unique<Probe>();
  const bool read=p->fileImport(argv[1],data.get(),false);
- if(argc==2){std::cout<<"read="<<read<<" controlTickets="<<p->tickets<<" controlValid="<<p->ticketValid
-  <<" rowTickets="<<p->rowTickets<<" rowValid="<<p->rowTicketValid<<"\n";
-  return !(read&&p->tickets==1u&&p->ticketValid&&p->rowTickets==3u&&p->rowTicketValid);}
+ if(argc==2){DwgLTypeControlByBlockAc1018Candidate::Result joined;
+  const bool bound=p->controlFrame&&p->byBlockFrameModel
+    &&DwgLTypeControlByBlockAc1018Candidate::inspect(*p->controlFrame,*p->byBlockFrame,
+        *p->byBlockFrameModel,joined);
+  std::cout<<"read="<<read<<" controlTickets="<<p->tickets<<" controlValid="<<p->ticketValid
+  <<" rowTickets="<<p->rowTickets<<" rowValid="<<p->rowTicketValid<<" joined="<<bound<<"\n";
+  return !(read&&p->tickets==1u&&p->ticketValid&&p->rowTickets==3u&&p->rowTicketValid&&bound);}
  const auto control=body(argv[2],5u,56);const auto row=body(argv[3],0x14u,57);
  DwgLTypeControlByBlockAc1018Candidate::Result r;const bool ok=read&&!p->duplicate&&p->model
   &&DwgLTypeControlByBlockAc1018Candidate::inspect(control,row,*p->model,r);
