@@ -17,6 +17,20 @@ failures and export advances past this gate, then fails during LAYER table
 serialization; no DXF is published. This is not whole-file output or support
 qualification. See the [empty-class gate receipt](docs/research/p7-ac1018-empty-wipeout-class-gate-2026-11-11.json).
 
+**P6/P7 follow-up (2026-11-11, unsigned AC1018+ LAYER flags):**
+ODA v5.4.1 §20.4.54 defines the R2000+ LAYER flags/lineweight field as `BS`.
+The reader consumed it as signed `SBitShort`; the hash-pinned AC1018 sample's
+handle `0x73` therefore decoded stored `0xB0` as `-80`, which changed the
+lineweight mask to enum 29 and made strict DXF LAYER validation fail. LibreDWG
+0.14 independently reports lineweight enum 5 for this source row. The parser
+now reads the specified unsigned `BS`; generated controls across AC1018,
+AC1021, AC1024 and AC1027 preserve lineweight 5 and validate the resulting
+layer. On the same physical source, the trace now reads flags 176 and strict
+export advances through LAYER into OBJECTS emission, where it still fails; no
+DXF is published. This fixes the signedness bug only and does not qualify the
+unrelated OBJECTS profile or whole-file output. See the [unsigned LAYER flag
+receipt](docs/research/p6-ac1018-layer-flags-unsigned-bitshort-2026-11-11.json).
+
 **P4/P6 implementation slice (2026-11-11, AC1018 VX_CONTROL routing):**
 the frame classifier treated fixed OBJECTS type 70 as an entity because it
 was absent from the fixed-object list, although the hash-pinned AC1018 sample

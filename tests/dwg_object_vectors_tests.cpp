@@ -131,6 +131,7 @@ public:
 class LayerHandleRoleProbe final : public DRW_Layer {
 public:
     using DRW_Layer::parseDwg;
+    using DRW_Layer::validateDxf;
 };
 
 class DictionaryEncodeProbe final : public DRW_Dictionary {
@@ -858,12 +859,15 @@ struct LayerHandleFrame {
 
 bool makeAc1018PlusLayerHandleFrame(DRW::Version version,
                                     LayerHandleFrame& frame,
-                                    bool includeBodyTargets = true) {
+                                    bool includeBodyTargets = true,
+                                    DRW_LW_Conv::lineWidth lineWeight =
+                                        DRW_LW_Conv::widthDefault) {
     if (version < DRW::AC1018)
         return false;
     DRW_Layer layer;
     layer.handle = 0x100u;
     layer.name = "LAYER0";
+    layer.lWeight = lineWeight;
     if (includeBodyTargets) {
         layer.xrefBlockHandle.ref = 0x21u;
         layer.plotStyleHandle.ref = 0x31u;
@@ -18776,6 +18780,19 @@ void testAc1018PlusLayerBodyHandleRoles(TestContext& t) {
             t.expect(exactSpans, std::string("LAYER ") + versionName(version)
                          + " body spans match ordered hard pointers through exact stream end");
         }
+
+        LayerHandleFrame unsignedFlagsFrame;
+        const bool unsignedFlagsBuilt = makeAc1018PlusLayerHandleFrame(
+            version, unsignedFlagsFrame, true, DRW_LW_Conv::width05);
+        LayerHandleRoleProbe unsignedFlagsLayer;
+        const bool unsignedFlagsRead = unsignedFlagsBuilt
+            && parse(version, unsignedFlagsLayer, unsignedFlagsFrame.bytes,
+                     unsignedFlagsFrame.handleBits);
+        t.expect(unsignedFlagsRead
+                     && unsignedFlagsLayer.lWeight == DRW_LW_Conv::width05
+                     && unsignedFlagsLayer.validateDxf(),
+                 std::string("LAYER ") + versionName(version)
+                     + " reads the R2000+ flag BS as unsigned, preserving lineweight 5");
 
         LayerHandleFrame nullFrame;
         const bool nullBuilt = makeAc1018PlusLayerHandleFrame(

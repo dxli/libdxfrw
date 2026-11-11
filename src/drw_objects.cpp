@@ -5407,7 +5407,7 @@ bool DRW_Layer::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
     auto parsedLineWeight = DRW_LW_Conv::widthDefault;
     if (version > DRW::AC1014) {//2000+
         std::int32_t f = 0;
-        if (!readSBitShortWithinBody(buf, version, bodyEnd, f))
+        if (!readBitShortWithinBody(buf, version, bodyEnd, f))
             return fail();
         DRW_DBG(", flags 2000+: "); DRW_DBG(f); DRW_DBG("\n");
         parsedFlags |= f & 0x0001; //layer frozen
