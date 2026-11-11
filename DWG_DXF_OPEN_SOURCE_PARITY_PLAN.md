@@ -1365,7 +1365,12 @@ created locally from scratch for the specific control.
   references. The source and same-vendor DXF use different dictionary and
   style orders; bind identities and preserve the appropriate order before any
   output decision. STYLE/LTYPE controls, fonts, layer and block dependencies
-  remain unclosed. See the [style graph receipt](docs/research/p5-ac1018-tablestyle-cellstylemap-graph-wire-2026-11-11.json).
+  remain unclosed. A bounded TABLESTYLE observer now checks the selected wire
+  fields and typed projection; it does not authenticate the caller's frame or
+  certify complete model equality. Next bind it to reader-origin source and
+  close its dictionary and resource dependencies. See the
+  [style graph receipt](docs/research/p5-ac1018-tablestyle-cellstylemap-graph-wire-2026-11-11.json)
+  and [observer receipt](docs/research/p5-ac1018-tablestyle-source-observer-2026-11-11.json).
   See the [DATATABLE candidate receipt](docs/research/p5-ac1018-datatable-candidate-observer-2026-11-11.json).
 
   The recreated AC1018 XRECORD `0xbc` is now independently walked to its
