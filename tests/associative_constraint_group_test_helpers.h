@@ -68,6 +68,8 @@ struct Node {
     std::uint32_t dimensionDependencyHandle = 0u;
     std::uint8_t directionType = 0u;
     DRW_Coord distance;
+    bool hasActiveFlag = false;
+    bool isActive = false;
 };
 
 struct Options {
@@ -169,6 +171,8 @@ inline bool makeFrame(const Options& options, Frame& frame) {
     for (const auto& node : options.nodes) {
         strings.putVariableText(DRW::AC1024, node.className);
         object.putBitLong(node.id);
+        if (options.groupVersion == 2)
+            object.putRawChar8(node.status);
         const std::int32_t connectionCount = node.declaredConnections >= 0
             ? node.declaredConnections
             : static_cast<std::int32_t>(node.connections.size());
@@ -220,6 +224,8 @@ inline bool makeFrame(const Options& options, Frame& frame) {
         } else if (node.hasGeometricalBody) {
             object.putBitLong(node.ownerId);
             object.putBit(node.isImplied ? 1u : 0u);
+            if (options.groupVersion == 2 && node.hasActiveFlag)
+                object.putBit(node.isActive ? 1u : 0u);
         } else if (node.hasImplicitPointBody) {
             object.putBitLong(node.geometryNodeId);
             if (node.geometryDependencyHandle != 0u && node.hasPoint)

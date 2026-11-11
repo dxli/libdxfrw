@@ -32838,14 +32838,26 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                 &bodyProbe, version, objectDataEnd, nextNodeId);
             complete = nextNodeIdRead && nextNodeId >= 0;
         }
-        // Version-2 groups with a nonzero seed may switch to the registered
-        // node-table layout. The next body value is then a root ID, not an
-        // inline count, so stop at the seed until that layout is implemented.
-        if (complete && groupVersion == 2 && nextNodeId != 0)
-            complete = false;
         if (complete) {
-            nodeCountRead = readBitLongWithinBody(
-                &bodyProbe, version, objectDataEnd, nodeCount);
+            if (groupVersion == 2 && nextNodeId != 0) {
+                // A nonzero seed can begin the alternate registered layout.
+                // Treat it as an inline list only when a positive bounded
+                // count is followed by a fully decoded inline node sequence.
+                dwgBuffer countProbe = bodyProbe.forkIndependent();
+                std::int32_t candidateCount = 0;
+                if (readBitLongWithinBody(&countProbe, version,
+                                          objectDataEnd, candidateCount)
+                    && candidateCount > 0) {
+                    bodyProbe = countProbe;
+                    nodeCount = candidateCount;
+                    nodeCountRead = true;
+                } else {
+                    complete = false;
+                }
+            } else {
+                nodeCountRead = readBitLongWithinBody(
+                    &bodyProbe, version, objectDataEnd, nodeCount);
+            }
             complete = nodeCountRead;
             if (complete && !isValidAssocCount(nodeCount)) {
                 boundedCountOverflow = true;
@@ -32864,7 +32876,9 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                 &groupStringProbe, stringDataEnd, 7u);
             complete = constraintNodesParsed;
         }
-        if (complete && groupVersion == 0 && nodeCount > 0) {
+        const bool inlineNodeList = groupVersion == 0
+            || (groupVersion == 2 && nodeCount > 0);
+        if (complete && inlineNodeList && nodeCount > 0) {
             if (!DRW::reserve(constraintNodes, nodeCount)) {
                 complete = false;
                 allocationFailure = true;
@@ -32879,12 +32893,22 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                         &nodeBodyProbe, &nodeStringProbe, version,
                         objectDataEnd, stringDataEnd, className)
                     || !readBitLongWithinBody(&nodeBodyProbe, version,
-                                              objectDataEnd, node.m_nodeId)
-                    || !readBitLongWithinBody(&nodeBodyProbe, version,
-                                              objectDataEnd, connectionCount)) {
+                                              objectDataEnd, node.m_nodeId)) {
                     complete = false;
                     break;
                 }
+                if (groupVersion == 2) {
+                    node.m_hasStatus = readRawCharWithinBody(
+                        &nodeBodyProbe, version, objectDataEnd,
+                        node.m_status);
+                    complete = node.m_hasStatus;
+                }
+                if (complete)
+                    complete = readBitLongWithinBody(
+                        &nodeBodyProbe, version, objectDataEnd,
+                        connectionCount);
+                if (!complete)
+                    break;
                 if (!isValidAssocCount(connectionCount)) {
                     boundedCountOverflow = true;
                     complete = false;
@@ -33228,6 +33252,7 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                         dwgHandle dimensionDependency;
                         std::int32_t ownerId = 0;
                         bool implied = false;
+                        bool active = false;
                         std::uint8_t directionType = 0u;
                         DRW_Coord distance;
                         const bool handlesRead =
@@ -33249,6 +33274,10 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                             && readBitWithinBody(
                                 &nodeBodyProbe, version, objectDataEnd,
                                 implied)
+                            && (groupVersion != 2
+                                || readBitWithinBody(
+                                    &nodeBodyProbe, version, objectDataEnd,
+                                    active))
                             && readRawCharWithinBody(
                                 &nodeBodyProbe, version, objectDataEnd,
                                 directionType)
@@ -33265,7 +33294,8 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                             DRW_AssociativeConstraintNode::DataKind::Distance;
                         node.m_ownerId = ownerId;
                         node.m_isImplied = implied;
-                        node.m_hasActiveFlag = false;
+                        node.m_hasActiveFlag = groupVersion == 2;
+                        node.m_isActive = active;
                         node.m_hasValueDependencyHandle = true;
                         node.m_valueDependencyCode =
                             valueDependency.code;
@@ -33318,6 +33348,7 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                             node.m_className)) {
                         std::int32_t ownerId = 0;
                         bool implied = false;
+                        bool active = false;
                         std::int32_t datumLineIndex = 0;
                         const std::uint64_t bodyStartBit =
                             currentObjectDwgBit(&nodeBodyProbe);
@@ -33328,6 +33359,10 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                             && readBitWithinBody(
                                 &nodeBodyProbe, version, objectDataEnd,
                                 implied)
+                            && (groupVersion != 2
+                                || readBitWithinBody(
+                                    &nodeBodyProbe, version, objectDataEnd,
+                                    active))
                             && readBitLongWithinBody(
                                 &nodeBodyProbe, version, objectDataEnd,
                                 datumLineIndex);
@@ -33340,7 +33375,8 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                             DRW_AssociativeConstraintNode::DataKind::Vertical;
                         node.m_ownerId = ownerId;
                         node.m_isImplied = implied;
-                        node.m_hasActiveFlag = false;
+                        node.m_hasActiveFlag = groupVersion == 2;
+                        node.m_isActive = active;
                         node.m_hasDatumLineIndex = true;
                         node.m_datumLineIndex = datumLineIndex;
                         node.m_classDataParsed = true;
@@ -33363,6 +33399,7 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                             node.m_className)) {
                         std::int32_t ownerId = 0;
                         bool implied = false;
+                        bool active = false;
                         std::int32_t datumLineIndex = 0;
                         const bool horizontalParsed =
                             readBitLongWithinBody(
@@ -33371,6 +33408,10 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                             && readBitWithinBody(
                                 &nodeBodyProbe, version, objectDataEnd,
                                 implied)
+                            && (groupVersion != 2
+                                || readBitWithinBody(
+                                    &nodeBodyProbe, version, objectDataEnd,
+                                    active))
                             && readBitLongWithinBody(
                                 &nodeBodyProbe, version, objectDataEnd,
                                 datumLineIndex);
@@ -33383,7 +33424,8 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                             DRW_AssociativeConstraintNode::DataKind::Horizontal;
                         node.m_ownerId = ownerId;
                         node.m_isImplied = implied;
-                        node.m_hasActiveFlag = false;
+                        node.m_hasActiveFlag = groupVersion == 2;
+                        node.m_isActive = active;
                         node.m_hasDatumLineIndex = true;
                         node.m_datumLineIndex = datumLineIndex;
                         node.m_classDataParsed = true;
@@ -33407,6 +33449,7 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                             handleProbe.forkIndependent();
                         std::int32_t ownerId = 0;
                         bool implied = false;
+                        bool active = false;
                         std::uint8_t mode = 0u;
                         dwgHandle valueDependency;
                         dwgHandle dimensionDependency;
@@ -33417,6 +33460,10 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                             && readBitWithinBody(
                                 &nodeBodyProbe, version, objectDataEnd,
                                 implied)
+                            && (groupVersion != 2
+                                || readBitWithinBody(
+                                    &nodeBodyProbe, version, objectDataEnd,
+                                    active))
                             && readBoundedObjectHandle(
                                 radiusHandleProbe, 0u, false,
                                 valueDependency, handleEndBit)
@@ -33440,7 +33487,8 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                             DRW_AssociativeConstraintNode::DataKind::RadiusDiameter;
                         node.m_ownerId = ownerId;
                         node.m_isImplied = implied;
-                        node.m_hasActiveFlag = false;
+                        node.m_hasActiveFlag = groupVersion == 2;
+                        node.m_isActive = active;
                         node.m_hasValueDependencyHandle = true;
                         node.m_valueDependencyCode = valueDependency.code;
                         node.m_valueDependencyHandle = valueDependency.ref64;
@@ -33678,10 +33726,14 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                 }
 
                 bool implied = false;
+                bool active = false;
                 if (!readBitLongWithinBody(&nodeBodyProbe, version,
                                            objectDataEnd, node.m_ownerId)
                     || !readBitWithinBody(&nodeBodyProbe, version,
-                                          objectDataEnd, implied)) {
+                                          objectDataEnd, implied)
+                    || (groupVersion == 2
+                        && !readBitWithinBody(&nodeBodyProbe, version,
+                                              objectDataEnd, active))) {
                     node.m_classDataParsed = false;
                     constraintNodes.push_back(std::move(node));
                     complete = false;
@@ -33690,9 +33742,10 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                 node.m_dataKind =
                     DRW_AssociativeConstraintNode::DataKind::Geometrical;
                 node.m_isImplied = implied;
-                // The AC1024 version-0 layout has no active bit. Preserve
-                // absence explicitly instead of synthesizing an active value.
-                node.m_hasActiveFlag = false;
+                // The legacy inline layout has no active bit. Preserve its
+                // absence instead of synthesizing a value.
+                node.m_hasActiveFlag = groupVersion == 2;
+                node.m_isActive = active;
                 node.m_classDataParsed = true;
                 if (equalsAsciiCaseInsensitive(
                         node.m_className, "AcParallelConstraint")) {
@@ -33731,7 +33784,7 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
                 &groupStringProbe, stringDataEnd, 7u);
             complete = constraintNodesParsed;
         }
-        else if (complete && groupVersion == 2)
+        else if (complete && groupVersion == 2 && nodeCount == 0)
             complete = false;
         const bool prefixWithinBounds = bodyProbe.isGood()
             && handleProbe.isGood()
@@ -33750,7 +33803,7 @@ bool DRW_AssociativeObject::parseDwgConstraintCandidate(
             decodedHandleCount + (groupReference != 0u ? 1u : 0u),
             constraintNodes.size(), nodeCountRead ? nodeCount : -1);
         groupStatus.m_sourceAssumption =
-            "AC1024 ACDBASSOC2DCONSTRAINTGROUP fixed header, action handles and bounded node framing; unsupported node tails remain raw";
+            "AC1024 ACDBASSOC2DCONSTRAINTGROUP fixed header and bounded action handles; version-0 nodes and fully consumed version-2 inline nodes are decoded, while registry or unsupported tails remain raw";
         if (!complete) {
             DRW_DBG("ACDBASSOC2DCONSTRAINTGROUP decode partial stage=");
             DRW_DBG(groupStage); DRW_DBG(" bodyBit=");

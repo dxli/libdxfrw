@@ -1,5 +1,20 @@
 # DWG/DXF parity — remaining implementation plan
 
+**P4 AC1024 version-2 inline constraint-node slice (2026-11-11):** the
+reader now handles the bounded R2010 inline envelope for positive-count
+version-2 groups: detached class name, sparse node ID, raw status byte,
+connections, and already-modeled node bodies. Geometrical/explicit constraints
+retain their active flag. A generated two-node control covers a constrained
+bounded line and active fixed constraint; a missing active bit stays raw and
+the following object still publishes. The affected build, 4-test normal cohort,
+and focused ASan control pass. Nonzero-seed zero-count groups remain raw because
+they may use the registered layout. Unsupported node classes, unclosed
+body/string spans, and all version-2 output remain refused. This extends a
+generated peer implementation profile only; the peer fixture is hand-encoded
+scratch data, not a producer witness, and this does not qualify native semantics
+or support claims. See the
+[version-2 inline receipt](docs/research/p4-ac1024-assoc-constraint-group-r2010-v2-inline-generated-2026-11-11.json).
+
 **P4 source-graph slice (2026-11-11, AC1032 associative network):** the
 hash-pinned AutoCAD forum attachment now has an exact local closure check for
 the selected NOD `0xC` → dictionary `0x2A6` → root network `0x2A7` →
@@ -4939,8 +4954,11 @@ and [LEADER receipt](docs/research/p4-leader-dimstyle-reference-fail-closed-2026
    a physical source identifies a required nonempty or mismatched body,
    action-dependency, owned-parameter, or versioned-registry profile. Prove its
    class, target role, owner route, fields and bounded span before decoding; reuse
-   qualified providers. Keep version-2 nonzero-seed registry layouts raw until
-   their framing is proven. Keep investigation DWGs out of committed fixtures;
+   qualified providers. Keep version-2 registered layouts raw unless the
+   positive inline count, supported node bodies, handle tails, detached strings,
+   and exact object boundary all validate; the current candidate recognizes
+   only this inline route and does not decode the registered layout. Keep
+   investigation DWGs out of committed fixtures;
    bind regressions to eligible repository inputs or locally authored fixtures.
    IMAGE input retains unambiguous incomplete clipping boundaries through
    recompiled callback copies; output refuses them until explicit caller repair.
@@ -4959,8 +4977,11 @@ and [LEADER receipt](docs/research/p4-leader-dimstyle-reference-fail-closed-2026
    typed output or a proven end-to-end replay path. Keep unresolved records
    refused. Never weaken the completeness predicate, emit a partial graph, or
    infer edges from adjacent handle values.
-   The AC1024 inline constraint-node dependency audit is already implemented;
-   do not reopen that parser/audit task from the earlier 2026-10-30 receipt.
+   The AC1024 version-0 inline constraint-node dependency audit is already
+   implemented. A separate generated-only AC1024 version-2 inline parser
+   profile now retains node status and active flags and refuses unsupported or
+   ambiguous tails; its producer and output gates remain open. Do not reopen
+   the completed version-0 audit from the earlier 2026-10-30 receipt.
    Across the two identified physical sources, its local audit verifies all
    29/29 and 31/31 non-null geometry-dependency references, dependency object
    kinds, same-group ownership/action membership, dependent-on entity targets,

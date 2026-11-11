@@ -7417,7 +7417,8 @@ struct DRW_AssociativePrefixStatus {
   UTF8STRING m_sourceAssumption;
 };
 
-//! Typed prefix for one AC1024 inline associative constraint node.
+//! Typed fields for one AC1024 inline associative constraint node. Legacy
+//! version-0 nodes omit status and active flags; version-2 nodes carry them.
 struct DRW_AssociativeConstraintNode {
   enum class DataKind {
     Unsupported,
@@ -7436,6 +7437,10 @@ struct DRW_AssociativeConstraintNode {
 
   UTF8STRING m_className;
   std::int32_t m_nodeId = 0;
+  // AC1024 version-2 inline nodes carry an 8-bit status field. Legacy
+  // version-0 inline nodes do not, so retain the presence explicitly.
+  bool m_hasStatus = false;
+  std::uint8_t m_status = 0u;
   std::vector<std::int32_t> m_connections;
   DataKind m_dataKind = DataKind::Unsupported;
   std::int32_t m_ownerId = 0;

@@ -13725,6 +13725,147 @@ void testAssociativeConstraintGroupGenerated(TestContext& t) {
         std::cerr << '\n';
     }
 
+    Options inlineVersion2;
+    inlineVersion2.classNumber = classNumber;
+    inlineVersion2.handle = sourceHandle;
+    inlineVersion2.groupVersion = 2;
+    inlineVersion2.nextNodeId = 9;
+    inlineVersion2.actions.clear();
+    Node constrainedLine;
+    constrainedLine.id = 1;
+    constrainedLine.status = 3u;
+    constrainedLine.connections = {4};
+    constrainedLine.className = "AcConstrainedBoundedLine";
+    constrainedLine.geometryDependencyHandle = 0xA500u;
+    constrainedLine.geometryNodeId = 0;
+    constrainedLine.point = DRW_Coord(0.0, 0.0, 0.0);
+    constrainedLine.direction = DRW_Coord(1.0, 0.0, 0.0);
+    constrainedLine.hasBoundedLineBody = true;
+    constrainedLine.startPoint = DRW_Coord(0.0, 0.0, 0.0);
+    constrainedLine.endPoint = DRW_Coord(1.0, 0.0, 0.0);
+    Node fixedConstraint;
+    fixedConstraint.id = 4;
+    fixedConstraint.status = 7u;
+    fixedConstraint.connections = {1};
+    fixedConstraint.className = "AcFixedConstraint";
+    fixedConstraint.ownerId = 1;
+    fixedConstraint.hasGeometricalBody = true;
+    fixedConstraint.hasActiveFlag = true;
+    fixedConstraint.isActive = true;
+    inlineVersion2.nodes = {constrainedLine, fixedConstraint};
+    Frame inlineObject;
+    Frame inlineSentinelObject;
+    std::vector<std::uint8_t> inlineFrame;
+    std::vector<std::uint8_t> inlineSentinelFrame;
+    const bool inlineBuilt = makeFrame(inlineVersion2, inlineObject)
+        && wrapFrame(inlineObject, inlineFrame)
+        && makeFrame(sentinel, inlineSentinelObject)
+        && wrapFrame(inlineSentinelObject, inlineSentinelFrame);
+    t.expect(inlineBuilt,
+             "AC1024 version-2 inline nodes and following object are generated from scratch");
+    if (inlineBuilt) {
+        const auto inlineSentinelOffset =
+            static_cast<std::uint32_t>(inlineFrame.size());
+        std::vector<std::uint8_t> inlineBytes = inlineFrame;
+        inlineBytes.insert(inlineBytes.end(), inlineSentinelFrame.begin(),
+                           inlineSentinelFrame.end());
+        AssociativeConstraintGroupDispatchReader inlineReader(
+            inlineBytes, classNumber);
+        PersistentManagerDispatchSink inlineSink;
+        const bool inlineRead = inlineReader.readObjects(inlineBytes,
+            {{sourceHandle, 0u, 0u},
+             {sentinelHandle, inlineSentinelOffset, 1u}}, inlineSink);
+        const auto inlineParsed = std::find_if(
+            inlineSink.typed.begin(), inlineSink.typed.end(),
+            [sourceHandle](const DRW_AssociativeObject& value) {
+                return value.handle == sourceHandle;
+            });
+        const auto inlineNext = std::find_if(
+            inlineSink.typed.begin(), inlineSink.typed.end(),
+            [sentinelHandle](const DRW_AssociativeObject& value) {
+                return value.handle == sentinelHandle;
+            });
+        const DRW_AssociativeObject inlineCopy =
+            inlineParsed == inlineSink.typed.end()
+                ? DRW_AssociativeObject()
+                : *inlineParsed;
+        const bool inlineMatches = inlineRead
+            && inlineReader.objectFailures() == 0u
+            && inlineParsed != inlineSink.typed.end()
+            && inlineParsed->m_constraintGroupBodyParsed
+            && inlineParsed->m_constraintGroupVersion == 2
+            && inlineParsed->m_constraintNextNodeId == 9
+            && inlineParsed->m_constraintNodeCount == 2
+            && inlineParsed->m_constraintNodesParsed
+            && inlineParsed->m_constraintNodes.size() == 2u
+            && inlineParsed->m_constraintNodes[0].m_hasStatus
+            && inlineParsed->m_constraintNodes[0].m_status == 3u
+            && inlineParsed->m_constraintNodes[0].m_nodeId == 1
+            && inlineParsed->m_constraintNodes[0].m_connections
+                   == std::vector<std::int32_t>{4}
+            && inlineParsed->m_constraintNodes[0].m_dataKind
+                   == DRW_AssociativeConstraintNode::DataKind::BoundedLine
+            && inlineParsed->m_constraintNodes[0].m_geometryDependencyHandle
+                   == 0xA500u
+            && inlineParsed->m_constraintNodes[1].m_hasStatus
+            && inlineParsed->m_constraintNodes[1].m_status == 7u
+            && inlineParsed->m_constraintNodes[1].m_nodeId == 4
+            && inlineParsed->m_constraintNodes[1].m_connections
+                   == std::vector<std::int32_t>{1}
+            && inlineParsed->m_constraintNodes[1].m_dataKind
+                   == DRW_AssociativeConstraintNode::DataKind::Geometrical
+            && inlineParsed->m_constraintNodes[1].m_ownerId == 1
+            && inlineParsed->m_constraintNodes[1].m_hasActiveFlag
+            && inlineParsed->m_constraintNodes[1].m_isActive
+            && inlineCopy.m_constraintNodes.size() == 2u
+            && inlineCopy.m_constraintNodes[0].m_status == 3u
+            && inlineCopy.m_constraintNodes[1].m_isActive
+            && inlineNext != inlineSink.typed.end()
+            && inlineSink.raw.size() == 2u;
+        t.expect(inlineMatches,
+                 "AC1024 version-2 inline class/status/connection/body fields decode with sparse IDs and exact following-frame recovery");
+
+        Options truncatedInline = inlineVersion2;
+        truncatedInline.nodes[1].hasActiveFlag = false;
+        Frame truncatedObject;
+        std::vector<std::uint8_t> truncatedFrame;
+        const bool truncatedBuilt = makeFrame(truncatedInline,
+                                              truncatedObject)
+            && wrapFrame(truncatedObject, truncatedFrame);
+        t.expect(truncatedBuilt,
+                 "AC1024 version-2 missing-active-bit control is generated from scratch");
+        if (truncatedBuilt) {
+            const auto nextOffset =
+                static_cast<std::uint32_t>(truncatedFrame.size());
+            std::vector<std::uint8_t> truncatedBytes = truncatedFrame;
+            truncatedBytes.insert(truncatedBytes.end(), inlineSentinelFrame.begin(),
+                                  inlineSentinelFrame.end());
+            AssociativeConstraintGroupDispatchReader truncatedReader(
+                truncatedBytes, classNumber);
+            PersistentManagerDispatchSink truncatedSink;
+            const bool truncatedRead = truncatedReader.readObjects(
+                truncatedBytes,
+                {{sourceHandle, 0u, 0u}, {sentinelHandle, nextOffset, 1u}},
+                truncatedSink);
+            const auto rejected = std::find_if(
+                truncatedSink.typed.begin(), truncatedSink.typed.end(),
+                [sourceHandle](const DRW_AssociativeObject& value) {
+                    return value.handle == sourceHandle;
+                });
+            const auto recovered = std::find_if(
+                truncatedSink.typed.begin(), truncatedSink.typed.end(),
+                [sentinelHandle](const DRW_AssociativeObject& value) {
+                    return value.handle == sentinelHandle;
+                });
+            t.expect(truncatedRead && truncatedReader.objectFailures() == 0u
+                         && rejected != truncatedSink.typed.end()
+                         && !rejected->m_constraintGroupBodyParsed
+                         && recovered != truncatedSink.typed.end()
+                         && truncatedSink.raw.size() == 2u,
+                     "AC1024 version-2 missing active bit stays raw-only and does not consume the following object");
+        }
+    }
+
     for (int profileMode = 0; profileMode < 8; ++profileMode) {
         Options profile;
         profile.classNumber = classNumber;
