@@ -175,6 +175,27 @@ public:
         std::uint32_t tableEntity,std::uint32_t dictionary,std::uint32_t tableStyle,
         std::uint32_t styleDictionary,std::uint32_t styleXRecord,std::uint32_t cellStyleMap,
         DwgCellStyleMapAc1018Candidate::Result& result) noexcept;
+    // Composes the selected CELLSTYLEMAP bundle with same-import STYLE and
+    // LTYPE control/record tickets. It verifies the selected profile's text
+    // style and six border linetype handle targets; it grants no output or
+    // font/rendering authority.
+    bool enableVerifiedTableCellStyleResourceSource(
+        const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        std::uint32_t tableEntity,std::uint32_t dictionary,std::uint32_t tableStyle,
+        std::uint32_t styleDictionary,std::uint32_t styleXRecord,std::uint32_t cellStyleMap,
+        std::uint32_t styleControl,std::uint32_t styleRecord,
+        std::uint32_t ltypeControl,std::uint32_t ordinaryLtype,
+        std::uint32_t byBlockLtype,std::uint32_t byLayerLtype) noexcept;
+    static bool readVerifiedTableCellStyleResourceSource(const dx_data&,
+        const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        std::uint32_t tableEntity,std::uint32_t dictionary,std::uint32_t tableStyle,
+        std::uint32_t styleDictionary,std::uint32_t styleXRecord,std::uint32_t cellStyleMap,
+        std::uint32_t styleControl,std::uint32_t styleRecord,
+        std::uint32_t ltypeControl,std::uint32_t ordinaryLtype,
+        std::uint32_t byBlockLtype,std::uint32_t byLayerLtype,
+        DwgCellStyleMapAc1018Candidate::Result& result) noexcept;
     static bool readVerifiedTableStyleXRecordSource(const dx_data&,
         const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,

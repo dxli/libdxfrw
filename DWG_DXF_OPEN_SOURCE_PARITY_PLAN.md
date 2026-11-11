@@ -1569,14 +1569,22 @@ created locally from scratch for the specific control.
   dictionary, extension XRECORD and CELLSTYLEMAP, including STYLE and LTYPE
   references. The source and same-vendor DXF use different dictionary and
   style orders; bind identities and preserve the appropriate order before any
-  output decision. STYLE/LTYPE controls, fonts, layer and block dependencies
-  remain unclosed. A bounded TABLESTYLE observer now checks the selected wire
+  output decision. For the exact hash-pinned AC1018 source profile,
+  same-import STYLE_CONTROL/STYLE and LTYPE_CONTROL/Continuous/ByBlock/ByLayer
+  source tickets are now joined to the selected CELLSTYLEMAP; its three
+  text-style targets and eighteen border linetype targets are revalidated
+  against those reader-bound resources. Physical mutation, selector
+  correction/retry, legacy mode and strict-output refusal controls pass
+  ([resource closure receipt](docs/research/p5-ac1018-cellstylemap-style-ltype-resource-closure-2026-11-11.json)).
+  This closes only those selected resource handles for this profile. Font
+  availability and semantics, APPID/EED, layer/plotstyle/xdict and block
+  dependencies remain unclosed. A bounded TABLESTYLE observer now checks the selected wire
   fields and typed projection. An opt-in reader-origin binding now joins that
   projection to the TABLE's style target and the style's TABLE reactor; it does
   not certify complete model equality. The style extension dictionary is now
   reader-bound with its ordered source entries; their XRECORD and CELLSTYLEMAP
-  targets are still numeric only. Bind those targets and the remaining resource
-  dependencies next ([dictionary receipt](docs/research/p5-ac1018-tablestyle-extension-dictionary-source-binding-2026-11-11.json)).
+  targets are reader-bound in the selected profile. The remaining resource
+  dependencies still need binding ([dictionary receipt](docs/research/p5-ac1018-tablestyle-extension-dictionary-source-binding-2026-11-11.json)).
   The style XRECORD's ten ordered data groups and owner/reactor roles are now
   joined to the reader-verified dictionary's first target
   ([binding receipt](docs/research/p5-ac1018-tablestyle-roundtrip-xrecord-source-binding-2026-11-11.json));
@@ -1601,8 +1609,11 @@ created locally from scratch for the specific control.
   The generated full-bundle control now confirms that this binding composes
   with the style-XRECORD path; map-frame CRC failure remains covered by the
   separate reader-source controls, not the full-bundle test. This is a
-  selected-field projection, not complete typed-model equality or STYLE/LTYPE,
-  APPID and font resource closure.
+  selected-field projection, not complete typed-model equality or APPID/EED,
+  font semantics, recursive graph closure, output authorization, or
+  interoperability evidence. The exact profile's STYLE/LTYPE source/control
+  and handle-target check is recorded separately in the
+  [resource closure receipt](docs/research/p5-ac1018-cellstylemap-style-ltype-resource-closure-2026-11-11.json).
   The AC1032 malformed-count dispatch test now passes: its
   generated common-parent and TABLESTYLE-specific owner roles were corrected
   to the distinct ODA §20.1 and §20.4.101.2 roles. The malformed count is

@@ -29126,6 +29126,63 @@ bool dx_iface::enableVerifiedTableCellStyleMapSource(const std::vector<std::uint
         styleDictionary,styleXRecord,cellStyleMap))return false;
     m_verifiedCellStyleMapRequired=true;return true;
 }
+
+bool dx_iface::enableVerifiedTableCellStyleResourceSource(
+        const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t content,std::uint32_t table,std::uint32_t geometry,
+        std::uint32_t entity,std::uint32_t dictionary,std::uint32_t style,
+        std::uint32_t styleDictionary,std::uint32_t styleXRecord,
+        std::uint32_t cellStyleMap,std::uint32_t styleControl,
+        std::uint32_t styleRecord,std::uint32_t ltypeControl,
+        std::uint32_t ordinaryLtype,std::uint32_t byBlockLtype,
+        std::uint32_t byLayerLtype) noexcept {
+    const std::array<std::uint32_t,6> resources{{styleControl,styleRecord,
+        ltypeControl,ordinaryLtype,byBlockLtype,byLayerLtype}};
+    const std::array<std::uint32_t,10> selected{{content,table,geometry,entity,
+        dictionary,style,styleDictionary,styleXRecord,cellStyleMap,
+        DRW::DwgNamedObjectsDictionaryHandle}};
+    for(std::size_t i=0;i<resources.size();++i) {
+        const auto handle=resources[i];
+        if(!handle || handle==DRW::NoHandle
+            || std::find(selected.cbegin(),selected.cend(),handle)!=selected.cend()
+            || std::find(xrecords.cbegin(),xrecords.cend(),handle)!=xrecords.cend())
+            return false;
+        for(std::size_t j=0;j<i;++j)
+            if(handle==resources[j])return false;
+    }
+    const bool noPriorResourceSelection=m_verifiedStyleControlSelected==0u
+        &&m_verifiedStyleRecordSelected==0u&&m_verifiedLTypeControlSelected==0u
+        &&m_verifiedLTypeOrdinarySelected==0u&&m_verifiedLTypeByBlockSelected==0u
+        &&m_verifiedLTypeByLayerSelected==0u;
+    const bool samePriorResourceSelection=m_verifiedStyleControlSelected==styleControl
+        &&m_verifiedStyleRecordSelected==styleRecord
+        &&m_verifiedLTypeControlSelected==ltypeControl
+        &&m_verifiedLTypeOrdinarySelected==ordinaryLtype
+        &&m_verifiedLTypeByBlockSelected==byBlockLtype
+        &&m_verifiedLTypeByLayerSelected==byLayerLtype;
+    if(!noPriorResourceSelection&&!samePriorResourceSelection)
+        return false;
+    m_verifiedStyleControlSelected=0u;m_verifiedStyleRecordSelected=0u;
+    m_verifiedLTypeControlSelected=0u;m_verifiedLTypeOrdinarySelected=0u;
+    m_verifiedLTypeByBlockSelected=0u;m_verifiedLTypeByLayerSelected=0u;
+    if(!enableVerifiedTableCellStyleMapSource(xrecords,content,table,geometry,
+            entity,dictionary,style,styleDictionary,styleXRecord,cellStyleMap)) {
+        m_verifiedStyleControlSelected=styleControl;
+        m_verifiedStyleRecordSelected=styleRecord;
+        m_verifiedLTypeControlSelected=ltypeControl;
+        m_verifiedLTypeOrdinarySelected=ordinaryLtype;
+        m_verifiedLTypeByBlockSelected=byBlockLtype;
+        m_verifiedLTypeByLayerSelected=byLayerLtype;
+        return false;
+    }
+    m_verifiedStyleControlSelected=styleControl;
+    m_verifiedStyleRecordSelected=styleRecord;
+    m_verifiedLTypeControlSelected=ltypeControl;
+    m_verifiedLTypeOrdinarySelected=ordinaryLtype;
+    m_verifiedLTypeByBlockSelected=byBlockLtype;
+    m_verifiedLTypeByLayerSelected=byLayerLtype;
+    return true;
+}
 std::uint32_t dx_iface::verifiedStyleExtensionDictionarySelection() const noexcept {
     return m_verifiedStyleDictionarySelected && m_verifiedXRecordReadData && !m_verifiedXRecordFailed
         && m_verifiedXRecordReadToken && m_verifiedXRecordReadData->m_verifiedXRecordImportToken==m_verifiedXRecordReadToken
@@ -30331,6 +30388,48 @@ bool dx_iface::readVerifiedTableCellStyleMapSource(const dx_data& data,
         if(row.kind==dx_data::VerifiedTableCandidateSource::Kind::CellStyleMap)
             return DwgCellStyleMapAc1018Candidate::inspect(row.raw,*model,result);
     return false;
+}
+
+bool dx_iface::readVerifiedTableCellStyleResourceSource(const dx_data& data,
+        const std::vector<std::uint32_t>& xrecords,std::uint32_t content,
+        std::uint32_t table,std::uint32_t geometry,std::uint32_t entity,
+        std::uint32_t dictionary,std::uint32_t tableStyle,
+        std::uint32_t styleDictionary,std::uint32_t styleXRecord,
+        std::uint32_t cellStyleMap,std::uint32_t styleControl,
+        std::uint32_t styleRecord,std::uint32_t ltypeControl,
+        std::uint32_t ordinaryLtype,std::uint32_t byBlockLtype,
+        std::uint32_t byLayerLtype,
+        DwgCellStyleMapAc1018Candidate::Result& result) noexcept {
+    result={};
+    DwgCellStyleMapAc1018Candidate::Result candidate;
+    if(!readVerifiedTableCellStyleMapSource(data,xrecords,content,table,geometry,
+            entity,dictionary,tableStyle,styleDictionary,styleXRecord,
+            cellStyleMap,candidate)
+        || !hasUnchangedVerifiedStyleResourceSource(data,styleControl,styleRecord)
+        || !hasUnchangedVerifiedLTypeResourceSource(data,ltypeControl,
+            ordinaryLtype,byBlockLtype,byLayerLtype))
+        return false;
+
+    const DRW_CellStyleMap* selectedMap=nullptr;
+    for(const auto& row:data.cellStyleMaps) {
+        if(row.handle!=cellStyleMap)continue;
+        if(selectedMap!=nullptr)return false;
+        selectedMap=&row;
+    }
+    if(selectedMap==nullptr
+        || selectedMap->m_cellStyles.size()!=candidate.styles.size())return false;
+    for(std::size_t i=0;i<candidate.styles.size();++i) {
+        const auto& cell=selectedMap->m_cellStyles[i];
+        if(candidate.styles[i].textStyle.target!=styleRecord
+            || cell.m_borders.size()!=candidate.styles[i].linetypes.size())
+            return false;
+        for(std::size_t j=0;j<candidate.styles[i].linetypes.size();++j)
+            if(candidate.styles[i].linetypes[j].target!=byBlockLtype
+                || cell.m_borders[j].m_lineTypeHandle!=byBlockLtype)
+                return false;
+    }
+    result=candidate;
+    return true;
 }
 
 void dx_iface::finishVerifiedXRecordSource(bool successfulRead) noexcept {

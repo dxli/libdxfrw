@@ -26,9 +26,12 @@ public:
 namespace {
 const std::vector<std::uint32_t> xs{0xbcu,0xbeu,0xbfu,0xc0u,0xc1u,0xc2u,0xc3u,0xc4u,0xc5u,0xc6u};
 const std::vector<std::uint32_t> all{0xbcu,0xbeu,0xbfu,0xc0u,0xc1u,0xc2u,0xc3u,0xc4u,0xc5u,0xc6u,0xdcu};
-bool enable(dx_iface& r,std::uint32_t map=0xddu){return r.enableVerifiedTableCellStyleMapSource(xs,0xb9u,0xbdu,0xbau,0x9cu,0xbbu,0x6bu,0xdbu,0xdcu,map);}
+bool enable(dx_iface& r,std::uint32_t map=0xddu){return r.enableVerifiedTableCellStyleResourceSource(
+ xs,0xb9u,0xbdu,0xbau,0x9cu,0xbbu,0x6bu,0xdbu,0xdcu,map,
+ 0x3u,0x11u,0x5u,0x16u,0x14u,0x15u);}
 bool live(const dx_data& d){DwgCellStyleMapAc1018Candidate::Result r;
- return dx_iface::readVerifiedTableCellStyleMapSource(d,xs,0xb9u,0xbdu,0xbau,0x9cu,0xbbu,0x6bu,0xdbu,0xdcu,0xddu,r)
+ return dx_iface::readVerifiedTableCellStyleResourceSource(d,xs,0xb9u,0xbdu,0xbau,0x9cu,0xbbu,0x6bu,0xdbu,0xdcu,0xddu,
+  0x3u,0x11u,0x5u,0x16u,0x14u,0x15u,r)
   && r.handle==0xddu && r.owner==0xdbu && r.styles[0].id==3 && r.styles[1].id==1 && r.styles[2].id==2
   && r.dataEndBit==5287u && r.handleEndBit==5655u
   && r.styles[0].textStyle.target==0x11u && r.styles[2].linetypes[5].target==0x14u
@@ -66,6 +69,12 @@ int main(int argc,char**argv){if(argc!=2)return 2;Probe r;dx_data d;
   ||!change([](DRW_CellStyleMap& x){x.m_cellStyles[0].m_contentFormat.m_textStyleHandle^=1u;})
   ||!change([](DRW_CellStyleMap& x){x.m_cellStyles[2].m_borders[5].m_lineTypeHandle^=1u;})
   ||!change([](DRW_CellStyleMap& x){x.m_cellStyles[1].m_contentFormat.m_textHeight=42.;}))return 5;
+ auto textStyle=std::find_if(d.textStyles.begin(),d.textStyles.end(),[](const DRW_Textstyle& x){return x.handle==0x11u;});
+ if(textStyle==d.textStyles.end())return 51;const auto originalTextStyle=*textStyle;
+ textStyle->name+="_MUTATED";if(live(d))return 52;*textStyle=originalTextStyle;if(!live(d))return 53;
+ auto byBlock=std::find_if(d.lineTypes.begin(),d.lineTypes.end(),[](const DRW_LType& x){return x.handle==0x14u;});
+ if(byBlock==d.lineTypes.end())return 54;const auto originalByBlock=*byBlock;
+ byBlock->desc+="_MUTATED";if(live(d))return 55;*byBlock=originalByBlock;if(!live(d))return 56;
  map->m_subrecordRanges.push_back({});if(!live(d))return 6;*map=original;
  auto& raw=DxIfaceStandardDwgCaptureTestAccess::raw(d,0xddu);raw.m_rawBytes[0]^=1u;if(live(d))return 7;raw.m_rawBytes[0]^=1u;if(!live(d))return 8;
  d.cellStyleMaps.push_back(original);if(live(d))return 9;d.cellStyleMaps.pop_back();if(!live(d))return 10;
@@ -98,7 +107,7 @@ int main(int argc,char**argv){if(argc!=2)return 2;Probe r;dx_data d;
  if(selected||!fault::fired||!enable(selectionFault))return 37;
  dx_data selectorRetry;if(!selectionFault.fileImport(argv[1],&selectorRetry,false)||!live(selectorRetry))return 38;
  Probe downgraded;dx_data downgradeData;DwgTableStyleRoundtripXRecordAc1018Candidate::Result oldXrecord;
- if(!enable(downgraded)||!downgraded.enableVerifiedTableStyleXRecordSource(xs,0xb9u,0xbdu,0xbau,0x9cu,0xbbu,0x6bu,0xdbu,0xdcu,0xddu)
+ if(!downgraded.enableVerifiedTableStyleXRecordSource(xs,0xb9u,0xbdu,0xbau,0x9cu,0xbbu,0x6bu,0xdbu,0xdcu,0xddu)
     ||!downgraded.fileImport(argv[1],&downgradeData,false))return 39;
  auto downgradedMap=std::find_if(downgradeData.cellStyleMaps.begin(),downgradeData.cellStyleMaps.end(),[](const DRW_CellStyleMap& x){return x.handle==0xddu;});
  if(downgradedMap==downgradeData.cellStyleMaps.end())return 40;
@@ -112,4 +121,4 @@ int main(int argc,char**argv){if(argc!=2)return 2;Probe r;dx_data d;
  auto oldMap=std::find_if(old.cellStyleMaps.begin(),old.cellStyleMaps.end(),[](const DRW_CellStyleMap& x){return x.handle==0xddu;});
  if(oldMap==old.cellStyleMaps.end())return 35;std::swap(oldMap->m_cellStyles[0],oldMap->m_cellStyles[1]);
  if(!dx_iface::readVerifiedTableStyleDictionarySource(old,xs,0xb9u,0xbdu,0xbau,0x9cu,0xbbu,0x6bu,0xdbu,0xdcu,0xddu,oldResult))return 36;
- std::cout<<"CELLSTYLEMAP selected source order, dictionary edge, mutation, failure/retry, old mode and output gate controls passed\n";return 0;}
+ std::cout<<"CELLSTYLEMAP source order, dictionary targets, same-import STYLE/LTYPE resources, mutation, failure/retry, old mode and output gate controls passed\n";return 0;}
