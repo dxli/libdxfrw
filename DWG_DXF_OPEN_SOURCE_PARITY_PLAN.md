@@ -1214,8 +1214,11 @@ created locally from scratch for the specific control.
   unremappable XDATA, while same-ID edits, replacement and deletion retain
   the existing SPLINE behavior. It is not graph-safe: an independent LINE's
   group-1005 reference to the source HELIX is dropped while the HELIX handle
-  is reminted, and an expected fail-closed test fails. Do not publish the
-  prototype. Next bind import-generation source identity, collect typed and
+  is reminted, and an expected fail-closed test initially fails. Opting into
+  the physical ENTITIES source facet detects that reference and makes the
+  focused test refuse atomically; HEADER/TABLES/BLOCKS/OBJECTS, opaque scopes,
+  full callback pairing and whole-file success remain unqualified. Do not
+  publish the prototype. Next bind import-generation source identity, collect typed and
   raw inbound/outbound references across sections, plan output handles before
   early sections, and reject unresolved or opaque edges atomically. Verify
   both consumers, edits/identity reuse and ASCII/Binary readback. See the
