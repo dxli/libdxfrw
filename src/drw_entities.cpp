@@ -11644,19 +11644,24 @@ bool DRW_OleFrame::encodeDwg(DRW::Version version, dwgBufferW *buf,
             && m_declaredPayloadLength != m_payloadBytes.size())) {
         return false;
     }
-
-    oType = 43;
-    if (!encodeDwgCommon(version, buf))
-        return false;
-    buf->putBitShort(m_flags);
-    if (version > DRW::AC1014)
-        buf->putBitShort(m_mode);
-    const std::uint32_t payloadLength =
-        static_cast<std::uint32_t>(m_payloadBytes.size());
-    buf->putBitLong(static_cast<std::int32_t>(payloadLength));
-    if (payloadLength != 0)
-        buf->putBytes(m_payloadBytes.data(), m_payloadBytes.size());
-    return encodeDwgEntHandle(version, buf, handleBuf);
+    return encodeEntityDwgTransaction(
+        oType, buf, nullptr, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            (void)strings;
+            oType = 43;
+            if (!encodeDwgCommon(version, body))
+                return false;
+            body->putBitShort(m_flags);
+            if (version > DRW::AC1014)
+                body->putBitShort(m_mode);
+            const std::uint32_t payloadLength =
+                static_cast<std::uint32_t>(m_payloadBytes.size());
+            body->putBitLong(static_cast<std::int32_t>(payloadLength));
+            if (payloadLength != 0)
+                body->putBytes(m_payloadBytes.data(), m_payloadBytes.size());
+            return encodeDwgEntHandle(version, body, handles);
+        });
 }
 
 void DRW_Light::resetDwgState() {
