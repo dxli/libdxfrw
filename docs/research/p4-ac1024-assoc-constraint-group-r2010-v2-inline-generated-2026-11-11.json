@@ -37,7 +37,8 @@
     ]
   },
   "generatedControls": {
-    "description": "From-scratch AC1024 object frames exercise two nodes with IDs 1 and 4, next-node-ID seed 9, distinct status bytes 3 and 7, reciprocal connection IDs, a bounded-line geometry dependency, and an active fixed constraint. A separate control omits the required active bit and requires raw-only publication plus following-object recovery.",
+    "description": "From-scratch AC1024 object frames exercise six sparse node IDs, distinct status bytes, reciprocal connection IDs, a bounded-line geometry dependency, an active fixed constraint, distance and radius/diameter dependency handles, and vertical/horizontal datum-line indexes. True and false active values are checked for geometrical, distance, radius/diameter, vertical and horizontal node bodies. A separate control omits the required fixed-constraint active bit and requires raw-only publication plus following-object recovery.",
+    "activeBitPlacement": "The generator emits each version-2 active bit after the implied bit and before the following class-specific direction/mode/datum field, matching the reader's peer-derived candidate order.",
     "fixtureFilesAdded": 0,
     "copyPreservation": "The parsed node status and active flag survive DRW_AssociativeObject copy construction.",
     "outputPolicy": "The existing DWG-to-DXF writer admission requires m_constraintGroupVersion == 0; version-2 output remains refused."
@@ -49,11 +50,15 @@
     },
     "focusedAndPhysicalCohort": {
       "command": "ctest --test-dir build-gcc -R '^(libdxfrw_associative_constraint_group_generated|dwg_read_AC1024_(architectural_example-imperial|civil_example-imperial|mechanical_example-imperial))$' --output-on-failure",
-      "result": "PASS: 4/4"
+      "result": "PASS: 4/4 before the regression expansion"
+    },
+    "expandedFocusedControl": {
+      "command": "cmake --build build-gcc --target libdxfrw_dwg_reader_matrix_tests -j4 && ctest --test-dir build-gcc -R '^libdxfrw_associative_constraint_group_generated$' --output-on-failure",
+      "result": "PASS: target build and focused test 1/1; expanded active-field coverage"
     },
     "asanFocusedControl": {
       "command": "cmake --build build-asan-custom --target libdxfrw_dwg_reader_matrix_tests -j4 && ctest --test-dir build-asan-custom -R '^libdxfrw_associative_constraint_group_generated$' --output-on-failure",
-      "result": "PASS: target build and focused test 1/1"
+      "result": "PASS: target build and focused test 1/1; expanded active-field coverage"
     },
     "diffCheck": "PASS"
   },

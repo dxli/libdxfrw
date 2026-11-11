@@ -182,17 +182,23 @@ inline bool makeFrame(const Options& options, Frame& frame) {
         if (node.hasDistanceBody) {
             object.putBitLong(node.ownerId);
             object.putBit(node.isImplied ? 1u : 0u);
+            if (options.groupVersion == 2 && node.hasActiveFlag)
+                object.putBit(node.isActive ? 1u : 0u);
             object.putRawChar8(node.directionType);
             if (node.directionType != 0u)
                 object.put3BitDouble(node.distance);
         } else if (node.hasRadiusDiameterBody) {
             object.putBitLong(node.ownerId);
             object.putBit(node.isImplied ? 1u : 0u);
+            if (options.groupVersion == 2 && node.hasActiveFlag)
+                object.putBit(node.isActive ? 1u : 0u);
             if (node.hasRadiusDiameterMode)
                 object.putRawChar8(node.radiusDiameterMode);
         } else if (node.hasHorizontalBody || node.hasVerticalBody) {
             object.putBitLong(node.ownerId);
             object.putBit(node.isImplied ? 1u : 0u);
+            if (options.groupVersion == 2 && node.hasActiveFlag)
+                object.putBit(node.isActive ? 1u : 0u);
             if (node.hasDatumLineIndex)
                 object.putBitLong(node.datumLineIndex);
         } else if (node.hasDatumLineBody) {

@@ -13729,7 +13729,7 @@ void testAssociativeConstraintGroupGenerated(TestContext& t) {
     inlineVersion2.classNumber = classNumber;
     inlineVersion2.handle = sourceHandle;
     inlineVersion2.groupVersion = 2;
-    inlineVersion2.nextNodeId = 9;
+    inlineVersion2.nextNodeId = 25;
     inlineVersion2.actions.clear();
     Node constrainedLine;
     constrainedLine.id = 1;
@@ -13752,7 +13752,51 @@ void testAssociativeConstraintGroupGenerated(TestContext& t) {
     fixedConstraint.hasGeometricalBody = true;
     fixedConstraint.hasActiveFlag = true;
     fixedConstraint.isActive = true;
-    inlineVersion2.nodes = {constrainedLine, fixedConstraint};
+    Node distanceConstraint;
+    distanceConstraint.id = 9;
+    distanceConstraint.status = 11u;
+    distanceConstraint.className = "AcDistanceConstraint";
+    distanceConstraint.ownerId = 4;
+    distanceConstraint.hasDistanceBody = true;
+    distanceConstraint.hasActiveFlag = true;
+    distanceConstraint.isActive = true;
+    distanceConstraint.directionType = 0u;
+    distanceConstraint.valueDependencyHandle = 0xA501u;
+    distanceConstraint.dimensionDependencyHandle = 0xA502u;
+    Node radiusConstraint;
+    radiusConstraint.id = 12;
+    radiusConstraint.status = 12u;
+    radiusConstraint.className = "AcRadiusDiameterConstraint";
+    radiusConstraint.ownerId = 4;
+    radiusConstraint.hasRadiusDiameterBody = true;
+    radiusConstraint.hasActiveFlag = true;
+    radiusConstraint.isActive = false;
+    radiusConstraint.radiusDiameterMode = 1u;
+    radiusConstraint.valueDependencyHandle = 0xA503u;
+    radiusConstraint.dimensionDependencyHandle = 0xA504u;
+    Node verticalConstraint;
+    verticalConstraint.id = 15;
+    verticalConstraint.status = 15u;
+    verticalConstraint.className = "AcVerticalConstraint";
+    verticalConstraint.ownerId = 4;
+    verticalConstraint.hasVerticalBody = true;
+    verticalConstraint.hasDatumLineIndex = true;
+    verticalConstraint.datumLineIndex = 2;
+    verticalConstraint.hasActiveFlag = true;
+    verticalConstraint.isActive = true;
+    Node horizontalConstraint;
+    horizontalConstraint.id = 18;
+    horizontalConstraint.status = 18u;
+    horizontalConstraint.className = "AcHorizontalConstraint";
+    horizontalConstraint.ownerId = 4;
+    horizontalConstraint.hasHorizontalBody = true;
+    horizontalConstraint.hasDatumLineIndex = true;
+    horizontalConstraint.datumLineIndex = 3;
+    horizontalConstraint.hasActiveFlag = true;
+    horizontalConstraint.isActive = false;
+    inlineVersion2.nodes = {constrainedLine, fixedConstraint,
+                            distanceConstraint, radiusConstraint,
+                            verticalConstraint, horizontalConstraint};
     Frame inlineObject;
     Frame inlineSentinelObject;
     std::vector<std::uint8_t> inlineFrame;
@@ -13794,10 +13838,10 @@ void testAssociativeConstraintGroupGenerated(TestContext& t) {
             && inlineParsed != inlineSink.typed.end()
             && inlineParsed->m_constraintGroupBodyParsed
             && inlineParsed->m_constraintGroupVersion == 2
-            && inlineParsed->m_constraintNextNodeId == 9
-            && inlineParsed->m_constraintNodeCount == 2
+            && inlineParsed->m_constraintNextNodeId == 25
+            && inlineParsed->m_constraintNodeCount == 6
             && inlineParsed->m_constraintNodesParsed
-            && inlineParsed->m_constraintNodes.size() == 2u
+            && inlineParsed->m_constraintNodes.size() == 6u
             && inlineParsed->m_constraintNodes[0].m_hasStatus
             && inlineParsed->m_constraintNodes[0].m_status == 3u
             && inlineParsed->m_constraintNodes[0].m_nodeId == 1
@@ -13817,13 +13861,65 @@ void testAssociativeConstraintGroupGenerated(TestContext& t) {
             && inlineParsed->m_constraintNodes[1].m_ownerId == 1
             && inlineParsed->m_constraintNodes[1].m_hasActiveFlag
             && inlineParsed->m_constraintNodes[1].m_isActive
-            && inlineCopy.m_constraintNodes.size() == 2u
+            && inlineParsed->m_constraintNodes[2].m_hasStatus
+            && inlineParsed->m_constraintNodes[2].m_status == 11u
+            && inlineParsed->m_constraintNodes[2].m_dataKind
+                   == DRW_AssociativeConstraintNode::DataKind::Distance
+            && inlineParsed->m_constraintNodes[2].m_hasActiveFlag
+            && inlineParsed->m_constraintNodes[2].m_isActive
+            && inlineParsed->m_constraintNodes[2].m_hasValueDependencyHandle
+            && inlineParsed->m_constraintNodes[2].m_valueDependencyHandle
+                   == 0xA501u
+            && inlineParsed->m_constraintNodes[2].m_valueDependencyCode
+                   == DRW::DwgHardPointer
+            && inlineParsed->m_constraintNodes[2].m_hasDimensionDependencyHandle
+            && inlineParsed->m_constraintNodes[2].m_dimensionDependencyHandle
+                   == 0xA502u
+            && inlineParsed->m_constraintNodes[2].m_dimensionDependencyCode
+                   == DRW::DwgHardPointer
+            && inlineParsed->m_constraintNodes[2].m_directionType == 0u
+            && !inlineParsed->m_constraintNodes[2].m_hasDistance
+            && inlineParsed->m_constraintNodes[3].m_hasStatus
+            && inlineParsed->m_constraintNodes[3].m_status == 12u
+            && inlineParsed->m_constraintNodes[3].m_dataKind
+                   == DRW_AssociativeConstraintNode::DataKind::RadiusDiameter
+            && inlineParsed->m_constraintNodes[3].m_hasActiveFlag
+            && !inlineParsed->m_constraintNodes[3].m_isActive
+            && inlineParsed->m_constraintNodes[3].m_hasValueDependencyHandle
+            && inlineParsed->m_constraintNodes[3].m_valueDependencyHandle
+                   == 0xA503u
+            && inlineParsed->m_constraintNodes[3].m_valueDependencyCode
+                   == DRW::DwgHardPointer
+            && inlineParsed->m_constraintNodes[3].m_dimensionDependencyHandle
+                   == 0xA504u
+            && inlineParsed->m_constraintNodes[3].m_dimensionDependencyCode
+                   == DRW::DwgHardPointer
+            && inlineParsed->m_constraintNodes[3].m_radiusDiameterMode == 1u
+            && inlineParsed->m_constraintNodes[4].m_hasStatus
+            && inlineParsed->m_constraintNodes[4].m_status == 15u
+            && inlineParsed->m_constraintNodes[4].m_dataKind
+                   == DRW_AssociativeConstraintNode::DataKind::Vertical
+            && inlineParsed->m_constraintNodes[4].m_hasActiveFlag
+            && inlineParsed->m_constraintNodes[4].m_isActive
+            && inlineParsed->m_constraintNodes[4].m_datumLineIndex == 2
+            && inlineParsed->m_constraintNodes[5].m_hasStatus
+            && inlineParsed->m_constraintNodes[5].m_status == 18u
+            && inlineParsed->m_constraintNodes[5].m_dataKind
+                   == DRW_AssociativeConstraintNode::DataKind::Horizontal
+            && inlineParsed->m_constraintNodes[5].m_hasActiveFlag
+            && !inlineParsed->m_constraintNodes[5].m_isActive
+            && inlineParsed->m_constraintNodes[5].m_datumLineIndex == 3
+            && inlineCopy.m_constraintNodes.size() == 6u
             && inlineCopy.m_constraintNodes[0].m_status == 3u
             && inlineCopy.m_constraintNodes[1].m_isActive
+            && inlineCopy.m_constraintNodes[2].m_isActive
+            && !inlineCopy.m_constraintNodes[3].m_isActive
+            && inlineCopy.m_constraintNodes[4].m_isActive
+            && !inlineCopy.m_constraintNodes[5].m_isActive
             && inlineNext != inlineSink.typed.end()
             && inlineSink.raw.size() == 2u;
         t.expect(inlineMatches,
-                 "AC1024 version-2 inline class/status/connection/body fields decode with sparse IDs and exact following-frame recovery");
+                 "AC1024 version-2 inline status and active fields decode across geometric, distance, radius, vertical, and horizontal bodies with exact following-frame recovery");
 
         Options truncatedInline = inlineVersion2;
         truncatedInline.nodes[1].hasActiveFlag = false;

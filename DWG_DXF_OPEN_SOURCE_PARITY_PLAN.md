@@ -15,6 +15,14 @@ scratch data, not a producer witness, and this does not qualify native semantics
 or support claims. See the
 [version-2 inline receipt](docs/research/p4-ac1024-assoc-constraint-group-r2010-v2-inline-generated-2026-11-11.json).
 
+**P4 version-2 active-field regression expansion (2026-11-11):** the generated
+AC1024 control now covers active-bit placement and typed readback for
+geometrical, distance, radius/diameter, vertical and horizontal nodes, with
+both active values and the explicit hard-pointer tails. Its frame builder now
+emits the active bit at the corresponding node-body boundary. The focused
+normal and ASan selector pass; this closes generated parser-control coverage
+only. Physical producer and output gates remain open; see the same receipt.
+
 **P4 source-graph slice (2026-11-11, AC1032 associative network):** the
 hash-pinned AutoCAD forum attachment now has an exact local closure check for
 the selected NOD `0xC` → dictionary `0x2A6` → root network `0x2A7` →
