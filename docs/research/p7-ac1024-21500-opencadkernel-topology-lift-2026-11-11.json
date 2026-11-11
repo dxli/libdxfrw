@@ -81,10 +81,10 @@
   },
   "libdxfrwRegression": {
     "file": "tests/graph_preservation_tests.cpp",
-    "change": "The generated ACIS 21500 two-coedge loop control now also emits true sense booleans for both coedges and asserts retained sense flags [1,1], continuous traversal, and exact reversed endpoint pairs [7,6] and [6,7]. The SAB bytes are authored in memory.",
+    "change": "Generated ACIS 21500 two-coedge loop controls assert all-reversed sense flags [1,1] and mixed flags [0,1], endpoint traversal and closure. The mixed SAB is passed through drw_convertSabToSatV1 and asserts one F forward token and one I reversed token on the emitted coedge rows. SAB bytes are authored in memory.",
     "command": "cmake --build build-gcc --target libdxfrw_graph_preservation_tests -j4 && build-gcc/libdxfrw_graph_preservation_tests",
     "result": "PASS: Graph/preservation tests",
-    "sourceFileSha256": "546a77e788f126be449a192b628883e58fe11bc91bf9799eea076329072fa71a"
+    "sourceFileSha256": "cd69d54297f052bf218883f7e5527633ad30f28ace5b9d512f34bc5bcdc439a5"
   },
   "unresolved": [
     "Determine which additional 21500 fields are semantic versus producer-specific using authoritative or independent source evidence; do not promote the scratch normalization to a format rule.",

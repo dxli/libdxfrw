@@ -8,6 +8,7 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <sstream>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -494,7 +495,8 @@ std::vector<std::uint8_t> sab21500FromGraph(const DRW_SabData& graph) {
 }
 
 std::vector<std::uint8_t> twoCoedgeClosedSab21500(
-    bool wrongNextTarget = false, bool reversedCoedges = false) {
+    bool wrongNextTarget = false, bool firstCoedgeReversed = false,
+    bool secondCoedgeReversed = false) {
     DRW_SabData graph;
     graph.header.signature = "ACIS BinaryFile";
     graph.header.version = 21500;
@@ -553,10 +555,14 @@ std::vector<std::uint8_t> twoCoedgeClosedSab21500(
     record("face", {-1, -1, 1, -1, -1, -1});
     record("loop", {-1, -1, 2, 0});
     record("coedge", {-1, wrongNextTarget ? 4 : 3, 3, 2, 4, 1, -1},
-           5u, reversedCoedges);
-    record("coedge", {-1, 2, 2, 3, 5, 1, -1}, 5u, reversedCoedges);
+           5u, firstCoedgeReversed);
+    record("coedge", {-1, 2, 2, 3, 5, 1, -1},
+           5u, secondCoedgeReversed);
     record("edge", {-1, 6, 7, 2, -1});
-    record("edge", {-1, 7, 6, 3, -1});
+    const bool reverseSecondEdge = firstCoedgeReversed
+        != secondCoedgeReversed;
+    record("edge", {-1, reverseSecondEdge ? 6 : 7,
+                     reverseSecondEdge ? 7 : 6, 3, -1});
     record("vertex", {-1, 4, 8});
     record("vertex", {-1, 5, 9});
     record("point", {}, -1, false, 8);
@@ -4018,9 +4024,12 @@ void testAcisRootedBodyProjection(TestContext& t) {
              "SAB 21800 rooted endpoint-chain observation recognizes a connected closed coedge cycle");
     const auto parse21500CoedgeControl = [](
         bool wrongNextTarget, DRW_AcisBrep& output,
-        bool reversedCoedges = false) {
+        bool firstCoedgeReversed = false,
+        bool secondCoedgeReversed = false) {
         const std::vector<std::uint8_t> bytes =
-            twoCoedgeClosedSab21500(wrongNextTarget, reversedCoedges);
+            twoCoedgeClosedSab21500(
+                wrongNextTarget, firstCoedgeReversed,
+                secondCoedgeReversed);
         DRW_SabData sab;
         DRW_AcisModel model;
         if (bytes.empty() || !drw_parseSab(bytes.data(), bytes.size(), sab)
@@ -4056,7 +4065,8 @@ void testAcisRootedBodyProjection(TestContext& t) {
              "ACIS 21500 source-profile control closes loop, coedge, edge, and endpoint identities");
     DRW_AcisBrep acis21500ReversedCoedges;
     const bool acis21500ReversedCoedgesParsed =
-        parse21500CoedgeControl(false, acis21500ReversedCoedges, true);
+        parse21500CoedgeControl(
+            false, acis21500ReversedCoedges, true, true);
     const DRW_AcisFaceLoop* acis21500ReversedLoop =
         acis21500ReversedCoedges.faces.empty()
             || acis21500ReversedCoedges.faces.front().loops.empty()
@@ -4073,6 +4083,47 @@ void testAcisRootedBodyProjection(TestContext& t) {
                         ->coedgeOrientedEndVertexNodeIndices
                         == std::vector<int>{6, 7},
              "ACIS 21500 true coedge booleans reverse both traversal endpoint pairs");
+    DRW_AcisBrep acis21500MixedCoedges;
+    const bool acis21500MixedCoedgesParsed =
+        parse21500CoedgeControl(false, acis21500MixedCoedges, false, true);
+    const DRW_AcisFaceLoop* acis21500MixedLoop =
+        acis21500MixedCoedges.faces.empty()
+            || acis21500MixedCoedges.faces.front().loops.empty()
+            ? nullptr : &acis21500MixedCoedges.faces.front().loops.front();
+    const std::vector<std::uint8_t> acis21500MixedBytes =
+        twoCoedgeClosedSab21500(false, false, true);
+    std::vector<std::uint8_t> acis21500MixedSat;
+    const bool acis21500MixedSatConverted =
+        drw_convertSabToSatV1(
+            acis21500MixedBytes.data(), acis21500MixedBytes.size(),
+            DRW::AC1024, acis21500MixedSat);
+    std::istringstream acis21500MixedSatStream(std::string(
+        acis21500MixedSat.begin(), acis21500MixedSat.end()));
+    std::string acis21500SatLine;
+    std::size_t acis21500ForwardCoedgeWords = 0u;
+    std::size_t acis21500ReversedCoedgeWords = 0u;
+    while (std::getline(acis21500MixedSatStream, acis21500SatLine)) {
+        if (acis21500SatLine.compare(0u, 7u, "coedge ") != 0)
+            continue;
+        if (acis21500SatLine.find(" F ") != std::string::npos)
+            ++acis21500ForwardCoedgeWords;
+        if (acis21500SatLine.find(" I ") != std::string::npos)
+            ++acis21500ReversedCoedgeWords;
+    }
+    t.expect(acis21500MixedCoedgesParsed && acis21500MixedLoop
+                 && acis21500MixedLoop->coedgeSenseFlags
+                        == std::vector<std::int8_t>{0, 1}
+                 && acis21500MixedLoop->coedgeEndpointChainContinuous
+                 && acis21500MixedLoop
+                        ->coedgeOrientedStartVertexNodeIndices
+                        == std::vector<int>{6, 7}
+                 && acis21500MixedLoop
+                        ->coedgeOrientedEndVertexNodeIndices
+                        == std::vector<int>{7, 6}
+                 && acis21500MixedSatConverted
+                 && acis21500ForwardCoedgeWords == 1u
+                 && acis21500ReversedCoedgeWords == 1u,
+             "ACIS 21500 mixed coedge senses preserve forward/reversed endpoints and F/I SAT words");
     DRW_AcisBrep acis21500BrokenLoop;
     const bool acis21500BrokenLoopParsed =
         parse21500CoedgeControl(true, acis21500BrokenLoop);
