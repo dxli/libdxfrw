@@ -1506,6 +1506,16 @@ created locally from scratch for the specific control.
   parsed-source replay, physical producer order, native precedence/rendering,
   and whole-document support remain open. See the [DWG row text-style writer
   receipt](docs/research/p5-ac1018-table-row-text-style-dwg-writer-2026-11-11.json).
+  **Completed DWG row text-color slice (2026-11-11):** the AC1018 direct
+  encoder now writes selected title/header/data CMC index colors before row
+  alignments, in ODA §20.4.96.1 order. The parser retains the normalized CMC
+  payload index rather than the reserved leading BS, allowing exact C0/C1/C3
+  model readback. A generated vector verifies ByLayer, ByBlock and indexed ACI,
+  exact raw field order, alignments and the following-body sentinel; selected
+  truecolor/unknown-flag values and unselected residue refuse without output.
+  The focused DWG and DXF adapter tests pass. This is generated codec evidence
+  only: physical producer ordering, native rendering/style precedence and
+  parsed-source replay remain open. See the [row text-color writer receipt](docs/research/p5-ac1018-table-row-colors-dwg-writer-2026-11-11.json).
   Re-encoding a parsed TABLE with a nonempty retained override range remains
   refused, including after modeled values change: the range currently stores
   offsets and counts, not the source bytes or a value snapshot. Next add an

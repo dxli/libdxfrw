@@ -3662,7 +3662,12 @@ bool readTableCmColor(DRW::Version version, dwgBuffer *buf,
     if (color != nullptr) {
         color->method = method;
         color->flags = flags;
-        color->index = index;
+        // The leading R2004+ BS is reserved and normally zero; retain the
+        // normalized color index from the CMC payload in the public model.
+        // C0/C1/C3 return their ACI/ByLayer/ByBlock index here, while C2
+        // keeps its ByLayer fallback alongside the explicit RGB value.
+        color->index = version < DRW::AC1018 ? index
+            : static_cast<std::uint16_t>(packedColor);
         color->rgb24 = rgb24;
         color->hasRgbColor = hasRgbColor;
         color->colorName = std::move(colorName);
@@ -15483,6 +15488,9 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
     constexpr std::array<std::uint32_t, 3> rowAlignmentFlags = {{
         0x00004000u, 0x00008000u, 0x00010000u
     }};
+    constexpr std::array<std::uint32_t, 3> rowTextColorFlags = {{
+        0x00000020u, 0x00000040u, 0x00000080u
+    }};
     constexpr std::array<std::uint32_t, 3> rowTextHeightFlags = {{
         0x00100000u, 0x00200000u, 0x00400000u
     }};
@@ -15491,6 +15499,19 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
     }};
     const auto validTableRowOverrides = [&]() {
         for (std::size_t i = 0u; i < rowAlignmentFlags.size(); ++i) {
+            const bool hasTextColor =
+                (m_tableOverrideFlags & rowTextColorFlags[i]) != 0u;
+            const DRW_DwgCmColor& textColor = m_tableRowTextColors[i];
+            const bool validIndexColor = !textColor.hasRgbColor
+                && textColor.flags == 0u
+                && textColor.rgb24 == -1 && textColor.colorName.empty()
+                && textColor.bookName.empty()
+                && ((textColor.method == 0xC0u && textColor.index == 256u)
+                    || (textColor.method == 0xC1u && textColor.index == 0u)
+                    || (textColor.method == 0xC3u && textColor.index >= 1u
+                        && textColor.index <= 255u));
+            if (hasTextColor ? !validIndexColor : !defaultColor(textColor))
+                return false;
             const bool hasAlignment =
                 (m_tableOverrideFlags & rowAlignmentFlags[i]) != 0u;
             const int alignment = m_tableRowAlignmentOverrides[i];
@@ -15515,7 +15536,7 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
         return true;
     };
     const bool validTableScalarOverrides =
-        (m_tableOverrideFlags & ~0x007FC01Fu) == 0u
+        (m_tableOverrideFlags & ~0x007FC0FFu) == 0u
         && validTableRowOverrides()
         && (hasTitleSuppressed || !m_titleSuppressed)
         && (m_headerSuppressed == hasHeaderSuppressed)
@@ -15595,11 +15616,6 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
         || std::any_of(m_tableRowTextStyleNames.cbegin(),
                        m_tableRowTextStyleNames.cend(),
                        [](const UTF8STRING& name) { return !name.empty(); })
-        || std::any_of(m_tableRowTextColors.cbegin(),
-                       m_tableRowTextColors.cend(),
-                       [&](const DRW_DwgCmColor& color) {
-                           return !defaultColor(color);
-                       })
         || std::any_of(m_tableRowFillNone.cbegin(),
                        m_tableRowFillNone.cend(),
                        [](bool value) { return value; })
@@ -15973,6 +15989,14 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
                 stagedBody.putBitDouble(m_horizontalCellMargin);
             if (hasVerticalCellMargin)
                 stagedBody.putBitDouble(m_verticalCellMargin);
+            for (std::size_t i = 0u; i < rowTextColorFlags.size(); ++i) {
+                if ((m_tableOverrideFlags & rowTextColorFlags[i]) != 0u) {
+                    const DRW_DwgCmColor& color = m_tableRowTextColors[i];
+                    stagedBody.putCmColor(
+                        version, color.method, color.index, color.rgb24,
+                        color.colorName, color.bookName, strBuf);
+                }
+            }
             // ODA §20.4.96.1: title/header/data alignments precede the
             // corresponding row text heights in the inline body. Text-style
             // references are written in the parallel handle stream below.

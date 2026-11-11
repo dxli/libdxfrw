@@ -11449,6 +11449,95 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  "AC1018 TABLE row text-style handles preserve the following body sentinel");
     }
 
+    TableDwgCodecProbe rowTextColorTable = makeEncodableAc1018Table();
+    rowTextColorTable.m_tableOverrideFlags = 0x0001C0E0u;
+    rowTextColorTable.m_tableRowTextColors[0].method = 0xC0u;
+    rowTextColorTable.m_tableRowTextColors[0].index = 256u;
+    rowTextColorTable.m_tableRowTextColors[1].method = 0xC1u;
+    rowTextColorTable.m_tableRowTextColors[1].index = 0u;
+    rowTextColorTable.m_tableRowTextColors[2].method = 0xC3u;
+    rowTextColorTable.m_tableRowTextColors[2].index = 63u;
+    rowTextColorTable.m_tableRowAlignmentOverrides = {{1, 5, 9}};
+    dwgBufferW rowTextColorBody;
+    dwgBufferW rowTextColorHandles;
+    dwgBufferW rowTextColorTypePrefix;
+    rowTextColorTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t rowTextColorObjectSizeBit =
+        rowTextColorTypePrefix.bitCount();
+    const bool rowTextColorEncoded = rowTextColorTable.encodeAsTableClass(
+        DRW::AC1018, rowTextColorBody, rowTextColorHandles);
+    const std::uint64_t rowTextColorBodyEndBit = rowTextColorBody.bitCount();
+    constexpr std::int32_t rowTextColorSentinel = 0x51CAE064;
+    rowTextColorBody.putBitLong(rowTextColorSentinel);
+    rowTextColorBody.patchRawLong32AtBit(
+        rowTextColorObjectSizeBit,
+        static_cast<std::uint32_t>(rowTextColorBody.bitCount()));
+    appendBits(rowTextColorBody, rowTextColorHandles);
+    dwgBuffer rowTextColorInput(rowTextColorBody.data().data(),
+                                rowTextColorBody.data().size());
+    TableDwgCodecProbe rowTextColorReadback;
+    const bool rowTextColorRead = rowTextColorEncoded
+        && rowTextColorReadback.parseDwg(DRW::AC1018, &rowTextColorInput);
+    const bool rowTextColorMatches = rowTextColorRead
+        && rowTextColorInput.isGood()
+        && rowTextColorReadback.m_semanticContentComplete
+        && rowTextColorReadback.m_tableOverrideFlags == 0x0001C0E0u
+        && rowTextColorReadback.m_tableRowTextColors[0].method == 0xC0u
+        && rowTextColorReadback.m_tableRowTextColors[0].index == 256u
+        && rowTextColorReadback.m_tableRowTextColors[1].method == 0xC1u
+        && rowTextColorReadback.m_tableRowTextColors[1].index == 0u
+        && rowTextColorReadback.m_tableRowTextColors[2].method == 0xC3u
+        && rowTextColorReadback.m_tableRowTextColors[2].index == 63u
+        && rowTextColorReadback.m_tableRowAlignmentOverrides
+            == std::array<int, 3>{{1, 5, 9}}
+        && cursorBit(rowTextColorInput) == rowTextColorBodyEndBit;
+    t.expect(rowTextColorMatches,
+             "AC1018 TABLE row CMC colors encode and read back before alignment values");
+    if (rowTextColorMatches) {
+        const std::int32_t sentinel = rowTextColorInput.getBitLong();
+        t.expect(rowTextColorInput.isGood()
+                     && sentinel == rowTextColorSentinel,
+                 "AC1018 TABLE row CMC colors preserve the following body sentinel");
+
+        const auto& ranges = rowTextColorReadback.m_content.m_subrecordRanges;
+        const auto range = std::find_if(ranges.cbegin(), ranges.cend(),
+            [](const DRW_DwgSubrecordRange& value) {
+                return value.m_name == "r2007-table-overrides";
+            });
+        dwgBuffer wire(rowTextColorBody.data().data(),
+                       rowTextColorBody.data().size());
+        bool wireOrderMatches = range != ranges.cend()
+            && setBitPosition(wire, range->m_startBit);
+        const bool wireHasOverrides = wireOrderMatches && wire.getBit();
+        const std::uint32_t wireFlags = wireOrderMatches
+            ? static_cast<std::uint32_t>(wire.getBitLong()) : 0u;
+        const std::uint16_t wireReservedColor = wireOrderMatches
+            ? wire.getBitShort() : 1u;
+        wireOrderMatches = wireOrderMatches && wireHasOverrides
+            && wireFlags == 0x0001C0E0u && wireReservedColor == 0u;
+        constexpr std::array<std::uint32_t, 3> packedColors = {{
+            0xC0000000u, 0xC1000000u, 0xC300003Fu
+        }};
+        for (std::size_t i = 0u; i < packedColors.size(); ++i) {
+            const std::uint16_t reservedColor = i == 0u
+                ? 0u : wire.getBitShort();
+            const std::int32_t packed = wire.getBitLong();
+            const std::uint8_t colorFlags = wire.getRawChar8();
+            wireOrderMatches = wireOrderMatches
+                && reservedColor == 0u
+                && packed == static_cast<std::int32_t>(packedColors[i])
+                && colorFlags == 0u;
+        }
+        wireOrderMatches = wireOrderMatches
+            && wire.getBitShort() == 1u && wire.getBitShort() == 5u
+            && wire.getBitShort() == 9u
+            && !wire.getBit() && !wire.getBit() && !wire.getBit()
+            && wire.isGood()
+            && cursorBit(wire) == range->m_startBit + range->m_bitSize;
+        t.expect(wireOrderMatches,
+                 "AC1018 TABLE emits title/header/data index CMC fields before row alignments");
+    }
+
     TableDwgCodecProbe cellAlignmentTable = makeEncodableAc1018Table();
     DRW_TableCell& cellAlignmentCell =
         cellAlignmentTable.m_content.m_rows.front().m_cells.front();
@@ -12915,6 +13004,24 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
             table.m_tableRowTextStyleNames[1] = "Arial";
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects selected truecolor row overrides",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_tableOverrideFlags = 0x00000020u;
+            table.m_tableRowTextColors[0].method = 0xC2u;
+            table.m_tableRowTextColors[0].hasRgbColor = true;
+            table.m_tableRowTextColors[0].rgb24 = 0x123456;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects selected row colors with unknown CMC flags",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_tableOverrideFlags = 0x00000020u;
+            table.m_tableRowTextColors[0].method = 0xC3u;
+            table.m_tableRowTextColors[0].index = 7u;
+            table.m_tableRowTextColors[0].flags = 0x04u;
         });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects nondefault row colors without writing",
