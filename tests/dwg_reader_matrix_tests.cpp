@@ -12796,7 +12796,26 @@ void testAc1032ConstraintGroupCandidateGenerated(TestContext& t) {
             object.put3BitDouble(DRW_Coord(1, 0, 0));
             object.put3BitDouble(DRW_Coord(0, 1, 0));
             object.putBitLong(2); // source-witnessed action count
-            object.putBitLong(13); // opaque post-action value; never interpreted
+            object.putBitLong(2); // candidate next-node ID
+            object.putBitLong(0); // candidate root ID
+            object.putBitLong(0); // no root connections
+            object.putBit(variant == 9 ? 1u : 0u); // candidate root flag
+            object.putBitLong(variant == 13 ? 257 : 2); // class string slots
+            object.putBitLong(variant == 8 ? 257 : 2); // registered count
+            object.putBit(variant == 10 ? 1u : 0u);
+            object.putBitLong(1); object.putBitLong(1);
+            object.putBit(0u);
+            object.putBitLong(variant == 5 ? 3 : 2); // invalid class index
+            if (variant != 7)
+                object.putBitLong(variant == 4 ? 1 : variant == 11 ? 0
+                                              : variant == 12 ? 3 : 2);
+            if (variant == 6) {
+                strings.putBitShort(100); // claims 100 UTF-16 units
+                strings.putRawChar8('A'); // only one byte available
+            } else {
+                strings.putVariableText(DRW::AC1032, "AcConstrainedBoundedLine");
+                strings.putVariableText(DRW::AC1032, "AcPointCurveConstraint");
+            }
         }
         Frame frame;
         if (!appendStringStream(object, strings)) return false;
@@ -12838,7 +12857,7 @@ void testAc1032ConstraintGroupCandidateGenerated(TestContext& t) {
         sink.typed.clear(); sink.raw.clear(); sink.publications.clear();
         return reader.readObjects(bytes, {{sourceHandle, 0u, 0u}}, sink);
     };
-    const auto partial = [&](bool expectedActions) {
+    const auto partial = [&](bool expectedActions, bool expectedRegistry) {
         if (sink.typed.size() != 1u || sink.raw.size() != 1u
             || sink.raw.front().m_rawBytes != expectedRaw
             || sink.raw.front().m_typedPayloadValidated) return false;
@@ -12850,10 +12869,13 @@ void testAc1032ConstraintGroupCandidateGenerated(TestContext& t) {
         return item.handle == sourceHandle && item.parentHandle == parent
             && item.m_owningNetworkHandle == network
             && !item.m_constraintGroupBodyParsed && !item.m_constraintNodesParsed
-            && !item.m_constraintNextNodeIdRead
+            && item.m_constraintNextNodeIdRead == expectedRegistry
+            && (!expectedRegistry || item.m_constraintNextNodeId == 2)
+            && item.m_constraintNodeCount == 0 && item.m_constraintNodes.empty()
             && item.m_constraintActionsParsed == expectedActions
             && status != item.m_prefixStatuses.end()
             && status->m_status == DRW_AssociativePrefixStatus::ParseStatus::Partial
+            && status->m_decodedValueCount == (expectedRegistry ? 2u : 0u)
             && (!expectedActions || (item.m_constraintGroupVersion == 2
                 && !item.m_constraintGroupFlag && item.m_constraintGroupReference == 0u
                 && item.m_constraintWorkplane[0].x == 0.0
@@ -12862,14 +12884,14 @@ void testAc1032ConstraintGroupCandidateGenerated(TestContext& t) {
                 && item.m_constraintActionCount == 2
                 && item.m_constraintActions == std::vector<std::uint32_t>{firstAction, secondAction}));
     };
-    t.expect(read(good, goodPayload) && partial(true) && reader.objectFailures() == 0u,
+    t.expect(read(good, goodPayload) && partial(true, true) && reader.objectFailures() == 0u,
              "AC1032 constraint-group candidate retains raw body and two action roles");
-    for (int variant : {1, 2, 3}) {
+    for (int variant : {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}) {
         std::vector<std::uint8_t> invalid, invalidPayload;
         t.expect(make(variant, invalid, invalidPayload), "AC1032 malformed candidate frame generated");
-        const bool refused = read(invalid, invalidPayload) && partial(false);
-        t.expect(refused, "wrong handle role or truncated candidate does not publish candidate fields");
-        t.expect(read(good, goodPayload) && partial(true) && reader.objectFailures() == 0u,
+        const bool refused = read(invalid, invalidPayload) && partial(variant >= 4, false);
+        t.expect(refused, "malformed group or registry publishes no invalid candidate state");
+        t.expect(read(good, goodPayload) && partial(true, true) && reader.objectFailures() == 0u,
                  "same AC1032 reader accepts corrected candidate after refusal");
     }
 }

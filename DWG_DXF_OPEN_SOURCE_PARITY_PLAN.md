@@ -1209,19 +1209,22 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
-- **P4 AC1032 constraint-group fixed-prefix candidate:** the source-bound
-  `0x2A8` group now exposes its version-2, two-owned-action fixed prefix from
-  isolated body/handle cursor probes. An independent bounded BS/BL/BD/H walker
-  matches the source spans and LibreDWG's candidate order; the decoded section
-  itself still uses libdxfrw's decompressor. The body/node completion flags
-  remain false, raw bytes remain intact, and the disputed post-actions value is
-  unparsed. Generated wrong-role and truncation controls refuse candidate
-  publication and retry on the same reader; the fast cohort passes 4/4. The
-  physical source still publishes 145/145 frames with zero entity/object
-  failures while strict output refuses at existing integrity gates. Next
-  establish the source node table, dependency semantics and graph closure;
-  this partial prefix is not an output or support qualification. See the
-  [receipt](docs/research/p4-ac1032-forum-constraint-group-prefix-candidate-2026-11-10.json).
+- **P4 AC1032 constraint-group registry candidate:** the source-bound `0x2A8`
+  group exposes its version-2 two-action fixed prefix and, after validating a
+  bounded peer-interpreted registry, its candidate seed and registered count.
+  The 13 registered entries exclude root 0, so `m_constraintNodeCount` and
+  `m_constraintNodes` remain untouched. Class string slots are bounded opaque
+  bytes; class names and node bodies are not published. Completion flags remain
+  false, raw bytes are retained, and output gates stay closed. Independent
+  primitive walkers agree with the source spans; section decompression remains
+  shared with libdxfrw. ACadRust's strict read finds root 0 and IDs 1–13; its
+  native AutoCAD validation is peer-reported and has not been rerun here.
+  Malformed registry and same-reader retry controls pass, along with a
+  164-offset whole-parser allocation/reset/retry sweep; the focused cohort
+  passes 5/5. The physical source still publishes 145/145 frames with zero
+  entity/object failures and refuses strict output at existing integrity gates.
+  Next establish node bodies, dependency semantics and graph closure. See the
+  [registry receipt](docs/research/p4-ac1032-forum-constraint-registry-candidate-2026-11-10.json).
 
 - **P6 DXF primitive subtype dispatch:** built-in derived LINE, RAY, CIRCLE,
   TRACE, TEXT and ATTRIB inputs now route to their typed writers instead of

@@ -33899,15 +33899,88 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
             DRW_DBG(m_constraintActions[0]); DRW_DBG("/");
             DRW_DBG(m_constraintActions[1]); DRW_DBG("\n");
         }
+        // The peer-interpreted AC1032 registered-node header has a distinct
+        // root and class-name table. Only expose its seed after the complete
+        // bounded registry is structurally consistent. String slots remain
+        // opaque and node bodies remain in the raw carrier.
+        dwgBuffer registryBody = bodyProbe.forkIndependent();
+        dwgBuffer registryText = sBuf->forkIndependent();
+        std::int32_t nextNodeId = 0, rootId = 0, rootConnections = 0;
+        std::int32_t classCount = 0, registeredCount = 0;
+        bool rootFlag = false;
+        constexpr std::int32_t maxCandidateRegistryItems = 256;
+        bool registryComplete = prefixComplete
+            && readBitLongWithinBody(&registryBody, version, objectDataEnd,
+                                     nextNodeId)
+            && nextNodeId > 0
+            && readBitLongWithinBody(&registryBody, version, objectDataEnd,
+                                     rootId) && rootId == 0
+            && readBitLongWithinBody(&registryBody, version, objectDataEnd,
+                                     rootConnections) && rootConnections == 0
+            && readBitWithinBody(&registryBody, version, objectDataEnd,
+                                 rootFlag) && !rootFlag
+            && readBitLongWithinBody(&registryBody, version, objectDataEnd,
+                                     classCount)
+            && classCount > 0 && classCount <= maxCandidateRegistryItems;
+        for (std::int32_t i = 0; registryComplete && i < classCount; ++i) {
+            std::int32_t codeUnits = 0;
+            std::uint64_t textBits = 0;
+            registryComplete = readBitShortWithinBody(
+                    &registryText, version, stringDataEnd, codeUnits)
+                && codeUnits > 0 && codeUnits <= kMaxAssocConstraintClassNameUnits
+                && dwgSafety::multiply(static_cast<std::uint64_t>(codeUnits),
+                                       16u, textBits)
+                && dictionaryBitRangeAvailable(&registryText, version,
+                                               stringDataEnd, textBits)
+                && textBits <= static_cast<std::uint64_t>(
+                       std::numeric_limits<std::int32_t>::max())
+                && registryText.moveBitPos(static_cast<std::int32_t>(textBits));
+        }
+        registryComplete = registryComplete
+            && readBitLongWithinBody(&registryBody, version, objectDataEnd,
+                                     registeredCount)
+            && registeredCount >= 0
+            && registeredCount <= maxCandidateRegistryItems
+            && countFitsObjectBody(&registryBody, version, objectDataEnd,
+                                   registeredCount, 5u);
+        std::array<std::int32_t, maxCandidateRegistryItems> seenIds{};
+        std::int32_t seenCount = 0;
+        for (std::int32_t i = 0; registryComplete && i < registeredCount; ++i) {
+            bool registryFlag = false;
+            std::int32_t classIndex = 0, nodeId = 0;
+            registryComplete = readBitWithinBody(&registryBody, version,
+                                                 objectDataEnd, registryFlag)
+                && !registryFlag
+                && readBitLongWithinBody(&registryBody, version, objectDataEnd,
+                                         classIndex)
+                && classIndex > 0 && classIndex <= classCount
+                && readBitLongWithinBody(&registryBody, version, objectDataEnd,
+                                         nodeId)
+                && nodeId > 0 && nodeId <= nextNodeId
+                && std::find(seenIds.begin(), seenIds.begin() + seenCount,
+                             nodeId) == seenIds.begin() + seenCount;
+            if (registryComplete)
+                seenIds[static_cast<std::size_t>(seenCount++)] = nodeId;
+        }
+        if (registryComplete) {
+            m_constraintNextNodeIdRead = true;
+            m_constraintNextNodeId = nextNodeId;
+            DRW_DBG("AC1032 constraint-group candidate seed/classes/registry=");
+            DRW_DBG(nextNodeId); DRW_DBG("/"); DRW_DBG(classCount);
+            DRW_DBG("/"); DRW_DBG(registeredCount); DRW_DBG("\n");
+        }
         auto status = makeAssocPrefixStatus(
             DRW_AssociativePrefixStatus::Kind::AcDbAssoc2dConstraintGroup,
-            groupStart, currentObjectDwgBit(&bodyProbe),
+            groupStart, currentObjectDwgBit(
+                registryComplete ? &registryBody : &bodyProbe),
             DRW_AssociativePrefixStatus::ParseStatus::Partial,
-            m_classVersion, prefixComplete ? 2u : 0u, 0u,
+            m_classVersion, prefixComplete ? 2u : 0u,
+            registryComplete ? static_cast<size_t>(registeredCount) : 0u,
             prefixComplete ? actionCount : -1);
         status.m_sourceAssumption =
-            "AC1032 class-version-2 two-action fixed-prefix candidate; "
-            "node table remains opaque and is not output-qualified";
+            "AC1032 class-version-2 two-action fixed-prefix and bounded "
+            "peer-interpreted registry candidate; string slots and node "
+            "bodies remain opaque and are not output-qualified";
         m_prefixStatuses.push_back(std::move(status));
     } else if (endsWith(rn, "ACTIONPARAM")) {
         // Generic action-param subclass (edge / path / face / object /
