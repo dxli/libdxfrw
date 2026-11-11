@@ -1209,6 +1209,12 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P6 DIMENSION runtime safety:** the DXF writer now validates each public
+  dimension subtype tag against the runtime type before any subtype downcast.
+  Generic dimension objects and matching consumer subclasses remain admitted.
+  ASCII/Binary subtype, mismatched-tag, retry and oblique controls pass; see
+  the [receipt](docs/research/p6-dxf-dimension-runtime-tag-validation-2026-11-10.json).
+
 - **P4 AC1032 opt-in constraint-node candidates:** the standalone
   `drwDecodeConstraintGroupCandidate` decoder takes an existing raw carrier
   and returns a separate peer-derived partial result without changing the

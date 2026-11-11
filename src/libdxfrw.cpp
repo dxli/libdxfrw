@@ -11474,6 +11474,43 @@ bool dxfRW::recordPendingDxfDimstyleBlockResource(
 }
 
 bool dxfRW::writeDimension(DRW_Dimension *ent) {
+    // eType is public and can disagree with the runtime object. The fields
+    // below are accessed through subtype pointers, so check the relationship
+    // before any downcast or output. Preserve the established plain
+    // DRW_Dimension path used for generic and dynamic-constraint records.
+    const auto matchesDimensionType = [](const DRW_Dimension* value) {
+        switch (value->eType) {
+        case DRW::DIMALIGNED:
+            return dynamic_cast<const DRW_DimAligned*>(value) != nullptr
+                && dynamic_cast<const DRW_DimLinear*>(value) == nullptr;
+        case DRW::DIMLINEAR:
+            return dynamic_cast<const DRW_DimLinear*>(value) != nullptr;
+        case DRW::DIMRADIAL:
+            return dynamic_cast<const DRW_DimRadial*>(value) != nullptr;
+        case DRW::DIMDIAMETRIC:
+            return dynamic_cast<const DRW_DimDiametric*>(value) != nullptr;
+        case DRW::DIMANGULAR:
+            return dynamic_cast<const DRW_DimAngular*>(value) != nullptr;
+        case DRW::DIMANGULAR3P:
+            return dynamic_cast<const DRW_DimAngular3p*>(value) != nullptr;
+        case DRW::DIMORDINATE:
+            return dynamic_cast<const DRW_DimOrdinate*>(value) != nullptr;
+        case DRW::DIMARC:
+            return dynamic_cast<const DRW_DimArc*>(value) != nullptr;
+        case DRW::DIMENSION:
+            return dynamic_cast<const DRW_DimAligned*>(value) == nullptr
+                && dynamic_cast<const DRW_DimRadial*>(value) == nullptr
+                && dynamic_cast<const DRW_DimDiametric*>(value) == nullptr
+                && dynamic_cast<const DRW_DimAngular*>(value) == nullptr
+                && dynamic_cast<const DRW_DimAngular3p*>(value) == nullptr
+                && dynamic_cast<const DRW_DimOrdinate*>(value) == nullptr
+                && dynamic_cast<const DRW_DimArc*>(value) == nullptr;
+        default:
+            return false;
+        }
+    };
+    if (ent != nullptr && !matchesDimensionType(ent))
+        return rejectDxfWriteWithReason("DIMENSION", "runtime type and entity tag disagree");
     if (!preflightEntity(ent))
         return false;
     if (ent->eType == DRW::DIMARC)

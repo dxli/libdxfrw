@@ -11,7 +11,7 @@
 #include <string>
 
 namespace {
-enum class Entry { Point, Line, Circle, Ray, Trace, Text, Attrib, Hatch };
+enum class Entry { Point, Line, Circle, Ray, Trace, Text, Attrib, Hatch, Dimension };
 class Writer : public LC3CompatCheck {
 public:
     explicit Writer(dxfRW& writer) : out(writer) {}
@@ -25,6 +25,7 @@ public:
         case Entry::Text: ok = out.writeText(dynamic_cast<DRW_Text*>(entity)); break;
         case Entry::Attrib: ok = out.writeAttrib(dynamic_cast<DRW_Attrib*>(entity)); break;
         case Entry::Hatch: ok = out.writeHatch(dynamic_cast<DRW_Hatch*>(entity)); break;
+        case Entry::Dimension: ok = out.writeDimension(dynamic_cast<DRW_Dimension*>(entity)); break;
         }
     }
     bool finalizeDxfWrite() override { return ok; }
@@ -36,6 +37,18 @@ public:
 class Reader : public LC3CompatCheck {
 public:
     void addPoint(const DRW_Point& value) override { name = "POINT"; valid = value.basePoint.x == 2.; }
+    void addDimLinear(const DRW_DimLinear* value) override { name = "DIMLINEAR"; valid = value && value->getDef1Point().x == 3.; }
+    void addDimAlign(const DRW_DimAligned* value) override { name = "DIMALIGNED"; valid = value != nullptr; }
+    void addDimRadial(const DRW_DimRadial* value) override {
+        if (const auto* large = dynamic_cast<const DRW_DimLargeRadial*>(value)) {
+            name = "DIMLARGERADIAL"; valid = large->jogAngle == .25;
+        } else { name = "DIMRADIAL"; valid = value != nullptr; }
+    }
+    void addDimDiametric(const DRW_DimDiametric* value) override { name = "DIMDIAMETRIC"; valid = value != nullptr; }
+    void addDimAngular(const DRW_DimAngular* value) override { name = "DIMANGULAR"; valid = value != nullptr; }
+    void addDimAngular3P(const DRW_DimAngular3p* value) override { name = "DIMANGULAR3P"; valid = value != nullptr; }
+    void addDimOrdinate(const DRW_DimOrdinate* value) override { name = "DIMORDINATE"; valid = value != nullptr; }
+    void addDimArc(const DRW_DimArc* value) override { name = "DIMARC"; valid = value != nullptr; }
     void addViewport(const DRW_Viewport& value) override { name = "VIEWPORT"; valid = value.pswidth == 9.; }
     void addPolyline(const DRW_Polyline& value) override { name = "POLYLINE"; valid = value.vertlist.size() == 1; }
     void addInsert(const DRW_Insert& value) override { name = "INSERT"; valid = value.name == "TEST_BLOCK"; }
@@ -76,6 +89,8 @@ struct CustomPoint : DRW_Point {};
 struct CustomRText : DRW_RText {};
 struct CustomArcAlignedText : DRW_ArcAlignedText {};
 struct CustomMPolygon : DRW_MPolygon {};
+struct CustomDimension : DRW_Dimension {};
+struct CustomLinearDimension : DRW_DimLinear {};
 struct CustomAttdef : DRW_Attdef {};
 bool exercise(const std::filesystem::path& path, bool binary) {
     dxfRW output(path.string().c_str());
@@ -142,6 +157,58 @@ bool exercise(const std::filesystem::path& path, bool binary) {
     DRW_MPolygon polygon; polygon.name = "SOLID"; polygon.looplist.push_back(loop);
     if (!check(hatch, Entry::Point, "HATCH") || !check(polygon, Entry::Point, "MPOLYGON")
         || !check(polygon, Entry::Hatch, "MPOLYGON")) return false;
+    DRW_DimLinear linearDimension;
+    linearDimension.setDef1Point(DRW_Coord(3., 4., 0.));
+    if (!check(linearDimension, Entry::Dimension, "DIMLINEAR")) return false;
+    CustomLinearDimension customLinear;
+    customLinear.setDef1Point(DRW_Coord(3., 4., 0.));
+    if (!check(customLinear, Entry::Dimension, "DIMLINEAR")) return false;
+    DRW_DimAligned alignedDimension;
+    DRW_DimRadial radialDimension;
+    DRW_DimLargeRadial largeRadialDimension; largeRadialDimension.jogAngle = .25;
+    DRW_DimDiametric diametricDimension;
+    DRW_DimAngular angularDimension;
+    DRW_DimAngular3p angular3pDimension;
+    DRW_DimOrdinate ordinateDimension;
+    DRW_DimArc arcDimension;
+    if (!check(alignedDimension, Entry::Dimension, "DIMALIGNED")
+        || !check(radialDimension, Entry::Dimension, "DIMRADIAL")
+        || !check(largeRadialDimension, Entry::Dimension, "DIMLARGERADIAL")
+        || !check(diametricDimension, Entry::Dimension, "DIMDIAMETRIC")
+        || !check(angularDimension, Entry::Dimension, "DIMANGULAR")
+        || !check(angular3pDimension, Entry::Dimension, "DIMANGULAR3P")
+        || !check(ordinateDimension, Entry::Dimension, "DIMORDINATE")
+        || !check(arcDimension, Entry::Dimension, "DIMARC")) return false;
+    // A plain generic DIMENSION is used by existing consumers; it remains
+    // admitted while the public subtype tag is checked before any downcast.
+    DRW_Dimension genericDimension;
+    writer.entity = &genericDimension; writer.entry = Entry::Dimension;
+    if (!output.write(&writer, DRW::AC1027, binary) || !writer.ok) return false;
+    CustomDimension customDimension;
+    writer.entity = &customDimension;
+    if (!output.write(&writer, DRW::AC1027, binary) || !writer.ok) return false;
+    for (const auto tag : {DRW::DIMALIGNED, DRW::DIMLINEAR, DRW::DIMRADIAL,
+                           DRW::DIMDIAMETRIC, DRW::DIMANGULAR, DRW::DIMANGULAR3P,
+                           DRW::DIMORDINATE, DRW::DIMARC}) {
+        { std::ofstream existing(path, std::ios::binary | std::ios::trunc); existing << "sentinel"; }
+        genericDimension.eType = tag;
+        writer.entity = &genericDimension; writer.entry = Entry::Dimension;
+        if (output.write(&writer, DRW::AC1027, binary) || writer.ok || contents(path) != "sentinel") return false;
+        genericDimension.eType = DRW::DIMENSION;
+        if (!output.write(&writer, DRW::AC1027, binary) || !writer.ok) return false;
+    }
+    { std::ofstream existing(path, std::ios::binary | std::ios::trunc); existing << "sentinel"; }
+    linearDimension.eType = DRW::DIMALIGNED;
+    writer.entity = &linearDimension; writer.entry = Entry::Dimension;
+    if (output.write(&writer, DRW::AC1027, binary) || writer.ok || contents(path) != "sentinel") return false;
+    linearDimension.eType = DRW::DIMLINEAR;
+    if (!check(linearDimension, Entry::Dimension, "DIMLINEAR")) return false;
+    { std::ofstream existing(path, std::ios::binary | std::ios::trunc); existing << "sentinel"; }
+    largeRadialDimension.eType = DRW::DIMARC;
+    writer.entity = &largeRadialDimension; writer.entry = Entry::Dimension;
+    if (output.write(&writer, DRW::AC1027, binary) || writer.ok || contents(path) != "sentinel") return false;
+    largeRadialDimension.eType = DRW::DIMRADIAL;
+    if (!check(largeRadialDimension, Entry::Dimension, "DIMLARGERADIAL")) return false;
 
     DRW_Image image;
     DRW_Block block;
