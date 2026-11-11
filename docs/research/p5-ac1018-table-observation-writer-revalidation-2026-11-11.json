@@ -3,7 +3,7 @@
   "date": "2026-11-11",
   "scope": "Writer lifecycle freshness checks for opt-in verified XRECORD/TABLE candidate observations and selected STYLE/LTYPE resource observations.",
   "implementation": {
-    "staging": "dx_iface::writeObjects rechecks the selected observation bundle before staging OBJECTS records.",
+    "staging": "dx_iface::writeLTypes and writeTextstyles recheck the selected observation bundle before resource-table staging; writeObjects rechecks before OBJECTS staging.",
     "finalization": "dx_iface::finalizeDxfWrite rechecks the same bundle before final output publication.",
     "selection": "The check verifies the exact selected XRECORD handles and source generation, then revalidates any selected TABLE candidates and selected STYLE/LTYPE resource observations.",
     "semantics": "This is stale-source refusal only. It does not authorize raw replay, typed TABLE output, graph closure, or support claims."
@@ -20,9 +20,15 @@
     "result": "PASS; the generated control calls the shared predicate directly rather than executing a full DXF export."
   },
   "validation": {
-    "build": "cmake --build build-gcc --target libdxfrw_dwg_table_candidate_binding_tests -j4",
-    "focused_ctest": "ctest --test-dir build-gcc -R '^libdxfrw_dwg_table_candidate_binding$' --output-on-failure",
-    "result": "PASS: 1/1 CTest"
+    "builds": [
+      "cmake --build build-gcc --target libdxfrw_dwg_table_candidate_binding_tests -j4",
+      "cmake --build build-gcc --target libdxfrw_dwg_ltype_table_ticket_tests -j4"
+    ],
+    "focused_ctests": [
+      "ctest --test-dir build-gcc -R '^libdxfrw_dwg_table_candidate_binding$' --output-on-failure",
+      "ctest --test-dir build-gcc -R '^libdxfrw_dwg_ltype_table_ticket$' --output-on-failure"
+    ],
+    "result": "PASS: each focused CTest 1/1; diff check clean. The tests cover the shared revalidation predicate and LTYPE ticket behavior; they do not execute a complete DXF export through the new staging callbacks."
   },
   "limitations": [
     "No TABLE/DATATABLE/TABLEGEOMETRY output is enabled by this check.",

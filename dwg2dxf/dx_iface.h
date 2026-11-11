@@ -1872,6 +1872,11 @@ public:
         }
     }
     virtual void writeLTypes() override{
+        if (dxfW != nullptr && cData != nullptr
+            && !hasUnchangedVerifiedSourceObservations(*cData)) {
+            (void)dxfW->writeLineType(nullptr);
+            return;
+        }
         for (std::list<DRW_LType>::iterator it=cData->lineTypes.begin(); it != cData->lineTypes.end(); ++it)
             dxfW->writeLineType(&(*it));
     }
@@ -1961,6 +1966,11 @@ public:
         }
     }
     virtual void writeTextstyles() override{
+        if (dxfW != nullptr && cData != nullptr
+            && !hasUnchangedVerifiedSourceObservations(*cData)) {
+            (void)dxfW->writeTextstyle(nullptr);
+            return;
+        }
         const bool selectedSourcePair = cData != nullptr
             && cData->m_verifiedStyleResourceSource != nullptr;
         if (selectedSourcePair

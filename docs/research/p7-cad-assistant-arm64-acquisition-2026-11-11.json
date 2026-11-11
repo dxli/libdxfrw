@@ -1,0 +1,19 @@
+{
+  "title": "CAD Assistant macOS ARM64 reader availability recheck",
+  "date": "2026-11-11",
+  "scope": "Check availability of the user-selected official CAD Assistant macOS ARM64 reader for the next P7 complete-boundary-topology probe.",
+  "publisher": "Open Cascade",
+  "official_product_page": "https://opencascade.com/products/cad-assistant/",
+  "artifact_url": "https://opencascade.com/source-mirror/sites/default/files/private/occt/applications/cad_assistant_1.6.0_2021-10-06_arm64.dmg",
+  "publisher_page_state": "The official page lists CAD Assistant 1.6.0 and links an ARM 64-bit macOS DMG; it documents SAT/SAB import through commercial XDE components and disallows model export/conversion.",
+  "local_state": "No CAD Assistant application or DMG was found in /Applications, /private/tmp, ~/Downloads, or ~/Applications during this check.",
+  "acquisition_attempt": {
+    "command": "curl -fL --retry 2 <artifact_url> -o /private/tmp/cad_assistant_1.6.0_2021-10-06_arm64.dmg",
+    "result": "FAILED before transfer: DNS lookup for opencascade.com failed (curl error 6). No artifact was created."
+  },
+  "disposition": "No reader process was launched and no geometry result was obtained. This is an acquisition blocker only, not ACIS evidence. Do not retry unchanged acquisition until network/DNS state changes or a local verified artifact becomes available.",
+  "limitations": [
+    "CAD Assistant shares OCCT geometry-kernel lineage with FreeCAD and is not an independent-kernel vote.",
+    "A successful reader run would remain parser-path evidence until exact payload identity, topology and known-answer semantics are checked."
+  ]
+}

@@ -1733,10 +1733,11 @@ created locally from scratch for the specific control.
   do not grant output permission or waive other gates. See the
   [writer-stage/finalization receipt](docs/research/p5-ac1018-style-resource-writer-stage-finalization-2026-11-11.json).
   **Selected TABLE source-observation revalidation (2026-11-11):**
-  `writeObjects` now rechecks the selected XRECORD/TABLE candidate snapshot
-  before staging OBJECTS records, and `finalizeDxfWrite` repeats the check
-  before output publication. The shared check also verifies any selected
-  STYLE/LTYPE observation bundle against its owning adapter selection. A
+  `writeLTypes` and `writeTextstyles` now recheck the selected source bundle
+  before staging resource records; `writeObjects` checks again before OBJECTS
+  staging, and `finalizeDxfWrite` repeats the check before output publication.
+  The shared check verifies selected XRECORD/TABLE candidates and STYLE/LTYPE
+  resource bundles against the owning adapter selections. A
   generated AC1018 control passes for a complete candidate, refuses a mutated
   TABLEGEOMETRY frame and a cross-import snapshot transplant, and passes again
   after source restoration. This is lifecycle freshness refusal only; it does
@@ -7318,6 +7319,13 @@ a second oracle. Both routes share OCCT, validation is not reported and
 DWG placement/history remain unqualified. Obtain independent-kernel and
 source-native evidence before support claims; see the [CAD Assistant
 observation](docs/research/p7-ac1027-source-sab-cad-assistant-observation-2026-11-04.json).
+
+For the next complete-boundary-topology probe, a current local inventory found
+no CAD Assistant app or DMG; the official vendor page lists its 1.6.0 ARM64
+artifact, but DNS resolution failed before any bytes were downloaded. No reader
+was launched and no new evidence was obtained. Do not retry unchanged
+acquisition until DNS/network state changes or a local verified artifact
+appears ([availability receipt](docs/research/p7-cad-assistant-arm64-acquisition-2026-11-11.json)).
 
 A BRL-CAD STEPcode/openNURBS/librt probe independently checks selected
 topology and eight rays on the source-associated 2E1 solid. Its STEP bridge
