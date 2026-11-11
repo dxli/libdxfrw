@@ -14799,6 +14799,158 @@ void testSab21800RecordHeaderAlignment(TestContext& t) {
                         4, 5, 6),
              "ACIS 21500 exact prefixed record rows project a bounded rooted body graph");
 
+    const auto with21500PCurve = [](DRW_AcisModel model,
+                                    bool includeCurveDependency) {
+        const auto coedge = std::find_if(
+            model.nodes.begin(), model.nodes.end(),
+            [](const DRW_AcisNode& node) { return node.type == "coedge"; });
+        if (coedge == model.nodes.end() || coedge->refs.size() != 8u)
+            return DRW_AcisModel();
+        const int pcurveIndex = static_cast<int>(model.nodes.size() - 1u);
+        const int curveIndex = pcurveIndex + 1;
+        std::size_t pointerOrdinal = 0u;
+        bool coedgePointerUpdated = false;
+        for (DRW_SabToken& token : coedge->record.tokens) {
+            if (token.tag != DRW_SabTag::Pointer)
+                continue;
+            if (pointerOrdinal++ == 7u) {
+                token.ival = pcurveIndex;
+                coedgePointerUpdated = true;
+                break;
+            }
+        }
+        if (!coedgePointerUpdated)
+            return DRW_AcisModel();
+        coedge->refs[7] = pcurveIndex;
+
+        const auto makeRecord = [](const std::string& type, int entityId,
+                                   const std::vector<int>& bodyPointers) {
+            DRW_AcisNode node;
+            node.type = type;
+            node.record.type = type;
+            DRW_SabToken typeToken;
+            typeToken.tag = DRW_SabTag::EntityType;
+            typeToken.sval = type;
+            node.record.tokens.push_back(typeToken);
+            DRW_SabToken attributePointer;
+            attributePointer.tag = DRW_SabTag::Pointer;
+            attributePointer.ival = -1;
+            node.record.tokens.push_back(attributePointer);
+            DRW_SabToken idToken;
+            idToken.tag = DRW_SabTag::Int;
+            idToken.ival = entityId;
+            node.record.tokens.push_back(idToken);
+            node.refs.push_back(-1);
+            for (int pointer : bodyPointers) {
+                DRW_SabToken pointerToken;
+                pointerToken.tag = DRW_SabTag::Pointer;
+                pointerToken.ival = pointer;
+                node.record.tokens.push_back(pointerToken);
+                node.refs.push_back(pointer);
+            }
+            return node;
+        };
+        std::vector<int> pcurveBodyPointers {-1};
+        if (includeCurveDependency)
+            pcurveBodyPointers.push_back(curveIndex);
+        DRW_AcisNode pcurve = makeRecord(
+            "pcurve", pcurveIndex + 1, pcurveBodyPointers);
+        DRW_AcisNode curve = makeRecord("intcurve-curve", curveIndex + 1,
+                                        {-1});
+        const auto terminal = model.nodes.end() - 1;
+        model.nodes.insert(terminal, std::move(pcurve));
+        model.nodes.insert(model.nodes.end() - 1, std::move(curve));
+        for (std::size_t index = 0u; index < model.nodes.size(); ++index)
+            model.nodes[index].index = static_cast<int>(index);
+        return model;
+    };
+    DRW_AcisModel pcurve21500Model =
+        with21500PCurve(body21500Model, true);
+    std::vector<DRW_AcisBodyProjection> pcurve21500Bodies;
+    DRW_AcisRootedProjectionReport pcurve21500Report;
+    const bool pcurve21500Projected = !pcurve21500Model.nodes.empty()
+        && drw_extractAcisBodyWireframes(
+            pcurve21500Model, pcurve21500Bodies, pcurve21500Report);
+    const int pcurve21500Index = static_cast<int>(pcurve21500Model.nodes.size()
+                                                  - 3u);
+    const int pcurveCurve21500Index = pcurve21500Index + 1;
+    const bool pcurveCurveLink = !pcurve21500Bodies.empty()
+        && std::find_if(
+               pcurve21500Bodies.front().graphLinks.begin(),
+               pcurve21500Bodies.front().graphLinks.end(),
+               [pcurve21500Index, pcurveCurve21500Index](
+                   const DRW_AcisBodyGraphLink& link) {
+                   return link.sourceNodeIndex == pcurve21500Index
+                       && link.pointerOrdinal == 2u
+                       && link.targetNodeIndex == pcurveCurve21500Index;
+               }) != pcurve21500Bodies.front().graphLinks.end();
+    t.expect(pcurve21500Projected && pcurve21500Bodies.size() == 1u
+                 && pcurve21500Bodies.front().report
+                        .unsupportedPCurveNodeCount == 1u
+                 && pcurve21500Bodies.front().report
+                        .unsupportedCurveNodeCount == 1u
+                 && pcurveCurveLink,
+             "ACIS 21500 rooted projection closes the bounded pcurve-to-intcurve reference while retaining both as unsupported semantics");
+
+    DRW_AcisModel nullPcurveDependency21500 =
+        with21500PCurve(body21500Model, false);
+    std::vector<DRW_AcisBodyProjection> nullPcurveBodies21500;
+    DRW_AcisRootedProjectionReport nullPcurveReport21500;
+    const bool nullPcurveProjected21500 =
+        !nullPcurveDependency21500.nodes.empty()
+        && drw_extractAcisBodyWireframes(
+            nullPcurveDependency21500, nullPcurveBodies21500,
+            nullPcurveReport21500);
+    t.expect(nullPcurveProjected21500
+                 && nullPcurveBodies21500.size() == 1u
+                 && nullPcurveBodies21500.front().report
+                        .unsupportedPCurveNodeCount == 1u
+                 && nullPcurveBodies21500.front().report
+                        .unsupportedCurveNodeCount == 0u,
+             "ACIS 21500 rooted projection accepts a bounded pcurve row with a null optional curve dependency");
+
+    DRW_AcisModel malformedPcurve21500 =
+        with21500PCurve(body21500Model, false);
+    const auto malformedPcurve = std::find_if(
+        malformedPcurve21500.nodes.begin(), malformedPcurve21500.nodes.end(),
+        [](const DRW_AcisNode& node) { return node.type == "pcurve"; });
+    if (malformedPcurve != malformedPcurve21500.nodes.end()) {
+        malformedPcurve->refs.pop_back();
+        malformedPcurve->record.tokens.pop_back();
+    }
+    std::vector<DRW_AcisBodyProjection> rejectedPcurve21500;
+    DRW_AcisRootedProjectionReport rejectedPcurve21500Report;
+    t.expect(malformedPcurve != malformedPcurve21500.nodes.end()
+                 && !drw_extractAcisBodyWireframes(
+                     malformedPcurve21500, rejectedPcurve21500,
+                     rejectedPcurve21500Report)
+                 && rejectedPcurve21500.empty()
+                 && rejectedPcurve21500Report.failure
+                        == DRW_AcisProjectionFailure::InvalidModel,
+             "ACIS 21500 rooted projection refuses a truncated pcurve pointer row atomically");
+
+    DRW_AcisModel wrongPcurveDependency21500 = pcurve21500Model;
+    const auto wrongPcurve = std::find_if(
+        wrongPcurveDependency21500.nodes.begin(),
+        wrongPcurveDependency21500.nodes.end(),
+        [](const DRW_AcisNode& node) { return node.type == "pcurve"; });
+    if (wrongPcurve != wrongPcurveDependency21500.nodes.end()) {
+        wrongPcurve->refs.back() = pcurve21500Model.nodes.front().index;
+        wrongPcurve->record.tokens.back().ival =
+            pcurve21500Model.nodes.front().index;
+    }
+    std::vector<DRW_AcisBodyProjection> rejectedPcurveDependency21500;
+    DRW_AcisRootedProjectionReport rejectedPcurveDependency21500Report;
+    t.expect(wrongPcurve != wrongPcurveDependency21500.nodes.end()
+                 && !drw_extractAcisBodyWireframes(
+                     wrongPcurveDependency21500,
+                     rejectedPcurveDependency21500,
+                     rejectedPcurveDependency21500Report)
+                 && rejectedPcurveDependency21500.empty()
+                 && rejectedPcurveDependency21500Report.failure
+                        == DRW_AcisProjectionFailure::InvalidModel,
+             "ACIS 21500 rooted projection refuses a pcurve dependency of the wrong record type atomically");
+
     DRW_AcisModel bad21500Attribute = body21500Model;
     bad21500Attribute.nodes.front().refs.front() = 1;
     std::vector<DRW_AcisBodyProjection> rejected21500;

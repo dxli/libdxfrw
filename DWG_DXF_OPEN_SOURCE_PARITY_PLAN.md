@@ -5053,6 +5053,27 @@ with the required ODA DWG specification, so obtain an authoritative correction
 before changing the bit order. See the [producer differential](docs/research/p4-oda-style-bit-order-ac1015-ac1032-2026-11-03.json)
 and [original receipt](docs/research/p4-ac1018-empty-style-dwg-bit-order-differential-2026-11-03.json).
 
+**P7 ACIS 21500 pcurve dependency-row closure (2026-11-11):** the rooted
+geometry view now accepts only the two observed raw pcurve pointer-row widths
+(the common attribute pointer plus one nullable slot, optionally followed by
+an `intcurve-curve` pointer). It validates the optional target type, removes
+only the common attribute pointer in the normalized view, and records the
+coedge→pcurve and pcurve→intcurve graph links with source pointer ordinals.
+Three source-distinct AC1024 SABs were structurally screened: each has 22
+pcurves, with 19 width-2 and three width-3 raw rows; each optional third
+pointer resolves to `intcurve-curve`, and every pcurve has one incoming
+coedge link. The rebuilt public parser and rooted walker also parse/project
+all three payloads, report all 22 pcurves reachable, and emit all three
+pcurve-to-intcurve links per payload. Generated in-memory controls verify
+reachable unsupported pcurve/curve counts, exact graph-link ordinal, and
+atomic refusal for a truncated row or wrong dependency type; a separate
+generated row confirms the null optional-curve profile remains accepted
+without adding a curve link. The focused graph-preservation target builds and
+passes. This proves only the observed row shape and dependency identity;
+`exp_par_cur`/`nubs`, parameterization, trim meaning, B-rep validity, native
+acceptance, and producer-wide ACIS 21500 support remain unresolved. No DWG/DXF
+fixture was added. See the [pcurve row receipt](docs/research/p7-ac1024-21500-pcurve-reference-rows-2026-11-11.json).
+
 ## P4 — original bodies and complete document closure
 
 The AC1021 children-room source's bounded selected-output census is complete:

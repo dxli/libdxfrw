@@ -7392,6 +7392,9 @@ bool makeObserved21500RootedView(const DRW_AcisModel& source,
         if (type == "edge") return 5u;
         if (type == "vertex") return 3u;
         if (type == "point") return 1u;
+        // ACIS 21500 pcurve records have a source-profile-specific optional
+        // intcurve dependency, validated separately below.
+        if (type == "pcurve") return std::numeric_limits<std::size_t>::max();
         if (type == "transform") return 0u;
         if (type == "plane-surface" || type == "cone-surface"
             || type == "torus-surface" || type == "sphere-surface"
@@ -7418,6 +7421,8 @@ bool makeObserved21500RootedView(const DRW_AcisModel& source,
             if (expected != std::numeric_limits<std::size_t>::max()
                 && !recordPrefix)
                 return false;
+            if (node.type == "pcurve" && !recordPrefix)
+                return false;
             if (!recordPrefix)
                 continue;
             const long long rawAttributePointer =
@@ -7432,6 +7437,24 @@ bool makeObserved21500RootedView(const DRW_AcisModel& source,
             if (expected != std::numeric_limits<std::size_t>::max()
                 && node.refs.size() != expected + 1u)
                 return false;
+            if (node.type == "pcurve") {
+                // Three source-distinct AC1024/21500 SABs have two observed
+                // raw pcurve rows: the common attribute pointer plus one
+                // nullable slot, optionally followed by an intcurve-curve
+                // dependency. Keep this strictly structural; the embedded
+                // exp_par_cur/nubs data is not interpreted here.
+                if (node.refs.size() != 2u && node.refs.size() != 3u)
+                    return false;
+                if (node.refs.size() == 3u) {
+                    const int dependency = node.refs[2];
+                    if (dependency < 0
+                        || static_cast<std::size_t>(dependency)
+                               >= candidate.nodes.size()
+                        || candidate.nodes[static_cast<std::size_t>(dependency)]
+                               .type != "intcurve-curve")
+                        return false;
+                }
+            }
 
             // ACIS 21500 retains this common attribute pointer in the model's
             // reference vector. The rooted reader's already admitted 21800
@@ -7450,10 +7473,10 @@ bool makeObserved21500RootedView(const DRW_AcisModel& source,
 
 } // namespace
 
-bool drw_extractAcisBodyWireframes(
+static bool drw_extractAcisBodyWireframesImpl(
     const DRW_AcisModel& model, std::vector<DRW_AcisBodyProjection>& out,
     DRW_AcisRootedProjectionReport& report,
-    const DRW_SabParseLimits& limits) {
+    const DRW_SabParseLimits& limits, bool observed21500Profile) {
     out.clear();
     report = DRW_AcisRootedProjectionReport();
     report.failure = DRW_AcisProjectionFailure::InvalidModel;
@@ -7475,8 +7498,8 @@ bool drw_extractAcisBodyWireframes(
                  failedNodeIndex);
             return false;
         }
-        const bool projected = drw_extractAcisBodyWireframes(
-            rootedView, out, report, limits);
+        const bool projected = drw_extractAcisBodyWireframesImpl(
+            rootedView, out, report, limits, true);
         const auto hasObservedRecordPrefix = [&model](int nodeIndex) {
             if (nodeIndex < 0
                 || static_cast<std::size_t>(nodeIndex) >= model.nodes.size())
@@ -8045,6 +8068,23 @@ bool drw_extractAcisBodyWireframes(
                         if (!addTarget(pointers, 6u, "pcurve", false))
                             return false;
                         mark(pointers[6], unsupportedPCurves);
+                        if (observed21500Profile) {
+                            const PointerRowView pcurvePointers =
+                                readPointers(pointers[6]);
+                            if (!pcurvePointers
+                                || (pcurvePointers.size() != 1u
+                                    && pcurvePointers.size() != 2u)) {
+                                fail(DRW_AcisProjectionFailure::InvalidModel,
+                                     pointers[6]);
+                                return false;
+                            }
+                            if (pcurvePointers.size() == 2u) {
+                                if (!addTarget(pcurvePointers, 1u,
+                                               "intcurve-curve", false))
+                                    return false;
+                                mark(pcurvePointers[1], unsupportedCurves);
+                            }
+                        }
                     }
                 } else if (node.type == "edge") {
                     if (!addTarget(pointers, 1u, "vertex", true)
@@ -8329,6 +8369,14 @@ bool drw_extractAcisBodyWireframes(
         report.failure = DRW_AcisProjectionFailure::UnexpectedFailure;
         return false;
     }
+}
+
+bool drw_extractAcisBodyWireframes(
+    const DRW_AcisModel& model, std::vector<DRW_AcisBodyProjection>& out,
+    DRW_AcisRootedProjectionReport& report,
+    const DRW_SabParseLimits& limits) {
+    return drw_extractAcisBodyWireframesImpl(
+        model, out, report, limits, isObservedAcis21500(model.header));
 }
 
 // ── Convenience entry: drw_decodeAcisWireframe ─────────────────────────────
