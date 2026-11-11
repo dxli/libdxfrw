@@ -970,6 +970,7 @@ tools/qualify_material_source_order.py
 tools/replay_dwg_legacy_extrusion.cpp
 tools/research/ac1032_forum_assocnetwork_spans.py
 tools/research/ac1032_forum_constraint_group_spans.py
+tools/research/ac1032_forum_constraint_node_spans.py
 tools/research/ac1032_forum_constraint_registry_spans.py
 tools/research/acadrust_constraint_group_probe.rs
 tools/research/audit_ac1027_source_references.py

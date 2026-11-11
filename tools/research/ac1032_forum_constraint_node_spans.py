@@ -120,17 +120,23 @@ def main():
         raise ValueError("geometry node dependency role mismatch")
     if not close_vec(line_fields["start"], line["start"]) or not close_vec(line_fields["end"], line["end"]):
         raise ValueError("line end points differ")
-    if not close_vec(arc_fields["center"], arc["center"]) or abs(arc_fields["radius"] - arc["radius"]) > 1e-8:
-        raise ValueError("arc center or radius differs")
+    if (not close_vec(arc_fields["center"], arc["center"])
+            or not close_vec(arc_fields["normal"], arc["extrusion"])
+            or abs(arc_fields["radius"] - arc["radius"]) > 1e-8):
+        raise ValueError("arc center, normal or radius differs")
     for angle, key in ((arc["start_angle"], "start"), (arc["end_angle"], "end")):
         expected = [arc["center"][0] + arc["radius"] * math.cos(angle),
                     arc["center"][1] + arc["radius"] * math.sin(angle), arc["center"][2]]
         if not close_vec(arc_fields[key], expected):
             raise ValueError("trimmed arc point differs")
     for dependency, target in ((line_dep, 0x2A3), (arc_dep, 0x2A2)):
-        if dependency.get("object") != "ASSOCGEOMDEPENDENCY" or dependency["ownerhandle"][-1] != 0x2A8 or dependency["assocdep.dep_on"][-1] != target:
+        if (dependency.get("object") != "ASSOCGEOMDEPENDENCY"
+                or dependency["ownerhandle"][-1] != 0x2A8
+                or dependency["assocdep.dep_on"][0] != 4
+                or dependency["assocdep.dep_on"][-1] != target):
             raise ValueError("dependency owner or target differs")
-    if line["reactors"][0][-1] != 0x2A9 or arc["reactors"][0][-1] != 0x2AA:
+    if (line["reactors"][0][0] != 4 or line["reactors"][0][-1] != 0x2A9
+            or arc["reactors"][0][0] != 4 or arc["reactors"][0][-1] != 0x2AA):
         raise ValueError("geometry reactor backlink differs")
     print(json.dumps({"source_sha256": SOURCE_HASH, "objects_sha256": OBJECTS_HASH,
                       "libredwg_json_sha256": PEER_HASH, "nodes": result,

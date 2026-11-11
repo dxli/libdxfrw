@@ -381,7 +381,7 @@
   },
   "validation": {
     "tool": "tools/research/ac1032_forum_constraint_node_spans.py",
-    "toolSha256": "81d59280c5537501e12cac82154f42e7b809422fbe6edd68809f26fb4c9cb0b0",
+    "toolSha256": "e6b566b0c7cb37fea93fb580a01e3f946a59b59cc251064c5741ab356283b38e",
     "command": "python3 tools/research/ac1032_forum_constraint_node_spans.py /private/tmp/p4-autodesk-forum-constraints.dwg /private/tmp/p4-forum-objects.bin /private/tmp/p4-forum-libredwg.json",
     "outputSha256": "dc2d03f065eb00842111a5007de23a51c2fd202d5ce205c0e2221a750ebe1269",
     "tests": "Hash-bound 13-node bounded walk and selected peer graph/geometry comparisons pass; one-byte mutations of source DWG, decoded section and peer JSON are rejected; Python compilation and git diff --check pass. No DWG/DXF fixture committed."
