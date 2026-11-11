@@ -74125,11 +74125,15 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
         } classEvidenceScope{*this};
         m_dwgDimensionImport.reset();
         m_collectDwgDimensionImport = true;
+        m_dwgLightImport.reset();
+        m_collectDwgLightImport = true;
         struct DimensionImportScope {
             dx_iface& owner;
             ~DimensionImportScope() {
                 owner.m_collectDwgDimensionImport = false;
                 owner.m_dwgDimensionImport.reset();
+                owner.m_collectDwgLightImport = false;
+                owner.m_dwgLightImport.reset();
             }
         } dimensionImportScope{*this};
         // A nested export during import must not observe a temporarily
@@ -74142,10 +74146,16 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
             && fData->importGeneration == guardedImportGeneration)
             fData->m_unqualifiedAc1027DwgImport = priorUnqualifiedAc1027;
         m_collectDwgDimensionImport = false;
+        m_collectDwgLightImport = false;
         if (m_dwgDimensionImport) {
             m_dwgDimensionImport->version = dwg.getVersion();
             m_dwgDimensionImport->sealedVersion = dwg.getVersion();
             m_dwgDimensionImport->accepted = success && dwg.getError() == DRW::BAD_NONE;
+        }
+        if (m_dwgLightImport) {
+            m_dwgLightImport->version = dwg.getVersion();
+            m_dwgLightImport->sealedVersion = dwg.getVersion();
+            m_dwgLightImport->accepted = success && dwg.getError() == DRW::BAD_NONE;
         }
         finishDwgClassEvidenceRead(success && dwg.getError() == DRW::BAD_NONE, dwg.getVersion(),
             dwg.getSourceCodePageId(), dwg.hasSourceCodePageField(), dwg.hasRecognizedSourceCodePage());
@@ -88185,7 +88195,25 @@ void dx_iface::writeEntity(DRW_Entity* e){
         break;
     case DRW::LIGHT:
         if (auto* light = dynamic_cast<DRW_Light*>(e)) {
-            if (light->validateDxf())
+            const auto* dwgLight = dynamic_cast<const dx_ifaceDwgLight*>(e);
+            if (dwgLight != nullptr) {
+                const auto& source = dwgLight->source;
+                const double hotspot = light->m_hotspotAngle * ARAD;
+                const double falloff = light->m_falloffAngle * ARAD;
+                if (!source || !source->accepted
+                    || source != dwgLight->capturedSource.lock()
+                    || source->version != source->sealedVersion
+                    || dwgLight->sourceGeneration != source->generation
+                    || source->version != DRW::AC1027
+                    || !std::isfinite(hotspot) || !std::isfinite(falloff)) {
+                    dxfW->writeRawDxfEntity(nullptr);
+                } else {
+                    DRW_Light output(*light);
+                    output.m_hotspotAngle = hotspot;
+                    output.m_falloffAngle = falloff;
+                    written = dxfW->writeLight(&output);
+                }
+            } else if (light->validateDxf())
                 written = dxfW->writeLight(light);
             else
                 dxfW->writeRawDxfEntity(nullptr);

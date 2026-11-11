@@ -200,6 +200,27 @@ public:
     DRW::Version sourceDwgPdfVersion{DRW::UNKNOWNV};
 };
 
+// Private to the converter: LIGHT's DWG angles are radians while DXF's
+// group 50/51 values are degrees. Bind the unit convention to each retained
+// record, including when drawings from multiple imports are combined.
+class dx_dwgLightImport {
+    friend class dx_iface;
+    friend class DxIfaceLightAngleTestAccess;
+    std::uint64_t generation{0};
+    DRW::Version version{DRW::UNKNOWNV};
+    DRW::Version sealedVersion{DRW::UNKNOWNV};
+    bool accepted{false};
+};
+class dx_ifaceDwgLight final : public DRW_Light {
+    friend class dx_iface;
+    friend class DxIfaceLightAngleTestAccess;
+    std::shared_ptr<dx_dwgLightImport> source;
+    std::weak_ptr<dx_dwgLightImport> capturedSource;
+    std::uint64_t sourceGeneration{0};
+public:
+    explicit dx_ifaceDwgLight(const DRW_Light& value) : DRW_Light(value) {}
+};
+
 // Converter-only provenance travels with the retained dimension, so removing
 // or replacing a block entity cannot leave a dangling pointer-key association.
 class dx_dwgDimensionImport {

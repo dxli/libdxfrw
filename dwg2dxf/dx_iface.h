@@ -1046,7 +1046,34 @@ public:
                 cData->typedEntityCaptureFailed = true;
             return;
         }
-        retainTypedEntity<DRW_Light>(data);
+        if (!m_collectDwgLightImport || cData == nullptr
+            || cData->sourceFormat != dx_source_format::DWG) {
+            retainTypedEntity<DRW_Light>(data);
+            return;
+        }
+        try {
+            if (!m_dwgLightImport) {
+                constexpr std::size_t originBytes =
+                    sizeof(dx_dwgLightImport) + 2u * sizeof(void*);
+                if (cData->typedEntityRetainedBytes > TypedEntityCaptureMaxRetainedBytes
+                    || originBytes > TypedEntityCaptureMaxRetainedBytes
+                        - cData->typedEntityRetainedBytes) {
+                    cData->typedEntityCaptureFailed = true;
+                    return;
+                }
+                m_dwgLightImport = std::make_shared<dx_dwgLightImport>();
+                m_dwgLightImport->generation = cData->importGeneration;
+                cData->typedEntityRetainedBytes += originBytes;
+            }
+            auto* retained = retainTypedEntity<dx_ifaceDwgLight>(data);
+            if (retained != nullptr) {
+                retained->source = m_dwgLightImport;
+                retained->capturedSource = m_dwgLightImport;
+                retained->sourceGeneration = cData->importGeneration;
+            }
+        } catch (...) {
+            cData->typedEntityCaptureFailed = true;
+        }
     }
     void addShape(const DRW_Shape& data) override {
         if (data.eType != DRW::SHAPE) {
@@ -3794,7 +3821,9 @@ private:
             std::is_same<EntityT,dx_ifaceImg>::value, DRW_Image,
             typename std::conditional<
                 std::is_same<EntityT, dx_ifaceUnderlay>::value,
-                DRW_Underlay, EntityT>::type>::type;
+                DRW_Underlay, typename std::conditional<
+                    std::is_same<EntityT, dx_ifaceDwgLight>::value,
+                    DRW_Light, EntityT>::type>::type>::type;
         observeDxfEntitiesTyped<OriginalModel>(source);
         retainTableEntityIdentity(static_cast<const DRW_Entity&>(source));
         if (currentBlock == nullptr
@@ -3867,6 +3896,8 @@ private:
             return nullptr;
         }
     }
+    std::shared_ptr<dx_dwgLightImport> m_dwgLightImport;
+    bool m_collectDwgLightImport{false};
     std::shared_ptr<dx_dwgDimensionImport> m_dwgDimensionImport;
     bool m_collectDwgDimensionImport{false};
     template<class Dimension>

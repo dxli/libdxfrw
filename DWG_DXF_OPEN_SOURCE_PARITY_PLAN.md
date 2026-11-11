@@ -5831,6 +5831,16 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 
 ## P6 — residual semantic and version audit
 
+AC1027 DWG LIGHT hotspot/falloff angles are now converted from radians to DXF
+degrees in a per-import, per-record converter carrier, preserving the public
+DWG callbacks and the degree-valued DXF callbacks. A generated source and an
+independent LibreDWG field-level comparison support this narrow version; other
+DWG versions remain refused pending evidence. The untouched generated DWG
+LIGHT still fails strict output because its DWG CMC has no qualified DXF
+projection; a caller-explicit ACI edit allows the angle control to proceed.
+Keep CMC/source graph and native rendering qualification open; no LIGHT support
+claim is promoted ([receipt](docs/research/p6-ac1027-light-angle-adapter-2026-11-11.json)).
+
 DWG TEXT now refuses conflicting nonzero alignment elevations for active
 alignment before writing; a zero alignment Z retains the existing unspecified
 convention. Distinct intentional zero and inactive alignment remain ambiguous,
