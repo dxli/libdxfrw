@@ -5,6 +5,7 @@
 #include "intern/dwgreader15.h"
 #include "intern/dwg_cellstylemap_ac1018_candidate.h"
 #include "intern/dwgbufferw.h"
+#include <array>
 #include <fstream>
 #include <iterator>
 #include <optional>
@@ -79,12 +80,37 @@ public:
             && sink.publication->m_sourceOffsetSpace==DRW_DwgFrameOffsetSpace::DecodedBuffer;
     }
 };
+bool resourceSelectorGuards() {
+    const std::vector<std::uint32_t> xrecords{
+        0xbcu,0xbeu,0xbfu,0xc0u,0xc1u,0xc2u,0xc3u,0xc4u,0xc5u,0xc6u};
+    const auto select=[&xrecords](dx_iface& adapter,const std::array<std::uint32_t,6>& r) {
+        return adapter.enableVerifiedTableCellStyleResourceSource(xrecords,
+            0xb9u,0xbdu,0xbau,0x9cu,0xbbu,0x6bu,0xdbu,0xdcu,0xddu,
+            r[0],r[1],r[2],r[3],r[4],r[5]);
+    };
+    const std::array<std::uint32_t,6> valid{{0x3u,0x11u,0x5u,0x16u,0x14u,0x15u}};
+    dx_iface adapter;
+    if(!select(adapter,valid))return false;
+    auto invalid=valid;invalid[1]=invalid[0];
+    if(select(adapter,invalid))return false;
+    invalid=valid;invalid[4]=0xddu;
+    if(select(adapter,invalid))return false;
+    invalid=valid;invalid[1]=0xbcu;
+    if(select(adapter,invalid))return false;
+    invalid=valid;invalid[0]=DRW::NoHandle;
+    if(select(adapter,invalid))return false;
+    auto conflict=valid;conflict[5]=0x17u;
+    if(select(adapter,conflict)||!select(adapter,valid))return false;
+    dx_iface duplicate;
+    invalid=valid;invalid[4]=invalid[3];
+    return !select(duplicate,invalid)&&select(duplicate,valid);
+}
 std::vector<std::uint8_t> sourceFrame(const std::vector<std::uint8_t>& body) {
     dwgBufferW b;b.putModularShort(static_cast<std::int32_t>(body.size()));b.putBytes(body.data(),body.size());
     b.putRawShort16(b.crc16(0xc0c1u,0u,b.size()));return b.data();
 }
 int main(int argc,char** argv) {
-    if(argc!=2)return 2;std::ifstream in(argv[1],std::ios::binary);
+    if(argc!=2)return 2;if(!resourceSelectorGuards())return 20;std::ifstream in(argv[1],std::ios::binary);
     const std::vector<std::uint8_t> body((std::istreambuf_iterator<char>(in)),{});
     if(!in || body.empty())return 3;
     for(int mode=0;mode<13;++mode){dwgReader15 reader(nullptr,nullptr);CellStyleSourceSink sink;auto bytes=sourceFrame(body);

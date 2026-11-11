@@ -1574,12 +1574,14 @@ created locally from scratch for the specific control.
   source tickets are now joined to the selected CELLSTYLEMAP; its three
   text-style targets and eighteen border linetype targets are revalidated
   against those reader-bound resources. Physical mutation, selector
-  correction/retry, legacy mode and strict-output refusal controls pass
+  correction/retry, legacy mode and strict-output refusal controls pass; a
+  portable generated CTest also rejects duplicate, absent, overlapping and
+  conflicting selector inputs while preserving valid selection after refusal
   ([resource closure receipt](docs/research/p5-ac1018-cellstylemap-style-ltype-resource-closure-2026-11-11.json)).
   This closes only those selected resource handles for this profile. Font
   availability and semantics, APPID/EED, layer/plotstyle/xdict and block
-  dependencies remain unclosed. A bounded TABLESTYLE observer now checks the selected wire
-  fields and typed projection. An opt-in reader-origin binding now joins that
+  dependencies remain unclosed. A bounded TABLESTYLE observer now checks the
+  selected wire fields and typed projection. An opt-in reader-origin binding now joins that
   projection to the TABLE's style target and the style's TABLE reactor; it does
   not certify complete model equality. The style extension dictionary is now
   reader-bound with its ordered source entries; their XRECORD and CELLSTYLEMAP
