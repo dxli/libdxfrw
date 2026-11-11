@@ -12880,6 +12880,57 @@ bool dwgReader::readDwgObjects(DRW_Interface &intfa, dwgBuffer *dbuf,
                                DwgIntegrityAddressSpace offsetSpace) {
   std::uint32_t i = 0;
   bool structuralFailure = false;
+  // BLOCKS has returned successfully before this phase. The private ledger is
+  // authoritative even if public callbacks were spoofed or partially replayed.
+  auto* tableSink=dynamic_cast<DwgVerifiedTableCandidateSink*>(&intfa);
+  const auto selectedEntity=tableSink?tableSink->verifiedTableEntitySelection():0u;
+  if(selectedEntity) {
+    try {
+      constexpr std::size_t maxBody=65536u,maxTotal=2u*1024u*1024u;
+      const auto index=m_dwgSourceFrameIndexes.find(selectedEntity);
+      if(version!=DRW::AC1018 || !dbuf || index==m_dwgSourceFrameIndexes.end()
+          || index->second>=m_dwgSourceFrameLedger.size())m_verifiedTableCandidateFailed=true;
+      else {
+        const auto& entry=m_dwgSourceFrameLedger[index->second];
+        dwgBuffer sizeProbe=dbuf->forkIndependent();
+        const bool positioned=sizeProbe.setPosition(entry.m_sourceOffset);
+        const std::int32_t size=positioned?sizeProbe.getModularShort():-1;
+        const bool duplicate=std::any_of(m_verifiedTableCandidates.cbegin(),m_verifiedTableCandidates.cend(),
+            [&](const VerifiedTableCandidatePending& p) {
+              return p.kind==DwgVerifiedTableCandidateKind::TableEntity || p.handle==entry.m_handle
+                  || p.ordinal==entry.m_sourceMapOrdinal || (p.space==entry.m_sourceOffsetSpace && p.offset==entry.m_sourceOffset);
+            });
+        if(m_verifiedTableCandidateFailed || duplicate || m_verifiedTableCandidates.size()>=5u
+            || entry.m_handle!=selectedEntity || entry.m_sourceOffsetSpace!=DRW_DwgFrameOffsetSpace::DecodedBuffer
+            || entry.m_disposition!=DRW_DwgFrameDisposition::Published || entry.m_publicationCount!=1u
+            || !sizeProbe.isGood() || size<0 || static_cast<std::size_t>(size)>maxBody
+            || m_verifiedXRecordPendingBytes>maxTotal || m_verifiedTableCandidateBytes>maxTotal-m_verifiedXRecordPendingBytes
+            || static_cast<std::size_t>(size)>maxTotal-m_verifiedXRecordPendingBytes-m_verifiedTableCandidateBytes)
+          m_verifiedTableCandidateFailed=true;
+        else {
+          dwgBuffer probe=dbuf->forkIndependent();DwgObjectFrame frame;
+          if(!frame.readAt(probe,version,entry.m_sourceOffset))m_verifiedTableCandidateFailed=true;
+          else {
+            dwgBuffer body(frame.body().data(),frame.body().size(),&decoder);
+            const auto encoded=body.getObjType(version);const auto cls=classesmap.find(encoded);
+            if(!body.isGood() || encoded<500 || cls==classesmap.end() || !cls->second
+                || cls->second->entityFlag==0 || cls->second->recName!="ACAD_TABLE"
+                || cls->second->className!="AcDbTable"
+                || (cls->second->dwgType!=0 && cls->second->dwgType!=encoded))m_verifiedTableCandidateFailed=true;
+            else {
+              VerifiedTableCandidatePending pending;pending.kind=DwgVerifiedTableCandidateKind::TableEntity;
+              pending.version=version;pending.classNumber=static_cast<std::uint16_t>(encoded);
+              pending.handle=entry.m_handle;pending.offset=entry.m_sourceOffset;
+              pending.ordinal=entry.m_sourceMapOrdinal;pending.space=entry.m_sourceOffsetSpace;
+              pending.frame=std::move(frame);m_verifiedTableCandidates.push_back(std::move(pending));
+              m_verifiedTableCandidateBytes+=static_cast<std::size_t>(size);
+            }
+          }
+        }
+      }
+    } catch(...) {m_verifiedTableCandidateFailed=true;}
+    if(m_verifiedTableCandidateFailed){m_verifiedTableCandidates.clear();m_verifiedTableCandidateBytes=0u;}
+  }
   DRW_DBG("\nentities map total size= ");
   DRW_DBG(ObjectMap.size());
   DRW_DBG("\nobjects map total size= ");
@@ -13122,7 +13173,7 @@ bool dwgReader::readDwgObjects(DRW_Interface &intfa, dwgBuffer *dbuf,
               return p.kind==*verifiedTableKind || p.handle==verifiedHandle
                   || p.ordinal==verifiedOrdinal || (p.space==verifiedSpace && p.offset==verifiedOffset);
             });
-        if (m_verifiedTableCandidateFailed || duplicate || m_verifiedTableCandidates.size()>=4u
+        if (m_verifiedTableCandidateFailed || duplicate || m_verifiedTableCandidates.size()>=5u
             || !sizeProbe.isGood() || size<0 || static_cast<std::size_t>(size)>maxBody
             || m_verifiedXRecordPendingBytes>maxTotal
             || m_verifiedTableCandidateBytes>maxTotal-m_verifiedXRecordPendingBytes

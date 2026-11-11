@@ -256,6 +256,8 @@ EXTRA_DIST = \
     src/intern/dwg_header_time.h \
     src/intern/dwg_table_child_xrecord_ac1018_candidate.cpp \
     src/intern/dwg_table_child_xrecord_ac1018_candidate.h \
+    src/intern/dwg_table_entity_xdictionary_ac1018_candidate.cpp \
+    src/intern/dwg_table_entity_xdictionary_ac1018_candidate.h \
     src/intern/dwg_table_extension_dictionary_ac1018_candidate.cpp \
     src/intern/dwg_table_extension_dictionary_ac1018_candidate.h \
     src/intern/dwg_table_roundtrip_xrecord_ac1018_candidate.cpp \
@@ -496,6 +498,8 @@ EXTRA_DIST = \
     tests/dwg_solid_trace_elevation_tests.cpp \
     tests/dwg_table_candidate_binding_tests.cpp \
     tests/dwg_table_child_xrecord_ac1018_candidate_tests.cpp \
+    tests/dwg_table_entity_reader_lease_tests.cpp \
+    tests/dwg_table_entity_xdictionary_ac1018_candidate_tests.cpp \
     tests/dwg_table_roundtrip_xrecord_ac1018_candidate_tests.cpp \
     tests/dwg_tablecontent_ac1018_candidate_tests.cpp \
     tests/dwg_tablegeometry_ac1018_candidate_tests.cpp \
@@ -667,6 +671,7 @@ EXTRA_DIST = \
     tests/run_dwg2dxf_raw_dxf_section_test.cmake \
     tests/run_dwg_read_test.cmake \
     tests/run_dwg_table_candidate_binding.cmake \
+    tests/run_dwg_table_entity_reader_lease.cmake \
     tests/run_dxf_roundtrip_splinepoints_test.cmake \
     tests/run_extension_graph_limits_test.cmake \
     tests/run_freecad_2d_lwpolyline_oda_cli_test.cmake \
@@ -1018,6 +1023,7 @@ EXTRA_DIST = \
     tools/research/p5_ac1018_table_entity_scratch_instrument.py \
     tools/research/p5_ac1018_table_entity_source_verify.py \
     tools/research/p5_ac1018_table_geometry_binding_probe.cpp \
+    tools/research/p5_ac1018_table_reciprocal_binding_probe.cpp \
     tools/research/p5_ac1018_table_roundtrip_binding_probe.cpp \
     tools/research/p5_ac1018_table_xrecord_source_verify.py \
     tools/research/p5_ac1018_tablecontent_candidate_compare.py \

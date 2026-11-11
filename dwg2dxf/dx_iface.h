@@ -29,6 +29,7 @@
 #include "intern/dwg_table_roundtrip_xrecord_ac1018_candidate.h"
 #include "intern/dwg_table_child_xrecord_ac1018_candidate.h"
 #include "intern/dwg_table_extension_dictionary_ac1018_candidate.h"
+#include "intern/dwg_table_entity_xdictionary_ac1018_candidate.h"
 namespace blockref_source_relation { struct Result; }
 
 #include <cstdint>
@@ -100,6 +101,16 @@ public:
     bool enableVerifiedTableExtensionDictionary(const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
         std::uint32_t tableEntity,std::uint32_t dictionary) noexcept;
+    // Reader-source H3 reciprocity only. The live TABLE model is not frozen or
+    // compared; this observation is never authorization to write/output.
+    bool enableVerifiedTableReciprocalSource(const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        std::uint32_t tableEntity,std::uint32_t dictionary) noexcept;
+    static bool readVerifiedTableReciprocalSource(const dx_data&,
+        const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        std::uint32_t tableEntity,std::uint32_t dictionary,
+        DwgTableEntityXDictionaryAc1018Candidate::Result& result) noexcept;
     static bool readVerifiedTableExtensionDictionary(const dx_data&,
         const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
@@ -3421,6 +3432,7 @@ public:
 private:
     bool wantsVerifiedXRecord(std::uint32_t handle) const noexcept override;
     void verifiedXRecord(const DwgVerifiedXRecordTicket&) noexcept override;
+    std::uint32_t verifiedTableEntitySelection() const noexcept override;
     bool wantsVerifiedTableCandidate(std::uint32_t handle) const noexcept override;
     void verifiedTableCandidate(const DwgVerifiedTableCandidateTicket&) noexcept override;
     void finishVerifiedXRecordSource(bool successfulRead) noexcept;
@@ -3445,6 +3457,7 @@ private:
     bool m_verifiedTableRoundtripSelected{false};
     bool m_verifiedTableRoundtripChildrenSelected{false};
     std::uint32_t m_verifiedTableEntitySelected{0u},m_verifiedTableDictionarySelected{0u};
+    bool m_verifiedReciprocalTableSelected{false};
     std::vector<dx_data::VerifiedTableCandidateSource> m_verifiedTableCandidatePending;
     std::size_t m_verifiedTableCandidatePendingBytes{0u};
     friend class DxWholeSourceTestAccess;

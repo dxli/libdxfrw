@@ -1352,11 +1352,12 @@ created locally from scratch for the specific control.
   ([receipt](docs/research/p5-ac1018-table-nine-child-source-binding-2026-11-11.json)).
   The reader-verified extension dictionary now binds its code-4 numeric owner
   target and code-2 root entry ([receipt](docs/research/p5-ac1018-table-extension-dictionary-one-sided-binding-2026-11-11.json)).
-  The owner target has not yet been authenticated as a TABLE or linked back
-  from its entity frame. A source walk now locates the TABLE's reciprocal H3
-  edge and specifies a post-BLOCKS private frame reread with whole-import and
-  ledger gates; generic AC1018 callback evidence remains Unknown. Implement
-  that binding using the [entity wire receipt](docs/research/p5-ac1018-table-entity-xdictionary-source-wire-2026-11-11.json).
+  A post-BLOCKS private, CRC-checked entity reread now authenticates the TABLE
+  source and its reciprocal H3 edge under the whole-import and ledger gates
+  ([binding receipt](docs/research/p5-ac1018-table-entity-reciprocal-source-binding-2026-11-11.json)).
+  This source proof does not freeze the editable TABLE model; generic AC1018
+  callback evidence remains Unknown and output is still refused. The physical
+  source boundaries are in the [entity wire receipt](docs/research/p5-ac1018-table-entity-xdictionary-source-wire-2026-11-11.json).
   TABLESTYLE and recursive resources, independent
   meaning, and transactional output closure are still open.
   The selected TABLESTYLE branch now has a complete source walk through its
