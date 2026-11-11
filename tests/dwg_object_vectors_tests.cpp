@@ -464,6 +464,13 @@ public:
   std::uint16_t dwgType() const { return oType; }
 };
 
+class UnderlayCodecProbe final : public DRW_Underlay {
+public:
+  using DRW_Underlay::encodeDwg;
+  void setDwgType(std::int16_t value) { oType = value; }
+  std::int16_t dwgType() const { return oType; }
+};
+
 class ViewportCodecProbe final : public DRW_Viewport {
 public:
   using DRW_Viewport::encodeDwg;
@@ -26391,6 +26398,41 @@ void testNavisworksModelDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testUnderlayDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1021, DRW::AC1024, DRW::AC1032}) {
+    for (const DRW_Underlay::Kind kind : {DRW_Underlay::PDF, DRW_Underlay::DGN,
+                                          DRW_Underlay::DWF}) {
+      UnderlayCodecProbe underlay;
+      underlay.handle = 0xC600u + static_cast<std::uint32_t>(version);
+      underlay.parentHandle = 0xC610u;
+      underlay.reactorHandles = {0xC620u};
+      underlay.xDictHandle = 0xC630u;
+      underlay.setDwgType(0x777);
+      underlay.kind = kind;
+      underlay.position = DRW_Coord(1.0, 2.0, 3.0);
+      underlay.scale = DRW_Coord(2.0, 3.0, 4.0);
+      underlay.rotation = 0.5;
+      underlay.definitionHandle = 0xC640u;
+      underlay.clipBoundary = {DRW_Coord(0.0, 0.0, 0.0),
+                               DRW_Coord(4.0, 0.0, 0.0),
+                               DRW_Coord(4.0, 3.0, 0.0)};
+      if (version > DRW::AC1021)
+        underlay.inverseClipBoundary = {DRW_Coord(1.0, 1.0, 0.0),
+                                        DRW_Coord(2.0, 1.0, 0.0),
+                                        DRW_Coord(2.0, 2.0, 0.0)};
+      const std::uint16_t type = kind == DRW_Underlay::PDF
+          ? DRW_Underlay::kDwgClassNumPdf : kind == DRW_Underlay::DGN
+          ? DRW_Underlay::kDwgClassNumDgn : DRW_Underlay::kDwgClassNumDwf;
+      checkEntityDwgEncodeAllocationRollback(
+          t, underlay, version, type,
+          std::string(version == DRW::AC1021 ? "AC1021" : version == DRW::AC1024
+                          ? "AC1024" : "AC1032") +
+              (kind == DRW_Underlay::PDF ? " PDFUNDERLAY" : kind == DRW_Underlay::DGN
+                          ? " DGNUNDERLAY" : " DWFUNDERLAY"));
+    }
+  }
+}
+
 void testViewportDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1015, DRW::AC1018,
                                      DRW::AC1021, DRW::AC1024}) {
@@ -29753,6 +29795,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testNavisworksModelDwgEncodeAllocationRollback(context);
       std::cout << "NAVISWORKSMODEL DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--underlay-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testUnderlayDwgEncodeAllocationRollback(context);
+      std::cout << "UNDERLAY DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

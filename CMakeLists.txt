@@ -2332,6 +2332,13 @@ if(LIBDXFRW_BUILD_TESTS)
         PROPERTIES
             LABELS "fast;dwg;object-vectors;navisworks;3d;generated;transaction"
             TIMEOUT 20)
+    add_test(NAME libdxfrw_underlay_dwg_encode_allocation_rollback
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --underlay-dwg-encode-allocation-rollback)
+    set_tests_properties(libdxfrw_underlay_dwg_encode_allocation_rollback
+        PROPERTIES
+            LABELS "fast;dwg;object-vectors;underlay;generated;transaction"
+            TIMEOUT 20)
     add_test(NAME libdxfrw_viewport_dwg_encode_allocation_rollback
         COMMAND libdxfrw_dwg_object_vectors_tests
             --viewport-dwg-encode-allocation-rollback)

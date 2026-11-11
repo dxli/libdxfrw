@@ -1210,6 +1210,14 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P6 UNDERLAY DWG encoder transaction safety:** PDF, DGN and DWF writers
+  now stage their body and handle output with alias-aware publication. Nine
+  generated AC1021/AC1024/AC1032 profiles sweep 150 allocation failures,
+  preserve prior state and retry exactly; AC1024/AC1032 include inverse clips.
+  The focused underlay CTest cohort passes 4/4. This qualifies local rollback
+  only; physical producer, graph and native rendering evidence remain open.
+  See the [rollback receipt](docs/research/p6-underlay-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **P4 AC1032 associative-network action-role guard:** LibreDWG revision
   `6d6a33987a1a97095b069c799c3d8a793320f812`'s stable `src/dwg2.spec` binds
   each `is_owned` bit to a hard-owner or soft-pointer action reference. The

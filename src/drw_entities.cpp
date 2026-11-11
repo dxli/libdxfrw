@@ -17755,58 +17755,62 @@ bool DRW_Underlay::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
 bool DRW_Underlay::encodeDwg(DRW::Version version, dwgBufferW *buf,
                              std::uint32_t bs, dwgBufferW *strBuf,
                              dwgBufferW *handleBuf) {
-    (void)bs; (void)strBuf;
+    (void)bs;
     if (!validatePayloadFields()
         || clipBoundary.size() > kMaxClipVertices
         || inverseClipBoundary.size() > kMaxClipVertices
         || (version <= DRW::AC1021 && !inverseClipBoundary.empty()))
         return false;
 
-    switch (kind) {
-    case DGN:
-        oType = kDwgClassNumDgn;
-        break;
-    case DWF:
-        oType = kDwgClassNumDwf;
-        break;
-    case PDF:
-    default:
-        oType = kDwgClassNumPdf;
-        break;
-    }
-    if (!encodeDwgCommon(version, buf))
-        return false;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [&](dwgBufferW *buf, dwgBufferW *, dwgBufferW *handleBuf) {
+            switch (kind) {
+            case DGN:
+                oType = kDwgClassNumDgn;
+                break;
+            case DWF:
+                oType = kDwgClassNumDwf;
+                break;
+            case PDF:
+            default:
+                oType = kDwgClassNumPdf;
+                break;
+            }
+            if (!encodeDwgCommon(version, buf))
+                return false;
 
-    const bool hasInverseClip = !inverseClipBoundary.empty() || (flags & 0x10) != 0;
-    const std::uint8_t wireFlags =
-        hasInverseClip ? static_cast<std::uint8_t>(flags | 0x10) : flags;
+            const bool hasInverseClip = !inverseClipBoundary.empty() || (flags & 0x10) != 0;
+            const std::uint8_t wireFlags =
+                hasInverseClip ? static_cast<std::uint8_t>(flags | 0x10) : flags;
 
-    buf->putExtrusion(extPoint, false);
-    buf->put3BitDouble(position);
-    buf->putBitDouble(rotation);
-    buf->putBitDouble(scale.x);
-    buf->putBitDouble(scale.y);
-    buf->putBitDouble(scale.z);
-    buf->putRawChar8(wireFlags);
-    buf->putRawChar8(contrast);
-    buf->putRawChar8(fade);
-    buf->putBitLong(static_cast<std::int32_t>(clipBoundary.size()));
-    for (const auto& vertex : clipBoundary) {
-        buf->putRawDouble(vertex.x);
-        buf->putRawDouble(vertex.y);
-    }
-    if (version > DRW::AC1021 && hasInverseClip) {
-        buf->putBitShort(static_cast<std::uint16_t>(inverseClipBoundary.size()));
-        for (const auto& vertex : inverseClipBoundary) {
-            buf->putRawDouble(vertex.x);
-            buf->putRawDouble(vertex.y);
-        }
-    }
+            buf->putExtrusion(extPoint, false);
+            buf->put3BitDouble(position);
+            buf->putBitDouble(rotation);
+            buf->putBitDouble(scale.x);
+            buf->putBitDouble(scale.y);
+            buf->putBitDouble(scale.z);
+            buf->putRawChar8(wireFlags);
+            buf->putRawChar8(contrast);
+            buf->putRawChar8(fade);
+            buf->putBitLong(static_cast<std::int32_t>(clipBoundary.size()));
+            for (const auto& vertex : clipBoundary) {
+                buf->putRawDouble(vertex.x);
+                buf->putRawDouble(vertex.y);
+            }
+            if (version > DRW::AC1021 && hasInverseClip) {
+                buf->putBitShort(static_cast<std::uint16_t>(inverseClipBoundary.size()));
+                for (const auto& vertex : inverseClipBoundary) {
+                    buf->putRawDouble(vertex.x);
+                    buf->putRawDouble(vertex.y);
+                }
+            }
 
-    if (!encodeDwgEntHandle(version, buf, handleBuf))
-        return false;
-    putNullableHardPointerHandle(handleBuf ? handleBuf : buf, definitionHandle);
-    return true;
+            if (!encodeDwgEntHandle(version, buf, handleBuf))
+                return false;
+            putNullableHardPointerHandle(handleBuf ? handleBuf : buf, definitionHandle);
+            return true;
+        });
 }
 
 
