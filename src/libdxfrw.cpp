@@ -9619,6 +9619,39 @@ bool dxfRW::writeProxyEntity(
 }
 
 bool dxfRW::writeLine(DRW_Line *ent) {
+    if (ent != nullptr) {
+        const auto& type = typeid(*ent);
+        if (type == typeid(DRW_3DLine))
+            return ent->eType == DRW::THREEDLINE
+                ? write3DLine(static_cast<DRW_3DLine*>(ent))
+                : rejectDxfWriteWithReason("LINE", "runtime type and entity tag disagree");
+        if (type == typeid(DRW_Ray) || type == typeid(DRW_Xline))
+            return writeRay(static_cast<DRW_Ray*>(ent));
+        if (type == typeid(DRW_Ellipse))
+            return ent->eType == DRW::ELLIPSE
+                ? writeEllipse(static_cast<DRW_Ellipse*>(ent))
+                : rejectDxfWriteWithReason("LINE", "runtime type and entity tag disagree");
+        if (type == typeid(DRW_Trace) || type == typeid(DRW_Solid)
+            || type == typeid(DRW_3Dface))
+            return writeTrace(static_cast<DRW_Trace*>(ent));
+        if (type == typeid(DRW_Text) || type == typeid(DRW_Attrib)
+            || type == typeid(DRW_Attdef) || type == typeid(DRW_MText)
+            || type == typeid(DRW_RText) || type == typeid(DRW_ArcAlignedText))
+            return writeText(static_cast<DRW_Text*>(ent));
+        if (type == typeid(DRW_Wipeout))
+            return ent->eType == DRW::WIPEOUT
+                ? writeWipeout(static_cast<DRW_Wipeout*>(ent))
+                : rejectDxfWriteWithReason("LINE", "runtime type and entity tag disagree");
+        // IMAGE requires a separately supplied definition/name; the LINE
+        // entry point cannot infer it without losing its image association.
+        if (type == typeid(DRW_Image)) {
+            if (ent->eType != DRW::IMAGE)
+                return rejectDxfWriteWithReason("IMAGE", "runtime type and entity tag disagree");
+            return rejectDxfWriteWithReason("IMAGE", "definition and name require the IMAGE entry point");
+        }
+        if (ent->eType != DRW::LINE)
+            return rejectDxfWriteWithReason("LINE", "runtime type and entity tag disagree or subtype is not supported");
+    }
     if (!preflightEntity(ent))
         return false;
     EntityRecordScope scope(*this, ent);
@@ -9683,6 +9716,12 @@ bool dxfRW::write3DLine(DRW_3DLine *ent) {
 }
 
 bool dxfRW::writeRay(DRW_Ray *ent) {
+    if (ent != nullptr && typeid(*ent) == typeid(DRW_Xline))
+        return ent->eType == DRW::XLINE
+            ? writeXline(static_cast<DRW_Xline*>(ent))
+            : rejectDxfWriteWithReason("RAY", "runtime type and entity tag disagree");
+    if (ent != nullptr && ent->eType != DRW::RAY)
+        return rejectDxfWriteWithReason("RAY", "runtime type and entity tag disagree or subtype is not supported");
     if (!preflightEntity(ent))
         return false;
     DRW_Coord crd;
@@ -9741,6 +9780,12 @@ bool dxfRW::writeXline(DRW_Xline *ent) {
 }
 
 bool dxfRW::writeCircle(DRW_Circle *ent) {
+    if (ent != nullptr && typeid(*ent) == typeid(DRW_Arc))
+        return ent->eType == DRW::ARC
+            ? writeArc(static_cast<DRW_Arc*>(ent))
+            : rejectDxfWriteWithReason("CIRCLE", "runtime type and entity tag disagree");
+    if (ent != nullptr && ent->eType != DRW::CIRCLE)
+        return rejectDxfWriteWithReason("CIRCLE", "runtime type and entity tag disagree or subtype is not supported");
     if (!preflightEntity(ent))
         return false;
     EntityRecordScope scope(*this, ent);
@@ -9909,6 +9954,16 @@ bool dxfRW::writeEllipse(DRW_Ellipse *ent){
 }
 
 bool dxfRW::writeTrace(DRW_Trace *ent){
+    if (ent != nullptr && typeid(*ent) == typeid(DRW_Solid))
+        return ent->eType == DRW::SOLID
+            ? writeSolid(static_cast<DRW_Solid*>(ent))
+            : rejectDxfWriteWithReason("TRACE", "runtime type and entity tag disagree");
+    if (ent != nullptr && typeid(*ent) == typeid(DRW_3Dface))
+        return ent->eType == DRW::E3DFACE
+            ? write3dface(static_cast<DRW_3Dface*>(ent))
+            : rejectDxfWriteWithReason("TRACE", "runtime type and entity tag disagree");
+    if (ent != nullptr && ent->eType != DRW::DXF_TRACE)
+        return rejectDxfWriteWithReason("TRACE", "runtime type and entity tag disagree or subtype is not supported");
     if (!preflightEntity(ent))
         return false;
     EntityRecordScope scope(*this, ent);
@@ -13937,6 +13992,15 @@ bool dxfRW::writeAttributeR2018Features(DRW_Attrib *ent) {
 
 bool dxfRW::writeAttrib(DRW_Attrib *ent,
                         std::uint32_t ownerOverride){
+    if (ent != nullptr && typeid(*ent) == typeid(DRW_Attdef)
+        && ent->eType != DRW::ATTDEF)
+        return rejectDxfWriteWithReason("ATTRIB", "runtime type and entity tag disagree");
+    if (ent != nullptr && ent->eType == DRW::ATTDEF) {
+        if (auto* attdef = dynamic_cast<DRW_Attdef*>(ent))
+            return writeAttdef(attdef, ownerOverride);
+    }
+    if (ent != nullptr && ent->eType != DRW::ATTRIB)
+        return rejectDxfWriteWithReason("ATTRIB", "runtime type and entity tag disagree or subtype is not supported");
     if (!preflightEntity(ent)
         || !isSafeDxfRecordText(ent->tag)
         || !ent->m_r2018OuterAnnotativeData.empty()
@@ -13952,11 +14016,6 @@ bool dxfRW::writeAttrib(DRW_Attrib *ent,
         m_writeError = true;
         return false;
     }
-    if (ent->eType == DRW::ATTDEF) {
-        if (auto *attdef = dynamic_cast<DRW_Attdef *>(ent))
-            return writeAttdef(attdef, ownerOverride);
-    }
-
     // ATTRIB handles are retained with their owning INSERT's minted identity.
     EntityRecordScope scope(*this, ent, true);
     writer->writeString(0, "ATTRIB");
@@ -14076,6 +14135,30 @@ bool dxfRW::writeAttdef(DRW_Attdef *ent,
 }
 
 bool dxfRW::writeText(DRW_Text *ent) {
+    if (ent != nullptr) {
+        const auto& type = typeid(*ent);
+        if (type == typeid(DRW_Attrib)) {
+            if (ent->eType != DRW::ATTRIB)
+                return rejectDxfWriteWithReason("ATTRIB", "runtime type and entity tag disagree");
+            return rejectDxfWriteWithReason("ATTRIB", "INSERT owner and child sequence context required");
+        }
+        if (type == typeid(DRW_Attdef))
+            return writeAttrib(static_cast<DRW_Attdef*>(ent));
+        if (type == typeid(DRW_MText))
+            return ent->eType == DRW::MTEXT
+                ? writeMText(static_cast<DRW_MText*>(ent))
+                : rejectDxfWriteWithReason("TEXT", "runtime type and entity tag disagree");
+        if (type == typeid(DRW_RText))
+            return ent->eType == DRW::TEXT
+                ? writeRText(static_cast<DRW_RText*>(ent))
+                : rejectDxfWriteWithReason("TEXT", "runtime type and entity tag disagree");
+        if (type == typeid(DRW_ArcAlignedText))
+            return ent->eType == DRW::TEXT
+                ? writeArcAlignedText(static_cast<DRW_ArcAlignedText*>(ent))
+                : rejectDxfWriteWithReason("TEXT", "runtime type and entity tag disagree");
+        if (ent->eType != DRW::TEXT)
+            return rejectDxfWriteWithReason("TEXT", "runtime type and entity tag disagree or subtype is not supported");
+    }
     if (!preflightEntity(ent))
         return false;
     EntityRecordScope scope(*this, ent);

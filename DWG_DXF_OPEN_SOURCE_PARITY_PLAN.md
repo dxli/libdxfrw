@@ -1209,6 +1209,15 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P6 DXF primitive subtype dispatch:** built-in derived LINE, RAY, CIRCLE,
+  TRACE, TEXT and ATTRIB inputs now route to their typed writers instead of
+  silently losing subtype geometry or fields. IMAGE and standalone ATTRIB are
+  refused when their required context is absent; ordinary custom base-tag
+  subclasses and the prior user-derived ATTDEF path remain available.
+  ASCII/Binary subtype, version, refusal and retry controls plus the existing
+  adapter runtime-dispatch test pass 2/2. Native rendering and graph semantics
+  remain open. See the [receipt](docs/research/p6-dxf-primitive-base-writer-subtype-dispatch-2026-11-10.json).
+
 - **P8 source-release inventory:** regenerated both tracked-file lists at
   `c43dfaa2`, adding 17 missing test/tool sources. A 999-file scratch archive
   passed exact-byte and extracted no-Git inventory checks; extracted CMake

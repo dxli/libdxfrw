@@ -1,0 +1,153 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+#include "libdxfrw.h"
+#include "lc3_compat_check.cpp"
+#include <chrono>
+#include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <string>
+
+namespace {
+enum class Entry { Line, Circle, Ray, Trace, Text, Attrib };
+class Writer : public LC3CompatCheck {
+public:
+    explicit Writer(dxfRW& writer) : out(writer) {}
+    void writeEntities() override {
+        switch (entry) {
+        case Entry::Line: ok = out.writeLine(dynamic_cast<DRW_Line*>(entity)); break;
+        case Entry::Circle: ok = out.writeCircle(dynamic_cast<DRW_Circle*>(entity)); break;
+        case Entry::Ray: ok = out.writeRay(dynamic_cast<DRW_Ray*>(entity)); break;
+        case Entry::Trace: ok = out.writeTrace(dynamic_cast<DRW_Trace*>(entity)); break;
+        case Entry::Text: ok = out.writeText(dynamic_cast<DRW_Text*>(entity)); break;
+        case Entry::Attrib: ok = out.writeAttrib(dynamic_cast<DRW_Attrib*>(entity)); break;
+        }
+    }
+    bool finalizeDxfWrite() override { return ok; }
+    dxfRW& out;
+    DRW_Entity* entity = nullptr;
+    Entry entry = Entry::Line;
+    bool ok = false;
+};
+class Reader : public LC3CompatCheck {
+public:
+    void addLine(const DRW_Line& value) override { name = "LINE"; valid = value.secPoint.x == 3.; }
+    void add3DLine(const DRW_3DLine& value) override { name = "3DLINE"; valid = value.secPoint.z == 4.; }
+    void addRay(const DRW_Ray&) override { name = "RAY"; valid = true; }
+    void addXline(const DRW_Xline&) override { name = "XLINE"; valid = true; }
+    void addCircle(const DRW_Circle&) override { name = "CIRCLE"; valid = true; }
+    void addArc(const DRW_Arc& value) override {
+        name = "ARC"; valid = value.radious == 5. && std::fabs(value.endangle - 1.5707963267948966) < 1e-10;
+    }
+    void addEllipse(const DRW_Ellipse& value) override { name = "ELLIPSE"; valid = value.ratio == 0.5; }
+    void addTrace(const DRW_Trace& value) override { name = "TRACE"; valid = value.thirdPoint.x == 2.; }
+    void addSolid(const DRW_Solid& value) override { name = "SOLID"; valid = value.thirdPoint.x == 2.; }
+    void add3dFace(const DRW_3Dface& value) override { name = "3DFACE"; valid = value.invisibleflag == 3; }
+    void addMText(const DRW_MText& value) override { name = "MTEXT"; valid = value.text == "text"; }
+    void addText(const DRW_Text& value) override {
+        if (const auto* rtext = dynamic_cast<const DRW_RText*>(&value)) {
+            name = "RTEXT"; valid = rtext->m_rTextFlags == 1 && value.text == "text";
+        } else if (const auto* arc = dynamic_cast<const DRW_ArcAlignedText*>(&value)) {
+            name = "ARCALIGNEDTEXT"; valid = arc->m_radius == 5. && value.text == "text";
+        } else { name = "TEXT"; valid = value.text == "text"; }
+    }
+    void addAttDef(const DRW_Attdef& value) override { name = "ATTDEF"; valid = value.tag == "TAG" && value.prompt == "prompt"; }
+    void addWipeout(const DRW_Wipeout* value) override { name = "WIPEOUT"; valid = value && value->clipPath.size() == 3; }
+    std::string name;
+    bool valid = false;
+};
+std::string contents(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+}
+struct CustomLine : DRW_Line {};
+struct CustomText : DRW_Text {};
+struct CustomAttdef : DRW_Attdef {};
+bool exercise(const std::filesystem::path& path, bool binary) {
+    dxfRW output(path.string().c_str());
+    Writer writer(output);
+    const auto check = [&](DRW_Entity& value, Entry entry, const char* expected) {
+        writer.entity = &value; writer.entry = entry; writer.ok = false;
+        if (!output.write(&writer, DRW::AC1027, binary) || !writer.ok) {
+            std::cerr << "write failed for " << expected << '\n'; return false;
+        }
+        dxfRW input(path.string().c_str()); Reader reader;
+        if (!input.read(&reader, false) || reader.name != expected || !reader.valid) {
+            std::cerr << "read failed for " << expected << ", got " << reader.name << '\n'; return false;
+        }
+        return true;
+    };
+    DRW_Line line; line.secPoint = {3., 0., 0.};
+    CustomLine customLine; customLine.secPoint = line.secPoint;
+    if (!check(line, Entry::Line, "LINE") || !check(customLine, Entry::Line, "LINE")) return false;
+    DRW_3DLine line3d; line3d.secPoint = {3., 0., 4.};
+    if (!check(line3d, Entry::Line, "3DLINE")) return false;
+    DRW_Ray ray; ray.secPoint = {1., 0., 0.};
+    DRW_Xline xline; xline.secPoint = ray.secPoint;
+    if (!check(ray, Entry::Line, "RAY") || !check(xline, Entry::Line, "XLINE")
+        || !check(xline, Entry::Ray, "XLINE")) return false;
+    DRW_Arc arc; arc.radious = 5.; arc.endangle = 1.5707963267948966;
+    if (!check(arc, Entry::Circle, "ARC")) return false;
+    DRW_Ellipse ellipse; ellipse.secPoint = {2., 0., 0.}; ellipse.ratio = 0.5;
+    ellipse.staparam = 0.; ellipse.endparam = 1.;
+    if (!check(ellipse, Entry::Line, "ELLIPSE")) return false;
+    DRW_Trace trace; trace.thirdPoint = {2., 2., 0.};
+    DRW_Solid solid; solid.thirdPoint = trace.thirdPoint;
+    DRW_3Dface face; face.thirdPoint = trace.thirdPoint; face.invisibleflag = 3;
+    if (!check(trace, Entry::Line, "TRACE") || !check(solid, Entry::Line, "SOLID")
+        || !check(face, Entry::Line, "3DFACE") || !check(solid, Entry::Trace, "SOLID")
+        || !check(face, Entry::Trace, "3DFACE")) return false;
+    DRW_Text text; text.text = "text"; text.height = 1.;
+    CustomText customText; customText.text = text.text; customText.height = text.height;
+    DRW_MText mtext; mtext.text = "text"; mtext.height = 1.;
+    DRW_RText rtext; rtext.text = "text"; rtext.height = 1.; rtext.m_rTextFlags = 1;
+    DRW_ArcAlignedText arctext; arctext.text = "text"; arctext.height = 1.; arctext.m_radius = 5.;
+    DRW_Attdef attdef; attdef.text = "text"; attdef.height = 1.; attdef.tag = "TAG"; attdef.prompt = "prompt";
+    CustomAttdef customAttdef; customAttdef.text = "text"; customAttdef.height = 1.;
+    customAttdef.tag = "TAG"; customAttdef.prompt = "prompt";
+    if (!check(text, Entry::Line, "TEXT") || !check(customText, Entry::Text, "TEXT")
+        || !check(mtext, Entry::Line, "MTEXT") || !check(rtext, Entry::Text, "RTEXT")
+        || !check(arctext, Entry::Text, "ARCALIGNEDTEXT") || !check(attdef, Entry::Text, "ATTDEF")
+        || !check(customAttdef, Entry::Attrib, "ATTDEF")) return false;
+    DRW_Wipeout wipeout; wipeout.clipPath = {{0., 0., 0.}, {4., 0., 0.}, {0., 3., 0.}};
+    if (!check(wipeout, Entry::Line, "WIPEOUT")) return false;
+
+    DRW_Image image;
+    DRW_Attrib attrib; attrib.text = "text"; attrib.tag = "TAG";
+    DRW_Arc wrongTag; wrongTag.eType = DRW::CIRCLE;
+    DRW_Xline wrongXline; wrongXline.eType = DRW::RAY;
+    DRW_Solid wrongSolid; wrongSolid.eType = DRW::DXF_TRACE;
+    DRW_MText wrongMtext; wrongMtext.eType = DRW::TEXT;
+    for (DRW_Entity* invalid : {static_cast<DRW_Entity*>(&image),
+                                static_cast<DRW_Entity*>(&attrib),
+                                static_cast<DRW_Entity*>(&wrongTag),
+                                static_cast<DRW_Entity*>(&wrongXline),
+                                static_cast<DRW_Entity*>(&wrongSolid),
+                                static_cast<DRW_Entity*>(&wrongMtext)}) {
+        { std::ofstream existing(path, std::ios::binary | std::ios::trunc); existing << "sentinel"; }
+        writer.entity = invalid;
+        writer.entry = invalid == &wrongTag ? Entry::Circle : Entry::Line;
+        if (output.write(&writer, DRW::AC1027, binary) || writer.ok || contents(path) != "sentinel")
+            return false;
+        if (!check(line, Entry::Line, "LINE")) return false;
+    }
+    { std::ofstream existing(path, std::ios::binary | std::ios::trunc); existing << "sentinel"; }
+    writer.entity = &rtext; writer.entry = Entry::Text;
+    if (output.write(&writer, DRW::AC1009, binary) || writer.ok || contents(path) != "sentinel") return false;
+    if (!check(line, Entry::Line, "LINE")) return false;
+    { std::ofstream existing(path, std::ios::binary | std::ios::trunc); existing << "sentinel"; }
+    writer.entity = &line3d; writer.entry = Entry::Line;
+    if (output.write(&writer, DRW::AC1014, binary) || writer.ok || contents(path) != "sentinel") return false;
+    return check(line, Entry::Line, "LINE");
+}
+}
+int main() {
+    const auto path = std::filesystem::temp_directory_path()
+        / ("dxf-primitive-dispatch-" + std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count()) + ".dxf");
+    struct Cleanup { std::filesystem::path path; ~Cleanup() {
+        std::error_code ignored; std::filesystem::remove(path, ignored); } } cleanup{path};
+    for (bool binary : {false, true}) if (!exercise(path, binary)) return 1;
+    return 0;
+}
