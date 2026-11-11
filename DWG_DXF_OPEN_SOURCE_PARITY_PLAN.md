@@ -1383,8 +1383,12 @@ created locally from scratch for the specific control.
   A generated standalone selected-frame test now covers valid-CRC payload
   mutation and a bad frame CRC with intact page checksums
   ([receipt](docs/research/p5-ac1018-tablestyle-xrecord-generated-reader-crc-2026-11-11.json));
-  a generated full-bundle positive and the same failures through that stronger
-  gate remain open.
+  a locally generated full-bundle test now verifies the positive stronger
+  capability, CRC-valid payload mutation rejection, selected-frame CRC failure,
+  same-reader retry and strict-output refusal ([receipt](docs/research/p5-ac1018-tablestyle-xrecord-generated-full-bundle-2026-11-11.json)).
+  This remains reader evidence only; capability revalidation at writer staging
+  and finalization, transactional output and recursive descendant closure stay
+  open.
   CELLSTYLEMAP is now joined to the reader-verified dictionary's second target,
   preserving source style order `[3,1,2]` and checking selected H4/H5 fields
   ([binding receipt](docs/research/p5-ac1018-cellstylemap-reader-source-binding-2026-11-11.json)).
@@ -1403,12 +1407,14 @@ created locally from scratch for the specific control.
   A separate source walk now identifies STYLE's EED APPID `0x12`, the
   APPID_CONTROL's two additional siblings, and distinct ordinary/phantom
   LTYPE_CONTROL roles. Bind those records and remaining siblings before
-  claiming resource closure; font meaning remains open. See the
-  [resource wire receipt](docs/research/p5-ac1018-table-style-ltype-resource-wire-2026-11-11.json).
-  A bounded LTYPE_CONTROL/ByBlock observer now checks the selected source pair
+  claiming resource closure; font meaning remains open. A bounded standalone
+  LTYPE_CONTROL/ByBlock observer now checks selected frame fields and roles
   ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)).
-  The observed ByBlock/ByLayer phantom order conflicts with ODA prose; retain
-  this as a source-profile observation until independently resolved and bound.
+  It is not reader-bound: STYLE EED/APPID, APPID_CONTROL siblings,
+  STYLE_CONTROL, ordinary LTYPE rows and the ByLayer sibling still need
+  same-import identity and role binding. The observed ByBlock/ByLayer phantom
+  order conflicts with ODA prose and stays confined to this source profile
+  until independently resolved. See the [resource wire receipt](docs/research/p5-ac1018-table-style-ltype-resource-wire-2026-11-11.json).
   See the [DATATABLE candidate receipt](docs/research/p5-ac1018-datatable-candidate-observer-2026-11-11.json).
 
   The recreated AC1018 XRECORD `0xbc` is now independently walked to its
