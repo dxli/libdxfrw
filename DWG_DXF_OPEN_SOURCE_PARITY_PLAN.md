@@ -1405,6 +1405,10 @@ created locally from scratch for the specific control.
   LTYPE_CONTROL roles. Bind those records and remaining siblings before
   claiming resource closure; font meaning remains open. See the
   [resource wire receipt](docs/research/p5-ac1018-table-style-ltype-resource-wire-2026-11-11.json).
+  A bounded LTYPE_CONTROL/ByBlock observer now checks the selected source pair
+  ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)).
+  The observed ByBlock/ByLayer phantom order conflicts with ODA prose; retain
+  this as a source-profile observation until independently resolved and bound.
   See the [DATATABLE candidate receipt](docs/research/p5-ac1018-datatable-candidate-observer-2026-11-11.json).
 
   The recreated AC1018 XRECORD `0xbc` is now independently walked to its

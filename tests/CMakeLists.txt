@@ -6110,6 +6110,28 @@ add_test(NAME libdxfrw_dwg_tablestyle_xrecord_reader_binding
     COMMAND libdxfrw_dwg_tablestyle_xrecord_reader_binding_tests ${CMAKE_CURRENT_BINARY_DIR}/generated-tablestyle-xrecord-reader-binding.dwg)
 set_tests_properties(libdxfrw_dwg_tablestyle_xrecord_reader_binding PROPERTIES LABELS "dwg;fast;table;xrecord" TIMEOUT 30)
 
+add_executable(libdxfrw_dwg_tablestyle_xrecord_full_bundle_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_tablestyle_xrecord_full_bundle_tests.cpp ${_libdxfrw_test_adapter_source})
+target_compile_features(libdxfrw_dwg_tablestyle_xrecord_full_bundle_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_tablestyle_xrecord_full_bundle_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_tablestyle_xrecord_full_bundle_tests PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/dwg2dxf)
+target_link_libraries(libdxfrw_dwg_tablestyle_xrecord_full_bundle_tests PRIVATE dxfrw)
+add_dependencies(libdxfrw_dwg_tablestyle_xrecord_full_bundle_tests
+    libdxfrw_dwg_tablecontent_ac1018_candidate_tests libdxfrw_dwg_datatable_ac1018_candidate_tests
+    libdxfrw_dwg_tablegeometry_ac1018_candidate_tests libdxfrw_dwg_table_roundtrip_xrecord_ac1018_candidate_tests
+    libdxfrw_dwg_tablestyle_ac1018_candidate_tests libdxfrw_dwg_tablestyle_extension_dictionary_ac1018_candidate_tests)
+add_test(NAME libdxfrw_dwg_tablestyle_xrecord_full_bundle COMMAND ${CMAKE_COMMAND}
+    -DCONTENT_TEST=$<TARGET_FILE:libdxfrw_dwg_tablecontent_ac1018_candidate_tests>
+    -DDATA_TEST=$<TARGET_FILE:libdxfrw_dwg_datatable_ac1018_candidate_tests>
+    -DGEOMETRY_TEST=$<TARGET_FILE:libdxfrw_dwg_tablegeometry_ac1018_candidate_tests>
+    -DROOT_TEST=$<TARGET_FILE:libdxfrw_dwg_table_roundtrip_xrecord_ac1018_candidate_tests>
+    -DSTYLE_TEST=$<TARGET_FILE:libdxfrw_dwg_tablestyle_ac1018_candidate_tests>
+    -DDICTIONARY_TEST=$<TARGET_FILE:libdxfrw_dwg_tablestyle_extension_dictionary_ac1018_candidate_tests>
+    -DBIND_TEST=$<TARGET_FILE:libdxfrw_dwg_tablestyle_xrecord_full_bundle_tests>
+    -DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/generated-tablestyle-xrecord-full-bundle
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/run_dwg_tablestyle_xrecord_full_bundle.cmake)
+set_tests_properties(libdxfrw_dwg_tablestyle_xrecord_full_bundle PROPERTIES LABELS "dwg;fast;table;xrecord" TIMEOUT 30)
+
 add_executable(libdxfrw_dwg_tablestyle_extension_dictionary_reader_lease_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/dwg_tablestyle_extension_dictionary_reader_lease_tests.cpp ${_libdxfrw_test_adapter_source})
 target_compile_features(libdxfrw_dwg_tablestyle_extension_dictionary_reader_lease_tests PRIVATE cxx_std_17)
@@ -6146,3 +6168,12 @@ add_test(NAME libdxfrw_dwg_cellstylemap_reader_source COMMAND ${CMAKE_COMMAND}
     -DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/cellstylemap_reader_source
     -P ${CMAKE_CURRENT_SOURCE_DIR}/run_dwg_cellstylemap_reader_source.cmake)
 set_tests_properties(libdxfrw_dwg_cellstylemap_reader_source PROPERTIES LABELS "dwg;fast;table" TIMEOUT 30)
+
+add_executable(libdxfrw_dwg_ltype_control_byblock_ac1018_candidate_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_ltype_control_byblock_ac1018_candidate_tests.cpp)
+target_compile_features(libdxfrw_dwg_ltype_control_byblock_ac1018_candidate_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_ltype_control_byblock_ac1018_candidate_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_ltype_control_byblock_ac1018_candidate_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dwg_ltype_control_byblock_ac1018_candidate_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dwg_ltype_control_byblock_ac1018_candidate COMMAND libdxfrw_dwg_ltype_control_byblock_ac1018_candidate_tests)
+set_tests_properties(libdxfrw_dwg_ltype_control_byblock_ac1018_candidate PROPERTIES LABELS "dwg;fast;table" TIMEOUT 30)

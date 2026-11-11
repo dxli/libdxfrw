@@ -35,6 +35,7 @@ libdxfrw_la_SOURCES = \
     intern/dwg_table_entity_xdictionary_ac1018_candidate.cpp \
     intern/dwg_tablestyle_ac1018_candidate.cpp \
     intern/dwg_cellstylemap_ac1018_candidate.cpp \
+    intern/dwg_ltype_control_byblock_ac1018_candidate.cpp \
     intern/dwgwriterlayoutvalidation.cpp \
     intern/rscodec.cpp \
     drw_acis.cpp \
@@ -91,6 +92,7 @@ dist_noinst_HEADERS = \
     intern/dwg_table_projection_ac1018_candidate.h \
     intern/dwg_tablestyle_ac1018_candidate.h \
     intern/dwg_cellstylemap_ac1018_candidate.h \
+    intern/dwg_ltype_control_byblock_ac1018_candidate.h \
     intern/dwg_default_material.h \
     intern/dwg_header_time.h \
     intern/dwgbuffer.h \

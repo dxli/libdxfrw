@@ -256,6 +256,8 @@ EXTRA_DIST = \
     src/intern/dwg_dxf_output_transaction.h \
     src/intern/dwg_fixed_handles.h \
     src/intern/dwg_header_time.h \
+    src/intern/dwg_ltype_control_byblock_ac1018_candidate.cpp \
+    src/intern/dwg_ltype_control_byblock_ac1018_candidate.h \
     src/intern/dwg_table_child_xrecord_ac1018_candidate.cpp \
     src/intern/dwg_table_child_xrecord_ac1018_candidate.h \
     src/intern/dwg_table_entity_xdictionary_ac1018_candidate.cpp \
@@ -492,6 +494,7 @@ EXTRA_DIST = \
     tests/dwg_legacy_polyline_chain_tests.cpp \
     tests/dwg_local_roundtrip_tests.cpp \
     tests/dwg_ltype_ac1021_count_tests.cpp \
+    tests/dwg_ltype_control_byblock_ac1018_candidate_tests.cpp \
     tests/dwg_ltype_multiversion_count_tests.cpp \
     tests/dwg_material_replay_refusal_tests.cpp \
     tests/dwg_modern_header_default_tests.cpp \
@@ -522,6 +525,7 @@ EXTRA_DIST = \
     tests/dwg_tablestyle_extension_dictionary_reader_lease_tests.cpp \
     tests/dwg_tablestyle_reader_source_tests.cpp \
     tests/dwg_tablestyle_roundtrip_xrecord_ac1018_candidate_tests.cpp \
+    tests/dwg_tablestyle_xrecord_full_bundle_tests.cpp \
     tests/dwg_tablestyle_xrecord_reader_binding_tests.cpp \
     tests/dwg_text_alignment_elevation_tests.cpp \
     tests/dwg_text_style_resolution_tests.cpp \
@@ -695,6 +699,7 @@ EXTRA_DIST = \
     tests/run_dwg_table_entity_reader_lease.cmake \
     tests/run_dwg_tablestyle_extension_dictionary_reader_lease.cmake \
     tests/run_dwg_tablestyle_reader_source.cmake \
+    tests/run_dwg_tablestyle_xrecord_full_bundle.cmake \
     tests/run_dxf_roundtrip_splinepoints_test.cmake \
     tests/run_extension_graph_limits_test.cmake \
     tests/run_freecad_2d_lwpolyline_oda_cli_test.cmake \
@@ -1039,6 +1044,7 @@ EXTRA_DIST = \
     tools/research/p4_forum_ltype_oda_compare.py \
     tools/research/p5_ac1018_cellstylemap_binding_probe.cpp \
     tools/research/p5_ac1018_cellstylemap_candidate_live_probe.cpp \
+    tools/research/p5_ac1018_ltype_pair_candidate_live_probe.cpp \
     tools/research/p5_ac1018_table_candidates_binding_probe.cpp \
     tools/research/p5_ac1018_table_children_binding_probe.cpp \
     tools/research/p5_ac1018_table_descendants_capture.cpp \
