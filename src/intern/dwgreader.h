@@ -1208,7 +1208,8 @@ private:
     DRW_DwgFrameOffsetSpace space{DRW_DwgFrameOffsetSpace::Unknown};
     DwgObjectFrame frame;
   };
-  std::unique_ptr<VerifiedXRecordPending> m_verifiedXRecordPending;
+  std::vector<VerifiedXRecordPending> m_verifiedXRecordPending;
+  std::size_t m_verifiedXRecordPendingBytes{0u};
   bool m_verifiedXRecordPendingFailed{false};
 protected:
   struct DwgSourceFrameLease;

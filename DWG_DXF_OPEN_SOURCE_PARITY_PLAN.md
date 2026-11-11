@@ -1292,10 +1292,15 @@ created locally from scratch for the specific control.
   remain intact ([receipt](docs/research/p5-xrecord-source-candidate-fault-bounds-2026-11-11.json)).
   The genuine reader ticket also drives allocation-failure controls for both
   measured adapter snapshot allocations and the final shared-owner allocation;
-  each retains ordinary import and same-adapter retry. Next design the opt-in
-  write path with capability revalidation at staging and finalization,
-  transactional rollback and recomputed output CRC. These controls do not
-  establish a whole-import allocation-failure guarantee.
+  each retains ordinary import and same-adapter retry. An all-or-none bounded
+  selection now seals the ten physical XRECORDs under one import token and
+  generation; a changed or missing member invalidates the entire selection.
+  Generated controls exercise missing, corrupted and mutated members, allocation
+  failures, quotas and retry ([multi-source receipt](docs/research/p5-ac1018-table-xrecord-multisource-capability-2026-11-11.json)).
+  Next qualify embedded references and the remaining recursive object bodies,
+  then design the opt-in write path with capability revalidation at staging and
+  finalization, transactional rollback and recomputed output CRC. These controls
+  do not establish a whole-import allocation-failure guarantee.
   Keep physical subtree output refused until all three opaque descendants,
   source-bound owner/target roles, class identities and graph closure are proven.
 

@@ -28913,17 +28913,47 @@ bool sameVerifiedXRecordPublication(const DRW_DwgFramePublication& a,
 }
 }
 
+bool dx_iface::enableVerifiedXRecordSources(const std::vector<std::uint32_t>& handles) noexcept {
+    if (m_verifiedXRecordReadData || handles.size()>64u) return false;
+    try {
+        auto selected=handles;
+        std::sort(selected.begin(),selected.end());
+        if (std::any_of(selected.cbegin(),selected.cend(),[](std::uint32_t h) {
+                return h==0u || h==DRW::NoHandle;
+            }) || std::adjacent_find(selected.cbegin(),selected.cend())!=selected.cend())
+            return false;
+        m_verifiedXRecordSelected.swap(selected);
+        return true;
+    } catch (...) { return false; }
+}
+
+bool dx_iface::enableVerifiedXRecordSource(std::uint32_t handle) noexcept {
+    try {
+        return enableVerifiedXRecordSources(handle==0u ? std::vector<std::uint32_t>{}
+                                                        : std::vector<std::uint32_t>{handle});
+    } catch (...) { return false; }
+}
+
 bool dx_iface::wantsVerifiedXRecord(std::uint32_t handle) const noexcept {
     return m_verifiedXRecordReadData != nullptr && !m_verifiedXRecordFailed
         && m_verifiedXRecordReadToken
         && m_verifiedXRecordReadData->m_verifiedXRecordImportToken == m_verifiedXRecordReadToken
         && m_verifiedXRecordReadData->importGeneration == m_verifiedXRecordReadGeneration
-        && m_verifiedXRecordSelected != 0u && handle == m_verifiedXRecordSelected;
+        && std::binary_search(m_verifiedXRecordSelected.cbegin(),m_verifiedXRecordSelected.cend(),handle);
 }
 
 void dx_iface::verifiedXRecord(const DwgVerifiedXRecordTicket& ticket) noexcept {
     auto* data = m_verifiedXRecordReadData;
-    if (!data || !wantsVerifiedXRecord(ticket.handle()) || m_verifiedXRecordPending) {
+    if (!data || !wantsVerifiedXRecord(ticket.handle())
+        || !std::binary_search(m_verifiedXRecordSelected.cbegin(),m_verifiedXRecordSelected.cend(),ticket.handle())
+        || m_verifiedXRecordPending.size()>=m_verifiedXRecordSelected.size()
+        || std::any_of(m_verifiedXRecordPending.cbegin(),m_verifiedXRecordPending.cend(),
+            [&ticket](const dx_data::VerifiedXRecordSource& p) {
+                return p.raw.m_handle==ticket.handle()
+                    || p.publication.m_sourceMapOrdinal==ticket.ordinal()
+                    || (p.publication.m_sourceOffsetSpace==ticket.space()
+                        && p.publication.m_sourceOffset==ticket.offset());
+            })) {
         m_verifiedXRecordFailed = true;
         return;
     }
@@ -28948,76 +28978,117 @@ void dx_iface::verifiedXRecord(const DwgVerifiedXRecordTicket& ticket) noexcept 
         || !addVectorPayloadBytes(pub.m_controlHandles, retainedBytes)
         || !addStringPayloadBytes(pub.m_recordName, retainedBytes)
         || !addStringPayloadBytes(pub.m_className, retainedBytes)
-        || retainedBytes > 2u * maxBody
+        || m_verifiedXRecordPendingBytes > 2u*maxBody
+        || retainedBytes > 2u*maxBody-m_verifiedXRecordPendingBytes
         || pub.m_encodedType != dwgObjType::XRECORD || pub.m_resolvedType != dwgObjType::XRECORD
         || pub.m_carrier != DRW_DwgFramePublication::Carrier::TypedAndRaw) {
         m_verifiedXRecordFailed = true; return;
     }
     try {
-        auto pending = std::make_unique<dx_data::VerifiedXRecordSource>();
-        pending->importToken = data->m_verifiedXRecordImportToken;
-        pending->generation = data->importGeneration;
-        pending->raw = raw;
-        pending->publication = pub;
-        m_verifiedXRecordPending = std::move(pending);
+        dx_data::VerifiedXRecordSource pending;
+        pending.importToken = data->m_verifiedXRecordImportToken;
+        pending.generation = data->importGeneration;
+        pending.raw = raw;
+        pending.publication = pub;
+        m_verifiedXRecordPending.push_back(std::move(pending));
+        m_verifiedXRecordPendingBytes+=retainedBytes;
     } catch (...) { m_verifiedXRecordFailed = true; }
 }
 
-bool dx_iface::hasUnchangedVerifiedXRecordSource(const dx_data& data,
-                                                std::uint32_t handle) noexcept {
-    const auto& source = data.m_verifiedXRecordSource;
-    if (!source || !source->importToken || source->importToken != data.m_verifiedXRecordImportToken
-        || source->generation != data.importGeneration || source->raw.m_handle != handle
-        || !data.dwgReadOutcome.operationSucceeded || data.m_standardDwgObjectCaptureFailed
-        || data.m_standardDwgObjectPayloadFailed) return false;
-    const auto found = data.m_standardDwgObjectFrames.find({source->generation, handle});
+bool dx_iface::verifiedXRecordMemberUnchanged(const dx_data& data,
+        const dx_data::VerifiedXRecordSource& source) noexcept {
+    const auto handle=source.raw.m_handle;
+    if (!source.importToken || source.importToken!=data.m_verifiedXRecordImportToken
+        || source.generation!=data.importGeneration) return false;
+    const auto found = data.m_standardDwgObjectFrames.find({source.generation, handle});
     if (found == data.m_standardDwgObjectFrames.end()) return false;
     const auto& frame = found->second;
     if (!frame.publicationSeen || !frame.payloadMatched || !frame.sourceProfileBound
-        || frame.generation != source->generation || frame.typedBaseline != source->typedBaseline
-        || !source->typedBaseline || frame.sourceCodePageId != source->codePage
-        || frame.sourceCodePageFieldPresent != source->codePagePresent
-        || frame.sourceCodePageRecognized != source->codePageRecognized
-        || frame.textDecodeObserved != source->textObserved || frame.textDecodeIssues != source->textIssues
-        || !sameVerifiedXRecordRaw(frame.raw, source->raw)
-        || !sameVerifiedXRecordPublication(frame.publication, source->publication)) return false;
+        || frame.generation != source.generation || frame.typedBaseline != source.typedBaseline
+        || !source.typedBaseline || frame.sourceCodePageId != source.codePage
+        || frame.sourceCodePageFieldPresent != source.codePagePresent
+        || frame.sourceCodePageRecognized != source.codePageRecognized
+        || frame.textDecodeObserved != source.textObserved || frame.textDecodeIssues != source.textIssues
+        || !sameVerifiedXRecordRaw(frame.raw, source.raw)
+        || !sameVerifiedXRecordPublication(frame.publication, source.publication)) return false;
     const DRW_XRecord* model = nullptr;
     for (const auto& item : data.xRecords) {
         if (item.handle != handle) continue;
         if (model) return false;
         model = &item;
     }
-    return model && standardDwgModelsEqual(*source->typedBaseline, *model,
-                                            source->raw.m_version, dwgObjType::XRECORD);
+    return model && standardDwgModelsEqual(*source.typedBaseline, *model,
+                                            source.raw.m_version, dwgObjType::XRECORD);
+}
+
+bool dx_iface::hasUnchangedVerifiedXRecordSource(const dx_data& data,
+                                                std::uint32_t handle) noexcept {
+    const auto& source=data.m_verifiedXRecordSource;
+    if (!source || !source->importToken || source->importToken!=data.m_verifiedXRecordImportToken
+        || source->generation!=data.importGeneration || source->records.empty()
+        || !data.dwgReadOutcome.operationSucceeded || data.m_standardDwgObjectCaptureFailed
+        || data.m_standardDwgObjectPayloadFailed) return false;
+    bool found=false;
+    for (const auto& member:source->records) {
+        if (!verifiedXRecordMemberUnchanged(data,member)) return false;
+        if (member.raw.m_handle==handle) found=true;
+    }
+    return found;
+}
+
+bool dx_iface::hasUnchangedVerifiedXRecordSources(const dx_data& data,
+        const std::vector<std::uint32_t>& handles) noexcept {
+    const auto& bundle=data.m_verifiedXRecordSource;
+    if (!bundle || handles.empty() || handles.size()>64u
+        || handles.size()!=bundle->records.size()
+        || !hasUnchangedVerifiedXRecordSource(data,handles.front())) return false;
+    for (std::size_t i=0;i<handles.size();++i) {
+        if (handles[i]==0u || handles[i]==DRW::NoHandle) return false;
+        for (std::size_t j=0;j<i;++j) if (handles[i]==handles[j]) return false;
+        if (std::none_of(bundle->records.cbegin(),bundle->records.cend(),
+            [&handles,i](const dx_data::VerifiedXRecordSource& row) {
+                return row.raw.m_handle==handles[i];
+            })) return false;
+    }
+    return true;
 }
 
 void dx_iface::finishVerifiedXRecordSource(bool successfulRead) noexcept {
     auto* data = m_verifiedXRecordReadData;
     if (!data) return;
     data->m_verifiedXRecordSource.reset();
-    if (successfulRead && !m_verifiedXRecordFailed && m_verifiedXRecordPending
+    if (successfulRead && !m_verifiedXRecordFailed && !m_verifiedXRecordSelected.empty()
+        && m_verifiedXRecordPending.size()==m_verifiedXRecordSelected.size()
         && m_verifiedXRecordReadToken
         && data->m_verifiedXRecordImportToken == m_verifiedXRecordReadToken
         && data->importGeneration == m_verifiedXRecordReadGeneration) {
-        const auto found = data->m_standardDwgObjectFrames.find(
-            {data->importGeneration, m_verifiedXRecordPending->raw.m_handle});
-        if (found != data->m_standardDwgObjectFrames.end()) {
+        bool complete=true;
+        for (auto& member:m_verifiedXRecordPending) {
+            const auto found = data->m_standardDwgObjectFrames.find(
+                {data->importGeneration, member.raw.m_handle});
+            if (found==data->m_standardDwgObjectFrames.end()) {complete=false;break;}
             const auto& frame = found->second;
-            m_verifiedXRecordPending->typedBaseline = frame.typedBaseline;
-            m_verifiedXRecordPending->codePage = frame.sourceCodePageId;
-            m_verifiedXRecordPending->codePagePresent = frame.sourceCodePageFieldPresent;
-            m_verifiedXRecordPending->codePageRecognized = frame.sourceCodePageRecognized;
-            m_verifiedXRecordPending->textObserved = frame.textDecodeObserved;
-            m_verifiedXRecordPending->textIssues = frame.textDecodeIssues;
+            member.typedBaseline=frame.typedBaseline;
+            member.codePage=frame.sourceCodePageId;
+            member.codePagePresent=frame.sourceCodePageFieldPresent;
+            member.codePageRecognized=frame.sourceCodePageRecognized;
+            member.textObserved=frame.textDecodeObserved;
+            member.textIssues=frame.textDecodeIssues;
+            if (!verifiedXRecordMemberUnchanged(*data,member)) {complete=false;break;}
+        }
+        if (complete && data->dwgReadOutcome.operationSucceeded
+            && !data->m_standardDwgObjectCaptureFailed && !data->m_standardDwgObjectPayloadFailed) {
             try {
-                data->m_verifiedXRecordSource =
-                    std::make_shared<const dx_data::VerifiedXRecordSource>(std::move(*m_verifiedXRecordPending));
-                if (!hasUnchangedVerifiedXRecordSource(*data, m_verifiedXRecordSelected))
-                    data->m_verifiedXRecordSource.reset();
+                auto bundle=std::make_shared<dx_data::VerifiedXRecordSources>();
+                bundle->importToken=m_verifiedXRecordReadToken;
+                bundle->generation=m_verifiedXRecordReadGeneration;
+                bundle->records=std::move(m_verifiedXRecordPending);
+                data->m_verifiedXRecordSource=std::move(bundle);
             } catch (...) { data->m_verifiedXRecordSource.reset(); }
         }
     }
-    m_verifiedXRecordPending.reset();
+    m_verifiedXRecordPending.clear();
+    m_verifiedXRecordPendingBytes=0u;
 }
 
 bool dx_iface::hasUnchangedStandardDwgObjectSources() const noexcept {
@@ -73581,8 +73652,9 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
         dwgRW dwg(fileI.c_str());
         fData->dwgReadOutcome.attempted = true;
         m_verifiedXRecordFailed = false;
-        m_verifiedXRecordPending.reset();
-        if (m_verifiedXRecordSelected != 0u) {
+        m_verifiedXRecordPending.clear();
+        m_verifiedXRecordPendingBytes=0u;
+        if (!m_verifiedXRecordSelected.empty()) {
             try {
                 fData->m_verifiedXRecordImportToken = std::make_shared<const unsigned char>(0u);
                 m_verifiedXRecordReadData = fData;
@@ -73593,7 +73665,8 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
         struct VerifiedXRecordReadScope {
             dx_iface& owner;
             ~VerifiedXRecordReadScope() {
-                owner.m_verifiedXRecordPending.reset();
+                owner.m_verifiedXRecordPending.clear();
+                owner.m_verifiedXRecordPendingBytes=0u;
                 owner.m_verifiedXRecordReadData = nullptr;
                 owner.m_verifiedXRecordReadToken.reset();
                 owner.m_verifiedXRecordReadGeneration = 0u;

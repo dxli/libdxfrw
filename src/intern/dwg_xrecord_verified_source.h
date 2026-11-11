@@ -33,6 +33,8 @@ private:
     const DwgObjectFrame& frame_;
 };
 
+// Each delivery is provisional. A sink must publish an aggregate only after
+// all selected tickets and the completed import match; a prefix is not proof.
 class DwgVerifiedXRecordSink {
 public:
     virtual ~DwgVerifiedXRecordSink() = default;

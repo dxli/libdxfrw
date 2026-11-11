@@ -2645,7 +2645,7 @@ private:
         }
     };
     // Opt-in provenance groundwork, not a replay/output certificate. The
-    // immutable owner binds one actual read attempt to one verified frame.
+    // immutable owner binds one actual read attempt to all selected frames.
     struct VerifiedXRecordSource {
         std::shared_ptr<const unsigned char> importToken;
         std::uint64_t generation{0u};
@@ -2657,8 +2657,13 @@ private:
         bool textObserved{false};
         std::uint32_t textIssues{0u};
     };
+    struct VerifiedXRecordSources {
+        std::shared_ptr<const unsigned char> importToken;
+        std::uint64_t generation{0u};
+        std::vector<VerifiedXRecordSource> records;
+    };
     std::shared_ptr<const unsigned char> m_verifiedXRecordImportToken;
-    std::shared_ptr<const VerifiedXRecordSource> m_verifiedXRecordSource;
+    std::shared_ptr<const VerifiedXRecordSources> m_verifiedXRecordSource;
     // Source-bound staging only. Never replay these bytes as DXF, and never
     // use these counts to waive strict semantic/output completeness.
     using StandardDwgFrameKey = std::pair<std::uint64_t, std::uint32_t>;

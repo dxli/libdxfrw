@@ -62,13 +62,13 @@ class dx_iface : public DRW_Interface, public DRW_DxfClassSourceHandler, public 
                  public WholeSourceV2::Handler, public DwgVerifiedXRecordSink {
 public:
     // Source observation only. This does not permit DWG or DXF replay.
-    bool enableVerifiedXRecordSource(std::uint32_t handle) noexcept {
-        if (m_verifiedXRecordReadData) return false;
-        m_verifiedXRecordSelected = handle;
-        return true;
-    }
+    bool enableVerifiedXRecordSource(std::uint32_t handle) noexcept;
+    // Empty disables observation; nonempty sets are all-or-none per import.
+    bool enableVerifiedXRecordSources(const std::vector<std::uint32_t>& handles) noexcept;
     static bool hasUnchangedVerifiedXRecordSource(
         const dx_data&, std::uint32_t handle) noexcept;
+    static bool hasUnchangedVerifiedXRecordSources(
+        const dx_data&, const std::vector<std::uint32_t>& handles) noexcept;
     bool wantsDxfSparseMaterialRawCapture() const noexcept override {
         // Old subclasses may override callbacks without retaining raw records.
         // They must explicitly opt in instead of inheriting this policy.
@@ -3330,12 +3330,15 @@ private:
     bool wantsVerifiedXRecord(std::uint32_t handle) const noexcept override;
     void verifiedXRecord(const DwgVerifiedXRecordTicket&) noexcept override;
     void finishVerifiedXRecordSource(bool successfulRead) noexcept;
-    std::uint32_t m_verifiedXRecordSelected{0u};
+    static bool verifiedXRecordMemberUnchanged(const dx_data&,
+        const dx_data::VerifiedXRecordSource&) noexcept;
+    std::vector<std::uint32_t> m_verifiedXRecordSelected;
     dx_data* m_verifiedXRecordReadData{nullptr};
     std::shared_ptr<const unsigned char> m_verifiedXRecordReadToken;
     std::uint64_t m_verifiedXRecordReadGeneration{0u};
     bool m_verifiedXRecordFailed{false};
-    std::unique_ptr<dx_data::VerifiedXRecordSource> m_verifiedXRecordPending;
+    std::vector<dx_data::VerifiedXRecordSource> m_verifiedXRecordPending;
+    std::size_t m_verifiedXRecordPendingBytes{0u};
     friend class DxWholeSourceTestAccess;
     friend class DxIfaceMlineDependencyTestAccess;
     friend class DxIfaceDwgLtypeControlOutputTestAccess;
