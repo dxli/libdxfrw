@@ -674,6 +674,48 @@ public:
     }
 };
 
+class DimDiametricCodecProbe final : public DRW_DimDiametric {
+public:
+    using DRW_DimDiametric::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+    void setHandles(std::uint32_t dimStyle, std::uint32_t block) {
+        dimStyleH.code = DRW::DwgHardPointer;
+        dimStyleH.ref = dimStyle;
+        blockH.code = DRW::DwgHardPointer;
+        blockH.ref = block;
+    }
+};
+
+class DimAngularCodecProbe final : public DRW_DimAngular {
+public:
+    using DRW_DimAngular::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+    void setHandles(std::uint32_t dimStyle, std::uint32_t block) {
+        dimStyleH.code = DRW::DwgHardPointer;
+        dimStyleH.ref = dimStyle;
+        blockH.code = DRW::DwgHardPointer;
+        blockH.ref = block;
+    }
+};
+
+class DimAngular3pCodecProbe final : public DRW_DimAngular3p {
+public:
+    using DRW_DimAngular3p::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+    void setHandles(std::uint32_t dimStyle, std::uint32_t block) {
+        dimStyleH.code = DRW::DwgHardPointer;
+        dimStyleH.ref = dimStyle;
+        blockH.code = DRW::DwgHardPointer;
+        blockH.ref = block;
+    }
+};
+
 class MeshCodecProbe final : public DRW_Mesh {
 public:
     using DRW_Mesh::encodeDwg;
@@ -26050,6 +26092,65 @@ void testRadialDimDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testDiameterAngularDimDwgEncodeAllocationRollback(TestContext &t) {
+  const auto prepare = [](auto &dimension, std::uint32_t base) {
+    dimension.handle = base;
+    dimension.parentHandle = base + 1u;
+    dimension.reactorHandles = {base + 2u};
+    dimension.xDictHandle = base + 3u;
+    dimension.setDwgType(0x777);
+    dimension.setName("*D_DIMENSION_TRANSACTION");
+    dimension.setText("DIMENSION \xCE\xA9");
+    dimension.setStyle("STANDARD");
+    dimension.setTextPoint(DRW_Coord(2.0, 3.0, 0.0));
+    dimension.setHandles(base + 4u, base + 5u);
+  };
+
+  for (const DRW::Version version : {DRW::AC1015, DRW::AC1018,
+                                     DRW::AC1021, DRW::AC1024}) {
+    const std::uint32_t base =
+        0xBC00u + static_cast<std::uint32_t>(version) * 0x10u;
+    DimDiametricCodecProbe diametric;
+    prepare(diametric, base);
+    diametric.setDiameter1Point(DRW_Coord(5.0, 0.0, 0.0));
+    diametric.setDiameter2Point(DRW_Coord(-5.0, 0.0, 0.0));
+    diametric.setLeaderLength(0.75);
+    checkEntityDwgEncodeAllocationRollback(
+        t, diametric, version, 26u,
+        version == DRW::AC1015 ? "AC1015 DIMENSION diametric"
+        : version == DRW::AC1018 ? "AC1018 DIMENSION diametric"
+        : version == DRW::AC1021 ? "AC1021 DIMENSION diametric"
+                                 : "AC1024 DIMENSION diametric");
+
+    DimAngularCodecProbe angular;
+    prepare(angular, base + 8u);
+    angular.setDimPoint(DRW_Coord(2.0, 4.0, 0.0));
+    angular.setFirstLine1(DRW_Coord(0.0, 0.0, 0.0));
+    angular.setFirstLine2(DRW_Coord(3.0, 0.0, 0.0));
+    angular.setSecondLine1(DRW_Coord(0.0, 0.0, 0.0));
+    angular.setSecondLine2(DRW_Coord(0.0, 3.0, 0.0));
+    checkEntityDwgEncodeAllocationRollback(
+        t, angular, version, 24u,
+        version == DRW::AC1015 ? "AC1015 DIMENSION angular"
+        : version == DRW::AC1018 ? "AC1018 DIMENSION angular"
+        : version == DRW::AC1021 ? "AC1021 DIMENSION angular"
+                                 : "AC1024 DIMENSION angular");
+
+    DimAngular3pCodecProbe angular3p;
+    prepare(angular3p, base + 0xCu);
+    angular3p.setDimPoint(DRW_Coord(2.0, 4.0, 0.0));
+    angular3p.setFirstLine(DRW_Coord(0.0, 0.0, 0.0));
+    angular3p.setSecondLine(DRW_Coord(3.0, 0.0, 0.0));
+    angular3p.SetVertexPoint(DRW_Coord(0.0, 0.0, 0.0));
+    checkEntityDwgEncodeAllocationRollback(
+        t, angular3p, version, 23u,
+        version == DRW::AC1015 ? "AC1015 DIMENSION angular 3-point"
+        : version == DRW::AC1018 ? "AC1018 DIMENSION angular 3-point"
+        : version == DRW::AC1021 ? "AC1021 DIMENSION angular 3-point"
+                                 : "AC1024 DIMENSION angular 3-point");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -29349,6 +29450,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testRadialDimDwgEncodeAllocationRollback(context);
       std::cout << "Radial DIMENSION DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--diametric-angular-dim-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testDiameterAngularDimDwgEncodeAllocationRollback(context);
+      std::cout << "Diametric/angular DIMENSION DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

@@ -29594,15 +29594,23 @@ bool DRW_DimLargeRadial::encodeDwg(DRW::Version version, dwgBufferW *buf,
 // ----------------------------------------------------------------------------
 bool DRW_DimDiametric::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs;
-    oType = 26;
-    if (!encodeDwgCommon(version, buf)) return false;
-    if (!encodeDwgDimBase(version, buf, strBuf)) return false;
-    buf->put3BitDouble(getPt5());       // first diameter point (code 15) — matches parseDwg order
-    buf->put3BitDouble(getDefPoint());  // opposite point (code 10)
-    buf->putBitDouble(getRa40());       // leader length (code 40)
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
-    putDimHandles(buf, dimStyleH, blockH, handleBuf);
-    return true;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            oType = 26;
+            if (!encodeDwgCommon(version, body)
+                || !encodeDwgDimBase(version, body, strings))
+                return false;
+            body->put3BitDouble(getPt5());      // first diameter point (15)
+            body->put3BitDouble(getDefPoint()); // opposite point (10)
+            body->putBitDouble(getRa40());     // leader length (40)
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
+            putDimHandles(body, dimStyleH, blockH, handles);
+            return body->isGood() && (strings == nullptr || strings->isGood())
+                && (handles == nullptr || handles->isGood());
+        });
 }
 
 // ----------------------------------------------------------------------------
@@ -29610,20 +29618,28 @@ bool DRW_DimDiametric::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uin
 // ----------------------------------------------------------------------------
 bool DRW_DimAngular::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs;
-    oType = 24;
-    if (!encodeDwgCommon(version, buf)) return false;
-    if (!encodeDwgDimBase(version, buf, strBuf)) return false;
-    // arcPoint is 2RD (not 3BD) in parseDwg — only x and y
-    const DRW_Coord dxfArcPoint = getDxfArcPoint();
-    buf->putRawDouble(dxfArcPoint.x);
-    buf->putRawDouble(dxfArcPoint.y);
-    buf->put3BitDouble(getPt3());       // def1 (line 1 start)
-    buf->put3BitDouble(getPt4());       // def2 (line 1 end)
-    buf->put3BitDouble(getPt5());       // circlePoint (center)
-    buf->put3BitDouble(getDefPoint());  // defPoint
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
-    putDimHandles(buf, dimStyleH, blockH, handleBuf);
-    return true;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            oType = 24;
+            if (!encodeDwgCommon(version, body)
+                || !encodeDwgDimBase(version, body, strings))
+                return false;
+            // arcPoint is 2RD (not 3BD) in parseDwg — only x and y
+            const DRW_Coord dxfArcPoint = getDxfArcPoint();
+            body->putRawDouble(dxfArcPoint.x);
+            body->putRawDouble(dxfArcPoint.y);
+            body->put3BitDouble(getPt3());      // def1 (line 1 start)
+            body->put3BitDouble(getPt4());      // def2 (line 1 end)
+            body->put3BitDouble(getPt5());      // circlePoint (center)
+            body->put3BitDouble(getDefPoint()); // defPoint
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
+            putDimHandles(body, dimStyleH, blockH, handles);
+            return body->isGood() && (strings == nullptr || strings->isGood())
+                && (handles == nullptr || handles->isGood());
+        });
 }
 
 // ----------------------------------------------------------------------------
@@ -29631,16 +29647,24 @@ bool DRW_DimAngular::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint3
 // ----------------------------------------------------------------------------
 bool DRW_DimAngular3p::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs;
-    oType = 23;
-    if (!encodeDwgCommon(version, buf)) return false;
-    if (!encodeDwgDimBase(version, buf, strBuf)) return false;
-    buf->put3BitDouble(getDefPoint());  // defPoint (code 10)
-    buf->put3BitDouble(getPt3());       // def1 (code 13)
-    buf->put3BitDouble(getPt4());       // def2 (code 14)
-    buf->put3BitDouble(getPt5());       // circlePoint / vertex (code 15)
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
-    putDimHandles(buf, dimStyleH, blockH, handleBuf);
-    return true;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            oType = 23;
+            if (!encodeDwgCommon(version, body)
+                || !encodeDwgDimBase(version, body, strings))
+                return false;
+            body->put3BitDouble(getDefPoint()); // defPoint (code 10)
+            body->put3BitDouble(getPt3());      // def1 (code 13)
+            body->put3BitDouble(getPt4());      // def2 (code 14)
+            body->put3BitDouble(getPt5());      // center / vertex (code 15)
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
+            putDimHandles(body, dimStyleH, blockH, handles);
+            return body->isGood() && (strings == nullptr || strings->isGood())
+                && (handles == nullptr || handles->isGood());
+        });
 }
 
 // ----------------------------------------------------------------------------
