@@ -3823,7 +3823,8 @@ ordinary-box difference depends on the bounds method and tessellation state.
 **AC1024 ACIS 21500 framing and bounded source-box probe (2026-11-11):** the
 local `visualization_-_aerial.dwg` source, solid handle `0x183`, contains a
 7,048-byte inline `ACIS BinaryFile` stream with version 21500, zero declared
-record count, two declared bodies, flags `0x18`, and a terminal marker. The
+record count, raw third header integer `2` (semantics unresolved), flags
+`0x18`, and a terminal marker. Do not label that integer as a body count. The
 reader now admits zero record count only for the evidenced ACIS 21200/21500/
 21800 profiles when the explicit terminator is present. Its AC1024 SAT v1
 projection emits the parsed record count (115) and the history boolean (bit 0)
