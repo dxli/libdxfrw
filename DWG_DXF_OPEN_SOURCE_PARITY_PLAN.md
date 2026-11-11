@@ -1369,9 +1369,12 @@ created locally from scratch for the specific control.
   style orders; bind identities and preserve the appropriate order before any
   output decision. STYLE/LTYPE controls, fonts, layer and block dependencies
   remain unclosed. A bounded TABLESTYLE observer now checks the selected wire
-  fields and typed projection; it does not authenticate the caller's frame or
-  certify complete model equality. Next bind it to reader-origin source and
-  close its dictionary and resource dependencies. See the
+  fields and typed projection. An opt-in reader-origin binding now joins that
+  projection to the TABLE's style target and the style's TABLE reactor; it does
+  not certify complete model equality. Close its dictionary and resource
+  dependencies next. The AC1032 malformed-count dispatch test fails on both
+  this tree and a clean pre-binding baseline and needs separate investigation.
+  See the [binding receipt](docs/research/p5-ac1018-tablestyle-reader-source-binding-2026-11-11.json),
   [style graph receipt](docs/research/p5-ac1018-tablestyle-cellstylemap-graph-wire-2026-11-11.json)
   and [observer receipt](docs/research/p5-ac1018-tablestyle-source-observer-2026-11-11.json).
   See the [DATATABLE candidate receipt](docs/research/p5-ac1018-datatable-candidate-observer-2026-11-11.json).

@@ -30,6 +30,7 @@
 #include "intern/dwg_table_child_xrecord_ac1018_candidate.h"
 #include "intern/dwg_table_extension_dictionary_ac1018_candidate.h"
 #include "intern/dwg_table_entity_xdictionary_ac1018_candidate.h"
+#include "intern/dwg_tablestyle_ac1018_candidate.h"
 namespace blockref_source_relation { struct Result; }
 
 #include <cstdint>
@@ -111,6 +112,16 @@ public:
     bool enableVerifiedTableModelSource(const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
         std::uint32_t tableEntity,std::uint32_t dictionary) noexcept;
+    // Reader-authenticated TABLESTYLE selected wire projection only; this
+    // does not certify the complete typed model or grant output authority.
+    bool enableVerifiedTableStyleSource(const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        std::uint32_t tableEntity,std::uint32_t dictionary,std::uint32_t tableStyle) noexcept;
+    static bool readVerifiedTableStyleSource(const dx_data&,
+        const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        std::uint32_t tableEntity,std::uint32_t dictionary,std::uint32_t tableStyle,
+        DwgTableStyleAc1018Candidate::Result& result) noexcept;
     static bool hasUnchangedVerifiedTableModelSource(const dx_data&,
         const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
@@ -3469,6 +3480,7 @@ private:
     std::uint32_t m_verifiedTableEntitySelected{0u},m_verifiedTableDictionarySelected{0u};
     bool m_verifiedReciprocalTableSelected{false};
     bool m_verifiedTableModelSelected{false};
+    std::uint32_t m_verifiedTableStyleSelected{0u};
     std::vector<dx_data::VerifiedTableCandidateSource> m_verifiedTableCandidatePending;
     std::size_t m_verifiedTableCandidatePendingBytes{0u};
     friend class DxWholeSourceTestAccess;

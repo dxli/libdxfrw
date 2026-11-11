@@ -2687,10 +2687,11 @@ private:
         std::uint32_t selectedExtensionDictionary{0u},selectedTableEntity{0u};
         bool requiresReciprocalTableSource{false};
         bool requiresUnchangedTableModel{false};
+        std::uint32_t selectedTableStyle{0u};
         std::vector<VerifiedXRecordSource> records;
     };
     struct VerifiedTableCandidateSource {
-        enum class Kind : std::uint8_t { TableContent, DataTable, TableGeometry, ExtensionDictionary, TableEntity };
+        enum class Kind : std::uint8_t { TableContent, DataTable, TableGeometry, ExtensionDictionary, TableEntity, TableStyle };
         DRW_UnsupportedObject raw;
         std::uint64_t ordinal{0u};
         DRW_DwgFrameOffsetSpace space{DRW_DwgFrameOffsetSpace::Unknown};
