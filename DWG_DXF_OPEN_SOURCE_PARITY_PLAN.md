@@ -1209,6 +1209,20 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-11)
 
+- **P7 ACIS 21500 bounded face/loop/coedge incidence observation:** the
+  hash-pinned AC1024 inline SAB at entity `0x183` now projects the observed
+  21500 face→loop, loop→coedge, coedge next/previous/partner/edge/loop/pcurve,
+  edge endpoint, and loop/face/shell/lump owner-index roles. Exact reference-row
+  widths gate this profile; generated closed- and broken-ring controls pass.
+  In the sampled SAB, all six faces have one null-terminated loop; all six
+  loops traverse four coedges, close at their start, have reciprocal links and
+  continuous endpoint chains, and match the parsed coedge/loop incidence
+  census. This is a single-source structural observation and generated
+  control, not independent ACIS schema validation, B-rep validity, native
+  acceptance, output qualification, or a broader 21500 support claim. Continue
+  source/topology and independent-kernel qualification separately. See the
+  [21500 incidence receipt](docs/research/p7-ac1024-21500-sab-incidence-observation-2026-11-11.json).
+
 - **P6 R12 ellipse numerical stability:** the ellipse-to-polyline converter
   now uses scaled length calculations for axes and normals whose norms are
   finite, and constructs the minor direction before scaling. A locally authored full ellipse

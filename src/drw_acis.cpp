@@ -657,6 +657,10 @@ bool isStrictAcis21800(const DRW_SabHeader& header) {
     return header.signature == "ACIS BinaryFile" && header.version == 21800;
 }
 
+bool isObservedAcis21500(const DRW_SabHeader& header) {
+    return header.signature == "ACIS BinaryFile" && header.version == 21500;
+}
+
 int pointerRefOfType(const DRW_AcisModel& model, const DRW_AcisNode& node,
                      std::size_t ordinal, const char* type,
                      SabParseBudget& budget) {
@@ -713,18 +717,24 @@ ParsedAcisUseIndexes indexParsedAcisUses(
     const std::set<int>& projectedShellIndices,
     const std::set<int>& projectedLumpIndices, SabParseBudget& budget) {
     ParsedAcisUseIndexes parsedUses;
-    if (!isStrictAcis21800(model.header)
+    const bool strict21800 = isStrictAcis21800(model.header);
+    const bool observed21500 = isObservedAcis21500(model.header);
+    if ((!strict21800 && !observed21500)
         || (projectedEdgeIndices.empty() && projectedLoopIndices.empty()
             && projectedFaceIndices.empty()
             && projectedShellIndices.empty() && projectedLumpIndices.empty()))
         return parsedUses;
 
     // Build source-ordered indexes for the incidence families in one pass.
-    // Rows retain explicit, well-typed coedge ordinal-4 -> edge, coedge
-    // ordinal-5 -> loop, loop ordinal-3 -> face, face ordinal-3 -> shell,
-    // and shell ordinal-5 -> lump references. Account for unclassified
-    // records too, so a partial index is never reported as a complete
-    // parsed-model census.
+    // Retain profile-scoped pointer roles. ACIS 21500 observations include
+    // the common attribute pointer in the raw rows, shifting each data-role
+    // slot by one from the rooted 21800 projection. Account for unclassified
+    // records too, so a partial index is never reported as a complete census.
+    const std::size_t coedgeEdgeOrdinal = observed21500 ? 5u : 4u;
+    const std::size_t coedgeLoopOrdinal = observed21500 ? 6u : 5u;
+    const std::size_t loopFaceOrdinal = observed21500 ? 4u : 3u;
+    const std::size_t faceShellOrdinal = observed21500 ? 4u : 3u;
+    const std::size_t shellLumpOrdinal = observed21500 ? 6u : 5u;
     for (std::size_t sourceIndex = 0u;
          sourceIndex < model.nodes.size(); ++sourceIndex) {
         budget.accountExtractionWork();
@@ -736,10 +746,11 @@ ParsedAcisUseIndexes indexParsedAcisUses(
                     parsedUses.firstUnclassifiedCoedgeNodeIndex =
                         static_cast<int>(sourceIndex);
             };
-            if (source.refs.size() <= 4u) {
+            if ((observed21500 && source.refs.size() != 8u)
+                || source.refs.size() <= coedgeEdgeOrdinal) {
                 markUnclassified();
             } else {
-                const int edgeIndex = source.refs[4u];
+                const int edgeIndex = source.refs[coedgeEdgeOrdinal];
                 const DRW_AcisNode* edge = nodeAt(model, edgeIndex);
                 if (!edge || edge->type != "edge") {
                     markUnclassified();
@@ -768,10 +779,11 @@ ParsedAcisUseIndexes indexParsedAcisUses(
                     parsedUses.firstUnclassifiedCoedgeOwnerNodeIndex =
                         static_cast<int>(sourceIndex);
             };
-            if (source.refs.size() <= 5u) {
+            if ((observed21500 && source.refs.size() != 8u)
+                || source.refs.size() <= coedgeLoopOrdinal) {
                 markUnclassified();
             } else {
-                const int loopIndex = source.refs[5u];
+                const int loopIndex = source.refs[coedgeLoopOrdinal];
                 const DRW_AcisNode* loop = nodeAt(model, loopIndex);
                 if (!loop || loop->type != "loop") {
                     markUnclassified();
@@ -800,10 +812,11 @@ ParsedAcisUseIndexes indexParsedAcisUses(
                     parsedUses.firstUnclassifiedLoopNodeIndex =
                         static_cast<int>(sourceIndex);
             };
-            if (source.refs.size() <= 3u) {
+            if ((observed21500 && source.refs.size() != 5u)
+                || source.refs.size() <= loopFaceOrdinal) {
                 markUnclassified();
             } else {
-                const int faceIndex = source.refs[3u];
+                const int faceIndex = source.refs[loopFaceOrdinal];
                 const DRW_AcisNode* face = nodeAt(model, faceIndex);
                 if (!face || face->type != "face") {
                     markUnclassified();
@@ -832,10 +845,11 @@ ParsedAcisUseIndexes indexParsedAcisUses(
                     parsedUses.firstUnclassifiedFaceNodeIndex =
                         static_cast<int>(sourceIndex);
             };
-            if (source.refs.size() <= 3u) {
+            if ((observed21500 && source.refs.size() != 7u)
+                || source.refs.size() <= faceShellOrdinal) {
                 markUnclassified();
             } else {
-                const int shellIndex = source.refs[3u];
+                const int shellIndex = source.refs[faceShellOrdinal];
                 const DRW_AcisNode* shell = nodeAt(model, shellIndex);
                 if (!shell || shell->type != "shell") {
                     markUnclassified();
@@ -864,10 +878,11 @@ ParsedAcisUseIndexes indexParsedAcisUses(
                     parsedUses.firstUnclassifiedShellNodeIndex =
                         static_cast<int>(sourceIndex);
             };
-            if (source.refs.size() <= 5u) {
+            if ((observed21500 && source.refs.size() != 7u)
+                || source.refs.size() <= shellLumpOrdinal) {
                 markUnclassified();
             } else {
-                const int lumpIndex = source.refs[5u];
+                const int lumpIndex = source.refs[shellLumpOrdinal];
                 const DRW_AcisNode* lump = nodeAt(model, lumpIndex);
                 if (!lump || lump->type != "lump") {
                     markUnclassified();
@@ -897,7 +912,9 @@ void projectCoedgePartnerRing(
     SabParseBudget& budget, std::vector<int>& coedgeNodeIndices,
     std::vector<int>& nextCoedgeNodeIndices, bool& hasObservation,
     bool& ringClosed) {
-    hasObservation = isStrictAcis21800(model.header);
+    const bool strict21800 = isStrictAcis21800(model.header);
+    const bool observed21500 = isObservedAcis21500(model.header);
+    hasObservation = strict21800 || observed21500;
     ringClosed = false;
     coedgeNodeIndices.clear();
     nextCoedgeNodeIndices.clear();
@@ -924,7 +941,9 @@ void projectCoedgePartnerRing(
 
         const DRW_AcisNode* coedge = nodeAt(model, currentCoedgeIndex);
         const int nextCoedgeIndex = coedge
-            ? pointerRefOfType(model, *coedge, 3u, "coedge", budget) : -1;
+            ? pointerRefOfType(model, *coedge,
+                               observed21500 ? 4u : 3u,
+                               "coedge", budget) : -1;
         nextCoedgeNodeIndices.push_back(nextCoedgeIndex);
         if (nextCoedgeIndex < 0)
             break;
@@ -1631,18 +1650,22 @@ std::vector<int> loopCoedgeNodeIndices(const DRW_AcisModel& m,
                                       bool& ringClosed) {
     std::vector<int> indices;
     const bool strict21800 = isStrictAcis21800(m.header);
-    hasRingClosure = strict21800;
+    const bool observed21500 = isObservedAcis21500(m.header)
+        && loop.refs.size() == 5u;
+    hasRingClosure = strict21800 || observed21500;
     ringClosed = false;
     int start = strict21800
         ? pointerRefOfType(m, loop, 2u, "coedge", budget)
-        : exactRefOfType(m, loop, "coedge", budget);
+        : observed21500
+            ? pointerRefOfType(m, loop, 3u, "coedge", budget)
+            : exactRefOfType(m, loop, "coedge", budget);
     if (start < 0) return indices;
     std::set<int> seen;
     int coedge = start;
     while (coedge >= 0) {
         budget.accountExtractionWork();
         if (seen.find(coedge) != seen.end()) {
-            ringClosed = strict21800 && coedge == start;
+            ringClosed = hasRingClosure && coedge == start;
             break;
         }
         // The cycle guard and retained ordered identity row occupy storage.
@@ -1653,7 +1676,9 @@ std::vector<int> loopCoedgeNodeIndices(const DRW_AcisModel& m,
         if (!c) break;
         coedge = strict21800
             ? pointerRefOfType(m, *c, 1u, "coedge", budget)
-            : exactRefOfType(m, *c, "coedge", budget);
+            : observed21500 && c->refs.size() == 8u
+                ? pointerRefOfType(m, *c, 2u, "coedge", budget)
+                : exactRefOfType(m, *c, "coedge", budget);
     }
     return indices;
 }
@@ -1668,13 +1693,17 @@ std::vector<int> loopCoedgePointerNodeIndices(
     std::vector<int> nodeIndices;
     const bool strict21800 = model.header.signature == "ACIS BinaryFile"
         && model.header.version == 21800;
+    const bool observed21500 = isObservedAcis21500(model.header);
+    const std::size_t profileOrdinal = observed21500
+        ? pointerOrdinal + 1u : pointerOrdinal;
     for (int coedgeIndex : coedgeNodeIndices) {
         budget.accountExtractionWork();
         int targetIndex = -1;
         const DRW_AcisNode* coedge = nodeAt(model, coedgeIndex);
-        if (strict21800 && coedge
-            && coedge->refs.size() > pointerOrdinal) {
-            const int candidate = coedge->refs[pointerOrdinal];
+        if ((strict21800 || observed21500) && coedge
+            && (!observed21500 || coedge->refs.size() == 8u)
+            && coedge->refs.size() > profileOrdinal) {
+            const int candidate = coedge->refs[profileOrdinal];
             const DRW_AcisNode* target = nodeAt(model, candidate);
             if (target && target->type == expectedType)
                 targetIndex = candidate;
@@ -1782,12 +1811,17 @@ std::vector<int> loopEdgeEndpointVertexNodeIndices(
     std::size_t endpointPointerOrdinal, SabParseBudget& budget) {
     std::vector<int> nodeIndices;
     const bool strict21800 = isStrictAcis21800(model.header);
+    const bool observed21500 = isObservedAcis21500(model.header);
     for (int edgeIndex : edgeNodeIndices) {
         int vertexIndex = -1;
         const DRW_AcisNode* edge = nodeAt(model, edgeIndex);
         if (strict21800 && edge) {
             vertexIndex = pointerRefOfType(
                 model, *edge, endpointPointerOrdinal, "vertex", budget);
+        } else if (observed21500 && edge && edge->refs.size() == 6u
+                   && endpointPointerOrdinal <= 2u) {
+            vertexIndex = pointerRefOfType(
+                model, *edge, endpointPointerOrdinal + 1u, "vertex", budget);
         } else {
             budget.accountExtractionWork();
         }
@@ -1829,6 +1863,16 @@ AcisBooleanFields booleanFieldsAfterPointerCount(
         && tokens.front().tag == DRW_SabTag::EntityType
         && tokens.front().sval == node.type)
         tokenIndex = 1u;
+    if (isObservedAcis21500(header) && tokens.size() >= 3u
+        && tokens[0].tag == DRW_SabTag::EntityType
+        && tokens[0].sval == node.type
+        && tokens[1].tag == DRW_SabTag::Pointer
+        && tokens[2].tag == DRW_SabTag::Int) {
+        // The observed 21500 records carry the common attribute/entity-ID
+        // prefix in their raw tokens. Pointer-role indexes retain that prefix;
+        // field scans start after it.
+        tokenIndex = 3u;
+    }
 
     std::size_t pointerCount = 0u;
     for (; tokenIndex < tokens.size(); ++tokenIndex) {
@@ -1861,11 +1905,12 @@ std::vector<std::int8_t> loopCoedgeSenseFlags(
     std::vector<std::int8_t> senseFlags;
     const bool strict21800 = model.header.signature == "ACIS BinaryFile"
         && model.header.version == 21800;
+    const bool observed21500 = isObservedAcis21500(model.header);
     for (int coedgeIndex : coedgeNodeIndices) {
         std::int8_t sense = -1;
-        if (strict21800) {
+        if (strict21800 || observed21500) {
             const DRW_AcisNode* coedge = nodeAt(model, coedgeIndex);
-            if (coedge) {
+            if (coedge && (!observed21500 || coedge->refs.size() == 8u)) {
                 const AcisBooleanFields fields = booleanFieldsAfterPointerCount(
                     model.header, *coedge, 5u, budget);
                 if (fields.count != 0u)
@@ -2807,7 +2852,8 @@ static bool extractAcisWireframeImpl(const DRW_AcisModel& model,
     std::set<int> projectedFaceIndices;
     std::set<int> projectedShellIndices;
     std::set<int> projectedLumpIndices;
-    if (isStrictAcis21800(model.header)) {
+    if (isStrictAcis21800(model.header)
+        || isObservedAcis21500(model.header)) {
         for (std::size_t ordinal = 0u; ordinal < candidateCount; ++ordinal) {
             budget.accountExtractionWork();
             int nodeIndex = -1;
@@ -3038,34 +3084,43 @@ static bool extractAcisWireframeImpl(const DRW_AcisModel& model,
         DRW_AcisEdge edge;
         edge.nodeIndex = edgeIndex;
         if (edgeNode) {
-            if (isStrictAcis21800(model.header)) {
+            const bool strict21800 = isStrictAcis21800(model.header);
+            const bool observed21500 = isObservedAcis21500(model.header)
+                && edgeNode->refs.size() == 6u;
+            if (strict21800 || observed21500) {
                 edge.coedgeNodeIndex = pointerRefOfType(
-                    model, *edgeNode, 3u, "coedge", budget);
+                    model, *edgeNode, observed21500 ? 4u : 3u,
+                    "coedge", budget);
                 const DRW_AcisNode* coedgeNode =
                     nodeAt(model, edge.coedgeNodeIndex);
                 edge.hasReciprocalCoedgeLink = coedgeNode
-                    && pointerRefOfType(model, *coedgeNode, 4u, "edge",
-                                        budget) == edgeIndex;
+                    && pointerRefOfType(
+                           model, *coedgeNode,
+                           observed21500 ? 5u : 4u, "edge", budget)
+                        == edgeIndex;
                 projectCoedgePartnerRing(
                     model, edge.coedgeNodeIndex, budget,
                     edge.coedgePartnerRingNodeIndices,
                     edge.coedgePartnerRingNextNodeIndices,
                     edge.hasCoedgePartnerRingObservation,
                     edge.coedgePartnerRingClosed);
-                edge.hasCoedgeEdgeUseIndexObservation = true;
-                edge.coedgeEdgeUseIndexCoversParsedCoedges =
-                    parsedAcisUseIndexes.coversParsedCoedges();
-                edge.coedgeEdgeUseIndexUnclassifiedCoedgeCount =
-                    parsedAcisUseIndexes.unclassifiedCoedgeCount;
-                edge.firstUnclassifiedCoedgeEdgeUseNodeIndex =
-                    parsedAcisUseIndexes.firstUnclassifiedCoedgeNodeIndex;
-                const auto edgeUses =
-                    parsedAcisUseIndexes.coedgeNodeIndicesByEdge.find(
-                        edgeIndex);
-                if (edgeUses
-                    != parsedAcisUseIndexes.coedgeNodeIndicesByEdge.end()) {
-                    budget.accountOutputItems(edgeUses->second.size());
-                    edge.coedgeEdgeUseNodeIndices = edgeUses->second;
+                if (strict21800) {
+                    edge.hasCoedgeEdgeUseIndexObservation = true;
+                    edge.coedgeEdgeUseIndexCoversParsedCoedges =
+                        parsedAcisUseIndexes.coversParsedCoedges();
+                    edge.coedgeEdgeUseIndexUnclassifiedCoedgeCount =
+                        parsedAcisUseIndexes.unclassifiedCoedgeCount;
+                    edge.firstUnclassifiedCoedgeEdgeUseNodeIndex =
+                        parsedAcisUseIndexes
+                            .firstUnclassifiedCoedgeNodeIndex;
+                    const auto edgeUses =
+                        parsedAcisUseIndexes.coedgeNodeIndicesByEdge.find(
+                            edgeIndex);
+                    if (edgeUses
+                        != parsedAcisUseIndexes.coedgeNodeIndicesByEdge.end()) {
+                        budget.accountOutputItems(edgeUses->second.size());
+                        edge.coedgeEdgeUseNodeIndices = edgeUses->second;
+                    }
                 }
                 edge.coedgePartnerRingMatchesEdgeUseIndex =
                     coedgePartnerRingMatchesEdgeUseIndex(
@@ -3188,12 +3243,16 @@ static bool extractAcisWireframeImpl(const DRW_AcisModel& model,
                 }
             }
             const bool strict21800 = isStrictAcis21800(model.header);
-            face.hasLoopChainObservation = strict21800;
+            const bool observed21500 = isObservedAcis21500(model.header)
+                && faceNode->refs.size() == 7u;
+            face.hasLoopChainObservation = strict21800 || observed21500;
             int surfaceIndex = strict21800
                 ? pointerRefWithSuffix(model, *faceNode, 5u, "-surface", budget)
                 : -1;
             int loopIndex = strict21800
                 ? pointerRefOfType(model, *faceNode, 2u, "loop", budget)
+                : observed21500
+                    ? pointerRefOfType(model, *faceNode, 3u, "loop", budget)
                 : -1;
             for (int ref : faceNode->refs) {
                 budget.accountExtractionWork();
@@ -3205,7 +3264,7 @@ static bool extractAcisWireframeImpl(const DRW_AcisModel& model,
                     && (referencedNode->type == "-surface"
                         || endsWith(referencedNode->type, "-surface")))
                     surfaceIndex = ref;
-                if (!strict21800 && loopIndex < 0
+                if (!strict21800 && !observed21500 && loopIndex < 0
                     && (referencedNode->type == "loop"
                         || endsWith(referencedNode->type, "loop")))
                     loopIndex = ref;
@@ -3315,7 +3374,7 @@ static bool extractAcisWireframeImpl(const DRW_AcisModel& model,
                         endpointChain.discontinuityCount;
                     projected.firstCoedgeEndpointDiscontinuityNodeIndex =
                         endpointChain.firstDiscontinuityNodeIndex;
-                    if (isStrictAcis21800(model.header)) {
+                    if (strict21800 || observed21500) {
                         projected.hasCoedgeUseIndexObservation = true;
                         projected.coedgeUseIndexCoversParsedCoedges =
                             parsedAcisUseIndexes.coversParsedCoedgeOwners();
@@ -3349,6 +3408,12 @@ static bool extractAcisWireframeImpl(const DRW_AcisModel& model,
                                 projected
                                     .coedgeUseIndexCoversParsedCoedges,
                                 budget);
+                    }
+                    const bool observed21500Loop =
+                        isObservedAcis21500(model.header)
+                        && loop->refs.size() == 5u;
+                    if (isStrictAcis21800(model.header)
+                        || observed21500Loop) {
                         budget.accountExtractionWork();
                         if (loop->refs.size() > 1u) {
                             projected.nextLoopTargetNodeIndex = loop->refs[1u];
@@ -3387,7 +3452,7 @@ static bool extractAcisWireframeImpl(const DRW_AcisModel& model,
                     cachedLoop->second.coedgeRingOpen;
                 faceLoop.coedgeLinksReciprocal =
                     cachedLoop->second.coedgeLinksReciprocal;
-                if (strict21800) {
+                if (strict21800 || observed21500) {
                     budget.accountOutputItems();
                     face.loopNextNodeIndices.push_back(
                         cachedLoop->second.nextLoopTargetNodeIndex);
@@ -3482,7 +3547,7 @@ static bool extractAcisWireframeImpl(const DRW_AcisModel& model,
                 face.loops.push_back(faceLoop);
                 loopIndex = cachedLoop->second.nextLoopIndex;
             }
-            if (strict21800) {
+            if (strict21800 || observed21500) {
                 face.hasLoopUseIndexObservation = true;
                 face.loopUseIndexCoversParsedLoops =
                     parsedAcisUseIndexes.coversParsedLoops();

@@ -363,9 +363,10 @@ std::vector<std::uint8_t> rootedVertexBodySab(
     return bytes;
 }
 
-std::vector<std::uint8_t> sab21800FromGraph(const DRW_SabData& graph) {
+std::vector<std::uint8_t> sabFromGraphVersion(
+    const DRW_SabData& graph, std::uint32_t version) {
     if (graph.header.signature != "ACIS BinaryFile"
-        || graph.header.version != 21800
+        || graph.header.version != static_cast<int>(version)
         || graph.records.size()
             >= static_cast<std::size_t>(
                 std::numeric_limits<std::int32_t>::max())) {
@@ -376,7 +377,7 @@ std::vector<std::uint8_t> sab21800FromGraph(const DRW_SabData& graph) {
         graph.records.size() + 1u);
     std::vector<std::uint8_t> bytes(graph.header.signature.begin(),
                                     graph.header.signature.end());
-    appendU32(bytes, 21800u);
+    appendU32(bytes, version);
     appendU32(bytes, recordCount);
     appendU32(bytes, static_cast<std::uint32_t>(graph.records.size()));
     appendU32(bytes, 0u);
@@ -470,9 +471,88 @@ std::vector<std::uint8_t> sab21800FromGraph(const DRW_SabData& graph) {
         bytes.push_back(static_cast<std::uint8_t>(DRW_SabTag::RecordEnd));
     }
 
-    appendSabEntityType(bytes, "End-of-ASM-data");
+    appendSabEntityType(bytes, version >= 21800u
+        ? "End-of-ASM-data" : "End-of-ACIS-data");
     bytes.push_back(static_cast<std::uint8_t>(DRW_SabTag::RecordEnd));
     return bytes;
+}
+
+std::vector<std::uint8_t> sab21800FromGraph(const DRW_SabData& graph) {
+    return sabFromGraphVersion(graph, 21800u);
+}
+
+std::vector<std::uint8_t> sab21500FromGraph(const DRW_SabData& graph) {
+    return sabFromGraphVersion(graph, 21500u);
+}
+
+std::vector<std::uint8_t> twoCoedgeClosedSab21500(bool wrongNextTarget = false) {
+    DRW_SabData graph;
+    graph.header.signature = "ACIS BinaryFile";
+    graph.header.version = 21500;
+    graph.header.numRecords = 11;
+    graph.header.numEntities = 2;
+    graph.header.unitsInMm = 1.0;
+    graph.header.resTol = 1.0e-6;
+    graph.header.norTol = 1.0e-6;
+
+    const auto pointer = [](int target) {
+        DRW_SabToken token;
+        token.tag = DRW_SabTag::Pointer;
+        token.ival = target;
+        return token;
+    };
+    const auto record = [&graph, &pointer](
+        const char* type, std::initializer_list<int> pointerTargets,
+        int boolAfterPointerCount = -1, bool boolValue = false,
+        int locationPointIndex = -1) {
+        DRW_SabRecord value;
+        value.type = type;
+        DRW_SabToken typeToken;
+        typeToken.tag = DRW_SabTag::EntityType;
+        typeToken.sval = value.type;
+        value.tokens.push_back(typeToken);
+        int pointerCount = 0;
+        for (int target : pointerTargets) {
+            if (pointerCount == boolAfterPointerCount) {
+                DRW_SabToken flag;
+                flag.tag = boolValue ? DRW_SabTag::BoolTrue
+                                     : DRW_SabTag::BoolFalse;
+                flag.bval = boolValue;
+                value.tokens.push_back(flag);
+            }
+            value.tokens.push_back(pointer(target));
+            ++pointerCount;
+        }
+        if (boolAfterPointerCount == pointerCount) {
+            DRW_SabToken flag;
+            flag.tag = boolValue ? DRW_SabTag::BoolTrue
+                                 : DRW_SabTag::BoolFalse;
+            flag.bval = boolValue;
+            value.tokens.push_back(flag);
+        }
+        if (locationPointIndex >= 0) {
+            DRW_SabToken location;
+            location.tag = DRW_SabTag::LocationVec;
+            location.vec = locationPointIndex == 8
+                ? DRW_Coord(0.0, 0.0, 0.0)
+                : DRW_Coord(1.0, 0.0, 0.0);
+            value.tokens.push_back(location);
+        }
+        graph.records.push_back(std::move(value));
+    };
+
+    record("face", {-1, -1, 1, -1, -1, -1});
+    record("loop", {-1, -1, 2, 0});
+    record("coedge", {-1, wrongNextTarget ? 4 : 3, 3, 2, 4, 1, -1},
+           5u, false);
+    record("coedge", {-1, 2, 2, 3, 5, 1, -1}, 5u, false);
+    record("edge", {-1, 6, 7, 2, -1});
+    record("edge", {-1, 7, 6, 3, -1});
+    record("vertex", {-1, 4, 8});
+    record("vertex", {-1, 5, 9});
+    record("point", {}, -1, false, 8);
+    record("point", {}, -1, false, 9);
+    return sab21500FromGraph(graph);
 }
 
 std::vector<std::uint8_t> shiftSabBits(const std::vector<std::uint8_t>& bytes,
@@ -3927,6 +4007,58 @@ void testAcisRootedBodyProjection(TestContext& t) {
                  && continuousEndpointLoop
                         ->firstCoedgeEndpointDiscontinuityNodeIndex == -1,
              "SAB 21800 rooted endpoint-chain observation recognizes a connected closed coedge cycle");
+    const auto parse21500CoedgeControl = [](
+        bool wrongNextTarget, DRW_AcisBrep& output) {
+        const std::vector<std::uint8_t> bytes =
+            twoCoedgeClosedSab21500(wrongNextTarget);
+        DRW_SabData sab;
+        DRW_AcisModel model;
+        if (bytes.empty() || !drw_parseSab(bytes.data(), bytes.size(), sab)
+            || sab.header.version != 21500) {
+            return false;
+        }
+        model = drw_buildAcisModel(sab);
+        return drw_extractAcisWireframe(model, output);
+    };
+    DRW_AcisBrep acis21500ClosedLoop;
+    const bool acis21500ClosedLoopParsed =
+        parse21500CoedgeControl(false, acis21500ClosedLoop);
+    const DRW_AcisFace* acis21500Face =
+        acis21500ClosedLoop.faces.empty()
+            ? nullptr : &acis21500ClosedLoop.faces.front();
+    const DRW_AcisFaceLoop* acis21500Loop =
+        !acis21500Face || acis21500Face->loops.empty()
+            ? nullptr : &acis21500Face->loops.front();
+    t.expect(acis21500ClosedLoopParsed && acis21500Face && acis21500Loop
+                 && acis21500Face->hasLoopChainObservation
+                 && acis21500Face->loopChainNullTerminated
+                 && acis21500Face->hasLoopUseIndexObservation
+                 && acis21500Face->loopUseIndexCoversParsedLoops
+                 && acis21500Face->faceLoopChainMatchesUseIndex
+                 && acis21500Loop->hasCoedgeRingClosure
+                 && acis21500Loop->coedgeRingClosed
+                 && acis21500Loop->coedgeLinksReciprocal
+                 && acis21500Loop->hasCoedgeEndpointChainObservation
+                 && acis21500Loop->coedgeEndpointChainContinuous
+                 && acis21500Loop->hasCoedgeUseIndexObservation
+                 && acis21500Loop->coedgeUseIndexCoversParsedCoedges
+                 && acis21500Loop->coedgeChainMatchesUseIndex,
+             "ACIS 21500 source-profile control closes loop, coedge, edge, and endpoint identities");
+    DRW_AcisBrep acis21500BrokenLoop;
+    const bool acis21500BrokenLoopParsed =
+        parse21500CoedgeControl(true, acis21500BrokenLoop);
+    t.expect(acis21500BrokenLoopParsed
+                 && !acis21500BrokenLoop.faces.empty()
+                 && !acis21500BrokenLoop.faces.front().loops.empty()
+                 && acis21500BrokenLoop.faces.front().loops.front()
+                        .hasCoedgeRingClosure
+                 && !acis21500BrokenLoop.faces.front().loops.front()
+                        .coedgeRingClosed
+                 && !acis21500BrokenLoop.faces.front().loops.front()
+                        .coedgeLinksReciprocal
+                 && !acis21500BrokenLoop.faces.front().loops.front()
+                        .coedgeEndpointChainContinuous,
+             "ACIS 21500 profile refuses closure when the exact next-coedge role targets a non-coedge");
     const auto findProjectedEdge = [](
         const std::vector<DRW_AcisBodyProjection>& projections,
         int edgeIndex) -> const DRW_AcisEdge* {
