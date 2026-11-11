@@ -374,6 +374,60 @@ DRW_Coord inverseTransformOcsCoordinate(DRW_Coord normal,
             + axisZ.z * coordinate.z);
 }
 
+// OCS bases are orthonormal, so each inverse component is a three-term dot
+// product. Scale the coordinate before summing: finite input terms can
+// otherwise overflow an intermediate even when cancellation leaves a finite
+// result. Compensated summation also retains low-order terms lost by the
+// ordinary left-to-right expression. This is used only by the explicit
+// nonmutating recovery API; historical applyExtrusion behavior is unchanged.
+bool inverseTransformOcsCoordinateStable(const DRW_Coord& normal,
+                                         const DRW_Coord& coordinate,
+                                         DRW_Coord& result) noexcept {
+    if (!std::isfinite(coordinate.x) || !std::isfinite(coordinate.y)
+        || !std::isfinite(coordinate.z)) return false;
+    DRW_Coord axisX, axisY, axisZ;
+    if (!calculateStableOcsAxes(normal, axisX, axisY, axisZ)) return false;
+
+    const double scale = std::max({std::fabs(coordinate.x),
+                                   std::fabs(coordinate.y),
+                                   std::fabs(coordinate.z)});
+    if (scale == 0.0) {
+        result = DRW_Coord();
+        return true;
+    }
+    const double values[] = {coordinate.x / scale,
+                             coordinate.y / scale,
+                             coordinate.z / scale};
+    const auto dot = [&](double x, double y, double z, double& output) {
+        const double coefficients[] = {x, y, z};
+        double sum = 0.0;
+        double correction = 0.0;
+        const auto add = [&](double value) {
+            const double next = sum + value;
+            if (std::fabs(sum) >= std::fabs(value))
+                correction += (sum - next) + value;
+            else
+                correction += (value - next) + sum;
+            sum = next;
+        };
+        for (std::size_t i = 0; i < 3u; ++i) {
+            const double product = coefficients[i] * values[i];
+            add(product);
+            add(std::fma(coefficients[i], values[i], -product));
+        }
+        const double normalized = sum + correction;
+        output = normalized * scale;
+        return std::isfinite(normalized) && std::isfinite(output);
+    };
+
+    DRW_Coord candidate;
+    if (!dot(axisX.x, axisX.y, axisX.z, candidate.x)
+        || !dot(axisY.x, axisY.y, axisY.z, candidate.y)
+        || !dot(axisZ.x, axisZ.y, axisZ.z, candidate.z)) return false;
+    result = candidate;
+    return true;
+}
+
 struct EmbeddedMTextHandleInfo {
     bool m_ownerHandle = false;
     int m_numReactors = 0;
@@ -9659,11 +9713,9 @@ bool validLegacyDxfExtrusion(const DRW_Circle& value) noexcept {
 
 bool restoreLegacyDxfCenter(DRW_Circle& value) noexcept {
     if (!value.haveExtrusion) return true;
-    if (!hasStableOcsBasis(value.extPoint)) return false;
-    const DRW_Coord center = inverseTransformOcsCoordinate(value.extPoint,
-                                                            value.basePoint);
-    if (!std::isfinite(center.x) || !std::isfinite(center.y)
-        || !std::isfinite(center.z)) return false;
+    DRW_Coord center;
+    if (!inverseTransformOcsCoordinateStable(value.extPoint, value.basePoint,
+                                              center)) return false;
     value.basePoint = center;
     return true;
 }
@@ -9682,8 +9734,10 @@ bool restoreLegacyDxfTrace(DRW_Trace& value) noexcept {
     DRW_Coord* const points[] = {&value.basePoint, &value.secPoint,
                                  &value.thirdPoint, &value.fourPoint};
     for (DRW_Coord* point : points) {
-        *point = inverseTransformOcsCoordinate(value.extPoint, *point);
-        if (!finite(*point)) return false;
+        DRW_Coord restored;
+        if (!inverseTransformOcsCoordinateStable(value.extPoint, *point,
+                                                 restored)) return false;
+        *point = restored;
     }
     return true;
 }
@@ -9767,13 +9821,13 @@ bool DRW_DxfLegacyExtrusion::toNativeOcs(const DRW_Text& input,
     try {
         DRW_Text candidate(input);
         if (candidate.haveExtrusion) {
-            if (!hasStableOcsBasis(candidate.extPoint)) return false;
-            candidate.basePoint = inverseTransformOcsCoordinate(
-                candidate.extPoint, candidate.basePoint);
-            candidate.secPoint = inverseTransformOcsCoordinate(
-                candidate.extPoint, candidate.secPoint);
-            if (!finite(candidate.basePoint) || !finite(candidate.secPoint))
-                return false;
+            DRW_Coord basePoint, secPoint;
+            if (!inverseTransformOcsCoordinateStable(candidate.extPoint,
+                    candidate.basePoint, basePoint)
+                || !inverseTransformOcsCoordinateStable(candidate.extPoint,
+                    candidate.secPoint, secPoint)) return false;
+            candidate.basePoint = basePoint;
+            candidate.secPoint = secPoint;
         }
         output = std::move(candidate);
         return true;
@@ -9799,10 +9853,10 @@ bool DRW_DxfLegacyExtrusion::toNativeOcs(const DRW_Insert& input,
     try {
         DRW_Insert candidate(input);
         if (candidate.haveExtrusion) {
-            if (!hasStableOcsBasis(candidate.extPoint)) return false;
-            candidate.basePoint = inverseTransformOcsCoordinate(
-                candidate.extPoint, candidate.basePoint);
-            if (!finite(candidate.basePoint)) return false;
+            DRW_Coord basePoint;
+            if (!inverseTransformOcsCoordinateStable(candidate.extPoint,
+                    candidate.basePoint, basePoint)) return false;
+            candidate.basePoint = basePoint;
         }
         output = std::move(candidate);
         return true;

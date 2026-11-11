@@ -242,6 +242,25 @@ bool directControls() {
     unchanged.basePoint = {91., 92., 93.};
     unchanged.radious = 42.;
     const DRW_Circle before = unchanged;
+    // The unscaled z dot product overflows after its first two terms, even
+    // though the third term cancels it to a finite native OCS coordinate.
+    // Explicit recovery must scale before summation instead of refusing this
+    // finite transform.
+    const double maximum = std::numeric_limits<double>::max();
+    DRW_Circle cancellation;
+    cancellation.basePoint = {-0.9 * maximum, -0.9 * maximum,
+                               0.32 * maximum};
+    cancellation.extPoint = {1., 1., 1.};
+    cancellation.haveExtrusion = true;
+    DRW_Circle recovered;
+    if (!DRW_DxfLegacyExtrusion::toNativeOcs(cancellation, recovered)
+        || !std::isfinite(recovered.basePoint.x)
+        || !std::isfinite(recovered.basePoint.y)
+        || !std::isfinite(recovered.basePoint.z)
+        || std::fabs(recovered.basePoint.x) > 1.e-15 * maximum
+        || !near(recovered.basePoint.y / maximum, 2.44 / std::sqrt(6.))
+        || !near(recovered.basePoint.z / maximum, -1.48 / std::sqrt(3.)))
+        return false;
     for (const DRW_Coord normal : {DRW_Coord{0.,0.,0.},
             DRW_Coord{std::numeric_limits<double>::infinity(),0.,1.},
             DRW_Coord{std::numeric_limits<double>::quiet_NaN(),0.,1.}}) {
@@ -252,7 +271,6 @@ bool directControls() {
     }
     // The inverse must use the same stable normalization as applyExtrusion,
     // including extreme finite and subnormal normals.
-    const double maximum = std::numeric_limits<double>::max();
     const double tiny = std::numeric_limits<double>::denorm_min();
     for (const DRW_Coord normal : {DRW_Coord{maximum,maximum/4.,-maximum/2.},
                                    DRW_Coord{tiny,tiny,tiny},

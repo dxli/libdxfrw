@@ -1,5 +1,16 @@
 # DWG/DXF parity — remaining implementation plan
 
+**Latest P6 local implementation slice (2026-11-11, scaled OCS inverse):**
+the explicit legacy-extrusion recovery API now scales finite coordinates before
+its inverse-basis dot products and uses compensated accumulation with fused
+product residuals. This avoids a false refusal when an intermediate sum
+overflows but the complete finite result is representable. The historical
+`applyExtrusion` path is unchanged; non-finite final coordinates still refuse.
+A generated near-`DBL_MAX` cancellation vector exercises the former overflow,
+and the focused legacy-extrusion CTest passes 1/1. This closes only that
+arithmetic case, not exact arithmetic, all finite transforms, native rendering,
+or producer qualification. See the [scaled-dot receipt](docs/research/p6-legacy-ocs-scaled-dot-overflow-2026-11-11.json).
+
 **Latest P7 implementation slice (2026-11-11, ACIS 700 zero-count framing):**
 an ODA File Converter 27.1.0.0-produced AC1024 DWG from the known cube SAT
 sample contains an `ACIS BinaryFile` version-700 SAB with record count zero,
