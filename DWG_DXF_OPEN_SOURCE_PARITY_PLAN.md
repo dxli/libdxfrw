@@ -1225,6 +1225,9 @@ created locally from scratch for the specific control.
   focused CTests passed 3/3. Regenerate again after adding tracked files. This
   is not an Autotools distcheck or native-platform qualification. See the
   [receipt](docs/research/p8-source-release-tracked-inventory-refresh-2026-11-10.json).
+  After `1d0a1d40`, regenerated the lists to include the new subtype dispatch
+  test; the 1000-file inventory check passes. The archive checks above apply
+  to the earlier 999-file snapshot.
 
 - **P6 HELIX spline dispatch and 2D fallback:** `writeSpline` now routes a
   runtime HELIX to the typed HELIX writer, retaining its axis and parameters.
