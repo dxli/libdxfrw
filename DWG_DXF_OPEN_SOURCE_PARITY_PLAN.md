@@ -1335,8 +1335,11 @@ created locally from scratch for the specific control.
   It is now included in the reader-owned same-import bundle, which verifies its
   source owner and invalidates the entire selection on failure or mutation
   ([binding receipt](docs/research/p5-ac1018-table-geometry-reader-binding-2026-11-11.json)).
-  Next verify the root XRECORD's exact references to all three custom frames;
-  the bundle does not yet establish that graph closure.
+  An opt-in root XRECORD observer now checks the 13 source-ordered pairs and
+  extracts its three 360/361/360 data references without interpreting them as
+  DWG H tokens ([receipt](docs/research/p5-ac1018-table-root-xrecord-ordered-candidate-2026-11-11.json)).
+  Next bind that observation to the verified root and match those targets to
+  all three selected custom frames; the bundle does not yet establish closure.
   See the [DATATABLE candidate receipt](docs/research/p5-ac1018-datatable-candidate-observer-2026-11-11.json).
 
   The recreated AC1018 XRECORD `0xbc` is now independently walked to its

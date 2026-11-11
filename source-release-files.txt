@@ -252,6 +252,8 @@ src/intern/dwg_dxf_output_transaction.cpp
 src/intern/dwg_dxf_output_transaction.h
 src/intern/dwg_fixed_handles.h
 src/intern/dwg_header_time.h
+src/intern/dwg_table_roundtrip_xrecord_ac1018_candidate.cpp
+src/intern/dwg_table_roundtrip_xrecord_ac1018_candidate.h
 src/intern/dwg_tablecontent_ac1018_candidate.h
 src/intern/dwg_tablegeometry_ac1018_candidate.cpp
 src/intern/dwg_tablegeometry_ac1018_candidate.h
@@ -486,6 +488,7 @@ tests/dwg_polyline_owner_facade_tests.cpp
 tests/dwg_reader_matrix_tests.cpp
 tests/dwg_solid_trace_elevation_tests.cpp
 tests/dwg_table_candidate_binding_tests.cpp
+tests/dwg_table_roundtrip_xrecord_ac1018_candidate_tests.cpp
 tests/dwg_tablecontent_ac1018_candidate_tests.cpp
 tests/dwg_tablegeometry_ac1018_candidate_tests.cpp
 tests/dwg_text_alignment_elevation_tests.cpp
@@ -1005,6 +1008,7 @@ tools/research/p5_ac1018_table_xrecord_source_verify.py
 tools/research/p5_ac1018_tablecontent_candidate_compare.py
 tools/research/p5_ac1018_tablecontent_candidate_probe.cpp
 tools/research/p5_ac1018_tablecontent_interior_verify.py
+tools/research/p5_table_root_xrecord_candidate_probe.cpp
 tools/research/p5_xrecord_codepage45_verify.py
 tools/research/p5_xrecord_codepage_capture.cpp
 tools/research/run_acsh_torus_source_probe.py
