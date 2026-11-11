@@ -968,6 +968,7 @@ tools/probe_wipeout_ac1032_source.cpp
 tools/qualify_material_source_order.py
 tools/replay_dwg_legacy_extrusion.cpp
 tools/research/ac1032_forum_assocnetwork_spans.py
+tools/research/ac1032_forum_constraint_group_spans.py
 tools/research/audit_ac1027_source_references.py
 tools/research/decode_dxf_sat1.py
 tools/research/dwg_ac1032_object_section_probe.cpp
