@@ -10502,6 +10502,46 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                              == normalizedRangeHandles.data(),
                      "AC1018 TABLE emits the same BLOCK HEADER hard-pointer bytes for normalized and parsed handle metadata");
 
+            for (unsigned mutation = 0; mutation < 2u; ++mutation) {
+                TableDwgCodecProbe staleRangeModel = retainedRangeModel;
+                if (mutation == 0u) {
+                    // A present mask with value zero is distinguishable from
+                    // the source's absent bit in the retained range count.
+                    staleRangeModel.m_content.m_subrecordRanges.back().m_count = 1u;
+                } else {
+                    staleRangeModel.m_tableOverrideFlags = 0x00100000u;
+                    staleRangeModel.m_tableRowHeightOverrides[0] = 0.0;
+                }
+                dwgBufferW staleBody, staleHandles;
+                staleBody.putBit(true);
+                staleHandles.putBit(false);
+                const auto beforeBody = staleBody.data();
+                const auto beforeHandles = staleHandles.data();
+                const auto beforeBodyBits = staleBody.bitCount();
+                const auto beforeHandleBits = staleHandles.bitCount();
+                const bool rejected = !staleRangeModel.encodeAsTableClass(
+                    DRW::AC1018, staleBody, staleHandles);
+                const bool unchanged = staleBody.data() == beforeBody
+                    && staleHandles.data() == beforeHandles
+                    && staleBody.bitCount() == beforeBodyBits
+                    && staleHandles.bitCount() == beforeHandleBits;
+                staleRangeModel = retainedRangeModel;
+                const bool retried = staleRangeModel.encodeAsTableClass(
+                    DRW::AC1018, staleBody, staleHandles);
+                t.expect(rejected && unchanged && retried,
+                         mutation == 0u
+                             ? "AC1018 TABLE retained absent mask rejects changed presence and retries atomically"
+                             : "AC1018 TABLE retained absent mask rejects selected zero height and retries atomically");
+            }
+
+            TableDwgCodecProbe generatedSelectedZero = mergedAc1018Table;
+            generatedSelectedZero.m_tableOverrideFlags = 0x00100000u;
+            generatedSelectedZero.m_tableRowHeightOverrides[0] = 0.0;
+            dwgBufferW generatedZeroBody, generatedZeroHandles;
+            t.expect(generatedSelectedZero.encodeAsTableClass(
+                         DRW::AC1018, generatedZeroBody, generatedZeroHandles),
+                     "AC1018 TABLE generated selected zero height remains encodable");
+
             TableDwgCodecProbe cachedProxyTable = mergedAc1018Table;
             cachedProxyTable.proxyGraphics = std::string("AC1018 cache\0bytes", 18u);
             cachedProxyTable.numProxyGraph = static_cast<int>(

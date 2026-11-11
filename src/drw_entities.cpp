@@ -15305,6 +15305,10 @@ bool DRW_Table::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || !m_content.m_fieldHandles.empty()
         || !m_content.m_mergedRanges.empty()
         || !validAc1018TableEmptyOverrideRanges(version, m_content)
+        // A retained four-bit range proves that all four source masks were
+        // absent. Do not silently reinterpret it as a new TABLE override.
+        || (!m_content.m_subrecordRanges.empty()
+            && m_tableOverrideFlags != 0u)
         || !m_content.m_name.empty() || !m_content.m_description.empty()
         || m_content.m_overrideStyleType != 4
         || (m_content.m_tableStyleHandle != 0u

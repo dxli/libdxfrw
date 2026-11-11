@@ -1209,6 +1209,18 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P5 AC1018 TABLE stale absent-mask guard:** when retained source ranges
+  describe four absent TABLE override masks, the direct encoder now refuses a
+  nonzero modeled TABLE mask, including selected zero text height. A changed
+  retained presence count is also refused; both cases preserve seeded buffers
+  and retry after correction. Range-empty generated selected-zero output still
+  encodes. This is a narrow consistency guard, not a source binding: nonempty
+  parsed ranges, identity, atomic delivery and full graph qualification remain
+  open. A newly recreated ODA AC1018 source independently exhibits the same
+  four absent bits, but the current physical codec probe refuses its authorized
+  output; investigate that refusal before claiming a positive source roundtrip.
+  See the [guard receipt](docs/research/p5-ac1018-table-stale-absent-mask-guard-2026-11-10.json).
+
 - **P5 AC1018 TABLE row overrides:** the DWG writer now emits the ODA
   title/header/data alignment and row text-height fields when their six
   selection bits are set. All 64 mixed selections preserve exact wire order,
