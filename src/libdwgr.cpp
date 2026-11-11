@@ -2984,9 +2984,11 @@ bool dwgRW::writeTable(DRW_Table *ent) {
         if (!encodeEntityForWrite(ent))
             return false;
     } else {
-        // A parsed source needs its own source binding and dependency proof.
-        if (typeid(*ent) != typeid(DRW_Table)
-            || !ent->m_content.m_subrecordRanges.empty()) {
+        // The TABLE codec admits only the exact AC1018 empty-mask range
+        // signature; it reconstructs those known zero bits from typed fields.
+        // Unknown, handle-bearing, or incomplete retained ranges are rejected
+        // by the codec before any frame is staged.
+        if (typeid(*ent) != typeid(DRW_Table)) {
             markDwgWriteFailure();
             return recordWriteResult(WriteSkipKind::Entity, false);
         }

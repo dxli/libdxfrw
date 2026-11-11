@@ -1554,18 +1554,24 @@ created locally from scratch for the specific control.
   DXF per-row border-color output remains refused where one group-code value
   cannot represent three distinct row values. Physical producer ordering and
   native rendering remain unqualified. See the [DWG border CMC receipt](docs/research/p5-ac1018-table-border-cmc-dwg-writer-2026-11-11.json).
-  Re-encoding a parsed TABLE with a nonempty retained override range remains
-  refused, including after modeled values change: the range currently stores
-  offsets and counts, not the source bytes or a value snapshot. Next add an
-  opt-in, out-of-band source binding that associates the exact raw TABLE frame
-  and import identity with a bounded reparse and immutable mask/value/range
-  snapshot, without changing the existing consumer object ABI. Require that
-  binding and exact modeled-field equality before admitting parsed replay;
-  test source identity, stale-range/value mutation refusal, corrected retry,
-  and fresh write/readback. Keep unsupported cells, dependencies and proxy
-  gates independent. LibreDWG reads the generated file but keeps its TABLE body
-  opaque; native rendering and physical producer qualification remain open. See the
-  [receipt](docs/research/p5-ac1018-table-row-alignment-height-dwg-writer-2026-11-10.json).
+  **Completed bounded zero-mask extension route (2026-11-11):** the writer
+  now admits a TABLE with an extension dictionary and the exact known AC1018
+  retained empty-mask range signature. It canonically re-encodes typed zero
+  masks instead of replaying source offsets/bytes; the codec still rejects
+  unknown names, versions, widths, counts, handle roles, incomplete ranges,
+  nonzero cell masks and nonzero table override masks. A generated whole-file
+  control verifies extension graph closure, typed range readback, atomic
+  failure/retry, and destination preservation (see the
+  [receipt](docs/research/p5-ac1018-table-zero-mask-extension-dictionary-reencode-2026-11-11.json)).
+  This removes the raw source-binding need for that exact re-encoded signature.
+  Other unknown/unmatched retained source subrecords remain refused; raw replay
+  still requires exact source/model binding and reference-role closure because
+  raw replay leaves nested handles source-valued
+  ([replay-boundary receipt](docs/research/p5-ac1018-table-source-replay-reference-boundary-2026-11-11.json)).
+  Keep unsupported cells, dependencies and proxy gates independent. LibreDWG
+  reads the generated file but keeps its TABLE body opaque; native rendering
+  and physical producer qualification remain open. See the
+  [row alignment receipt](docs/research/p5-ac1018-table-row-alignment-height-dwg-writer-2026-11-10.json).
   The exact modeled snapshot comparator is now shared from
   `dwg_table_model_ac1018_candidate.h`; `dx_iface` delegates to it, including
   DWG row/border overrides and raw range handle codes. Focused controls still

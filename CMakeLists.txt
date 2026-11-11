@@ -1244,6 +1244,12 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_table_ac1018_empty_extension_roundtrip
         PROPERTIES LABELS "fast;dwg;generated;tables;graph;transaction;readback"
         TIMEOUT 30)
+    add_test(NAME libdxfrw_table_ac1018_zero_mask_extension_roundtrip
+        COMMAND libdxfrw_dwg_local_roundtrip
+            --table-ac1018-zero-mask-extension-roundtrip)
+    set_tests_properties(libdxfrw_table_ac1018_zero_mask_extension_roundtrip
+        PROPERTIES LABELS "fast;dwg;generated;tables;graph;transaction;readback"
+        TIMEOUT 30)
     add_executable(libdxfrw_table_extension_facade_allocation_tests
         tests/table_extension_facade_allocation_tests.cpp
         tests/modeler_dxf_writer_matrix_tests.cpp

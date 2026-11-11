@@ -15731,7 +15731,6 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
         || m_tableStyleHandle == 0 || !attribHandles.empty()
         || !attlist.empty()
         || (xDictHandle != 0u && !allowExtensionDictionary)
-        || (xDictHandle != 0u && !m_content.m_subrecordRanges.empty())
         || seqendH.code != 0u || seqendH.size != 0u
         || seqendH.rawCode != 0u || seqendH.ref != DRW::NoHandle
         || seqendH.ref64 != DRW::NoHandle || seqEndEntity != nullptr

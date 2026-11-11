@@ -38448,6 +38448,36 @@ public:
     void testExtensionRollback(bool test) noexcept {
         m_testExtensionRollback = test;
     }
+    void setRetainedZeroMaskRanges() {
+        table.m_content.m_subrecordRanges.clear();
+        std::uint64_t startBit = 0u;
+        for (const DRW_TableRow& row : table.m_content.m_rows) {
+            for (const DRW_TableCell& cell : row.m_cells) {
+                if (cell.m_contents.size() != 1u
+                    || cell.m_contents.front().m_text.empty())
+                    continue;
+                DRW_DwgSubrecordRange range;
+                range.m_name = "r2007-table-cell-overrides";
+                range.m_startBit = startBit;
+                range.m_bitSize = 10u;
+                range.m_version = DRW::AC1018;
+                range.m_count = 0u;
+                range.m_rawHandleCode = 0u;
+                range.m_parseComplete = true;
+                table.m_content.m_subrecordRanges.push_back(range);
+                startBit += range.m_bitSize;
+            }
+        }
+        DRW_DwgSubrecordRange tableRange;
+        tableRange.m_name = "r2007-table-overrides";
+        tableRange.m_startBit = startBit;
+        tableRange.m_bitSize = 4u;
+        tableRange.m_version = DRW::AC1018;
+        tableRange.m_count = 0u;
+        tableRange.m_rawHandleCode = 0u;
+        tableRange.m_parseComplete = true;
+        table.m_content.m_subrecordRanges.push_back(tableRange);
+    }
 
 private:
     void initializeTable() {
@@ -38524,7 +38554,8 @@ public:
 bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
                                          bool emitTable = false,
                                          bool emitDbColor = false,
-                                         bool emitExtension = false) {
+                                         bool emitExtension = false,
+                                         bool emitZeroMaskRanges = false) {
     const auto nonce = std::chrono::steady_clock::now()
                            .time_since_epoch().count();
     const auto path = retainedOutput != nullptr
@@ -38550,11 +38581,19 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
     if (emitExtension && !output.reserveHandle(producer.kExtensionHandle))
         return false;
     if (emitTable) {
-        // The selected zero is an explicit title text-height override, not
-        // an absent override. These are row styles, not physical row heights.
-        producer.table.m_tableOverrideFlags = 0x0071C000u;
-        producer.table.m_tableRowAlignmentOverrides = {{1, 5, 9}};
-        producer.table.m_tableRowHeightOverrides = {{0.0, 2.5, 4.75}};
+        if (emitZeroMaskRanges) {
+            // Exercise the known retained zero-mask spans with the extension
+            // dictionary route. The codec reconstructs their exact bit widths
+            // from the typed empty-mask profile.
+            producer.setRetainedZeroMaskRanges();
+        } else {
+            // The selected zero is an explicit title text-height override,
+            // not an absent override. These are row styles, not physical
+            // row heights.
+            producer.table.m_tableOverrideFlags = 0x0071C000u;
+            producer.table.m_tableRowAlignmentOverrides = {{1, 5, 9}};
+            producer.table.m_tableRowHeightOverrides = {{0.0, 2.5, 4.75}};
+        }
     }
     DRW_TableStyle missingOpaqueColor = producer.style;
     missingOpaqueColor.m_rowStyles[0].m_textColorCmc.m_method =
@@ -38658,6 +38697,8 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
         }
         producer.setExtensionMode(6);
         producer.testExtensionRollback(true);
+        if (emitZeroMaskRanges)
+            producer.setRetainedZeroMaskRanges();
     }
     if (!output.write(&producer, DRW::AC1018, true) || !producer.ready) {
         const DRW_OperationDiagnostic diagnostic = output.getLastDiagnostic();
@@ -38757,10 +38798,14 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
             != static_cast<int>(generatedTableProxyCache().size())
         || table->m_tableStyleHandle != emittedStyleHandle
         || !table->m_semanticContentComplete
-        || table->m_tableOverrideFlags != 0x0071C000u
-        || table->m_tableRowAlignmentOverrides != std::array<int, 3>{{1, 5, 9}}
+        || table->m_tableOverrideFlags
+            != (emitZeroMaskRanges ? 0u : 0x0071C000u)
+        || table->m_tableRowAlignmentOverrides
+            != (emitZeroMaskRanges ? std::array<int, 3>{{0, 0, 0}}
+                              : std::array<int, 3>{{1, 5, 9}})
         || table->m_tableRowHeightOverrides
-            != std::array<double, 3>{{0.0, 2.5, 4.75}}
+            != (emitZeroMaskRanges ? std::array<double, 3>{{0.0, 0.0, 0.0}}
+                              : std::array<double, 3>{{0.0, 2.5, 4.75}})
         || table->m_content.m_rows.size() != 3u
         || table->m_content.m_columns.size() != 3u
         || table->m_content.m_rows[0].m_cells.size() != 3u
@@ -38768,6 +38813,28 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
         || !table->m_content.m_rows[0].m_cells[1].m_isMerged
         || !table->m_content.m_rows[0].m_cells[2].m_isMerged) {
         return false;
+    }
+    if (emitZeroMaskRanges) {
+        const auto& ranges = table->m_content.m_subrecordRanges;
+        const std::size_t expectedCellRanges = 7u;
+        if (ranges.size() != expectedCellRanges + 1u
+            || !std::all_of(ranges.cbegin(), ranges.cend(),
+                [](const DRW_DwgSubrecordRange& range) {
+                    return range.m_version == DRW::AC1018
+                        && range.m_count == 0u
+                        && range.m_rawHandleCode == 0u
+                        && range.m_parseComplete;
+                })
+            || ranges.back().m_name != "r2007-table-overrides"
+            || ranges.back().m_bitSize != 4u
+            || !std::all_of(ranges.cbegin(), ranges.end() - 1,
+                [](const DRW_DwgSubrecordRange& range) {
+                    return range.m_name == "r2007-table-cell-overrides"
+                        && range.m_bitSize == 10u;
+                })) {
+            std::cerr << "TABLE zero-mask range fresh readback mismatch\n";
+            return false;
+        }
     }
     if (emitExtension) {
         const auto matches = std::count_if(readData.dictionaries.cbegin(),
@@ -38939,6 +39006,14 @@ int main(int argc, char** argv) {
         const bool passed = testTableStyleNodWholeFileRoundTrip(
             argc == 3 ? argv[2] : nullptr, true, false, true);
         std::cout << "AC1018 TABLE empty extension round-trip: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    }
+    if ((argc == 2 || argc == 3)
+        && std::string(argv[1]) == "--table-ac1018-zero-mask-extension-roundtrip") {
+        const bool passed = testTableStyleNodWholeFileRoundTrip(
+            argc == 3 ? argv[2] : nullptr, true, false, true, true);
+        std::cout << "AC1018 TABLE zero-mask ranges with extension round-trip: "
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     }
