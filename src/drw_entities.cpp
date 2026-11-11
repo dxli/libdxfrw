@@ -8588,18 +8588,70 @@ bool DRW_LWPolyline::encodeDwg(DRW::Version version, dwgBufferW *buf,
   }
 }
 
-bool DRW_Block::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
-    (void)bs;
-    // BLOCK = 4, ENDBLK = 5 per DWG spec.  isEnd controls which.
+bool DRW_Block::encodeDwg(DRW::Version version, dwgBufferW *buf,
+                          std::uint32_t bs, dwgBufferW *strBuf,
+                          dwgBufferW *handleBuf) {
+  (void)bs;
+  if (buf == nullptr)
+    return false;
+
+  dwgBufferW *const bodyTarget = buf;
+  dwgBufferW *const stringTarget = strBuf != nullptr ? strBuf : bodyTarget;
+  dwgBufferW *const handleTarget =
+      handleBuf != nullptr ? handleBuf : bodyTarget;
+  try {
+    dwgBufferW bodyStage = *bodyTarget;
+    std::optional<dwgBufferW> stringStageStorage;
+    dwgBufferW *stringStage = &bodyStage;
+    if (stringTarget != bodyTarget) {
+      stringStageStorage.emplace(*stringTarget);
+      stringStage = &*stringStageStorage;
+    }
+    std::optional<dwgBufferW> handleStageStorage;
+    dwgBufferW *handleStage = &bodyStage;
+    if (handleTarget == bodyTarget) {
+      handleStage = &bodyStage;
+    } else if (handleTarget == stringTarget) {
+      handleStage = stringStage;
+    } else {
+      handleStageStorage.emplace(*handleTarget);
+      handleStage = &*handleStageStorage;
+    }
+
+    buf = &bodyStage;
+    strBuf = strBuf != nullptr ? stringStage : nullptr;
+    handleBuf = handleBuf != nullptr ? handleStage : nullptr;
+    struct ObjectTypeRollback {
+      decltype(oType) &value;
+      decltype(oType) original;
+      bool committed{false};
+      ~ObjectTypeRollback() {
+        if (!committed)
+          value = original;
+      }
+    } typeRollback{oType, oType};
+    // BLOCK = 4, ENDBLK = 5 per DWG spec. isEnd controls which.
     oType = isEnd ? 5 : 4;
-    if (!encodeDwgCommon(version, buf)) return false;
-    if (!isEnd) {
-        (strBuf ? strBuf : buf)->putVariableText(version, name);
-    }
-    if (version > DRW::AC1018) {
-        buf->putBit(0);  // unknown bit (R2007+: always 0 for our output)
-    }
-    return encodeDwgEntHandle(version, buf, handleBuf);
+    if (!encodeDwgCommon(version, buf))
+      return false;
+    if (!isEnd)
+      (strBuf ? strBuf : buf)->putVariableText(version, name);
+    if (version > DRW::AC1018)
+      buf->putBit(0); // unknown bit (R2007+: always 0 for our output)
+
+    if (!encodeDwgEntHandle(version, buf, handleBuf) || !buf->isGood() ||
+        !stringStage->isGood() || !handleStage->isGood())
+      return false;
+    bodyTarget->swap(bodyStage);
+    if (stringTarget != bodyTarget)
+      stringTarget->swap(*stringStageStorage);
+    if (handleTarget != bodyTarget && handleTarget != stringTarget)
+      handleTarget->swap(*handleStageStorage);
+    typeRollback.committed = true;
+    return true;
+  } catch (const std::bad_alloc &) {
+    return false;
+  }
 }
 
 // TEXT's DWG body stores only one elevation for its two OCS points.  The

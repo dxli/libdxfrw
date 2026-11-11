@@ -448,6 +448,14 @@ public:
   std::uint16_t dwgType() const { return oType; }
 };
 
+class BlockCodecProbe final : public DRW_Block {
+public:
+  using DRW_Block::encodeDwg;
+
+  void setDwgType(std::uint16_t value) { oType = value; }
+  std::uint16_t dwgType() const { return oType; }
+};
+
 class ViewportCodecProbe final : public DRW_Viewport {
 public:
   using DRW_Viewport::encodeDwg;
@@ -25300,6 +25308,35 @@ void testHelixDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testBlockDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+    const std::uint32_t baseHandle = version == DRW::AC1021 ? 0xAE10u : 0xAE20u;
+
+    BlockCodecProbe block;
+    block.handle = baseHandle;
+    block.parentHandle = 0xAE30u;
+    block.reactorHandles = {0xAE40u};
+    block.xDictHandle = 0xAE50u;
+    block.name = "TXN_BLOCK";
+    block.setDwgType(0x777u);
+    checkEntityDwgEncodeAllocationRollback(
+        t, block, version, 4u,
+        version == DRW::AC1021 ? "AC1021 BLOCK" : "AC1024 BLOCK");
+
+    BlockCodecProbe endBlock;
+    endBlock.handle = baseHandle + 1u;
+    endBlock.parentHandle = 0xAE30u;
+    endBlock.reactorHandles = {0xAE40u};
+    endBlock.xDictHandle = 0xAE50u;
+    endBlock.name = "TXN_ENDBLK_UNUSED";
+    endBlock.setDwgType(0x777u);
+    endBlock.setIsEnd(true);
+    checkEntityDwgEncodeAllocationRollback(
+        t, endBlock, version, 5u,
+        version == DRW::AC1021 ? "AC1021 ENDBLK" : "AC1024 ENDBLK");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -28487,6 +28524,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testHelixDwgEncodeAllocationRollback(context);
       std::cout << "HELIX DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 &&
+        std::string(argv[1]) == "--block-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testBlockDwgEncodeAllocationRollback(context);
+      std::cout << "BLOCK/ENDBLK DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }
