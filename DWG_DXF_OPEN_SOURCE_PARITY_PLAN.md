@@ -1209,6 +1209,19 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-11)
 
+- **P6 R12 ellipse boundary:** a distinct parameter span below `1e-10` now
+  remains a partial ellipse when tessellated; near-full spans also remain
+  open. Exact equal-parameter and exact representable full-turn forms retain
+  their prior full-ellipse behavior, while an opt-in wrapped CCW arc no longer
+  inherits the former tolerance band. Out-of-range sweeps refuse output.
+  Generated direct and ASCII/Binary R12 controls cover 2D and tilted 3D
+  endpoints, normal/extrusion-enabled readback, legacy and opt-in directions,
+  full turns, caller-state preservation and destination-safe retry. A build of
+  the previous implementation fails the new short-arc control. This fixes a
+  bounded approximation error; native CAD rendering, other normalization
+  limits and consumer/platform qualification remain open. See the
+  [ellipse boundary receipt](docs/research/p6-r12-ellipse-boundary-precision-2026-11-11.json).
+
 - **P6 SPLINE/HELIX near-unit rational weights:** SPLINE and HELIX DXF output,
   and their shared DWG spline-body encoder, now mark a weight as non-unit
   using exact comparison rather than a `1e-12` deadband. This preserves the

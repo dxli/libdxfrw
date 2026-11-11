@@ -9911,10 +9911,9 @@ bool dxfRW::writeEllipse(DRW_Ellipse *ent){
         && normalized.staparam >= 0.0 && normalized.staparam <= M_PIx2
         && normalized.endparam >= 0.0 && normalized.endparam <= M_PIx2
         && normalized.endparam < normalized.staparam
-        // Preserve the tessellator's existing zero- and full-turn bands,
-        // including their start point and traversal direction.
-        && normalized.staparam - normalized.endparam > 1.0e-10
-        && std::fabs((normalized.endparam - normalized.staparam) + M_PIx2) > 1.0e-10)
+        // Preserve the canonical reverse full-turn spelling; every other
+        // distinct wrapped endpoint describes a partial CCW arc.
+        && !(normalized.staparam == M_PIx2 && normalized.endparam == 0.0))
         normalized.endparam += M_PIx2;
     normalized.correctAxis();
     // A failed or nonrepresentable normalization must not be emitted as a

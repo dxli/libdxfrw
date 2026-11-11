@@ -9666,6 +9666,14 @@ void DRW_Ellipse::toPolyline(DRW_Polyline *pol, int parts){
         secPoint.x * secPoint.x + secPoint.y * secPoint.y
         + secPoint.z * secPoint.z);
     const double sweep = endparam - staparam;
+    // Keep the established equal-parameter full-ellipse convention. A
+    // distinct endpoint represents a partial arc unless it is exactly the
+    // representable one-turn endpoint; tolerances here can turn a short arc
+    // into a complete ellipse. Comparing the endpoints also preserves a full
+    // turn after adding it to a nonzero normalized start parameter.
+    const bool fullEllipse = endparam == staparam
+        || endparam == staparam + fullTurn
+        || endparam == staparam - fullTurn;
     if (parts <= 0 || !std::isfinite(basePoint.x)
         || !std::isfinite(basePoint.y) || !std::isfinite(basePoint.z)
         || !std::isfinite(secPoint.x) || !std::isfinite(secPoint.y)
@@ -9674,7 +9682,7 @@ void DRW_Ellipse::toPolyline(DRW_Polyline *pol, int parts){
         || !std::isfinite(endparam) || !std::isfinite(sweep)
         || !std::isfinite(normalLength) || normalLength <= 0.0
         || !std::isfinite(majorLength) || majorLength <= 0.0
-        || std::abs(sweep) > fullTurn + 1.0e-10)
+        || (!fullEllipse && std::abs(sweep) > fullTurn))
         return;
 
     const double nx = extPoint.x / normalLength;
@@ -9700,11 +9708,11 @@ void DRW_Ellipse::toPolyline(DRW_Polyline *pol, int parts){
     double start = staparam;
     double actualSweep = sweep;
     bool closed = false;
-    if (std::abs(actualSweep) <= 1.0e-10) {
+    if (endparam == staparam) {
         start = 0.0;
         actualSweep = fullTurn;
         closed = true;
-    } else if (std::abs(std::abs(actualSweep) - fullTurn) <= 1.0e-10) {
+    } else if (fullEllipse) {
         actualSweep = std::copysign(fullTurn, actualSweep);
         closed = true;
     }

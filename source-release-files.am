@@ -507,6 +507,7 @@ EXTRA_DIST = \
     tests/dxf_no_raw_sections_tests.cpp \
     tests/dxf_pointcloud_omitted_fields_tests.cpp \
     tests/dxf_primitive_subtype_dispatch_tests.cpp \
+    tests/dxf_r12_ellipse_boundary_tests.cpp \
     tests/dxf_r12_ellipse_wrap_tests.cpp \
     tests/dxf_sectionobject_411_tests.cpp \
     tests/dxf_sectionobject_vertices_tests.cpp \
