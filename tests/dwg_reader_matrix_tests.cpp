@@ -12116,7 +12116,9 @@ bool appendGeneratedBits(dwgBufferW& destination,
 
 bool makeGeneratedR24TableStyleObject(std::uint32_t handle,
                                       std::int32_t declaredCellStyleCount,
-                                      GeneratedTableStyleObject& result) {
+                                      GeneratedTableStyleObject& result,
+                                      std::uint8_t parentRole = DRW::DwgSoftPointer,
+                                      std::uint8_t tableCellOwnerRole = DRW::DwgHardOwnership) {
     constexpr DRW::Version version = DRW::AC1032;
     DRW_TextCodec codec;
     codec.setVersion(version, false);
@@ -12160,13 +12162,16 @@ bool makeGeneratedR24TableStyleObject(std::uint32_t handle,
     object.alignToByte();
 
     dwgHandle owner;
-    owner.code = DRW::DwgHardOwnership;
+    // ODA 20.1: common object parent is a soft pointer. This is distinct
+    // from the R24 TABLESTYLE-specific owner that follows it.
+    owner.code = parentRole;
     owner.size = 2u;
     owner.ref = 0xA200u;
     owner.ref64 = owner.ref;
     handles.putHandle(owner);
     dwgHandle unknown;
-    unknown.code = DRW::DwgHardPointer;
+    // ODA 20.4.101.2 describes this class-specific field as a hard owner.
+    unknown.code = tableCellOwnerRole;
     unknown.size = 2u;
     unknown.ref = 0xA300u;
     unknown.ref64 = unknown.ref;
@@ -12424,6 +12429,54 @@ void testTableStyleMalformedCountDoesNotBlockFollowingObject(TestContext& t) {
     t.expect(read && reader.objectParseFailures() == 1u
                  && sink.handles == std::vector<std::uint32_t>{0xA101u},
              "malformed TABLESTYLE count is refused before callback and the following OBJECT still publishes");
+
+    // The body differs only in the declared count: an empty sequence is a
+    // parser boundary control (ODA says that the usual count should be 3).
+    // It proves the malformed frame reached the repeat rather than failing an
+    // unrelated common-object or TABLESTYLE-specific handle role first.
+    GeneratedTableStyleObject correctedObject;
+    std::vector<std::uint8_t> correctedFrame;
+    const bool correctedBuilt = makeGeneratedR24TableStyleObject(
+        0xA100u, 0, correctedObject)
+        && wrapGeneratedR24Object(correctedObject, correctedFrame);
+    t.expect(correctedBuilt, "corrected generated TABLESTYLE frame builds");
+    if (!correctedBuilt)
+        return;
+    const auto runControl = [&](const std::vector<std::uint8_t>& first,
+                                bool expectedRead, std::size_t expectedFailures,
+                                const std::vector<std::uint32_t>& expectedHandles,
+                                const char* label) {
+        const auto offset = static_cast<std::uint32_t>(first.size());
+        std::vector<std::uint8_t> combined = first;
+        combined.insert(combined.end(), sentinelFrame.begin(), sentinelFrame.end());
+        TableStyleDispatchReader controlReader(combined);
+        TableStyleDispatchSink controlSink;
+        const bool controlRead = controlReader.readObjects(combined,
+            {{0xA101u, offset, 0u}, {0xA100u, 0u, 1u}}, controlSink);
+        t.expect(controlRead == expectedRead
+                     && controlReader.objectParseFailures() == expectedFailures
+                     && controlSink.handles == expectedHandles, label);
+    };
+    runControl(correctedFrame, true, 0u, {0xA100u, 0xA101u},
+               "corrected count publishes both TABLESTYLE objects in order");
+
+    GeneratedTableStyleObject badSubtypeRoleObject, badParentRoleObject;
+    std::vector<std::uint8_t> badSubtypeRoleFrame, badParentRoleFrame;
+    const bool rolesBuilt = makeGeneratedR24TableStyleObject(
+        0xA100u, 0, badSubtypeRoleObject, DRW::DwgSoftPointer,
+        DRW::DwgHardPointer)
+        && wrapGeneratedR24Object(badSubtypeRoleObject, badSubtypeRoleFrame)
+        && makeGeneratedR24TableStyleObject(
+            0xA100u, 0, badParentRoleObject, DRW::DwgHardOwnership,
+            DRW::DwgHardOwnership)
+        && wrapGeneratedR24Object(badParentRoleObject, badParentRoleFrame);
+    t.expect(rolesBuilt, "wrong-role TABLESTYLE controls build");
+    if (!rolesBuilt)
+        return;
+    runControl(badSubtypeRoleFrame, true, 1u, {0xA101u},
+               "wrong TABLESTYLE-specific owner role is a record failure");
+    runControl(badParentRoleFrame, false, 1u, {0xA101u},
+               "wrong common-parent role fails the section and preserves following-frame delivery");
 }
 
 class PersistentManagerDispatchReader final : public dwgReader21 {

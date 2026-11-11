@@ -1372,8 +1372,13 @@ created locally from scratch for the specific control.
   fields and typed projection. An opt-in reader-origin binding now joins that
   projection to the TABLE's style target and the style's TABLE reactor; it does
   not certify complete model equality. Close its dictionary and resource
-  dependencies next. The AC1032 malformed-count dispatch test fails on both
-  this tree and a clean pre-binding baseline and needs separate investigation.
+  dependencies next. The AC1032 malformed-count dispatch test now passes: its
+  generated common-parent and TABLESTYLE-specific owner roles were corrected
+  to the distinct ODA §20.1 and §20.4.101.2 roles. The malformed count is
+  refused and the following frame publishes; wrong-role and corrected-count
+  controls pass. The accepted empty-style sentinel is a parser boundary
+  control, while ODA describes the usual style count as three
+  ([regression receipt](docs/research/p6-ac1032-tablestyle-count-dispatch-fixture-2026-11-11.json)).
   See the [binding receipt](docs/research/p5-ac1018-tablestyle-reader-source-binding-2026-11-11.json),
   [style graph receipt](docs/research/p5-ac1018-tablestyle-cellstylemap-graph-wire-2026-11-11.json)
   and [observer receipt](docs/research/p5-ac1018-tablestyle-source-observer-2026-11-11.json).
