@@ -1330,6 +1330,11 @@ created locally from scratch for the specific control.
   missing or changed members invalidate the whole bundle. The root XRECORD's
   outgoing references, full class metadata and remaining recursive resources
   still need proof before considering output. See the [binding receipt](docs/research/p5-ac1018-table-candidates-reader-binding-2026-11-11.json).
+  A separate bounded TABLEGEOMETRY observer now validates the selected 3×3
+  zero-cell body and handle spans ([receipt](docs/research/p5-ac1018-tablegeometry-bounded-candidate-2026-11-11.json)).
+  Next add it to the reader-owned bundle and verify its source owner and the
+  root XRECORD's exact reference to it; the observer alone authenticates neither
+  its caller-supplied bytes nor the source graph.
   See the [DATATABLE candidate receipt](docs/research/p5-ac1018-datatable-candidate-observer-2026-11-11.json).
 
   The recreated AC1018 XRECORD `0xbc` is now independently walked to its

@@ -255,6 +255,8 @@ EXTRA_DIST = \
     src/intern/dwg_fixed_handles.h \
     src/intern/dwg_header_time.h \
     src/intern/dwg_tablecontent_ac1018_candidate.h \
+    src/intern/dwg_tablegeometry_ac1018_candidate.cpp \
+    src/intern/dwg_tablegeometry_ac1018_candidate.h \
     src/intern/dwg_xrecord_verified_source.h \
     src/intern/dwgbuffer.cpp \
     src/intern/dwgbuffer.h \
@@ -487,6 +489,7 @@ EXTRA_DIST = \
     tests/dwg_solid_trace_elevation_tests.cpp \
     tests/dwg_table_candidate_binding_tests.cpp \
     tests/dwg_tablecontent_ac1018_candidate_tests.cpp \
+    tests/dwg_tablegeometry_ac1018_candidate_tests.cpp \
     tests/dwg_text_alignment_elevation_tests.cpp \
     tests/dwg_text_style_resolution_tests.cpp \
     tests/dwg_vertex_tangent_units_tests.cpp \
