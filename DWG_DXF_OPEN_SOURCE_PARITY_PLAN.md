@@ -1267,9 +1267,12 @@ created locally from scratch for the specific control.
   failures and refuse a generated 1,060,932-byte selected frame before a
   comparable allocation; ordinary selected-record import and same-adapter retry
   remain intact ([receipt](docs/research/p5-xrecord-source-candidate-fault-bounds-2026-11-11.json)).
-  Next cover allocation failures in the later adapter snapshot and sealing
-  stages, then design the opt-in write path with capability revalidation at
-  staging and finalization, transactional rollback and recomputed output CRC.
+  The genuine reader ticket also drives allocation-failure controls for both
+  measured adapter snapshot allocations and the final shared-owner allocation;
+  each retains ordinary import and same-adapter retry. Next design the opt-in
+  write path with capability revalidation at staging and finalization,
+  transactional rollback and recomputed output CRC. These controls do not
+  establish a whole-import allocation-failure guarantee.
   Keep physical subtree output refused until all three opaque descendants,
   source-bound owner/target roles, class identities and graph closure are proven.
 

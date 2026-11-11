@@ -17,9 +17,17 @@ bool fired = false;
 bool observe = false;
 std::size_t largest = 0;
 std::size_t allocations = 0;
+bool (*predicate)() noexcept = nullptr;
+std::size_t predicateSize = 0;
 }
 void* operator new(std::size_t n) {
     if (fault::observe) { ++fault::allocations; if (n > fault::largest) fault::largest = n; }
+    if (fault::predicate && fault::predicate()) {
+        fault::predicate=nullptr;
+        fault::predicateSize=n;
+        fault::fired=true;
+        throw std::bad_alloc();
+    }
     if (fault::remaining == 0) {
         fault::remaining = -1;
         fault::fired = true;
@@ -45,6 +53,17 @@ public:
     }
     static void transplant(dx_data& to, const dx_data& from) {
         to.m_verifiedXRecordSource = from.m_verifiedXRecordSource;
+    }
+    static void deliver(dx_iface& i, const DwgVerifiedXRecordTicket& ticket) noexcept {
+        i.dx_iface::verifiedXRecord(ticket);
+    }
+    static bool sealReady(dx_iface& i, std::uint32_t h) noexcept {
+        const auto* data=i.m_verifiedXRecordReadData;
+        if (!data || !i.m_verifiedXRecordPending || data->m_verifiedXRecordSource
+            || !data->dwgReadOutcome.operationSucceeded) return false;
+        const auto it=data->m_standardDwgObjectFrames.find({data->importGeneration,h});
+        return it!=data->m_standardDwgObjectFrames.end() && std::next(it)==data->m_standardDwgObjectFrames.end()
+            && it->second.typedBaseline && it->second.payloadMatched && it->second.sourceProfileBound;
     }
 };
 namespace {
@@ -101,6 +120,24 @@ public:
         dx_iface::addXRecord(x);
     }
 };
+class AdapterFaultSink final : public dx_iface {
+public:
+    long snapshotFail=-1;
+    std::size_t snapshotAllocations=0;
+    bool ticketReceived=false;
+    bool wantsVerifiedXRecord(std::uint32_t h) const noexcept override {return h==handle+1u;}
+    void verifiedXRecord(const DwgVerifiedXRecordTicket& ticket) noexcept override {
+        ticketReceived=true;
+        fault::allocations=0; fault::remaining=snapshotFail; fault::observe=true;
+        DxIfaceStandardDwgCaptureTestAccess::deliver(*this,ticket);
+        snapshotAllocations=fault::allocations;
+        fault::remaining=-1; fault::observe=false;
+    }
+};
+AdapterFaultSink* sealReader=nullptr;
+bool sealFaultReady() noexcept {
+    return sealReader && DxIfaceStandardDwgCaptureTestAccess::sealReady(*sealReader,handle+1u);
+}
 class FailingCallback final : public dx_iface {
 public:
     bool selected=false, failed=false;
@@ -157,10 +194,10 @@ bool physicalCrcImportControl(const std::filesystem::path& path) {
     return reader.fileImport(path.string(),&retry,false)
         && dx_iface::hasUnchangedVerifiedXRecordSource(retry,handle);
 }
-bool sameImportedXRecord(const dx_data& a,const dx_data& b) {
-    const auto find=[](const dx_data& d) -> const DRW_XRecord* {
+bool sameImportedXRecord(const dx_data& a,const dx_data& b,std::uint32_t selected=handle) {
+    const auto find=[selected](const dx_data& d) -> const DRW_XRecord* {
         const DRW_XRecord* result=nullptr;
-        for (const auto& x:d.xRecords) if (x.handle==handle) {
+        for (const auto& x:d.xRecords) if (x.handle==selected) {
             if (result) return nullptr;
             result=&x;
         }
@@ -220,6 +257,52 @@ bool candidateAllocationControl(const std::filesystem::path& path) {
     }
     std::cout<<"optional candidate allocation faults covered="<<covered<<'\n';
     return covered==expected;
+}
+bool adapterAllocationControl(const std::filesystem::path& path) {
+    constexpr std::uint32_t target=handle+1u;
+    dx_iface plainReader; dx_data plain;
+    if (!plainReader.fileImport(path.string(),&plain,false)) return false;
+    AdapterFaultSink reader; reader.enableVerifiedXRecordSource(target);
+    dx_data calibration;
+    if (!reader.fileImport(path.string(),&calibration,false) || !reader.ticketReceived
+        || !dx_iface::hasUnchangedVerifiedXRecordSource(calibration,target)
+        || !sameImportedXRecord(plain,calibration,target)) return false;
+    const auto count=reader.snapshotAllocations;
+    if (count==0u || count>64u) return false;
+    for (std::size_t i=0;i<count;++i) {
+        reader.snapshotFail=static_cast<long>(i); reader.ticketReceived=false;
+        fault::fired=false; dx_data failed;
+        const bool ok=reader.fileImport(path.string(),&failed,false);
+        fault::remaining=-1; fault::observe=false;
+        if (!ok || !reader.ticketReceived || !fault::fired
+            || failed.dwgReadOutcome.observations.objectParseFailures!=0u
+            || failed.dwgReadOutcome.observations.entityParseFailures!=0u
+            || !sameImportedXRecord(plain,failed,target)
+            || dx_iface::hasUnchangedVerifiedXRecordSource(failed,target)) return false;
+        reader.snapshotFail=-1; reader.ticketReceived=false;
+        dx_data retry;
+        if (!reader.fileImport(path.string(),&retry,false) || !reader.ticketReceived
+            || !dx_iface::hasUnchangedVerifiedXRecordSource(retry,target)) return false;
+    }
+    // The selector below becomes true only once the final selected frame has
+    // its typed baseline and the real reader-delivered ticket is pending.
+    // The next allocation is the capability's final shared-owner creation.
+    reader.snapshotFail=-1; reader.ticketReceived=false;
+    fault::fired=false; fault::predicateSize=0;
+    sealReader=&reader; fault::predicate=sealFaultReady;
+    dx_data failedSeal; const bool ok=reader.fileImport(path.string(),&failedSeal,false);
+    fault::predicate=nullptr; sealReader=nullptr;
+    if (!ok || !reader.ticketReceived || !fault::fired || fault::predicateSize==0u
+        || failedSeal.dwgReadOutcome.observations.objectParseFailures!=0u
+        || failedSeal.dwgReadOutcome.observations.entityParseFailures!=0u
+        || !sameImportedXRecord(plain,failedSeal,target)
+        || dx_iface::hasUnchangedVerifiedXRecordSource(failedSeal,target)) return false;
+    reader.ticketReceived=false; dx_data retry;
+    if (!reader.fileImport(path.string(),&retry,false) || !reader.ticketReceived
+        || !dx_iface::hasUnchangedVerifiedXRecordSource(retry,target)) return false;
+    std::cout<<"adapter snapshot allocation faults covered="<<count
+             <<" final owner allocation bytes="<<fault::predicateSize<<'\n';
+    return true;
 }
 bool oversizedCandidateControl(const std::filesystem::path& path) {
     if (std::filesystem::exists(path)) return false;
@@ -300,6 +383,7 @@ bool run(const std::filesystem::path& path) {
     if (!outer.attempted || dx_iface::hasUnchangedVerifiedXRecordSource(crossData,handle)) return fail("cross-iface reentry sealed evidence");
     if (!physicalCrcImportControl(path.string()+".ac1015.dwg")) return fail("AC1015 physical CRC refusal/retry failed");
     if (!candidateAllocationControl(path)) return fail("optional candidate allocation fault/retry failed");
+    if (!adapterAllocationControl(path)) return fail("adapter source allocation fault/retry failed");
     if (!oversizedCandidateControl(path.string()+".oversized.dwg")) return fail("oversized candidate preflight failed");
     return true;
 }
