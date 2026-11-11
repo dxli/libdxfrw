@@ -2388,6 +2388,26 @@ Running it on the ACadSharp AEC candidate returns before inventory because the
 reader refuses its handle map; the selector does not bypass that gate.
 See the [ACadSharp candidate screen receipt](docs/research/p4-ac1032-assocnetwork-acadsharp-aec-sample-screen-2026-11-10.json).
 
+**Distinct AC1032 source and field spans (2026-11-10):** a public Autodesk
+ObjectARX forum attachment contains two class-version-2 associative networks,
+and its contributor publishes the native owner path from constraint group
+`0x2A8` through network `0x2A5` and dictionaries to model space. Its embedded
+APPINFO names AutoCAD 2024 build `U.61.0.0(x64)`; this is source metadata,
+not signed provenance. Current libdxfrw publishes 145/145 frames with zero
+object/entity parse failures. A separate, bounded Python bit walker verifies
+the class-specific candidate BS/BL/B spans and action H roles for networks
+`0x2A5` and `0x2A7`, matching LibreDWG's verbose positions and values. The
+decoded OBJECTS input is extracted with libdxfrw's own section decompressor,
+so that part is not independent. Both network CRCs pass in LibreDWG. The
+containing source still reports an LTYPE_CONTROL integrity error and HEADER/
+BLOCK_CONTROL warnings; LibreDWG fails to decode the constraint group and
+warns about unmapped `0x2B5`, which is also HEADER HANDSEED. Its warning has
+no attributed reference and is not proof of a dangling graph edge. Keep
+`m_networkFieldsParsed=false`, AC1032 output refused, and full dependency and
+whole-source gates open. The next ready work is source-backed qualification
+of the constraint-group body and owner/action dependencies; see the
+[source-span receipt](docs/research/p4-ac1032-forum-assocnetwork-source-spans-2026-11-10.json).
+
 **Generated regression slice completed (2026-11-09):** a from-scratch AC1032
 class-version-2 dispatch control now checks separate base/network action-index
 candidates, action ownership flags, and complete bounded prefix statuses while
