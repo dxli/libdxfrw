@@ -77,6 +77,12 @@
     },
     "disposition": "Negative qualification result only. The parser accepts the SAT document framing, but its ACIS-7 typed pcurve/coedge accessor route does not interpret this ACIS 21.5 profile. Do not promote semantic support or infer 21.5 field offsets from this peer."
   },
+  "formatAuthorityBoundary": {
+    "source": "Open Design Alliance, Working with .sat and .sab Files in Teigha",
+    "url": "https://www.opendesign.com/blog/2017/october/working-sat-and-sab-files-teigha",
+    "observation": "The article maps R24/AutoCAD 2010 to ACIS 21500 and describes Autodesk's 20800-and-later SAT/SAB streams as modified from native Spatial ACIS.",
+    "effect": "ACIS 7.0 SAT parsing is not an oracle for this modified 21500 profile. Keep pcurve field layout and geometry semantics unqualified until version-specific authority or an explicitly 21500-qualified peer resolves them."
+  },
   "validation": {
     "command": "cmake --build build-gcc --target libdxfrw_graph_preservation_tests -j4 && ./build-gcc/libdxfrw_graph_preservation_tests",
     "build": "PASS",

@@ -5083,6 +5083,16 @@ not semantic evidence for this modified profile; do not use its ACIS 7 schema
 or accessors to change production offsets. The exact SAT hashes and scratch
 probe command/results are recorded in the [pcurve row receipt](docs/research/p7-ac1024-21500-pcurve-reference-rows-2026-11-11.json).
 
+**P7 ACIS 21500 authority boundary (2026-11-11):** ODA's SAT/SAB article
+identifies `21500` as the ACAD R24/2010 profile and states that Autodesk's
+20800+ SAT/SAB streams are modified from native Spatial ACIS. Therefore an
+ACIS 7.0 parser result is not a semantic oracle for this 21500 profile even
+when it parses the text framing. Keep 21500 pcurve semantics gated until a
+version-specific Autodesk/ODA layout or a peer explicitly qualified for the
+modified profile resolves the row and geometry fields. See the [ODA SAT/SAB
+format note](https://www.opendesign.com/blog/2017/october/working-sat-and-sab-files-teigha)
+and the [pcurve row receipt](docs/research/p7-ac1024-21500-pcurve-reference-rows-2026-11-11.json).
+
 ## P4 — original bodies and complete document closure
 
 The AC1021 children-room source's bounded selected-output census is complete:
