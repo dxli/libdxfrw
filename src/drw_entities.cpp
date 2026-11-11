@@ -25055,13 +25055,17 @@ bool DRW_Image::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
 }
 
 bool DRW_Image::hasValidClipBoundary() const {
+    return hasValidClipBoundary(m_clipBoundaryType);
+}
+
+bool DRW_Image::hasValidClipBoundary(int boundaryType) const {
     if (clipPath.size() > kMaxClipVertices || m_clipPathHasOpenVertex
         || m_declaredClipVertexCount == kIncompleteDxfClipBoundary
         || (m_declaredClipVertexCount >= 0
             && static_cast<std::size_t>(m_declaredClipVertexCount) != clipPath.size())) {
         return false;
     }
-    switch (m_clipBoundaryType) {
+    switch (boundaryType) {
     case 0:
         return clipPath.empty();
     case 1:
@@ -25312,65 +25316,73 @@ bool DRW_Image::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t b
         DRW_DBG("IMAGE has an invalid scalar or clip field\n");
         return false;
     }
-    // Callers sometimes populate clipPath without setting m_clipBoundaryType
-    // (DXF import historically stored only the vertices). Infer a coherent type
-    // so encode does not reject a well-formed polygon/rectangle path.
-    if (m_clipBoundaryType == 0 && !clipPath.empty()) {
+    // Some callers supply clipPath without a type. Infer a local output type
+    // so a failed encode does not mutate the caller's entity state.
+    int boundaryType = m_clipBoundaryType;
+    if (boundaryType == 0 && !clipPath.empty()) {
         if (clipPath.size() == 2)
-            m_clipBoundaryType = 1;
+            boundaryType = 1;
         else if (clipPath.size() >= 3)
-            m_clipBoundaryType = 2;
+            boundaryType = 2;
     }
-    if (!hasValidClipBoundary()) {
+    if (!hasValidClipBoundary(boundaryType)) {
         DRW_DBG("IMAGE has invalid clip boundary\n");
         return false;
     }
-    oType = 101;  // IMAGE class id — see dwgreader.cpp case 101
-    if (!encodeDwgCommon(version, buf)) return false;
+    return encodeEntityDwgTransaction(
+        oType, buf, nullptr, handleBuf,
+        [this, version, boundaryType](dwgBufferW *body, dwgBufferW *strings,
+                                      dwgBufferW *handles) {
+            (void)strings;
+            oType = 101; // IMAGE class id — see dwgreader.cpp case 101
+            if (!encodeDwgCommon(version, body))
+                return false;
 
-    buf->putBitLong(m_classVersion);
-    buf->putBitDouble(basePoint.x); buf->putBitDouble(basePoint.y); buf->putBitDouble(basePoint.z);
-    buf->putBitDouble(secPoint.x);  buf->putBitDouble(secPoint.y);  buf->putBitDouble(secPoint.z);  // uvec
-    buf->putBitDouble(vVector.x);   buf->putBitDouble(vVector.y);   buf->putBitDouble(vVector.z);
-    buf->putRawDouble(sizeu);
-    buf->putRawDouble(sizev);
-    buf->putBitShort(static_cast<std::uint16_t>(m_displayProps));
-    buf->putBit(static_cast<std::uint8_t>(clip & 1));
-    buf->putRawChar8(static_cast<std::uint8_t>(brightness));
-    buf->putRawChar8(static_cast<std::uint8_t>(contrast));
-    buf->putRawChar8(static_cast<std::uint8_t>(fade));
-    if (version > DRW::AC1021) {  // 2010+ clip mode
-        buf->putBit(clipMode ? 1 : 0);
-    }
-    if (m_clipBoundaryType == 0) {
-        buf->putBitShort(0);  // clip_boundary_type 0 = none
-    } else if (m_clipBoundaryType == 1) {
-        buf->putBitShort(1);
-        buf->put2RawDouble(clipPath[0]);
-        buf->put2RawDouble(clipPath[1]);
-    } else {
-        buf->putBitShort(2);
-        buf->putBitLong(static_cast<std::int32_t>(clipPath.size()));
-        for (std::size_t i = 0; i < clipPath.size(); ++i)
-            buf->put2RawDouble(clipPath[i]);
-    }
+            body->putBitLong(m_classVersion);
+            body->putBitDouble(basePoint.x); body->putBitDouble(basePoint.y); body->putBitDouble(basePoint.z);
+            body->putBitDouble(secPoint.x);  body->putBitDouble(secPoint.y);  body->putBitDouble(secPoint.z); // uvec
+            body->putBitDouble(vVector.x);   body->putBitDouble(vVector.y);   body->putBitDouble(vVector.z);
+            body->putRawDouble(sizeu);
+            body->putRawDouble(sizev);
+            body->putBitShort(static_cast<std::uint16_t>(m_displayProps));
+            body->putBit(static_cast<std::uint8_t>(clip & 1));
+            body->putRawChar8(static_cast<std::uint8_t>(brightness));
+            body->putRawChar8(static_cast<std::uint8_t>(contrast));
+            body->putRawChar8(static_cast<std::uint8_t>(fade));
+            if (version > DRW::AC1021)
+                body->putBit(clipMode ? 1 : 0);
+            if (boundaryType == 0) {
+                body->putBitShort(0);
+            } else if (boundaryType == 1) {
+                body->putBitShort(1);
+                body->put2RawDouble(clipPath[0]);
+                body->put2RawDouble(clipPath[1]);
+            } else {
+                body->putBitShort(2);
+                body->putBitLong(static_cast<std::int32_t>(clipPath.size()));
+                for (const DRW_Coord& point : clipPath)
+                    body->put2RawDouble(point);
+            }
 
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
 
-    // Emit both trailing handles UNCONDITIONALLY in parseDwg order:
-    // imagedef (hard pointer, code 5) then imagedefreactor (hard owner, code 3).
-    dwgBufferW *hb = handleBuf ? handleBuf : buf;
-    auto makeHandle = [](std::uint8_t code, std::uint32_t r) {
-        dwgHandle h;
-        h.code = (r == 0) ? 0 : code;
-        h.ref  = r;
-        h.size = 0;
-        if (r != 0) { std::uint32_t t = r; while (t != 0) { t >>= 8; ++h.size; } }
-        return h;
-    };
-    hb->putHandle(makeHandle(5, ref));                       // imagedef (340)
-    hb->putHandle(makeHandle(3, m_imageDefReactorHandle));   // imagedefreactor (360)
-    return true;
+            // Emit trailing IMAGEDEF pointer then reactor owner.
+            dwgBufferW *handleTarget = handles ? handles : body;
+            const auto makeHandle = [](std::uint8_t code, std::uint32_t ref) {
+                dwgHandle handle;
+                handle.code = ref == 0 ? 0 : code;
+                handle.ref = ref;
+                handle.size = 0;
+                for (std::uint32_t value = ref; value != 0; value >>= 8)
+                    ++handle.size;
+                return handle;
+            };
+            handleTarget->putHandle(makeHandle(5, ref));
+            handleTarget->putHandle(
+                makeHandle(3, m_imageDefReactorHandle));
+            return handleTarget->isGood();
+        });
 }
 
 bool DRW_Wipeout::parseCode(int code, const std::unique_ptr<dxfReader>& reader) {
@@ -25418,50 +25430,58 @@ bool DRW_Wipeout::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t
         DRW_DBG("WIPEOUT has invalid clip boundary\n");
         return false;
     }
-    // WIPEOUT is fixed DWG entity type 1109.  It is not a custom class and
-    // must not depend on a file-local CLASSES ordinal.
-    oType = dwgType::WIPEOUT;
-    if (!encodeDwgCommon(version, buf)) return false;
+    // WIPEOUT is fixed DWG entity type 1109, independent of CLASSES.
+    return encodeEntityDwgTransaction(
+        oType, buf, nullptr, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            (void)strings;
+            oType = dwgType::WIPEOUT;
+            if (!encodeDwgCommon(version, body))
+                return false;
 
-    buf->putBitLong(0);
-    buf->putBitDouble(basePoint.x); buf->putBitDouble(basePoint.y); buf->putBitDouble(basePoint.z);
-    buf->putBitDouble(secPoint.x);  buf->putBitDouble(secPoint.y);  buf->putBitDouble(secPoint.z);
-    buf->putBitDouble(vVector.x);   buf->putBitDouble(vVector.y);   buf->putBitDouble(vVector.z);
-    buf->putRawDouble(sizeu);
-    buf->putRawDouble(sizev);
-    buf->putBitShort(static_cast<std::uint16_t>(m_displayProps));
-    buf->putBit(static_cast<std::uint8_t>(clip & 1));
-    buf->putRawChar8(static_cast<std::uint8_t>(brightness));
-    buf->putRawChar8(static_cast<std::uint8_t>(contrast));
-    buf->putRawChar8(static_cast<std::uint8_t>(fade));
-    if (version > DRW::AC1021) {
-        buf->putBit(clipMode ? 1 : 0);
-    }
-    if (m_clipBoundaryType == 1) {
-        buf->putBitShort(1);
-        buf->put2RawDouble(clipPath[0]);
-        buf->put2RawDouble(clipPath[1]);
-    } else {
-        buf->putBitShort(2);
-        buf->putBitLong(static_cast<std::int32_t>(clipPath.size()));
-        for (std::size_t i = 0; i < clipPath.size(); ++i)
-            buf->put2RawDouble(clipPath[i]);
-    }
+            body->putBitLong(0);
+            body->putBitDouble(basePoint.x); body->putBitDouble(basePoint.y); body->putBitDouble(basePoint.z);
+            body->putBitDouble(secPoint.x);  body->putBitDouble(secPoint.y);  body->putBitDouble(secPoint.z);
+            body->putBitDouble(vVector.x);   body->putBitDouble(vVector.y);   body->putBitDouble(vVector.z);
+            body->putRawDouble(sizeu);
+            body->putRawDouble(sizev);
+            body->putBitShort(static_cast<std::uint16_t>(m_displayProps));
+            body->putBit(static_cast<std::uint8_t>(clip & 1));
+            body->putRawChar8(static_cast<std::uint8_t>(brightness));
+            body->putRawChar8(static_cast<std::uint8_t>(contrast));
+            body->putRawChar8(static_cast<std::uint8_t>(fade));
+            if (version > DRW::AC1021)
+                body->putBit(clipMode ? 1 : 0);
+            if (m_clipBoundaryType == 1) {
+                body->putBitShort(1);
+                body->put2RawDouble(clipPath[0]);
+                body->put2RawDouble(clipPath[1]);
+            } else {
+                body->putBitShort(2);
+                body->putBitLong(static_cast<std::int32_t>(clipPath.size()));
+                for (const DRW_Coord& point : clipPath)
+                    body->put2RawDouble(point);
+            }
 
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
 
-    dwgBufferW *hb = handleBuf ? handleBuf : buf;
-    auto makeHandle = [](std::uint8_t code, std::uint32_t r) {
-        dwgHandle h;
-        h.code = (r == 0) ? 0 : code;
-        h.ref  = r;
-        h.size = 0;
-        if (r != 0) { std::uint32_t t = r; while (t != 0) { t >>= 8; ++h.size; } }
-        return h;
-    };
-    hb->putHandle(makeHandle(5, ref));
-    hb->putHandle(makeHandle(3, m_imageDefReactorHandle));
-    return true;
+            dwgBufferW *handleTarget = handles ? handles : body;
+            const auto makeHandle = [](std::uint8_t code, std::uint32_t ref) {
+                dwgHandle handle;
+                handle.code = ref == 0 ? 0 : code;
+                handle.ref = ref;
+                handle.size = 0;
+                for (std::uint32_t value = ref; value != 0; value >>= 8)
+                    ++handle.size;
+                return handle;
+            };
+            handleTarget->putHandle(makeHandle(5, ref));
+            handleTarget->putHandle(
+                makeHandle(3, m_imageDefReactorHandle));
+            return handleTarget->isGood();
+        });
 }
 
 bool DRW_NavisworksModel::parseCode(

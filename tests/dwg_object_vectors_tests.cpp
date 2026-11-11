@@ -744,6 +744,22 @@ public:
     }
 };
 
+class ImageCodecProbe final : public DRW_Image {
+public:
+    using DRW_Image::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+};
+
+class WipeoutCodecProbe final : public DRW_Wipeout {
+public:
+    using DRW_Wipeout::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+};
+
 class MeshCodecProbe final : public DRW_Mesh {
 public:
     using DRW_Mesh::encodeDwg;
@@ -26235,6 +26251,110 @@ void testArcOrdinateDimDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testImageWipeoutDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1018, DRW::AC1021,
+                                     DRW::AC1024, DRW::AC1032}) {
+    ImageCodecProbe image;
+    image.handle = 0xC100u + static_cast<std::uint32_t>(version);
+    image.parentHandle = 0xC110u;
+    image.reactorHandles = {0xC120u};
+    image.xDictHandle = 0xC130u;
+    image.setDwgType(0x777);
+    image.basePoint = DRW_Coord(10.0, 20.0, 0.0);
+    image.secPoint = DRW_Coord(74.0, 20.0, 0.0);
+    image.vVector = DRW_Coord(0.0, 1.0, 0.0);
+    image.sizeu = 64.0;
+    image.sizev = 48.0;
+    image.m_displayProps = 3;
+    image.clip = 1;
+    image.brightness = 50;
+    image.contrast = 60;
+    image.fade = 10;
+    image.clipMode = true;
+    image.ref = 0xC140u;
+    image.m_imageDefReactorHandle = 0xC150u;
+    // The encoder infers the rectangle type for output but keeps the caller's
+    // unset type unchanged, including when a staged write fails.
+    image.clipPath = {DRW_Coord(0.0, 0.0, 0.0),
+                      DRW_Coord(64.0, 48.0, 0.0)};
+    const std::uint16_t imageType = 101u;
+    checkEntityDwgEncodeAllocationRollback(
+        t, image, version, imageType,
+        version == DRW::AC1018 ? "AC1018 IMAGE inferred rectangle"
+        : version == DRW::AC1021 ? "AC1021 IMAGE inferred rectangle"
+        : version == DRW::AC1024 ? "AC1024 IMAGE inferred rectangle"
+                                 : "AC1032 IMAGE inferred rectangle");
+
+    if (version == DRW::AC1024) {
+      DRW_TextCodec codec;
+      codec.setVersion(version, false);
+      dwgBufferW expectedBody(&codec), expectedHandles(&codec);
+      expectedBody.putBitLong(0x5A17u);
+      dwgHandle seed;
+      seed.code = DRW::DwgSoftPointer;
+      seed.size = 1u;
+      seed.ref = seed.ref64 = 0xAAu;
+      expectedHandles.putHandle(seed);
+      ImageCodecProbe expected = image;
+      const bool expectedOk = expected.encodeDwg(
+          version, &expectedBody, 0u, nullptr, &expectedHandles);
+      ImageCodecProbe failed = image;
+      dwgBufferW body(&codec), handles(&codec);
+      body.putBitLong(0x5A17u);
+      handles.putHandle(seed);
+      const auto bodyBefore = body.data();
+      const auto handlesBefore = handles.data();
+      allocationFailureCountdown = 8;
+      bool encoded = false;
+      bool threw = false;
+      try {
+        encoded = failed.encodeDwg(version, &body, 0u, nullptr, &handles);
+      } catch (const std::bad_alloc &) {
+        threw = true;
+      }
+      const long after = allocationFailureCountdown.exchange(-1);
+      const bool rolledBack = after < 0 && !encoded && !threw
+          && body.data() == bodyBefore && handles.data() == handlesBefore
+          && failed.m_clipBoundaryType == 0;
+      const bool retried = failed.encodeDwg(
+              version, &body, 0u, nullptr, &handles)
+          && body.data() == expectedBody.data()
+          && handles.data() == expectedHandles.data()
+          && failed.m_clipBoundaryType == 0;
+      t.expect(expectedOk && rolledBack && retried,
+               "IMAGE inferred clip type stays unmutated through allocation rollback and retry");
+    }
+
+    WipeoutCodecProbe wipeout;
+    wipeout.handle = 0xC200u + static_cast<std::uint32_t>(version);
+    wipeout.parentHandle = 0xC210u;
+    wipeout.reactorHandles = {0xC220u};
+    wipeout.xDictHandle = 0xC230u;
+    wipeout.setDwgType(0x777);
+    wipeout.basePoint = DRW_Coord(1.0, 2.0, 0.0);
+    wipeout.secPoint = DRW_Coord(8.0, 2.0, 0.0);
+    wipeout.vVector = DRW_Coord(0.0, 1.0, 0.0);
+    wipeout.sizeu = 7.0;
+    wipeout.sizev = 5.0;
+    wipeout.clip = 1;
+    wipeout.brightness = 0;
+    wipeout.contrast = 50;
+    wipeout.fade = 0;
+    wipeout.ref = 0xC240u;
+    wipeout.m_imageDefReactorHandle = 0xC250u;
+    wipeout.m_clipBoundaryType = 2;
+    wipeout.clipPath = {DRW_Coord(0.0, 0.0, 0.0),
+                        DRW_Coord(7.0, 0.0, 0.0),
+                        DRW_Coord(7.0, 5.0, 0.0),
+                        DRW_Coord(0.0, 5.0, 0.0)};
+    checkEntityDwgEncodeAllocationRollback(
+        t, wipeout, version, static_cast<std::uint16_t>(dwgType::WIPEOUT),
+        version == DRW::AC1018 ? "AC1018 WIPEOUT"
+        : version == DRW::AC1021 ? "AC1021 WIPEOUT"
+        : version == DRW::AC1024 ? "AC1024 WIPEOUT" : "AC1032 WIPEOUT");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -29550,6 +29670,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testArcOrdinateDimDwgEncodeAllocationRollback(context);
       std::cout << "Arc/ordinate DIMENSION DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--image-wipeout-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testImageWipeoutDwgEncodeAllocationRollback(context);
+      std::cout << "IMAGE/WIPEOUT DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

@@ -3542,6 +3542,21 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
   No DWG/DXF fixture was added. See the [allocation rollback
   receipt](docs/research/p6-dimension-arc-ordinate-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **P6 IMAGE/WIPEOUT DWG encoder transaction safety:** both entity writers
+  now stage body and handle streams through the shared helper, preserving the
+  IMAGEDEF pointer and reactor-owner roles and the fixed WIPEOUT type. IMAGE
+  boundary-type inference is local to serialization, so the source entity is
+  unchanged after both success and failure. Generated rectangle IMAGE and
+  polygon WIPEOUT profiles sweep 16 allocation failures each at AC1018,
+  AC1021, AC1024, and AC1032; seeded-buffer/handle rollback, same-object retry,
+  alias behavior, and inferred-type state preservation pass. The focused
+  entity-writer transaction cohort passes 31/31, and the existing IMAGE
+  compound rollback/retry/readback CTest also passes. This is transaction and
+  local readback evidence only; IMAGEDEF/reactor semantic qualification,
+  producer coverage, native image display, and broader output support remain
+  open. No DWG/DXF fixture was added. See the [allocation rollback
+  receipt](docs/research/p6-image-wipeout-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 After every slice: run its focused fast checks; update this queue and the
 relevant receipt; commit code, plan and receipt together; report the commit and
 next eligible slice, then continue. Keep fixtures out of commits unless already

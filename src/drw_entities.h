@@ -4166,6 +4166,8 @@ public:
     /// declared type. Type 1 is two opposite rectangle corners; type 2 is a
     /// polygon with at least three vertices; type 0 carries no payload.
     bool hasValidClipBoundary() const;
+    /// Validate an inferred boundary type without mutating the source entity.
+    bool hasValidClipBoundary(int boundaryType) const;
 
     /// Accept an unset type with an uncounted two-point or polygon boundary.
     /// Explicit types and parsed vertex counts must match the payload.
