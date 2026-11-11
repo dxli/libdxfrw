@@ -13038,6 +13038,23 @@ bool dwgReader::readDwgObjects(DRW_Interface &intfa, dwgBuffer *dbuf,
     const auto verifiedSpace = lease.object.sourceOffsetSpace;
     const bool verifiedXRecord = read && !frameFailure
         && lease.object.type == dwgObjType::XRECORD;
+    std::optional<DwgVerifiedTableCandidateKind> verifiedTableKind;
+    std::uint16_t verifiedTableClass=0u;
+    // Class identity comes from the reader's matched lease classification,
+    // never from a consumer callback or a caller-provided raw carrier.
+    if (read && !frameFailure && version==DRW::AC1018 && lease.classification
+        && lease.classification->resolvedClass
+        && lease.classification->route==DwgFrameClassification::Route::Object
+        && lease.classification->encodedType>=500
+        && lease.classification->encodedType==lease.classification->resolvedType) {
+      const auto& cls=*lease.classification->resolvedClass;
+      if (cls.recName=="TABLECONTENT" && cls.className=="AcDbTableContent")
+        verifiedTableKind=DwgVerifiedTableCandidateKind::TableContent;
+      else if (cls.recName=="DATATABLE" && cls.className=="AcDbDataTable")
+        verifiedTableKind=DwgVerifiedTableCandidateKind::DataTable;
+      if (verifiedTableKind)
+        verifiedTableClass=static_cast<std::uint16_t>(lease.classification->encodedType);
+    }
     const bool discarded = discardDetachedDwgSourceFrame(lease);
     if (!discarded) {
       structuralFailure = true;
@@ -13061,8 +13078,8 @@ bool dwgReader::readDwgObjects(DRW_Interface &intfa, dwgBuffer *dbuf,
         if (m_verifiedXRecordPendingFailed || duplicate
             || m_verifiedXRecordPending.size()>=maxCount || !sizeProbe.isGood()
             || candidateSize<0 || static_cast<std::size_t>(candidateSize)>maxBody
-            || m_verifiedXRecordPendingBytes>maxTotal
-            || static_cast<std::size_t>(candidateSize)>maxTotal-m_verifiedXRecordPendingBytes) {
+            || m_verifiedXRecordPendingBytes>maxTotal || m_verifiedTableCandidateBytes>maxTotal-m_verifiedXRecordPendingBytes
+            || static_cast<std::size_t>(candidateSize)>maxTotal-m_verifiedXRecordPendingBytes-m_verifiedTableCandidateBytes) {
           m_verifiedXRecordPending.clear(); m_verifiedXRecordPendingFailed=true;
         } else {
           dwgBuffer probe=dbuf->forkIndependent();
@@ -13079,6 +13096,42 @@ bool dwgReader::readDwgObjects(DRW_Interface &intfa, dwgBuffer *dbuf,
           }
         }
       } catch (...) { m_verifiedXRecordPending.clear(); m_verifiedXRecordPendingFailed=true; }
+    }
+    auto* tableSink=dynamic_cast<DwgVerifiedTableCandidateSink*>(&intfa);
+    if (discarded && verifiedTableKind && !structuralFailure && tableSink
+        && tableSink->wantsVerifiedTableCandidate(verifiedHandle)) {
+      try {
+        constexpr std::size_t maxTotal=2u*1024u*1024u;
+        const std::size_t maxBody=*verifiedTableKind==DwgVerifiedTableCandidateKind::TableContent
+            ?65536u:1024u*1024u;
+        dwgBuffer sizeProbe=dbuf->forkIndependent();
+        const bool positioned=sizeProbe.setPosition(verifiedOffset);
+        const std::int32_t size=positioned?sizeProbe.getModularShort():-1;
+        const bool duplicate=std::any_of(m_verifiedTableCandidates.cbegin(),m_verifiedTableCandidates.cend(),
+            [&](const VerifiedTableCandidatePending& p) {
+              return p.kind==*verifiedTableKind || p.handle==verifiedHandle
+                  || p.ordinal==verifiedOrdinal || (p.space==verifiedSpace && p.offset==verifiedOffset);
+            });
+        if (m_verifiedTableCandidateFailed || duplicate || m_verifiedTableCandidates.size()>=2u
+            || !sizeProbe.isGood() || size<0 || static_cast<std::size_t>(size)>maxBody
+            || m_verifiedXRecordPendingBytes>maxTotal
+            || m_verifiedTableCandidateBytes>maxTotal-m_verifiedXRecordPendingBytes
+            || static_cast<std::size_t>(size)>maxTotal-m_verifiedXRecordPendingBytes-m_verifiedTableCandidateBytes) {
+          m_verifiedTableCandidates.clear();m_verifiedTableCandidateFailed=true;
+        } else {
+          dwgBuffer probe=dbuf->forkIndependent();DwgObjectFrame frame;
+          if (!frame.readAt(probe,version,verifiedOffset)) {
+            m_verifiedTableCandidates.clear();m_verifiedTableCandidateFailed=true;
+          } else {
+            VerifiedTableCandidatePending pending;
+            pending.kind=*verifiedTableKind;pending.version=version;pending.classNumber=verifiedTableClass;
+            pending.handle=verifiedHandle;pending.offset=verifiedOffset;pending.ordinal=verifiedOrdinal;
+            pending.space=verifiedSpace;pending.frame=std::move(frame);
+            m_verifiedTableCandidates.push_back(std::move(pending));
+            m_verifiedTableCandidateBytes+=static_cast<std::size_t>(size);
+          }
+        }
+      } catch (...) {m_verifiedTableCandidates.clear();m_verifiedTableCandidateFailed=true;}
     }
     structuralFailure = structuralFailure || frameFailure;
   }
@@ -13129,6 +13182,22 @@ void dwgReader::deliverVerifiedXRecord(DRW_Interface& target) noexcept {
     DwgVerifiedXRecordTicket ticket(candidate.version,candidate.handle,candidate.offset,
         candidate.ordinal,candidate.space,candidate.frame);
     sink->verifiedXRecord(ticket);
+  }
+}
+
+void dwgReader::deliverVerifiedTableCandidates(DRW_Interface& target) noexcept {
+  if (m_verifiedTableCandidates.empty() || m_verifiedTableCandidateFailed
+      || m_objectParseFailures!=0u || m_entityParseFailures!=0u
+      || m_dwgFrameCoverageIntegrityViolation
+      || m_dwgFrameCoverageStatus!=DRW_DwgFrameCoverageStatus::FinalizedComplete) return;
+  auto* sink=dynamic_cast<DwgVerifiedTableCandidateSink*>(&target);
+  if (!sink)return;
+  auto pending=std::move(m_verifiedTableCandidates);m_verifiedTableCandidateBytes=0u;
+  for(const auto& item:pending) {
+    if (!sink->wantsVerifiedTableCandidate(item.handle))return;
+    DwgVerifiedTableCandidateTicket ticket(item.kind,item.version,item.classNumber,
+        item.handle,item.offset,item.ordinal,item.space,item.frame);
+    sink->verifiedTableCandidate(ticket);
   }
 }
 

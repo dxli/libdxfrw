@@ -2660,10 +2660,23 @@ private:
     struct VerifiedXRecordSources {
         std::shared_ptr<const unsigned char> importToken;
         std::uint64_t generation{0u};
+        bool requiresTableCandidates{false};
         std::vector<VerifiedXRecordSource> records;
+    };
+    struct VerifiedTableCandidateSource {
+        DRW_UnsupportedObject raw;
+        std::uint64_t ordinal{0u};
+        DRW_DwgFrameOffsetSpace space{DRW_DwgFrameOffsetSpace::Unknown};
+        bool tableContent{false};
+    };
+    struct VerifiedTableCandidateSources {
+        std::shared_ptr<const unsigned char> importToken;
+        std::uint64_t generation{0u};
+        std::vector<VerifiedTableCandidateSource> records;
     };
     std::shared_ptr<const unsigned char> m_verifiedXRecordImportToken;
     std::shared_ptr<const VerifiedXRecordSources> m_verifiedXRecordSource;
+    std::shared_ptr<const VerifiedTableCandidateSources> m_verifiedTableCandidateSource;
     // Source-bound staging only. Never replay these bytes as DXF, and never
     // use these counts to waive strict semantic/output completeness.
     using StandardDwgFrameKey = std::pair<std::uint64_t, std::uint32_t>;

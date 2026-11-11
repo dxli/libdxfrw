@@ -40,6 +40,7 @@ struct Options {
     int oversizedDataType{0};
     int columnCount{3},rowCount{3},cellCount{3};
     bool longText{false},manyCustom{false};
+    bool oneLongText{false};
 };
 void putHandle(dwgBufferW& b,std::uint8_t role,std::uint32_t value) {
     dwgHandle h; h.code=role; h.ref=value; b.putHandle(h);
@@ -105,7 +106,8 @@ DRW_UnsupportedObject build(const Options& o={},Expected* output=nullptr) {
         for (int col=0;col<3;++col) {
             const int index=row*3+col; const bool populated=index<7;
             const int customCount=populated?(o.manyCustom?6:1):0;
-            b.putBitLong(0); text(b,""); b.putBitLong(0); b.putBitLong(customCount);
+            b.putBitLong(0); text(b,o.oneLongText && index==0?std::string(4096,'a'):std::string());
+            b.putBitLong(0); b.putBitLong(customCount);
             if (populated) {
                 for(int j=0;j<customCount;++j) {
                     text(b,"checksum"); b.putBitLong(o.oversizedDataType?o.oversizedDataType:2);
@@ -255,4 +257,12 @@ bool physical(const char* path) {
              <<" work units="<<r.workUnits<<'\n';return true;
 }
 }
-int main(int argc,char**argv){return argc<=2 && generated() && (argc==1 || physical(argv[1]))?0:1;}
+int main(int argc,char**argv){
+    if(argc==3 && (std::string(argv[1])=="--emit-body" || std::string(argv[1])=="--emit-large-body")) {
+        Options o;if(std::string(argv[1])=="--emit-large-body")o.oneLongText=true;
+        const auto raw=build(o);std::ofstream f(argv[2],std::ios::binary|std::ios::trunc);
+        f.write(reinterpret_cast<const char*>(raw.m_rawBytes.data()),raw.m_rawBytes.size());
+        return f?0:1;
+    }
+    return argc<=2 && generated() && (argc==1 || physical(argv[1]))?0:1;
+}

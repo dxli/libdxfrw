@@ -28929,8 +28929,26 @@ bool dx_iface::enableVerifiedXRecordSources(const std::vector<std::uint32_t>& ha
             }) || std::adjacent_find(selected.cbegin(),selected.cend())!=selected.cend())
             return false;
         m_verifiedXRecordSelected.swap(selected);
+        m_verifiedTableContentSelected=0u;m_verifiedDataTableSelected=0u;
         return true;
     } catch (...) { return false; }
+}
+
+bool dx_iface::enableVerifiedTableCandidates(const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable) noexcept {
+    if (m_verifiedXRecordReadData || xrecords.empty() || xrecords.size()>64u
+        || tableContent==0u || tableContent==DRW::NoHandle
+        || dataTable==0u || dataTable==DRW::NoHandle || tableContent==dataTable) return false;
+    try {
+        auto selected=xrecords;
+        std::sort(selected.begin(),selected.end());
+        if (std::any_of(selected.cbegin(),selected.cend(),[&](std::uint32_t h) {
+                return h==0u || h==DRW::NoHandle || h==tableContent || h==dataTable;
+            }) || std::adjacent_find(selected.cbegin(),selected.cend())!=selected.cend()) return false;
+        m_verifiedXRecordSelected.swap(selected);
+        m_verifiedTableContentSelected=tableContent;m_verifiedDataTableSelected=dataTable;
+        return true;
+    } catch (...) {return false;}
 }
 
 bool dx_iface::enableVerifiedXRecordSource(std::uint32_t handle) noexcept {
@@ -28985,7 +29003,8 @@ void dx_iface::verifiedXRecord(const DwgVerifiedXRecordTicket& ticket) noexcept 
         || !addStringPayloadBytes(pub.m_recordName, retainedBytes)
         || !addStringPayloadBytes(pub.m_className, retainedBytes)
         || m_verifiedXRecordPendingBytes > 2u*maxBody
-        || retainedBytes > 2u*maxBody-m_verifiedXRecordPendingBytes
+        || m_verifiedTableCandidatePendingBytes>2u*maxBody-m_verifiedXRecordPendingBytes
+        || retainedBytes > 2u*maxBody-m_verifiedXRecordPendingBytes-m_verifiedTableCandidatePendingBytes
         || pub.m_encodedType != dwgObjType::XRECORD || pub.m_resolvedType != dwgObjType::XRECORD
         || pub.m_carrier != DRW_DwgFramePublication::Carrier::TypedAndRaw) {
         m_verifiedXRecordFailed = true; return;
@@ -28999,6 +29018,62 @@ void dx_iface::verifiedXRecord(const DwgVerifiedXRecordTicket& ticket) noexcept 
         m_verifiedXRecordPending.push_back(std::move(pending));
         m_verifiedXRecordPendingBytes+=retainedBytes;
     } catch (...) { m_verifiedXRecordFailed = true; }
+}
+
+bool dx_iface::wantsVerifiedTableCandidate(std::uint32_t handle) const noexcept {
+    return m_verifiedXRecordReadData && !m_verifiedXRecordFailed
+        && m_verifiedXRecordReadToken
+        && m_verifiedXRecordReadData->m_verifiedXRecordImportToken==m_verifiedXRecordReadToken
+        && m_verifiedXRecordReadData->importGeneration==m_verifiedXRecordReadGeneration
+        && (handle==m_verifiedTableContentSelected || handle==m_verifiedDataTableSelected)
+        && handle!=0u;
+}
+
+void dx_iface::verifiedTableCandidate(const DwgVerifiedTableCandidateTicket& ticket) noexcept {
+    auto* data=m_verifiedXRecordReadData;
+    const bool content=ticket.kind()==DwgVerifiedTableCandidateKind::TableContent;
+    if (!data || !wantsVerifiedTableCandidate(ticket.handle())
+        || ticket.handle()!=(content?m_verifiedTableContentSelected:m_verifiedDataTableSelected)
+        || m_verifiedTableCandidatePending.size()>=2u
+        || std::any_of(m_verifiedTableCandidatePending.cbegin(),m_verifiedTableCandidatePending.cend(),
+            [&ticket,content](const dx_data::VerifiedTableCandidateSource& p) {
+                return p.tableContent==content || p.raw.m_handle==ticket.handle()
+                    || p.ordinal==ticket.ordinal()
+                    || (p.space==ticket.space() && p.raw.m_objectOffset==ticket.offset());
+            })
+        || std::any_of(m_verifiedXRecordPending.cbegin(),m_verifiedXRecordPending.cend(),
+            [&ticket](const dx_data::VerifiedXRecordSource& p) {
+                return p.raw.m_handle==ticket.handle() || p.publication.m_sourceMapOrdinal==ticket.ordinal()
+                    || (p.publication.m_sourceOffsetSpace==ticket.space()
+                        && p.publication.m_sourceOffset==ticket.offset());
+            })) {m_verifiedXRecordFailed=true;return;}
+    const dx_data::StandardDwgFrameKey key{data->importGeneration,ticket.handle()};
+    const auto found=data->m_opaqueDwgSourceFrames.find(key);
+    if (found==data->m_opaqueDwgSourceFrames.end()
+        || data->m_opaqueDwgSourceFrameIdentities.count(key)!=1u) {m_verifiedXRecordFailed=true;return;}
+    const auto& raw=found->second;
+    std::size_t retained=0u;
+    constexpr std::size_t maxTotal=2u*1024u*1024u;
+    if (ticket.version()!=DRW::AC1018 || raw.m_version!=ticket.version()
+        || raw.m_objectType!=ticket.classNumber() || raw.m_handle!=ticket.handle()
+        || raw.m_objectOffset!=ticket.offset() || raw.m_isEntity || !raw.m_isCustomClass
+        || !raw.m_hasClassDefinition || raw.m_hasDataStorage
+        || raw.m_recordName!=(content?"TABLECONTENT":"DATATABLE")
+        || raw.m_className!=(content?"AcDbTableContent":"AcDbDataTable")
+        || raw.m_bodyBitSize!=ticket.frame().bodyBitSize()
+        || raw.m_objectSize!=ticket.frame().body().size() || raw.m_rawBytes!=ticket.frame().body()
+        || !estimateAcDsHistoryDwgFrameBytes(raw,retained)
+        || m_verifiedXRecordPendingBytes>maxTotal
+        || m_verifiedTableCandidatePendingBytes>maxTotal-m_verifiedXRecordPendingBytes
+        || retained>maxTotal-m_verifiedXRecordPendingBytes-m_verifiedTableCandidatePendingBytes) {
+        m_verifiedXRecordFailed=true;return;
+    }
+    try {
+        dx_data::VerifiedTableCandidateSource pending;
+        pending.raw=raw;pending.ordinal=ticket.ordinal();pending.space=ticket.space();pending.tableContent=content;
+        m_verifiedTableCandidatePending.push_back(std::move(pending));
+        m_verifiedTableCandidatePendingBytes+=retained;
+    } catch (...) {m_verifiedXRecordFailed=true;}
 }
 
 bool dx_iface::verifiedXRecordMemberUnchanged(const dx_data& data,
@@ -29039,19 +29114,27 @@ bool dx_iface::hasUnchangedVerifiedXRecordSource(const dx_data& data,
         if (!verifiedXRecordMemberUnchanged(data,member)) return false;
         if (member.raw.m_handle==handle) found=true;
     }
+    if (source->requiresTableCandidates) {
+        const auto& candidates=data.m_verifiedTableCandidateSource;
+        if (!candidates || candidates->records.size()!=2u) return false;
+        std::uint32_t contentHandle=0u,dataHandle=0u;
+        for(const auto& row:candidates->records) {
+            if(row.tableContent)contentHandle=row.raw.m_handle;else dataHandle=row.raw.m_handle;
+        }
+        DwgTableContentAc1018Candidate::Result content;
+        DwgDataTableAc1018Candidate::Result table;
+        if (!validateVerifiedTableCandidates(data,*source,*candidates,contentHandle,dataHandle,content,table)) return false;
+    } else if (data.m_verifiedTableCandidateSource) return false;
     return found;
 }
 
-bool dx_iface::hasUnchangedVerifiedXRecordSources(const dx_data& data,
+bool dx_iface::verifiedXRecordSelectionMatches(const dx_data::VerifiedXRecordSources& bundle,
         const std::vector<std::uint32_t>& handles) noexcept {
-    const auto& bundle=data.m_verifiedXRecordSource;
-    if (!bundle || handles.empty() || handles.size()>64u
-        || handles.size()!=bundle->records.size()
-        || !hasUnchangedVerifiedXRecordSource(data,handles.front())) return false;
+    if (handles.empty() || handles.size()>64u || handles.size()!=bundle.records.size()) return false;
     for (std::size_t i=0;i<handles.size();++i) {
         if (handles[i]==0u || handles[i]==DRW::NoHandle) return false;
         for (std::size_t j=0;j<i;++j) if (handles[i]==handles[j]) return false;
-        if (std::none_of(bundle->records.cbegin(),bundle->records.cend(),
+        if (std::none_of(bundle.records.cbegin(),bundle.records.cend(),
             [&handles,i](const dx_data::VerifiedXRecordSource& row) {
                 return row.raw.m_handle==handles[i];
             })) return false;
@@ -29059,10 +29142,92 @@ bool dx_iface::hasUnchangedVerifiedXRecordSources(const dx_data& data,
     return true;
 }
 
+bool dx_iface::hasUnchangedVerifiedXRecordSources(const dx_data& data,
+        const std::vector<std::uint32_t>& handles) noexcept {
+    const auto& bundle=data.m_verifiedXRecordSource;
+    return bundle && verifiedXRecordSelectionMatches(*bundle,handles)
+        && hasUnchangedVerifiedXRecordSource(data,handles.front());
+}
+
+bool dx_iface::validateVerifiedTableCandidates(const dx_data& data,
+        const dx_data::VerifiedXRecordSources& xrecords,
+        const dx_data::VerifiedTableCandidateSources& sources,
+        std::uint32_t tableContent,std::uint32_t dataTable,
+        DwgTableContentAc1018Candidate::Result& content,
+        DwgDataTableAc1018Candidate::Result& table) noexcept {
+    content={};table={};
+    if (!xrecords.importToken || xrecords.importToken!=sources.importToken
+        || xrecords.importToken!=data.m_verifiedXRecordImportToken
+        || xrecords.generation!=data.importGeneration || sources.generation!=data.importGeneration
+        || !data.dwgReadOutcome.operationSucceeded || data.dwgReadOutcome.opaqueSourceCaptureFailed
+        || data.m_standardDwgObjectCaptureFailed || data.m_standardDwgObjectPayloadFailed
+        || xrecords.records.empty() || xrecords.records.size()>64u || sources.records.size()!=2u
+        || tableContent==0u || dataTable==0u || tableContent==dataTable) return false;
+    try {
+        const dx_data::VerifiedTableCandidateSource* contentSource=nullptr;
+        const dx_data::VerifiedTableCandidateSource* dataSource=nullptr;
+        for (const auto& row:sources.records) {
+            const auto key=dx_data::StandardDwgFrameKey{sources.generation,row.raw.m_handle};
+            const auto found=data.m_opaqueDwgSourceFrames.find(key);
+            if (found==data.m_opaqueDwgSourceFrames.end()
+                || data.m_opaqueDwgSourceFrameIdentities.count(key)!=1u
+                || !sameVerifiedXRecordRaw(found->second,row.raw)) return false;
+            if (row.tableContent && row.raw.m_handle==tableContent && !contentSource) contentSource=&row;
+            else if (!row.tableContent && row.raw.m_handle==dataTable && !dataSource) dataSource=&row;
+            else return false;
+        }
+        if (!contentSource || !dataSource || contentSource->ordinal==dataSource->ordinal
+            || (contentSource->space==dataSource->space
+                && contentSource->raw.m_objectOffset==dataSource->raw.m_objectOffset)) return false;
+        for (const auto& row:xrecords.records) {
+            if (!verifiedXRecordMemberUnchanged(data,row)
+                || row.publication.m_sourceMapOrdinal==contentSource->ordinal
+                || row.publication.m_sourceMapOrdinal==dataSource->ordinal
+                || (row.publication.m_sourceOffsetSpace==contentSource->space
+                    && row.publication.m_sourceOffset==contentSource->raw.m_objectOffset)
+                || (row.publication.m_sourceOffsetSpace==dataSource->space
+                    && row.publication.m_sourceOffset==dataSource->raw.m_objectOffset)) return false;
+        }
+        DwgTableContentAc1018Candidate::Result parsedContent;
+        DwgDataTableAc1018Candidate::Result parsedTable;
+        if (!DwgTableContentAc1018Candidate::inspect(contentSource->raw,parsedContent)
+            || !DwgDataTableAc1018Candidate::inspect(dataSource->raw,parsedTable)
+            || parsedContent.parentHandle!=parsedTable.parentHandle
+            || parsedTable.ownedChildren.size()+1u!=xrecords.records.size()) return false;
+        const auto member=[&](std::uint32_t h) {
+            return std::find_if(xrecords.records.cbegin(),xrecords.records.cend(),
+                [h](const dx_data::VerifiedXRecordSource& row){return row.raw.m_handle==h;});
+        };
+        const auto root=member(parsedContent.parentHandle);
+        if (root==xrecords.records.cend()) return false;
+        for (const auto child:parsedTable.ownedChildren) {
+            const auto found=member(child);
+            if (found==xrecords.records.cend() || found==root) return false;
+            const auto* model=dynamic_cast<const DRW_XRecord*>(found->typedBaseline.get());
+            if (!model || model->parentHandle!=dataTable) return false;
+        }
+        content=std::move(parsedContent);table=std::move(parsedTable);
+        return true;
+    } catch (...) {content={};table={};return false;}
+}
+
+bool dx_iface::readVerifiedTableCandidates(const dx_data& data,
+        const std::vector<std::uint32_t>& xrecords,std::uint32_t tableContent,
+        std::uint32_t dataTable,DwgTableContentAc1018Candidate::Result& content,
+        DwgDataTableAc1018Candidate::Result& table) noexcept {
+    content={};table={};
+    if (!data.m_verifiedXRecordSource || !data.m_verifiedTableCandidateSource
+        || !data.m_verifiedXRecordSource->requiresTableCandidates
+        || !verifiedXRecordSelectionMatches(*data.m_verifiedXRecordSource,xrecords)) return false;
+    return validateVerifiedTableCandidates(data,*data.m_verifiedXRecordSource,
+        *data.m_verifiedTableCandidateSource,tableContent,dataTable,content,table);
+}
+
 void dx_iface::finishVerifiedXRecordSource(bool successfulRead) noexcept {
     auto* data = m_verifiedXRecordReadData;
     if (!data) return;
     data->m_verifiedXRecordSource.reset();
+    data->m_verifiedTableCandidateSource.reset();
     if (successfulRead && !m_verifiedXRecordFailed && !m_verifiedXRecordSelected.empty()
         && m_verifiedXRecordPending.size()==m_verifiedXRecordSelected.size()
         && m_verifiedXRecordReadToken
@@ -29088,13 +29253,37 @@ void dx_iface::finishVerifiedXRecordSource(bool successfulRead) noexcept {
                 auto bundle=std::make_shared<dx_data::VerifiedXRecordSources>();
                 bundle->importToken=m_verifiedXRecordReadToken;
                 bundle->generation=m_verifiedXRecordReadGeneration;
+                bundle->requiresTableCandidates=m_verifiedTableContentSelected!=0u || m_verifiedDataTableSelected!=0u;
                 bundle->records=std::move(m_verifiedXRecordPending);
-                data->m_verifiedXRecordSource=std::move(bundle);
-            } catch (...) { data->m_verifiedXRecordSource.reset(); }
+                std::shared_ptr<const dx_data::VerifiedTableCandidateSources> candidateOwner;
+                if (m_verifiedTableContentSelected || m_verifiedDataTableSelected) {
+                    if (!m_verifiedTableContentSelected || !m_verifiedDataTableSelected
+                        || m_verifiedTableCandidatePending.size()!=2u) complete=false;
+                    else {
+                        auto candidates=std::make_shared<dx_data::VerifiedTableCandidateSources>();
+                        candidates->importToken=m_verifiedXRecordReadToken;
+                        candidates->generation=m_verifiedXRecordReadGeneration;
+                        candidates->records=std::move(m_verifiedTableCandidatePending);
+                        DwgTableContentAc1018Candidate::Result content;
+                        DwgDataTableAc1018Candidate::Result table;
+                        complete=validateVerifiedTableCandidates(*data,*bundle,*candidates,
+                            m_verifiedTableContentSelected,m_verifiedDataTableSelected,content,table);
+                        if (complete) candidateOwner=std::move(candidates);
+                    }
+                }
+                if (complete) {
+                    // Both nonthrowing shared-owner moves occur after every
+                    // member has validated; no callback can observe a prefix.
+                    data->m_verifiedTableCandidateSource=std::move(candidateOwner);
+                    data->m_verifiedXRecordSource=std::move(bundle);
+                }
+            } catch (...) {data->m_verifiedXRecordSource.reset();data->m_verifiedTableCandidateSource.reset();}
         }
     }
     m_verifiedXRecordPending.clear();
     m_verifiedXRecordPendingBytes=0u;
+    m_verifiedTableCandidatePending.clear();
+    m_verifiedTableCandidatePendingBytes=0u;
 }
 
 bool dx_iface::hasUnchangedStandardDwgObjectSources() const noexcept {
@@ -73203,6 +73392,7 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
     if (m_verifiedXRecordReadData) {
         m_verifiedXRecordFailed = true;
         m_verifiedXRecordReadData->m_verifiedXRecordSource.reset();
+        m_verifiedXRecordReadData->m_verifiedTableCandidateSource.reset();
         m_verifiedXRecordReadData->m_verifiedXRecordImportToken.reset();
         return false;
     }
@@ -73210,6 +73400,7 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
         // Every new attempt invalidates the previous read's authority, even
         // if this attempt fails before a reader or a frame is constructed.
         fData->m_verifiedXRecordSource.reset();
+        fData->m_verifiedTableCandidateSource.reset();
         fData->m_verifiedXRecordImportToken.reset();
     }
     if (fData && hasStrictDxfExportLease(fData)) return false;
@@ -73660,6 +73851,8 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
         m_verifiedXRecordFailed = false;
         m_verifiedXRecordPending.clear();
         m_verifiedXRecordPendingBytes=0u;
+        m_verifiedTableCandidatePending.clear();
+        m_verifiedTableCandidatePendingBytes=0u;
         if (!m_verifiedXRecordSelected.empty()) {
             try {
                 fData->m_verifiedXRecordImportToken = std::make_shared<const unsigned char>(0u);
@@ -73673,6 +73866,8 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
             ~VerifiedXRecordReadScope() {
                 owner.m_verifiedXRecordPending.clear();
                 owner.m_verifiedXRecordPendingBytes=0u;
+                owner.m_verifiedTableCandidatePending.clear();
+                owner.m_verifiedTableCandidatePendingBytes=0u;
                 owner.m_verifiedXRecordReadData = nullptr;
                 owner.m_verifiedXRecordReadToken.reset();
                 owner.m_verifiedXRecordReadGeneration = 0u;

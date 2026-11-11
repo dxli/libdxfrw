@@ -485,6 +485,7 @@ EXTRA_DIST = \
     tests/dwg_polyline_owner_facade_tests.cpp \
     tests/dwg_reader_matrix_tests.cpp \
     tests/dwg_solid_trace_elevation_tests.cpp \
+    tests/dwg_table_candidate_binding_tests.cpp \
     tests/dwg_tablecontent_ac1018_candidate_tests.cpp \
     tests/dwg_text_alignment_elevation_tests.cpp \
     tests/dwg_text_style_resolution_tests.cpp \
@@ -653,6 +654,7 @@ EXTRA_DIST = \
     tests/run_dwg2dxf_image_path_test.cmake \
     tests/run_dwg2dxf_raw_dxf_section_test.cmake \
     tests/run_dwg_read_test.cmake \
+    tests/run_dwg_table_candidate_binding.cmake \
     tests/run_dxf_roundtrip_splinepoints_test.cmake \
     tests/run_extension_graph_limits_test.cmake \
     tests/run_freecad_2d_lwpolyline_oda_cli_test.cmake \
@@ -994,6 +996,7 @@ EXTRA_DIST = \
     tools/research/freecad_torus_bound_probe.py \
     tools/research/inventory_cover_peer_body_handles.py \
     tools/research/p4_forum_ltype_oda_compare.py \
+    tools/research/p5_ac1018_table_candidates_binding_probe.cpp \
     tools/research/p5_ac1018_table_descendants_capture.cpp \
     tools/research/p5_ac1018_table_descendants_verify.py \
     tools/research/p5_ac1018_table_xrecord_source_verify.py \

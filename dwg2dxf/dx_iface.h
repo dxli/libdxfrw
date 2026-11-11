@@ -23,6 +23,8 @@
 #include "intern/drw_dbg.h"
 #include "intern/dxfwholesource.h"
 #include "intern/dwg_xrecord_verified_source.h"
+#include "intern/dwg_datatable_ac1018_candidate.h"
+#include "intern/dwg_tablecontent_ac1018_candidate.h"
 namespace blockref_source_relation { struct Result; }
 
 #include <cstdint>
@@ -59,7 +61,8 @@ class dx_iface : public DRW_Interface, public DRW_DxfClassSourceHandler, public 
                  public DRW_DxfObjectPhysicalSourcePolicy,
                  public DRW_DxfSparseMaterialRawPolicy,
                  public DRW_DxfPointCloudDefinitionSourceHandler,
-                 public WholeSourceV2::Handler, public DwgVerifiedXRecordSink {
+                 public WholeSourceV2::Handler, public DwgVerifiedXRecordSink,
+                 public DwgVerifiedTableCandidateSink {
 public:
     // Source observation only. This does not permit DWG or DXF replay.
     bool enableVerifiedXRecordSource(std::uint32_t handle) noexcept;
@@ -69,6 +72,17 @@ public:
         const dx_data&, std::uint32_t handle) noexcept;
     static bool hasUnchangedVerifiedXRecordSources(
         const dx_data&, const std::vector<std::uint32_t>& handles) noexcept;
+    // Opt-in same-import source observations only; never authorizes output.
+    // Root XRECORD outgoing 360/361 roles and other graph dependencies remain
+    // unverified. Reader classification binds class kind/names/number only;
+    // other class metadata is callback data, not authenticated evidence.
+    bool enableVerifiedTableCandidates(const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable) noexcept;
+    static bool readVerifiedTableCandidates(const dx_data&,
+        const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,
+        DwgTableContentAc1018Candidate::Result& content,
+        DwgDataTableAc1018Candidate::Result& table) noexcept;
     bool wantsDxfSparseMaterialRawCapture() const noexcept override {
         // Old subclasses may override callbacks without retaining raw records.
         // They must explicitly opt in instead of inheriting this policy.
@@ -3332,9 +3346,18 @@ public:
 private:
     bool wantsVerifiedXRecord(std::uint32_t handle) const noexcept override;
     void verifiedXRecord(const DwgVerifiedXRecordTicket&) noexcept override;
+    bool wantsVerifiedTableCandidate(std::uint32_t handle) const noexcept override;
+    void verifiedTableCandidate(const DwgVerifiedTableCandidateTicket&) noexcept override;
     void finishVerifiedXRecordSource(bool successfulRead) noexcept;
     static bool verifiedXRecordMemberUnchanged(const dx_data&,
         const dx_data::VerifiedXRecordSource&) noexcept;
+    static bool verifiedXRecordSelectionMatches(const dx_data::VerifiedXRecordSources&,
+        const std::vector<std::uint32_t>& handles) noexcept;
+    static bool validateVerifiedTableCandidates(const dx_data&,
+        const dx_data::VerifiedXRecordSources&,const dx_data::VerifiedTableCandidateSources&,
+        std::uint32_t tableContent,std::uint32_t dataTable,
+        DwgTableContentAc1018Candidate::Result& content,
+        DwgDataTableAc1018Candidate::Result& table) noexcept;
     std::vector<std::uint32_t> m_verifiedXRecordSelected;
     dx_data* m_verifiedXRecordReadData{nullptr};
     std::shared_ptr<const unsigned char> m_verifiedXRecordReadToken;
@@ -3342,6 +3365,9 @@ private:
     bool m_verifiedXRecordFailed{false};
     std::vector<dx_data::VerifiedXRecordSource> m_verifiedXRecordPending;
     std::size_t m_verifiedXRecordPendingBytes{0u};
+    std::uint32_t m_verifiedTableContentSelected{0u},m_verifiedDataTableSelected{0u};
+    std::vector<dx_data::VerifiedTableCandidateSource> m_verifiedTableCandidatePending;
+    std::size_t m_verifiedTableCandidatePendingBytes{0u};
     friend class DxWholeSourceTestAccess;
     friend class DxIfaceMlineDependencyTestAccess;
     friend class DxIfaceDwgLtypeControlOutputTestAccess;

@@ -1538,6 +1538,26 @@ add_test(NAME libdxfrw_dwg_tablecontent_ac1018_candidate
     COMMAND libdxfrw_dwg_tablecontent_ac1018_candidate_tests)
 set_tests_properties(libdxfrw_dwg_tablecontent_ac1018_candidate PROPERTIES
     LABELS "dwg;fast;tablecontent" TIMEOUT 30)
+add_executable(libdxfrw_dwg_table_candidate_binding_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_table_candidate_binding_tests.cpp
+    ${_libdxfrw_test_adapter_source})
+target_compile_features(libdxfrw_dwg_table_candidate_binding_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_table_candidate_binding_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_table_candidate_binding_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/dwg2dxf ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dwg_table_candidate_binding_tests PRIVATE dxfrw)
+add_dependencies(libdxfrw_dwg_table_candidate_binding_tests
+    libdxfrw_dwg_tablecontent_ac1018_candidate_tests
+    libdxfrw_dwg_datatable_ac1018_candidate_tests)
+add_test(NAME libdxfrw_dwg_table_candidate_binding
+    COMMAND ${CMAKE_COMMAND}
+        -DCONTENT_TEST=$<TARGET_FILE:libdxfrw_dwg_tablecontent_ac1018_candidate_tests>
+        -DDATA_TEST=$<TARGET_FILE:libdxfrw_dwg_datatable_ac1018_candidate_tests>
+        -DBIND_TEST=$<TARGET_FILE:libdxfrw_dwg_table_candidate_binding_tests>
+        -DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/generated-table-binding
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/run_dwg_table_candidate_binding.cmake)
+set_tests_properties(libdxfrw_dwg_table_candidate_binding PROPERTIES
+    LABELS "dwg;fast;tablecontent;datatable" TIMEOUT 30)
 add_executable(libdxfrw_underlay_objects_allocation_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/underlay_objects_allocation_tests.cpp
     ${_libdxfrw_test_adapter_source}

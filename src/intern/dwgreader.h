@@ -21,6 +21,7 @@
 #include "drw_textcodec.h"
 #include "dwgbuffer.h"
 #include "dwgobjectframe.h"
+#include "dwg_xrecord_verified_source.h"
 #include "dwgsafety.h"
 #include "dwgutil.h"
 #include <algorithm>
@@ -1201,6 +1202,7 @@ public:
 private:
   // Only dwgRW may flush after successful whole-read completion.
   void deliverVerifiedXRecord(DRW_Interface& target) noexcept;
+  void deliverVerifiedTableCandidates(DRW_Interface& target) noexcept;
   struct VerifiedXRecordPending {
     DRW::Version version{DRW::UNKNOWNV};
     std::uint32_t handle{0u}, offset{0u};
@@ -1211,6 +1213,18 @@ private:
   std::vector<VerifiedXRecordPending> m_verifiedXRecordPending;
   std::size_t m_verifiedXRecordPendingBytes{0u};
   bool m_verifiedXRecordPendingFailed{false};
+  struct VerifiedTableCandidatePending {
+    DwgVerifiedTableCandidateKind kind{DwgVerifiedTableCandidateKind::TableContent};
+    DRW::Version version{DRW::UNKNOWNV};
+    std::uint16_t classNumber{0u};
+    std::uint32_t handle{0u},offset{0u};
+    std::uint64_t ordinal{0u};
+    DRW_DwgFrameOffsetSpace space{DRW_DwgFrameOffsetSpace::Unknown};
+    DwgObjectFrame frame;
+  };
+  std::vector<VerifiedTableCandidatePending> m_verifiedTableCandidates;
+  std::size_t m_verifiedTableCandidateBytes{0u};
+  bool m_verifiedTableCandidateFailed{false};
 protected:
   struct DwgSourceFrameLease;
   struct DwgFramePublicationArtifacts {

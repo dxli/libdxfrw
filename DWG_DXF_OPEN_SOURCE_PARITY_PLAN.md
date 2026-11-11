@@ -1325,8 +1325,11 @@ created locally from scratch for the specific control.
   wire profile, exact boundaries and child-owner roles with bounded resources
   and transactional failure. Its public raw input is forgeable: it is not
   reader-origin provenance, general DATATABLE semantics, or output authority.
-  Next bind the inspected bytes to a CRC-verified import and the sealed child
-  set, then close the remaining recursive resources before considering output.
+  A separate opt-in binding now ties both TABLECONTENT and DATATABLE candidates
+  and the selected XRECORD set to CRC-checked frames in one completed import;
+  missing or changed members invalidate the whole bundle. The root XRECORD's
+  outgoing references, full class metadata and remaining recursive resources
+  still need proof before considering output. See the [binding receipt](docs/research/p5-ac1018-table-candidates-reader-binding-2026-11-11.json).
   See the [DATATABLE candidate receipt](docs/research/p5-ac1018-datatable-candidate-observer-2026-11-11.json).
 
   The recreated AC1018 XRECORD `0xbc` is now independently walked to its
