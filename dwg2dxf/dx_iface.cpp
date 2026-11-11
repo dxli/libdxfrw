@@ -28934,7 +28934,7 @@ bool dx_iface::enableVerifiedXRecordSources(const std::vector<std::uint32_t>& ha
         m_verifiedTableContentSelected=0u;m_verifiedDataTableSelected=0u;m_verifiedTableGeometrySelected=0u;
         m_verifiedTableRoundtripSelected=false;m_verifiedTableRoundtripChildrenSelected=false;
         m_verifiedTableEntitySelected=0u;m_verifiedTableDictionarySelected=0u;m_verifiedReciprocalTableSelected=false;m_verifiedTableModelSelected=false;m_verifiedTableProjectionSelected=false;m_verifiedTableStyleSelected=0u;
-        m_verifiedStyleDictionarySelected=0u;m_verifiedStyleXRecordSelected=0u;m_verifiedCellStyleMapSelected=0u;
+        m_verifiedStyleDictionarySelected=0u;m_verifiedStyleXRecordSelected=0u;m_verifiedCellStyleMapSelected=0u;m_verifiedStyleXRecordRequired=false;
         return true;
     } catch (...) { return false; }
 }
@@ -28954,7 +28954,7 @@ bool dx_iface::enableVerifiedTableCandidates(const std::vector<std::uint32_t>& x
         m_verifiedTableContentSelected=tableContent;m_verifiedDataTableSelected=dataTable;
         m_verifiedTableGeometrySelected=0u;m_verifiedTableRoundtripSelected=false;m_verifiedTableRoundtripChildrenSelected=false;
         m_verifiedTableEntitySelected=0u;m_verifiedTableDictionarySelected=0u;m_verifiedReciprocalTableSelected=false;m_verifiedTableModelSelected=false;m_verifiedTableProjectionSelected=false;m_verifiedTableStyleSelected=0u;
-        m_verifiedStyleDictionarySelected=0u;m_verifiedStyleXRecordSelected=0u;m_verifiedCellStyleMapSelected=0u;
+        m_verifiedStyleDictionarySelected=0u;m_verifiedStyleXRecordSelected=0u;m_verifiedCellStyleMapSelected=0u;m_verifiedStyleXRecordRequired=false;
         return true;
     } catch (...) {return false;}
 }
@@ -28975,7 +28975,7 @@ bool dx_iface::enableVerifiedTableCandidates(const std::vector<std::uint32_t>& x
         m_verifiedTableContentSelected=tableContent;m_verifiedDataTableSelected=dataTable;
         m_verifiedTableGeometrySelected=tableGeometry;m_verifiedTableRoundtripSelected=false;m_verifiedTableRoundtripChildrenSelected=false;
         m_verifiedTableEntitySelected=0u;m_verifiedTableDictionarySelected=0u;m_verifiedReciprocalTableSelected=false;m_verifiedTableModelSelected=false;m_verifiedTableProjectionSelected=false;m_verifiedTableStyleSelected=0u;
-        m_verifiedStyleDictionarySelected=0u;m_verifiedStyleXRecordSelected=0u;m_verifiedCellStyleMapSelected=0u;
+        m_verifiedStyleDictionarySelected=0u;m_verifiedStyleXRecordSelected=0u;m_verifiedCellStyleMapSelected=0u;m_verifiedStyleXRecordRequired=false;
         return true;
     } catch (...) {return false;}
 }
@@ -29049,6 +29049,19 @@ bool dx_iface::enableVerifiedTableStyleDictionarySource(const std::vector<std::u
     if(!enableVerifiedTableStyleSource(xrecords,content,table,geometry,entity,dictionary,style))return false;
     m_verifiedStyleDictionarySelected=styleDictionary;m_verifiedStyleXRecordSelected=styleXRecord;
     m_verifiedCellStyleMapSelected=cellStyleMap;return true;
+}
+bool dx_iface::enableVerifiedTableStyleXRecordSource(const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t content,std::uint32_t table,std::uint32_t geometry,
+        std::uint32_t entity,std::uint32_t dictionary,std::uint32_t style,
+        std::uint32_t styleDictionary,std::uint32_t styleXRecord,std::uint32_t cellStyleMap) noexcept {
+    if(m_verifiedXRecordReadData || xrecords.size()!=10u || !styleXRecord
+        || styleXRecord==DRW::NoHandle || std::find(xrecords.cbegin(),xrecords.cend(),styleXRecord)!=xrecords.cend())return false;
+    try {
+        auto selected=xrecords;selected.push_back(styleXRecord);std::sort(selected.begin(),selected.end());
+        if(!enableVerifiedTableStyleDictionarySource(xrecords,content,table,geometry,entity,dictionary,style,
+            styleDictionary,styleXRecord,cellStyleMap))return false;
+        m_verifiedXRecordSelected.swap(selected);m_verifiedStyleXRecordRequired=true;return true;
+    } catch(...) {return false;}
 }
 std::uint32_t dx_iface::verifiedStyleExtensionDictionarySelection() const noexcept {
     return m_verifiedStyleDictionarySelected && m_verifiedXRecordReadData && !m_verifiedXRecordFailed
@@ -29380,6 +29393,7 @@ bool dx_iface::validateVerifiedTableCandidates(const dx_data& data,
         || ((xrecords.selectedStyleDictionary!=0u)!=(xrecords.selectedStyleXRecord!=0u))
         || ((xrecords.selectedStyleDictionary!=0u)!=(xrecords.selectedCellStyleMap!=0u))
         || (xrecords.selectedStyleDictionary && !xrecords.selectedTableStyle)
+        || (xrecords.requiresVerifiedStyleXRecord && !xrecords.selectedStyleDictionary)
         || sources.records.size()!=(xrecords.selectedStyleDictionary?7u:xrecords.selectedTableStyle?6u:xrecords.requiresReciprocalTableSource?5u:xrecords.selectedExtensionDictionary?4u:tableGeometry?3u:2u)
         || (tableGeometry!=0u)!=(geometry!=nullptr)
         || tableContent==0u || dataTable==0u || tableContent==dataTable
@@ -29451,7 +29465,7 @@ bool dx_iface::validateVerifiedTableCandidates(const dx_data& data,
         if (!DwgTableContentAc1018Candidate::inspect(contentSource->raw,parsedContent)
             || !DwgDataTableAc1018Candidate::inspect(dataSource->raw,parsedTable)
             || parsedContent.parentHandle!=parsedTable.parentHandle
-            || parsedTable.ownedChildren.size()+1u!=xrecords.records.size()) return false;
+            || parsedTable.ownedChildren.size()+1u+(xrecords.requiresVerifiedStyleXRecord?1u:0u)!=xrecords.records.size()) return false;
         DwgTableGeometryAc1018Candidate::Result parsedGeometry;
         if (tableGeometry && (!DwgTableGeometryAc1018Candidate::inspect(geometrySource->raw,parsedGeometry)
             || parsedGeometry.parentHandle!=parsedContent.parentHandle)) return false;
@@ -29492,6 +29506,14 @@ bool dx_iface::validateVerifiedTableCandidates(const dx_data& data,
                         || style.xdictionary!=observed.handle
                         || !DwgTableStyleExtensionDictionaryAc1018Candidate::matchesSelected(observed,style.handle,
                             xrecords.selectedStyleXRecord,xrecords.selectedCellStyleMap))return false;
+                    if(xrecords.requiresVerifiedStyleXRecord) {
+                        const auto selected=member(observed.roundtrip);
+                        if(selected==xrecords.records.cend() || selected==root)return false;
+                        const auto* model=dynamic_cast<const DRW_XRecord*>(selected->typedBaseline.get());
+                        DwgTableStyleRoundtripXRecordAc1018Candidate::Result proof;
+                        if(!model || !DwgTableStyleRoundtripXRecordAc1018Candidate::inspect(selected->raw,*model,proof)
+                            || proof.handle!=observed.roundtrip || proof.owner!=observed.handle || proof.reactor!=observed.handle)return false;
+                    }
                 }
             }
         }
@@ -29709,6 +29731,27 @@ bool dx_iface::readVerifiedTableStyleDictionarySource(const dx_data& data,
     return false;
 }
 
+bool dx_iface::readVerifiedTableStyleXRecordSource(const dx_data& data,
+        const std::vector<std::uint32_t>& xrecords,std::uint32_t content,std::uint32_t table,
+        std::uint32_t geometry,std::uint32_t entity,std::uint32_t dictionary,std::uint32_t style,
+        std::uint32_t styleDictionary,std::uint32_t styleXRecord,std::uint32_t cellStyleMap,
+        DwgTableStyleRoundtripXRecordAc1018Candidate::Result& result) noexcept {
+    result={};const auto& source=data.m_verifiedXRecordSource;
+    if(!source || !source->requiresVerifiedStyleXRecord || xrecords.size()!=10u
+        || std::find(xrecords.cbegin(),xrecords.cend(),styleXRecord)!=xrecords.cend())return false;
+    try {
+        auto selected=xrecords;selected.push_back(styleXRecord);
+        DwgTableStyleExtensionDictionaryAc1018Candidate::Result dictionaryResult;
+        if(!readVerifiedTableStyleDictionarySource(data,selected,content,table,geometry,entity,dictionary,style,
+            styleDictionary,styleXRecord,cellStyleMap,dictionaryResult))return false;
+        for(const auto& row:source->records)if(row.raw.m_handle==styleXRecord) {
+            const auto* model=dynamic_cast<const DRW_XRecord*>(row.typedBaseline.get());
+            return model && DwgTableStyleRoundtripXRecordAc1018Candidate::inspect(row.raw,*model,result);
+        }
+        return false;
+    } catch(...) {result={};return false;}
+}
+
 void dx_iface::finishVerifiedXRecordSource(bool successfulRead) noexcept {
     auto* data = m_verifiedXRecordReadData;
     if (!data) return;
@@ -29750,6 +29793,7 @@ void dx_iface::finishVerifiedXRecordSource(bool successfulRead) noexcept {
                 bundle->selectedStyleDictionary=m_verifiedStyleDictionarySelected;
                 bundle->selectedStyleXRecord=m_verifiedStyleXRecordSelected;
                 bundle->selectedCellStyleMap=m_verifiedCellStyleMapSelected;
+                bundle->requiresVerifiedStyleXRecord=m_verifiedStyleXRecordRequired;
                 bundle->requiresTableCandidates=m_verifiedTableContentSelected!=0u || m_verifiedDataTableSelected!=0u
                     || m_verifiedTableGeometrySelected!=0u;
                 bundle->records=std::move(m_verifiedXRecordPending);

@@ -1060,6 +1060,7 @@ EXTRA_DIST = \
     tools/research/p5_ac1018_tablestyle_graph_capture.cpp \
     tools/research/p5_ac1018_tablestyle_graph_verify.py \
     tools/research/p5_ac1018_tablestyle_roundtrip_xrecord_probe.cpp \
+    tools/research/p5_ac1018_tablestyle_xrecord_binding_probe.cpp \
     tools/research/p5_table_root_xrecord_candidate_probe.cpp \
     tools/research/p5_xrecord_codepage45_verify.py \
     tools/research/p5_xrecord_codepage_capture.cpp \

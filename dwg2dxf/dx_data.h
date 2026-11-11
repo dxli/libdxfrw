@@ -2690,6 +2690,7 @@ private:
         bool requiresUnchangedTableProjection{false};
         std::uint32_t selectedTableStyle{0u};
         std::uint32_t selectedStyleDictionary{0u},selectedStyleXRecord{0u},selectedCellStyleMap{0u};
+        bool requiresVerifiedStyleXRecord{false};
         std::vector<VerifiedXRecordSource> records;
     };
     struct VerifiedTableCandidateSource {

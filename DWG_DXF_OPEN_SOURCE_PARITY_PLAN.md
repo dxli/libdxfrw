@@ -1377,11 +1377,13 @@ created locally from scratch for the specific control.
   reader-bound with its ordered source entries; their XRECORD and CELLSTYLEMAP
   targets are still numeric only. Bind those targets and the remaining resource
   dependencies next ([dictionary receipt](docs/research/p5-ac1018-tablestyle-extension-dictionary-source-binding-2026-11-11.json)).
-  The style XRECORD's ten ordered data groups and owner/reactor roles now have
-  a bounded observer ([receipt](docs/research/p5-ac1018-tablestyle-roundtrip-xrecord-observer-2026-11-11.json));
-  the CELLSTYLEMAP observer likewise preserves source style order `[3,1,2]` and
-  its H4/H5 references ([receipt](docs/research/p5-ac1018-cellstylemap-source-observer-2026-11-11.json)).
-  Join both to reader-verified targets before treating those edges as bound.
+  The style XRECORD's ten ordered data groups and owner/reactor roles are now
+  joined to the reader-verified dictionary's first target
+  ([binding receipt](docs/research/p5-ac1018-tablestyle-roundtrip-xrecord-source-binding-2026-11-11.json));
+  a generated full-bundle positive and selected-frame CRC mutation remain open.
+  The CELLSTYLEMAP observer preserves source style order `[3,1,2]` and its
+  H4/H5 references ([receipt](docs/research/p5-ac1018-cellstylemap-source-observer-2026-11-11.json));
+  join it to the reader-verified second target before treating that edge as bound.
   The AC1032 malformed-count dispatch test now passes: its
   generated common-parent and TABLESTYLE-specific owner roles were corrected
   to the distinct ODA §20.1 and §20.4.101.2 roles. The malformed count is

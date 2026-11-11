@@ -57,6 +57,11 @@ public:
     static void deliver(dx_iface& i, const DwgVerifiedXRecordTicket& ticket) noexcept {
         i.dx_iface::verifiedXRecord(ticket);
     }
+    static bool selection(dx_iface& i,const std::vector<std::uint32_t>& expected,bool strong) noexcept {
+        return i.m_verifiedXRecordSelected==expected && i.m_verifiedStyleXRecordRequired==strong
+            && i.m_verifiedStyleDictionarySelected==0xdbu && i.m_verifiedStyleXRecordSelected==0xdcu
+            && i.m_verifiedCellStyleMapSelected==0xddu;
+    }
     static bool sealReady(dx_iface& i, std::uint32_t h) noexcept {
         const auto* data=i.m_verifiedXRecordReadData;
         if (!data || i.m_verifiedXRecordPending.empty() || data->m_verifiedXRecordSource
@@ -68,6 +73,22 @@ public:
 };
 namespace {
 constexpr std::uint32_t handle=0xA602u;
+bool styleXRecordSelectorControl() {
+    const std::vector<std::uint32_t> ten{0xbcu,0xbeu,0xbfu,0xc0u,0xc1u,0xc2u,0xc3u,0xc4u,0xc5u,0xc6u};
+    auto eleven=ten;eleven.push_back(0xdcu);
+    const auto weak=[&](dx_iface& i){return i.enableVerifiedTableStyleDictionarySource(ten,0xb9u,0xbdu,0xbau,0x9cu,0xbbu,0x6bu,0xdbu,0xdcu,0xddu);};
+    const auto strong=[&](dx_iface& i){return i.enableVerifiedTableStyleXRecordSource(ten,0xb9u,0xbdu,0xbau,0x9cu,0xbbu,0x6bu,0xdbu,0xdcu,0xddu);};
+    dx_iface counted;if(!weak(counted))return false;fault::allocations=0;fault::observe=true;const bool good=strong(counted);fault::observe=false;
+    const auto count=fault::allocations;if(!good || !count || !DxIfaceStandardDwgCaptureTestAccess::selection(counted,eleven,true))return false;
+    for(std::size_t n=0;n<count;++n){dx_iface a;if(!weak(a))return false;fault::remaining=static_cast<long>(n);fault::fired=false;
+        const bool selected=strong(a);fault::remaining=-1;
+        if(selected || !fault::fired || !DxIfaceStandardDwgCaptureTestAccess::selection(a,ten,false) || !strong(a)
+            || !DxIfaceStandardDwgCaptureTestAccess::selection(a,eleven,true))return false;}
+    if(counted.enableVerifiedTableStyleXRecordSource(ten,0xb9u,0xbdu,0xbau,0x9cu,0xbbu,0x6bu,0xdbu,0xbcu,0xddu)
+        || !DxIfaceStandardDwgCaptureTestAccess::selection(counted,eleven,true) || !weak(counted)
+        || !DxIfaceStandardDwgCaptureTestAccess::selection(counted,ten,false))return false;
+    return true;
+}
 class Writer final : public dx_iface {
 public:
     explicit Writer(dwgRW& w, std::size_t payloadSize=0u, unsigned count=2u,
@@ -466,6 +487,7 @@ bool oversizedCandidateControl(const std::filesystem::path& path) {
 }
 bool run(const std::filesystem::path& path) {
     const auto fail=[](const char* s) {std::cerr<<s<<'\n'; return false;};
+    if (!styleXRecordSelectorControl()) return fail("style XRECORD selection transaction failed");
     dwgRW out(path.string().c_str()); Writer writer(out);
     if (!out.write(&writer,DRW::AC1018,true) || !writer.written) return fail("generated DWG write failed");
     dx_data a,b; dx_iface first,second; first.enableVerifiedXRecordSource(handle); second.enableVerifiedXRecordSource(handle);
