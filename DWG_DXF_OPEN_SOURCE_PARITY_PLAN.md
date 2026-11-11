@@ -1589,8 +1589,18 @@ created locally from scratch for the specific control.
   and [observer receipt](docs/research/p5-ac1018-tablestyle-source-observer-2026-11-11.json).
   A separate source walk now identifies STYLE's EED APPID `0x12`, the
   APPID_CONTROL's two additional siblings, and distinct ordinary/phantom
-  LTYPE_CONTROL roles. Bind those records and remaining siblings before
-  claiming resource closure; font meaning remains open. A bounded standalone
+  LTYPE_CONTROL roles. An opt-in reader source callback now retains selected
+  STYLE EED APPID handles before string resolution and reports whether every
+  target resolves through the parsed APPID table; the pinned AC1018 STYLE
+  `0x11` callback binds its EED reference to APPID `0x12` (`ACAD`) while the
+  ordinary resolved `ACAD`/`Arial` strings remain intact. This closes only the
+  selected reference-to-row join. APPID_CONTROL siblings `0xcd`/`0xd7` now
+  also reach typed same-import rows with unchanged DWG name source tokens; their
+  complete physical body spans, font meaning, STYLE_CONTROL and output ordering
+  remain open; see the [STYLE
+  EED APPID binding receipt](docs/research/p5-ac1018-style-eed-appid-reader-binding-2026-11-11.json).
+  Bind those records and remaining siblings before claiming resource closure.
+  A bounded standalone
   LTYPE_CONTROL/ByBlock observer now checks selected frame fields and roles
   ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)).
   The CRC-checked LTYPE_CONTROL frame is now staged in the existing provisional

@@ -5514,6 +5514,8 @@ bool dwgRW::processDwg() {
 
     try {
     reader->prepareDwgClassSource(dynamic_cast<DRW_DwgClassSourceHandler*>(iface));
+    reader->prepareDwgStyleEedSource(
+        dynamic_cast<DRW_DwgStyleEedSourceHandler*>(iface));
     reader->beginDwgClassCoverage();
     ret = reader->readDwgHeader(hdr);
     if (ret)
@@ -5617,6 +5619,7 @@ bool dwgRW::processDwg() {
 
     for (auto it=reader->stylemap.begin(); it!=reader->stylemap.end(); ++it) {
         DRW_Textstyle *ly = it->second;
+        reader->publishDwgStyleEedSource(*ly);
         iface->addTextStyle(const_cast<DRW_Textstyle&>(*ly));
     }
 

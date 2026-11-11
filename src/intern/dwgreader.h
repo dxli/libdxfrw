@@ -1534,6 +1534,9 @@ protected:
                                        bool readCompleted) noexcept;
   void beginDwgClassCoverage() noexcept;
   void prepareDwgClassSource(DRW_DwgClassSourceHandler *handler) noexcept;
+  void prepareDwgStyleEedSource(
+      DRW_DwgStyleEedSourceHandler *handler) noexcept;
+  void publishDwgStyleEedSource(const DRW_Textstyle &style) noexcept;
   void captureDwgClassSource(const std::uint8_t *bytes, std::uint64_t size,
                             std::int32_t descriptor, std::uint64_t declaredSize) noexcept;
   void capturePhysicalDwgClassSource(dwgBuffer &buffer, std::uint64_t base,
@@ -2150,6 +2153,13 @@ public:
   std::vector<std::string> m_ltypeNameOrder;
   std::unordered_map<std::uint32_t, DRW_Block *> blockmap;
   std::unordered_map<std::uint32_t, DRW_Textstyle *> stylemap;
+  struct DwgStyleEedSourceReferences {
+    std::vector<DRW_TableEntry::PendingHandleRef> appIds;
+    bool allAppIdsResolve{false};
+  };
+  std::unordered_map<std::uint32_t, DwgStyleEedSourceReferences>
+      m_dwgStyleEedSourceReferences;
+  DRW_DwgStyleEedSourceHandler *m_dwgStyleEedSourceHandler{nullptr};
   std::unordered_map<std::uint32_t, DRW_Dimstyle *> dimstylemap;
   std::unordered_map<std::uint32_t, DRW_Vport *> vportmap;
   std::unordered_map<std::uint32_t, DRW_Block_Record *> blockRecordmap;

@@ -6993,6 +6993,23 @@ void dwgReader::prepareDwgClassSource(DRW_DwgClassSourceHandler *handler) noexce
   }
 }
 
+void dwgReader::prepareDwgStyleEedSource(
+    DRW_DwgStyleEedSourceHandler *handler) noexcept {
+  m_dwgStyleEedSourceHandler = handler;
+  m_dwgStyleEedSourceReferences.clear();
+}
+
+void dwgReader::publishDwgStyleEedSource(const DRW_Textstyle &style) noexcept {
+  if (m_dwgStyleEedSourceHandler == nullptr)
+    return;
+  const auto source = m_dwgStyleEedSourceReferences.find(style.handle);
+  if (source == m_dwgStyleEedSourceReferences.end())
+    return;
+  m_dwgStyleEedSourceHandler->addDwgStyleEedSource(
+      version, style.handle, source->second.appIds,
+      source->second.allAppIdsResolve);
+}
+
 std::shared_ptr<std::vector<std::uint8_t>> dwgReader::allocateDwgClassSource(
     std::uint64_t size, std::int32_t descriptor, DRW_DwgFrameOffsetSpace space,
     std::uint64_t base, std::uint64_t declaredSize, bool backingValid) noexcept {
@@ -8121,6 +8138,7 @@ bool dwgReader::readDwgHandles(dwgBuffer *dbuf, std::uint64_t offset,
 bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
                               DwgIntegrityAddressSpace offsetSpace) {
   DRW_DBG("\ndwgReader::readDwgTables start\n");
+  m_dwgStyleEedSourceReferences.clear();
   bool ret = true;
   bool ret2 = true;
   objHandle oc;
@@ -9141,8 +9159,31 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
     parseAttribs(item.second);
   for (auto &item : layermap)
     parseAttribs(item.second);
-  for (auto &item : stylemap)
-    parseAttribs(item.second);
+  for (auto &item : stylemap) {
+    DRW_Textstyle *style = item.second;
+    if (m_dwgStyleEedSourceHandler != nullptr &&
+        m_dwgStyleEedSourceHandler->wantsDwgStyleEedSource(style->handle)) {
+      DwgStyleEedSourceReferences source;
+      bool allAppIdsResolve = true;
+      for (const auto &reference : style->pendingAppIdResolutions) {
+        const auto appId = appIdmap.find(reference.handleRef);
+        if (appId == appIdmap.end() || appId->second == nullptr ||
+            appId->second->handle != reference.handleRef) {
+          allAppIdsResolve = false;
+          break;
+        }
+      }
+      source.allAppIdsResolve = allAppIdsResolve;
+      try {
+        source.appIds = style->pendingAppIdResolutions;
+        m_dwgStyleEedSourceReferences.emplace(style->handle,
+                                               std::move(source));
+      } catch (...) {
+        // Source observation is optional; retain ordinary read behavior.
+      }
+    }
+    parseAttribs(style);
+  }
   for (auto &item : dimstylemap)
     parseAttribs(item.second);
   for (auto &item : vportmap)

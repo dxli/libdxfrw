@@ -1467,6 +1467,27 @@ public:
       const std::vector<DRW_TableEntry::PendingHandleRef>& layers) noexcept = 0;
 };
 
+/** Optional source-reference observation for DWG STYLE table rows. The
+ * callback receives the parser's APPID handle references after the row has
+ * parsed and while the complete APPID table is available, before public EED
+ * strings are resolved and the deferred references are cleared. The Boolean
+ * reports whether every referenced handle resolves to a parsed APPID row.
+ * References are borrowed only for the callback. This does not certify font
+ * semantics, STYLE output, or the complete table/resource graph. */
+class DRW_DwgStyleEedSourceHandler {
+public:
+  virtual ~DRW_DwgStyleEedSourceHandler() = default;
+  virtual bool wantsDwgStyleEedSource(
+      std::uint32_t styleHandle) const noexcept {
+    (void)styleHandle;
+    return false;
+  }
+  virtual void addDwgStyleEedSource(
+      DRW::Version version, std::uint32_t styleHandle,
+      const std::vector<DRW_TableEntry::PendingHandleRef>& appIds,
+      bool allAppIdsResolve) noexcept = 0;
+};
+
 #ifdef LIBDXFRW_DRW_INTERFACE_RESTORE_NONE
 # pragma pop_macro("None")
 # undef LIBDXFRW_DRW_INTERFACE_RESTORE_NONE

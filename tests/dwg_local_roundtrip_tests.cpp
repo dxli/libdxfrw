@@ -37984,6 +37984,97 @@ public:
     using DRW_Table::parseDwg;
 };
 
+class PhysicalStyleEedObserver final : public dx_iface,
+                                      public DRW_DwgStyleEedSourceHandler {
+public:
+    bool wantsDwgStyleEedSource(
+        std::uint32_t styleHandle) const noexcept override {
+        return styleHandle == 0x11u;
+    }
+    void addDwgStyleEedSource(
+        DRW::Version version, std::uint32_t styleHandle,
+        const std::vector<DRW_TableEntry::PendingHandleRef>& appIds,
+        bool allAppIdsResolve) noexcept override {
+        ++observations;
+        sourceVersion = version;
+        observedStyleHandle = styleHandle;
+        targetsResolve = allAppIdsResolve;
+        try {
+            appIdReferences = appIds;
+        } catch (...) {
+            captureFailed = true;
+        }
+    }
+
+    std::size_t observations{0u};
+    DRW::Version sourceVersion{DRW::UNKNOWNV};
+    std::uint32_t observedStyleHandle{0u};
+    std::vector<DRW_TableEntry::PendingHandleRef> appIdReferences;
+    bool targetsResolve{false};
+    bool captureFailed{false};
+};
+
+bool inspectPhysicalStyleEedAppIdBinding(
+    const std::filesystem::path& inputPath) {
+    PhysicalStyleEedObserver reader;
+    dx_data data;
+    if (!reader.fileImport(inputPath.string(), &data, false)) {
+        std::cerr << "physical STYLE EED source import failed: " << inputPath
+                  << '\n';
+        return false;
+    }
+    const auto style = std::find_if(
+        data.textStyles.begin(), data.textStyles.end(),
+        [](const DRW_Textstyle& item) { return item.handle == 0x11u; });
+    const auto appId = std::find_if(
+        data.appIds.begin(), data.appIds.end(),
+        [](const DRW_AppId& item) { return item.handle == 0x12u; });
+    const auto dimstyleAppId = std::find_if(
+        data.appIds.begin(), data.appIds.end(),
+        [](const DRW_AppId& item) { return item.handle == 0xcdu; });
+    const auto mleaderAppId = std::find_if(
+        data.appIds.begin(), data.appIds.end(),
+        [](const DRW_AppId& item) { return item.handle == 0xd7u; });
+    const bool extDataResolved = style != data.textStyles.end()
+        && std::any_of(style->extData.begin(), style->extData.end(),
+            [](const DRW_Variant* item) {
+                return item && item->code() == 1001
+                    && item->stringEquals("ACAD");
+            })
+        && std::any_of(style->extData.begin(), style->extData.end(),
+            [](const DRW_Variant* item) {
+                return item && item->code() == 1000
+                    && item->stringEquals("Arial");
+            });
+    const bool passed = data.sourceVersion == DRW::AC1018
+        && reader.observations == 1u && !reader.captureFailed
+        && reader.sourceVersion == DRW::AC1018
+        && reader.observedStyleHandle == 0x11u
+        && reader.targetsResolve && reader.appIdReferences.size() == 1u
+        && reader.appIdReferences.front().handleRef == 0x12u
+        && appId != data.appIds.end() && appId->name == "ACAD"
+        && dimstyleAppId != data.appIds.end()
+        && dimstyleAppId->name == "ACAD_DSTYLE_DIMJOGGED_JOGANGLE_SYMBOL"
+        && dimstyleAppId->hasUnchangedDwgSourceName()
+        && mleaderAppId != data.appIds.end()
+        && mleaderAppId->name == "ACAD_MLEADERVER"
+        && mleaderAppId->hasUnchangedDwgSourceName()
+        && style != data.textStyles.end() && style->font == "arial.ttf"
+        && extDataResolved;
+    std::cout << "physical STYLE EED APPID binding version="
+              << static_cast<int>(data.sourceVersion)
+              << " observations=" << reader.observations
+              << " styleHandle=0x" << std::hex << reader.observedStyleHandle
+              << " appidRefs=" << std::dec << reader.appIdReferences.size()
+              << " targetsResolve=" << reader.targetsResolve
+              << " typedAppid=" << (appId != data.appIds.end())
+              << " typedSiblings=" << (dimstyleAppId != data.appIds.end())
+              << '/' << (mleaderAppId != data.appIds.end())
+              << " resolvedExtData=" << extDataResolved
+              << " result=" << (passed ? "PASS" : "FAIL") << '\n';
+    return passed;
+}
+
 bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
     dx_iface reader;
     dx_data data;
@@ -39159,6 +39250,10 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--inspect-physical-table-codec") {
         return inspectPhysicalTableDirectCodec(argv[2]) ? 0 : 1;
+    }
+    if (argc == 3
+        && std::string(argv[1]) == "--inspect-physical-style-eed-appid") {
+        return inspectPhysicalStyleEedAppIdBinding(argv[2]) ? 0 : 1;
     }
     if ((argc == 2 || argc == 3)
         && std::string(argv[1]) == "--tablestyle-nod-whole-file-roundtrip") {
