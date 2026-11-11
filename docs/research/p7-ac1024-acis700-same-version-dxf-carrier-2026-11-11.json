@@ -75,6 +75,14 @@
       },
       "dependencyClosure": "The selected entity's EED references ACAD_OBJECT_CHANGE_GUID. The fresh selected-output container included the source APPID table; output without APPID registration is refused by the writer."
     },
+    "odaSameVersionResaveAndAudit": {
+      "converter": "ODA File Converter 27.1.0.0",
+      "resaveCommand": "ODAFileConverter <input-dir> <output-dir> ACAD2010 DWG 0 0 '*.dwg'",
+      "resavedDwgSha256": "237b42f3c135c39709239c0aa711940f3569baba2b22ac79d547d3367f43f44a",
+      "auditCommand": "ODAFileConverter <input-dir> <output-dir> ACAD2010 DWG 0 1 '*.dwg'",
+      "auditDwgSha256": "3f6456bf765c20dfed0b5c28f684a14d39db2488dbae789df9f6e783632f5c2f",
+      "result": "Both generated resaves parse with zero entity/object parse failures, but retain the same two AcDb:Header integrity diagnostics and exact expected/observed values as the original. Neither operation supplies evidence to repair or waive those diagnostics; strict whole-file export remains blocked."
+    },
     "generatedControl": {
       "command": "cmake --build build-gcc --target libdxfrw_dwg_local_roundtrip libdxfrw_acis_sat_allocation_tests -j4 && ctest --test-dir build-gcc -R '^(dwg_ac1024_acis700_sat_dxf_roundtrip|acis_sat_allocation_rollback_retry)$' --output-on-failure",
       "result": "PASS 2/2 (0.61 seconds). The AC1024 ASCII/Binary carrier imports, exports, reads back, and survives import-export-import. Missing APPID and AC1027 cross-version output refuse atomically. The serializer allocation/retry control passes."

@@ -46,7 +46,11 @@ output refuse atomically. Whole-document export remains refused because the
 source still has two AcDb:Header integrity diagnostics. Generated controls
 also pass import-export-import and allocation/retry checks. This closes a
 bounded carrier route only; no whole-document or 3D support claim is promoted.
-No external fixture was committed. See the [carrier receipt](docs/research/p7-ac1024-acis700-same-version-dxf-carrier-2026-11-11.json).
+Normal ODA same-version resave and audit-mode resave retain the same two
+diagnostics; do not repeat those unchanged operations. Whole-source recovery
+needs a different independently verified AC1024 sample or an ODA-spec-backed
+reader resolution. No external fixture was committed. See the [carrier
+receipt](docs/research/p7-ac1024-acis700-same-version-dxf-carrier-2026-11-11.json).
 
 **P7 second source-distinct AC1024/21500 topology lift (2026-11-11):**
 LibreDWG 0.14 minJSON supplied the complete SAB payload for conference-room
