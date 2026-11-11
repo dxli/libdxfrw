@@ -2689,10 +2689,11 @@ private:
         bool requiresUnchangedTableModel{false};
         bool requiresUnchangedTableProjection{false};
         std::uint32_t selectedTableStyle{0u};
+        std::uint32_t selectedStyleDictionary{0u},selectedStyleXRecord{0u},selectedCellStyleMap{0u};
         std::vector<VerifiedXRecordSource> records;
     };
     struct VerifiedTableCandidateSource {
-        enum class Kind : std::uint8_t { TableContent, DataTable, TableGeometry, ExtensionDictionary, TableEntity, TableStyle };
+        enum class Kind : std::uint8_t { TableContent, DataTable, TableGeometry, ExtensionDictionary, TableEntity, TableStyle, StyleExtensionDictionary };
         DRW_UnsupportedObject raw;
         std::uint64_t ordinal{0u};
         DRW_DwgFrameOffsetSpace space{DRW_DwgFrameOffsetSpace::Unknown};

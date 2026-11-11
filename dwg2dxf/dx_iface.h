@@ -31,6 +31,7 @@
 #include "intern/dwg_table_extension_dictionary_ac1018_candidate.h"
 #include "intern/dwg_table_entity_xdictionary_ac1018_candidate.h"
 #include "intern/dwg_tablestyle_ac1018_candidate.h"
+#include "intern/dwg_tablestyle_extension_dictionary_ac1018_candidate.h"
 namespace blockref_source_relation { struct Result; }
 
 #include <cstdint>
@@ -126,6 +127,18 @@ public:
     bool enableVerifiedTableStyleSource(const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
         std::uint32_t tableEntity,std::uint32_t dictionary,std::uint32_t tableStyle) noexcept;
+    // Style extension dictionary entries are numeric targets only; this does
+    // not authenticate the target frames/types or authorize output.
+    bool enableVerifiedTableStyleDictionarySource(const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        std::uint32_t tableEntity,std::uint32_t dictionary,std::uint32_t style,
+        std::uint32_t styleDictionary,std::uint32_t styleXRecord,std::uint32_t cellStyleMap) noexcept;
+    static bool readVerifiedTableStyleDictionarySource(const dx_data&,
+        const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        std::uint32_t tableEntity,std::uint32_t dictionary,std::uint32_t style,
+        std::uint32_t styleDictionary,std::uint32_t styleXRecord,std::uint32_t cellStyleMap,
+        DwgTableStyleExtensionDictionaryAc1018Candidate::Result& result) noexcept;
     static bool readVerifiedTableStyleSource(const dx_data&,
         const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
@@ -3462,6 +3475,7 @@ private:
     bool wantsVerifiedXRecord(std::uint32_t handle) const noexcept override;
     void verifiedXRecord(const DwgVerifiedXRecordTicket&) noexcept override;
     std::uint32_t verifiedTableEntitySelection() const noexcept override;
+    std::uint32_t verifiedStyleExtensionDictionarySelection() const noexcept override;
     bool wantsVerifiedTableEntityModel() const noexcept override;
     bool wantsVerifiedTableCandidate(std::uint32_t handle) const noexcept override;
     void verifiedTableCandidate(const DwgVerifiedTableCandidateTicket&) noexcept override;
@@ -3491,6 +3505,7 @@ private:
     bool m_verifiedTableModelSelected{false};
     bool m_verifiedTableProjectionSelected{false};
     std::uint32_t m_verifiedTableStyleSelected{0u};
+    std::uint32_t m_verifiedStyleDictionarySelected{0u},m_verifiedStyleXRecordSelected{0u},m_verifiedCellStyleMapSelected{0u};
     std::vector<dx_data::VerifiedTableCandidateSource> m_verifiedTableCandidatePending;
     std::size_t m_verifiedTableCandidatePendingBytes{0u};
     friend class DxWholeSourceTestAccess;

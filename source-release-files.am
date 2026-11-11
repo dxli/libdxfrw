@@ -269,6 +269,8 @@ EXTRA_DIST = \
     src/intern/dwg_tablegeometry_ac1018_candidate.h \
     src/intern/dwg_tablestyle_ac1018_candidate.cpp \
     src/intern/dwg_tablestyle_ac1018_candidate.h \
+    src/intern/dwg_tablestyle_extension_dictionary_ac1018_candidate.cpp \
+    src/intern/dwg_tablestyle_extension_dictionary_ac1018_candidate.h \
     src/intern/dwg_xrecord_verified_source.h \
     src/intern/dwgbuffer.cpp \
     src/intern/dwgbuffer.h \
@@ -510,6 +512,8 @@ EXTRA_DIST = \
     tests/dwg_tablecontent_ac1018_candidate_tests.cpp \
     tests/dwg_tablegeometry_ac1018_candidate_tests.cpp \
     tests/dwg_tablestyle_ac1018_candidate_tests.cpp \
+    tests/dwg_tablestyle_extension_dictionary_ac1018_candidate_tests.cpp \
+    tests/dwg_tablestyle_extension_dictionary_reader_lease_tests.cpp \
     tests/dwg_tablestyle_reader_source_tests.cpp \
     tests/dwg_text_alignment_elevation_tests.cpp \
     tests/dwg_text_style_resolution_tests.cpp \
@@ -680,6 +684,7 @@ EXTRA_DIST = \
     tests/run_dwg_read_test.cmake \
     tests/run_dwg_table_candidate_binding.cmake \
     tests/run_dwg_table_entity_reader_lease.cmake \
+    tests/run_dwg_tablestyle_extension_dictionary_reader_lease.cmake \
     tests/run_dwg_tablestyle_reader_source.cmake \
     tests/run_dxf_roundtrip_splinepoints_test.cmake \
     tests/run_extension_graph_limits_test.cmake \
@@ -1044,6 +1049,7 @@ EXTRA_DIST = \
     tools/research/p5_ac1018_tablecontent_interior_verify.py \
     tools/research/p5_ac1018_tablestyle_binding_probe.cpp \
     tools/research/p5_ac1018_tablestyle_candidate_live_probe.cpp \
+    tools/research/p5_ac1018_tablestyle_dictionary_binding_probe.cpp \
     tools/research/p5_ac1018_tablestyle_graph_capture.cpp \
     tools/research/p5_ac1018_tablestyle_graph_verify.py \
     tools/research/p5_table_root_xrecord_candidate_probe.cpp \

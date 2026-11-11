@@ -43,7 +43,7 @@ public:
     virtual void verifiedXRecord(const DwgVerifiedXRecordTicket&) noexcept = 0;
 };
 
-enum class DwgVerifiedTableCandidateKind : std::uint8_t { TableContent, DataTable, TableGeometry, ExtensionDictionary, TableEntity, TableStyle };
+enum class DwgVerifiedTableCandidateKind : std::uint8_t { TableContent, DataTable, TableGeometry, ExtensionDictionary, TableEntity, TableStyle, StyleExtensionDictionary };
 
 // As with XRECORD tickets, this is a provisional, reader-created CRC-checked
 // frame observation, not an authenticated aggregate or an output permit.
@@ -84,6 +84,7 @@ public:
     // Private opt-in. Zero means no post-BLOCKS entity reread.
     virtual std::uint32_t verifiedTableEntitySelection() const noexcept {return 0u;}
     virtual bool wantsVerifiedTableEntityModel() const noexcept {return false;}
+    virtual std::uint32_t verifiedStyleExtensionDictionarySelection() const noexcept {return 0u;}
     virtual bool wantsVerifiedTableCandidate(std::uint32_t handle) const noexcept=0;
     virtual void verifiedTableCandidate(const DwgVerifiedTableCandidateTicket&) noexcept=0;
 };

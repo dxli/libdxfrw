@@ -12931,7 +12931,7 @@ bool dwgReader::readDwgObjects(DRW_Interface &intfa, dwgBuffer *dbuf,
               return p.kind==DwgVerifiedTableCandidateKind::TableEntity || p.handle==entry.m_handle
                   || p.ordinal==entry.m_sourceMapOrdinal || (p.space==entry.m_sourceOffsetSpace && p.offset==entry.m_sourceOffset);
             });
-        if(m_verifiedTableCandidateFailed || duplicate || m_verifiedTableCandidates.size()>=6u
+        if(m_verifiedTableCandidateFailed || duplicate || m_verifiedTableCandidates.size()>=7u
             || entry.m_handle!=selectedEntity || entry.m_sourceOffsetSpace!=DRW_DwgFrameOffsetSpace::DecodedBuffer
             || entry.m_disposition!=DRW_DwgFrameDisposition::Published || entry.m_publicationCount!=1u
             || !sizeProbe.isGood() || size<0 || static_cast<std::size_t>(size)>maxBody
@@ -13154,7 +13154,9 @@ bool dwgReader::readDwgObjects(DRW_Interface &intfa, dwgBuffer *dbuf,
     // its class number is a fixed type, not caller-provided class metadata.
     if (read && !frameFailure && version==DRW::AC1018
         && lease.object.type==dwgObjType::DICTIONARY) {
-      verifiedTableKind=DwgVerifiedTableCandidateKind::ExtensionDictionary;
+      const auto* sink=dynamic_cast<DwgVerifiedTableCandidateSink*>(&intfa);
+      verifiedTableKind=sink && sink->verifiedStyleExtensionDictionarySelection()==verifiedHandle
+          ?DwgVerifiedTableCandidateKind::StyleExtensionDictionary:DwgVerifiedTableCandidateKind::ExtensionDictionary;
       verifiedTableClass=dwgObjType::DICTIONARY;
     }
     const bool discarded = discardDetachedDwgSourceFrame(lease);
@@ -13207,6 +13209,7 @@ bool dwgReader::readDwgObjects(DRW_Interface &intfa, dwgBuffer *dbuf,
         const std::size_t maxBody=*verifiedTableKind==DwgVerifiedTableCandidateKind::TableContent
             ?65536u:(*verifiedTableKind==DwgVerifiedTableCandidateKind::TableGeometry
                 || *verifiedTableKind==DwgVerifiedTableCandidateKind::ExtensionDictionary
+                || *verifiedTableKind==DwgVerifiedTableCandidateKind::StyleExtensionDictionary
                 || *verifiedTableKind==DwgVerifiedTableCandidateKind::TableStyle)?4096u:1024u*1024u;
         dwgBuffer sizeProbe=dbuf->forkIndependent();
         const bool positioned=sizeProbe.setPosition(verifiedOffset);
@@ -13216,7 +13219,7 @@ bool dwgReader::readDwgObjects(DRW_Interface &intfa, dwgBuffer *dbuf,
               return p.kind==*verifiedTableKind || p.handle==verifiedHandle
                   || p.ordinal==verifiedOrdinal || (p.space==verifiedSpace && p.offset==verifiedOffset);
             });
-        if (m_verifiedTableCandidateFailed || duplicate || m_verifiedTableCandidates.size()>=6u
+        if (m_verifiedTableCandidateFailed || duplicate || m_verifiedTableCandidates.size()>=7u
             || !sizeProbe.isGood() || size<0 || static_cast<std::size_t>(size)>maxBody
             || m_verifiedXRecordPendingBytes>maxTotal
             || m_verifiedTableCandidateBytes>maxTotal-m_verifiedXRecordPendingBytes

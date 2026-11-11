@@ -30,6 +30,7 @@ libdxfrw_la_SOURCES = \
     intern/dwg_table_roundtrip_xrecord_ac1018_candidate.cpp \
     intern/dwg_table_child_xrecord_ac1018_candidate.cpp \
     intern/dwg_table_extension_dictionary_ac1018_candidate.cpp \
+    intern/dwg_tablestyle_extension_dictionary_ac1018_candidate.cpp \
     intern/dwg_table_entity_xdictionary_ac1018_candidate.cpp \
     intern/dwg_tablestyle_ac1018_candidate.cpp \
     intern/dwgwriterlayoutvalidation.cpp \
@@ -81,6 +82,7 @@ dist_noinst_HEADERS = \
     intern/dwg_table_roundtrip_xrecord_ac1018_candidate.h \
     intern/dwg_table_child_xrecord_ac1018_candidate.h \
     intern/dwg_table_extension_dictionary_ac1018_candidate.h \
+    intern/dwg_tablestyle_extension_dictionary_ac1018_candidate.h \
     intern/dwg_table_entity_xdictionary_ac1018_candidate.h \
     intern/dwg_table_model_ac1018_candidate.h \
     intern/dwg_table_projection_ac1018_candidate.h \

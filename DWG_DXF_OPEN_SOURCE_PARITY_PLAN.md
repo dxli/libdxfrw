@@ -1373,8 +1373,11 @@ created locally from scratch for the specific control.
   remain unclosed. A bounded TABLESTYLE observer now checks the selected wire
   fields and typed projection. An opt-in reader-origin binding now joins that
   projection to the TABLE's style target and the style's TABLE reactor; it does
-  not certify complete model equality. Close its dictionary and resource
-  dependencies next. The AC1032 malformed-count dispatch test now passes: its
+  not certify complete model equality. The style extension dictionary is now
+  reader-bound with its ordered source entries; their XRECORD and CELLSTYLEMAP
+  targets are still numeric only. Bind those targets and the remaining resource
+  dependencies next ([dictionary receipt](docs/research/p5-ac1018-tablestyle-extension-dictionary-source-binding-2026-11-11.json)).
+  The AC1032 malformed-count dispatch test now passes: its
   generated common-parent and TABLESTYLE-specific owner roles were corrected
   to the distinct ODA §20.1 and §20.4.101.2 roles. The malformed count is
   refused and the following frame publishes; wrong-role and corrected-count
