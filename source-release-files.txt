@@ -1011,6 +1011,9 @@ tools/research/p5_ac1018_table_children_binding_probe.cpp
 tools/research/p5_ac1018_table_descendants_capture.cpp
 tools/research/p5_ac1018_table_descendants_verify.py
 tools/research/p5_ac1018_table_dictionary_binding_probe.cpp
+tools/research/p5_ac1018_table_entity_publication_probe.cpp
+tools/research/p5_ac1018_table_entity_scratch_instrument.py
+tools/research/p5_ac1018_table_entity_source_verify.py
 tools/research/p5_ac1018_table_geometry_binding_probe.cpp
 tools/research/p5_ac1018_table_roundtrip_binding_probe.cpp
 tools/research/p5_ac1018_table_xrecord_source_verify.py

@@ -1353,7 +1353,11 @@ created locally from scratch for the specific control.
   The reader-verified extension dictionary now binds its code-4 numeric owner
   target and code-2 root entry ([receipt](docs/research/p5-ac1018-table-extension-dictionary-one-sided-binding-2026-11-11.json)).
   The owner target has not yet been authenticated as a TABLE or linked back
-  from its entity frame. TABLESTYLE and recursive resources, independent
+  from its entity frame. A source walk now locates the TABLE's reciprocal H3
+  edge and specifies a post-BLOCKS private frame reread with whole-import and
+  ledger gates; generic AC1018 callback evidence remains Unknown. Implement
+  that binding using the [entity wire receipt](docs/research/p5-ac1018-table-entity-xdictionary-source-wire-2026-11-11.json).
+  TABLESTYLE and recursive resources, independent
   meaning, and transactional output closure are still open.
   The selected TABLESTYLE branch now has a complete source walk through its
   dictionary, extension XRECORD and CELLSTYLEMAP, including STYLE and LTYPE
