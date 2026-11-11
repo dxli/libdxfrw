@@ -597,6 +597,14 @@ public:
     std::int16_t dwgType() const { return oType; }
 };
 
+class ToleranceCodecProbe final : public DRW_Tolerance {
+public:
+    using DRW_Tolerance::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+};
+
 class MeshCodecProbe final : public DRW_Mesh {
 public:
     using DRW_Mesh::encodeDwg;
@@ -25825,6 +25833,29 @@ void testMeshDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testToleranceDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1015, DRW::AC1018,
+                                     DRW::AC1021, DRW::AC1024}) {
+    ToleranceCodecProbe tolerance;
+    tolerance.handle = 0xB610u + static_cast<std::uint32_t>(version);
+    tolerance.parentHandle = 0xB620u;
+    tolerance.reactorHandles = {0xB630u};
+    tolerance.xDictHandle = 0xB640u;
+    tolerance.setDwgType(0x777);
+    tolerance.text = "POSITION_TOLERANCE_\xCE\xA9";
+    tolerance.insertionPoint = DRW_Coord(1.25, 2.5, 3.75);
+    tolerance.xAxisDirectionVector = DRW_Coord(1.0, 0.0, 0.0);
+    tolerance.extPoint = DRW_Coord(0.0, 0.0, 1.0);
+    tolerance.dimStyleH.code = DRW::DwgHardPointer;
+    tolerance.dimStyleH.ref = 0xB650u;
+    checkEntityDwgEncodeAllocationRollback(
+        t, tolerance, version, 46u,
+        version == DRW::AC1015 ? "AC1015 TOLERANCE"
+        : version == DRW::AC1018 ? "AC1018 TOLERANCE"
+        : version == DRW::AC1021 ? "AC1021 TOLERANCE" : "AC1024 TOLERANCE");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -29092,6 +29123,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testMeshDwgEncodeAllocationRollback(context);
       std::cout << "MESH DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--tolerance-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testToleranceDwgEncodeAllocationRollback(context);
+      std::cout << "TOLERANCE DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

@@ -13046,27 +13046,33 @@ bool DRW_Tolerance::parseDwg(DRW::Version v, dwgBuffer *buf,
 bool DRW_Tolerance::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs,
                               dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs;
-    oType = 46;
-    if (!encodeDwgCommon(version, buf, strBuf))
-        return false;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            oType = 46;
+            if (!encodeDwgCommon(version, body, strings))
+                return false;
 
-    if (version < DRW::AC1015) {
-        buf->putBitShort(0);
-        buf->putBitDouble(0.0);
-        buf->putBitDouble(0.0);
-    }
+            if (version < DRW::AC1015) {
+                body->putBitShort(0);
+                body->putBitDouble(0.0);
+                body->putBitDouble(0.0);
+            }
 
-    buf->put3BitDouble(insertionPoint);
-    buf->put3BitDouble(xAxisDirectionVector);
-    buf->put3BitDouble(extPoint);
-    (strBuf ? strBuf : buf)->putVariableText(version, text);
+            body->put3BitDouble(insertionPoint);
+            body->put3BitDouble(xAxisDirectionVector);
+            body->put3BitDouble(extPoint);
+            (strings ? strings : body)->putVariableText(version, text);
 
-    if (!encodeDwgEntHandle(version, buf, handleBuf))
-        return false;
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
 
-    dwgBufferW *hb = handleBuf ? handleBuf : buf;
-    putHardPointerHandle(hb, (dimStyleH.ref == 0) ? 0x15 : dimStyleH.ref);
-    return true;
+            dwgBufferW *handleTarget = handles ? handles : body;
+            putHardPointerHandle(handleTarget,
+                                 (dimStyleH.ref == 0) ? 0x15 : dimStyleH.ref);
+            return handleTarget->isGood();
+        });
 }
 
 

@@ -3467,6 +3467,19 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
   and broader output support remain open. No DWG/DXF fixture was added. See
   the [allocation rollback receipt](docs/research/p6-mesh-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **P6 TOLERANCE DWG encoder transaction safety:**
+  `DRW_Tolerance::encodeDwg` now stages the body, detached text, and handle
+  streams, including the dimension-style pointer, through the shared entity
+  transaction helper. Generated UTF-8 text controls at AC1015/AC1018 each
+  sweep 18 allocation failures; AC1021/AC1024 each sweep 22. Destination and
+  handle-state rollback, prior class-ID restoration, same-object retry, and
+  alias controls pass. The focused selector and 25-test entity-writer
+  transaction cohort pass. This establishes transaction behavior only;
+  TOLERANCE producer coverage, complete dimension-style graph semantics,
+  native display, and broader output support remain open. No DWG/DXF fixture
+  was added. See the [allocation rollback
+  receipt](docs/research/p6-tolerance-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 After every slice: run its focused fast checks; update this queue and the
 relevant receipt; commit code, plan and receipt together; report the commit and
 next eligible slice, then continue. Keep fixtures out of commits unless already
