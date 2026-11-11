@@ -17,6 +17,10 @@ struct EllipseReader : LC3CompatCheck {
     void addEllipse(const DRW_Ellipse& value) override {ellipse=value;++count;}
     DRW_Ellipse ellipse;int count=0;
 };
+struct PolylineReader : LC3CompatCheck {
+    void addPolyline(const DRW_Polyline& value) override {polyline=value;++count;}
+    DRW_Polyline polyline;int count=0;
+};
 struct BoundaryWriter : LC3CompatCheck {
     BoundaryWriter(dxfRW& value,bool polygon):writer(value),mpolygon(polygon) {
         edge=std::make_shared<DRW_Ellipse>();edge->secPoint={1e200,0.,0.};edge->ratio=2.;
@@ -83,6 +87,64 @@ bool cancelledOverflowingMinorTerm() {
     return close(polyline.vertlist.front()->basePoint.z/1.5e308,
                  expectedZ/1.5e308);
 }
+bool ratioAboveOneOverflowingNorm(const std::filesystem::path& path) {
+    for(const bool binary:{false,true}) {
+        DRW_Ellipse expectedEllipse;
+        expectedEllipse.secPoint={1.3e308,1.3e308,0.};
+        expectedEllipse.extPoint={1./std::sqrt(6.),-1./std::sqrt(6.),
+                                  2./std::sqrt(6.)};
+        expectedEllipse.ratio=1.1;
+        if(!std::isinf(std::hypot(expectedEllipse.secPoint.x,
+                                  expectedEllipse.secPoint.y))) return false;
+        expectedEllipse.staparam=.3;
+        expectedEllipse.endparam=.9;
+        DRW_Polyline expected;
+        expectedEllipse.toPolyline(&expected,8);
+        if(expected.vertlist.size()!=2u || (expected.flags&8)==0
+            || !std::isfinite(expected.vertlist.front()->basePoint.x)
+            || !std::isfinite(expected.vertlist.front()->basePoint.y)
+            || !std::isfinite(expected.vertlist.front()->basePoint.z)) return false;
+
+        dxfRW writer(path.string().c_str());
+        writer.setEllipseParts(8);
+        EllipseWriter adapter(writer);
+        adapter.ellipse=expectedEllipse;
+        const bool wrote=writer.write(&adapter,DRW::AC1009,binary);
+        if(!wrote||!adapter.accepted
+            || adapter.ellipse.secPoint.x!=1.3e308
+            || adapter.ellipse.ratio!=1.1) {
+            std::cerr<<"R12 writer rejected overflow-norm ratio normalization binary="
+                     <<binary<<" result="<<wrote<<" accepted="
+                     <<adapter.accepted<<"\n";
+            return false;
+        }
+        dxfRW reader(path.string().c_str());
+        PolylineReader actual;
+        if(!reader.read(&actual,false)||actual.count!=1
+            ||actual.polyline.vertlist.size()!=expected.vertlist.size()
+            ||(actual.polyline.flags&8)==0) {
+            std::cerr<<"R12 ratio-normalized polyline readback shape mismatch binary="
+                     <<binary<<" count="<<actual.count<<" vertices="
+                     <<actual.polyline.vertlist.size()<<"\n";
+            return false;
+        }
+        for(std::size_t i=0;i<expected.vertlist.size();++i) {
+            const DRW_Coord& a=actual.polyline.vertlist[i]->basePoint;
+            const DRW_Coord& b=expected.vertlist[i]->basePoint;
+            if(std::abs(a.x/1.3e308-b.x/1.3e308)>1.e-12
+                ||std::abs(a.y/1.3e308-b.y/1.3e308)>1.e-12
+                ||std::abs(a.z/1.3e308-b.z/1.3e308)>1.e-12) {
+                std::cerr<<"R12 ratio-normalized geometry mismatch binary="
+                         <<binary<<" vertex="<<i<<" actual="<<a.x/1.3e308
+                         <<","<<a.y/1.3e308<<","<<a.z/1.3e308
+                         <<" expected="<<b.x/1.3e308<<","<<b.y/1.3e308
+                         <<","<<b.z/1.3e308<<"\n";
+                return false;
+            }
+        }
+    }
+    return true;
+}
 int main() {
     const auto path=std::filesystem::temp_directory_path()/
         ("libdxfrw-extreme-ellipse-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".dxf");
@@ -145,6 +207,10 @@ int main() {
     }
     if(!cancelledOverflowingMinorTerm()) {
         std::cerr<<"finite ELLIPSE coordinate lost to overflowing minor term\n";
+        return 1;
+    }
+    if(!ratioAboveOneOverflowingNorm(path)) {
+        std::cerr<<"ratio-above-one ELLIPSE normalization lost finite geometry\n";
         return 1;
     }
     std::cout<<"extreme ELLIPSE axis normalization and retry PASS\n";return 0;

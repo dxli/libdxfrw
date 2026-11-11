@@ -1171,13 +1171,10 @@ bool isValidDxfEntityFields(const DRW_Entity& entity) {
         if (!isValidDxfEllipseGeometry(*ellipse))
             return false;
         if (ellipse->ratio > 1.0) {
-            const double major = std::hypot(std::hypot(ellipse->secPoint.x,
-                                                       ellipse->secPoint.y),
-                                            ellipse->secPoint.z);
-            // Axis normalization must be representable before any record is
-            // emitted; otherwise inverting only the ratio changes geometry.
-            if (!std::isfinite(major * ellipse->ratio)
-                || !std::isfinite(ellipse->endparam - ellipse->staparam))
+            // The transformed axis components, rather than its scalar norm,
+            // determine whether normalization is representable. correctAxis
+            // performs that scaled check before any record is emitted.
+            if (!std::isfinite(ellipse->endparam - ellipse->staparam))
                 return false;
         }
     }

@@ -1227,8 +1227,13 @@ created locally from scratch for the specific control.
   shared-exponent form until after compensated summation. A generated partial
   ellipse whose minor term alone exceeds `DBL_MAX` now emits both finite vertices
   after cancellation against its finite center; the fast extreme-axis control
-  passes. Keep ratio-above-one axis normalization with overflowing norms and
-  native/consumer semantics open. See the
+  passes. Ratio-above-one axis swapping now derives directions from scaled
+  components and computes each transformed axis component without forming an
+  overflowing scalar norm/product. Generated AC1009 ASCII/Binary controls cover
+  a finite source axis whose norm overflows and a swapped axis whose norm also
+  overflows while all components remain finite; fresh readback matches the
+  source geometry. Unrepresentable or underflowed components remain refused.
+  Native/consumer semantics remain open. See the
   [extreme R12 ellipse receipt](docs/research/p6-r12-ellipse-extreme-axis-stability-2026-11-11.json)
   and [overflowing-norm follow-up](docs/research/p6-r12-ellipse-overflowing-vector-norm-2026-11-11.json).
 

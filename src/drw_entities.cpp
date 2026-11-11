@@ -9827,23 +9827,70 @@ void DRW_Ellipse::correctAxis(){
     const double start = full ? 0.0 : staparam;
     const double sweep = full ? M_PIx2 : endparam - staparam;
     if (ratio > 1){
-        const double normalLength = std::hypot(std::hypot(extPoint.x, extPoint.y), extPoint.z);
-        const double majorLength = std::hypot(std::hypot(secPoint.x, secPoint.y), secPoint.z);
-        const double targetLength = majorLength * ratio;
-        if (!std::isfinite(normalLength) || normalLength <= 0.0
-            || !std::isfinite(majorLength) || majorLength <= 0.0
-            || !std::isfinite(targetLength) || targetLength <= 0.0
-            || !std::isfinite(sweep))
+        const double normalScale = std::max({std::abs(extPoint.x),
+            std::abs(extPoint.y), std::abs(extPoint.z)});
+        const double majorScale = std::max({std::abs(secPoint.x),
+            std::abs(secPoint.y), std::abs(secPoint.z)});
+        if (!std::isfinite(ratio) || !std::isfinite(normalScale)
+            || normalScale <= 0.0 || !std::isfinite(majorScale)
+            || majorScale <= 0.0 || !std::isfinite(sweep))
             return;
-        const double nx = extPoint.x / normalLength, ny = extPoint.y / normalLength, nz = extPoint.z / normalLength;
-        const double ax = secPoint.x / majorLength, ay = secPoint.y / majorLength, az = secPoint.z / majorLength;
+
+        const double normalX = extPoint.x / normalScale;
+        const double normalY = extPoint.y / normalScale;
+        const double normalZ = extPoint.z / normalScale;
+        const double majorX = secPoint.x / majorScale;
+        const double majorY = secPoint.y / majorScale;
+        const double majorZ = secPoint.z / majorScale;
+        if ((extPoint.x != 0.0 && normalX == 0.0)
+            || (extPoint.y != 0.0 && normalY == 0.0)
+            || (extPoint.z != 0.0 && normalZ == 0.0)
+            || (secPoint.x != 0.0 && majorX == 0.0)
+            || (secPoint.y != 0.0 && majorY == 0.0)
+            || (secPoint.z != 0.0 && majorZ == 0.0))
+            return;
+        const double normalLength =
+            std::hypot(std::hypot(normalX, normalY), normalZ);
+        const double majorLength =
+            std::hypot(std::hypot(majorX, majorY), majorZ);
+        if (!std::isfinite(normalLength) || normalLength <= 0.0
+            || !std::isfinite(majorLength) || majorLength <= 0.0)
+            return;
+        const double nx = normalX / normalLength;
+        const double ny = normalY / normalLength;
+        const double nz = normalZ / normalLength;
+        const double ax = majorX / majorLength;
+        const double ay = majorY / majorLength;
+        const double az = majorZ / majorLength;
         const double minorX = ny * az - nz * ay, minorY = nz * ax - nx * az, minorZ = nx * ay - ny * ax;
         const double minorLength = std::hypot(std::hypot(minorX, minorY), minorZ);
         if (!std::isfinite(minorLength) || minorLength <= 0.0)
             return;
-        const DRW_Coord axis{(minorX / minorLength) * targetLength,
-                             (minorY / minorLength) * targetLength,
-                             (minorZ / minorLength) * targetLength};
+        const double ellipseRatio = ratio;
+        const auto scaledProduct = [majorScale, majorLength,
+                                    ellipseRatio](double component) {
+            if (component == 0.0)
+                return 0.0;
+            int componentExponent = 0, scaleExponent = 0;
+            int lengthExponent = 0, ratioExponent = 0;
+            const double componentMantissa = std::frexp(component,
+                                                          &componentExponent);
+            const double scaleMantissa = std::frexp(majorScale,
+                                                     &scaleExponent);
+            const double lengthMantissa = std::frexp(majorLength,
+                                                      &lengthExponent);
+            const double ratioMantissa = std::frexp(ellipseRatio,
+                                                     &ratioExponent);
+            double mantissa = (((componentMantissa * scaleMantissa)
+                                * lengthMantissa) * ratioMantissa);
+            int adjustment = 0;
+            mantissa = std::frexp(mantissa, &adjustment);
+            return std::ldexp(mantissa, componentExponent + scaleExponent
+                + lengthExponent + ratioExponent + adjustment);
+        };
+        const DRW_Coord axis{scaledProduct(minorX / minorLength),
+                             scaledProduct(minorY / minorLength),
+                             scaledProduct(minorZ / minorLength)};
         // Swapping the major/minor axes changes the parameter origin by
         // -PI/2. Normalize only the start and preserve the signed sweep; the
         // end may legitimately wrap past 2PI (or be less than the start for
@@ -9853,6 +9900,9 @@ void DRW_Ellipse::correctAxis(){
             normalizedStart += M_PIx2;
         const double normalizedEnd = normalizedStart + sweep;
         if (!std::isfinite(axis.x) || !std::isfinite(axis.y) || !std::isfinite(axis.z)
+            || (minorX != 0.0 && axis.x == 0.0)
+            || (minorY != 0.0 && axis.y == 0.0)
+            || (minorZ != 0.0 && axis.z == 0.0)
             || !std::isfinite(normalizedStart) || !std::isfinite(normalizedEnd))
             return;
         secPoint = axis;
