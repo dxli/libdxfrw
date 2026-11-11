@@ -440,6 +440,14 @@ public:
   std::uint16_t dwgType() const { return oType; }
 };
 
+class HelixCodecProbe final : public DRW_Helix {
+public:
+  using DRW_Helix::encodeDwg;
+
+  void setDwgType(std::uint16_t value) { oType = value; }
+  std::uint16_t dwgType() const { return oType; }
+};
+
 class ViewportCodecProbe final : public DRW_Viewport {
 public:
   using DRW_Viewport::encodeDwg;
@@ -25262,6 +25270,36 @@ void testSplineDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testHelixDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+    HelixCodecProbe helix;
+    helix.handle = version == DRW::AC1021 ? 0xAE10u : 0xAE20u;
+    helix.parentHandle = 0xAE30u;
+    helix.reactorHandles = {0xAE40u};
+    helix.xDictHandle = 0xAE50u;
+    helix.setDwgType(0x777u);
+    helix.degree = 2;
+    helix.flags = 0;
+    helix.knotslist = {0.0, 0.0, 0.0, 1.0, 1.0, 1.0};
+    helix.controllist = {std::make_shared<DRW_Coord>(2.0, 0.0, 0.0),
+                         std::make_shared<DRW_Coord>(1.0, 1.0, 1.0),
+                         std::make_shared<DRW_Coord>(0.0, 2.0, 2.0)};
+    helix.m_majorVersion = 1;
+    helix.m_maintVersion = 0;
+    helix.axisBasePt = DRW_Coord(0.0, 0.0, 0.0);
+    helix.startPt = DRW_Coord(2.0, 0.0, 0.0);
+    helix.axisVector = DRW_Coord(0.0, 0.0, 1.0);
+    helix.radius = 2.0;
+    helix.turns = 1.0;
+    helix.turnHeight = 1.0;
+    helix.handedness = true;
+    helix.constraintType = 1;
+    checkEntityDwgEncodeAllocationRollback(
+        t, helix, version, DRW_Helix::kDwgClassNum,
+        version == DRW::AC1021 ? "AC1021 HELIX" : "AC1024 HELIX");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -28441,6 +28479,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testSplineDwgEncodeAllocationRollback(context);
       std::cout << "SPLINE DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 &&
+        std::string(argv[1]) == "--helix-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testHelixDwgEncodeAllocationRollback(context);
+      std::cout << "HELIX DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

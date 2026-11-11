@@ -7748,19 +7748,57 @@ void DRW_Spline::encodeDwgSplineBody(DRW::Version version, dwgBufferW *buf) cons
 // DRW_Helix::encodeDwg — spline body (oType = HELIX class 503) + AcDbHelix
 // trailer, then the common entity handle data. Trailer field order MUST match
 // DRW_Helix::parseDwg (Phase 8a-1).
-bool DRW_Helix::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
-    (void)bs; (void)strBuf;
-    const auto finite = [](const DRW_Coord& point) {
-        return std::isfinite(point.x) && std::isfinite(point.y)
-            && std::isfinite(point.z);
-    };
-    if (buf == nullptr || !validatePayloadFields()
-        || !finite(axisBasePt) || !finite(startPt) || !finite(axisVector)
-        || !std::isfinite(radius) || !std::isfinite(turns)
-        || !std::isfinite(turnHeight))
-        return false;
-    oType = kDwgClassNum;  // HELIX custom class 503
-    if (!encodeDwgCommon(version, buf)) return false;
+bool DRW_Helix::encodeDwg(DRW::Version version, dwgBufferW *buf,
+                          std::uint32_t bs, dwgBufferW *strBuf,
+                          dwgBufferW *handleBuf) {
+  (void)bs;
+  (void)strBuf;
+  const auto finite = [](const DRW_Coord &point) {
+    return std::isfinite(point.x) && std::isfinite(point.y) &&
+           std::isfinite(point.z);
+  };
+  if (buf == nullptr || !validatePayloadFields() || !finite(axisBasePt) ||
+      !finite(startPt) || !finite(axisVector) || !std::isfinite(radius) ||
+      !std::isfinite(turns) || !std::isfinite(turnHeight))
+    return false;
+
+  dwgBufferW *const bodyTarget = buf;
+  dwgBufferW *const stringTarget = strBuf != nullptr ? strBuf : bodyTarget;
+  dwgBufferW *const handleTarget =
+      handleBuf != nullptr ? handleBuf : bodyTarget;
+  try {
+    dwgBufferW bodyStage = *bodyTarget;
+    std::optional<dwgBufferW> stringStageStorage;
+    dwgBufferW *stringStage = &bodyStage;
+    if (stringTarget != bodyTarget) {
+      stringStageStorage.emplace(*stringTarget);
+      stringStage = &*stringStageStorage;
+    }
+    std::optional<dwgBufferW> handleStageStorage;
+    dwgBufferW *handleStage = &bodyStage;
+    if (handleTarget == bodyTarget) {
+      handleStage = &bodyStage;
+    } else if (handleTarget == stringTarget) {
+      handleStage = stringStage;
+    } else {
+      handleStageStorage.emplace(*handleTarget);
+      handleStage = &*handleStageStorage;
+    }
+
+    buf = &bodyStage;
+    handleBuf = handleBuf != nullptr ? handleStage : nullptr;
+    struct ObjectTypeRollback {
+      decltype(oType) &value;
+      decltype(oType) original;
+      bool committed{false};
+      ~ObjectTypeRollback() {
+        if (!committed)
+          value = original;
+      }
+    } typeRollback{oType, oType};
+    oType = kDwgClassNum; // HELIX custom class 503
+    if (!encodeDwgCommon(version, buf))
+      return false;
     encodeDwgSplineBody(version, buf);
 
     // AcDbHelix trailer (same order as parseDwg):
@@ -7775,7 +7813,19 @@ bool DRW_Helix::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t b
     buf->putBit(handedness ? 1 : 0);
     buf->putRawChar8(static_cast<std::uint8_t>(constraintType));
 
-    return encodeDwgEntHandle(version, buf, handleBuf);
+    if (!buf->isGood() || !encodeDwgEntHandle(version, buf, handleBuf) ||
+        !buf->isGood() || !stringStage->isGood() || !handleStage->isGood())
+      return false;
+    bodyTarget->swap(bodyStage);
+    if (stringTarget != bodyTarget)
+      stringTarget->swap(*stringStageStorage);
+    if (handleTarget != bodyTarget && handleTarget != stringTarget)
+      handleTarget->swap(*handleStageStorage);
+    typeRollback.committed = true;
+    return true;
+  } catch (const std::bad_alloc &) {
+    return false;
+  }
 }
 
 namespace {
