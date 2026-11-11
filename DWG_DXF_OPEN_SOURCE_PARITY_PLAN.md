@@ -1,5 +1,17 @@
 # DWG/DXF parity — remaining implementation plan
 
+**P4/P6 implementation slice (2026-11-11, AC1018 VX_CONTROL routing):**
+the frame classifier treated fixed OBJECTS type 70 as an entity because it
+was absent from the fixed-object list, although the hash-pinned AC1018 sample
+records handle `0x2426` as OBJECTS `VX_CONTROL` / `AcDbVXTable`. Type 70 now
+enters the OBJECTS pass and reaches the existing `DRW_VxControl` common-header
+parser; the same source publishes 9,161/9,161 frames with zero entity/object
+parse failures. The public sample’s producer provenance is unverified, its
+frame establishes routing only, and no AC1018 VX record-body fields are
+claimed. Strict ASCII DXF export still refuses at the separate
+`WIPEOUTVARIABLES` source-profile gate; no output was published. The DWG
+remains in scratch storage. See the [routing receipt](docs/research/p6-ac1018-vx-control-object-routing-2026-11-11.json).
+
 **P7 imported SAT bounds update (2026-11-10):** the exact hash-pinned
 source-derived SAT was parsed by pinned InventorLoader and built as a valid
 FreeCAD Part solid. Its `optimalBoundingBox(False, False)` agrees with the

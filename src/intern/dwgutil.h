@@ -366,6 +366,10 @@ namespace dwgColor {
 namespace dwgObjType {
     enum Object {
         UNKNOWN_9 = 9,
+        // AC1018 encodes the legacy AcDbVXTable control as fixed OBJECTS
+        // type 70. Newer files may instead use the file-local VXCONTROL
+        // class ordinal (AcDbVxControl).
+        VX_CONTROL = 70,
         DICTIONARY = 42,
         UNKNOWN_36 = 54,
         UNKNOWN_37 = 55,
@@ -393,6 +397,7 @@ namespace dwgObjType {
     inline bool isFixedObject(std::int16_t type) {
         switch (type) {
         case UNKNOWN_9:
+        case VX_CONTROL:
         case DICTIONARY:
         case UNKNOWN_36:
         case UNKNOWN_37:

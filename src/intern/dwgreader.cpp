@@ -13837,6 +13837,15 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
         }
         break;
       }
+      case dwgObjType::VX_CONTROL: {
+        DRW_VxControl e;
+        ret = parseTableEntry(e);
+        if (ret) {
+          intfa.addVxControl(e);
+          intfa.addUnsupportedObject(makeRawObject(oType));
+        }
+        break;
+      }
       case dwgObjType::PROXY_OBJECT: {
         DRW_ProxyObject e;
         // A failed proxy-object body is not a lossless raw carrier: its
