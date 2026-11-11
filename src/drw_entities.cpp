@@ -2755,29 +2755,102 @@ bool validAc1018TableRetainedOverrideRanges(
     std::size_t cellRangeCount = 0u;
     for (const DRW_TableRow& row : content.m_rows) {
         for (const DRW_TableCell& cell : row.m_cells) {
-            if (cell.m_overrideFlags != 0u || cell.m_virtualEdgeFlags != 0u)
+            if (cell.m_virtualEdgeFlags != 0u)
                 return false;
-            if (cell.m_contents.size() == 1u
-                && !cell.m_contents.front().m_text.empty())
+            if (cell.m_overrideFlags != 0u
+                || (cell.m_contents.size() == 1u
+                    && !cell.m_contents.front().m_text.empty()))
                 ++cellRangeCount;
         }
     }
-    if (cellRangeCount == 0u || ranges.size() != cellRangeCount + 1u)
+    if (ranges.size() != cellRangeCount + 1u)
         return false;
 
+    constexpr std::uint32_t supportedCellMask = 0x0003FFFFu;
+    constexpr std::uint32_t cellAlignmentFlag = 0x00000001u;
+    constexpr std::uint32_t backgroundFillNoneFlag = 0x00000002u;
+    constexpr std::uint32_t backgroundColorFlag = 0x00000004u;
+    constexpr std::uint32_t contentColorFlag = 0x00000008u;
+    constexpr std::uint32_t cellTextHeightFlag = 0x00000020u;
+    constexpr std::array<std::uint32_t, 4> cellBorderColorFlags = {{
+        0x00000040u, 0x00000080u, 0x00000100u, 0x00000200u
+    }};
+    constexpr std::array<std::uint32_t, 4> cellBorderLineweightFlags = {{
+        0x00000400u, 0x00000800u, 0x00001000u, 0x00002000u
+    }};
+    constexpr std::array<std::uint32_t, 4> cellBorderVisibilityFlags = {{
+        0x00004000u, 0x00008000u, 0x00010000u, 0x00020000u
+    }};
+
     std::uint64_t previousEndBit = 0u;
-    for (std::size_t i = 0u; i < cellRangeCount; ++i) {
-        const DRW_DwgSubrecordRange& range = ranges[i];
-        if (range.m_name != "r2007-table-cell-overrides"
-            || range.m_version != DRW::AC1018 || range.m_count != 0u
-            || range.m_rawHandleCode != 0u
-            || range.m_bitSize != 10u || !range.m_parseComplete
-            || range.m_startBit < previousEndBit
-            || range.m_bitSize
-                > std::numeric_limits<std::uint64_t>::max()
-                    - range.m_startBit)
-            return false;
-        previousEndBit = range.m_startBit + range.m_bitSize;
+    std::size_t rangeIndex = 0u;
+    for (const DRW_TableRow& row : content.m_rows) {
+        for (const DRW_TableCell& cell : row.m_cells) {
+            const bool hasRange = cell.m_overrideFlags != 0u
+                || (cell.m_contents.size() == 1u
+                    && !cell.m_contents.front().m_text.empty());
+            if (!hasRange)
+                continue;
+            if ((cell.m_overrideFlags & ~supportedCellMask) != 0u)
+                return false;
+
+            dwgBufferW expectedCellRange;
+            try {
+                expectedCellRange.putBitLong(
+                    static_cast<std::int32_t>(cell.m_overrideFlags));
+                expectedCellRange.putRawChar8(
+                    static_cast<std::uint8_t>(cell.m_virtualEdgeFlags));
+                if ((cell.m_overrideFlags & cellAlignmentFlag) != 0u)
+                    expectedCellRange.putRawShort16(
+                        static_cast<std::uint16_t>(cell.m_textAlignment));
+                if ((cell.m_overrideFlags & backgroundFillNoneFlag) != 0u)
+                    expectedCellRange.putBit(!cell.m_backgroundEnabled);
+                if ((cell.m_overrideFlags & backgroundColorFlag) != 0u)
+                    expectedCellRange.putCmColor(version,
+                        static_cast<std::uint16_t>(cell.m_fillColorRgb));
+                if ((cell.m_overrideFlags & contentColorFlag) != 0u)
+                    expectedCellRange.putCmColor(version,
+                        static_cast<std::uint16_t>(cell.m_textColorRgb));
+                // The text-style H is in the parallel handle stream, not this
+                // body-bit range. The typed writer and graph preflight handle
+                // its role and target separately.
+                if ((cell.m_overrideFlags & cellTextHeightFlag) != 0u)
+                    expectedCellRange.putBitDouble(cell.m_textHeight);
+                for (std::size_t edge = 0u;
+                     edge < cellBorderColorFlags.size(); ++edge) {
+                    const DRW_TableBorder& border = cell.m_borders[edge];
+                    if ((cell.m_overrideFlags
+                         & cellBorderColorFlags[edge]) != 0u)
+                        expectedCellRange.putCmColor(version,
+                            static_cast<std::uint16_t>(border.m_colorRgb));
+                    if ((cell.m_overrideFlags
+                         & cellBorderLineweightFlags[edge]) != 0u)
+                        expectedCellRange.putBitShort(
+                            static_cast<std::uint16_t>(border.m_lineWeight));
+                    if ((cell.m_overrideFlags
+                         & cellBorderVisibilityFlags[edge]) != 0u)
+                        expectedCellRange.putBitShort(
+                            border.m_visible ? 1u : 0u);
+                }
+            } catch (...) {
+                return false;
+            }
+
+            const DRW_DwgSubrecordRange& range = ranges[rangeIndex++];
+            if (range.m_name != "r2007-table-cell-overrides"
+                || range.m_version != DRW::AC1018
+                || range.m_count != cell.m_overrideFlags
+                || range.m_rawHandleCode != 0u
+                || !expectedCellRange.isGood()
+                || range.m_bitSize != expectedCellRange.bitCount()
+                || !range.m_parseComplete
+                || range.m_startBit < previousEndBit
+                || range.m_bitSize
+                    > std::numeric_limits<std::uint64_t>::max()
+                        - range.m_startBit)
+                return false;
+            previousEndBit = range.m_startBit + range.m_bitSize;
+        }
     }
 
     const DRW_DwgSubrecordRange& tableRange = ranges.back();

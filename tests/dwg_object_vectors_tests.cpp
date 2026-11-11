@@ -10371,6 +10371,120 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  "AC1018 plain-text TABLE encoder preserves the following body sentinel");
     }
 
+    TableDwgCodecProbe nonemptyOverrideSource = encodedAc1018Table;
+    DRW_TableCell& nonemptyOverrideCell =
+        nonemptyOverrideSource.m_content.m_rows.front().m_cells.front();
+    nonemptyOverrideCell.m_overrideFlags = 0x0000000Fu;
+    nonemptyOverrideCell.m_textAlignment = 5;
+    nonemptyOverrideCell.m_backgroundEnabled = false;
+    nonemptyOverrideCell.m_fillColorRgb = 12;
+    nonemptyOverrideCell.m_textColorRgb = 3;
+    dwgBufferW nonemptyOverrideBody;
+    dwgBufferW nonemptyOverrideHandles;
+    dwgBufferW nonemptyOverrideTypePrefix;
+    nonemptyOverrideTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t nonemptyOverrideObjectSizeBit =
+        nonemptyOverrideTypePrefix.bitCount();
+    const bool nonemptyOverrideBuilt =
+        nonemptyOverrideSource.encodeAsTableClass(
+            DRW::AC1018, nonemptyOverrideBody,
+            nonemptyOverrideHandles);
+    t.expect(nonemptyOverrideBuilt,
+             "AC1018 TABLE emits a populated cell's selected override fields");
+    if (nonemptyOverrideBuilt) {
+        const auto sourceBodyBytes = nonemptyOverrideBody.data();
+        const auto sourceHandleBytes = nonemptyOverrideHandles.data();
+        const std::uint64_t sourceBodyBits = nonemptyOverrideBody.bitCount();
+        constexpr std::int32_t nonemptyOverrideSentinel = 0x71C0A20;
+        nonemptyOverrideBody.putBitLong(nonemptyOverrideSentinel);
+        nonemptyOverrideBody.patchRawLong32AtBit(
+            nonemptyOverrideObjectSizeBit, nonemptyOverrideBody.bitCount());
+        appendBits(nonemptyOverrideBody, nonemptyOverrideHandles);
+        dwgBuffer nonemptyOverrideInput(
+            nonemptyOverrideBody.data().data(),
+            nonemptyOverrideBody.data().size());
+        TableDwgCodecProbe nonemptyOverrideReadback;
+        const bool nonemptyOverrideRead = nonemptyOverrideReadback.parseDwg(
+            DRW::AC1018, &nonemptyOverrideInput);
+        const auto& parsedOverrideRanges =
+            nonemptyOverrideReadback.m_content.m_subrecordRanges;
+        const DRW_TableCell* parsedOverrideCell =
+            nonemptyOverrideReadback.m_content.m_rows.size() == 1u
+                && nonemptyOverrideReadback.m_content.m_rows.front()
+                       .m_cells.size() == 1u
+            ? &nonemptyOverrideReadback.m_content.m_rows.front().m_cells.front()
+            : nullptr;
+        const bool parsedOverrideMatches = nonemptyOverrideRead
+            && nonemptyOverrideInput.isGood()
+            && nonemptyOverrideReadback.m_semanticContentComplete
+            && parsedOverrideCell != nullptr
+            && parsedOverrideCell->m_overrideFlags == 0x0Fu
+            && parsedOverrideCell->m_textAlignment == 5
+            && !parsedOverrideCell->m_backgroundEnabled
+            && parsedOverrideCell->m_fillColorRgb == 12
+            && parsedOverrideCell->m_textColorRgb == 3
+            && parsedOverrideRanges.size() == 2u
+            && parsedOverrideRanges.front().m_name
+                == "r2007-table-cell-overrides"
+            && parsedOverrideRanges.front().m_count == 0x0Fu
+            && parsedOverrideRanges.front().m_parseComplete
+            && cursorBit(nonemptyOverrideInput) == sourceBodyBits;
+        t.expect(parsedOverrideMatches,
+                 "AC1018 nonempty cell override span parses with exact selected values and source boundary");
+        if (parsedOverrideMatches) {
+            t.expect(nonemptyOverrideInput.getBitLong()
+                         == nonemptyOverrideSentinel
+                         && nonemptyOverrideInput.isGood(),
+                     "AC1018 nonempty cell override parse preserves the following-body sentinel");
+
+            TableDwgCodecProbe parsedOverrideModel = nonemptyOverrideSource;
+            parsedOverrideModel.m_content.m_subrecordRanges =
+                parsedOverrideRanges;
+            dwgBufferW reencodedOverrideBody;
+            dwgBufferW reencodedOverrideHandles;
+            const bool parsedOverrideReencoded =
+                parsedOverrideModel.encodeAsTableClass(
+                    DRW::AC1018, reencodedOverrideBody,
+                    reencodedOverrideHandles);
+            t.expect(parsedOverrideReencoded,
+                     "AC1018 parsed nonempty cell override range admits typed canonical re-encoding");
+            t.expect(parsedOverrideReencoded
+                         && reencodedOverrideBody.data() == sourceBodyBytes
+                         && reencodedOverrideHandles.data()
+                             == sourceHandleBytes,
+                     "AC1018 parsed nonempty override re-encoding reproduces the typed source body and handles");
+
+            parsedOverrideModel.m_content.m_subrecordRanges.front()
+                .m_bitSize -= 1u;
+            dwgBufferW malformedOverrideBody;
+            dwgBufferW malformedOverrideHandles;
+            malformedOverrideBody.putRawChar8(0xA8u);
+            malformedOverrideHandles.putRawChar8(0x8Au);
+            const auto malformedOverrideBodyBefore =
+                malformedOverrideBody.data();
+            const auto malformedOverrideHandlesBefore =
+                malformedOverrideHandles.data();
+            const bool malformedOverrideRefused =
+                !parsedOverrideModel.encodeAsTableClass(
+                    DRW::AC1018, malformedOverrideBody,
+                    malformedOverrideHandles);
+            const bool malformedOverridePreserved =
+                malformedOverrideBody.data() == malformedOverrideBodyBefore
+                && malformedOverrideHandles.data()
+                    == malformedOverrideHandlesBefore;
+            parsedOverrideModel.m_content.m_subrecordRanges.front()
+                .m_bitSize += 1u;
+            const bool correctedOverrideRetry =
+                parsedOverrideModel.encodeAsTableClass(
+                    DRW::AC1018, malformedOverrideBody,
+                    malformedOverrideHandles);
+            t.expect(malformedOverrideRefused
+                         && malformedOverridePreserved
+                         && correctedOverrideRetry,
+                     "AC1018 nonempty override span mismatch rolls back and corrected same-object retry succeeds");
+        }
+    }
+
     TableDwgCodecProbe mergedAc1018Table;
     mergedAc1018Table.handle = 0xA500u;
     mergedAc1018Table.name = "*T1";
