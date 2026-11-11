@@ -33833,6 +33833,82 @@ bool DRW_AssociativeObject::parseDwg(DRW::Version version, dwgBuffer *buf, std::
         DRW_DBG(m_constraintNodeCount); DRW_DBG(" nodesDecoded=");
         DRW_DBG(m_constraintNodes.size()); DRW_DBG(" nodesParsed=");
         DRW_DBG(m_constraintNodesParsed); DRW_DBG("\n");
+    } else if (rn == "ACDBASSOC2DCONSTRAINTGROUP"
+               && version == DRW::AC1032) {
+        if (!readActionFields())
+            return fail();
+
+        // The AutoCAD 2024 source at 0x2A8 and an independent primitive walk
+        // agree with the peer's fixed-prefix candidate. Keep its remaining
+        // node table opaque: the peer fails there and its schema is disputed.
+        const std::uint64_t groupStart = currentObjectDwgBit(buf);
+        dwgBuffer bodyProbe = buf->forkIndependent();
+        dwgBuffer handleProbe = hBuff.forkIndependent();
+        std::int32_t groupVersion = 0;
+        bool groupFlag = false;
+        std::array<DRW_Coord, 3> workplane{};
+        std::uint32_t groupReference = 0u;
+        std::int32_t actionCount = 0;
+        std::vector<std::uint32_t> actions;
+        bool prefixComplete = m_classVersion == 2u && objectDataEndKnown
+            && readBitLongWithinBody(&bodyProbe, version, objectDataEnd,
+                                     groupVersion)
+            && groupVersion == 2
+            && readBitWithinBody(&bodyProbe, version, objectDataEnd, groupFlag)
+            && read3BitDoubleWithinBody(&bodyProbe, version, objectDataEnd,
+                                        workplane[0])
+            && read3BitDoubleWithinBody(&bodyProbe, version, objectDataEnd,
+                                        workplane[1])
+            && read3BitDoubleWithinBody(&bodyProbe, version, objectDataEnd,
+                                        workplane[2])
+            && readHandleTransactionalWithCode(&handleProbe, groupReference,
+                                               DRW::DwgHardOwnership, true)
+            && groupReference == 0u
+            && readBitLongWithinBody(&bodyProbe, version, objectDataEnd,
+                                     actionCount)
+            && actionCount == 2
+            && static_cast<std::uint64_t>(actionCount)
+                   <= minimumHandleCountBudgetWithin(&handleProbe, handleEndBit);
+        if (prefixComplete) {
+            if (!DRW::reserve(actions, actionCount))
+                return fail();
+            for (std::int32_t i = 0; i < actionCount; ++i) {
+                std::uint32_t action = 0u;
+                if (!readHandleTransactionalWithCode(
+                        &handleProbe, action, DRW::DwgHardOwnership, false)
+                    || action == 0u
+                    || std::find(actions.begin(), actions.end(), action)
+                           != actions.end()) {
+                    prefixComplete = false;
+                    break;
+                }
+                actions.push_back(action);
+            }
+        }
+        if (prefixComplete) {
+            m_constraintGroupVersion = groupVersion;
+            m_constraintGroupFlag = groupFlag;
+            m_constraintWorkplane = workplane;
+            m_constraintGroupReference = groupReference;
+            m_constraintActionCount = actionCount;
+            m_constraintActions = std::move(actions);
+            m_constraintActionsParsed = true;
+            DRW_DBG("AC1032 constraint-group candidate version/flag/actions=");
+            DRW_DBG(groupVersion); DRW_DBG("/"); DRW_DBG(groupFlag);
+            DRW_DBG("/"); DRW_DBG(actionCount); DRW_DBG(" handles=");
+            DRW_DBG(m_constraintActions[0]); DRW_DBG("/");
+            DRW_DBG(m_constraintActions[1]); DRW_DBG("\n");
+        }
+        auto status = makeAssocPrefixStatus(
+            DRW_AssociativePrefixStatus::Kind::AcDbAssoc2dConstraintGroup,
+            groupStart, currentObjectDwgBit(&bodyProbe),
+            DRW_AssociativePrefixStatus::ParseStatus::Partial,
+            m_classVersion, prefixComplete ? 2u : 0u, 0u,
+            prefixComplete ? actionCount : -1);
+        status.m_sourceAssumption =
+            "AC1032 class-version-2 two-action fixed-prefix candidate; "
+            "node table remains opaque and is not output-qualified";
+        m_prefixStatuses.push_back(std::move(status));
     } else if (endsWith(rn, "ACTIONPARAM")) {
         // Generic action-param subclass (edge / path / face / object /
         // asmbody / ...): decode the shared AcDbAssocActionParam prefix, then

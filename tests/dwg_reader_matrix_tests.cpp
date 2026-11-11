@@ -12591,15 +12591,17 @@ public:
 class Ac1032AssociativeNetworkDispatchReader final : public dwgReader32 {
 public:
     explicit Ac1032AssociativeNetworkDispatchReader(
-        std::vector<std::uint8_t>& bytes, std::uint16_t classNumber)
+        std::vector<std::uint8_t>& bytes, std::uint16_t classNumber,
+        const char* recordName = "ACDBASSOCNETWORK",
+        const char* className = "AcDbAssocNetwork")
         : dwgReader32(std::make_unique<dwgBuffer>(bytes.data(), bytes.size()),
                       nullptr) {
         version = DRW::AC1032;
         decoder.setVersion(version, false);
         auto definition = std::make_unique<DRW_Class>();
         definition->classNum = classNumber;
-        definition->recName = "ACDBASSOCNETWORK";
-        definition->className = "AcDbAssocNetwork";
+        definition->recName = recordName;
+        definition->className = className;
         definition->entityFlag = 0;
         if (classesmap.emplace(classNumber, definition.get()).second)
             definition.release();
@@ -12757,6 +12759,119 @@ void testAssociativeNetworkActionIndexGenerated(TestContext& t) {
                  && assigned.m_networkVersion == 0
                  && assigned.m_networkFieldsParsed,
              "associative network index fields survive copy construction and assignment");
+}
+
+void testAc1032ConstraintGroupCandidateGenerated(TestContext& t) {
+    using namespace associative_constraint_group_test;
+    constexpr std::uint16_t classNumber = 0x301u;
+    constexpr std::uint32_t sourceHandle = 0xA600u;
+    constexpr std::uint32_t parent = 0xA601u;
+    constexpr std::uint32_t network = 0xA602u;
+    constexpr std::uint32_t firstAction = 0xA603u;
+    constexpr std::uint32_t secondAction = 0xA604u;
+    const auto make = [&](int variant, std::vector<std::uint8_t>& bytes,
+                          std::vector<std::uint8_t>& payload) {
+        dwgBufferW object, handles, strings;
+        object.putObjType(DRW::AC1032, classNumber);
+        object.putHandle(reference(DRW::DwgNullReference, sourceHandle));
+        object.putBitShort(0); // no EED
+        object.putBitLong(0); // no reactors
+        object.putBit(1u); // no extension dictionary
+        object.putBit(0u); // no DataStorage
+        object.putBitShort(2); // action class version
+        object.putBitLong(0); // geometry status
+        object.putBitLong(1); // base action index
+        object.putBitLong(2); // max dependency index
+        object.putBitLong(0); // no base action dependencies
+        object.putBitShort(0); object.putBitLong(0); // reserved, no owned params
+        object.putBitShort(0); object.putBitLong(0); // reserved, no values
+        object.putBitLong(2); // group version
+        object.putBit(0u); // group flag
+        if (variant == 2) {
+            // A raw-double code without its eight payload bytes: the body
+            // boundary must not be crossed into the following streams.
+            object.putBit(0u); object.putBit(0u);
+        } else {
+            object.put3BitDouble(DRW_Coord(0, 0, 0));
+            object.put3BitDouble(DRW_Coord(1, 0, 0));
+            object.put3BitDouble(DRW_Coord(0, 1, 0));
+            object.putBitLong(2); // source-witnessed action count
+            object.putBitLong(13); // opaque post-action value; never interpreted
+        }
+        Frame frame;
+        if (!appendStringStream(object, strings)) return false;
+        object.alignToByte();
+        frame.objectEndBit = object.bitCount();
+        handles.putHandle(reference(DRW::DwgSoftPointer, parent));
+        handles.putHandle(reference(DRW::DwgSoftPointer, network));
+        handles.putHandle(reference(DRW::DwgHardOwnership, 0u));
+        handles.putHandle(reference(DRW::DwgHardOwnership, 0u));
+        handles.putHandle(reference(DRW::DwgHardOwnership, firstAction));
+        if (variant == 3) {
+            handles.putRawChar8(0x32u); // hard owner claims two missing bytes
+        } else {
+            handles.putHandle(reference(variant == 1 ? DRW::DwgSoftPointer
+                                                      : DRW::DwgHardOwnership,
+                                        secondAction));
+        }
+        object.putBytes(handles.data().data(), handles.data().size());
+        if (!object.isGood() || !handles.isGood()
+            || handles.bitCount() > std::numeric_limits<std::uint32_t>::max())
+            return false;
+        frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
+        frame.payload = object.data();
+        payload = frame.payload;
+        return wrapFrame(frame, bytes);
+    };
+    std::vector<std::uint8_t> good, goodPayload;
+    if (!make(0, good, goodPayload)) {
+        t.expect(false, "AC1032 constraint-group frame generated");
+        return;
+    }
+    Ac1032AssociativeNetworkDispatchReader reader(
+        good, classNumber, "ACDBASSOC2DCONSTRAINTGROUP", "AcDbAssoc2dConstraintGroup");
+    PersistentManagerDispatchSink sink;
+    std::vector<std::uint8_t> expectedRaw;
+    const auto read = [&](std::vector<std::uint8_t>& bytes,
+                          const std::vector<std::uint8_t>& payload) {
+        expectedRaw = payload;
+        sink.typed.clear(); sink.raw.clear(); sink.publications.clear();
+        return reader.readObjects(bytes, {{sourceHandle, 0u, 0u}}, sink);
+    };
+    const auto partial = [&](bool expectedActions) {
+        if (sink.typed.size() != 1u || sink.raw.size() != 1u
+            || sink.raw.front().m_rawBytes != expectedRaw
+            || sink.raw.front().m_typedPayloadValidated) return false;
+        const auto& item = sink.typed.front();
+        const auto status = std::find_if(item.m_prefixStatuses.begin(),
+            item.m_prefixStatuses.end(), [](const DRW_AssociativePrefixStatus& value) {
+                return value.m_kind == DRW_AssociativePrefixStatus::Kind::AcDbAssoc2dConstraintGroup;
+            });
+        return item.handle == sourceHandle && item.parentHandle == parent
+            && item.m_owningNetworkHandle == network
+            && !item.m_constraintGroupBodyParsed && !item.m_constraintNodesParsed
+            && !item.m_constraintNextNodeIdRead
+            && item.m_constraintActionsParsed == expectedActions
+            && status != item.m_prefixStatuses.end()
+            && status->m_status == DRW_AssociativePrefixStatus::ParseStatus::Partial
+            && (!expectedActions || (item.m_constraintGroupVersion == 2
+                && !item.m_constraintGroupFlag && item.m_constraintGroupReference == 0u
+                && item.m_constraintWorkplane[0].x == 0.0
+                && item.m_constraintWorkplane[1].x == 1.0
+                && item.m_constraintWorkplane[2].y == 1.0
+                && item.m_constraintActionCount == 2
+                && item.m_constraintActions == std::vector<std::uint32_t>{firstAction, secondAction}));
+    };
+    t.expect(read(good, goodPayload) && partial(true) && reader.objectFailures() == 0u,
+             "AC1032 constraint-group candidate retains raw body and two action roles");
+    for (int variant : {1, 2, 3}) {
+        std::vector<std::uint8_t> invalid, invalidPayload;
+        t.expect(make(variant, invalid, invalidPayload), "AC1032 malformed candidate frame generated");
+        const bool refused = read(invalid, invalidPayload) && partial(false);
+        t.expect(refused, "wrong handle role or truncated candidate does not publish candidate fields");
+        t.expect(read(good, goodPayload) && partial(true) && reader.objectFailures() == 0u,
+                 "same AC1032 reader accepts corrected candidate after refusal");
+    }
 }
 
 void testAc1032AssociativeNetworkCandidateGenerated(TestContext& t) {
@@ -22335,6 +22450,14 @@ int main(int argc, char** argv) {
         testAssociativeNetworkActionIndexGenerated(focused);
         testAc1024AssociativeNetworkActionHandleRolesGenerated(focused);
         std::cout << "Generated AC1024 associative network action indexes: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--constraint-group-ac1032-candidate-generated") {
+        TestContext focused;
+        testAc1032ConstraintGroupCandidateGenerated(focused);
+        std::cout << "Generated AC1032 constraint-group candidate: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

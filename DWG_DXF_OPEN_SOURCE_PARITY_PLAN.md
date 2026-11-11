@@ -1209,6 +1209,20 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P4 AC1032 constraint-group fixed-prefix candidate:** the source-bound
+  `0x2A8` group now exposes its version-2, two-owned-action fixed prefix from
+  isolated body/handle cursor probes. An independent bounded BS/BL/BD/H walker
+  matches the source spans and LibreDWG's candidate order; the decoded section
+  itself still uses libdxfrw's decompressor. The body/node completion flags
+  remain false, raw bytes remain intact, and the disputed post-actions value is
+  unparsed. Generated wrong-role and truncation controls refuse candidate
+  publication and retry on the same reader; the fast cohort passes 4/4. The
+  physical source still publishes 145/145 frames with zero entity/object
+  failures while strict output refuses at existing integrity gates. Next
+  establish the source node table, dependency semantics and graph closure;
+  this partial prefix is not an output or support qualification. See the
+  [receipt](docs/research/p4-ac1032-forum-constraint-group-prefix-candidate-2026-11-10.json).
+
 - **P6 DXF primitive subtype dispatch:** built-in derived LINE, RAY, CIRCLE,
   TRACE, TEXT and ATTRIB inputs now route to their typed writers instead of
   silently losing subtype geometry or fields. IMAGE and standalone ATTRIB are
