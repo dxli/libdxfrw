@@ -1376,6 +1376,21 @@ created locally from scratch for the specific control.
   source/topology and independent-kernel qualification separately. See the
   [21500 incidence receipt](docs/research/p7-ac1024-21500-sab-incidence-observation-2026-11-11.json).
 
+- **P7 AC1024 21500 independent topology lift (2026-11-11):** pinned
+  OpenCADStudio/OpenCADKernel now reconstructs the selected SAT projection as
+  one body with 6 faces, 6 loops, 24 coedges, 12 edges and 8 vertices. Exact
+  face→loop order, loop→coedge order, owner links, edge endpoints and typed
+  orientation fields match the hash-pinned source projection, with no broken
+  references reported by the lift. This required type-specific normalization
+  of a disposable parsed-record copy because the pinned ACadRust accessors use
+  classic SAT offsets while this ACIS 21500 projection has additional pointer
+  fields. Those offsets are not promoted to a general format rule. OpenCADKernel
+  validation reports 4 open loops and 12 same-sided edges; therefore the
+  topology lift is not a valid-B-rep or geometry-semantic result. Resolve those
+  flaws against an independent source-native topology/orientation oracle and
+  establish the 21500 header field semantics separately. See the [independent
+  topology-lift receipt](docs/research/p7-ac1024-21500-opencadkernel-topology-lift-2026-11-11.json).
+
 - **P7 ACIS 21500 rooted geometry graph:** the same hash-pinned AC1024 inline
   SAB now passes an exact common-prefix and pointer-row-shape gate into the
   existing rooted geometry walker. It projects one body with 85 reachable
@@ -3830,11 +3845,14 @@ and `ImportGui` is unavailable in the console build, so this is not native
 FreeCAD acceptance. The ODA converter could not start because macOS PasteBoard
 services were unavailable. No external fixture was committed. See the [AC1024
 21500 receipt](docs/research/p7-ac1024-21500-sab-sat-cuboid-crosscheck-2026-11-11.json).
-Next use the selected AC1024 handle `0x183` as the direct-lift candidate: map
-its source SAT face/loop/coedge incidence into OpenCADKernel and compare each
-incidence and orientation. Keep the 21500 header-field interpretation as a
-separate versioned evidence gate. Obtain source-native acceptance through a
-supported importer route after that mapping. Broader
+The selected AC1024 handle `0x183` has now been mapped into OpenCADKernel after
+scratch-only type-specific row normalization, and its source incidence and
+typed orientation fields match. The kernel still reports four open loops and
+twelve same-sided edges. Next resolve those failures against an independent
+source-native topology/orientation oracle; do not change production sense
+mapping from this peer result alone. Keep the 21500 header-field interpretation
+as a separate versioned evidence gate. Obtain source-native acceptance through
+a supported importer route after topology validation. Broader
 consumer/platform qualification remains separate. Do not promote support from parser fields,
 the local reader/writer loop, or LibreDWG comparison. Keep full-source
 IMAGEDEF and opaque-frame output gates separate.
