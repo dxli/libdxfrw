@@ -518,6 +518,9 @@ public:
     using DRW_Attrib::encodeDwg;
     using DRW_Attrib::parseDwg;
     using DRW_Attrib::resetAttribDwgState;
+
+    void setDwgType(std::uint16_t value) { oType = value; }
+    std::uint16_t dwgType() const { return oType; }
 };
 
 class AttdefCodecProbe final : public DRW_Attdef {
@@ -525,6 +528,9 @@ public:
     using DRW_Attdef::encodeDwg;
     using DRW_Attdef::parseDwg;
     using DRW_Attdef::resetDwgState;
+
+    void setDwgType(std::uint16_t value) { oType = value; }
+    std::uint16_t dwgType() const { return oType; }
 };
 
 class MeshCodecProbe final : public DRW_Mesh {
@@ -25376,6 +25382,95 @@ void testInsertDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testAttribAttdefDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+    const std::uint32_t baseHandle =
+        version == DRW::AC1021 ? 0xAE10u : 0xAE20u;
+
+    AttribCodecProbe attrib;
+    attrib.handle = baseHandle;
+    attrib.parentHandle = 0xAE30u;
+    attrib.reactorHandles = {0xAE40u};
+    attrib.xDictHandle = 0xAE50u;
+    attrib.setDwgType(0x777u);
+    attrib.basePoint = DRW_Coord(1.25, 2.5, 3.75);
+    attrib.secPoint = DRW_Coord(4.0, 5.0, 3.75);
+    attrib.extPoint = DRW_Coord(0.0, 0.0, 1.0);
+    attrib.height = 2.5;
+    attrib.text = "TXN_ATTRIB";
+    attrib.tag = "TXN_TAG";
+    attrib.m_fieldLength = 12;
+    attrib.attribFlags = 1;
+    attrib.lockPosition = true;
+    attrib.styleH.ref = 0xAE60u;
+    checkEntityDwgEncodeAllocationRollback(
+        t, attrib, version, 2u,
+        version == DRW::AC1021 ? "AC1021 ATTRIB" : "AC1024 ATTRIB");
+
+    AttdefCodecProbe attdef;
+    attdef.handle = baseHandle + 1u;
+    attdef.parentHandle = 0xAE30u;
+    attdef.reactorHandles = {0xAE40u};
+    attdef.xDictHandle = 0xAE50u;
+    attdef.setDwgType(0x777u);
+    attdef.basePoint = DRW_Coord(1.25, 2.5, 3.75);
+    attdef.secPoint = DRW_Coord(4.0, 5.0, 3.75);
+    attdef.extPoint = DRW_Coord(0.0, 0.0, 1.0);
+    attdef.height = 2.5;
+    attdef.text = "TXN_ATTDEF";
+    attdef.tag = "TXN_TAG";
+    attdef.prompt = "Prompt";
+    attdef.m_fieldLength = 12;
+    attdef.attribFlags = 2;
+    attdef.lockPosition = true;
+    attdef.styleH.ref = 0xAE60u;
+    checkEntityDwgEncodeAllocationRollback(
+        t, attdef, version, 3u,
+        version == DRW::AC1021 ? "AC1021 ATTDEF" : "AC1024 ATTDEF");
+  }
+
+  AttribCodecProbe multilineAttrib;
+  multilineAttrib.handle = 0xAE30u;
+  multilineAttrib.parentHandle = 0xAE31u;
+  multilineAttrib.reactorHandles = {0xAE32u};
+  multilineAttrib.xDictHandle = 0xAE33u;
+  multilineAttrib.setDwgType(0x777u);
+  multilineAttrib.text = "single-line-value";
+  multilineAttrib.tag = "MULTILINE_TAG";
+  multilineAttrib.m_attributeType = 2;
+  multilineAttrib.mtext = std::make_unique<DRW_MText>();
+  multilineAttrib.mtext->text = "embedded\\Pmessage";
+  multilineAttrib.mtext->m_r2018IsNotAnnotative = true;
+  multilineAttrib.mtext->m_r2018Version = 1;
+  multilineAttrib.mtext->m_r2018DefaultFlag = true;
+  multilineAttrib.mtext->m_r2018Attachment = 5;
+  multilineAttrib.mtext->m_r2018XAxisDir = DRW_Coord(1.0, 0.0, 0.0);
+  multilineAttrib.mtext->m_r2018InsertionPoint = DRW_Coord(10.0, 20.0, 0.0);
+  multilineAttrib.mtext->m_r2018RectWidth = 30.0;
+  multilineAttrib.mtext->m_r2018RectHeight = 8.0;
+  multilineAttrib.m_r2018OuterAnnotativeData = {0xA5u, 0x5Au};
+  multilineAttrib.m_r2018OuterAnnotativeAppHandle = 0xAE34u;
+  checkEntityDwgEncodeAllocationRollback(t, multilineAttrib, DRW::AC1032, 2u,
+                                         "AC1032 multiline ATTRIB");
+
+  AttdefCodecProbe multilineAttdef;
+  multilineAttdef.handle = 0xAE40u;
+  multilineAttdef.parentHandle = 0xAE41u;
+  multilineAttdef.reactorHandles = {0xAE42u};
+  multilineAttdef.xDictHandle = 0xAE43u;
+  multilineAttdef.setDwgType(0x777u);
+  multilineAttdef.text = "default-value";
+  multilineAttdef.tag = "MULTILINE_DEF";
+  multilineAttdef.prompt = "Distinct prompt";
+  multilineAttdef.m_attributeType = 4;
+  multilineAttdef.mtext = std::make_unique<DRW_MText>();
+  multilineAttdef.mtext->text = "definition\\Pcontents";
+  multilineAttdef.m_r2018OuterAnnotativeData = {0xA5u, 0x5Au, 0x13u};
+  multilineAttdef.m_r2018OuterAnnotativeAppHandle = 0xAE44u;
+  checkEntityDwgEncodeAllocationRollback(t, multilineAttdef, DRW::AC1032, 3u,
+                                         "AC1032 multiline ATTDEF");
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -28579,6 +28674,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testInsertDwgEncodeAllocationRollback(context);
       std::cout << "INSERT/MINSERT DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--attrib-attdef-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testAttribAttdefDwgEncodeAllocationRollback(context);
+      std::cout << "ATTRIB/ATTDEF DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

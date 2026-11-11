@@ -19753,105 +19753,160 @@ bool DRW_Attrib::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs
     return true;
 }
 
-bool DRW_Attrib::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
-    (void)bs;
-    if (buf == nullptr
-        || m_fieldLength < 0
-        || m_fieldLength > std::numeric_limits<std::uint16_t>::max()
-        || (version >= DRW::AC1024 && version < DRW::AC1032
-            && (attVersion != 0 || mtext
-                || !m_r2018OuterAnnotativeData.empty()
-                || m_r2018OuterAnnotativeAppHandle != 0
-                || !m_r2018OuterAnnotativeAppIdName.empty())))
-        return false;
-    const std::uint8_t attributeType = (m_attributeType == 0) ? 1 : m_attributeType;
-    if (version >= DRW::AC1032 && attributeType != 1
-        && attributeType != 2)
-        return false;
-    const bool hasEmbeddedMText = version >= DRW::AC1032 && attributeType != 1;
-    if (hasEmbeddedMText && !mtext)
-        return false;
-    if ((!hasEmbeddedMText
-         && (!m_r2018OuterAnnotativeData.empty()
-             || m_r2018OuterAnnotativeUnknown != 0
-             || m_r2018OuterAnnotativeAppHandle != 0
-             || !m_r2018OuterAnnotativeAppIdName.empty()))
-        || (hasEmbeddedMText && m_r2018OuterAnnotativeData.empty()
-            && (m_r2018OuterAnnotativeUnknown != 0
-                || m_r2018OuterAnnotativeAppHandle != 0
-                || !m_r2018OuterAnnotativeAppIdName.empty()))
-        || m_r2018OuterAnnotativeData.size()
-             > std::numeric_limits<std::uint16_t>::max())
-        return false;
+bool DRW_Attrib::encodeDwg(DRW::Version version, dwgBufferW *buf,
+                           std::uint32_t bs, dwgBufferW *strBuf,
+                           dwgBufferW *handleBuf) {
+  (void)bs;
+  if (buf == nullptr || m_fieldLength < 0 ||
+      m_fieldLength > std::numeric_limits<std::uint16_t>::max() ||
+      (version >= DRW::AC1024 && version < DRW::AC1032 &&
+       (attVersion != 0 || mtext || !m_r2018OuterAnnotativeData.empty() ||
+        m_r2018OuterAnnotativeAppHandle != 0 ||
+        !m_r2018OuterAnnotativeAppIdName.empty())))
+    return false;
+  const std::uint8_t attributeType =
+      (m_attributeType == 0) ? 1 : m_attributeType;
+  if (version >= DRW::AC1032 && attributeType != 1 && attributeType != 2)
+    return false;
+  const bool hasEmbeddedMText = version >= DRW::AC1032 && attributeType != 1;
+  if (hasEmbeddedMText && !mtext)
+    return false;
+  if ((!hasEmbeddedMText && (!m_r2018OuterAnnotativeData.empty() ||
+                             m_r2018OuterAnnotativeUnknown != 0 ||
+                             m_r2018OuterAnnotativeAppHandle != 0 ||
+                             !m_r2018OuterAnnotativeAppIdName.empty())) ||
+      (hasEmbeddedMText && m_r2018OuterAnnotativeData.empty() &&
+       (m_r2018OuterAnnotativeUnknown != 0 ||
+        m_r2018OuterAnnotativeAppHandle != 0 ||
+        !m_r2018OuterAnnotativeAppIdName.empty())) ||
+      m_r2018OuterAnnotativeData.size() >
+          std::numeric_limits<std::uint16_t>::max())
+    return false;
 
-    oType = 2;  // ATTRIB class id — see dwgreader.cpp:1148
-    if (!encodeDwgCommon(version, buf)) return false;
+  dwgBufferW *const bodyTarget = buf;
+  dwgBufferW *const stringTarget = strBuf != nullptr ? strBuf : bodyTarget;
+  dwgBufferW *const handleTarget =
+      handleBuf != nullptr ? handleBuf : bodyTarget;
+  try {
+    dwgBufferW bodyStage = *bodyTarget;
+    std::optional<dwgBufferW> stringStageStorage;
+    dwgBufferW *stringStage = &bodyStage;
+    if (stringTarget != bodyTarget) {
+      stringStageStorage.emplace(*stringTarget);
+      stringStage = &*stringStageStorage;
+    }
+    std::optional<dwgBufferW> handleStageStorage;
+    dwgBufferW *handleStage = &bodyStage;
+    if (handleTarget == bodyTarget) {
+      handleStage = &bodyStage;
+    } else if (handleTarget == stringTarget) {
+      handleStage = stringStage;
+    } else {
+      handleStageStorage.emplace(*handleTarget);
+      handleStage = &*handleStageStorage;
+    }
+
+    buf = &bodyStage;
+    strBuf = strBuf != nullptr ? stringStage : nullptr;
+    handleBuf = handleBuf != nullptr ? handleStage : nullptr;
+    struct ObjectTypeRollback {
+      decltype(oType) &value;
+      decltype(oType) original;
+      bool committed{false};
+      ~ObjectTypeRollback() {
+        if (!committed)
+          value = original;
+      }
+    } typeRollback{oType, oType};
+    oType = 2; // ATTRIB class id — see dwgreader.cpp:1148
+    if (!encodeDwgCommon(version, buf))
+      return false;
 
     // TEXT-body section — mirrors DRW_Attrib::parseDwg.
     // data_flags=0: emit every optional field unconditionally (same
     // strategy as DRW_Text::encodeDwg — simpler encoder, ~30 bytes larger).
-    buf->putRawChar8(0);                              // data_flags=0
-    buf->putRawDouble(basePoint.z);                   // elevation RD
-    buf->putRawDouble(basePoint.x);                   // insertion 2RD
+    buf->putRawChar8(0);            // data_flags=0
+    buf->putRawDouble(basePoint.z); // elevation RD
+    buf->putRawDouble(basePoint.x); // insertion 2RD
     buf->putRawDouble(basePoint.y);
-    buf->putDefaultDouble(basePoint.x, secPoint.x);   // alignment 2DD
+    buf->putDefaultDouble(basePoint.x, secPoint.x); // alignment 2DD
     buf->putDefaultDouble(basePoint.y, secPoint.y);
     buf->putExtrusion(extPoint, /*b_R2000_style=*/true);
     buf->putThickness(thickness, /*b_R2000_style=*/true);
-    buf->putRawDouble(oblique / ARAD);                // oblique radians RD
-    buf->putRawDouble(angle / ARAD);                  // angle in radians RD
-    buf->putRawDouble(height);                        // text height RD
-    buf->putRawDouble(widthscale);                    // width factor RD
+    buf->putRawDouble(oblique / ARAD); // oblique radians RD
+    buf->putRawDouble(angle / ARAD);   // angle in radians RD
+    buf->putRawDouble(height);         // text height RD
+    buf->putRawDouble(widthscale);     // width factor RD
     dwgBufferW *sb = strBuf ? strBuf : buf;
-    sb->putVariableText(version, text);               // text string TV
-    buf->putBitShort(static_cast<std::uint16_t>(textgen));  // generation flags BS
-    buf->putBitShort(static_cast<std::uint16_t>(alignH));   // horiz align BS
-    buf->putBitShort(static_cast<std::uint16_t>(alignV));   // vert align BS
+    sb->putVariableText(version, text); // text string TV
+    buf->putBitShort(
+        static_cast<std::uint16_t>(textgen));             // generation flags BS
+    buf->putBitShort(static_cast<std::uint16_t>(alignH)); // horiz align BS
+    buf->putBitShort(static_cast<std::uint16_t>(alignV)); // vert align BS
 
     if (version >= DRW::AC1024) {
-        buf->putRawChar8(hasEmbeddedMText && attVersion == 0 ? 1 : attVersion);
+      buf->putRawChar8(hasEmbeddedMText && attVersion == 0 ? 1 : attVersion);
     }
     if (version >= DRW::AC1032) {
-        buf->putRawChar8(attributeType);
+      buf->putRawChar8(attributeType);
     }
 
     dwgBufferW embeddedHandles;
     if (hasEmbeddedMText) {
-        if (!encodeEmbeddedMTextDwg(version, buf, strBuf, &embeddedHandles, *mtext))
-            return false;
-        buf->putBitShort(static_cast<std::uint16_t>(
-            m_r2018OuterAnnotativeData.size()));
-        for (std::uint8_t byte : m_r2018OuterAnnotativeData)
-            buf->putRawChar8(byte);
-        if (!m_r2018OuterAnnotativeData.empty())
-            buf->putBitShort(m_r2018OuterAnnotativeUnknown);
+      if (!encodeEmbeddedMTextDwg(version, buf, strBuf, &embeddedHandles,
+                                  *mtext))
+        return false;
+      buf->putBitShort(
+          static_cast<std::uint16_t>(m_r2018OuterAnnotativeData.size()));
+      for (std::uint8_t byte : m_r2018OuterAnnotativeData)
+        buf->putRawChar8(byte);
+      if (!m_r2018OuterAnnotativeData.empty())
+        buf->putBitShort(m_r2018OuterAnnotativeUnknown);
     }
 
     // ATTRIB-specific tail
-    sb->putVariableText(version, tag);                // tag TV
+    sb->putVariableText(version, tag); // tag TV
     buf->putBitShort(static_cast<std::uint16_t>(m_fieldLength));
-    buf->putRawChar8(attribFlags);                    // flags RC
+    buf->putRawChar8(attribFlags); // flags RC
     if (version >= DRW::AC1021) {
-        buf->putBit(lockPosition ? 1 : 0);             // lock position B (R2007a+)
+      buf->putBit(lockPosition ? 1 : 0); // lock position B (R2007a+)
     }
 
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
+    if (!encodeDwgEntHandle(version, buf, handleBuf))
+      return false;
 
     dwgHandle sH;
     std::uint32_t sref = (styleH.ref == 0) ? 0x13 : styleH.ref;
     sH.code = 5;
-    sH.ref  = sref;
+    sH.ref = sref;
     sH.size = 0;
-    if (sref != 0) { std::uint32_t t = sref; while (t != 0) { t >>= 8; ++sH.size; } }
+    if (sref != 0) {
+      std::uint32_t t = sref;
+      while (t != 0) {
+        t >>= 8;
+        ++sH.size;
+      }
+    }
     dwgBufferW *hb = handleBuf ? handleBuf : buf;
     appendBitBuffer(hb, embeddedHandles);
     if (hasEmbeddedMText && !m_r2018OuterAnnotativeData.empty())
-        putHardPointerHandle(hb,
-            m_r2018OuterAnnotativeAppHandle == 0
-                ? DRW::DwgAcadAppIdHandle
-                : m_r2018OuterAnnotativeAppHandle);
+      putHardPointerHandle(hb, m_r2018OuterAnnotativeAppHandle == 0
+                                   ? DRW::DwgAcadAppIdHandle
+                                   : m_r2018OuterAnnotativeAppHandle);
     hb->putHandle(sH);
-    return buf->isGood() && sb->isGood() && hb->isGood();
+    if (!buf->isGood() || !sb->isGood() || !hb->isGood() ||
+        !stringStage->isGood() || !handleStage->isGood())
+      return false;
+    bodyTarget->swap(bodyStage);
+    if (stringTarget != bodyTarget)
+      stringTarget->swap(*stringStageStorage);
+    if (handleTarget != bodyTarget && handleTarget != stringTarget)
+      handleTarget->swap(*handleStageStorage);
+    typeRollback.committed = true;
+    return true;
+  } catch (const std::bad_alloc &) {
+    return false;
+  }
 }
 
 bool DRW_Attdef::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
@@ -20076,39 +20131,74 @@ bool DRW_Attdef::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs
     return true;
 }
 
-bool DRW_Attdef::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
-    (void)bs;
-    if (buf == nullptr
-        || m_fieldLength < 0
-        || m_fieldLength > std::numeric_limits<std::uint16_t>::max()
-        || (version >= DRW::AC1024 && version < DRW::AC1032
-            && (attVersion != 0 || mtext
-                || !m_r2018OuterAnnotativeData.empty()
-                || m_r2018OuterAnnotativeAppHandle != 0
-                || !m_r2018OuterAnnotativeAppIdName.empty())))
-        return false;
-    const std::uint8_t attributeType = (m_attributeType == 0) ? 1 : m_attributeType;
-    if (version >= DRW::AC1032 && attributeType != 1
-        && attributeType != 4)
-        return false;
-    const bool hasEmbeddedMText = version >= DRW::AC1032 && attributeType != 1;
-    if (hasEmbeddedMText && !mtext)
-        return false;
-    if ((!hasEmbeddedMText
-         && (!m_r2018OuterAnnotativeData.empty()
-             || m_r2018OuterAnnotativeUnknown != 0
-             || m_r2018OuterAnnotativeAppHandle != 0
-             || !m_r2018OuterAnnotativeAppIdName.empty()))
-        || (hasEmbeddedMText && m_r2018OuterAnnotativeData.empty()
-            && (m_r2018OuterAnnotativeUnknown != 0
-                || m_r2018OuterAnnotativeAppHandle != 0
-                || !m_r2018OuterAnnotativeAppIdName.empty()))
-        || m_r2018OuterAnnotativeData.size()
-             > std::numeric_limits<std::uint16_t>::max())
-        return false;
+bool DRW_Attdef::encodeDwg(DRW::Version version, dwgBufferW *buf,
+                           std::uint32_t bs, dwgBufferW *strBuf,
+                           dwgBufferW *handleBuf) {
+  (void)bs;
+  if (buf == nullptr || m_fieldLength < 0 ||
+      m_fieldLength > std::numeric_limits<std::uint16_t>::max() ||
+      (version >= DRW::AC1024 && version < DRW::AC1032 &&
+       (attVersion != 0 || mtext || !m_r2018OuterAnnotativeData.empty() ||
+        m_r2018OuterAnnotativeAppHandle != 0 ||
+        !m_r2018OuterAnnotativeAppIdName.empty())))
+    return false;
+  const std::uint8_t attributeType =
+      (m_attributeType == 0) ? 1 : m_attributeType;
+  if (version >= DRW::AC1032 && attributeType != 1 && attributeType != 4)
+    return false;
+  const bool hasEmbeddedMText = version >= DRW::AC1032 && attributeType != 1;
+  if (hasEmbeddedMText && !mtext)
+    return false;
+  if ((!hasEmbeddedMText && (!m_r2018OuterAnnotativeData.empty() ||
+                             m_r2018OuterAnnotativeUnknown != 0 ||
+                             m_r2018OuterAnnotativeAppHandle != 0 ||
+                             !m_r2018OuterAnnotativeAppIdName.empty())) ||
+      (hasEmbeddedMText && m_r2018OuterAnnotativeData.empty() &&
+       (m_r2018OuterAnnotativeUnknown != 0 ||
+        m_r2018OuterAnnotativeAppHandle != 0 ||
+        !m_r2018OuterAnnotativeAppIdName.empty())) ||
+      m_r2018OuterAnnotativeData.size() >
+          std::numeric_limits<std::uint16_t>::max())
+    return false;
 
-    oType = 3;  // ATTDEF class id — see dwgreader.cpp:1185
-    if (!encodeDwgCommon(version, buf)) return false;
+  dwgBufferW *const bodyTarget = buf;
+  dwgBufferW *const stringTarget = strBuf != nullptr ? strBuf : bodyTarget;
+  dwgBufferW *const handleTarget =
+      handleBuf != nullptr ? handleBuf : bodyTarget;
+  try {
+    dwgBufferW bodyStage = *bodyTarget;
+    std::optional<dwgBufferW> stringStageStorage;
+    dwgBufferW *stringStage = &bodyStage;
+    if (stringTarget != bodyTarget) {
+      stringStageStorage.emplace(*stringTarget);
+      stringStage = &*stringStageStorage;
+    }
+    std::optional<dwgBufferW> handleStageStorage;
+    dwgBufferW *handleStage = &bodyStage;
+    if (handleTarget == bodyTarget) {
+      handleStage = &bodyStage;
+    } else if (handleTarget == stringTarget) {
+      handleStage = stringStage;
+    } else {
+      handleStageStorage.emplace(*handleTarget);
+      handleStage = &*handleStageStorage;
+    }
+
+    buf = &bodyStage;
+    strBuf = strBuf != nullptr ? stringStage : nullptr;
+    handleBuf = handleBuf != nullptr ? handleStage : nullptr;
+    struct ObjectTypeRollback {
+      decltype(oType) &value;
+      decltype(oType) original;
+      bool committed{false};
+      ~ObjectTypeRollback() {
+        if (!committed)
+          value = original;
+      }
+    } typeRollback{oType, oType};
+    oType = 3; // ATTDEF class id — see dwgreader.cpp:1185
+    if (!encodeDwgCommon(version, buf))
+      return false;
 
     // TEXT-body section — identical layout to DRW_Attrib::encodeDwg.
     buf->putRawChar8(0);
@@ -20130,51 +20220,70 @@ bool DRW_Attdef::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t 
     buf->putBitShort(static_cast<std::uint16_t>(alignV));
 
     if (version >= DRW::AC1024) {
-        buf->putRawChar8(hasEmbeddedMText && attVersion == 0 ? 1 : attVersion);
+      buf->putRawChar8(hasEmbeddedMText && attVersion == 0 ? 1 : attVersion);
     }
     if (version >= DRW::AC1032) {
-        buf->putRawChar8(attributeType);
+      buf->putRawChar8(attributeType);
     }
 
     dwgBufferW embeddedHandles;
     if (hasEmbeddedMText) {
-        if (!encodeEmbeddedMTextDwg(version, buf, strBuf, &embeddedHandles, *mtext))
-            return false;
-        buf->putBitShort(static_cast<std::uint16_t>(
-            m_r2018OuterAnnotativeData.size()));
-        for (std::uint8_t byte : m_r2018OuterAnnotativeData)
-            buf->putRawChar8(byte);
-        if (!m_r2018OuterAnnotativeData.empty())
-            buf->putBitShort(m_r2018OuterAnnotativeUnknown);
+      if (!encodeEmbeddedMTextDwg(version, buf, strBuf, &embeddedHandles,
+                                  *mtext))
+        return false;
+      buf->putBitShort(
+          static_cast<std::uint16_t>(m_r2018OuterAnnotativeData.size()));
+      for (std::uint8_t byte : m_r2018OuterAnnotativeData)
+        buf->putRawChar8(byte);
+      if (!m_r2018OuterAnnotativeData.empty())
+        buf->putBitShort(m_r2018OuterAnnotativeUnknown);
     }
 
     sb->putVariableText(version, tag);
     buf->putBitShort(static_cast<std::uint16_t>(m_fieldLength));
     buf->putRawChar8(attribFlags);
     if (version >= DRW::AC1021) {
-        buf->putBit(lockPosition ? 1 : 0);
+      buf->putBit(lockPosition ? 1 : 0);
     }
 
     // ATTDEF adds prompt between flags and handle stream
     sb->putVariableText(version, prompt);
 
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
+    if (!encodeDwgEntHandle(version, buf, handleBuf))
+      return false;
 
     dwgHandle sH;
     std::uint32_t sref = (styleH.ref == 0) ? 0x13 : styleH.ref;
     sH.code = 5;
-    sH.ref  = sref;
+    sH.ref = sref;
     sH.size = 0;
-    if (sref != 0) { std::uint32_t t = sref; while (t != 0) { t >>= 8; ++sH.size; } }
+    if (sref != 0) {
+      std::uint32_t t = sref;
+      while (t != 0) {
+        t >>= 8;
+        ++sH.size;
+      }
+    }
     dwgBufferW *hb = handleBuf ? handleBuf : buf;
     appendBitBuffer(hb, embeddedHandles);
     if (hasEmbeddedMText && !m_r2018OuterAnnotativeData.empty())
-        putHardPointerHandle(hb,
-            m_r2018OuterAnnotativeAppHandle == 0
-                ? DRW::DwgAcadAppIdHandle
-                : m_r2018OuterAnnotativeAppHandle);
+      putHardPointerHandle(hb, m_r2018OuterAnnotativeAppHandle == 0
+                                   ? DRW::DwgAcadAppIdHandle
+                                   : m_r2018OuterAnnotativeAppHandle);
     hb->putHandle(sH);
-    return buf->isGood() && sb->isGood() && hb->isGood();
+    if (!buf->isGood() || !sb->isGood() || !hb->isGood() ||
+        !stringStage->isGood() || !handleStage->isGood())
+      return false;
+    bodyTarget->swap(bodyStage);
+    if (stringTarget != bodyTarget)
+      stringTarget->swap(*stringStageStorage);
+    if (handleTarget != bodyTarget && handleTarget != stringTarget)
+      handleTarget->swap(*handleStageStorage);
+    typeRollback.committed = true;
+    return true;
+  } catch (const std::bad_alloc &) {
+    return false;
+  }
 }
 
 bool DRW_MText::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
