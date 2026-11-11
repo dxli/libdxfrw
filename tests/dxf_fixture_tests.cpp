@@ -18569,6 +18569,7 @@ void testGeneratedImageDictionaryObjectsAllocationRetry(TestContext& t) {
     constexpr std::uint32_t entityHandle = 0xD930u;
     constexpr std::uint32_t nodHandle = 0xD910u;
     constexpr std::uint32_t imageDictionaryHandle = 0xD911u;
+    constexpr std::uint32_t imageReactorHandle = 0xD940u;
     const std::string imageName = "IMAGE_OBJECTS_ALLOCATION_SWEEP.png";
     using Edge = DRW_Dictionary::Entry::DxfHandleCode;
     class ImageObjectsWriter final : public dx_iface {
@@ -18581,6 +18582,7 @@ void testGeneratedImageDictionaryObjectsAllocationRetry(TestContext& t) {
             image.sizev = 480.0;
             image.secPoint = {1.0, 0.0, 0.0};
             image.vVector = {0.0, 1.0, 0.0};
+            image.m_imageDefReactorHandle = imageReactorHandle;
             imageWritten = dxfW->writeImage(
                 &image, "IMAGE_OBJECTS_ALLOCATION_SWEEP.png", 17u,
                 0xD920u) != nullptr;
@@ -18614,6 +18616,15 @@ void testGeneratedImageDictionaryObjectsAllocationRetry(TestContext& t) {
         plan.definition.vp = 0.5;
         plan.definition.loaded = 1;
         plan.definition.resolution = 5;
+        plan.definition.reactorHandles.push_back(imageReactorHandle);
+        DRW_ImageDefinitionReactor reactor;
+        reactor.handle = imageReactorHandle;
+        reactor.parentHandle = entityHandle;
+        reactor.m_classVersion = 2;
+        reactor.appData = {{{102, std::string("{IMAGE_REACTOR_META")},
+                            {1, std::string("selected-source-reactor")},
+                            {102, std::string("}")}}};
+        plan.selectedReactors.push_back(std::move(reactor));
         if (!writer.setImageDefinitionPlan({plan}))
             return false;
         auto nod = std::make_unique<DRW_Dictionary>();
@@ -18770,9 +18781,28 @@ void testGeneratedImageDictionaryObjectsAllocationRetry(TestContext& t) {
                 && root != reader.dictionaries.end()
                 && imageDictionary != reader.dictionaries.end()
                 && imageDictionary->m_entries.front().m_handle == image->ref;
+            const auto reactor = decoded.imageDefinitionReactors.begin();
+            const bool reactorMatched = readBack
+                && decoded.imageDefinitionReactors.size() == 1u
+                && reactor != decoded.imageDefinitionReactors.end()
+                && image != nullptr
+                && reactor->second.handle == image->m_imageDefReactorHandle
+                && reactor->second.parentHandle == image->handle
+                && reactor->second.m_classVersion == 2
+                && reactor->second.appData.size() == 1u
+                && reactor->second.appData.front().size() == 3u
+                && std::next(reactor->second.appData.front().begin())->c_str()
+                    != nullptr
+                && std::string(std::next(
+                       reactor->second.appData.front().begin())->c_str())
+                    == "selected-source-reactor";
             everyOffsetRetried = everyOffsetRetried && readBack && graphMatched;
+            everyOffsetRetried = everyOffsetRetried && reactorMatched;
             adapter.dxfW = nullptr;
         }
+        std::cout << "IMAGE OBJECTS allocations: binary=" << binary
+                  << " count=" << allocations
+                  << " injected=" << injectedFailures << '\n';
         t.expect(calibrated && everyOffsetRolledBack
                      && injectedFailures == allocations,
                  binary
