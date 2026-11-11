@@ -247,6 +247,8 @@ EXTRA_DIST = \
     src/intern/drw_symbol_casefold_data.h \
     src/intern/drw_textcodec.cpp \
     src/intern/drw_textcodec.h \
+    src/intern/dwg_cellstylemap_ac1018_candidate.cpp \
+    src/intern/dwg_cellstylemap_ac1018_candidate.h \
     src/intern/dwg_datatable_ac1018_candidate.cpp \
     src/intern/dwg_datatable_ac1018_candidate.h \
     src/intern/dwg_default_material.h \
@@ -461,6 +463,7 @@ EXTRA_DIST = \
     tests/dwg_ac1027_empty_view_ucs_controls_tests.cpp \
     tests/dwg_ac1027_maintenance_header_tests.cpp \
     tests/dwg_ac1027_material_dictionary_wire_tests.cpp \
+    tests/dwg_cellstylemap_ac1018_candidate_tests.cpp \
     tests/dwg_class_evidence_tests.cpp \
     tests/dwg_class_section_wire_tests.cpp \
     tests/dwg_class_source_tests.cpp \
@@ -1031,6 +1034,7 @@ EXTRA_DIST = \
     tools/research/freecad_torus_bound_probe.py \
     tools/research/inventory_cover_peer_body_handles.py \
     tools/research/p4_forum_ltype_oda_compare.py \
+    tools/research/p5_ac1018_cellstylemap_candidate_live_probe.cpp \
     tools/research/p5_ac1018_table_candidates_binding_probe.cpp \
     tools/research/p5_ac1018_table_children_binding_probe.cpp \
     tools/research/p5_ac1018_table_descendants_capture.cpp \

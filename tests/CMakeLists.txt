@@ -6113,3 +6113,12 @@ add_test(NAME libdxfrw_dwg_tablestyle_extension_dictionary_reader_lease COMMAND 
     -DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/generated-tablestyle-dictionary-lease
     -P ${CMAKE_CURRENT_SOURCE_DIR}/run_dwg_tablestyle_extension_dictionary_reader_lease.cmake)
 set_tests_properties(libdxfrw_dwg_tablestyle_extension_dictionary_reader_lease PROPERTIES LABELS "dwg;fast;table" TIMEOUT 30)
+
+add_executable(libdxfrw_dwg_cellstylemap_ac1018_candidate_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_cellstylemap_ac1018_candidate_tests.cpp)
+target_compile_features(libdxfrw_dwg_cellstylemap_ac1018_candidate_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_cellstylemap_ac1018_candidate_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_cellstylemap_ac1018_candidate_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dwg_cellstylemap_ac1018_candidate_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dwg_cellstylemap_ac1018_candidate COMMAND libdxfrw_dwg_cellstylemap_ac1018_candidate_tests)
+set_tests_properties(libdxfrw_dwg_cellstylemap_ac1018_candidate PROPERTIES LABELS "dwg;fast;table" TIMEOUT 30)
