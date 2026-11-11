@@ -59,14 +59,23 @@ int main(int argc,char**argv){
  if(argc==3&&std::string(argv[1])=="--self-test"){
   const std::filesystem::path path(argv[2]);if(std::filesystem::exists(path))return 3;
   struct Cleanup{std::filesystem::path p;~Cleanup(){std::error_code e;std::filesystem::remove(p,e);}} cleanup{path};
-  dwgRW writer(path.string().c_str());GeneratedSource source(writer);
-  if(!writer.write(&source,DRW::AC1018,true)||!source.generated)return 4;
+  dwgRW writer(path.string().c_str());GeneratedSource generated(writer);
+  if(!writer.write(&generated,DRW::AC1018,true)||!generated.generated)return 4;
+  std::ifstream source(path,std::ios::binary);
+  const std::vector<char> original((std::istreambuf_iterator<char>(source)),{});
+  if(!source||original.size()<64u)return 5;
   auto data=std::make_unique<dx_data>();Probe probe;
+  {std::ofstream broken(path,std::ios::binary|std::ios::trunc);broken.write(original.data(),20);if(!broken)return 6;}
+  const bool failedRead=probe.fileImport(path.string(),data.get(),false);
+  const bool leaked=probe.tickets!=0u||probe.rowTickets!=0u;
+  {std::ofstream restored(path,std::ios::binary|std::ios::trunc);restored.write(original.data(),static_cast<std::streamsize>(original.size()));if(!restored)return 7;}
   const bool read=probe.fileImport(path.string(),data.get(),false);
-  const bool ok=read&&probe.tickets==1u&&probe.ticketValid&&probe.rowTickets==3u&&probe.rowTicketValid;
-  std::cout<<"generated=1 read="<<read<<" controlTickets="<<probe.tickets
+  const bool ok=!failedRead&&!leaked&&read&&probe.tickets==1u&&probe.ticketValid
+      &&probe.rowTickets==3u&&probe.rowTicketValid;
+  std::cout<<"generated=1 failedRead="<<failedRead<<" leakedTickets="<<leaked
+    <<" retryRead="<<read<<" controlTickets="<<probe.tickets
     <<" rowTickets="<<probe.rowTickets<<" typedNames="<<probe.rowTicketValid<<"\n";
-  return ok?0:5;
+  return ok?0:8;
  }
  if(argc==3&&std::string(argv[1])=="--emit-dwg"){
   std::ifstream existing(argv[2],std::ios::binary);if(existing)return 3;

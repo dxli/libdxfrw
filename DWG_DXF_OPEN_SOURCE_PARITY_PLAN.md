@@ -1413,9 +1413,10 @@ created locally from scratch for the specific control.
   The CRC-checked LTYPE_CONTROL frame is now staged in the existing provisional
   reader-candidate queue from the TABLES phase and delivered only after complete
   read finalization. A portable from-scratch AC1018 integration CTest writes and
-  imports a DWG, verifies one control plus three typed LTYPE row tickets, and
-  removes the scratch file. The separate delivery-gate control verifies
-  selection and withholding on partial or failed reads. A current-source probe
+  imports a DWG, verifies one control plus three typed LTYPE row tickets, then
+  refuses a truncated source with no leaked tickets and retries the restored
+  bytes through the same adapter. The scratch file is removed. This is generated
+  truncation/retry evidence; physical CRC corruption/retry remains open. A current-source probe
   observes exactly one LTYPE_CONTROL ticket for handle 0x5 after complete
   AC1018 import with all 226 frames published. The selected ordinary member
   handle 0x16 is also staged with its typed Continuous model under the same
