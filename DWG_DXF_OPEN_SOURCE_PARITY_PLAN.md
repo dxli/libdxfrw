@@ -1346,8 +1346,12 @@ created locally from scratch for the specific control.
   An explicit stronger bundle now binds that observation to the verified root
   and matches all three ordered targets to the selected custom frames
   ([receipt](docs/research/p5-ac1018-table-roundtrip-binding-2026-11-11.json)).
-  It remains source-profile evidence: TABLESTYLE and recursive resources,
-  independent meaning, and transactional output closure are still open.
+  A further opt-in check binds all nine DATATABLE-owned XRECORD wire profiles
+  and their code-4 parent roles in the same import; it accepts the observed
+  five/six-pair shapes and does not assert the witness's cell-value semantics
+  ([receipt](docs/research/p5-ac1018-table-nine-child-source-binding-2026-11-11.json)).
+  TABLE parent/dictionary, TABLESTYLE and recursive resources, independent
+  meaning, and transactional output closure are still open.
   See the [DATATABLE candidate receipt](docs/research/p5-ac1018-datatable-candidate-observer-2026-11-11.json).
 
   The recreated AC1018 XRECORD `0xbc` is now independently walked to its

@@ -28,6 +28,7 @@ libdxfrw_la_SOURCES = \
     intern/dwg_datatable_ac1018_candidate.cpp \
     intern/dwg_tablegeometry_ac1018_candidate.cpp \
     intern/dwg_table_roundtrip_xrecord_ac1018_candidate.cpp \
+    intern/dwg_table_child_xrecord_ac1018_candidate.cpp \
     intern/dwgwriterlayoutvalidation.cpp \
     intern/rscodec.cpp \
     drw_acis.cpp \
@@ -75,6 +76,7 @@ dist_noinst_HEADERS = \
     intern/dwg_tablecontent_ac1018_candidate.h \
     intern/dwg_tablegeometry_ac1018_candidate.h \
     intern/dwg_table_roundtrip_xrecord_ac1018_candidate.h \
+    intern/dwg_table_child_xrecord_ac1018_candidate.h \
     intern/dwg_default_material.h \
     intern/dwg_header_time.h \
     intern/dwgbuffer.h \

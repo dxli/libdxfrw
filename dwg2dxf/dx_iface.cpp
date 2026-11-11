@@ -28930,7 +28930,7 @@ bool dx_iface::enableVerifiedXRecordSources(const std::vector<std::uint32_t>& ha
             return false;
         m_verifiedXRecordSelected.swap(selected);
         m_verifiedTableContentSelected=0u;m_verifiedDataTableSelected=0u;m_verifiedTableGeometrySelected=0u;
-        m_verifiedTableRoundtripSelected=false;
+        m_verifiedTableRoundtripSelected=false;m_verifiedTableRoundtripChildrenSelected=false;
         return true;
     } catch (...) { return false; }
 }
@@ -28948,7 +28948,7 @@ bool dx_iface::enableVerifiedTableCandidates(const std::vector<std::uint32_t>& x
             }) || std::adjacent_find(selected.cbegin(),selected.cend())!=selected.cend()) return false;
         m_verifiedXRecordSelected.swap(selected);
         m_verifiedTableContentSelected=tableContent;m_verifiedDataTableSelected=dataTable;
-        m_verifiedTableGeometrySelected=0u;m_verifiedTableRoundtripSelected=false;
+        m_verifiedTableGeometrySelected=0u;m_verifiedTableRoundtripSelected=false;m_verifiedTableRoundtripChildrenSelected=false;
         return true;
     } catch (...) {return false;}
 }
@@ -28967,7 +28967,7 @@ bool dx_iface::enableVerifiedTableCandidates(const std::vector<std::uint32_t>& x
             }) || std::adjacent_find(selected.cbegin(),selected.cend())!=selected.cend()) return false;
         m_verifiedXRecordSelected.swap(selected);
         m_verifiedTableContentSelected=tableContent;m_verifiedDataTableSelected=dataTable;
-        m_verifiedTableGeometrySelected=tableGeometry;m_verifiedTableRoundtripSelected=false;
+        m_verifiedTableGeometrySelected=tableGeometry;m_verifiedTableRoundtripSelected=false;m_verifiedTableRoundtripChildrenSelected=false;
         return true;
     } catch (...) {return false;}
 }
@@ -28976,6 +28976,13 @@ bool dx_iface::enableVerifiedTableRoundtripCandidates(const std::vector<std::uin
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry) noexcept {
     if (!enableVerifiedTableCandidates(xrecords,tableContent,dataTable,tableGeometry)) return false;
     m_verifiedTableRoundtripSelected=true;
+    return true;
+}
+
+bool dx_iface::enableVerifiedTableRoundtripChildren(const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry) noexcept {
+    if (xrecords.size()!=10u || !enableVerifiedTableRoundtripCandidates(xrecords,tableContent,dataTable,tableGeometry))return false;
+    m_verifiedTableRoundtripChildrenSelected=true;
     return true;
 }
 
@@ -29203,6 +29210,7 @@ bool dx_iface::validateVerifiedTableCandidates(const dx_data& data,
         || !data.dwgReadOutcome.operationSucceeded || data.dwgReadOutcome.opaqueSourceCaptureFailed
         || data.m_standardDwgObjectCaptureFailed || data.m_standardDwgObjectPayloadFailed
         || xrecords.records.empty() || xrecords.records.size()>64u
+        || (xrecords.requiresTableRoundtripChildren && !xrecords.requiresTableRoundtripRoot)
         || sources.records.size()!=(tableGeometry?3u:2u)
         || (tableGeometry!=0u)!=(geometry!=nullptr)
         || tableContent==0u || dataTable==0u || tableContent==dataTable
@@ -29265,6 +29273,12 @@ bool dx_iface::validateVerifiedTableCandidates(const dx_data& data,
             if (found==xrecords.records.cend() || found==root) return false;
             const auto* model=dynamic_cast<const DRW_XRecord*>(found->typedBaseline.get());
             if (!model || model->parentHandle!=dataTable) return false;
+            if (xrecords.requiresTableRoundtripChildren) {
+                DwgTableChildXRecordAc1018Candidate::Result observed;
+                if (parsedTable.ownedChildren.size()!=9u
+                    || !DwgTableChildXRecordAc1018Candidate::inspect(found->raw,*model,observed)
+                    || observed.handle!=child || observed.owner!=dataTable) return false;
+            }
         }
         content=std::move(parsedContent);table=std::move(parsedTable);
         if(geometry)*geometry=std::move(parsedGeometry);
@@ -29319,6 +29333,32 @@ bool dx_iface::readVerifiedTableRoundtripCandidates(const dx_data& data,
     return true;
 }
 
+bool dx_iface::readVerifiedTableRoundtripChildren(const dx_data& data,
+        const std::vector<std::uint32_t>& xrecords,std::uint32_t tableContent,
+        std::uint32_t dataTable,std::uint32_t tableGeometry,
+        DwgTableContentAc1018Candidate::Result& content,
+        DwgDataTableAc1018Candidate::Result& table,
+        DwgTableGeometryAc1018Candidate::Result& geometry,
+        DwgTableRoundtripXRecordAc1018Candidate::Result& root,
+        std::array<DwgTableChildXRecordAc1018Candidate::Result,9>& children) noexcept {
+    content={};table={};geometry={};root={};children={};
+    if (!data.m_verifiedXRecordSource || !data.m_verifiedXRecordSource->requiresTableRoundtripChildren
+        || !readVerifiedTableRoundtripCandidates(data,xrecords,tableContent,dataTable,tableGeometry,content,table,geometry,root))return false;
+    const auto fail=[&]() noexcept {content={};table={};geometry={};root={};children={};return false;};
+    try {
+        const auto& rows=data.m_verifiedXRecordSource->records;
+        if(table.ownedChildren.size()!=children.size())return fail();
+        for(std::size_t i=0;i<children.size();++i) {
+            const auto found=std::find_if(rows.cbegin(),rows.cend(),[&](const dx_data::VerifiedXRecordSource& row) {
+                return row.raw.m_handle==table.ownedChildren[i];
+            });
+            const auto* model=found==rows.cend()?nullptr:dynamic_cast<const DRW_XRecord*>(found->typedBaseline.get());
+            if (!model || !DwgTableChildXRecordAc1018Candidate::inspect(found->raw,*model,children[i]))return fail();
+        }
+        return true;
+    } catch(...) {return fail();}
+}
+
 void dx_iface::finishVerifiedXRecordSource(bool successfulRead) noexcept {
     auto* data = m_verifiedXRecordReadData;
     if (!data) return;
@@ -29350,6 +29390,7 @@ void dx_iface::finishVerifiedXRecordSource(bool successfulRead) noexcept {
                 bundle->importToken=m_verifiedXRecordReadToken;
                 bundle->generation=m_verifiedXRecordReadGeneration;
                 bundle->requiresTableRoundtripRoot=m_verifiedTableRoundtripSelected;
+                bundle->requiresTableRoundtripChildren=m_verifiedTableRoundtripChildrenSelected;
                 bundle->requiresTableCandidates=m_verifiedTableContentSelected!=0u || m_verifiedDataTableSelected!=0u
                     || m_verifiedTableGeometrySelected!=0u;
                 bundle->records=std::move(m_verifiedXRecordPending);

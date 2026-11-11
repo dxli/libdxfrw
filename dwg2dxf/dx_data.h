@@ -2662,6 +2662,7 @@ private:
         std::uint64_t generation{0u};
         bool requiresTableCandidates{false};
         bool requiresTableRoundtripRoot{false};
+        bool requiresTableRoundtripChildren{false};
         std::vector<VerifiedXRecordSource> records;
     };
     struct VerifiedTableCandidateSource {

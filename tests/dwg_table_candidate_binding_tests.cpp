@@ -1,5 +1,6 @@
 #include "dx_iface.h"
 #include "intern/dwgutil.h"
+#include "table_child_candidate_fixture.h"
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -54,6 +55,7 @@ public:
 namespace {
 constexpr std::uint32_t contentHandle=0xb9u,rootHandle=0xbcu,dataHandle=0xbdu;
 const std::vector<std::uint32_t> xrecords{0xbcu,0xbeu,0xbfu,0xc0u};
+const std::vector<std::uint32_t> fullXrecords{0xbcu,0xbeu,0xbfu,0xc0u,0xc1u,0xc2u,0xc3u,0xc4u,0xc5u,0xc6u};
 using Content=DwgTableContentAc1018Candidate::Result;
 using Data=DwgDataTableAc1018Candidate::Result;
 using Geometry=DwgTableGeometryAc1018Candidate::Result;
@@ -72,8 +74,8 @@ DRW_UnsupportedObject raw(const char* path,bool content) {
 }
 class Writer final : public dx_iface {
 public:
-    Writer(dwgRW& output,DRW_UnsupportedObject a,DRW_UnsupportedObject b,std::size_t big=0u,DRW_UnsupportedObject g={},bool rootProfile=false)
-        :w(output),content(std::move(a)),table(std::move(b)),geometry(std::move(g)),bigSize(big),profile(rootProfile){}
+    Writer(dwgRW& output,DRW_UnsupportedObject a,DRW_UnsupportedObject b,std::size_t big=0u,DRW_UnsupportedObject g={},bool rootProfile=false,bool childProfile=false)
+        :w(output),content(std::move(a)),table(std::move(b)),geometry(std::move(g)),bigSize(big),profile(rootProfile),childrenProfile(childProfile){}
     void writeHeader(DRW_Header& h) override {h.vars.clear();}
     void writeDwgClasses() override {registered=w.registerRawDwgObjectClass(&content)&&w.registerRawDwgObjectClass(&table)
         && (!geometry.m_handle || w.registerRawDwgObjectClass(&geometry));}
@@ -84,8 +86,9 @@ public:
     void writeDimstyles() override {} void writeAppId() override {}
     void writeObjects() override {
         wrote=registered;
-        for (std::size_t i=0;i<xrecords.size();++i) {
-            const auto h=xrecords[i];
+        const auto& handles=childrenProfile?fullXrecords:xrecords;
+        for (std::size_t i=0;i<handles.size();++i) {
+            const auto h=handles[i];
             DRW_XRecord x;x.handle=h;x.parentHandle=h==rootHandle?0xbbu:dataHandle;
             if(profile && h==rootHandle) {
                 x.reactorHandles={0xbbu};x.setDwgCommonObjectState(1,1u,false);x.m_cloning=1;auto& e=x.m_dataEntries;
@@ -95,6 +98,10 @@ public:
                 e.emplace_back(361,std::uint64_t{0xbau});e.emplace_back(102,UTF8STRING("ACAD_ROUNDTRIP_PRE2007_TABLE"));
                 e.emplace_back(90,std::int32_t{3});e.emplace_back(91,std::int32_t{3});
                 e.emplace_back(102,UTF8STRING("ACAD_ROUNDTRIP_PRE2007_TABLECELL"));e.emplace_back(360,std::uint64_t{0xbdu});
+            } else if(childrenProfile && h!=rootHandle) {
+                ChildFixture::Options o;o.handle=h;o.empty=(h==0xbfu || h==0xc0u);
+                if(h>=0xc1u)o.value=std::to_string(h-0xc0u);
+                x=ChildFixture::build(o).typed;
             } else if(bigSize && i<2u)x.m_values.emplace_back(310,std::vector<std::uint8_t>(bigSize,0xa5u));
             else x.m_values.emplace_back(1,UTF8STRING("LOCALLY_AUTHORED"));
             wrote=w.writeXRecord(&x)&&wrote;
@@ -104,10 +111,10 @@ public:
     }
     bool finalizeDwgWrite() override{return wrote;}
     bool finalizeDwgWriteStructure() override{return true;}
-    dwgRW& w;DRW_UnsupportedObject content,table,geometry;std::size_t bigSize;bool profile=false,registered=false,wrote=false;
+    dwgRW& w;DRW_UnsupportedObject content,table,geometry;std::size_t bigSize;bool profile=false,childrenProfile=false,registered=false,wrote=false;
 };
-bool write(const std::filesystem::path& path,DRW_UnsupportedObject a,DRW_UnsupportedObject b,std::size_t big=0u,const DRW_UnsupportedObject* geometry=nullptr,bool profile=false) {
-    dwgRW output(path.string().c_str());Writer writer(output,std::move(a),std::move(b),big,geometry?*geometry:DRW_UnsupportedObject{},profile);
+bool write(const std::filesystem::path& path,DRW_UnsupportedObject a,DRW_UnsupportedObject b,std::size_t big=0u,const DRW_UnsupportedObject* geometry=nullptr,bool profile=false,bool childrenProfile=false) {
+    dwgRW output(path.string().c_str());Writer writer(output,std::move(a),std::move(b),big,geometry?*geometry:DRW_UnsupportedObject{},profile,childrenProfile);
     return output.write(&writer,DRW::AC1018,true)&&writer.wrote;
 }
 bool selected(dx_iface& a){return a.enableVerifiedTableCandidates(xrecords,contentHandle,dataHandle);}
@@ -631,5 +638,124 @@ bool runRoundtrip(const char* contentPath,const char* dataPath,const char* geome
     return true;
 }
 
+bool selectedChildren(dx_iface& reader) {
+    return reader.enableVerifiedTableRoundtripChildren(fullXrecords,contentHandle,dataHandle,geometryHandle);
 }
-int main(int argc,char**argv){if(argc!=9)return 2;std::filesystem::path p(argv[5]);if(std::filesystem::exists(p))return 2;const bool ok=run(argv[1],argv[2],argv[3],argv[4],p) && runGeometry(argv[1],argv[2],argv[6],argv[7],p) && runRoundtrip(argv[1],argv[2],argv[6],argv[8],p);std::error_code e;std::filesystem::remove(p,e);return ok?0:1;}
+bool liveChildren(const dx_data& d) {
+    Content c;Data t;Geometry g;DwgTableRoundtripXRecordAc1018Candidate::Result root;
+    std::array<DwgTableChildXRecordAc1018Candidate::Result,9> children;
+    if(!dx_iface::readVerifiedTableRoundtripChildren(d,fullXrecords,contentHandle,dataHandle,geometryHandle,c,t,g,root,children))return false;
+    for(std::size_t i=0;i<children.size();++i)if(children[i].handle!=0xbeu+i || children[i].owner!=dataHandle)return false;
+    return children[0].text=="Title" && !children[1].hasText && !children[2].hasText && children[8].text=="6";
+}
+class SpoofChild final : public dx_iface {
+public:
+    bool enabled=true,seen=false;
+    void addXRecord(const DRW_XRecord& value) override {
+        if(enabled && value.handle==0xbeu){seen=true;auto altered=value;
+            altered.m_dataEntries[2]=DRW_Variant(1,UTF8STRING("spoofed"));dx_iface::addXRecord(altered);return;}
+        dx_iface::addXRecord(value);
+    }
+};
+bool runChildren(const char* contentPath,const char* dataPath,const char* geometryPath,const char* rootPath,
+                 const std::filesystem::path& path) {
+#define CHECK_C(expr) do { if(!(expr)){std::cerr<<"child binding failed line "<<__LINE__<<'\n';return false;} } while(false)
+    auto content=raw(contentPath,true),table=raw(dataPath,false),geometry=rawGeometry(geometryPath);
+    CHECK_C(write(path,content,table,0,&geometry,true,true));
+    dx_iface source;dx_data initial;CHECK_C(source.fileImport(path.string(),&initial,false));
+    std::ifstream f(rootPath,std::ios::binary);std::vector<std::uint8_t> expectedRoot((std::istreambuf_iterator<char>(f)),{});
+    CHECK_C(replaceSelectedBody(path,DxIfaceStandardDwgCaptureTestAccess::standardRaw(initial,rootHandle),expectedRoot));
+    dx_iface old;CHECK_C(old.enableVerifiedTableRoundtripCandidates(fullXrecords,contentHandle,dataHandle,geometryHandle));
+    dx_data initialOld;CHECK_C(old.fileImport(path.string(),&initialOld,false));
+    Content oc;Data ot;Geometry og;DwgTableRoundtripXRecordAc1018Candidate::Result oroot;
+    CHECK_C(dx_iface::readVerifiedTableRoundtripCandidates(initialOld,fullXrecords,contentHandle,dataHandle,geometryHandle,oc,ot,og,oroot));
+    dx_iface reader;CHECK_C(selectedChildren(reader));dx_data incomplete;
+    CHECK_C(reader.fileImport(path.string(),&incomplete,false));CHECK_C(!liveChildren(incomplete));
+    CHECK_C(!dx_iface::hasUnchangedVerifiedXRecordSource(incomplete,rootHandle));
+    for(std::uint32_t h=0xbeu;h<=0xc6u;++h){
+        ChildFixture::Options o;o.handle=h;o.empty=(h==0xbfu||h==0xc0u);if(h>=0xc1u)o.value=std::to_string(h-0xc0u);
+        CHECK_C(replaceSelectedBody(path,DxIfaceStandardDwgCaptureTestAccess::standardRaw(initial,h),ChildFixture::build(o).raw.m_rawBytes));
+    }
+    auto shortSet=fullXrecords;shortSet.pop_back();CHECK_C(!reader.enableVerifiedTableRoundtripChildren(shortSet,contentHandle,dataHandle,geometryHandle));
+    auto duplicate=fullXrecords;duplicate[1]=duplicate[2];CHECK_C(!reader.enableVerifiedTableRoundtripChildren(duplicate,contentHandle,dataHandle,geometryHandle));
+    dx_data baseline;CHECK_C(reader.fileImport(path.string(),&baseline,false));CHECK_C(liveChildren(baseline));
+    CHECK_C(dx_iface::hasUnchangedVerifiedXRecordSources(baseline,fullXrecords));
+    auto child=std::find_if(baseline.xRecords.begin(),baseline.xRecords.end(),[](const DRW_XRecord& x){return x.handle==0xbeu;});
+    CHECK_C(child!=baseline.xRecords.end());const auto entry=child->m_dataEntries[2];
+    child->m_dataEntries[2]=DRW_Variant(1,UTF8STRING("changed"));CHECK_C(!liveChildren(baseline));
+    CHECK_C(!dx_iface::hasUnchangedVerifiedXRecordSource(baseline,rootHandle));child->m_dataEntries[2]=entry;CHECK_C(liveChildren(baseline));
+    auto& childRaw=const_cast<DRW_UnsupportedObject&>(DxIfaceStandardDwgCaptureTestAccess::standardRaw(baseline,0xbeu));
+    childRaw.m_rawBytes[0]^=1u;CHECK_C(!liveChildren(baseline));childRaw.m_rawBytes[0]^=1u;CHECK_C(liveChildren(baseline));
+    baseline.xRecords.push_back(*child);CHECK_C(!liveChildren(baseline));baseline.xRecords.pop_back();CHECK_C(liveChildren(baseline));
+    dx_data other;CHECK_C(reader.fileImport(path.string(),&other,false));CHECK_C(liveChildren(other));
+    DxIfaceStandardDwgCaptureTestAccess::transplant(other,baseline);CHECK_C(!liveChildren(other));
+    for(int stage=1;stage<=3;++stage){dx_iface a;CHECK_C(selectedChildren(a));dx_data failed;
+        sealingAdapter=&a;sealingStage=stage;fault::predicate=sealFaultReady;fault::fired=false;
+        const bool ok=a.fileImport(path.string(),&failed,false);fault::predicate=nullptr;sealingAdapter=nullptr;
+        CHECK_C(ok && fault::fired && !liveChildren(failed));CHECK_C(!dx_iface::hasUnchangedVerifiedXRecordSource(failed,rootHandle));
+        dx_data again;CHECK_C(a.fileImport(path.string(),&again,false));CHECK_C(liveChildren(again));}
+    Reentry same;dx_data sameData;same.data=&sameData;same.path=path.string();CHECK_C(selectedChildren(same));
+    (void)same.fileImport(path.string(),&sameData,false);CHECK_C(same.attempted && !liveChildren(sameData));
+    dx_data again;CHECK_C(same.fileImport(path.string(),&again,false));CHECK_C(liveChildren(again));
+
+    Reentry outer;dx_iface inner;dx_data cross;outer.data=&cross;outer.nested=&inner;outer.path=path.string();
+    CHECK_C(selectedChildren(outer) && selectedChildren(inner));(void)outer.fileImport(path.string(),&cross,false);
+    CHECK_C(outer.attempted && !liveChildren(cross));dx_data crossRetry;
+    CHECK_C(outer.fileImport(path.string(),&crossRetry,false));CHECK_C(liveChildren(crossRetry));
+    SpoofChild spoof;CHECK_C(selectedChildren(spoof));dx_data spoofed;(void)spoof.fileImport(path.string(),&spoofed,false);
+    CHECK_C(spoof.seen && !liveChildren(spoofed));spoof.enabled=false;dx_data spoofRetry;
+    CHECK_C(spoof.fileImport(path.string(),&spoofRetry,false));CHECK_C(liveChildren(spoofRetry));
+    Content c;Data t;Geometry g;DwgTableRoundtripXRecordAc1018Candidate::Result root;
+    std::array<DwgTableChildXRecordAc1018Candidate::Result,9> children;
+    fault::count=0;fault::counting=true;const bool counted=dx_iface::readVerifiedTableRoundtripChildren(
+        baseline,fullXrecords,contentHandle,dataHandle,geometryHandle,c,t,g,root,children);fault::counting=false;
+    const auto allocations=fault::count;CHECK_C(counted && allocations>0u);
+    c.handle=t.handle=g.handle=root.handle=9u;children[0].handle=9u;fault::remaining=static_cast<long>(allocations-1u);fault::fired=false;
+    const bool oom=dx_iface::readVerifiedTableRoundtripChildren(baseline,fullXrecords,contentHandle,dataHandle,geometryHandle,c,t,g,root,children);
+    fault::remaining=-1;CHECK_C(!oom && fault::fired && !c.handle && !t.handle && !g.handle && !root.handle && !children[0].handle);
+    CHECK_C(liveChildren(baseline));std::cout<<"child query allocations="<<allocations<<" (last fault sampled)\n";
+    const auto output=path.string()+".child.dxf";
+    {std::ofstream out(output,std::ios::binary|std::ios::trunc);out<<"CHILD_SENTINEL";CHECK_C(static_cast<bool>(out));}
+    CHECK_C(!reader.fileExport(output,DRW::AC1018,false,&baseline,false,true,dx_dxfSourceTextPolicy::Compatible,
+        DRW::DxfTextWritePolicy::Compatible,dx_dxfProxyGraphicsPolicy::Compatible,dx_dwgReadCompletenessPolicy::RequireComplete));
+    {std::ifstream in(output,std::ios::binary);const std::string value((std::istreambuf_iterator<char>(in)),{});CHECK_C(value=="CHILD_SENTINEL");}
+    {std::error_code e;std::filesystem::remove(output,e);}
+    const auto original=DxIfaceStandardDwgCaptureTestAccess::standardRaw(baseline,0xbeu);
+    for(int mode=0;mode<5;++mode){ChildFixture::Options o;
+        if(mode==0)o.role=5u;if(mode==1)o.page=30u;if(mode==2)o.owner=0xbau;
+        auto changed=ChildFixture::build(o).raw.m_rawBytes;
+        if(mode==3)patchRawBits(changed,81u,95u,2u);
+        if(mode==4)patchRawBits(changed,97u,7u,4u);
+        CHECK_C(replaceSelectedBody(path,original,changed));
+        if(mode==1 || mode==3 || mode==4){dx_data observational;CHECK_C(old.fileImport(path.string(),&observational,false));
+            CHECK_C(dx_iface::readVerifiedTableRoundtripCandidates(observational,fullXrecords,contentHandle,dataHandle,geometryHandle,oc,ot,og,oroot));}
+        dx_data bad;(void)reader.fileImport(path.string(),&bad,false);
+        CHECK_C(!liveChildren(bad));CHECK_C(!dx_iface::hasUnchangedVerifiedXRecordSource(bad,rootHandle));
+        auto current=original;current.m_rawBytes=changed;CHECK_C(replaceSelectedBody(path,current,original.m_rawBytes));
+        dx_data retry;CHECK_C(reader.fileImport(path.string(),&retry,false));CHECK_C(liveChildren(retry));
+    }
+    // This is a wire-shape observer, not a fixed semantic census of source cells.
+    ChildFixture::Options alternate;alternate.value="Other";const auto alternateBody=ChildFixture::build(alternate).raw.m_rawBytes;
+    CHECK_C(replaceSelectedBody(path,original,alternateBody));dx_data alternateData;
+    CHECK_C(reader.fileImport(path.string(),&alternateData,false));
+    CHECK_C(dx_iface::readVerifiedTableRoundtripChildren(alternateData,fullXrecords,contentHandle,dataHandle,geometryHandle,c,t,g,root,children));
+    CHECK_C(children[0].text=="Other");auto alternateRaw=original;alternateRaw.m_rawBytes=alternateBody;
+    CHECK_C(replaceSelectedBody(path,alternateRaw,original.m_rawBytes));
+    std::vector<std::uint8_t> originalFile;CHECK_C(corruptSelectedCrc(path,original,originalFile));dx_data badCrc;
+    (void)reader.fileImport(path.string(),&badCrc,false);CHECK_C(!liveChildren(badCrc));
+    CHECK_C(!dx_iface::hasUnchangedVerifiedXRecordSource(badCrc,rootHandle));
+    const auto& integrity=badCrc.dwgReadOutcome.observations.integrity;
+    CHECK_C(!integrity.extractionOmitted && !integrity.reportedUpstreamDropped && !integrity.aggregateSaturated);
+    bool childFailure=false;for(std::size_t i=0;i<integrity.retained;++i){const auto& row=integrity.rows[i];
+        CHECK_C(row.kind!=DwgIntegrityCheckKind::DataPageChecksum && row.kind!=DwgIntegrityCheckKind::DataPageCrc);
+        if(row.kind==DwgIntegrityCheckKind::ObjectFrameBounds && row.hasLogicalHandle && row.logicalHandle==0xbeu)childFailure=true;}
+    CHECK_C(childFailure);
+    {std::ofstream out(path,std::ios::binary|std::ios::trunc);out.write(reinterpret_cast<const char*>(originalFile.data()),originalFile.size());CHECK_C(static_cast<bool>(out));}
+    dx_data crcRetry;CHECK_C(reader.fileImport(path.string(),&crcRetry,false));CHECK_C(liveChildren(crcRetry));
+    std::cout<<"nine-child source binding controls passed\n";
+#undef CHECK_C
+    return true;
+}
+
+}
+int main(int argc,char**argv){if(argc!=10)return 2;std::filesystem::path p(argv[5]);if(std::filesystem::exists(p))return 2;const bool ok=run(argv[1],argv[2],argv[3],argv[4],p) && runGeometry(argv[1],argv[2],argv[6],argv[7],p) && runRoundtrip(argv[1],argv[2],argv[6],argv[8],p) && runChildren(argv[1],argv[9],argv[6],argv[8],p);std::error_code e;std::filesystem::remove(p,e);return ok?0:1;}
