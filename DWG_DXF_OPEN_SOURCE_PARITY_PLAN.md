@@ -3505,6 +3505,18 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
   output support remain open. No DWG/DXF fixture was added. See the
   [allocation rollback receipt](docs/research/p6-dimension-aligned-linear-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **P6 radial/large-radial DIMENSION DWG encoder transaction safety:** both
+  writers now stage common data, dimension strings, body fields, and
+  DIMSTYLE/block handles through the shared transaction helper. Generated
+  radial profiles sweep 19 allocation failures at AC1015/AC1018 and 23/22 at
+  AC1021/AC1024; large-radial profiles sweep 17 at AC1018 and 22 at
+  AC1021/AC1024. Rollback, subtype-code restoration, same-object retry, and
+  alias controls pass. The focused selector and 28-test entity-writer
+  transaction cohort pass. Transaction evidence only; dimension semantics,
+  graph closure, producer coverage, native behavior, and broader output
+  support remain open. No DWG/DXF fixture was added. See the [allocation
+  rollback receipt](docs/research/p6-dimension-radial-large-radial-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 After every slice: run its focused fast checks; update this queue and the
 relevant receipt; commit code, plan and receipt together; report the commit and
 next eligible slice, then continue. Keep fixtures out of commits unless already

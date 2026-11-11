@@ -646,6 +646,34 @@ public:
     }
 };
 
+class DimRadialCodecProbe final : public DRW_DimRadial {
+public:
+    using DRW_DimRadial::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+    void setHandles(std::uint32_t dimStyle, std::uint32_t block) {
+        dimStyleH.code = DRW::DwgHardPointer;
+        dimStyleH.ref = dimStyle;
+        blockH.code = DRW::DwgHardPointer;
+        blockH.ref = block;
+    }
+};
+
+class DimLargeRadialCodecProbe final : public DRW_DimLargeRadial {
+public:
+    using DRW_DimLargeRadial::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+    void setHandles(std::uint32_t dimStyle, std::uint32_t block) {
+        dimStyleH.code = DRW::DwgHardPointer;
+        dimStyleH.ref = dimStyle;
+        blockH.code = DRW::DwgHardPointer;
+        blockH.ref = block;
+    }
+};
+
 class MeshCodecProbe final : public DRW_Mesh {
 public:
     using DRW_Mesh::encodeDwg;
@@ -25971,6 +25999,57 @@ void testAlignedLinearDimDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testRadialDimDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1015, DRW::AC1018,
+                                     DRW::AC1021, DRW::AC1024}) {
+    DimRadialCodecProbe radial;
+    radial.handle = 0xBA10u + static_cast<std::uint32_t>(version);
+    radial.parentHandle = 0xBA20u;
+    radial.reactorHandles = {0xBA30u};
+    radial.xDictHandle = 0xBA40u;
+    radial.setDwgType(0x777);
+    radial.setName("*D_RADIAL_TRANSACTION");
+    radial.setText("RADIAL DIMENSION \xCE\xA9");
+    radial.setStyle("STANDARD");
+    radial.setTextPoint(DRW_Coord(2.0, 3.0, 0.0));
+    radial.setCenterPoint(DRW_Coord(1.0, 2.0, 0.0));
+    radial.setDiameterPoint(DRW_Coord(5.0, 0.0, 0.0));
+    radial.setLeaderLength(0.75);
+    radial.setHandles(0xBA50u, 0xBA60u);
+    checkEntityDwgEncodeAllocationRollback(
+        t, radial, version, 25u,
+        version == DRW::AC1015 ? "AC1015 DIMENSION radial"
+        : version == DRW::AC1018 ? "AC1018 DIMENSION radial"
+        : version == DRW::AC1021 ? "AC1021 DIMENSION radial"
+                                 : "AC1024 DIMENSION radial");
+  }
+
+  for (const DRW::Version version : {DRW::AC1018, DRW::AC1021,
+                                     DRW::AC1024}) {
+    DimLargeRadialCodecProbe radial;
+    radial.handle = 0xBB10u + static_cast<std::uint32_t>(version);
+    radial.parentHandle = 0xBB20u;
+    radial.reactorHandles = {0xBB30u};
+    radial.xDictHandle = 0xBB40u;
+    radial.setDwgType(0x777);
+    radial.setName("*D_LARGE_RADIAL_TRANSACTION");
+    radial.setText("JOGGED RADIAL \xCE\xA9");
+    radial.setStyle("STANDARD");
+    radial.setTextPoint(DRW_Coord(2.0, 3.0, 0.0));
+    radial.setCenterPoint(DRW_Coord(1.0, 2.0, 0.0));
+    radial.setChordPoint(DRW_Coord(5.0, 0.0, 0.0));
+    radial.jogPoint = DRW_Coord(3.0, 2.0, 0.0);
+    radial.jogAngle = 0.5;
+    radial.overrideCenterPoint = DRW_Coord(1.25, 2.25, 0.0);
+    radial.setHandles(0xBB50u, 0xBB60u);
+    checkEntityDwgEncodeAllocationRollback(
+        t, radial, version, DRW_DimLargeRadial::kDwgClassNum,
+        version == DRW::AC1018 ? "AC1018 DIMENSION large radial"
+        : version == DRW::AC1021 ? "AC1021 DIMENSION large radial"
+                                 : "AC1024 DIMENSION large radial");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -29262,6 +29341,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testAlignedLinearDimDwgEncodeAllocationRollback(context);
       std::cout << "Aligned/linear DIMENSION DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--radial-dim-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testRadialDimDwgEncodeAllocationRollback(context);
+      std::cout << "Radial DIMENSION DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

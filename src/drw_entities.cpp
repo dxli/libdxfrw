@@ -29542,15 +29542,23 @@ bool DRW_DimLinear::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32
 // ----------------------------------------------------------------------------
 bool DRW_DimRadial::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs;
-    oType = 25;
-    if (!encodeDwgCommon(version, buf)) return false;
-    if (!encodeDwgDimBase(version, buf, strBuf)) return false;
-    buf->put3BitDouble(getDefPoint());  // center point (code 10)
-    buf->put3BitDouble(getPt5());       // diameter point (code 15)
-    buf->putBitDouble(getRa40());       // leader length (code 40)
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
-    putDimHandles(buf, dimStyleH, blockH, handleBuf);
-    return true;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            oType = 25;
+            if (!encodeDwgCommon(version, body)
+                || !encodeDwgDimBase(version, body, strings))
+                return false;
+            body->put3BitDouble(getDefPoint()); // center point (code 10)
+            body->put3BitDouble(getPt5());      // diameter point (code 15)
+            body->putBitDouble(getRa40());      // leader length (code 40)
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
+            putDimHandles(body, dimStyleH, blockH, handles);
+            return body->isGood() && (strings == nullptr || strings->isGood())
+                && (handles == nullptr || handles->isGood());
+        });
 }
 
 // ----------------------------------------------------------------------------
@@ -29560,17 +29568,25 @@ bool DRW_DimLargeRadial::encodeDwg(DRW::Version version, dwgBufferW *buf,
                                    std::uint32_t bs, dwgBufferW *strBuf,
                                    dwgBufferW *handleBuf) {
     (void)bs;
-    oType = kDwgClassNum;
-    if (!encodeDwgCommon(version, buf)) return false;
-    if (!encodeDwgDimBase(version, buf, strBuf)) return false;
-    buf->put3BitDouble(getCenterPoint());       // definition point (code 10)
-    buf->put3BitDouble(jogPoint);               // jog vertex (code 15)
-    buf->putBitDouble(jogAngle);                // jog transverse angle (code 40)
-    buf->put3BitDouble(getChordPoint());        // chord point (code 13)
-    buf->put3BitDouble(overrideCenterPoint);    // overridden center (code 14)
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
-    putDimHandles(buf, dimStyleH, blockH, handleBuf);
-    return true;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            oType = kDwgClassNum;
+            if (!encodeDwgCommon(version, body)
+                || !encodeDwgDimBase(version, body, strings))
+                return false;
+            body->put3BitDouble(getCenterPoint());    // definition point (10)
+            body->put3BitDouble(jogPoint);            // jog vertex (15)
+            body->putBitDouble(jogAngle);             // transverse angle (40)
+            body->put3BitDouble(getChordPoint());     // chord point (13)
+            body->put3BitDouble(overrideCenterPoint); // overridden center (14)
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
+            putDimHandles(body, dimStyleH, blockH, handles);
+            return body->isGood() && (strings == nullptr || strings->isGood())
+                && (handles == nullptr || handles->isGood());
+        });
 }
 
 // ----------------------------------------------------------------------------
