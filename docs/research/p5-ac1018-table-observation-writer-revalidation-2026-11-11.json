@@ -14,10 +14,13 @@
     "assertions": [
       "A complete selected TABLE candidate bundle passes the shared revalidation predicate used by both writer boundaries.",
       "Mutation of the selected TABLEGEOMETRY frame causes both the source query and shared revalidation predicate to refuse.",
+      "A real dxfRW::write callback sequence reaches LTYPE staging with a mutated selected TABLEGEOMETRY frame and the adapter refuses the resource record.",
+      "The failed write preserves a pre-existing destination byte-for-byte.",
+      "Restoring the source permits retry through the same adapter and dxfRW instance.",
       "Restoring the frame permits the same adapter to pass again.",
       "Transplanting the candidate snapshot into a different import generation is refused."
     ],
-    "result": "PASS; the generated control calls the shared predicate directly rather than executing a full DXF export."
+    "result": "PASS; generated control exercises dxfRW::write through the resource-table callback, verifies atomic destination preservation, and retries with the same adapter and writer. It bypasses dx_iface::fileExport qualification and does not perform DXF readback."
   },
   "validation": {
     "builds": [
@@ -26,12 +29,14 @@
     ],
     "focused_ctests": [
       "ctest --test-dir build-gcc -R '^libdxfrw_dwg_table_candidate_binding$' --output-on-failure",
-      "ctest --test-dir build-gcc -R '^libdxfrw_dwg_ltype_table_ticket$' --output-on-failure"
+      "ctest --test-dir build-gcc -R '^libdxfrw_dwg_ltype_table_ticket$' --output-on-failure",
+      "ctest --test-dir build-asan-custom -R '^libdxfrw_dwg_table_candidate_binding$' --output-on-failure"
     ],
-    "result": "PASS: each focused CTest 1/1; diff check clean. The tests cover the shared revalidation predicate and LTYPE ticket behavior; they do not execute a complete DXF export through the new staging callbacks."
+    "result": "PASS: candidate-binding CTest 1/1 in normal and AddressSanitizer builds. The existing LTYPE ticket test remains separately covered by the prior receipt state; this slice does not repeat its build or test."
   },
   "limitations": [
     "No TABLE/DATATABLE/TABLEGEOMETRY output is enabled by this check.",
+    "The generated write is a serializer callback control, not a qualified dx_iface::fileExport operation; it has no fresh DXF readback or consumer semantic evidence.",
     "No physical or generated DWG/DXF fixture is committed.",
     "Recursive resource closure, native semantics, and whole-source output remain open."
   ]

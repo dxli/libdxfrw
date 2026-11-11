@@ -1740,11 +1740,15 @@ created locally from scratch for the specific control.
   resource bundles against the owning adapter selections. A
   generated AC1018 control passes for a complete candidate, refuses a mutated
   TABLEGEOMETRY frame and a cross-import snapshot transplant, and passes again
-  after source restoration. This is lifecycle freshness refusal only; it does
-  not authorize replay, output, recursive graph closure or support claims. The
-  focused test directly exercises the shared revalidation predicate (not a
-  full DXF export), passed 1/1 and removes its scratch DWG; no fixture is
-  committed.
+  after source restoration. A focused control now calls `dxfRW::write` through
+  the actual TABLES/resource callbacks: the stale LTYPE-stage check aborts the
+  write while preserving an existing destination byte-for-byte, then the same
+  adapter and writer succeed after the source bytes are restored. Normal and
+  AddressSanitizer focused runs pass 1/1; generated DWG/DXF files are scratch
+  and removed. This exercises serializer callback freshness and transaction
+  retry, but bypasses `dx_iface::fileExport` qualification, performs no fresh
+  DXF readback, and authorizes no replay, TABLE output, recursive graph closure
+  or support claim. No fixture is committed.
   See the [revalidation receipt](docs/research/p5-ac1018-table-observation-writer-revalidation-2026-11-11.json).
   A bounded standalone
   LTYPE_CONTROL/ByBlock observer now checks selected frame fields and roles

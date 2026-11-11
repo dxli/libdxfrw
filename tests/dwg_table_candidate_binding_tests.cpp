@@ -122,6 +122,30 @@ public:
     bool finalizeDwgWriteStructure() override{return true;}
     dwgRW& w;DRW_UnsupportedObject content,table,geometry;std::size_t bigSize;bool profile=false,childrenProfile=false,registered=false,wrote=false;
 };
+class DxfStageProbe final : public dx_iface {
+public:
+    dxfRW* activeWriter{nullptr};
+    bool blockRecordWriterBound{false};
+    bool lineTypesCalled{false};
+    bool observationFreshAtLineTypes{false};
+    void writeBlockRecords() override {
+        blockRecordWriterBound = dxfW != nullptr;
+        if (dxfW != nullptr)
+            dx_iface::writeBlockRecords();
+    }
+    void writeHeader(DRW_Header& header) override {
+        dxfW = activeWriter;
+        dx_iface::writeHeader(header);
+    }
+    void writeLTypes() override {
+        lineTypesCalled = true;
+        observationFreshAtLineTypes = cData != nullptr
+            && DxIfaceStandardDwgCaptureTestAccess::writerObservationCheck(
+                *this, *cData);
+        dx_iface::writeLTypes();
+    }
+    bool finalizeDxfWrite() override { return true; }
+};
 bool write(const std::filesystem::path& path,DRW_UnsupportedObject a,DRW_UnsupportedObject b,std::size_t big=0u,const DRW_UnsupportedObject* geometry=nullptr,bool profile=false,bool childrenProfile=false) {
     dwgRW output(path.string().c_str());Writer writer(output,std::move(a),std::move(b),big,geometry?*geometry:DRW_UnsupportedObject{},profile,childrenProfile);
     return output.write(&writer,DRW::AC1018,true)&&writer.wrote;
@@ -413,6 +437,25 @@ bool runGeometry(const char* contentPath,const char* dataPath,const char* geomet
     dx_data baseline;CHECK_G(reader.fileImport(path.string(),&baseline,false));CHECK_G(liveGeometry(baseline));
     CHECK_G(dx_iface::hasUnchangedVerifiedXRecordSources(baseline,xrecords));
     CHECK_G(DxIfaceStandardDwgCaptureTestAccess::writerObservationCheck(reader,baseline));
+    DxfStageProbe stageProbe;CHECK_G(selectedGeometry(stageProbe));
+    dx_data stagedSource;CHECK_G(stageProbe.fileImport(path.string(),&stagedSource,false));
+    const auto stageOutput=path.string()+".stage.dxf";
+    {std::ofstream f(stageOutput,std::ios::binary|std::ios::trunc);f<<"STAGE_SENTINEL";CHECK_G(static_cast<bool>(f));}
+    auto& stagedGeometry=DxIfaceStandardDwgCaptureTestAccess::raw(stagedSource,geometryHandle);
+    stagedGeometry.m_rawBytes[0]^=1u;
+    dxfRW stageWriter(stageOutput.c_str());stageProbe.activeWriter=&stageWriter;stageProbe.dxfW=&stageWriter;
+    const bool stagedWrite=stageWriter.write(&stageProbe,DRW::AC1018,false);
+    stageProbe.dxfW=nullptr;
+    CHECK_G(stageProbe.blockRecordWriterBound && !stagedWrite && stageProbe.lineTypesCalled
+        && !stageProbe.observationFreshAtLineTypes);
+    {std::ifstream f(stageOutput,std::ios::binary);const std::string value((std::istreambuf_iterator<char>(f)),{});CHECK_G(value=="STAGE_SENTINEL");}
+    stagedGeometry.m_rawBytes[0]^=1u;
+    stageProbe.lineTypesCalled=false;stageProbe.observationFreshAtLineTypes=false;
+    const bool stageRetry=stageWriter.write(&stageProbe,DRW::AC1018,false);
+    stageProbe.dxfW=nullptr;
+    CHECK_G(stageRetry && stageProbe.lineTypesCalled
+        && stageProbe.observationFreshAtLineTypes);
+    std::error_code stageError;CHECK_G(std::filesystem::remove(stageOutput,stageError)&&!stageError);
     Content c;Data t;Geometry g;c.handle=t.handle=g.handle=1u;
     CHECK_G(!dx_iface::readVerifiedTableCandidates(baseline,xrecords,contentHandle,dataHandle,c,t));
     CHECK_G(!dx_iface::readVerifiedTableCandidates(baseline,xrecords,contentHandle,dataHandle,0xcau,c,t,g));
