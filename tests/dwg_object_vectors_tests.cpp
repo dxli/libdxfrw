@@ -464,6 +464,13 @@ public:
   std::uint16_t dwgType() const { return oType; }
 };
 
+class PointCloudCodecProbe final : public DRW_PointCloud {
+public:
+  using DRW_PointCloud::encodeDwg;
+  void setDwgType(std::int16_t value) { oType = value; }
+  std::int16_t dwgType() const { return oType; }
+};
+
 class UnderlayCodecProbe final : public DRW_Underlay {
 public:
   using DRW_Underlay::encodeDwg;
@@ -26398,6 +26405,53 @@ void testNavisworksModelDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testPointCloudDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1021, DRW::AC1024,
+                                     DRW::AC1027, DRW::AC1032}) {
+    for (const bool hasSources : {false, true}) {
+      PointCloudCodecProbe cloud;
+      cloud.handle = 0xC700u + static_cast<std::uint32_t>(version);
+      cloud.parentHandle = 0xC710u;
+      cloud.reactorHandles = {0xC720u};
+      cloud.xDictHandle = 0xC730u;
+      cloud.setDwgType(0x777);
+      cloud.classVersion = 1;
+      cloud.origin = DRW_Coord(1.0, 2.0, 3.0);
+      cloud.savedFilename = "transaction-pointcloud.pcg";
+      if (hasSources) {
+        cloud.sourceFileCount = 2;
+        cloud.sourceFiles = {"source-one.pcg", "source-two.pcg"};
+      } else {
+        cloud.extentsMin = DRW_Coord(-1.0, -2.0, -3.0);
+        cloud.extentsMax = DRW_Coord(4.0, 5.0, 6.0);
+        cloud.pointCount = 12345;
+        cloud.ucsName = "transaction-ucs";
+        if (version > DRW::AC1024) {
+          cloud.definitionHandle = 0xC740u;
+          cloud.reactorHandle = 0xC750u;
+          cloud.showIntensity = true;
+          cloud.intensityScheme = 2;
+          cloud.intensityStyle.maxIntensity = 1.0;
+          cloud.showClipping = true;
+          DRW_PointCloudClipping clip;
+          clip.type = 3;
+          clip.vertexCount = 3;
+          clip.vertices = {DRW_Coord(0.0, 0.0, 0.0),
+                           DRW_Coord(4.0, 0.0, 0.0),
+                           DRW_Coord(4.0, 3.0, 0.0)};
+          cloud.clippingCount = 1;
+          cloud.clippings = {clip};
+        }
+      }
+      checkEntityDwgEncodeAllocationRollback(
+          t, cloud, version, DRW_PointCloud::kDwgClassNum,
+          std::string(version == DRW::AC1021 ? "AC1021" : version == DRW::AC1024
+                          ? "AC1024" : version == DRW::AC1027 ? "AC1027" : "AC1032") +
+              (hasSources ? " POINTCLOUD sources" : " POINTCLOUD extents"));
+    }
+  }
+}
+
 void testUnderlayDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024, DRW::AC1032}) {
     for (const DRW_Underlay::Kind kind : {DRW_Underlay::PDF, DRW_Underlay::DGN,
@@ -29795,6 +29849,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testNavisworksModelDwgEncodeAllocationRollback(context);
       std::cout << "NAVISWORKSMODEL DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--pointcloud-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testPointCloudDwgEncodeAllocationRollback(context);
+      std::cout << "POINTCLOUD DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

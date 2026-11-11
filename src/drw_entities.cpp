@@ -26057,67 +26057,71 @@ bool DRW_PointCloud::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint3
         }
     }
 
-    oType = kDwgClassNum;
-    if (!encodeDwgCommon(version, buf, strBuf))
-        return false;
-    dwgBufferW *sBuf = strBuf ? strBuf : buf;
-    buf->putBitShort(static_cast<std::uint16_t>(classVersion));
-    buf->put3BitDouble(origin);
-    sBuf->putVariableText(version, savedFilename);
-    buf->putBitLong(sourceFileCount);
-    if (sourceFileCount == 0) {
-        buf->put3BitDouble(extentsMin);
-        buf->put3BitDouble(extentsMax);
-        buf->putRawLong64(pointCount);
-        sBuf->putVariableText(version, ucsName);
-        buf->put3BitDouble(ucsOrigin);
-        buf->put3BitDouble(ucsXDirection);
-        buf->put3BitDouble(ucsYDirection);
-        buf->put3BitDouble(ucsZDirection);
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [&](dwgBufferW *buf, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
+            oType = kDwgClassNum;
+            if (!encodeDwgCommon(version, buf, strBuf))
+                return false;
+            dwgBufferW *sBuf = strBuf ? strBuf : buf;
+            buf->putBitShort(static_cast<std::uint16_t>(classVersion));
+            buf->put3BitDouble(origin);
+            sBuf->putVariableText(version, savedFilename);
+            buf->putBitLong(sourceFileCount);
+            if (sourceFileCount == 0) {
+                buf->put3BitDouble(extentsMin);
+                buf->put3BitDouble(extentsMax);
+                buf->putRawLong64(pointCount);
+                sBuf->putVariableText(version, ucsName);
+                buf->put3BitDouble(ucsOrigin);
+                buf->put3BitDouble(ucsXDirection);
+                buf->put3BitDouble(ucsYDirection);
+                buf->put3BitDouble(ucsZDirection);
 
-        if (version > DRW::AC1024) {
-            buf->putBit(showIntensity ? 1 : 0);
-            buf->putBitShort(static_cast<std::uint16_t>(intensityScheme));
-            buf->putBitDouble(intensityStyle.minIntensity);
-            buf->putBitDouble(intensityStyle.maxIntensity);
-            buf->putBitDouble(intensityStyle.lowThreshold);
-            buf->putBitDouble(intensityStyle.highThreshold);
-            buf->putBit(showClipping ? 1 : 0);
-            buf->putBitLong(clippingCount);
-            for (const DRW_PointCloudClipping& clipping : clippings) {
-                buf->putBit(clipping.isInverted ? 1 : 0);
-                buf->putBitShort(static_cast<std::uint16_t>(clipping.type));
-                if (clipping.type == 3)
-                    buf->putBitLong(clipping.vertexCount);
-                for (const DRW_Coord& vertex : clipping.vertices)
-                    buf->put2RawDouble(vertex);
-                if (clipping.type == 1) {
-                    buf->putBitDouble(clipping.zMin);
-                    buf->putBitDouble(clipping.zMax);
+                if (version > DRW::AC1024) {
+                    buf->putBit(showIntensity ? 1 : 0);
+                    buf->putBitShort(static_cast<std::uint16_t>(intensityScheme));
+                    buf->putBitDouble(intensityStyle.minIntensity);
+                    buf->putBitDouble(intensityStyle.maxIntensity);
+                    buf->putBitDouble(intensityStyle.lowThreshold);
+                    buf->putBitDouble(intensityStyle.highThreshold);
+                    buf->putBit(showClipping ? 1 : 0);
+                    buf->putBitLong(clippingCount);
+                    for (const DRW_PointCloudClipping& clipping : clippings) {
+                        buf->putBit(clipping.isInverted ? 1 : 0);
+                        buf->putBitShort(static_cast<std::uint16_t>(clipping.type));
+                        if (clipping.type == 3)
+                            buf->putBitLong(clipping.vertexCount);
+                        for (const DRW_Coord& vertex : clipping.vertices)
+                            buf->put2RawDouble(vertex);
+                        if (clipping.type == 1) {
+                            buf->putBitDouble(clipping.zMin);
+                            buf->putBitDouble(clipping.zMax);
+                        }
+                    }
                 }
             }
-        }
-    }
-    for (const UTF8STRING& sourceFile : sourceFiles)
-        sBuf->putVariableText(version, sourceFile);
+            for (const UTF8STRING& sourceFile : sourceFiles)
+                sBuf->putVariableText(version, sourceFile);
 
-    if (!encodeDwgEntHandle(version, buf, handleBuf))
-        return false;
-    if (version > DRW::AC1024 && sourceFileCount == 0) {
-        dwgBufferW *hBuf = handleBuf ? handleBuf : buf;
-        auto putHandle = [hBuf](std::uint8_t code, std::uint32_t ref) {
-            dwgHandle handle;
-            handle.code = ref == 0 ? 0 : code;
-            handle.ref = ref;
-            handle.size = 0;
-            for (std::uint32_t value = ref; value != 0; value >>= 8)
-                ++handle.size;
-            hBuf->putHandle(handle);
-        };
-        putHandle(5, definitionHandle);
-        putHandle(3, reactorHandle);
-    }
-    return true;
+            if (!encodeDwgEntHandle(version, buf, handleBuf))
+                return false;
+            if (version > DRW::AC1024 && sourceFileCount == 0) {
+                dwgBufferW *hBuf = handleBuf ? handleBuf : buf;
+                auto putHandle = [hBuf](std::uint8_t code, std::uint32_t ref) {
+                    dwgHandle handle;
+                    handle.code = ref == 0 ? 0 : code;
+                    handle.ref = ref;
+                    handle.size = 0;
+                    for (std::uint32_t value = ref; value != 0; value >>= 8)
+                        ++handle.size;
+                    hBuf->putHandle(handle);
+                };
+                putHandle(5, definitionHandle);
+                putHandle(3, reactorHandle);
+            }
+            return true;
+        });
 }
 
 bool DRW_PointCloudEx::parseCode(int code, const std::unique_ptr<dxfReader>& reader) {

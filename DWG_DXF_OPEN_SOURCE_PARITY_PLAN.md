@@ -1210,6 +1210,14 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P6 classic POINTCLOUD DWG encoder transaction safety:** the writer stages
+  body, strings and handles for source-list and extents branches. Eight
+  generated AC1021/AC1024/AC1027/AC1032 profiles sweep 246 allocation
+  failures and retry exactly; focused point-cloud and underlay tests pass 3/3.
+  This proves local rollback only. The version/source-list branches can omit
+  non-default fields; add a separate lossless refusal and retry control before
+  claiming those combinations are supported. See the [rollback receipt](docs/research/p6-pointcloud-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 - **P6 VIEWPORT DXF ambient color regression:** groups 63 and 421 no
   longer clear a previously read group-431 color-book name or its retained
   string lease. The existing ASCII/Binary ordering test failed before the fix;
