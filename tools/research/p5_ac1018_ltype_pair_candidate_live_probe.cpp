@@ -2,6 +2,8 @@
 // reader-private source/CRC ticket and does not prove graph or output closure.
 #include "dx_iface.h"
 #include "libdwgr.h"
+#include "intern/dwgobjectframe.h"
+#include "intern/dwgutil.h"
 #include "intern/dwg_ltype_control_byblock_ac1018_candidate.h"
 #include <fstream>
 #include <filesystem>
@@ -9,6 +11,9 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <algorithm>
+#include <cstdint>
+#include <vector>
 
 class GeneratedSource final:public dx_iface {
 public:
@@ -29,6 +34,7 @@ private:dwgRW& writer_;
 };
 class Probe final:public dx_iface {
 public:
+ void reset(){model.reset();duplicate=false;tickets=0;ticketValid=false;rowTickets=0;rowTicketValid=false;controlFrame.reset();byBlockFrame.reset();byBlockFrameModel.reset();}
  void addLType(const DRW_LType& v) override {dx_iface::addLType(v);if(v.name=="BYBLOCK"||v.name=="ByBlock"){if(model)duplicate=true;model=v;}}
  std::optional<DRW_LType> model;bool duplicate=false;unsigned tickets=0;bool ticketValid=false;unsigned rowTickets=0;bool rowTicketValid=false;
  std::optional<DRW_UnsupportedObject> controlFrame,byBlockFrame;std::optional<DRW_LType> byBlockFrameModel;
@@ -51,6 +57,35 @@ public:
   }
  }
 };
+std::uint32_t get32(const std::uint8_t* p){return static_cast<std::uint32_t>(p[0])|static_cast<std::uint32_t>(p[1])<<8u
+ |static_cast<std::uint32_t>(p[2])<<16u|static_cast<std::uint32_t>(p[3])<<24u;}
+void put32(std::uint8_t* p,std::uint32_t n){for(unsigned i=0;i<4u;++i)p[i]=static_cast<std::uint8_t>(n>>(i*8u));}
+bool corruptObjectFrameCrc(const std::filesystem::path& path,const DRW_UnsupportedObject& source,
+                           std::vector<std::uint8_t>& original){
+ std::ifstream input(path,std::ios::binary);std::vector<char> chars((std::istreambuf_iterator<char>(input)),{});if(!input||source.m_rawBytes.empty())return false;
+ original.reserve(chars.size());for(const auto c:chars)original.push_back(static_cast<std::uint8_t>(c));
+ const auto hit=std::search(original.cbegin(),original.cend(),source.m_rawBytes.cbegin(),source.m_rawBytes.cend());
+ if(hit==original.cend()||std::search(std::next(hit),original.cend(),source.m_rawBytes.cbegin(),source.m_rawBytes.cend())!=original.cend())return false;
+ const auto bodyAt=static_cast<std::size_t>(hit-original.cbegin());dwgBuffer reader(original.data(),original.size(),nullptr);DwgObjectFrame frame;
+ std::size_t frameAt=0u;bool foundFrame=false;for(const auto prefix:{2u,4u})if(bodyAt>=prefix
+   &&frame.readAt(reader,DRW::AC1018,bodyAt-prefix)&&frame.body()==source.m_rawBytes
+   &&reader.getPosition()==bodyAt+source.m_rawBytes.size()+2u){frameAt=bodyAt-prefix;foundFrame=true;break;}
+ if(!foundFrame)return false;
+ std::size_t pageAt=0u;std::vector<std::uint8_t> header(32u);
+ for(std::size_t p=0x100u;p+32u<=original.size();p+=0x20u){std::copy_n(original.data()+p,32u,header.data());dwgCompressor::decrypt18Hdr(header.data(),32u,p);
+  const auto size=get32(header.data()+8u);if(get32(header.data())!=0x4163043bu||size!=get32(header.data()+12u)
+    ||size>original.size()-(p+32u)||bodyAt<p+32u||bodyAt+source.m_rawBytes.size()+2u>p+32u+size)continue;
+  const auto dataCrc=dwgUtil::checksum18(0u,original.data()+p+32u,size);const auto headerCrc=get32(header.data()+24u);put32(header.data()+24u,0u);
+  if(dataCrc!=get32(header.data()+28u)||dwgUtil::checksum18(dataCrc,header.data(),32u)!=headerCrc)continue;
+  if(pageAt!=0u)return false;pageAt=p;}
+ if(!pageAt)return false;auto damaged=original;damaged[bodyAt+source.m_rawBytes.size()]^=1u;
+ std::copy_n(damaged.data()+pageAt,32u,header.data());dwgCompressor::decrypt18Hdr(header.data(),32u,pageAt);
+ const auto size=get32(header.data()+8u);const auto dataCrc=dwgUtil::checksum18(0u,damaged.data()+pageAt+32u,size);
+ put32(header.data()+28u,dataCrc);put32(header.data()+24u,0u);put32(header.data()+24u,dwgUtil::checksum18(dataCrc,header.data(),32u));
+ dwgCompressor::decrypt18Hdr(header.data(),32u,pageAt);std::copy(header.begin(),header.end(),damaged.begin()+static_cast<std::ptrdiff_t>(pageAt));
+ dwgBuffer verify(damaged.data(),damaged.size(),nullptr);if(frame.readAt(verify,DRW::AC1018,frameAt))return false;
+ std::ofstream output(path,std::ios::binary|std::ios::trunc);output.write(reinterpret_cast<const char*>(damaged.data()),static_cast<std::streamsize>(damaged.size()));return static_cast<bool>(output);
+}
 DRW_UnsupportedObject body(const char* path,std::uint32_t handle,int type) {
  std::ifstream in(path,std::ios::binary);DRW_UnsupportedObject r;r.m_version=DRW::AC1018;r.m_handle=handle;r.m_objectType=type;
  r.m_rawBytes.assign(std::istreambuf_iterator<char>(in),{});r.m_objectSize=static_cast<std::uint32_t>(r.m_rawBytes.size());return r;
@@ -72,10 +107,21 @@ int main(int argc,char**argv){
   const bool read=probe.fileImport(path.string(),data.get(),false);
   const bool ok=!failedRead&&!leaked&&read&&probe.tickets==1u&&probe.ticketValid
       &&probe.rowTickets==3u&&probe.rowTicketValid;
+  if(!ok)return 8;
+  std::vector<std::uint8_t> originalBytes;if(!probe.controlFrame||!corruptObjectFrameCrc(path,*probe.controlFrame,originalBytes))return 9;
+  probe.reset();auto damaged=std::make_unique<dx_data>();const bool damagedRead=probe.fileImport(path.string(),damaged.get(),false);
+  bool controlDiagnostic=false;const auto& integrity=damaged->dwgReadOutcome.observations.integrity;
+  for(std::size_t i=0;i<integrity.retained;++i){const auto& row=integrity.rows[i];
+   if(row.kind==DwgIntegrityCheckKind::ObjectFrameBounds&&row.hasLogicalHandle&&row.logicalHandle==5u)controlDiagnostic=true;
+   if(row.kind==DwgIntegrityCheckKind::DataPageChecksum||row.kind==DwgIntegrityCheckKind::DataPageCrc)return 10;}
+  const bool leakedCrcTickets=probe.tickets!=0u||probe.rowTickets!=0u;
+  {std::ofstream restored(path,std::ios::binary|std::ios::trunc);restored.write(reinterpret_cast<const char*>(originalBytes.data()),static_cast<std::streamsize>(originalBytes.size()));if(!restored)return 11;}
+  probe.reset();auto retryData=std::make_unique<dx_data>();const bool crcRetryRead=probe.fileImport(path.string(),retryData.get(),false);
+  const bool crcRetry=crcRetryRead&&probe.tickets==1u&&probe.ticketValid&&probe.rowTickets==3u&&probe.rowTicketValid;
   std::cout<<"generated=1 failedRead="<<failedRead<<" leakedTickets="<<leaked
-    <<" retryRead="<<read<<" controlTickets="<<probe.tickets
-    <<" rowTickets="<<probe.rowTickets<<" typedNames="<<probe.rowTicketValid<<"\n";
-  return ok?0:8;
+    <<" retryRead="<<read<<" crcRead="<<damagedRead<<" crcDiagnostic="<<controlDiagnostic
+    <<" crcLeakedTickets="<<leakedCrcTickets<<" crcRetry="<<crcRetry<<"\n";
+  return !damagedRead&&controlDiagnostic&&!leakedCrcTickets&&crcRetry?0:12;
  }
  if(argc==3&&std::string(argv[1])=="--emit-dwg"){
   std::ifstream existing(argv[2],std::ios::binary);if(existing)return 3;

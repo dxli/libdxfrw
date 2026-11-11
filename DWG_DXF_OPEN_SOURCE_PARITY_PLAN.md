@@ -1699,7 +1699,13 @@ created locally from scratch for the specific control.
   imports a DWG, verifies one control plus three typed LTYPE row tickets, then
   refuses a truncated source with no leaked tickets and retries the restored
   bytes through the same adapter. The scratch file is removed. This is generated
-  truncation/retry evidence; physical CRC corruption/retry remains open. A current-source probe
+  truncation/retry evidence. The same runtime-generated reader-ticket control
+  now corrupts only the selected LTYPE_CONTROL frame CRC, recomputes enclosing
+  AC18 page/header checksums, requires an ObjectFrameBounds diagnostic without
+  a page-checksum diagnostic or leaked tickets, restores the bytes and retries
+  through the same adapter. This proves generated CRC rollback/retry;
+  corruption/retry on the physical producer file remains open
+  ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)). A current-source probe
   observes exactly one LTYPE_CONTROL ticket for handle 0x5 after complete
   AC1018 import with all 226 frames published. The selected ordinary member
   handle 0x16 is also staged with its typed Continuous model under the same
@@ -1707,8 +1713,9 @@ created locally from scratch for the specific control.
   frame tickets for ByBlock 0x14, ByLayer 0x15 and Continuous 0x16. Their
   reader-issued ticket bodies now pass the bounded same-import control/ByBlock
   selected-field and role join. That source-profile order contradicts ODA for
-  the phantom pair and stays isolated. Live CRC corruption/retry and STYLE
-  EED/APPID dependencies remain unqualified ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)). ODA §20.4.57 specifies ByLayer then
+  the phantom pair and stays isolated. Physical producer-file CRC corruption/
+  retry, STYLE EED/APPID dependencies and remaining resource closure remain
+  open ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)). ODA §20.4.57 specifies ByLayer then
   ByBlock, while this pinned source and LibreDWG report ByBlock then ByLayer.
   Treat that as a source anomaly. The observer now exposes a separate normative
   order check with exact ByLayer/ByBlock spans; same-import source binding and
