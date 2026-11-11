@@ -6072,3 +6072,12 @@ add_test(NAME libdxfrw_dwg_tablestyle_reader_source COMMAND ${CMAKE_COMMAND}
     -DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/tablestyle_reader_source
     -P ${CMAKE_CURRENT_SOURCE_DIR}/run_dwg_tablestyle_reader_source.cmake)
 set_tests_properties(libdxfrw_dwg_tablestyle_reader_source PROPERTIES LABELS "dwg;fast;table" TIMEOUT 30)
+
+add_executable(libdxfrw_dwg_table_projection_ac1018_candidate_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_table_projection_ac1018_candidate_tests.cpp ${_libdxfrw_test_adapter_source})
+target_compile_features(libdxfrw_dwg_table_projection_ac1018_candidate_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_table_projection_ac1018_candidate_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_table_projection_ac1018_candidate_tests PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/dwg2dxf)
+target_link_libraries(libdxfrw_dwg_table_projection_ac1018_candidate_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dwg_table_projection_ac1018_candidate COMMAND libdxfrw_dwg_table_projection_ac1018_candidate_tests)
+set_tests_properties(libdxfrw_dwg_table_projection_ac1018_candidate PROPERTIES LABELS "dwg;fast;table" TIMEOUT 30)

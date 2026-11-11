@@ -2687,6 +2687,7 @@ private:
         std::uint32_t selectedExtensionDictionary{0u},selectedTableEntity{0u};
         bool requiresReciprocalTableSource{false};
         bool requiresUnchangedTableModel{false};
+        bool requiresUnchangedTableProjection{false};
         std::uint32_t selectedTableStyle{0u};
         std::vector<VerifiedXRecordSource> records;
     };

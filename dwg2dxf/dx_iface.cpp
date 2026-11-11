@@ -32,6 +32,7 @@
 #include <unordered_set>
 #include "dx_iface.h"
 #include "intern/dwg_table_model_ac1018_candidate.h"
+#include "intern/dwg_table_projection_ac1018_candidate.h"
 #include "dx_ac1027_plotstyle_wire.h"
 #include "dx_ac1027_material_wire.h"
 #include "dx_ac1027_layer_wire.h"
@@ -28932,7 +28933,7 @@ bool dx_iface::enableVerifiedXRecordSources(const std::vector<std::uint32_t>& ha
         m_verifiedXRecordSelected.swap(selected);
         m_verifiedTableContentSelected=0u;m_verifiedDataTableSelected=0u;m_verifiedTableGeometrySelected=0u;
         m_verifiedTableRoundtripSelected=false;m_verifiedTableRoundtripChildrenSelected=false;
-        m_verifiedTableEntitySelected=0u;m_verifiedTableDictionarySelected=0u;m_verifiedReciprocalTableSelected=false;m_verifiedTableModelSelected=false;m_verifiedTableStyleSelected=0u;
+        m_verifiedTableEntitySelected=0u;m_verifiedTableDictionarySelected=0u;m_verifiedReciprocalTableSelected=false;m_verifiedTableModelSelected=false;m_verifiedTableProjectionSelected=false;m_verifiedTableStyleSelected=0u;
         return true;
     } catch (...) { return false; }
 }
@@ -28951,7 +28952,7 @@ bool dx_iface::enableVerifiedTableCandidates(const std::vector<std::uint32_t>& x
         m_verifiedXRecordSelected.swap(selected);
         m_verifiedTableContentSelected=tableContent;m_verifiedDataTableSelected=dataTable;
         m_verifiedTableGeometrySelected=0u;m_verifiedTableRoundtripSelected=false;m_verifiedTableRoundtripChildrenSelected=false;
-        m_verifiedTableEntitySelected=0u;m_verifiedTableDictionarySelected=0u;m_verifiedReciprocalTableSelected=false;m_verifiedTableModelSelected=false;m_verifiedTableStyleSelected=0u;
+        m_verifiedTableEntitySelected=0u;m_verifiedTableDictionarySelected=0u;m_verifiedReciprocalTableSelected=false;m_verifiedTableModelSelected=false;m_verifiedTableProjectionSelected=false;m_verifiedTableStyleSelected=0u;
         return true;
     } catch (...) {return false;}
 }
@@ -28971,7 +28972,7 @@ bool dx_iface::enableVerifiedTableCandidates(const std::vector<std::uint32_t>& x
         m_verifiedXRecordSelected.swap(selected);
         m_verifiedTableContentSelected=tableContent;m_verifiedDataTableSelected=dataTable;
         m_verifiedTableGeometrySelected=tableGeometry;m_verifiedTableRoundtripSelected=false;m_verifiedTableRoundtripChildrenSelected=false;
-        m_verifiedTableEntitySelected=0u;m_verifiedTableDictionarySelected=0u;m_verifiedReciprocalTableSelected=false;m_verifiedTableModelSelected=false;m_verifiedTableStyleSelected=0u;
+        m_verifiedTableEntitySelected=0u;m_verifiedTableDictionarySelected=0u;m_verifiedReciprocalTableSelected=false;m_verifiedTableModelSelected=false;m_verifiedTableProjectionSelected=false;m_verifiedTableStyleSelected=0u;
         return true;
     } catch (...) {return false;}
 }
@@ -29014,6 +29015,13 @@ bool dx_iface::enableVerifiedTableModelSource(const std::vector<std::uint32_t>& 
         std::uint32_t entity,std::uint32_t dictionary) noexcept {
     if(!enableVerifiedTableReciprocalSource(xrecords,content,table,geometry,entity,dictionary))return false;
     m_verifiedTableModelSelected=true;return true;
+}
+
+bool dx_iface::enableVerifiedTableProjectionSource(const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t content,std::uint32_t table,std::uint32_t geometry,
+        std::uint32_t entity,std::uint32_t dictionary) noexcept {
+    if(!enableVerifiedTableModelSource(xrecords,content,table,geometry,entity,dictionary))return false;
+    m_verifiedTableProjectionSelected=true;return true;
 }
 
 bool dx_iface::enableVerifiedTableStyleSource(const std::vector<std::uint32_t>& xrecords,
@@ -29341,6 +29349,7 @@ bool dx_iface::validateVerifiedTableCandidates(const dx_data& data,
         || (xrecords.selectedExtensionDictionary && !xrecords.requiresTableRoundtripChildren)
         || (xrecords.requiresReciprocalTableSource && !xrecords.selectedExtensionDictionary)
         || (xrecords.requiresUnchangedTableModel && !xrecords.requiresReciprocalTableSource)
+        || (xrecords.requiresUnchangedTableProjection && !xrecords.requiresUnchangedTableModel)
         || (xrecords.selectedTableStyle && !xrecords.requiresReciprocalTableSource)
         || sources.records.size()!=(xrecords.selectedTableStyle?6u:xrecords.requiresReciprocalTableSource?5u:xrecords.selectedExtensionDictionary?4u:tableGeometry?3u:2u)
         || (tableGeometry!=0u)!=(geometry!=nullptr)
@@ -29426,7 +29435,9 @@ bool dx_iface::validateVerifiedTableCandidates(const dx_data& data,
                     live=&candidate;
                 }
                 if(!live || !entitySource->tableModel || !DwgTableModelAc1018Candidate::bounded(*live)
-                    || !sameDwgTableModel(*entitySource->tableModel,*live))return false;
+                    || !sameDwgTableModel(*entitySource->tableModel,*live)
+                    || (xrecords.requiresUnchangedTableProjection
+                        && !hasUnchangedDwgTableProjection(data,*entitySource->tableModel)))return false;
             } else if(entitySource->tableModel) return false;
             DwgTableEntityXDictionaryAc1018Candidate::Result entity;
             if(!DwgTableEntityXDictionaryAc1018Candidate::inspect(entitySource->raw,entity)
@@ -29611,6 +29622,32 @@ bool dx_iface::readVerifiedTableStyleSource(const dx_data& data,
     return false;
 }
 
+bool dx_iface::hasUnchangedVerifiedTableProjectionSource(const dx_data& data,
+        const std::vector<std::uint32_t>& xrecords,std::uint32_t content,
+        std::uint32_t table,std::uint32_t geometry,std::uint32_t entity,std::uint32_t dictionary) noexcept {
+    return data.m_verifiedXRecordSource && data.m_verifiedXRecordSource->requiresUnchangedTableProjection
+        && hasUnchangedVerifiedTableModelSource(data,xrecords,content,table,geometry,entity,dictionary);
+}
+
+bool dx_iface::hasUnchangedDwgTableProjection(const dx_data& data,const DRW_Table& source) noexcept {
+    if(data.typedEntityCaptureFailed || !data.mBlock || data.blocks.size()>TypedEntityCaptureMaxRecords)return false;
+    std::size_t remaining=TypedEntityCaptureMaxRecords;
+    const DRW_Entity* selected=nullptr;
+    const auto inspect=[&](const dx_ifaceBlock* block) {
+        if(!block)return true;
+        if(block->ent.size()>remaining)return false;
+        remaining-=block->ent.size();
+        for(const auto* candidate:block->ent)if(candidate && candidate->handle==source.handle) {
+            if(selected)return false;
+            selected=candidate;
+        }
+        return true;
+    };
+    if(!inspect(data.mBlock))return false;
+    for(const auto* block:data.blocks)if(!inspect(block))return false;
+    return selected && DwgTableProjectionAc1018Candidate::matches(source,*selected);
+}
+
 void dx_iface::finishVerifiedXRecordSource(bool successfulRead) noexcept {
     auto* data = m_verifiedXRecordReadData;
     if (!data) return;
@@ -29647,6 +29684,7 @@ void dx_iface::finishVerifiedXRecordSource(bool successfulRead) noexcept {
                 bundle->selectedTableEntity=m_verifiedTableEntitySelected;
                 bundle->requiresReciprocalTableSource=m_verifiedReciprocalTableSelected;
                 bundle->requiresUnchangedTableModel=m_verifiedTableModelSelected;
+                bundle->requiresUnchangedTableProjection=m_verifiedTableProjectionSelected;
                 bundle->selectedTableStyle=m_verifiedTableStyleSelected;
                 bundle->requiresTableCandidates=m_verifiedTableContentSelected!=0u || m_verifiedDataTableSelected!=0u
                     || m_verifiedTableGeometrySelected!=0u;

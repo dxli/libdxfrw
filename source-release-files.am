@@ -261,6 +261,7 @@ EXTRA_DIST = \
     src/intern/dwg_table_extension_dictionary_ac1018_candidate.cpp \
     src/intern/dwg_table_extension_dictionary_ac1018_candidate.h \
     src/intern/dwg_table_model_ac1018_candidate.h \
+    src/intern/dwg_table_projection_ac1018_candidate.h \
     src/intern/dwg_table_roundtrip_xrecord_ac1018_candidate.cpp \
     src/intern/dwg_table_roundtrip_xrecord_ac1018_candidate.h \
     src/intern/dwg_tablecontent_ac1018_candidate.h \
@@ -504,6 +505,7 @@ EXTRA_DIST = \
     tests/dwg_table_entity_reader_lease_tests.cpp \
     tests/dwg_table_entity_xdictionary_ac1018_candidate_tests.cpp \
     tests/dwg_table_model_ac1018_candidate_tests.cpp \
+    tests/dwg_table_projection_ac1018_candidate_tests.cpp \
     tests/dwg_table_roundtrip_xrecord_ac1018_candidate_tests.cpp \
     tests/dwg_tablecontent_ac1018_candidate_tests.cpp \
     tests/dwg_tablegeometry_ac1018_candidate_tests.cpp \
@@ -1031,6 +1033,7 @@ EXTRA_DIST = \
     tools/research/p5_ac1018_table_entity_source_verify.py \
     tools/research/p5_ac1018_table_geometry_binding_probe.cpp \
     tools/research/p5_ac1018_table_model_binding_probe.cpp \
+    tools/research/p5_ac1018_table_projection_binding_probe.cpp \
     tools/research/p5_ac1018_table_reciprocal_binding_probe.cpp \
     tools/research/p5_ac1018_table_roundtrip_binding_probe.cpp \
     tools/research/p5_ac1018_table_xrecord_source_verify.py \

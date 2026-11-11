@@ -1358,8 +1358,10 @@ created locally from scratch for the specific control.
   An additional opt-in mode binds a bounded, privately captured TABLE model to
   that frame and revalidates it against the retained live TABLE
   ([model receipt](docs/research/p5-ac1018-table-model-source-binding-2026-11-11.json)).
-  The separate 2D INSERT projection is not checked by this mode, generic AC1018
-  callback evidence remains Unknown, and output is still refused. The physical
+  A further opt-in mode also compares the unique retained 2D INSERT projection
+  with that private snapshot ([receipt](docs/research/p5-ac1018-table-projection-source-binding-2026-11-11.json));
+  it does not prove block membership or emitted display primitives. Generic
+  AC1018 callback evidence remains Unknown, and output is still refused. The physical
   source boundaries are in the [entity wire receipt](docs/research/p5-ac1018-table-entity-xdictionary-source-wire-2026-11-11.json).
   TABLESTYLE and recursive resources, independent
   meaning, and transactional output closure are still open.

@@ -112,6 +112,15 @@ public:
     bool enableVerifiedTableModelSource(const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
         std::uint32_t tableEntity,std::uint32_t dictionary) noexcept;
+    // Also require the uniquely retained INSERT-shaped compatibility view to
+    // match the private TABLE source. No block membership/output authority.
+    bool enableVerifiedTableProjectionSource(const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        std::uint32_t tableEntity,std::uint32_t dictionary) noexcept;
+    static bool hasUnchangedVerifiedTableProjectionSource(const dx_data&,
+        const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        std::uint32_t tableEntity,std::uint32_t dictionary) noexcept;
     // Reader-authenticated TABLESTYLE selected wire projection only; this
     // does not certify the complete typed model or grant output authority.
     bool enableVerifiedTableStyleSource(const std::vector<std::uint32_t>& xrecords,
@@ -3480,6 +3489,7 @@ private:
     std::uint32_t m_verifiedTableEntitySelected{0u},m_verifiedTableDictionarySelected{0u};
     bool m_verifiedReciprocalTableSelected{false};
     bool m_verifiedTableModelSelected{false};
+    bool m_verifiedTableProjectionSelected{false};
     std::uint32_t m_verifiedTableStyleSelected{0u};
     std::vector<dx_data::VerifiedTableCandidateSource> m_verifiedTableCandidatePending;
     std::size_t m_verifiedTableCandidatePendingBytes{0u};
@@ -3549,6 +3559,7 @@ private:
     bool replayTableBody(dx_data&,TableBody&,bool entitiesReady);
     static bool sameTableBodyModel(const DRW_Table&,const DRW_Table&,DRW::Version) noexcept;
     static bool sameDwgTableModel(const DRW_Table&,const DRW_Table&) noexcept;
+    static bool hasUnchangedDwgTableProjection(const dx_data&,const DRW_Table&) noexcept;
     static bool hasMatchedTableSource(const dx_data&,const std::shared_ptr<const TableBody>&) noexcept;
     static bool chargeTableBody(dx_data&,std::size_t,std::size_t,std::size_t=0u) noexcept;
     dx_data* m_tableSourceReadData{nullptr};
