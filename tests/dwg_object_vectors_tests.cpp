@@ -11688,6 +11688,81 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  "AC1018 TABLE emits sparse border values in mask order and preserves signed sentinels");
     }
 
+    TableDwgCodecProbe tableBorderColors = makeEncodableAc1018Table();
+    tableBorderColors.m_borderColorOverrideFlags = 0x00020081u;
+    tableBorderColors.m_tableBorderColors[0].method = 0xC0u;
+    tableBorderColors.m_tableBorderColors[0].index = 256u;
+    tableBorderColors.m_tableBorderColors[7].method = 0xC1u;
+    tableBorderColors.m_tableBorderColors[7].index = 0u;
+    tableBorderColors.m_tableBorderColors[17].method = 0xC3u;
+    tableBorderColors.m_tableBorderColors[17].index = 255u;
+    dwgBufferW tableBorderColorBody;
+    dwgBufferW tableBorderColorHandles;
+    dwgBufferW tableBorderColorTypePrefix;
+    tableBorderColorTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t tableBorderColorObjectSizeBit =
+        tableBorderColorTypePrefix.bitCount();
+    const bool tableBorderColorEncoded = tableBorderColors.encodeAsTableClass(
+        DRW::AC1018, tableBorderColorBody, tableBorderColorHandles);
+    const std::uint64_t tableBorderColorBodyEndBit =
+        tableBorderColorBody.bitCount();
+    constexpr std::int32_t tableBorderColorSentinel = 0x51CA0944;
+    tableBorderColorBody.putBitLong(tableBorderColorSentinel);
+    tableBorderColorBody.patchRawLong32AtBit(
+        tableBorderColorObjectSizeBit,
+        static_cast<std::uint32_t>(tableBorderColorBody.bitCount()));
+    appendBits(tableBorderColorBody, tableBorderColorHandles);
+    dwgBuffer tableBorderColorInput(tableBorderColorBody.data().data(),
+                                    tableBorderColorBody.data().size());
+    TableDwgCodecProbe tableBorderColorReadback;
+    const bool tableBorderColorRead = tableBorderColorEncoded
+        && tableBorderColorReadback.parseDwg(DRW::AC1018,
+                                             &tableBorderColorInput);
+    const bool tableBorderColorMatches = tableBorderColorRead
+        && tableBorderColorInput.isGood()
+        && tableBorderColorReadback.m_semanticContentComplete
+        && tableBorderColorReadback.m_borderColorOverrideFlags == 0x00020081u
+        && tableBorderColorReadback.m_tableBorderColors[0].method == 0xC0u
+        && tableBorderColorReadback.m_tableBorderColors[0].index == 256u
+        && tableBorderColorReadback.m_tableBorderColors[7].method == 0xC1u
+        && tableBorderColorReadback.m_tableBorderColors[7].index == 0u
+        && tableBorderColorReadback.m_tableBorderColors[17].method == 0xC3u
+        && tableBorderColorReadback.m_tableBorderColors[17].index == 255u
+        && cursorBit(tableBorderColorInput) == tableBorderColorBodyEndBit;
+    t.expect(tableBorderColorMatches,
+             "AC1018 TABLE sparse border index CMC colors encode and read back");
+    if (tableBorderColorMatches) {
+        const std::int32_t sentinel = tableBorderColorInput.getBitLong();
+        t.expect(tableBorderColorInput.isGood()
+                     && sentinel == tableBorderColorSentinel,
+                 "AC1018 TABLE border CMC values preserve the following body sentinel");
+        const auto& ranges =
+            tableBorderColorReadback.m_content.m_subrecordRanges;
+        const auto range = std::find_if(ranges.cbegin(), ranges.cend(),
+            [](const DRW_DwgSubrecordRange& value) {
+                return value.m_name == "r2007-table-overrides";
+            });
+        dwgBuffer wire(tableBorderColorBody.data().data(),
+                       tableBorderColorBody.data().size());
+        bool wireOrderMatches = range != ranges.cend()
+            && setBitPosition(wire, range->m_startBit)
+            && !wire.getBit() && wire.getBit()
+            && static_cast<std::uint32_t>(wire.getBitLong()) == 0x00020081u;
+        constexpr std::array<std::uint32_t, 3> packedBorderColors = {{
+            0xC0000000u, 0xC1000000u, 0xC30000FFu
+        }};
+        for (std::uint32_t packed : packedBorderColors) {
+            wireOrderMatches = wireOrderMatches && wire.getBitShort() == 0u
+                && wire.getBitLong() == static_cast<std::int32_t>(packed)
+                && wire.getRawChar8() == 0u;
+        }
+        wireOrderMatches = wireOrderMatches && !wire.getBit() && !wire.getBit()
+            && wire.isGood()
+            && cursorBit(wire) == range->m_startBit + range->m_bitSize;
+        t.expect(wireOrderMatches,
+                 "AC1018 TABLE emits sparse border CMC values in mask order");
+    }
+
     TableDwgCodecProbe cellAlignmentTable = makeEncodableAc1018Table();
     DRW_TableCell& cellAlignmentCell =
         cellAlignmentTable.m_content.m_rows.front().m_cells.front();
@@ -13199,6 +13274,15 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
             table.m_tableBorderLineweights[0] = 25;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects truecolor border CMC without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_borderColorOverrideFlags = 1u;
+            table.m_tableBorderColors[0].method = 0xC2u;
+            table.m_tableBorderColors[0].hasRgbColor = true;
+            table.m_tableBorderColors[0].rgb24 = 0x123456;
         });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects non-enum border lineweight without writing",

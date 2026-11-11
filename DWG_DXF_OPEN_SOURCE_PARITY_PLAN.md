@@ -1536,6 +1536,16 @@ created locally from scratch for the specific control.
   The focused DWG and DXF adapter tests pass. Border CMC stays refused. This
   does not qualify physical producer ordering or native rendering; see the
   [DWG border writer receipt](docs/research/p5-ac1018-table-border-lineweight-visibility-dwg-writer-2026-11-11.json).
+  **Completed DWG table-border CMC slice (2026-11-11):** the AC1018 direct
+  writer now emits selected entries from the 18-bit border-color mask in bit
+  order. It admits C0/ByLayer, C1/ByBlock and C3/indexed ACI only, and retains
+  the normalized payload index for readback; truecolor, names/books, unknown
+  flags and unselected residue remain refused. Generated sparse-mask vectors
+  verify exact CMC order, parser readback and the following-body sentinel.
+  Focused DWG and DXF adapter tests pass. This adds bounded DWG codec support;
+  DXF per-row border-color output remains refused where one group-code value
+  cannot represent three distinct row values. Physical producer ordering and
+  native rendering remain unqualified. See the [DWG border CMC receipt](docs/research/p5-ac1018-table-border-cmc-dwg-writer-2026-11-11.json).
   Re-encoding a parsed TABLE with a nonempty retained override range remains
   refused, including after modeled values change: the range currently stores
   offsets and counts, not the source bytes or a value snapshot. Next add an
@@ -2693,7 +2703,7 @@ behavior independently. Local macOS checks do not satisfy those platform gates.
   and [CMC representability audit](docs/research/p5-ac1021-table-border-cmc-lossless-dxf-audit-2026-11-08.json),
   plus the earlier [DWG retention receipt](docs/research/p5-ac1021-table-border-overrides-2026-11-08.json).
 - **Remaining P5 TABLE border work (bounded, fast):**
-  keep per-row border CMC output-refused; the general representability audit
+  keep DXF per-row border CMC output-refused; the general representability audit
   is complete and does not need to block other P5 work. Revisit only for a
   separately specified equality-constrained profile. Autodesk's
   [TABLE DXF group-code definition](https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-D8CCD2F0-18A3-42BB-A64D-539114A07DA0.htm)
@@ -2715,11 +2725,12 @@ behavior independently. Local macOS checks do not satisfy those platform gates.
      output, while selected zero is preserved. No public virtuals were added.
   2. Keep the mapped six-category lineweight and visibility arrays, strict
      18-bit mask/value presence checks, the exact 27-value lineweight enum for
-     both row and cell overrides, and DWG/DXF visibility inversion. **The
-     bounded AC1018 DWG table-level lineweight/visibility writer is now
-     implemented and generated-readback tested**; the 18-bit border color
-     writer remains out of scope because selected CMC values are not generally
-     representable by the DXF entity-level border groups.
+     both row and cell overrides, and DWG/DXF visibility inversion. The
+     bounded AC1018 DWG table-level lineweight/visibility writer is implemented
+     and generated-readback tested. The AC1018 DWG border CMC writer also
+     supports bounded index-color values. DXF per-row border CMC remains
+     output-refused because selected values are not generally representable by
+     the entity-level border groups.
      Per-row border CMC is resolved as general-profile output-refused: four
      edge categories have only one DXF entity-level value for three independent
      DWG rows. Do not block other P5 work on this non-representable profile.

@@ -2824,6 +2824,15 @@ bool validDwgTableLineweight(int value) noexcept {
     }
 }
 
+bool validDwgTableIndexColor(const DRW_DwgCmColor& value) noexcept {
+    return !value.hasRgbColor && value.flags == 0u && value.rgb24 == -1
+        && value.colorName.empty() && value.bookName.empty()
+        && ((value.method == 0xC0u && value.index == 256u)
+            || (value.method == 0xC1u && value.index == 0u)
+            || (value.method == 0xC3u && value.index >= 1u
+                && value.index <= 255u));
+}
+
 bool validAc1018TableBlockRecordHandle(const dwgHandle& blockRecord) {
     const bool normalized = blockRecord.code == DRW::DwgNullReference
         && blockRecord.size == 0u && blockRecord.rawCode == 0u
@@ -4223,14 +4232,15 @@ bool skipR2007TableOverrides(DRW::Version version, dwgBuffer *buf,
         if ((flags & ~0x0003FFFFu) != 0u)
             return false;
         table.m_borderColorOverrideFlags = flags;
-        if (flags != 0u)
-            semanticComplete = false;
         ++maskCount;
         for (std::size_t i = 0; i < table.m_tableBorderColors.size(); ++i) {
-            if ((flags & (1u << i)) != 0u
-                && !readTableCmColor(version, buf, strBuf, bounds,
-                                     &table.m_tableBorderColors[i]))
-                return false;
+            if ((flags & (1u << i)) != 0u) {
+                if (!readTableCmColor(version, buf, strBuf, bounds,
+                                      &table.m_tableBorderColors[i]))
+                    return false;
+                if (!validDwgTableIndexColor(table.m_tableBorderColors[i]))
+                    semanticComplete = false;
+            }
         }
     }
 
@@ -15518,20 +15528,12 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
     constexpr std::array<std::uint32_t, 3> rowTextStyleFlags = {{
         0x00020000u, 0x00040000u, 0x00080000u
     }};
-    const auto validIndexColor = [](const DRW_DwgCmColor& value) {
-        return !value.hasRgbColor && value.flags == 0u && value.rgb24 == -1
-            && value.colorName.empty() && value.bookName.empty()
-            && ((value.method == 0xC0u && value.index == 256u)
-                || (value.method == 0xC1u && value.index == 0u)
-                || (value.method == 0xC3u && value.index >= 1u
-                    && value.index <= 255u));
-    };
     const auto validTableRowOverrides = [&]() {
         for (std::size_t i = 0u; i < rowAlignmentFlags.size(); ++i) {
             const bool hasTextColor =
                 (m_tableOverrideFlags & rowTextColorFlags[i]) != 0u;
             const DRW_DwgCmColor& textColor = m_tableRowTextColors[i];
-            if (hasTextColor ? !validIndexColor(textColor)
+            if (hasTextColor ? !validDwgTableIndexColor(textColor)
                              : !defaultColor(textColor))
                 return false;
             const bool hasFillNone =
@@ -15541,7 +15543,7 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
             const bool hasFillColor =
                 (m_tableOverrideFlags & rowFillColorFlags[i]) != 0u;
             const DRW_DwgCmColor& fillColor = m_tableRowFillColors[i];
-            if (hasFillColor ? !validIndexColor(fillColor)
+            if (hasFillColor ? !validDwgTableIndexColor(fillColor)
                              : !defaultColor(fillColor))
                 return false;
             const bool hasAlignment =
@@ -15563,6 +15565,17 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
                     ? (textStyleHandle == 0u
                         || textStyleHandle == DRW::NoHandle)
                     : textStyleHandle != 0u)
+                return false;
+        }
+        return true;
+    };
+    const auto validTableBorderColorOverrides = [&]() {
+        for (std::size_t i = 0u; i < m_tableBorderColors.size(); ++i) {
+            const bool selected =
+                (m_borderColorOverrideFlags & (1u << i)) != 0u;
+            const DRW_DwgCmColor& color = m_tableBorderColors[i];
+            if (selected ? !validDwgTableIndexColor(color)
+                         : !defaultColor(color))
                 return false;
         }
         return true;
@@ -15666,15 +15679,10 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
         || (m_hasSemanticContent && !m_semanticContentComplete)
         || m_dataVersion != 0 || !validLegacyTableValueFlag(m_valueFlag)
         || !validTableScalarOverrides
-        || m_borderColorOverrideFlags != 0u
+        || !validTableBorderColorOverrides()
         || std::any_of(m_tableRowTextStyleNames.cbegin(),
                        m_tableRowTextStyleNames.cend(),
                        [](const UTF8STRING& name) { return !name.empty(); })
-        || std::any_of(m_tableBorderColors.cbegin(),
-                       m_tableBorderColors.cend(),
-                       [&](const DRW_DwgCmColor& color) {
-                           return !defaultColor(color);
-                       })
         || m_content.m_columns.empty()
         || m_content.m_columns.size() > kMaxTableColumns
         || static_cast<std::size_t>(colcount) != m_content.m_columns.size()
@@ -16056,7 +16064,20 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
                     stagedBody.putBitDouble(m_tableRowHeightOverrides[i]);
             }
         }
-        stagedBody.putBit(false); // no border color overrides
+        const bool hasBorderColorOverrides = m_borderColorOverrideFlags != 0u;
+        stagedBody.putBit(hasBorderColorOverrides);
+        if (hasBorderColorOverrides) {
+            stagedBody.putBitLong(static_cast<std::int32_t>(
+                m_borderColorOverrideFlags));
+            for (std::size_t i = 0u; i < m_tableBorderColors.size(); ++i) {
+                if ((m_borderColorOverrideFlags & (1u << i)) != 0u) {
+                    const DRW_DwgCmColor& color = m_tableBorderColors[i];
+                    stagedBody.putCmColor(
+                        version, color.method, color.index, color.rgb24,
+                        color.colorName, color.bookName, strBuf);
+                }
+            }
+        }
         const bool hasBorderLineweightOverrides =
             m_borderLineweightOverrideFlags != 0u;
         stagedBody.putBit(hasBorderLineweightOverrides);
