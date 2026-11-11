@@ -1265,11 +1265,16 @@ created locally from scratch for the specific control.
   XRECORDs `0xbe`–`0xc6`, whose source bodies and owner links are now
   independently walked and cross-checked against LibreDWG and a same-vendor
   ODA DXF conversion. TABLEGEOMETRY's selected zero-cell profile and DATATABLE
-  scalar columns also match that conversion. The source strings' codepage 45,
-  TABLECONTENT interior and 50 null handle-field identities, TABLESTYLE
-  dependencies, and producer/native meaning remain unresolved. Treat this as
-  source evidence only; retain populated-graph refusal. Reproduce the walk
-  using the [descendant graph receipt](docs/research/p5-ac1018-table-descendant-graph-wire-2026-11-11.json).
+  scalar columns also match that conversion. A complete source-bound walk of
+  TABLECONTENT `0xb9` now matches its nine cells, formatting, merged range and
+  all handle roles to the same-vendor DXF projection. The 50 null references
+  map to 17 text-style and 33 border-linetype fields; the final TABLESTYLE
+  pointer is non-null. AC1018 needs inline body/text cursors and a separately
+  positioned handle cursor, so do not lift the existing version gate without
+  those boundaries. The XRECORD codepage 45, TABLESTYLE dependencies, and
+  independent producer/native meaning remain unresolved. Retain populated-graph
+  refusal. See the [descendant graph receipt](docs/research/p5-ac1018-table-descendant-graph-wire-2026-11-11.json)
+  and [TABLECONTENT walk](docs/research/p5-ac1018-tablecontent-complete-body-walk-2026-11-11.json).
 
   The recreated AC1018 XRECORD `0xbc` is now independently walked to its
   exact data, owner and reactor boundaries. Its three group-102 strings carry
