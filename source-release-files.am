@@ -247,6 +247,8 @@ EXTRA_DIST = \
     src/intern/drw_symbol_casefold_data.h \
     src/intern/drw_textcodec.cpp \
     src/intern/drw_textcodec.h \
+    src/intern/dwg_datatable_ac1018_candidate.cpp \
+    src/intern/dwg_datatable_ac1018_candidate.h \
     src/intern/dwg_default_material.h \
     src/intern/dwg_dxf_output_transaction.cpp \
     src/intern/dwg_dxf_output_transaction.h \
@@ -443,6 +445,7 @@ EXTRA_DIST = \
     tests/dwg_class_section_wire_tests.cpp \
     tests/dwg_class_source_tests.cpp \
     tests/dwg_class_wire_tests.cpp \
+    tests/dwg_datatable_ac1018_candidate_tests.cpp \
     tests/dwg_default_material_libredwg.py \
     tests/dwg_default_material_optin_tests.cpp \
     tests/dwg_default_plotstyle_libredwg.py \

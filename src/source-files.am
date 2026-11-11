@@ -25,6 +25,7 @@ libdxfrw_la_SOURCES = \
     intern/dxfreader.cpp \
     intern/dxfwriter.cpp \
     intern/dwg_dxf_output_transaction.cpp \
+    intern/dwg_datatable_ac1018_candidate.cpp \
     intern/dwgwriterlayoutvalidation.cpp \
     intern/rscodec.cpp \
     drw_acis.cpp \
@@ -68,6 +69,7 @@ dist_noinst_HEADERS = \
     intern/drw_symbol_casefold_data.h \
     intern/drw_textcodec.h \
     intern/dwg_dxf_output_transaction.h \
+    intern/dwg_datatable_ac1018_candidate.h \
     intern/dwg_default_material.h \
     intern/dwg_header_time.h \
     intern/dwgbuffer.h \

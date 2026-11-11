@@ -1275,6 +1275,13 @@ created locally from scratch for the specific control.
   independent producer/native meaning remain unresolved. Retain populated-graph
   refusal. See the [descendant graph receipt](docs/research/p5-ac1018-table-descendant-graph-wire-2026-11-11.json)
   and [TABLECONTENT walk](docs/research/p5-ac1018-tablecontent-complete-body-walk-2026-11-11.json).
+  An opt-in AC1018 DATATABLE observer now validates the selected four-column
+  wire profile, exact boundaries and child-owner roles with bounded resources
+  and transactional failure. Its public raw input is forgeable: it is not
+  reader-origin provenance, general DATATABLE semantics, or output authority.
+  Next bind the inspected bytes to a CRC-verified import and the sealed child
+  set, then close the remaining recursive resources before considering output.
+  See the [DATATABLE candidate receipt](docs/research/p5-ac1018-datatable-candidate-observer-2026-11-11.json).
 
   The recreated AC1018 XRECORD `0xbc` is now independently walked to its
   exact data, owner and reactor boundaries. Its three group-102 strings carry
