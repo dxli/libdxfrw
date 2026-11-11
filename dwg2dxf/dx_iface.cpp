@@ -18781,6 +18781,12 @@ bool addTextRetainedBytes(
         if (!addMTextRetainedBytes(*mtext, estimate))
             return false;
     }
+    if (const auto* columns = dynamic_cast<const DRW_MTextLegacyColumns*>(&text)) {
+        if (columns->columnSource
+            && (!addAssociativeRetainedBytes(sizeof(DRW_MTextLegacyColumns::Source), estimate)
+                || !addVectorPayloadBytes(columns->columnSource->groups, estimate)))
+            return false;
+    }
     if (const auto* arcText =
             dynamic_cast<const DRW_ArcAlignedText*>(&text)) {
         if (!addArcAlignedTextRetainedBytes(*arcText, estimate))

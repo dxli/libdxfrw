@@ -3030,6 +3030,35 @@ private:
     [[nodiscard]] bool finalizeDxfColumnObject() const noexcept;
 };
 
+//! A bounded legacy MTEXT main-subclass column carrier from DXF input.
+/*! This distinct runtime type keeps original column groups separate from
+ * both common linetype/rotation and the R2018 embedded-column grammar. Its
+ * group values are observations, not an output or native-rendering claim.
+ * Copying it to a plain DRW_MText deliberately discards the carrier. */
+class DRW_MTextLegacyColumns final : public DRW_MText {
+public:
+    struct Group {
+        int code = 0;
+        double value = 0.0;
+    };
+    struct Source {
+        DRW::Version version = DRW::UNKNOWNV;
+        bool binary = false;
+        std::vector<Group> groups;
+    private:
+        friend class dxfRW;
+        std::shared_ptr<DxfReadRetainedLease> retainedLease;
+    };
+    // Copies share the immutable source and its retained-byte charge.
+    std::shared_ptr<const Source> columnSource;
+
+protected:
+    bool encodeDwg(DRW::Version, dwgBufferW*, std::uint32_t = 0,
+                   dwgBufferW* = nullptr, dwgBufferW* = nullptr) override {
+        return false;
+    }
+};
+
 //! Class to handle RTEXT (RText, AutoCAD Express Tools "reactive text").
 /*!
 *  RTEXT renders text generated at view time from a DIESEL expression (or an

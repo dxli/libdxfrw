@@ -966,7 +966,10 @@ public:
         retainTypedEntity<DRW_Solid>(data);
     }
     virtual void addMText(const DRW_MText& data) override{
-        retainTypedEntity<DRW_MText>(data);
+        if (const auto* columns = dynamic_cast<const DRW_MTextLegacyColumns*>(&data))
+            retainTypedEntity<DRW_MTextLegacyColumns>(*columns);
+        else
+            retainTypedEntity<DRW_MText>(data);
     }
     void addTolerance(const DRW_Tolerance& data) override{
         retainTypedEntity<DRW_Tolerance>(data);

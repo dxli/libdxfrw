@@ -507,6 +507,7 @@ EXTRA_DIST = \
     tests/dxf_lightlist_resolver_snapshot_tests.cpp \
     tests/dxf_lwpoly_wcs_vertices_tests.cpp \
     tests/dxf_mline_source_dependency_tests.cpp \
+    tests/dxf_mtext_legacy_columns_tests.cpp \
     tests/dxf_no_raw_sections_tests.cpp \
     tests/dxf_pointcloud_omitted_fields_tests.cpp \
     tests/dxf_primitive_subtype_dispatch_tests.cpp \

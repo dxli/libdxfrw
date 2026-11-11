@@ -271,6 +271,16 @@ target_link_libraries(libdxfrw_dxf_r12_ellipse_boundary_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dxf_r12_ellipse_boundary COMMAND libdxfrw_dxf_r12_ellipse_boundary_tests)
 set_tests_properties(libdxfrw_dxf_r12_ellipse_boundary PROPERTIES LABELS "dxf;fast;geometry;transaction" TIMEOUT 30)
 
+add_executable(libdxfrw_dxf_mtext_legacy_columns_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dxf_mtext_legacy_columns_tests.cpp
+    ${CMAKE_SOURCE_DIR}/dwg2dxf/dx_iface.cpp)
+target_compile_features(libdxfrw_dxf_mtext_legacy_columns_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dxf_mtext_legacy_columns_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dxf_mtext_legacy_columns_tests PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/dwg2dxf)
+target_link_libraries(libdxfrw_dxf_mtext_legacy_columns_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dxf_mtext_legacy_columns COMMAND libdxfrw_dxf_mtext_legacy_columns_tests)
+set_tests_properties(libdxfrw_dxf_mtext_legacy_columns PROPERTIES LABELS "dxf;fast;mtext;compatibility;transaction" TIMEOUT 30)
+
 add_executable(libdxfrw_dwg_mtext_rotation_direction_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/dwg_mtext_rotation_direction_tests.cpp)
 target_compile_features(libdxfrw_dwg_mtext_rotation_direction_tests PRIVATE cxx_std_17)

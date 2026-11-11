@@ -6127,6 +6127,10 @@ bool dxfRW::preflightEntity(const DRW_Entity *ent) {
         m_writeError = true;
         return false;
     }
+    // Do not let a public tag mutation route the source-only column carrier
+    // through an inherited POINT/LINE/TEXT writer and discard its payload.
+    if (dynamic_cast<const DRW_MTextLegacyColumns*>(ent) != nullptr)
+        return rejectDxfWriteWithReason("MTEXT", "legacy column source has no qualified serializer");
     if (!isValidDxfEntityFields(*ent)) {
         m_writeError = true;
         return false;
@@ -14620,6 +14624,8 @@ bool dxfRW::writeUnderlayDefinition(DRW_UnderlayDefinition *ent) {
 }
 
 bool dxfRW::writeMText(DRW_MText *ent){
+    if (dynamic_cast<const DRW_MTextLegacyColumns*>(ent) != nullptr)
+        return rejectDxfWriteWithReason("MTEXT", "legacy column source has no qualified serializer");
     if (version > DRW::AC1009) {
         if (!preflightEntity(ent))
             return false;
@@ -22452,6 +22458,38 @@ bool dxfRW::processMText() {
     bool hasInsertionX = false;
     bool hasInsertionY = false;
     bool hasHeight = false;
+    // A legacy MTEXT column run reuses 48 (common linetype scale) and 50
+    // (MTEXT rotation). Keep the ordered run outside the base MTEXT model.
+    // Only the explicitly scoped, canonical order is decoded here.
+    DRW_MTextLegacyColumns columns;
+    std::shared_ptr<DRW_MTextLegacyColumns::Source> columnSource;
+    bool inMTextSubclass = false, inEmbeddedObject = false, legacyColumns = false;
+    bool sawSubclassMarker = false;
+    bool preTypeColumnField = false;
+    unsigned seenColumns = 0u;
+    int remainingHeights = -1;
+    constexpr unsigned requiredColumns = 0x3fu; // 75,76,78,79,48,49
+    constexpr std::size_t maxColumnGroups = 4103u;
+    const auto appendColumn = [&](int groupCode, double value) {
+        if (!std::isfinite(value))
+            return false;
+        if (!columnSource) {
+            columnSource = std::make_shared<DRW_MTextLegacyColumns::Source>();
+            columnSource->retainedLease = std::make_shared<DxfReadRetainedLease>(reader->retainedByteBudget());
+        }
+        if (columnSource->groups.size() >= maxColumnGroups) return false;
+        const std::size_t previous = sizeof(DRW_MTextLegacyColumns::Source)
+            + columnSource->groups.size() * sizeof(DRW_MTextLegacyColumns::Group);
+        if (!columnSource->retainedLease->resizeTo(previous + sizeof(DRW_MTextLegacyColumns::Group)))
+            return false;
+        try {
+            columnSource->groups.push_back({groupCode, value});
+        } catch (...) {
+            (void)columnSource->retainedLease->resizeTo(previous);
+            throw;
+        }
+        return true;
+    };
     while (reader->readRec(&code)) {
         DRW_DBG(code); DRW_DBG("\n");
         if (0 == code) {
@@ -22462,11 +22500,81 @@ bool dxfRW::processMText() {
                 return setError(DRW::BAD_READ_ENTITIES);
             if (!hasText || !hasInsertionX || !hasInsertionY || !hasHeight)
                 return setError(DRW::BAD_CODE_PARSED);
+            if (legacyColumns && (remainingHeights > 0 || seenColumns != requiredColumns))
+                return setError(DRW::BAD_CODE_PARSED);
             if (!txt.finalizeDxfColumnObject())
                 return setError(DRW::BAD_CODE_PARSED);
             txt.updateAngle();
-            iface->addMText(txt);
+            if (legacyColumns) {
+                columnSource->version = reader->getSourceVersion();
+                columnSource->binary = reader->isBinary();
+                columns.columnSource = std::move(columnSource);
+                static_cast<DRW_MText&>(columns) = std::move(txt);
+                iface->addMText(columns);
+            } else {
+                iface->addMText(txt);
+            }
             return true;  //found new entity or ENDSEC, terminate
+        }
+
+        if (legacyColumns && remainingHeights > 0 && code != 50)
+            return setError(DRW::BAD_CODE_PARSED);
+        if (code == 100) {
+            const auto marker = reader->getStringView();
+            sawSubclassMarker = true;
+            inMTextSubclass = marker == "AcDbMText";
+        } else if (code == 101 && reader->getStringView() == "Embedded Object") {
+            if (legacyColumns) return setError(DRW::BAD_CODE_PARSED);
+            inEmbeddedObject = true;
+        } else if (code >= 1000) {
+            if (legacyColumns && remainingHeights > 0)
+                return setError(DRW::BAD_CODE_PARSED);
+            inMTextSubclass = false;
+            inEmbeddedObject = false;
+        }
+        if (!inEmbeddedObject && inMTextSubclass && !legacyColumns
+            && (code == 76 || code == 78 || code == 79 || code == 48 || code == 49))
+            preTypeColumnField = true;
+        if (!inEmbeddedObject && inMTextSubclass && code == 75 && !legacyColumns) {
+            if (preTypeColumnField) return setError(DRW::BAD_CODE_PARSED);
+            legacyColumns = true;
+        }
+        if (legacyColumns && !inEmbeddedObject && inMTextSubclass) {
+            unsigned bit = 0u;
+            if (code == 75) bit = 0x01u;
+            else if (code == 76) bit = 0x02u;
+            else if (code == 78) bit = 0x04u;
+            else if (code == 79) bit = 0x08u;
+            else if (code == 48) bit = 0x10u;
+            else if (code == 49) bit = 0x20u;
+            if (bit != 0u) {
+                if ((seenColumns & bit) != 0u || remainingHeights >= 0)
+                    return setError(DRW::BAD_CODE_PARSED);
+                const double value = bit <= 0x08u ? static_cast<double>(reader->getInt32()) : reader->getDouble();
+                if ((code == 75 && (value < 0 || value > 2))
+                    || (code == 76 && (value < 0 || value > 4096))
+                    || ((code == 78 || code == 79) && value != 0 && value != 1)
+                    || !appendColumn(code, value)) return setError(DRW::BAD_CODE_PARSED);
+                seenColumns |= bit;
+                continue;
+            }
+            if (code == 50) {
+                const double value = reader->getDouble();
+                if (seenColumns != requiredColumns || !appendColumn(code, value))
+                    return setError(DRW::BAD_CODE_PARSED);
+                if (remainingHeights < 0) {
+                    if (value < 1.0 || value > 4096.0 || std::floor(value) != value)
+                        return setError(DRW::BAD_CODE_PARSED);
+                    remainingHeights = static_cast<int>(value);
+                } else if (remainingHeights == 0) {
+                    return setError(DRW::BAD_CODE_PARSED);
+                } else {
+                    --remainingHeights;
+                }
+                continue;
+            }
+        } else if (!inEmbeddedObject && !sawSubclassMarker && code == 75) {
+            return setError(DRW::BAD_CODE_PARSED);
         }
 
         hasText = hasText || code == 1 || code == 3;

@@ -1782,6 +1782,14 @@ bool dwgRW::encodeEntityForWrite(DRW_Entity *ent,
     if (writer == nullptr || ent == nullptr)
         return recordWriteResult(WriteSkipKind::Entity, false);
 
+    // The legacy MTEXT column carrier is intentionally not serializable yet.
+    // Latch the whole operation even if a consumer ignores an entity-write
+    // failure; this also covers inherited point/line/text entry points.
+    if (dynamic_cast<const DRW_MTextLegacyColumns*>(ent) != nullptr) {
+        markDwgWriteFailure();
+        return recordWriteResult(WriteSkipKind::Entity, false);
+    }
+
     // SOLID/TRACE encode only one elevation. A rejected mismatch must not
     // disappear from the document when a legacy callback ignores false.
     if ((typeid(*ent) == typeid(DRW_Trace) || typeid(*ent) == typeid(DRW_Solid))
