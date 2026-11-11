@@ -32675,41 +32675,50 @@ bool DRW_MLine::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t b
     (void)bs; (void)strBuf;
     if (!validatePayloadFields())
         return false;
-    oType = 47;
-    if (!encodeDwgCommon(version, buf)) return false;
+    return encodeEntityDwgTransaction(
+        oType, buf, nullptr, handleBuf,
+        [this, version](dwgBufferW *body, dwgBufferW *strings,
+                        dwgBufferW *handles) {
+            (void)strings;
+            oType = 47;
+            if (!encodeDwgCommon(version, body))
+                return false;
 
-    buf->putBitDouble(scale);
-    buf->putRawChar8(justification);
-    buf->put3BitDouble(basePoint);
-    buf->putExtrusion(extPoint, false);  // false = pre-2000 style (getExtrusion(false) in parser)
-    buf->putBitShort(static_cast<std::uint16_t>(openClosed));
-    buf->putRawChar8(numLines);
-    buf->putBitShort(numVerts);
+            body->putBitDouble(scale);
+            body->putRawChar8(justification);
+            body->put3BitDouble(basePoint);
+            body->putExtrusion(extPoint, false);
+            body->putBitShort(static_cast<std::uint16_t>(openClosed));
+            body->putRawChar8(numLines);
+            body->putBitShort(numVerts);
 
-    for (const auto& vtx : vertlist) {
-        buf->put3BitDouble(vtx.position);
-        buf->put3BitDouble(vtx.vertexDir);
-        buf->put3BitDouble(vtx.miterDir);
-        for (int li = 0; li < static_cast<int>(numLines); ++li) {
-            const auto& segs  = (li < static_cast<int>(vtx.segParms.size()))
-                                    ? vtx.segParms[li]      : std::vector<double>{};
-            const auto& fills = (li < static_cast<int>(vtx.areaFillParms.size()))
-                                    ? vtx.areaFillParms[li] : std::vector<double>{};
-            buf->putBitShort(static_cast<std::uint16_t>(segs.size()));
-            for (double s : segs)  buf->putBitDouble(s);
-            buf->putBitShort(static_cast<std::uint16_t>(fills.size()));
-            for (double f : fills) buf->putBitDouble(f);
-        }
-    }
+            for (const auto &vertex : vertlist) {
+                body->put3BitDouble(vertex.position);
+                body->put3BitDouble(vertex.vertexDir);
+                body->put3BitDouble(vertex.miterDir);
+                for (int lineIndex = 0;
+                     lineIndex < static_cast<int>(numLines); ++lineIndex) {
+                    const auto &segments = vertex.segParms[lineIndex];
+                    const auto &fills = vertex.areaFillParms[lineIndex];
+                    body->putBitShort(
+                        static_cast<std::uint16_t>(segments.size()));
+                    for (double segment : segments)
+                        body->putBitDouble(segment);
+                    body->putBitShort(static_cast<std::uint16_t>(fills.size()));
+                    for (double fill : fills)
+                        body->putBitDouble(fill);
+                }
+            }
 
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
-
-    // MLINE style handle — extra handle after standard entity handles.
-    if (version > DRW::AC1014) {
-        dwgBufferW *hb = (handleBuf != nullptr) ? handleBuf : buf;
-        putAbsHandle(hb, styleHandle);
-    }
-    return true;
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
+            if (version > DRW::AC1014) {
+                dwgBufferW *const handleOutput =
+                    handles != nullptr ? handles : body;
+                putAbsHandle(handleOutput, styleHandle);
+            }
+            return true;
+        });
 }
 
 // ---------------------------------------------------------------------------

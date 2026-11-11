@@ -565,6 +565,14 @@ public:
     std::int16_t dwgType() const { return oType; }
 };
 
+class MLineCodecProbe final : public DRW_MLine {
+public:
+    using DRW_MLine::encodeDwg;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
+};
+
 class MeshCodecProbe final : public DRW_Mesh {
 public:
     using DRW_Mesh::parseDwg;
@@ -25645,6 +25653,45 @@ void testLeaderDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testMLineDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1015, DRW::AC1018, DRW::AC1021,
+                                     DRW::AC1024}) {
+    MLineCodecProbe mline;
+    mline.handle = 0xB110u + static_cast<std::uint32_t>(version);
+    mline.parentHandle = 0xB120u;
+    mline.reactorHandles = {0xB130u};
+    mline.xDictHandle = 0xB140u;
+    mline.setDwgType(0x777);
+    mline.scale = 1.5;
+    mline.justification = 1;
+    mline.basePoint = DRW_Coord(1.0, 2.0, 3.0);
+    mline.extPoint = DRW_Coord(0.0, 0.0, 1.0);
+    mline.openClosed = 1;
+    mline.numLines = 1;
+    mline.numVerts = 2;
+    mline.styleHandle = 0xB150u;
+    DRW_MLineVertex first;
+    first.position = DRW_Coord(0.0, 0.0, 0.0);
+    first.vertexDir = DRW_Coord(1.0, 0.0, 0.0);
+    first.miterDir = DRW_Coord(1.0, 1.0, 0.0);
+    first.segParms = {{0.25, 0.5}};
+    first.areaFillParms = {{0.75}};
+    DRW_MLineVertex second;
+    second.position = DRW_Coord(10.0, 5.0, 0.0);
+    second.vertexDir = DRW_Coord(0.0, 1.0, 0.0);
+    second.miterDir = DRW_Coord(-1.0, 1.0, 0.0);
+    second.segParms = {{1.0}};
+    second.areaFillParms = {{0.5, 0.25}};
+    mline.vertlist = {first, second};
+    checkEntityDwgEncodeAllocationRollback(
+        t, mline, version, 47u,
+        version == DRW::AC1015 ? "AC1015 MLINE"
+                               : version == DRW::AC1018 ? "AC1018 MLINE"
+                               : version == DRW::AC1021 ? "AC1021 MLINE"
+                                                        : "AC1024 MLINE");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -28872,6 +28919,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testLeaderDwgEncodeAllocationRollback(context);
       std::cout << "LEADER DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--mline-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testMLineDwgEncodeAllocationRollback(context);
+      std::cout << "MLINE DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }
