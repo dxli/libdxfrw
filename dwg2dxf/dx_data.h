@@ -2644,6 +2644,21 @@ private:
             return textDecodeObserved && textDecodeIssues == 0u;
         }
     };
+    // Opt-in provenance groundwork, not a replay/output certificate. The
+    // immutable owner binds one actual read attempt to one verified frame.
+    struct VerifiedXRecordSource {
+        std::shared_ptr<const unsigned char> importToken;
+        std::uint64_t generation{0u};
+        DRW_UnsupportedObject raw;
+        DRW_DwgFramePublication publication;
+        std::shared_ptr<const DRW_TableEntry> typedBaseline;
+        std::uint16_t codePage{0u};
+        bool codePagePresent{false}, codePageRecognized{false};
+        bool textObserved{false};
+        std::uint32_t textIssues{0u};
+    };
+    std::shared_ptr<const unsigned char> m_verifiedXRecordImportToken;
+    std::shared_ptr<const VerifiedXRecordSource> m_verifiedXRecordSource;
     // Source-bound staging only. Never replay these bytes as DXF, and never
     // use these counts to waive strict semantic/output completeness.
     using StandardDwgFrameKey = std::pair<std::uint64_t, std::uint32_t>;

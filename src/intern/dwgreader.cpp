@@ -18,6 +18,7 @@
 #include "drw_reserve.h"
 #include "drw_textcodec.h"
 #include "dwgobjectframe.h"
+#include "dwg_xrecord_verified_source.h"
 #include "dwgsafety.h"
 #include "proxygraphicdecoder.h"
 #include "dwgheadersection.h"
@@ -13031,8 +13032,44 @@ bool dwgReader::readDwgObjects(DRW_Interface &intfa, dwgBuffer *dbuf,
         }
       }
     }
-    if (!discardDetachedDwgSourceFrame(lease)) {
+    const auto verifiedHandle = lease.object.handle;
+    const auto verifiedOffset = lease.object.loc;
+    const auto verifiedOrdinal = lease.object.sourceOrdinal;
+    const auto verifiedSpace = lease.object.sourceOffsetSpace;
+    const bool verifiedXRecord = read && !frameFailure
+        && lease.object.type == dwgObjType::XRECORD;
+    const bool discarded = discardDetachedDwgSourceFrame(lease);
+    if (!discarded) {
       structuralFailure = true;
+    }
+    // OBJECTS runs after block transactions. After the source lease commits,
+    // stage one bounded candidate. The ticket is delivered only after the
+    // complete reader operation has succeeded, not at this provisional point.
+    auto* verifiedSink = dynamic_cast<DwgVerifiedXRecordSink*>(&intfa);
+    if (discarded && verifiedXRecord && !structuralFailure && verifiedSink
+        && verifiedSink->wantsVerifiedXRecord(verifiedHandle)) {
+      try {
+        dwgBuffer probe = dbuf->forkIndependent();
+        DwgObjectFrame verifiedFrame;
+        dwgBuffer sizeProbe = dbuf->forkIndependent();
+        const bool positioned = sizeProbe.setPosition(verifiedOffset);
+        const std::int32_t candidateSize = positioned ? sizeProbe.getModularShort() : -1;
+        if (m_verifiedXRecordPending || m_verifiedXRecordPendingFailed) {
+          m_verifiedXRecordPending.reset();
+          m_verifiedXRecordPendingFailed = true;
+        } else if (sizeProbe.isGood() && candidateSize >= 0
+                   && static_cast<std::size_t>(candidateSize) <= 1024u * 1024u
+                   && verifiedFrame.readAt(probe, version, verifiedOffset)) {
+          auto pending = std::make_unique<VerifiedXRecordPending>();
+          pending->version = version;
+          pending->handle = verifiedHandle;
+          pending->offset = verifiedOffset;
+          pending->ordinal = verifiedOrdinal;
+          pending->space = verifiedSpace;
+          pending->frame = std::move(verifiedFrame);
+          m_verifiedXRecordPending = std::move(pending);
+        } else { m_verifiedXRecordPendingFailed = true; }
+      } catch (...) { m_verifiedXRecordPending.reset(); m_verifiedXRecordPendingFailed = true; }
     }
     structuralFailure = structuralFailure || frameFailure;
   }
@@ -13066,6 +13103,20 @@ bool dwgReader::readDwgObjects(DRW_Interface &intfa, dwgBuffer *dbuf,
   // a warning, but a missing/truncated object frame invalidates the OBJECTS
   // section. The frame reader is the only authority for this distinction.
   return !structuralFailure;
+}
+
+void dwgReader::deliverVerifiedXRecord(DRW_Interface& target) noexcept {
+  if (!m_verifiedXRecordPending || m_verifiedXRecordPendingFailed
+      || m_objectParseFailures != 0u || m_entityParseFailures != 0u
+      || m_dwgFrameCoverageIntegrityViolation
+      || m_dwgFrameCoverageStatus != DRW_DwgFrameCoverageStatus::FinalizedComplete)
+    return;
+  auto* sink = dynamic_cast<DwgVerifiedXRecordSink*>(&target);
+  if (!sink || !sink->wantsVerifiedXRecord(m_verifiedXRecordPending->handle)) return;
+  auto pending = std::move(m_verifiedXRecordPending);
+  DwgVerifiedXRecordTicket ticket(pending->version, pending->handle, pending->offset,
+      pending->ordinal, pending->space, pending->frame);
+  sink->verifiedXRecord(ticket);
 }
 
 bool dwgReader::publishDeferredRawObjects(

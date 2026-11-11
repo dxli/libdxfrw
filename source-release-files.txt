@@ -250,6 +250,7 @@ src/intern/dwg_dxf_output_transaction.cpp
 src/intern/dwg_dxf_output_transaction.h
 src/intern/dwg_fixed_handles.h
 src/intern/dwg_header_time.h
+src/intern/dwg_xrecord_verified_source.h
 src/intern/dwgbuffer.cpp
 src/intern/dwgbuffer.h
 src/intern/dwgbufferw.cpp
@@ -484,6 +485,7 @@ tests/dwg_vertex_tangent_units_tests.cpp
 tests/dwg_view_angle_units_tests.cpp
 tests/dwg_viewport_angle_units_tests.cpp
 tests/dwg_vport_angle_units_tests.cpp
+tests/dwg_xrecord_verified_source_tests.cpp
 tests/dxf_compact_material_graph_tests.cpp
 tests/dxf_dictionary_late_hardowner_tests.cpp
 tests/dxf_dimension_oblique_tests.cpp

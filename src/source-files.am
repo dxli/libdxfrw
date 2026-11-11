@@ -74,6 +74,7 @@ dist_noinst_HEADERS = \
     intern/dwghatchboundary.h \
     intern/dwgheadersection.h \
     intern/dwgobjectframe.h \
+    intern/dwg_xrecord_verified_source.h \
     intern/dwgreader.h \
     intern/dwgreader15.h \
     intern/dwgreader18.h \

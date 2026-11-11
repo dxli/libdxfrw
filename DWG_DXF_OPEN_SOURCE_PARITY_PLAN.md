@@ -1241,19 +1241,20 @@ created locally from scratch for the specific control.
   the typed writer substitutes codepage 0. Neither the correct interpretation
   of 45 nor the three opaque descendant bodies is established. The pinned
   verifier and actual-import observations are in the [wire receipt](docs/research/p5-ac1018-table-xrecord-source-wire-2026-11-11.json).
-  Next implement an **opt-in sealed source capability** inside the import
-  aggregate, constructed only after a successful generation-bound publication
-  matches the exact raw frame and immutable typed baseline. Bind an import-unique
-  token, source version, frame ordinal/offset/space/size/type/handle, body and
-  CRC-validation provenance from `DwgObjectFrame::readAt`; the callback body
-  alone does not contain the original CRC. Carry it out of band, without adding
-  ordinary callbacks or changing `DRW_XRecord` layout or global ordered-entry
-  authority. First test generated CRC-valid and corrupt frames, coincident
-  identities across imports, source and model mutations, refusal/rollback and
-  same-writer retry. Revalidate the sealed baseline at staging and finalization;
-  recompute output framing/CRC only when replay is actually admitted. Keep the
-  physical subtree refused until all three opaque descendants, their source-bound
-  owner/target roles, class identities and transactional closure are proven.
+  The opt-in selected-XRECORD source capability is now sealed only after
+  CRC-checked frame acquisition, committed OBJECTS lease, successful whole
+  read, complete frame coverage, matched publication and immutable typed
+  baseline. A separate internal sink preserves ordinary callbacks and the
+  `DRW_XRecord` layout and precedence. The generated AC1015 physical CRC
+  corruption is refused and the restored file succeeds on same-reader retry;
+  generated AC1018 mutation, identity, callback-failure and reentry controls
+  pass. The recreated physical AC1018 `0xbc` also seals as source evidence
+  ([receipt](docs/research/p5-ac1018-table-xrecord-verified-source-capability-2026-11-11.json)).
+  Next add targeted allocation-failure and size-limit controls for this optional
+  capture, then design the opt-in write path with capability revalidation at
+  staging and finalization, transactional rollback and recomputed output CRC.
+  Keep physical subtree output refused until all three opaque descendants,
+  source-bound owner/target roles, class identities and graph closure are proven.
 
 - **P5 AC1018 TABLE stale absent-mask guard:** when retained source ranges
   describe four absent TABLE override masks, the direct encoder now refuses a

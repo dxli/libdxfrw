@@ -20,6 +20,7 @@
 #include "../libdwgr.h"
 #include "drw_textcodec.h"
 #include "dwgbuffer.h"
+#include "dwgobjectframe.h"
 #include "dwgsafety.h"
 #include "dwgutil.h"
 #include <algorithm>
@@ -1197,6 +1198,18 @@ public:
     return m_readObjectCount;
   }
 
+private:
+  // Only dwgRW may flush after successful whole-read completion.
+  void deliverVerifiedXRecord(DRW_Interface& target) noexcept;
+  struct VerifiedXRecordPending {
+    DRW::Version version{DRW::UNKNOWNV};
+    std::uint32_t handle{0u}, offset{0u};
+    std::uint64_t ordinal{0u};
+    DRW_DwgFrameOffsetSpace space{DRW_DwgFrameOffsetSpace::Unknown};
+    DwgObjectFrame frame;
+  };
+  std::unique_ptr<VerifiedXRecordPending> m_verifiedXRecordPending;
+  bool m_verifiedXRecordPendingFailed{false};
 protected:
   struct DwgSourceFrameLease;
   struct DwgFramePublicationArtifacts {

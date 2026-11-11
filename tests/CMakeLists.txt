@@ -1486,6 +1486,19 @@ add_executable(libdxfrw_dwg2dxf_adapter_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/dwg2dxf_adapter_tests.cpp
     ${_libdxfrw_test_adapter_source}
 )
+add_executable(libdxfrw_dwg_xrecord_verified_source_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_xrecord_verified_source_tests.cpp
+    ${_libdxfrw_test_adapter_source})
+target_compile_features(libdxfrw_dwg_xrecord_verified_source_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_xrecord_verified_source_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_xrecord_verified_source_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/dwg2dxf ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dwg_xrecord_verified_source_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dwg_xrecord_verified_source
+    COMMAND libdxfrw_dwg_xrecord_verified_source_tests
+        ${CMAKE_CURRENT_BINARY_DIR}/generated-xrecord-verified-source.dwg)
+set_tests_properties(libdxfrw_dwg_xrecord_verified_source PROPERTIES
+    LABELS "dwg;fast;xrecord" TIMEOUT 30)
 add_executable(libdxfrw_underlay_objects_allocation_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/underlay_objects_allocation_tests.cpp
     ${_libdxfrw_test_adapter_source}

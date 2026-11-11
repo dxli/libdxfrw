@@ -1134,6 +1134,8 @@ bool dwgRW::readInstalledReader() {
     }
 
     captureReaderDiagnostics(isOk);
+    if (isOk && error == DRW::BAD_NONE && iface != nullptr)
+        reader->deliverVerifiedXRecord(*iface);
     reader.reset();
     return isOk;
 }
