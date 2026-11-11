@@ -1654,10 +1654,15 @@ created locally from scratch for the specific control.
   for that generated model, not full physical-source output or exact field-byte
   equality. No DWG/DXF fixture is written or committed. The separate full
   AC1018 source export attempt still stops during output preparation because
-  its unrelated SUN graph requires a same-version AC1021+ source and target;
-  preserve that blocker and do not bypass it to promote STYLE output. Exact
-  physical STYLE field bytes, remaining LTYPE resource ordering, and font meaning remain
-  open. These checks do not grant output permission or waive other gates. See the
+  it contains one typed, unrooted SUN (`0x23`, parent `0xcc`, class version 1,
+  inactive, intensity 1, shadow enabled), with no raw SUN record, ACAD_SUN NOD
+  root, or VPORT/VIEW/viewport SUN edge. The existing graph gate requires a
+  same-version AC1021+ source and target. The inactive flag does not establish
+  that this non-default object can be dropped or replayed as an AC1018 DXF
+  object. Preserve the refusal until its source profile and lossless
+  output/disposition are evidenced. Exact physical STYLE field bytes,
+  remaining LTYPE resource ordering, and font meaning remain open. These checks
+  do not grant output permission or waive other gates. See the
   [writer-stage/finalization receipt](docs/research/p5-ac1018-style-resource-writer-stage-finalization-2026-11-11.json).
   A bounded standalone
   LTYPE_CONTROL/ByBlock observer now checks selected frame fields and roles

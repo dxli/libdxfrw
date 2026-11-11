@@ -50,11 +50,23 @@
         "target_version": "AC1018",
         "result": "refused during output preparation before TABLES callbacks",
         "diagnostic": "SUN owner graph closure: SUN graph requires a same-version AC1021+ source and target",
+        "observed_sun_graph": {
+          "typed_sun_rows": 1,
+          "raw_sun_rows": 0,
+          "named_object_dictionary_acad_sun_roots": 0,
+          "vport_view_and_viewport_sun_owner_edges": 0,
+          "sun_handle": "0x23",
+          "parent_handle": "0xcc",
+          "class_version": 1,
+          "is_on": false,
+          "intensity": 1.0,
+          "has_shadow": true
+        },
         "style_writer_stage_reached": false,
         "atomic_finalization_reached": false,
         "readback_performed": false
       },
-      "scope_limit": "The source-binding assertions pass. The export attempt exposes an unrelated AC1018 SUN graph preflight blocker, so this physical input does not execute the new writer-stage/finalization checks or prove serialized STYLE field equality/readback."
+      "scope_limit": "The source-binding assertions pass. The source has an unrooted, non-default typed AC1018 SUN object and no modeled owner references. Its inactive flag alone does not prove it is safe to drop or replay as an AC1018 DXF object. The export attempt therefore remains refused before STYLE writer staging; this physical input does not prove serialized STYLE field equality/readback."
     },
     "generated_source_bound_writer_control": {
       "source_binding": "Reuses the completed physical import's source token, STYLE_CONTROL/STYLE frame tickets, and selected typed STYLE/APPID rows in a minimal generated dx_data output model. No drawing fixture is written or committed.",
@@ -68,7 +80,7 @@
     "diff_check": "passed"
   },
   "remaining": [
-    "Resolve the AC1018 physical whole-source SUN preflight blocker with evidence-backed profile handling; do not bypass it to promote STYLE output.",
+    "Resolve the AC1018 unrooted SUN object's source profile and lossless output/disposition with evidence; do not drop or replay it speculatively to promote STYLE output.",
     "Prove exact STYLE output bytes/fields and fresh ASCII/Binary readback under the selected output profile.",
     "Close remaining LTYPE dependencies and ordering, font meaning, producer breadth, and whole-source integrity before any output or support promotion."
   ]

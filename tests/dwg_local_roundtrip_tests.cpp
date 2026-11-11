@@ -38227,6 +38227,54 @@ bool inspectPhysicalStyleResourceAdapterBinding(
         sourceBoundExportSucceeded = outputSourceImported
             && reader.fileExport(outputPath.string(), DRW::AC1018, false,
                                  &outputSource, true);
+        if (outputSourceImported) {
+            const auto sunOwnerCount = [](const auto& rows) {
+                return std::count_if(rows.begin(), rows.end(),
+                    [](const auto& row) { return row.m_sunHandle != 0u; });
+            };
+            std::size_t namedSunRoots = 0u;
+            if (outputSource.hasNamedObjectDictionary) {
+                namedSunRoots = static_cast<std::size_t>(std::count_if(
+                    outputSource.namedObjectDictionary.m_entries.begin(),
+                    outputSource.namedObjectDictionary.m_entries.end(),
+                    [](const DRW_Dictionary::Entry& entry) {
+                        return entry.m_name == "ACAD_SUN";
+                    }));
+            }
+            std::size_t viewportSunOwners = 0u;
+            const auto countViewportSunOwners =
+                [&viewportSunOwners](const std::list<DRW_Entity*>& entities) {
+                    viewportSunOwners += static_cast<std::size_t>(
+                        std::count_if(entities.begin(), entities.end(),
+                            [](const DRW_Entity* entity) {
+                                const auto* viewport =
+                                    dynamic_cast<const DRW_Viewport*>(entity);
+                                return viewport != nullptr
+                                    && viewport->m_sunHandle != 0u;
+                            }));
+                };
+            if (outputSource.mBlock != nullptr)
+                countViewportSunOwners(outputSource.mBlock->ent);
+            for (const dx_ifaceBlock* block : outputSource.blocks) {
+                if (block != nullptr)
+                    countViewportSunOwners(block->ent);
+            }
+            std::cerr << "AC1018 SUN preflight graph: typed="
+                      << outputSource.suns.size()
+                      << " raw=" << outputSource.rawSunObjects.size()
+                      << " vportOwners=" << sunOwnerCount(outputSource.VPorts)
+                      << " viewOwners=" << sunOwnerCount(outputSource.views)
+                      << " viewportOwners=" << viewportSunOwners
+                      << " namedRoots=" << namedSunRoots << '\n';
+            for (const DRW_Sun& sun : outputSource.suns) {
+                std::cerr << "AC1018 SUN row handle=0x" << std::hex
+                          << sun.handle << " parent=0x" << sun.parentHandle
+                          << std::dec << " on=" << sun.m_isOn
+                          << " classVersion=" << sun.m_classVersion
+                          << " intensity=" << sun.m_intensity
+                          << " shadow=" << sun.m_hasShadow << '\n';
+            }
+        }
         if (sourceBoundExportSucceeded) {
             dx_iface outputReader;
             dx_data outputData;
