@@ -9439,6 +9439,46 @@ std::uint32_t dxfRW::resolveReference(std::uint32_t handle) const {
 }
 
 bool dxfRW::writePoint(DRW_Point *ent) {
+    // POINT is a common public base class. Preserve modeled derived entities
+    // instead of silently serializing only their base point.
+    if (ent != nullptr) {
+        if (auto* line = dynamic_cast<DRW_Line*>(ent))
+            return writeLine(line);
+        if (auto* circle = dynamic_cast<DRW_Circle*>(ent))
+            return writeCircle(circle);
+        const auto& type = typeid(*ent);
+        if (type == typeid(DRW_Table))
+            return ent->eType == DRW::TABLE
+                ? writeTable(static_cast<DRW_Table*>(ent))
+                : rejectDxfWriteWithReason("POINT", "runtime type and entity tag disagree");
+        if (type == typeid(DRW_Insert))
+            return ent->eType == DRW::INSERT
+                ? writeInsert(static_cast<DRW_Insert*>(ent))
+                : rejectDxfWriteWithReason("POINT", "runtime type and entity tag disagree");
+        if (type == typeid(DRW_Polyline))
+            return ent->eType == DRW::POLYLINE
+                ? writePolyline(static_cast<DRW_Polyline*>(ent))
+                : rejectDxfWriteWithReason("POINT", "runtime type and entity tag disagree");
+        if (type == typeid(DRW_MPolygon))
+            return ent->eType == DRW::MPOLYGON
+                ? writeMPolygon(static_cast<DRW_MPolygon*>(ent))
+                : rejectDxfWriteWithReason("POINT", "runtime type and entity tag disagree");
+        if (type == typeid(DRW_Hatch))
+            return ent->eType == DRW::HATCH
+                ? writeHatch(static_cast<DRW_Hatch*>(ent))
+                : rejectDxfWriteWithReason("POINT", "runtime type and entity tag disagree");
+        if (type == typeid(DRW_Viewport))
+            return ent->eType == DRW::VIEWPORT
+                ? writeViewport(static_cast<DRW_Viewport*>(ent))
+                : rejectDxfWriteWithReason("POINT", "runtime type and entity tag disagree");
+        if (dynamic_cast<DRW_Block*>(ent) || dynamic_cast<DRW_Vertex*>(ent))
+            return rejectDxfWriteWithReason("POINT", "block or vertex context required");
+        if (dynamic_cast<DRW_Insert*>(ent) || dynamic_cast<DRW_Polyline*>(ent)
+            || dynamic_cast<DRW_Hatch*>(ent) || dynamic_cast<DRW_Viewport*>(ent))
+            return rejectDxfWriteWithReason("POINT", "derived subtype is not supported");
+        if (ent->eType != DRW::POINT)
+            return rejectDxfWriteWithReason("POINT", "runtime type and entity tag disagree or subtype is not supported");
+    }
     if (!preflightEntity(ent))
         return false;
     RecordStateScope state(*this, ent);
@@ -10424,6 +10464,13 @@ bool dxfRW::writeHelix(DRW_Helix *ent){
 }
 
 bool dxfRW::writeHatch(DRW_Hatch *ent){
+    if (ent != nullptr && typeid(*ent) == typeid(DRW_MPolygon))
+        return ent->eType == DRW::MPOLYGON
+            ? writeMPolygon(static_cast<DRW_MPolygon*>(ent))
+            : rejectDxfWriteWithReason("HATCH", "runtime type and entity tag disagree");
+    if (ent != nullptr && (dynamic_cast<DRW_MPolygon*>(ent)
+                           || ent->eType != DRW::HATCH))
+        return rejectDxfWriteWithReason("HATCH", "runtime type and entity tag disagree or subtype is not supported");
     if (version > DRW::AC1009) {
         if (!preflightDxfWrite())
             return false;
@@ -14137,6 +14184,12 @@ bool dxfRW::writeAttdef(DRW_Attdef *ent,
 bool dxfRW::writeText(DRW_Text *ent) {
     if (ent != nullptr) {
         const auto& type = typeid(*ent);
+        // These specialized classes deliberately carry the TEXT tag. A
+        // further-derived type must not fall through as ordinary TEXT.
+        if ((dynamic_cast<DRW_RText*>(ent) && type != typeid(DRW_RText))
+            || (dynamic_cast<DRW_ArcAlignedText*>(ent)
+                && type != typeid(DRW_ArcAlignedText)))
+            return rejectDxfWriteWithReason("TEXT", "specialized text subtype is not supported");
         if (type == typeid(DRW_Attrib)) {
             if (ent->eType != DRW::ATTRIB)
                 return rejectDxfWriteWithReason("ATTRIB", "runtime type and entity tag disagree");

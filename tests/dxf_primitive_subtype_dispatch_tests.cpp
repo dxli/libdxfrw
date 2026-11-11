@@ -7,21 +7,24 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <memory>
 #include <string>
 
 namespace {
-enum class Entry { Line, Circle, Ray, Trace, Text, Attrib };
+enum class Entry { Point, Line, Circle, Ray, Trace, Text, Attrib, Hatch };
 class Writer : public LC3CompatCheck {
 public:
     explicit Writer(dxfRW& writer) : out(writer) {}
     void writeEntities() override {
         switch (entry) {
+        case Entry::Point: ok = out.writePoint(dynamic_cast<DRW_Point*>(entity)); break;
         case Entry::Line: ok = out.writeLine(dynamic_cast<DRW_Line*>(entity)); break;
         case Entry::Circle: ok = out.writeCircle(dynamic_cast<DRW_Circle*>(entity)); break;
         case Entry::Ray: ok = out.writeRay(dynamic_cast<DRW_Ray*>(entity)); break;
         case Entry::Trace: ok = out.writeTrace(dynamic_cast<DRW_Trace*>(entity)); break;
         case Entry::Text: ok = out.writeText(dynamic_cast<DRW_Text*>(entity)); break;
         case Entry::Attrib: ok = out.writeAttrib(dynamic_cast<DRW_Attrib*>(entity)); break;
+        case Entry::Hatch: ok = out.writeHatch(dynamic_cast<DRW_Hatch*>(entity)); break;
         }
     }
     bool finalizeDxfWrite() override { return ok; }
@@ -32,6 +35,12 @@ public:
 };
 class Reader : public LC3CompatCheck {
 public:
+    void addPoint(const DRW_Point& value) override { name = "POINT"; valid = value.basePoint.x == 2.; }
+    void addViewport(const DRW_Viewport& value) override { name = "VIEWPORT"; valid = value.pswidth == 9.; }
+    void addPolyline(const DRW_Polyline& value) override { name = "POLYLINE"; valid = value.vertlist.size() == 1; }
+    void addInsert(const DRW_Insert& value) override { name = "INSERT"; valid = value.name == "TEST_BLOCK"; }
+    void addHatch(const DRW_Hatch* value) override { name = "HATCH"; valid = value && value->looplist.size() == 1; }
+    void addMPolygon(const DRW_MPolygon* value) override { name = "MPOLYGON"; valid = value && value->looplist.size() == 1; }
     void addLine(const DRW_Line& value) override { name = "LINE"; valid = value.secPoint.x == 3.; }
     void add3DLine(const DRW_3DLine& value) override { name = "3DLINE"; valid = value.secPoint.z == 4.; }
     void addRay(const DRW_Ray&) override { name = "RAY"; valid = true; }
@@ -63,6 +72,10 @@ std::string contents(const std::filesystem::path& path) {
 }
 struct CustomLine : DRW_Line {};
 struct CustomText : DRW_Text {};
+struct CustomPoint : DRW_Point {};
+struct CustomRText : DRW_RText {};
+struct CustomArcAlignedText : DRW_ArcAlignedText {};
+struct CustomMPolygon : DRW_MPolygon {};
 struct CustomAttdef : DRW_Attdef {};
 bool exercise(const std::filesystem::path& path, bool binary) {
     dxfRW output(path.string().c_str());
@@ -78,9 +91,13 @@ bool exercise(const std::filesystem::path& path, bool binary) {
         }
         return true;
     };
+    DRW_Point point; point.basePoint.x = 2.;
+    CustomPoint customPoint; customPoint.basePoint.x = 2.;
+    if (!check(point, Entry::Point, "POINT") || !check(customPoint, Entry::Point, "POINT")) return false;
     DRW_Line line; line.secPoint = {3., 0., 0.};
     CustomLine customLine; customLine.secPoint = line.secPoint;
-    if (!check(line, Entry::Line, "LINE") || !check(customLine, Entry::Line, "LINE")) return false;
+    if (!check(line, Entry::Line, "LINE") || !check(line, Entry::Point, "LINE")
+        || !check(customLine, Entry::Line, "LINE")) return false;
     DRW_3DLine line3d; line3d.secPoint = {3., 0., 4.};
     if (!check(line3d, Entry::Line, "3DLINE")) return false;
     DRW_Ray ray; ray.secPoint = {1., 0., 0.};
@@ -88,7 +105,7 @@ bool exercise(const std::filesystem::path& path, bool binary) {
     if (!check(ray, Entry::Line, "RAY") || !check(xline, Entry::Line, "XLINE")
         || !check(xline, Entry::Ray, "XLINE")) return false;
     DRW_Arc arc; arc.radious = 5.; arc.endangle = 1.5707963267948966;
-    if (!check(arc, Entry::Circle, "ARC")) return false;
+    if (!check(arc, Entry::Circle, "ARC") || !check(arc, Entry::Point, "ARC")) return false;
     DRW_Ellipse ellipse; ellipse.secPoint = {2., 0., 0.}; ellipse.ratio = 0.5;
     ellipse.staparam = 0.; ellipse.endparam = 1.;
     if (!check(ellipse, Entry::Line, "ELLIPSE")) return false;
@@ -108,12 +125,33 @@ bool exercise(const std::filesystem::path& path, bool binary) {
     customAttdef.tag = "TAG"; customAttdef.prompt = "prompt";
     if (!check(text, Entry::Line, "TEXT") || !check(customText, Entry::Text, "TEXT")
         || !check(mtext, Entry::Line, "MTEXT") || !check(rtext, Entry::Text, "RTEXT")
+        || !check(rtext, Entry::Point, "RTEXT")
         || !check(arctext, Entry::Text, "ARCALIGNEDTEXT") || !check(attdef, Entry::Text, "ATTDEF")
         || !check(customAttdef, Entry::Attrib, "ATTDEF")) return false;
     DRW_Wipeout wipeout; wipeout.clipPath = {{0., 0., 0.}, {4., 0., 0.}, {0., 3., 0.}};
     if (!check(wipeout, Entry::Line, "WIPEOUT")) return false;
+    DRW_Viewport viewport; viewport.pswidth = 9.; viewport.psheight = 10.;
+    if (!check(viewport, Entry::Point, "VIEWPORT")) return false;
+    DRW_Polyline polyline; polyline.vertlist.push_back(std::make_shared<DRW_Vertex>());
+    if (!check(polyline, Entry::Point, "POLYLINE")) return false;
+    DRW_Insert insert; insert.name = "TEST_BLOCK";
+    if (!check(insert, Entry::Point, "INSERT")) return false;
+    auto edge = std::make_shared<DRW_Line>(); edge->secPoint.x = 1.;
+    auto loop = std::make_shared<DRW_HatchLoop>(0); loop->numedges = 1; loop->objlist.push_back(edge);
+    DRW_Hatch hatch; hatch.name = "SOLID"; hatch.looplist.push_back(loop);
+    DRW_MPolygon polygon; polygon.name = "SOLID"; polygon.looplist.push_back(loop);
+    if (!check(hatch, Entry::Point, "HATCH") || !check(polygon, Entry::Point, "MPOLYGON")
+        || !check(polygon, Entry::Hatch, "MPOLYGON")) return false;
 
     DRW_Image image;
+    DRW_Block block;
+    DRW_Vertex vertex;
+    DRW_Table incompleteTable;
+    DRW_Viewport wrongViewport; wrongViewport.eType = DRW::POINT;
+    CustomRText customRtext; customRtext.text = "text"; customRtext.m_rTextFlags = 1;
+    CustomArcAlignedText customArcText; customArcText.text = "text"; customArcText.m_radius = 5.;
+    CustomMPolygon customPolygon;
+    DRW_MPolygon wrongPolygon; wrongPolygon.eType = DRW::HATCH;
     DRW_Attrib attrib; attrib.text = "text"; attrib.tag = "TAG";
     DRW_Arc wrongTag; wrongTag.eType = DRW::CIRCLE;
     DRW_Xline wrongXline; wrongXline.eType = DRW::RAY;
@@ -121,13 +159,26 @@ bool exercise(const std::filesystem::path& path, bool binary) {
     DRW_MText wrongMtext; wrongMtext.eType = DRW::TEXT;
     for (DRW_Entity* invalid : {static_cast<DRW_Entity*>(&image),
                                 static_cast<DRW_Entity*>(&attrib),
+                                static_cast<DRW_Entity*>(&block),
+                                static_cast<DRW_Entity*>(&vertex),
+                                static_cast<DRW_Entity*>(&incompleteTable),
+                                static_cast<DRW_Entity*>(&wrongViewport),
+                                static_cast<DRW_Entity*>(&customRtext),
+                                static_cast<DRW_Entity*>(&customArcText),
+                                static_cast<DRW_Entity*>(&customPolygon),
+                                static_cast<DRW_Entity*>(&wrongPolygon),
                                 static_cast<DRW_Entity*>(&wrongTag),
                                 static_cast<DRW_Entity*>(&wrongXline),
                                 static_cast<DRW_Entity*>(&wrongSolid),
                                 static_cast<DRW_Entity*>(&wrongMtext)}) {
         { std::ofstream existing(path, std::ios::binary | std::ios::trunc); existing << "sentinel"; }
         writer.entity = invalid;
-        writer.entry = invalid == &wrongTag ? Entry::Circle : Entry::Line;
+        writer.entry = invalid == &wrongTag ? Entry::Circle
+            : invalid == &block || invalid == &vertex || invalid == &incompleteTable
+                || invalid == &wrongViewport ? Entry::Point
+            : invalid == &customRtext || invalid == &customArcText ? Entry::Text
+            : invalid == &customPolygon || invalid == &wrongPolygon ? Entry::Hatch
+            : Entry::Line;
         if (output.write(&writer, DRW::AC1027, binary) || writer.ok || contents(path) != "sentinel")
             return false;
         if (!check(line, Entry::Line, "LINE")) return false;

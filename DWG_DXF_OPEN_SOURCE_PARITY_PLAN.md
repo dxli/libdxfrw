@@ -1209,6 +1209,13 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-10)
 
+- **P6 POINT and HATCH subtype preservation:** public POINT and HATCH writers
+  now route supported built-in descendants to their typed serializers, and
+  refuse context-dependent or unsupported descendants instead of dropping
+  subtype fields. Specialized TEXT subclasses also cannot silently flatten.
+  The expanded ASCII/Binary dispatch control passes; source-defined custom
+  base-tag POINT behavior remains covered. See the [receipt](docs/research/p6-dxf-point-hatch-text-subtype-dispatch-2026-11-10.json).
+
 - **P8 LibreCAD_3 HELIX fallback:** a clean consumer snapshot `0beddae8`
   built against libdxfrw `78b89125` with the provider's `-Werror` enabled.
   After the known legacy-header and root-dictionary fixes were applied in
