@@ -984,6 +984,7 @@ EXTRA_DIST = \
     tools/research/freecad_torus_bound_probe.py \
     tools/research/inventory_cover_peer_body_handles.py \
     tools/research/p4_forum_ltype_oda_compare.py \
+    tools/research/p5_ac1018_table_xrecord_source_verify.py \
     tools/research/run_acsh_torus_source_probe.py \
     tools/research/tablegeometry_dwg_span_scan.cpp \
     tools/research/tablegeometry_physical_span_verify.py \
