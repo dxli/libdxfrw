@@ -2808,6 +2808,22 @@ bool validLegacyTableValueFlag(int value) {
         && (flags & baseFlags) == baseFlags;
 }
 
+bool validDwgTableLineweight(int value) noexcept {
+    // ODA §20.4.96.1 stores AcDb::LineWeight values in the border masks.
+    // Keep exact enum members only; in particular, don't accept values that
+    // DRW_LW_Conv would round to a nearby DXF lineweight.
+    switch (value) {
+    case -3: case -2: case -1:
+    case 0: case 5: case 9: case 13: case 15: case 18: case 20:
+    case 25: case 30: case 35: case 40: case 50: case 53: case 60:
+    case 70: case 80: case 90: case 100: case 106: case 120: case 140:
+    case 158: case 200: case 211:
+        return true;
+    default:
+        return false;
+    }
+}
+
 bool validAc1018TableBlockRecordHandle(const dwgHandle& blockRecord) {
     const bool normalized = blockRecord.code == DRW::DwgNullReference
         && blockRecord.size == 0u && blockRecord.rawCode == 0u
@@ -4227,16 +4243,17 @@ bool skipR2007TableOverrides(DRW::Version version, dwgBuffer *buf,
         if ((flags & ~0x0003FFFFu) != 0u)
             return false;
         table.m_borderLineweightOverrideFlags = flags;
-        if (flags != 0u)
-            semanticComplete = false;
         ++maskCount;
         for (std::size_t i = 0; i < table.m_tableBorderLineweights.size(); ++i) {
             if ((flags & (1u << i)) != 0u) {
                 std::uint16_t lineweight = 0;
                 if (!readBoundedBitShort(*buf, bounds.bodyEndBit, lineweight))
                     return false;
-                table.m_tableBorderLineweights[i] = lineweight;
+                const int decodedLineweight = static_cast<std::int16_t>(lineweight);
+                table.m_tableBorderLineweights[i] = decodedLineweight;
                 table.m_hasTableBorderLineweightOverrides[i] = true;
+                if (!validDwgTableLineweight(decodedLineweight))
+                    semanticComplete = false;
             }
         }
     }
@@ -4250,8 +4267,6 @@ bool skipR2007TableOverrides(DRW::Version version, dwgBuffer *buf,
         if ((flags & ~0x0003FFFFu) != 0u)
             return false;
         table.m_borderVisibilityOverrideFlags = flags;
-        if (flags != 0u)
-            semanticComplete = false;
         ++maskCount;
         for (std::size_t i = 0; i < table.m_tableBorderVisibilities.size(); ++i) {
             if ((flags & (1u << i)) != 0u) {
@@ -15552,9 +15567,33 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
         }
         return true;
     };
+    const auto validTableBorderOverrides = [&]() {
+        for (std::size_t i = 0u; i < m_tableBorderLineweights.size(); ++i) {
+            const bool hasLineweight =
+                (m_borderLineweightOverrideFlags & (1u << i)) != 0u;
+            if (hasLineweight
+                    ? (!m_hasTableBorderLineweightOverrides[i]
+                        || !validDwgTableLineweight(
+                            m_tableBorderLineweights[i]))
+                    : (m_hasTableBorderLineweightOverrides[i]
+                        || m_tableBorderLineweights[i] != 0))
+                return false;
+            const bool hasVisibility =
+                (m_borderVisibilityOverrideFlags & (1u << i)) != 0u;
+            if (hasVisibility
+                    ? (!m_hasTableBorderVisibilityOverrides[i]
+                        || (m_tableBorderVisibilities[i] != 0
+                            && m_tableBorderVisibilities[i] != 1))
+                    : (m_hasTableBorderVisibilityOverrides[i]
+                        || m_tableBorderVisibilities[i] != 0))
+                return false;
+        }
+        return true;
+    };
     const bool validTableScalarOverrides =
         (m_tableOverrideFlags & ~0x007FFFFFu) == 0u
         && validTableRowOverrides()
+        && validTableBorderOverrides()
         && (hasTitleSuppressed || !m_titleSuppressed)
         && (m_headerSuppressed == hasHeaderSuppressed)
         && (hasFlowDirection
@@ -15628,8 +15667,6 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
         || m_dataVersion != 0 || !validLegacyTableValueFlag(m_valueFlag)
         || !validTableScalarOverrides
         || m_borderColorOverrideFlags != 0u
-        || m_borderLineweightOverrideFlags != 0u
-        || m_borderVisibilityOverrideFlags != 0u
         || std::any_of(m_tableRowTextStyleNames.cbegin(),
                        m_tableRowTextStyleNames.cend(),
                        [](const UTF8STRING& name) { return !name.empty(); })
@@ -15638,18 +15675,6 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
                        [&](const DRW_DwgCmColor& color) {
                            return !defaultColor(color);
                        })
-        || std::any_of(m_tableBorderLineweights.cbegin(),
-                       m_tableBorderLineweights.cend(),
-                       [](int value) { return value != 0; })
-        || std::any_of(m_tableBorderVisibilities.cbegin(),
-                       m_tableBorderVisibilities.cend(),
-                       [](int value) { return value != 0; })
-        || std::any_of(m_hasTableBorderLineweightOverrides.cbegin(),
-                       m_hasTableBorderLineweightOverrides.cend(),
-                       [](bool value) { return value; })
-        || std::any_of(m_hasTableBorderVisibilityOverrides.cbegin(),
-                       m_hasTableBorderVisibilityOverrides.cend(),
-                       [](bool value) { return value; })
         || m_content.m_columns.empty()
         || m_content.m_columns.size() > kMaxTableColumns
         || static_cast<std::size_t>(colcount) != m_content.m_columns.size()
@@ -16032,8 +16057,30 @@ bool DRW_Table::encodeDwgWithExtension(DRW::Version version, dwgBufferW *buf,
             }
         }
         stagedBody.putBit(false); // no border color overrides
-        stagedBody.putBit(false); // no border lineweight overrides
-        stagedBody.putBit(false); // no border visibility overrides
+        const bool hasBorderLineweightOverrides =
+            m_borderLineweightOverrideFlags != 0u;
+        stagedBody.putBit(hasBorderLineweightOverrides);
+        if (hasBorderLineweightOverrides) {
+            stagedBody.putBitLong(static_cast<std::int32_t>(
+                m_borderLineweightOverrideFlags));
+            for (std::size_t i = 0u; i < m_tableBorderLineweights.size(); ++i) {
+                if ((m_borderLineweightOverrideFlags & (1u << i)) != 0u)
+                    stagedBody.putBitShort(static_cast<std::uint16_t>(
+                        m_tableBorderLineweights[i]));
+            }
+        }
+        const bool hasBorderVisibilityOverrides =
+            m_borderVisibilityOverrideFlags != 0u;
+        stagedBody.putBit(hasBorderVisibilityOverrides);
+        if (hasBorderVisibilityOverrides) {
+            stagedBody.putBitLong(static_cast<std::int32_t>(
+                m_borderVisibilityOverrideFlags));
+            for (std::size_t i = 0u; i < m_tableBorderVisibilities.size(); ++i) {
+                if ((m_borderVisibilityOverrideFlags & (1u << i)) != 0u)
+                    stagedBody.putBitShort(static_cast<std::uint16_t>(
+                        m_tableBorderVisibilities[i]));
+            }
+        }
 
         dwgBufferW *const entityHandles = handleBuf == nullptr
             ? nullptr : handles;

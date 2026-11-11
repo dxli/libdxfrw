@@ -11614,6 +11614,80 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  "AC1018 TABLE emits fill-none booleans then fill CMCs before row alignments");
     }
 
+    TableDwgCodecProbe tableBorderOverrides = makeEncodableAc1018Table();
+    tableBorderOverrides.m_borderLineweightOverrideFlags = 0x00020001u;
+    tableBorderOverrides.m_tableBorderLineweights[0] = 5;
+    tableBorderOverrides.m_tableBorderLineweights[17] = -2;
+    tableBorderOverrides.m_hasTableBorderLineweightOverrides[0] = true;
+    tableBorderOverrides.m_hasTableBorderLineweightOverrides[17] = true;
+    tableBorderOverrides.m_borderVisibilityOverrideFlags = 0x00010002u;
+    tableBorderOverrides.m_tableBorderVisibilities[1] = 1;
+    tableBorderOverrides.m_tableBorderVisibilities[16] = 0;
+    tableBorderOverrides.m_hasTableBorderVisibilityOverrides[1] = true;
+    tableBorderOverrides.m_hasTableBorderVisibilityOverrides[16] = true;
+    dwgBufferW tableBorderBody;
+    dwgBufferW tableBorderHandles;
+    dwgBufferW tableBorderTypePrefix;
+    tableBorderTypePrefix.putObjType(DRW::AC1018, 562u);
+    const std::uint64_t tableBorderObjectSizeBit =
+        tableBorderTypePrefix.bitCount();
+    const bool tableBorderEncoded = tableBorderOverrides.encodeAsTableClass(
+        DRW::AC1018, tableBorderBody, tableBorderHandles);
+    const std::uint64_t tableBorderBodyEndBit = tableBorderBody.bitCount();
+    constexpr std::int32_t tableBorderSentinel = 0x51CA0960;
+    tableBorderBody.putBitLong(tableBorderSentinel);
+    tableBorderBody.patchRawLong32AtBit(
+        tableBorderObjectSizeBit,
+        static_cast<std::uint32_t>(tableBorderBody.bitCount()));
+    appendBits(tableBorderBody, tableBorderHandles);
+    dwgBuffer tableBorderInput(tableBorderBody.data().data(),
+                               tableBorderBody.data().size());
+    TableDwgCodecProbe tableBorderReadback;
+    const bool tableBorderRead = tableBorderEncoded
+        && tableBorderReadback.parseDwg(DRW::AC1018, &tableBorderInput);
+    const bool tableBorderMatches = tableBorderRead
+        && tableBorderInput.isGood()
+        && tableBorderReadback.m_semanticContentComplete
+        && tableBorderReadback.m_borderLineweightOverrideFlags == 0x00020001u
+        && tableBorderReadback.m_tableBorderLineweights[0] == 5
+        && tableBorderReadback.m_tableBorderLineweights[17] == -2
+        && tableBorderReadback.m_hasTableBorderLineweightOverrides[0]
+        && tableBorderReadback.m_hasTableBorderLineweightOverrides[17]
+        && tableBorderReadback.m_borderVisibilityOverrideFlags == 0x00010002u
+        && tableBorderReadback.m_tableBorderVisibilities[1] == 1
+        && tableBorderReadback.m_tableBorderVisibilities[16] == 0
+        && tableBorderReadback.m_hasTableBorderVisibilityOverrides[1]
+        && tableBorderReadback.m_hasTableBorderVisibilityOverrides[16]
+        && cursorBit(tableBorderInput) == tableBorderBodyEndBit;
+    t.expect(tableBorderMatches,
+             "AC1018 TABLE border lineweight and visibility masks encode and read back");
+    if (tableBorderMatches) {
+        const std::int32_t sentinel = tableBorderInput.getBitLong();
+        t.expect(tableBorderInput.isGood() && sentinel == tableBorderSentinel,
+                 "AC1018 TABLE border masks preserve the following body sentinel");
+        const auto& ranges = tableBorderReadback.m_content.m_subrecordRanges;
+        const auto range = std::find_if(ranges.cbegin(), ranges.cend(),
+            [](const DRW_DwgSubrecordRange& value) {
+                return value.m_name == "r2007-table-overrides";
+            });
+        dwgBuffer wire(tableBorderBody.data().data(), tableBorderBody.data().size());
+        bool wireOrderMatches = range != ranges.cend()
+            && setBitPosition(wire, range->m_startBit)
+            && !wire.getBit() // no table scalar overrides
+            && !wire.getBit(); // no border color overrides
+        wireOrderMatches = wireOrderMatches && wire.getBit()
+            && static_cast<std::uint32_t>(wire.getBitLong()) == 0x00020001u
+            && wire.getBitShort() == 5u
+            && wire.getBitShort() == static_cast<std::uint16_t>(-2)
+            && wire.getBit()
+            && static_cast<std::uint32_t>(wire.getBitLong()) == 0x00010002u
+            && wire.getBitShort() == 1u && wire.getBitShort() == 0u
+            && wire.isGood()
+            && cursorBit(wire) == range->m_startBit + range->m_bitSize;
+        t.expect(wireOrderMatches,
+                 "AC1018 TABLE emits sparse border values in mask order and preserves signed sentinels");
+    }
+
     TableDwgCodecProbe cellAlignmentTable = makeEncodableAc1018Table();
     DRW_TableCell& cellAlignmentCell =
         cellAlignmentTable.m_content.m_rows.front().m_cells.front();
@@ -13125,6 +13199,29 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
         DRW::AC1018,
         [](TableDwgCodecProbe& table) {
             table.m_tableBorderLineweights[0] = 25;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects non-enum border lineweight without writing",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_borderLineweightOverrideFlags = 1u;
+            table.m_tableBorderLineweights[0] = 6;
+            table.m_hasTableBorderLineweightOverrides[0] = true;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects border lineweight mask without selected-value presence",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_borderLineweightOverrideFlags = 1u;
+            table.m_tableBorderLineweights[0] = 5;
+        });
+    expectAtomicPreflightRefusal(
+        "AC1018 TABLE encoder rejects border visibility outside the Boolean domain",
+        DRW::AC1018,
+        [](TableDwgCodecProbe& table) {
+            table.m_borderVisibilityOverrideFlags = 1u;
+            table.m_tableBorderVisibilities[0] = 2;
+            table.m_hasTableBorderVisibilityOverrides[0] = true;
         });
     expectAtomicPreflightRefusal(
         "AC1018 TABLE encoder rejects table layout overrides without writing",

@@ -1524,6 +1524,18 @@ created locally from scratch for the specific control.
   Unsupported truecolor and unselected fill state remain fail-closed. The same
   focused DWG and DXF adapter tests pass. No producer/native claim is implied;
   see the [row fill writer receipt](docs/research/p5-ac1018-table-row-fill-dwg-writer-2026-11-11.json).
+  **Completed DWG table-border lineweight/visibility slice (2026-11-11):**
+  the AC1018 direct writer now emits the sparse 18-bit lineweight and
+  visibility masks and selected values in slot order. It preserves explicit
+  selected-zero presence, accepts only the exact 27-value `AcDb::LineWeight`
+  domain (including signed `-1/-2/-3` sentinels), and restricts visibility to
+  0/1. Parsing restores signed sentinels and marks non-enum values
+  semantically incomplete. Generated roundtrip checks cover sparse masks,
+  signed ByBlock, explicit zero visibility, exact wire order and the following
+  sentinel; malformed values and mask/presence mismatches refuse atomically.
+  The focused DWG and DXF adapter tests pass. Border CMC stays refused. This
+  does not qualify physical producer ordering or native rendering; see the
+  [DWG border writer receipt](docs/research/p5-ac1018-table-border-lineweight-visibility-dwg-writer-2026-11-11.json).
   Re-encoding a parsed TABLE with a nonempty retained override range remains
   refused, including after modeled values change: the range currently stores
   offsets and counts, not the source bytes or a value snapshot. Next add an
@@ -2703,7 +2715,11 @@ behavior independently. Local macOS checks do not satisfy those platform gates.
      output, while selected zero is preserved. No public virtuals were added.
   2. Keep the mapped six-category lineweight and visibility arrays, strict
      18-bit mask/value presence checks, the exact 27-value lineweight enum for
-     both row and cell overrides, and DWG/DXF visibility inversion.
+     both row and cell overrides, and DWG/DXF visibility inversion. **The
+     bounded AC1018 DWG table-level lineweight/visibility writer is now
+     implemented and generated-readback tested**; the 18-bit border color
+     writer remains out of scope because selected CMC values are not generally
+     representable by the DXF entity-level border groups.
      Per-row border CMC is resolved as general-profile output-refused: four
      edge categories have only one DXF entity-level value for three independent
      DWG rows. Do not block other P5 work on this non-representable profile.
