@@ -1222,6 +1222,7 @@ private:
     DRW_DwgFrameOffsetSpace space{DRW_DwgFrameOffsetSpace::Unknown};
     DwgObjectFrame frame;
     std::shared_ptr<const DRW_Table> tableModel;
+    std::shared_ptr<const DRW_LType> ltypeModel;
   };
   std::shared_ptr<const DRW_Table> m_verifiedTableParsedModel;
   std::vector<std::uint8_t> m_verifiedTableParsedBody;

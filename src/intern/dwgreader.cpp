@@ -8422,6 +8422,7 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
     }
     return true;
   };
+  std::vector<std::uint32_t> verifiedLtypeRows;
   const auto parseTableRecord = [&](const objHandle &object,
                                     const DwgTableDescriptor &descriptor,
                                     auto &record) {
@@ -8439,6 +8440,29 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
     if (!record->parseDwg(version, &buffer, frame.bodyBitSize()) ||
         !buffer.isGood() || record->handle != object.handle)
       return false;
+    if (version == DRW::AC1018 && descriptor.recordType == DRW::DwgLTypeObjectType
+        && std::find(verifiedLtypeRows.cbegin(), verifiedLtypeRows.cend(), object.handle)
+            != verifiedLtypeRows.cend()) {
+      const auto sourceIt = std::find_if(erasedObjectHandles.crbegin(), erasedObjectHandles.crend(),
+          [&object](const auto& e) { return e.source.handle == object.handle; });
+      auto* ltype = dynamic_cast<DRW_LType*>(record.get());
+      DwgObjectFrame candidateFrame;dwgBuffer candidateBuffer=dbuf->forkIndependent();
+      if (sourceIt == erasedObjectHandles.crend() || !ltype
+          || !candidateFrame.readAt(candidateBuffer, version, object.loc)
+          || candidateFrame.body().size() > 4096u || m_verifiedTableCandidates.size() >= 8u) {
+        m_verifiedTableCandidates.clear();m_verifiedTableCandidateFailed=true;
+      } else {
+        try {
+          VerifiedTableCandidatePending pending;pending.kind=DwgVerifiedTableCandidateKind::LTypeRecord;
+          pending.version=version;pending.classNumber=static_cast<std::uint16_t>(descriptor.recordType);
+          pending.handle=object.handle;pending.offset=sourceIt->source.offset;
+          pending.ordinal=sourceIt->source.ordinal;pending.space=sourceIt->source.offsetSpace;
+          pending.frame=std::move(candidateFrame);pending.ltypeModel=std::make_shared<DRW_LType>(*ltype);
+          m_verifiedTableCandidateBytes+=pending.frame.body().size();
+          m_verifiedTableCandidates.push_back(std::move(pending));
+        } catch (...) {m_verifiedTableCandidates.clear();m_verifiedTableCandidateFailed=true;}
+      }
+    }
     if (version <= DRW::AC1018)
       return true;
 
@@ -8570,6 +8594,8 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
     if (ret2)
       recordLtypeControlMemberRoleError(oc, ltControl, offsetSpace);
     ret2 = ret2 && claimControlHandles(ltControl);
+    if (version == DRW::AC1018 && ltControl.handlesList.size() <= 8u)
+      verifiedLtypeRows.assign(ltControl.handlesList.cbegin(), ltControl.handlesList.cend());
     ret2 = ret2 && stageControlReceipt(oc, kLTypeTable, ltControl);
     if (!ret2) {
       ltControl.handlesList.clear();
@@ -13347,7 +13373,7 @@ void dwgReader::deliverVerifiedTableCandidates(DRW_Interface& target) noexcept {
   for(const auto& item:pending) {
     if (!sink->wantsVerifiedTableCandidate(item.handle))return;
     DwgVerifiedTableCandidateTicket ticket(item.kind,item.version,item.classNumber,
-        item.handle,item.offset,item.ordinal,item.space,item.frame,item.tableModel.get());
+        item.handle,item.offset,item.ordinal,item.space,item.frame,item.tableModel.get(),item.ltypeModel.get());
     sink->verifiedTableCandidate(ticket);
   }
 }

@@ -1415,10 +1415,10 @@ created locally from scratch for the specific control.
   read finalization. The generated delivery-gate control verifies selection
   and withholding on partial or failed reads. A current-source live probe also
   observes exactly one LTYPE_CONTROL ticket for handle 0x5 after complete
-  AC1018 import with all 226 frames published; this does not exercise CRC
-  corruption/retry or bind LTYPE rows. STYLE EED/APPID, APPID_CONTROL siblings,
-  STYLE_CONTROL, ordinary LTYPE rows and the ByLayer sibling still need
-  same-import identity and role binding ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)). ODA §20.4.57 specifies ByLayer then
+  AC1018 import with all 226 frames published. The selected ordinary member
+  handle 0x16 is also staged with its typed Continuous model under the same
+  import and control selection. Phantom ByBlock/ByLayer rows, CRC corruption
+  and retry, and STYLE EED/APPID dependencies remain unqualified ([receipt](docs/research/p5-ac1018-ltype-control-byblock-source-observer-2026-11-11.json)). ODA §20.4.57 specifies ByLayer then
   ByBlock, while this pinned source and LibreDWG report ByBlock then ByLayer.
   Treat that as a source anomaly. The observer now exposes a separate normative
   order check with exact ByLayer/ByBlock spans; same-import source binding and
