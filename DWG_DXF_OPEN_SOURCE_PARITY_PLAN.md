@@ -1384,6 +1384,11 @@ created locally from scratch for the specific control.
   See the [binding receipt](docs/research/p5-ac1018-tablestyle-reader-source-binding-2026-11-11.json),
   [style graph receipt](docs/research/p5-ac1018-tablestyle-cellstylemap-graph-wire-2026-11-11.json)
   and [observer receipt](docs/research/p5-ac1018-tablestyle-source-observer-2026-11-11.json).
+  A separate source walk now identifies STYLE's EED APPID `0x12`, the
+  APPID_CONTROL's two additional siblings, and distinct ordinary/phantom
+  LTYPE_CONTROL roles. Bind those records and remaining siblings before
+  claiming resource closure; font meaning remains open. See the
+  [resource wire receipt](docs/research/p5-ac1018-table-style-ltype-resource-wire-2026-11-11.json).
   See the [DATATABLE candidate receipt](docs/research/p5-ac1018-datatable-candidate-observer-2026-11-11.json).
 
   The recreated AC1018 XRECORD `0xbc` is now independently walked to its
