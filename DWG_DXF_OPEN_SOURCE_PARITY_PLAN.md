@@ -3455,6 +3455,18 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
   native application behavior remain open. No DWG/DXF fixture was added. See
   the [allocation rollback receipt](docs/research/p6-oleframe-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **P6 MESH DWG encoder transaction safety:** `DRW_Mesh::encodeDwg` now stages
+  its base-cage body and entity-handle stream through the shared transaction
+  helper. Generated topology controls include four vertices, one quad, four
+  edges, two crease values, and the admitted trailing flag profile. AC1018,
+  AC1021, AC1024, and AC1032 each sweep 14 injected allocation failures;
+  seeded destination and handle-state rollback, class-ID restoration,
+  same-object retry, and all-stream alias controls pass. The focused selector
+  and 24-test entity-writer transaction cohort pass. This is transaction
+  evidence only; MESH field semantics, producer coverage, native rendering,
+  and broader output support remain open. No DWG/DXF fixture was added. See
+  the [allocation rollback receipt](docs/research/p6-mesh-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
+
 After every slice: run its focused fast checks; update this queue and the
 relevant receipt; commit code, plan and receipt together; report the commit and
 next eligible slice, then continue. Keep fixtures out of commits unless already

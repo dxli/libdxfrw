@@ -10968,39 +10968,47 @@ bool DRW_Mesh::encodeDwg(DRW::Version dwgVersion, dwgBufferW *buf, std::uint32_t
     for (const auto& face : faces)
         faceStreamCount += static_cast<std::int32_t>(face.size() + 1);
 
-    oType = kDwgClassNum;
-    if (!encodeDwgCommon(dwgVersion, buf)) return false;
+    return encodeEntityDwgTransaction(
+        oType, buf, nullptr, handleBuf,
+        [this, dwgVersion, faceStreamCount](dwgBufferW *body,
+                                            dwgBufferW *strings,
+                                            dwgBufferW *handles) {
+            (void)strings;
+            oType = kDwgClassNum;
+            if (!encodeDwgCommon(dwgVersion, body))
+                return false;
 
-    buf->putBitShort(version);
-    buf->putBit(blendCrease ? 1 : 0);
+            body->putBitShort(version);
+            body->putBit(blendCrease ? 1 : 0);
 
-    buf->putBitLong(subdivisionLevel);
+            body->putBitLong(subdivisionLevel);
 
-    buf->putBitLong(static_cast<std::int32_t>(vertices.size()));
-    for (const DRW_Coord& vertex : vertices)
-        buf->put3BitDouble(vertex);
+            body->putBitLong(static_cast<std::int32_t>(vertices.size()));
+            for (const DRW_Coord& vertex : vertices)
+                body->put3BitDouble(vertex);
 
-    buf->putBitLong(faceStreamCount);
-    for (const auto& face : faces) {
-        buf->putBitLong(static_cast<std::int32_t>(face.size()));
-        for (std::int32_t index : face)
-            buf->putBitLong(index);
-    }
+            body->putBitLong(faceStreamCount);
+            for (const auto& face : faces) {
+                body->putBitLong(static_cast<std::int32_t>(face.size()));
+                for (std::int32_t index : face)
+                    body->putBitLong(index);
+            }
 
-    buf->putBitLong(static_cast<std::int32_t>(edges.size()));
-    for (const auto& edge : edges) {
-        buf->putBitLong(edge.first);
-        buf->putBitLong(edge.second);
-    }
+            body->putBitLong(static_cast<std::int32_t>(edges.size()));
+            for (const auto& edge : edges) {
+                body->putBitLong(edge.first);
+                body->putBitLong(edge.second);
+            }
 
-    buf->putBitLong(static_cast<std::int32_t>(creases.size()));
-    for (double crease : creases)
-        buf->putBitDouble(crease);
+            body->putBitLong(static_cast<std::int32_t>(creases.size()));
+            for (double crease : creases)
+                body->putBitDouble(crease);
 
-    buf->putBit(1u);
-    buf->putBit(0u);
+            body->putBit(1u);
+            body->putBit(0u);
 
-    return encodeDwgEntHandle(dwgVersion, buf, handleBuf);
+            return encodeDwgEntHandle(dwgVersion, body, handles);
+        });
 }
 
 bool DRW_Shape::parseCode(int code, const std::unique_ptr<dxfReader>& reader) {

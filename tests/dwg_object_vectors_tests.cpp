@@ -599,10 +599,14 @@ public:
 
 class MeshCodecProbe final : public DRW_Mesh {
 public:
+    using DRW_Mesh::encodeDwg;
     using DRW_Mesh::parseDwg;
     using DRW_Mesh::resetDwgState;
     using DRW_Entity::encodeDwgCommon;
     using DRW_Entity::encodeDwgEntHandle;
+
+    void setDwgType(std::int16_t value) { oType = value; }
+    std::int16_t dwgType() const { return oType; }
 
     bool encodeCommonPrefix(DRW::Version version, dwgBufferW *body,
                             dwgBufferW *strings) {
@@ -25793,6 +25797,34 @@ void testOleFrameDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testMeshDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1018, DRW::AC1021,
+                                     DRW::AC1024, DRW::AC1032}) {
+    MeshCodecProbe mesh;
+    mesh.handle = 0xB510u + static_cast<std::uint32_t>(version);
+    mesh.parentHandle = 0xB520u;
+    mesh.reactorHandles = {0xB530u};
+    mesh.xDictHandle = 0xB540u;
+    mesh.setDwgType(0x777);
+    mesh.version = 2u;
+    mesh.blendCrease = true;
+    mesh.subdivisionLevel = 2;
+    mesh.vertices = {DRW_Coord(0.0, 0.0, 0.0),
+                     DRW_Coord(1.0, 0.0, 0.0),
+                     DRW_Coord(1.0, 1.0, 0.0),
+                     DRW_Coord(0.0, 1.0, 0.25)};
+    mesh.faces = {{0, 1, 2, 3}};
+    mesh.edges = {{0, 1}, {1, 2}, {2, 3}, {3, 0}};
+    mesh.creases = {0.25, 0.75};
+    mesh.unknown = 1u;
+    checkEntityDwgEncodeAllocationRollback(
+        t, mesh, version, DRW_Mesh::kDwgClassNum,
+        version == DRW::AC1018 ? "AC1018 MESH"
+        : version == DRW::AC1021 ? "AC1021 MESH"
+        : version == DRW::AC1024 ? "AC1024 MESH" : "AC1032 MESH");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -29052,6 +29084,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testOleFrameDwgEncodeAllocationRollback(context);
       std::cout << "OLEFRAME DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--mesh-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testMeshDwgEncodeAllocationRollback(context);
+      std::cout << "MESH DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }
