@@ -14,8 +14,9 @@ bool allocationTracking = false;
 long allocationFailureOffset = -1;
 std::size_t allocationAttempts = 0u;
 bool allocationFailed = false;
-void tableFacadeAllocationBegin() {
-    if (allocationProbeEnabled)
+int allocationProbeStage = 0;
+void tableFacadeAllocationBegin(int stage) {
+    if (allocationProbeEnabled && allocationProbeStage == stage)
         allocationTracking = true;
 }
 void tableFacadeAllocationEnd() { allocationTracking = false; }
@@ -124,6 +125,40 @@ int main() {
             return 1;
         }
     }
+    for (const int mode : {20, 21, 22, 23}) {
+        dx_data data;
+        dwgRW writer(path.string().c_str());
+        TableStyleNodWholeFileAdapter producer(&writer, &data, true, false, false);
+        if (!writer.reserveHandle(producer.kExtensionHandle) || !seed()) return 1;
+        producer.setExtensionMode(mode);
+        allocationProbeStage = 1;
+        allocationAttempts = 0u;
+        allocationFailed = false;
+        allocationFailureOffset = 0;
+        allocationProbeEnabled = true;
+        const bool wrote = writer.write(&producer, DRW::AC1018, true);
+        allocationProbeEnabled = false;
+        allocationTracking = false;
+        if (!allocationFailed || !producer.caughtException()
+            || ((mode == 20 || mode == 22) && (wrote || !unchanged()))
+            || ((mode == 21 || mode == 23) && (!wrote || !producer.ready))) {
+            std::cerr << "caught duplicate allocation failure mismatch mode="
+                      << mode << " fired=" << allocationFailed
+                      << " caught=" << producer.caughtException()
+                      << " wrote=" << wrote << '\n';
+            return 1;
+        }
+        if (mode == 20 || mode == 22) {
+            allocationFailureOffset = -1;
+            producer.setExtensionMode(6);
+            if (!writer.write(&producer, DRW::AC1018, true) || !producer.ready) {
+                std::cerr << "caught duplicate retry failed\n";
+                return 1;
+            }
+        }
+    }
+    std::cout << "Caught fixed/generic allocation exceptions: "
+                 "refusal, explicit rollback and retry PASS\n";
     std::cout << "TABLE extension facade allocation failures=" << count
               << " rollback/retry/readback: PASS\n";
     return 0;

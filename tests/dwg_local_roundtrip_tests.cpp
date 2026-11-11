@@ -66,6 +66,7 @@ bool runHatchPixelPresenceTests(const std::filesystem::path& parent);
 bool runHatchSameDataTests(const std::filesystem::path& parent);
 bool writeHatchReferenceFile(const std::filesystem::path& path, bool binary);
 bool verifyHatchReferenceFile(const std::filesystem::path& path);
+void drwThrowNextFixedObjectAfterFrameForTest();
 
 class DrwEntityEncodeTestAccess {
 public:
@@ -38093,7 +38094,7 @@ bool inspectPhysicalTableDirectCodec(const std::filesystem::path& inputPath) {
 namespace {
 
 #ifdef LIBDXFRW_TABLE_FACADE_ALLOC_SWEEP
-void tableFacadeAllocationBegin();
+void tableFacadeAllocationBegin(int stage);
 void tableFacadeAllocationEnd();
 #endif
 
@@ -38103,6 +38104,13 @@ public:
     public:
         bool encodeDwg(DRW::Version, dwgBufferW*, std::uint32_t,
                        dwgBufferW*, dwgBufferW*) override { return false; }
+    };
+    class ThrowingPoint final : public DRW_Point {
+    public:
+        bool encodeDwg(DRW::Version, dwgBufferW*, std::uint32_t,
+                       dwgBufferW*, dwgBufferW*) override {
+            throw std::bad_alloc();
+        }
     };
     class DerivedTable final : public DRW_Table {
     public:
@@ -38176,7 +38184,7 @@ public:
         if (!m_emitTable)
             return;
         if (m_extensionMode == 10 || m_extensionMode == 12
-            || m_extensionMode == 15) {
+            || m_extensionMode == 15 || m_extensionMode == 19) {
             DRW_Dictionary early;
             early.handle = kExtensionHandle;
             early.parentHandle = table.handle;
@@ -38190,8 +38198,13 @@ public:
                 RejectedPoint collision;
                 collision.handle = kExtensionHandle;
                 (void)m_writer->writePoint(&collision);
-            } else {
+            } else if (m_extensionMode == 15) {
                 (void)m_writer->beginBlockContent(0xA741u);
+            } else {
+                ThrowingPoint collision;
+                collision.handle = kExtensionHandle;
+                try { (void)m_writer->writePoint(&collision); }
+                catch (const std::bad_alloc&) { m_caughtException = true; }
             }
         }
         const std::uint32_t blockRecord = m_writer->defineBlock(
@@ -38297,7 +38310,7 @@ public:
         }
         #ifdef LIBDXFRW_TABLE_FACADE_ALLOC_SWEEP
         struct AllocationScope {
-            AllocationScope() { tableFacadeAllocationBegin(); }
+            AllocationScope() { tableFacadeAllocationBegin(0); }
             ~AllocationScope() { tableFacadeAllocationEnd(); }
         } allocationScope;
         #endif
@@ -38319,7 +38332,7 @@ public:
             ready = false;
         if (!ready || m_extensionMode == 0 || m_extensionMode == 1
             || m_extensionMode == 10 || m_extensionMode == 12
-            || m_extensionMode == 15)
+            || m_extensionMode == 15 || m_extensionMode == 19)
             return;
         if (m_extensionMode == 4) {
             DRW_XRecord wrongType;
@@ -38333,7 +38346,48 @@ public:
         extension.parentHandle = m_extensionMode == 2 ? 0xA721u : table.handle;
         if (m_extensionMode == 3)
             extension.m_entries.push_back({"UNSUPPORTED", 0xA722u});
+        if (m_extensionMode == 17 || m_extensionMode == 18) {
+            const auto token = m_extensionMode == 18
+                ? m_writer->beginDwgWriteTransaction(true, false, false) : 0u;
+            drwThrowNextFixedObjectAfterFrameForTest();
+            try { (void)m_writer->writeDictionary(&extension); }
+            catch (const std::bad_alloc&) { m_caughtException = true; }
+            DRW::DwgObjectFrameReceipt observed;
+            m_exceptionFrameObserved = m_writer->getLastDwgObjectFrame(observed)
+                && observed.valid && observed.objectHandle == kExtensionHandle;
+            if (m_extensionMode == 18) {
+                ready = token != 0u && m_caughtException && m_exceptionFrameObserved
+                    && m_writer->rollbackDwgWriteTransaction(token)
+                    && m_writer->writeDictionary(&extension);
+            }
+            return;
+        }
         ready = m_writer->writeDictionary(&extension);
+        #ifdef LIBDXFRW_TABLE_FACADE_ALLOC_SWEEP
+        if (ready && (m_extensionMode >= 20 && m_extensionMode <= 23)) {
+            DRW_Dictionary duplicate = extension;
+            duplicate.m_entries.push_back({std::string(128u, 'x'), 0xA742u});
+            DRW_TableStyle genericCollision = style;
+            genericCollision.handle = kExtensionHandle;
+            const bool explicitRollback = m_extensionMode == 21
+                || m_extensionMode == 23;
+            const auto token = explicitRollback
+                ? m_writer->beginDwgWriteTransaction(true, false, false) : 0u;
+            tableFacadeAllocationBegin(1);
+            try {
+                if (m_extensionMode <= 21)
+                    (void)m_writer->writeDictionary(&duplicate);
+                else
+                    (void)m_writer->writeTableStyle(&genericCollision);
+            }
+            catch (const std::bad_alloc&) { m_caughtException = true; }
+            tableFacadeAllocationEnd();
+            if (explicitRollback)
+                ready = token != 0u && m_caughtException
+                    && m_writer->rollbackDwgWriteTransaction(token);
+            return;
+        }
+        #endif
         if (ready && m_extensionMode == 5)
             ready = m_writer->writeDictionary(&extension);
         if (ready && m_extensionMode == 7)
@@ -38384,9 +38438,13 @@ public:
     void setExtensionMode(int mode) noexcept {
         m_extensionMode = mode;
         m_derivedCodecCalled = false;
+        m_caughtException = false;
+        m_exceptionFrameObserved = false;
         table.xDictHandle = mode == 0 ? 0u : kExtensionHandle;
     }
     bool derivedCodecCalled() const noexcept { return m_derivedCodecCalled; }
+    bool caughtException() const noexcept { return m_caughtException; }
+    bool exceptionFrameObserved() const noexcept { return m_exceptionFrameObserved; }
     void testExtensionRollback(bool test) noexcept {
         m_testExtensionRollback = test;
     }
@@ -38449,6 +38507,8 @@ private:
     int m_extensionMode {0};
     bool m_testExtensionRollback {false};
     bool m_derivedCodecCalled {false};
+    bool m_caughtException {false};
+    bool m_exceptionFrameObserved {false};
 };
 
 class TableDbColorWholeFileReadback final : public dx_iface {
@@ -38558,7 +38618,7 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
                 return false;
             }
         }
-        for (int mode : {1, 2, 3, 4, 5, 9, 10, 12, 13, 14, 15, 16}) {
+        for (int mode : {1, 2, 3, 4, 5, 9, 10, 12, 13, 14, 15, 16, 17, 19}) {
             std::ofstream previous(path, std::ios::binary | std::ios::trunc);
             previous << sentinel;
             previous.close();
@@ -38568,6 +38628,8 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
             const std::string after((std::istreambuf_iterator<char>(afterStream)),
                                     std::istreambuf_iterator<char>());
             if (!rejected || after != sentinel || producer.derivedCodecCalled()
+                || ((mode == 17 || mode == 19) && !producer.caughtException())
+                || (mode == 17 && !producer.exceptionFrameObserved())
                 || producer.table.handle != 0xA720u
                 || producer.table.blockRecH.ref != 0u) {
                 std::cerr << "TABLE extension refusal/rollback failed mode="
@@ -38586,6 +38648,12 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
         producer.setExtensionMode(11);
         if (!output.write(&producer, DRW::AC1018, true) || !producer.ready) {
             std::cerr << "rolled-back duplicate poisoned TABLE extension graph\n";
+            return false;
+        }
+        producer.setExtensionMode(18);
+        if (!output.write(&producer, DRW::AC1018, true) || !producer.ready
+            || !producer.caughtException() || !producer.exceptionFrameObserved()) {
+            std::cerr << "caught post-frame exception did not rollback and retry\n";
             return false;
         }
         producer.setExtensionMode(6);

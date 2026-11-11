@@ -61,6 +61,47 @@ bool drwHasEncodableDwgHatchPatternAngles(const DRW_Hatch& entity) noexcept;
 #define FIRSTHANDLE 48
 
 namespace {
+// A consumer may catch a frame-write exception inside its callback. Record
+// that incomplete attempt without allocating; explicit writer transactions
+// snapshot and restore the TABLE extension failure state on rollback.
+class DwgFrameExceptionScope {
+public:
+    explicit DwgFrameExceptionScope(std::unique_ptr<dwgWriter>& writer) noexcept
+        : m_writer(writer)
+#if __cplusplus >= 201703L
+        , m_exceptionDepth(std::uncaught_exceptions())
+#endif
+    {
+#if __cplusplus < 201703L
+        // C++14 cannot count nested exceptions; conservatively record calls
+        // made while an earlier exception is already unwinding.
+        if (std::uncaught_exception())
+            note();
+#endif
+    }
+    ~DwgFrameExceptionScope() noexcept {
+#if __cplusplus >= 201703L
+        if (std::uncaught_exceptions() > m_exceptionDepth)
+            note();
+#else
+        if (std::uncaught_exception())
+            note();
+#endif
+    }
+    DwgFrameExceptionScope(const DwgFrameExceptionScope&) = delete;
+    DwgFrameExceptionScope& operator=(const DwgFrameExceptionScope&) = delete;
+
+private:
+    void note() noexcept {
+        if (auto* native = dynamic_cast<dwgWriter15*>(m_writer.get()))
+            native->recordUntrackedDwgObjectFailure();
+    }
+    std::unique_ptr<dwgWriter>& m_writer;
+#if __cplusplus >= 201703L
+    int m_exceptionDepth;
+#endif
+};
+
 thread_local bool g_throwNextLegacyPolylineForTest = false;
 thread_local bool g_throwNextLegacyPolylineLateForTest = false;
 thread_local bool g_throwNextAc1021PolylineForTest = false;
@@ -69,6 +110,7 @@ thread_local bool g_throwNextLegacyInsertForTest = false;
 thread_local bool g_throwNextLegacyInsertLateForTest = false;
 thread_local bool g_throwNextLegacyBlockEntityForTest = false;
 thread_local bool g_throwNextLegacyBlockEntityLateForTest = false;
+thread_local bool g_throwNextFixedObjectAfterFrameForTest = false;
 }
 // Internal test seams: no dwgRW or consumer class layout changes.
 void drwThrowNextLegacyPolylineForTest() { g_throwNextLegacyPolylineForTest = true; }
@@ -79,6 +121,7 @@ void drwThrowNextLegacyInsertForTest() { g_throwNextLegacyInsertForTest = true; 
 void drwThrowNextLegacyInsertLateForTest() { g_throwNextLegacyInsertLateForTest = true; }
 void drwThrowNextLegacyBlockEntityForTest() { g_throwNextLegacyBlockEntityForTest = true; }
 void drwThrowNextLegacyBlockEntityLateForTest() { g_throwNextLegacyBlockEntityLateForTest = true; }
+void drwThrowNextFixedObjectAfterFrameForTest() { g_throwNextFixedObjectAfterFrameForTest = true; }
 
 namespace {
 
@@ -1328,6 +1371,7 @@ void dwgRW::resetWriteSkipCounters() {
 }
 
 std::uint32_t dwgRW::allocNextHandle() {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return writer != nullptr ? writer->allocNextHandle() : 0;
 }
 
@@ -1347,6 +1391,7 @@ bool dwgRW::getEmittedDwgTableControlHandles(
 
 bool dwgRW::registerDwgNamedObjectDictionaryEntry(
     const std::string& name, std::uint32_t childHandle) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     const bool accepted = writer != nullptr
         && writer->registerDwgNamedObjectDictionaryEntry(name, childHandle);
     if (!accepted)
@@ -1356,6 +1401,7 @@ bool dwgRW::registerDwgNamedObjectDictionaryEntry(
 
 bool dwgRW::registerDwgGroupDictionaryEntry(
     const std::string& name, std::uint32_t groupHandle) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     const bool accepted = writer != nullptr
         && writer->registerDwgGroupDictionaryEntry(name, groupHandle);
     if (!accepted)
@@ -1442,6 +1488,7 @@ void dwgRW::clearDwgObjectFrameProvenance() {
 }
 
 bool dwgRW::rollbackLastDwgObjectWrite(bool restoreCallerState) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (writer == nullptr || !m_lastWriteTransaction)
         return false;
 
@@ -1473,6 +1520,7 @@ bool dwgRW::rollbackLastDwgObjectWrite(bool restoreCallerState) {
 std::uint64_t dwgRW::beginDwgWriteTransaction(bool suppressFailureCounters,
                                               bool trackCallerMutations,
                                               bool includeAdmissionState) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (writer == nullptr || m_nextDwgWriteTransaction == 0)
         return 0;
 
@@ -1505,6 +1553,7 @@ std::uint64_t dwgRW::beginDwgWriteTransaction(bool suppressFailureCounters,
 }
 
 bool dwgRW::commitDwgWriteTransaction(std::uint64_t token) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (token == 0 || m_dwgWriteTransactions.empty()
         || m_dwgWriteTransactions.back()->token != token)
         return false;
@@ -1526,6 +1575,7 @@ bool dwgRW::commitDwgWriteTransaction(std::uint64_t token) {
 }
 
 bool dwgRW::rollbackDwgWriteTransaction(std::uint64_t token) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (token == 0 || m_dwgWriteTransactions.empty()
         || m_dwgWriteTransactions.back()->token != token)
         return false;
@@ -1612,6 +1662,7 @@ bool dwgRW::recordWriteResult(WriteSkipKind kind, bool ok,
 bool dwgRW::writeObjectTransaction(
     WriteSkipKind kind, const std::function<bool()>& write,
     bool allowIdempotentNoFrame) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return writeObjectTransaction(
         kind, nullptr, write, allowIdempotentNoFrame);
 }
@@ -1619,6 +1670,7 @@ bool dwgRW::writeObjectTransaction(
 bool dwgRW::writeObjectTransaction(
     WriteSkipKind kind, DRW_TableEntry *mutationTarget,
     const std::function<bool()>& write, bool allowIdempotentNoFrame) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (writer == nullptr || !write)
         return recordWriteResult(kind, false);
 
@@ -1661,6 +1713,7 @@ bool dwgRW::writeFixedObjectFrameTransaction(
     WriteSkipKind kind, dwgWriter15 *objectWriter,
     const DRW_TableEntry *object, DRW_TableEntry *mutationTarget,
     const std::function<bool()>& write) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (objectWriter == nullptr || object == nullptr || !write)
         return recordWriteResult(kind, false);
 
@@ -1692,6 +1745,10 @@ bool dwgRW::writeFixedObjectFrameTransaction(
         objectWriter->checkpointEntityFrame();
     DRW::DwgObjectFrameReceipt frame;
     const bool wrote = write();
+    if (wrote && g_throwNextFixedObjectAfterFrameForTest) {
+        g_throwNextFixedObjectAfterFrameForTest = false;
+        throw std::bad_alloc();
+    }
     const bool hasFrame = wrote
         && objectWriter->getLastDwgObjectFrame(frame);
     const bool ok = hasFrame && frame.valid
@@ -2327,66 +2384,82 @@ catch (...) {
 // virtual on the base `dwgWriter`).  Returns false if the writer isn't
 // ready (e.g., caller invoked outside `writeEntities`).
 bool dwgRW::writePoint(DRW_Point *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeLine(DRW_Line *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::write3DLine(DRW_3DLine *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeCircle(DRW_Circle *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeArc(DRW_Arc *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeEllipse(DRW_Ellipse *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeText(DRW_Text *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeRText(DRW_RText *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeArcAlignedText(DRW_ArcAlignedText *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeLWPolyline(DRW_LWPolyline *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeRay(DRW_Ray *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeXline(DRW_Xline *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeTrace(DRW_Trace *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeSolid(DRW_Solid *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::write3dface(DRW_3Dface *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeInsert(DRW_Insert *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     m_lastSuccessfulEntityHandle = 0;
     m_lastDwgObjectFrame = {};
     m_lastDwgObjectFrameValid = false;
@@ -2795,6 +2868,7 @@ bool dwgRW::writeInsert(DRW_Insert *ent) {
 }
 
 bool dwgRW::registerTableEntityClassForWrite(DRW_Table *table) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     auto* native = dynamic_cast<dwgWriter15*>(writer.get());
     if (table == nullptr || native == nullptr || m_dwgWriteTransactions.empty()
         || !m_dwgWriteTransactions.back()->trackCallerMutations)
@@ -2823,6 +2897,7 @@ bool dwgRW::registerTableEntityClassForWrite(DRW_Table *table) {
 }
 
 bool dwgRW::registerTableEntityClass(DRW_Table *table) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (writer == nullptr || table == nullptr || version != DRW::AC1018)
         return false;
     const auto callerState = std::find_if(
@@ -2875,6 +2950,7 @@ public:
 };
 
 bool dwgRW::writeTable(DRW_Table *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::Entity, false);
     auto* native = dynamic_cast<dwgWriter15*>(writer.get());
@@ -2947,24 +3023,29 @@ bool dwgRW::writeTable(DRW_Table *ent) {
 }
 
 bool dwgRW::writeMText(DRW_MText *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeSpline(DRW_Spline *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeHelix(DRW_Helix *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeAttrib(DRW_Attrib *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     (void)ent;
     markDwgWriteFailure();
     return recordWriteResult(WriteSkipKind::Entity, false);
 }
 
 bool dwgRW::writeAttdef(DRW_Attdef *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (writer == nullptr || !writer->hasActiveBlockContent()) {
         markDwgWriteFailure();
         return recordWriteResult(WriteSkipKind::Entity, false);
@@ -2973,6 +3054,7 @@ bool dwgRW::writeAttdef(DRW_Attdef *ent) {
 }
 
 bool dwgRW::writeHatch(DRW_Hatch *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     const bool written = encodeEntityForWrite(ent);
     // A gradient is a semantic color payload, not an optional decoration. If
     // its supported CMC projection fails, fail the whole staged DWG write so
@@ -2984,6 +3066,7 @@ bool dwgRW::writeHatch(DRW_Hatch *ent) {
 }
 
 bool dwgRW::writeMPolygon(DRW_MPolygon *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     const bool written = encodeEntityForWrite(ent);
     const bool hasFillColorState = ent != nullptr
         && (ent->fillColorAci < 0 || ent->fillColorAci > 256
@@ -3000,34 +3083,42 @@ bool dwgRW::writeMPolygon(DRW_MPolygon *ent) {
 }
 
 bool dwgRW::writeDimension(DRW_Dimension *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeTolerance(DRW_Tolerance *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeLight(DRW_Light *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeCamera(DRW_Camera *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeGeoPositionMarker(DRW_GeoPositionMarker *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeSectionObject(DRW_SectionObject *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeMLine(DRW_MLine *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeUnderlay(DRW_Underlay *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::Entity, false);
     // Entity custom class must be in CLASSES before the body is encoded.
@@ -3037,6 +3128,7 @@ bool dwgRW::writeUnderlay(DRW_Underlay *ent) {
 }
 
 bool dwgRW::registerNavisworksModelEntityClass() {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     return recordWriteResult(WriteSkipKind::ClassRegistration,
@@ -3044,6 +3136,7 @@ bool dwgRW::registerNavisworksModelEntityClass() {
 }
 
 bool dwgRW::registerUnderlayEntityClass(DRW_Underlay::Kind kind) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     return recordWriteResult(WriteSkipKind::ClassRegistration,
@@ -3051,6 +3144,7 @@ bool dwgRW::registerUnderlayEntityClass(DRW_Underlay::Kind kind) {
 }
 
 bool dwgRW::writePolyline(DRW_Polyline *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     m_lastSuccessfulEntityHandle = 0;
     m_lastDwgObjectFrame = {};
     m_lastDwgObjectFrameValid = false;
@@ -3475,24 +3569,29 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
 }
 
 bool dwgRW::writeLeader(DRW_Leader *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeMLeader(DRW_MLeader *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeViewport(DRW_Viewport *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 // Phase 6.1 — SHAPE passthrough (no native LibreCAD entity).
 bool dwgRW::writeShape(DRW_Shape *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 // Phase 6.2 — OLE2FRAME passthrough (opaque payload preserved by encodeDwg).
 bool dwgRW::writeOle2Frame(DRW_Ole2Frame *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
@@ -3500,6 +3599,7 @@ bool dwgRW::writeOle2Frame(DRW_Ole2Frame *ent) {
 // payload while the raw unsupported carrier keeps exact source bytes available
 // for same-version replay when the high-level filter needs it.
 bool dwgRW::writeOleFrame(DRW_OleFrame *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
@@ -3521,6 +3621,7 @@ void dwgRW::setDwgWriteFailurePointForTest(
 }
 
 bool dwgRW::writeDwgObjectsForTest() {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return writer != nullptr && writer->writeDwgObjects();
 }
 
@@ -3529,6 +3630,7 @@ bool dwgRW::emitDeferredBlockControlForTest() {
 }
 
 bool dwgRW::writeMesh(DRW_Mesh *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (ent != nullptr && !ent->propertyOverrides.empty()) {
         // The current DWG encoder only has a verified base-cage mapping.
         // Abort the entire save as well as this entity call so a consumer
@@ -3546,6 +3648,7 @@ bool dwgRW::writeMesh(DRW_Mesh *ent) {
 }
 
 bool dwgRW::writeWipeout(DRW_Wipeout *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::Entity, false);
     // WIPEOUT is fixed entity type 1109; no CLASSES registration is needed.
@@ -3553,6 +3656,7 @@ bool dwgRW::writeWipeout(DRW_Wipeout *ent) {
 }
 
 bool dwgRW::writeImageDef(DRW_ImageDef *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     auto *w = asWriter15(writer);
     if (w == nullptr || object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
@@ -3562,6 +3666,7 @@ bool dwgRW::writeImageDef(DRW_ImageDef *object) {
 }
 
 bool dwgRW::writeImageDefinitionReactor(DRW_ImageDefinitionReactor *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     auto *w = asWriter15(writer);
     if (w == nullptr || object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
@@ -3571,6 +3676,7 @@ bool dwgRW::writeImageDefinitionReactor(DRW_ImageDefinitionReactor *object) {
 }
 
 bool dwgRW::registerPointCloudDefObjectClass(DRW_PointCloudDef *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -3582,6 +3688,7 @@ bool dwgRW::registerPointCloudDefObjectClass(DRW_PointCloudDef *object) {
 }
 
 bool dwgRW::writePointCloudDef(DRW_PointCloudDef *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -3594,6 +3701,7 @@ bool dwgRW::writePointCloudDef(DRW_PointCloudDef *object) {
 
 bool dwgRW::registerNavisworksModelDefObjectClass(
     DRW_NavisworksModelDef *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -3604,6 +3712,7 @@ bool dwgRW::registerNavisworksModelDefObjectClass(
 }
 
 bool dwgRW::writeNavisworksModelDef(DRW_NavisworksModelDef *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -3616,6 +3725,7 @@ bool dwgRW::writeNavisworksModelDef(DRW_NavisworksModelDef *object) {
 
 bool dwgRW::registerPointCloudColorMapObjectClass(
     DRW_PointCloudColorMap *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -3626,6 +3736,7 @@ bool dwgRW::registerPointCloudColorMapObjectClass(
 }
 
 bool dwgRW::writePointCloudColorMap(DRW_PointCloudColorMap *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -3638,6 +3749,7 @@ bool dwgRW::writePointCloudColorMap(DRW_PointCloudColorMap *object) {
 
 bool dwgRW::registerImageDefReactorObjectClass(
     DRW_ImageDefinitionReactor *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     const std::uint32_t handle = object != nullptr ? object->handle : 0;
@@ -3647,6 +3759,7 @@ bool dwgRW::registerImageDefReactorObjectClass(
 
 bool dwgRW::writeImage(DRW_Image *ent, const std::string *fileName, const DRW_ImageDef *definition,
                        const DRW_ImageDefinitionReactor *reactorDefinition) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::Entity, false);
 
@@ -3853,14 +3966,17 @@ bool dwgRW::writeImage(DRW_Image *ent, const std::string *fileName, const DRW_Im
 }
 
 bool dwgRW::writePointCloud(DRW_PointCloud *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writePointCloudEx(DRW_PointCloudEx *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::writeNavisworksModel(DRW_NavisworksModel *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::Entity, false);
     if (!registerNavisworksModelEntityClass())
@@ -3869,12 +3985,14 @@ bool dwgRW::writeNavisworksModel(DRW_NavisworksModel *ent) {
 }
 
 bool dwgRW::writeSurface(DRW_Surface *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (ent == nullptr || ent->getDwgClassNum() == 0)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     return encodeEntityForWrite(ent);
 }
 
 bool dwgRW::registerSurfaceEntityClass(DRW_Surface *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (writer == nullptr || ent == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     return recordWriteResult(WriteSkipKind::ClassRegistration,
@@ -3883,6 +4001,7 @@ bool dwgRW::registerSurfaceEntityClass(DRW_Surface *ent) {
 
 bool dwgRW::registerDwgEntityClassInstance(std::uint16_t classNumber,
                                            std::uint32_t handle) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (writer == nullptr || handle == 0)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (handle == std::numeric_limits<std::uint32_t>::max())
@@ -3895,6 +4014,7 @@ bool dwgRW::registerDwgEntityClassInstance(std::uint16_t classNumber,
 
 std::uint32_t dwgRW::defineBlock(const std::string& name, const DRW_Coord& basePoint,
                            int insUnits) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (writer == nullptr) {
         (void)recordWriteResult(WriteSkipKind::BlockDefinition, false);
         return 0;
@@ -3905,6 +4025,7 @@ std::uint32_t dwgRW::defineBlock(const std::string& name, const DRW_Coord& baseP
 }
 
 std::uint32_t dwgRW::defineBlock(const DRW_Block_Record& record) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (writer == nullptr) {
         (void)recordWriteResult(WriteSkipKind::BlockDefinition, false);
         return 0;
@@ -3915,6 +4036,7 @@ std::uint32_t dwgRW::defineBlock(const DRW_Block_Record& record) {
 }
 
 bool dwgRW::beginBlockContent(std::uint32_t blockRecordHandle) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     const bool ok = writer != nullptr && writer->beginBlockContent(blockRecordHandle);
     if (!ok) {
         if (auto* native = dynamic_cast<dwgWriter15*>(writer.get()))
@@ -3924,6 +4046,7 @@ bool dwgRW::beginBlockContent(std::uint32_t blockRecordHandle) {
 }
 
 bool dwgRW::endBlockContent() {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     const bool ok = writer != nullptr && writer->endBlockContent();
     if (!ok) {
         if (auto* native = dynamic_cast<dwgWriter15*>(writer.get()))
@@ -3933,6 +4056,7 @@ bool dwgRW::endBlockContent() {
 }
 
 bool dwgRW::addLType(DRW_LType *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::TableRecord, false);
     auto *w = asWriter15(writer);
@@ -3948,6 +4072,7 @@ bool dwgRW::addLType(DRW_LType *ent) {
     return recordWriteResult(WriteSkipKind::TableRecord, handle != 0);
 }
 bool dwgRW::addLayer(DRW_Layer *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::TableRecord, false);
     auto *w = asWriter15(writer);
@@ -3963,6 +4088,7 @@ bool dwgRW::addLayer(DRW_Layer *ent) {
     return recordWriteResult(WriteSkipKind::TableRecord, handle != 0);
 }
 bool dwgRW::addTextstyle(DRW_Textstyle *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::TableRecord, false);
     auto *w = asWriter15(writer);
@@ -3978,6 +4104,7 @@ bool dwgRW::addTextstyle(DRW_Textstyle *ent) {
     return recordWriteResult(WriteSkipKind::TableRecord, handle != 0);
 }
 bool dwgRW::addUCS(DRW_UCS *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::TableRecord, false);
     auto *w = asWriter15(writer);
@@ -3991,6 +4118,7 @@ bool dwgRW::addUCS(DRW_UCS *ent) {
     return recordWriteResult(WriteSkipKind::TableRecord, ok);
 }
 bool dwgRW::addView(DRW_View *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::TableRecord, false);
     auto *w = asWriter15(writer);
@@ -4004,6 +4132,7 @@ bool dwgRW::addView(DRW_View *ent) {
     return recordWriteResult(WriteSkipKind::TableRecord, ok);
 }
 bool dwgRW::addVport(DRW_Vport *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::TableRecord, false);
     auto *w = asWriter15(writer);
@@ -4017,6 +4146,7 @@ bool dwgRW::addVport(DRW_Vport *ent) {
     return recordWriteResult(WriteSkipKind::TableRecord, ok);
 }
 bool dwgRW::addViewportEntityHeader(DRW_ViewportEntityHeader *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::TableRecord, false);
     auto *w = asWriter15(writer);
@@ -4031,6 +4161,7 @@ bool dwgRW::addViewportEntityHeader(DRW_ViewportEntityHeader *ent) {
     return recordWriteResult(WriteSkipKind::TableRecord, ok);
 }
 bool dwgRW::addDimstyle(DRW_Dimstyle *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::TableRecord, false);
     auto *w = asWriter15(writer);
@@ -4046,6 +4177,7 @@ bool dwgRW::addDimstyle(DRW_Dimstyle *ent) {
     return recordWriteResult(WriteSkipKind::TableRecord, handle != 0);
 }
 bool dwgRW::addAppId(DRW_AppId *ent) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (ent == nullptr)
         return recordWriteResult(WriteSkipKind::TableRecord, false);
     auto *w = asWriter15(writer);
@@ -4062,6 +4194,7 @@ bool dwgRW::addAppId(DRW_AppId *ent) {
 }
 
 bool dwgRW::writeAcDbPlaceholder(DRW_AcDbPlaceholder *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4074,6 +4207,7 @@ bool dwgRW::writeAcDbPlaceholder(DRW_AcDbPlaceholder *object) {
 }
 
 bool dwgRW::writeVbaProject(DRW_VbaProject *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4085,6 +4219,7 @@ bool dwgRW::writeVbaProject(DRW_VbaProject *object) {
 }
 
 bool dwgRW::writeDbColor(DRW_DbColor *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4096,6 +4231,7 @@ bool dwgRW::writeDbColor(DRW_DbColor *object) {
 }
 
 bool dwgRW::registerDbColorObjectClass(DRW_DbColor *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4106,6 +4242,7 @@ bool dwgRW::registerDbColorObjectClass(DRW_DbColor *object) {
 }
 
 bool dwgRW::registerPlotSettingsObjectClass(std::uint32_t handle) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (handle != 0)
@@ -4120,6 +4257,7 @@ bool dwgRW::validateDwgClassInstanceCounts() const {
 
 bool dwgRW::registerDimensionAssociationObjectClass(
     DRW_DimensionAssociation *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4130,6 +4268,7 @@ bool dwgRW::registerDimensionAssociationObjectClass(
 }
 
 bool dwgRW::writeDimensionAssociation(DRW_DimensionAssociation *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4142,6 +4281,7 @@ bool dwgRW::writeDimensionAssociation(DRW_DimensionAssociation *object) {
 
 bool dwgRW::registerEvaluationGraphObjectClass(
     DRW_EvaluationGraph *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4152,6 +4292,7 @@ bool dwgRW::registerEvaluationGraphObjectClass(
 }
 
 bool dwgRW::writeEvaluationGraph(DRW_EvaluationGraph *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4164,6 +4305,7 @@ bool dwgRW::writeEvaluationGraph(DRW_EvaluationGraph *object) {
 
 bool dwgRW::writeBlockRepresentationData(
     DRW_BlockRepresentationData *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4175,6 +4317,7 @@ bool dwgRW::writeBlockRepresentationData(
 }
 
 bool dwgRW::registerSunObjectClass(DRW_Sun *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4184,6 +4327,7 @@ bool dwgRW::registerSunObjectClass(DRW_Sun *object) {
 }
 
 bool dwgRW::writeSun(DRW_Sun *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4194,6 +4338,7 @@ bool dwgRW::writeSun(DRW_Sun *object) {
 }
 
 bool dwgRW::registerMLeaderStyleObjectClass(DRW_MLeaderStyle *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4203,6 +4348,7 @@ bool dwgRW::registerMLeaderStyleObjectClass(DRW_MLeaderStyle *object) {
 }
 
 bool dwgRW::writeMLeaderStyle(DRW_MLeaderStyle *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4214,6 +4360,7 @@ bool dwgRW::writeMLeaderStyle(DRW_MLeaderStyle *object) {
 }
 
 bool dwgRW::registerTableStyleObjectClass(DRW_TableStyle *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4224,6 +4371,7 @@ bool dwgRW::registerTableStyleObjectClass(DRW_TableStyle *object) {
 }
 
 bool dwgRW::writeTableStyle(DRW_TableStyle *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4235,6 +4383,7 @@ bool dwgRW::writeTableStyle(DRW_TableStyle *object) {
 }
 
 bool dwgRW::registerCellStyleMapObjectClass(DRW_CellStyleMap *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4245,6 +4394,7 @@ bool dwgRW::registerCellStyleMapObjectClass(DRW_CellStyleMap *object) {
 }
 
 bool dwgRW::writeCellStyleMap(DRW_CellStyleMap *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4256,6 +4406,7 @@ bool dwgRW::writeCellStyleMap(DRW_CellStyleMap *object) {
 }
 
 bool dwgRW::registerTableContentObjectClass(DRW_TableContentObject *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr || getVersion() != DRW::AC1021)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4266,6 +4417,7 @@ bool dwgRW::registerTableContentObjectClass(DRW_TableContentObject *object) {
 }
 
 bool dwgRW::writeTableContent(DRW_TableContentObject *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || getVersion() != DRW::AC1021)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4279,6 +4431,7 @@ bool dwgRW::writeTableContent(DRW_TableContentObject *object) {
 bool dwgRW::writeTableStyleCellStyleMapGraph(
     DRW_TableStyle *tableStyle, DRW_Dictionary *extensionDictionary,
     DRW_CellStyleMap *cellStyleMap) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (tableStyle == nullptr || extensionDictionary == nullptr
         || cellStyleMap == nullptr || writer == nullptr
         || getVersion() != DRW::AC1021) {
@@ -4345,6 +4498,7 @@ bool dwgRW::writeTableStyleCellStyleMapGraph(
 }
 
 bool dwgRW::registerMaterialObjectClass(DRW_Material *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (auto* w = asWriter15(writer); w && w->defaultDwgMaterialGraphActive()) {
         markDwgWriteFailure();
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
@@ -4359,6 +4513,7 @@ bool dwgRW::registerMaterialObjectClass(DRW_Material *object) {
 }
 
 bool dwgRW::writeMaterial(DRW_Material *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (auto* w = asWriter15(writer); w && w->defaultDwgMaterialGraphActive()) {
         markDwgWriteFailure();
         return recordWriteResult(WriteSkipKind::Object, false);
@@ -4393,6 +4548,7 @@ bool dwgRW::writeMaterial(DRW_Material *object) {
 }
 
 bool dwgRW::registerLightListObjectClass(DRW_LightList *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4403,6 +4559,7 @@ bool dwgRW::registerLightListObjectClass(DRW_LightList *object) {
 }
 
 bool dwgRW::writeLightList(DRW_LightList *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4414,6 +4571,7 @@ bool dwgRW::writeLightList(DRW_LightList *object) {
 }
 
 bool dwgRW::registerBackgroundObjectClass(DRW_Background *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4424,6 +4582,7 @@ bool dwgRW::registerBackgroundObjectClass(DRW_Background *object) {
 }
 
 bool dwgRW::writeBackground(DRW_Background *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4435,6 +4594,7 @@ bool dwgRW::writeBackground(DRW_Background *object) {
 }
 
 bool dwgRW::registerSunStudyObjectClass(DRW_SunStudy *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4445,6 +4605,7 @@ bool dwgRW::registerSunStudyObjectClass(DRW_SunStudy *object) {
 }
 
 bool dwgRW::writeSunStudy(DRW_SunStudy *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4456,6 +4617,7 @@ bool dwgRW::writeSunStudy(DRW_SunStudy *object) {
 }
 
 bool dwgRW::registerMotionPathObjectClass(DRW_MotionPath *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4466,6 +4628,7 @@ bool dwgRW::registerMotionPathObjectClass(DRW_MotionPath *object) {
 }
 
 bool dwgRW::writeMotionPath(DRW_MotionPath *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4477,6 +4640,7 @@ bool dwgRW::writeMotionPath(DRW_MotionPath *object) {
 }
 
 bool dwgRW::registerCurvePathObjectClass(DRW_CurvePath *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4487,6 +4651,7 @@ bool dwgRW::registerCurvePathObjectClass(DRW_CurvePath *object) {
 }
 
 bool dwgRW::writeCurvePath(DRW_CurvePath *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4498,6 +4663,7 @@ bool dwgRW::writeCurvePath(DRW_CurvePath *object) {
 }
 
 bool dwgRW::registerPointPathObjectClass(DRW_PointPath *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4508,6 +4674,7 @@ bool dwgRW::registerPointPathObjectClass(DRW_PointPath *object) {
 }
 
 bool dwgRW::writePointPath(DRW_PointPath *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4519,6 +4686,7 @@ bool dwgRW::writePointPath(DRW_PointPath *object) {
 }
 
 bool dwgRW::registerObjectPtrObjectClass(DRW_ObjectPtr *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4529,6 +4697,7 @@ bool dwgRW::registerObjectPtrObjectClass(DRW_ObjectPtr *object) {
 }
 
 bool dwgRW::writeObjectPtr(DRW_ObjectPtr *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4541,6 +4710,7 @@ bool dwgRW::writeObjectPtr(DRW_ObjectPtr *object) {
 
 bool dwgRW::registerPartialViewingIndexObjectClass(
     DRW_PartialViewingIndex *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4551,6 +4721,7 @@ bool dwgRW::registerPartialViewingIndexObjectClass(
 }
 
 bool dwgRW::writePartialViewingIndex(DRW_PartialViewingIndex *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4562,6 +4733,7 @@ bool dwgRW::writePartialViewingIndex(DRW_PartialViewingIndex *object) {
 }
 
 bool dwgRW::registerRenderSettingsObjectClass(DRW_RenderSettings *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4573,6 +4745,7 @@ bool dwgRW::registerRenderSettingsObjectClass(DRW_RenderSettings *object) {
 }
 
 bool dwgRW::writeRenderSettings(DRW_RenderSettings *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4584,6 +4757,7 @@ bool dwgRW::writeRenderSettings(DRW_RenderSettings *object) {
 }
 
 bool dwgRW::registerVisualStyleObjectClass(DRW_VisualStyle *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4594,6 +4768,7 @@ bool dwgRW::registerVisualStyleObjectClass(DRW_VisualStyle *object) {
 }
 
 bool dwgRW::writeVisualStyle(DRW_VisualStyle *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4605,6 +4780,7 @@ bool dwgRW::writeVisualStyle(DRW_VisualStyle *object) {
 }
 
 bool dwgRW::writeDictionary(DRW_Dictionary *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4629,6 +4805,7 @@ bool dwgRW::writeDictionary(DRW_Dictionary *object) {
 }
 
 bool dwgRW::writeXRecord(DRW_XRecord *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4640,6 +4817,7 @@ bool dwgRW::writeXRecord(DRW_XRecord *object) {
 }
 
 bool dwgRW::writePlotSettings(DRW_PlotSettings *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4661,6 +4839,7 @@ bool dwgRW::writePlotSettings(DRW_PlotSettings *object) {
 }
 
 bool dwgRW::writeLayout(DRW_Layout *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4672,6 +4851,7 @@ bool dwgRW::writeLayout(DRW_Layout *object) {
 }
 
 bool dwgRW::writeGroup(DRW_Group *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4685,6 +4865,7 @@ bool dwgRW::writeGroup(DRW_Group *object) {
 }
 
 bool dwgRW::writeMLineStyle(DRW_MLineStyle *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4696,6 +4877,7 @@ bool dwgRW::writeMLineStyle(DRW_MLineStyle *object) {
 }
 
 bool dwgRW::registerRasterVariablesObjectClass(DRW_RasterVariables *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4705,6 +4887,7 @@ bool dwgRW::registerRasterVariablesObjectClass(DRW_RasterVariables *object) {
 }
 
 bool dwgRW::writeRasterVariables(DRW_RasterVariables *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4716,6 +4899,7 @@ bool dwgRW::writeRasterVariables(DRW_RasterVariables *object) {
 }
 
 bool dwgRW::registerWipeoutVariablesObjectClass(DRW_WipeoutVariables *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4725,6 +4909,7 @@ bool dwgRW::registerWipeoutVariablesObjectClass(DRW_WipeoutVariables *object) {
 }
 
 bool dwgRW::registerWipeoutEntityClass() {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     return recordWriteResult(WriteSkipKind::ClassRegistration,
@@ -4732,6 +4917,7 @@ bool dwgRW::registerWipeoutEntityClass() {
 }
 
 bool dwgRW::writeWipeoutVariables(DRW_WipeoutVariables *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4743,6 +4929,7 @@ bool dwgRW::writeWipeoutVariables(DRW_WipeoutVariables *object) {
 }
 
 bool dwgRW::registerGeoDataObjectClass(DRW_GeoData *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4752,6 +4939,7 @@ bool dwgRW::registerGeoDataObjectClass(DRW_GeoData *object) {
 }
 
 bool dwgRW::writeGeoData(DRW_GeoData *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4762,6 +4950,7 @@ bool dwgRW::writeGeoData(DRW_GeoData *object) {
 }
 
 bool dwgRW::registerSpatialFilterObjectClass(DRW_SpatialFilter *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4771,6 +4960,7 @@ bool dwgRW::registerSpatialFilterObjectClass(DRW_SpatialFilter *object) {
 }
 
 bool dwgRW::writeSpatialFilter(DRW_SpatialFilter *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4784,6 +4974,7 @@ bool dwgRW::writeSpatialFilter(DRW_SpatialFilter *object) {
 // PR 8d.2a — five small no-storage OBJECTS families.  Same wrapper shape as
 // the PR 8d.1b/c/d trio (RasterVariables/GeoData/SpatialFilter).
 bool dwgRW::registerScaleObjectClass(DRW_Scale *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4793,6 +4984,7 @@ bool dwgRW::registerScaleObjectClass(DRW_Scale *object) {
 }
 
 bool dwgRW::writeScale(DRW_Scale *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4803,6 +4995,7 @@ bool dwgRW::writeScale(DRW_Scale *object) {
 }
 
 bool dwgRW::registerIDBufferObjectClass(DRW_IDBuffer *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4812,6 +5005,7 @@ bool dwgRW::registerIDBufferObjectClass(DRW_IDBuffer *object) {
 }
 
 bool dwgRW::writeIDBuffer(DRW_IDBuffer *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4822,6 +5016,7 @@ bool dwgRW::writeIDBuffer(DRW_IDBuffer *object) {
 }
 
 bool dwgRW::registerLayerIndexObjectClass(DRW_LayerIndex *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4831,6 +5026,7 @@ bool dwgRW::registerLayerIndexObjectClass(DRW_LayerIndex *object) {
 }
 
 bool dwgRW::writeLayerIndex(DRW_LayerIndex *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4842,6 +5038,7 @@ bool dwgRW::writeLayerIndex(DRW_LayerIndex *object) {
 }
 
 bool dwgRW::registerSpatialIndexObjectClass(DRW_SpatialIndex *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4851,6 +5048,7 @@ bool dwgRW::registerSpatialIndexObjectClass(DRW_SpatialIndex *object) {
 }
 
 bool dwgRW::writeSpatialIndex(DRW_SpatialIndex *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4862,6 +5060,7 @@ bool dwgRW::writeSpatialIndex(DRW_SpatialIndex *object) {
 }
 
 bool dwgRW::registerDictionaryVarObjectClass(DRW_DictionaryVar *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4871,6 +5070,7 @@ bool dwgRW::registerDictionaryVarObjectClass(DRW_DictionaryVar *object) {
 }
 
 bool dwgRW::writeDictionaryVar(DRW_DictionaryVar *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4884,6 +5084,7 @@ bool dwgRW::writeDictionaryVar(DRW_DictionaryVar *object) {
 // PR 8d.2b — four larger no-storage OBJECTS families.  Same wrapper shape as
 // the PR 8d.2a trio.
 bool dwgRW::registerDictionaryWithDefaultObjectClass(DRW_DictionaryWithDefault *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4893,6 +5094,7 @@ bool dwgRW::registerDictionaryWithDefaultObjectClass(DRW_DictionaryWithDefault *
 }
 
 bool dwgRW::writeDictionaryWithDefault(DRW_DictionaryWithDefault *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4910,6 +5112,7 @@ bool dwgRW::writeDictionaryWithDefault(DRW_DictionaryWithDefault *object) {
 }
 
 bool dwgRW::registerSortEntsTableObjectClass(DRW_SortEntsTable *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4919,6 +5122,7 @@ bool dwgRW::registerSortEntsTableObjectClass(DRW_SortEntsTable *object) {
 }
 
 bool dwgRW::writeSortEntsTable(DRW_SortEntsTable *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4930,6 +5134,7 @@ bool dwgRW::writeSortEntsTable(DRW_SortEntsTable *object) {
 }
 
 bool dwgRW::registerFieldListObjectClass(DRW_FieldList *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4939,6 +5144,7 @@ bool dwgRW::registerFieldListObjectClass(DRW_FieldList *object) {
 }
 
 bool dwgRW::writeFieldList(DRW_FieldList *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4950,6 +5156,7 @@ bool dwgRW::writeFieldList(DRW_FieldList *object) {
 }
 
 bool dwgRW::registerFieldObjectClass(DRW_Field *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (consumeFieldClassRegistrationFailureForTest())
@@ -4961,6 +5168,7 @@ bool dwgRW::registerFieldObjectClass(DRW_Field *object) {
 }
 
 bool dwgRW::writeField(DRW_Field *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4972,6 +5180,7 @@ bool dwgRW::writeField(DRW_Field *object) {
 
 bool dwgRW::registerUnderlayDefinitionObjectClass(
     DRW_UnderlayDefinition *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -4983,6 +5192,7 @@ bool dwgRW::registerUnderlayDefinitionObjectClass(
 }
 
 bool dwgRW::writeUnderlayDefinition(DRW_UnderlayDefinition *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -4994,6 +5204,7 @@ bool dwgRW::writeUnderlayDefinition(DRW_UnderlayDefinition *object) {
 }
 
 bool dwgRW::registerRawDwgObjectClass(const DRW_UnsupportedObject *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     const bool registered = writer->registerRawObjectClass(*object);
@@ -5003,6 +5214,7 @@ bool dwgRW::registerRawDwgObjectClass(const DRW_UnsupportedObject *object) {
 }
 
 bool dwgRW::writeRawDwgObject(DRW_UnsupportedObject *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (auto* w = asWriter15(writer); w && w->defaultDwgMaterialGraphActive()) {
         markDwgWriteFailure();
         return recordWriteResult(WriteSkipKind::RawObject, false);
@@ -5021,6 +5233,7 @@ bool dwgRW::writeRawDwgObject(DRW_UnsupportedObject *object) {
 bool dwgRW::writeRawDwgObject(
     DRW_UnsupportedObject *object,
     const DRW_ModelerGeometry *typedModeler) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (auto* w = asWriter15(writer); w && w->defaultDwgMaterialGraphActive()) {
         markDwgWriteFailure();
         return recordWriteResult(WriteSkipKind::RawObject, false);
@@ -5037,6 +5250,7 @@ bool dwgRW::writeRawDwgObject(
 }
 
 bool dwgRW::writeRawDwgSection(const DRW_RawDwgSection *section) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (auto* w = asWriter15(writer); w && w->defaultDwgMaterialGraphActive()) {
         markDwgWriteFailure();
         return recordWriteResult(WriteSkipKind::RawSection, false);
@@ -5048,6 +5262,7 @@ bool dwgRW::writeRawDwgSection(const DRW_RawDwgSection *section) {
 }
 
 bool dwgRW::registerSectionObjectClass(DRW_Section *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -5058,6 +5273,7 @@ bool dwgRW::registerSectionObjectClass(DRW_Section *object) {
 }
 
 bool dwgRW::writeSection(const DRW_Section *section) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (section == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -5069,6 +5285,7 @@ bool dwgRW::writeSection(const DRW_Section *section) {
 
 bool dwgRW::registerTvDevicePropertiesObjectClass(
     DRW_TvDeviceProperties *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -5079,6 +5296,7 @@ bool dwgRW::registerTvDevicePropertiesObjectClass(
 }
 
 bool dwgRW::writeTvDeviceProperties(DRW_TvDeviceProperties *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -5090,6 +5308,7 @@ bool dwgRW::writeTvDeviceProperties(DRW_TvDeviceProperties *object) {
 }
 
 bool dwgRW::registerVxControlObjectClass(DRW_VxControl *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -5100,6 +5319,7 @@ bool dwgRW::registerVxControlObjectClass(DRW_VxControl *object) {
 }
 
 bool dwgRW::writeVxControl(DRW_VxControl *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -5111,6 +5331,7 @@ bool dwgRW::writeVxControl(DRW_VxControl *object) {
 }
 
 bool dwgRW::registerVxTableRecordObjectClass(DRW_VxTableRecord *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -5121,6 +5342,7 @@ bool dwgRW::registerVxTableRecordObjectClass(DRW_VxTableRecord *object) {
 }
 
 bool dwgRW::writeVxTableRecord(DRW_VxTableRecord *object) {
+    DwgFrameExceptionScope frameExceptionScope(writer);
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);

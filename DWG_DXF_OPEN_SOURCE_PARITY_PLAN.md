@@ -1220,16 +1220,20 @@ created locally from scratch for the specific control.
   attempts, nested rollback and retry are covered. Direct TABLE encoding and
   parsed source ranges remain refused, and unidentified failed frame attempts
   reaching common facade accounting conservatively block the extension
-  profile. This is not accounting for every public API failure: non-emitting
-  administrative operations and exceptions intercepted by a consumer inside
-  its callback are not fully tracked. Qualify that exception boundary before
-  making broader failure-coverage claims. Next qualify the physical
+  profile. Public frame, registration, table-record and block entry points now
+  also record escaping exceptions even when a consumer catches them inside its
+  callback. The flag refuses extension output; it does not roll back a frame.
+  Explicit transaction rollback separately removes a partially emitted frame
+  and restores the flag, permitting retry. Non-emitting administrative calls
+  such as inline reservation failures remain outside this exception guarantee.
+  Next qualify the physical
   populated graph: XRECORD membership, owner/reactor and embedded handle roles,
   all referenced object bodies, source binding and transactional closure.
   LibreDWG's decoded TABLECONTENT fields are unreliable for
   this file; its object identities and links are bounded observations, not
   semantic proof. See the [physical graph receipt](docs/research/p5-ac1018-table-extension-dictionary-physical-graph-2026-11-10.json)
-  and [generated empty-graph receipt](docs/research/p5-ac1018-table-empty-extension-graph-2026-11-11.json).
+  [generated empty-graph receipt](docs/research/p5-ac1018-table-empty-extension-graph-2026-11-11.json),
+  and [caught-exception receipt](docs/research/p5-table-extension-caught-exception-2026-11-11.json).
 
 - **P5 AC1018 TABLE stale absent-mask guard:** when retained source ranges
   describe four absent TABLE override masks, the direct encoder now refuses a
