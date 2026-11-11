@@ -7594,14 +7594,66 @@ bool DRW_Trace::encodeDwg(DRW::Version version, dwgBufferW *buf,
   }
 }
 
-bool DRW_Spline::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
-    (void)bs; (void)strBuf;
-    if (buf == nullptr || !validatePayloadFields())
-        return false;
-    oType = 36;  // SPLINE class id — see dwgreader.cpp:1329
-    if (!encodeDwgCommon(version, buf)) return false;
+bool DRW_Spline::encodeDwg(DRW::Version version, dwgBufferW *buf,
+                           std::uint32_t bs, dwgBufferW *strBuf,
+                           dwgBufferW *handleBuf) {
+  (void)bs;
+  (void)strBuf;
+  if (buf == nullptr || !validatePayloadFields())
+    return false;
+
+  dwgBufferW *const bodyTarget = buf;
+  dwgBufferW *const stringTarget = strBuf != nullptr ? strBuf : bodyTarget;
+  dwgBufferW *const handleTarget =
+      handleBuf != nullptr ? handleBuf : bodyTarget;
+  try {
+    dwgBufferW bodyStage = *bodyTarget;
+    std::optional<dwgBufferW> stringStageStorage;
+    dwgBufferW *stringStage = &bodyStage;
+    if (stringTarget != bodyTarget) {
+      stringStageStorage.emplace(*stringTarget);
+      stringStage = &*stringStageStorage;
+    }
+    std::optional<dwgBufferW> handleStageStorage;
+    dwgBufferW *handleStage = &bodyStage;
+    if (handleTarget == bodyTarget) {
+      handleStage = &bodyStage;
+    } else if (handleTarget == stringTarget) {
+      handleStage = stringStage;
+    } else {
+      handleStageStorage.emplace(*handleTarget);
+      handleStage = &*handleStageStorage;
+    }
+
+    buf = &bodyStage;
+    handleBuf = handleBuf != nullptr ? handleStage : nullptr;
+    struct ObjectTypeRollback {
+      decltype(oType) &value;
+      decltype(oType) original;
+      bool committed{false};
+      ~ObjectTypeRollback() {
+        if (!committed)
+          value = original;
+      }
+    } typeRollback{oType, oType};
+    oType = 36; // SPLINE class id — see dwgreader.cpp:1329
+    if (!encodeDwgCommon(version, buf))
+      return false;
     encodeDwgSplineBody(version, buf);
-    return encodeDwgEntHandle(version, buf, handleBuf);
+
+    if (!buf->isGood() || !encodeDwgEntHandle(version, buf, handleBuf) ||
+        !buf->isGood() || !stringStage->isGood() || !handleStage->isGood())
+      return false;
+    bodyTarget->swap(bodyStage);
+    if (stringTarget != bodyTarget)
+      stringTarget->swap(*stringStageStorage);
+    if (handleTarget != bodyTarget && handleTarget != stringTarget)
+      handleTarget->swap(*handleStageStorage);
+    typeRollback.committed = true;
+    return true;
+  } catch (const std::bad_alloc &) {
+    return false;
+  }
 }
 
 // Spline body encode: the scenario/degree/knots/ctrl/fit section, WITHOUT the

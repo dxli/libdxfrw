@@ -432,6 +432,14 @@ public:
   std::uint16_t dwgType() const { return oType; }
 };
 
+class SplineCodecProbe final : public DRW_Spline {
+public:
+  using DRW_Spline::encodeDwg;
+
+  void setDwgType(std::uint16_t value) { oType = value; }
+  std::uint16_t dwgType() const { return oType; }
+};
+
 class ViewportCodecProbe final : public DRW_Viewport {
 public:
   using DRW_Viewport::encodeDwg;
@@ -25233,6 +25241,27 @@ void testLWPolylineDwgEncodeAllocationRollback(TestContext &t) {
   }
 }
 
+void testSplineDwgEncodeAllocationRollback(TestContext &t) {
+  for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+    SplineCodecProbe spline;
+    spline.handle = version == DRW::AC1021 ? 0xAE10u : 0xAE20u;
+    spline.parentHandle = 0xAE30u;
+    spline.reactorHandles = {0xAE40u};
+    spline.xDictHandle = 0xAE50u;
+    spline.setDwgType(0x777u);
+    spline.degree = 2;
+    spline.flags = 0x4;
+    spline.normalVec = DRW_Coord(0.0, 0.0, 1.0);
+    spline.knotslist = {0.0, 0.0, 0.0, 1.0, 1.0, 1.0};
+    spline.controllist = {std::make_shared<DRW_Coord>(0.0, 0.0, 0.0),
+                          std::make_shared<DRW_Coord>(1.0, 2.0, 0.0),
+                          std::make_shared<DRW_Coord>(2.0, 0.0, 0.0)};
+    checkEntityDwgEncodeAllocationRollback(
+        t, spline, version, 36u,
+        version == DRW::AC1021 ? "AC1021 SPLINE" : "AC1024 SPLINE");
+  }
+}
+
 void testCircleDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     DRW_TextCodec codec;
@@ -28404,6 +28433,14 @@ int main(int argc, char** argv) {
       TestContext context;
       testLWPolylineDwgEncodeAllocationRollback(context);
       std::cout << "LWPOLYLINE DWG encoder allocation rollback/retry: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 &&
+        std::string(argv[1]) == "--spline-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testSplineDwgEncodeAllocationRollback(context);
+      std::cout << "SPLINE DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }
