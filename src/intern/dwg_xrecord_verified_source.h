@@ -43,7 +43,7 @@ public:
     virtual void verifiedXRecord(const DwgVerifiedXRecordTicket&) noexcept = 0;
 };
 
-enum class DwgVerifiedTableCandidateKind : std::uint8_t { TableContent, DataTable, TableGeometry, ExtensionDictionary, TableEntity, TableStyle, StyleExtensionDictionary };
+enum class DwgVerifiedTableCandidateKind : std::uint8_t { TableContent, DataTable, TableGeometry, ExtensionDictionary, TableEntity, TableStyle, StyleExtensionDictionary, CellStyleMap };
 
 // As with XRECORD tickets, this is a provisional, reader-created CRC-checked
 // frame observation, not an authenticated aggregate or an output permit.

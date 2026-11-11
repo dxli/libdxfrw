@@ -6122,3 +6122,17 @@ target_include_directories(libdxfrw_dwg_cellstylemap_ac1018_candidate_tests PRIV
 target_link_libraries(libdxfrw_dwg_cellstylemap_ac1018_candidate_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dwg_cellstylemap_ac1018_candidate COMMAND libdxfrw_dwg_cellstylemap_ac1018_candidate_tests)
 set_tests_properties(libdxfrw_dwg_cellstylemap_ac1018_candidate PROPERTIES LABELS "dwg;fast;table" TIMEOUT 30)
+
+add_executable(libdxfrw_dwg_cellstylemap_reader_source_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_cellstylemap_reader_source_tests.cpp $<TARGET_OBJECTS:libdxfrw_test_adapter>)
+target_compile_features(libdxfrw_dwg_cellstylemap_reader_source_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_cellstylemap_reader_source_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_cellstylemap_reader_source_tests PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/dwg2dxf)
+target_link_libraries(libdxfrw_dwg_cellstylemap_reader_source_tests PRIVATE dxfrw)
+add_dependencies(libdxfrw_dwg_cellstylemap_reader_source_tests libdxfrw_dwg_cellstylemap_ac1018_candidate_tests)
+add_test(NAME libdxfrw_dwg_cellstylemap_reader_source COMMAND ${CMAKE_COMMAND}
+    -DBODY_TEST=$<TARGET_FILE:libdxfrw_dwg_cellstylemap_ac1018_candidate_tests>
+    -DREADER_TEST=$<TARGET_FILE:libdxfrw_dwg_cellstylemap_reader_source_tests>
+    -DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/cellstylemap_reader_source
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/run_dwg_cellstylemap_reader_source.cmake)
+set_tests_properties(libdxfrw_dwg_cellstylemap_reader_source PROPERTIES LABELS "dwg;fast;table" TIMEOUT 30)

@@ -31,6 +31,7 @@
 #include "intern/dwg_table_extension_dictionary_ac1018_candidate.h"
 #include "intern/dwg_table_entity_xdictionary_ac1018_candidate.h"
 #include "intern/dwg_tablestyle_ac1018_candidate.h"
+#include "intern/dwg_cellstylemap_ac1018_candidate.h"
 #include "intern/dwg_tablestyle_extension_dictionary_ac1018_candidate.h"
 #include "intern/dwg_tablestyle_roundtrip_xrecord_ac1018_candidate.h"
 namespace blockref_source_relation { struct Result; }
@@ -147,6 +148,18 @@ public:
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
         std::uint32_t tableEntity,std::uint32_t dictionary,std::uint32_t style,
         std::uint32_t styleDictionary,std::uint32_t styleXRecord,std::uint32_t cellStyleMap) noexcept;
+    // Opt-in selected CELLSTYLEMAP wire fields only, preserving source order;
+    // does not certify the whole model, resources, graph or output.
+    bool enableVerifiedTableCellStyleMapSource(const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        std::uint32_t tableEntity,std::uint32_t dictionary,std::uint32_t tableStyle,
+        std::uint32_t styleDictionary,std::uint32_t styleXRecord,std::uint32_t cellStyleMap) noexcept;
+    static bool readVerifiedTableCellStyleMapSource(const dx_data&,
+        const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        std::uint32_t tableEntity,std::uint32_t dictionary,std::uint32_t tableStyle,
+        std::uint32_t styleDictionary,std::uint32_t styleXRecord,std::uint32_t cellStyleMap,
+        DwgCellStyleMapAc1018Candidate::Result& result) noexcept;
     static bool readVerifiedTableStyleXRecordSource(const dx_data&,
         const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
@@ -3521,6 +3534,7 @@ private:
     std::uint32_t m_verifiedTableStyleSelected{0u};
     std::uint32_t m_verifiedStyleDictionarySelected{0u},m_verifiedStyleXRecordSelected{0u},m_verifiedCellStyleMapSelected{0u};
     bool m_verifiedStyleXRecordRequired{false};
+    bool m_verifiedCellStyleMapRequired{false};
     std::vector<dx_data::VerifiedTableCandidateSource> m_verifiedTableCandidatePending;
     std::size_t m_verifiedTableCandidatePendingBytes{0u};
     friend class DxWholeSourceTestAccess;

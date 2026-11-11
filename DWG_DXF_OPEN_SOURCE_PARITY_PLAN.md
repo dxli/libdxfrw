@@ -1381,9 +1381,11 @@ created locally from scratch for the specific control.
   joined to the reader-verified dictionary's first target
   ([binding receipt](docs/research/p5-ac1018-tablestyle-roundtrip-xrecord-source-binding-2026-11-11.json));
   a generated full-bundle positive and selected-frame CRC mutation remain open.
-  The CELLSTYLEMAP observer preserves source style order `[3,1,2]` and its
-  H4/H5 references ([receipt](docs/research/p5-ac1018-cellstylemap-source-observer-2026-11-11.json));
-  join it to the reader-verified second target before treating that edge as bound.
+  CELLSTYLEMAP is now joined to the reader-verified dictionary's second target,
+  preserving source style order `[3,1,2]` and checking selected H4/H5 fields
+  ([binding receipt](docs/research/p5-ac1018-cellstylemap-reader-source-binding-2026-11-11.json)).
+  This is a selected-field projection, not complete typed-model equality or
+  STYLE/LTYPE, APPID and font resource closure.
   The AC1032 malformed-count dispatch test now passes: its
   generated common-parent and TABLESTYLE-specific owner roles were corrected
   to the distinct ODA §20.1 and §20.4.101.2 roles. The malformed count is

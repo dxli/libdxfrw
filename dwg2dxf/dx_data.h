@@ -2691,10 +2691,11 @@ private:
         std::uint32_t selectedTableStyle{0u};
         std::uint32_t selectedStyleDictionary{0u},selectedStyleXRecord{0u},selectedCellStyleMap{0u};
         bool requiresVerifiedStyleXRecord{false};
+        bool requiresVerifiedCellStyleMap{false};
         std::vector<VerifiedXRecordSource> records;
     };
     struct VerifiedTableCandidateSource {
-        enum class Kind : std::uint8_t { TableContent, DataTable, TableGeometry, ExtensionDictionary, TableEntity, TableStyle, StyleExtensionDictionary };
+        enum class Kind : std::uint8_t { TableContent, DataTable, TableGeometry, ExtensionDictionary, TableEntity, TableStyle, StyleExtensionDictionary, CellStyleMap };
         DRW_UnsupportedObject raw;
         std::uint64_t ordinal{0u};
         DRW_DwgFrameOffsetSpace space{DRW_DwgFrameOffsetSpace::Unknown};

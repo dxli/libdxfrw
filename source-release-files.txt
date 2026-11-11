@@ -462,6 +462,7 @@ tests/dwg_ac1027_empty_view_ucs_controls_tests.cpp
 tests/dwg_ac1027_maintenance_header_tests.cpp
 tests/dwg_ac1027_material_dictionary_wire_tests.cpp
 tests/dwg_cellstylemap_ac1018_candidate_tests.cpp
+tests/dwg_cellstylemap_reader_source_tests.cpp
 tests/dwg_class_evidence_tests.cpp
 tests/dwg_class_section_wire_tests.cpp
 tests/dwg_class_source_tests.cpp
@@ -685,6 +686,7 @@ tests/run_block_owner_rejection_test.cmake
 tests/run_dimassoc_adapter_closure_test.cmake
 tests/run_dwg2dxf_image_path_test.cmake
 tests/run_dwg2dxf_raw_dxf_section_test.cmake
+tests/run_dwg_cellstylemap_reader_source.cmake
 tests/run_dwg_read_test.cmake
 tests/run_dwg_table_candidate_binding.cmake
 tests/run_dwg_table_entity_reader_lease.cmake
@@ -1032,6 +1034,7 @@ tools/research/freecad_imported_sat_torus_bound_probe.py
 tools/research/freecad_torus_bound_probe.py
 tools/research/inventory_cover_peer_body_handles.py
 tools/research/p4_forum_ltype_oda_compare.py
+tools/research/p5_ac1018_cellstylemap_binding_probe.cpp
 tools/research/p5_ac1018_cellstylemap_candidate_live_probe.cpp
 tools/research/p5_ac1018_table_candidates_binding_probe.cpp
 tools/research/p5_ac1018_table_children_binding_probe.cpp
