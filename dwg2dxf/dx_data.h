@@ -2852,6 +2852,7 @@ private:
     // drawing state. Snapshot storage shares the family resource ceilings
     // with the corresponding typed/raw retained carriers.
     friend class DxWholeSourceTestAccess;
+    friend class DxIfaceStyleResourceTestAccess;
     friend class dx_iface;
     std::list<DRW_RawDxfObject> m_rawSectionRecordBaselines;
     std::list<DRW_CellStyleMap> m_cellStyleMapDxfBaselines;

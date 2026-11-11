@@ -68,6 +68,36 @@ bool writeHatchReferenceFile(const std::filesystem::path& path, bool binary);
 bool verifyHatchReferenceFile(const std::filesystem::path& path);
 void drwThrowNextFixedObjectAfterFrameForTest();
 
+class DxIfaceStyleResourceTestAccess {
+public:
+    static bool prepareBoundStyleOutput(const dx_data& imported,
+                                        dx_iface& writer,
+                                        dx_data& output) {
+        if (!imported.m_verifiedXRecordImportToken
+            || !imported.m_verifiedStyleResourceSource
+            || !imported.dwgReadOutcome.operationSucceeded)
+            return false;
+        const auto selected = std::find_if(
+            imported.textStyles.begin(), imported.textStyles.end(),
+            [](const DRW_Textstyle& style) { return style.handle == 0x11u; });
+        if (selected == imported.textStyles.end())
+            return false;
+        output.sourceFormat = dx_source_format::DWG;
+        output.sourceVersion = DRW::AC1018;
+        output.importGeneration = imported.importGeneration;
+        output.dwgReadOutcome.operationSucceeded = true;
+        output.m_verifiedXRecordImportToken =
+            imported.m_verifiedXRecordImportToken;
+        output.m_verifiedStyleResourceSource =
+            imported.m_verifiedStyleResourceSource;
+        output.textStyles.push_back(*selected);
+        output.appIds = imported.appIds;
+        return writer.enableVerifiedStyleResourceSource(0x3u, 0x11u)
+            && dx_iface::hasUnchangedVerifiedStyleResourceSource(
+                output, 0x3u, 0x11u);
+    }
+};
+
 class DrwEntityEncodeTestAccess {
 public:
     static void markParsedProxyGraphics(DRW_Entity& entity,
@@ -38219,10 +38249,99 @@ bool inspectPhysicalStyleResourceAdapterBinding(
         std::error_code outputCleanupError;
         std::filesystem::remove(outputPath, outputCleanupError);
     }
+    bool generatedGuardPrepared = false;
+    bool generatedMutationRefused = false;
+    bool generatedDestinationPreserved = false;
+    bool generatedAsciiRetry = false;
+    bool generatedAsciiReadback = false;
+    bool generatedBinaryRetry = false;
+    bool generatedBinaryReadback = false;
+    if (restoredImportRetry) {
+        dx_iface generatedWriter;
+        dx_data generatedImported;
+        dx_data generatedOutput;
+        const bool generatedSourceImported = reader.fileImport(
+            inputPath.string(), &generatedImported, false);
+        generatedGuardPrepared = generatedSourceImported
+            && DxIfaceStyleResourceTestAccess::prepareBoundStyleOutput(
+                generatedImported, generatedWriter, generatedOutput);
+        auto generatedStyle = std::find_if(
+            generatedOutput.textStyles.begin(), generatedOutput.textStyles.end(),
+            [](const DRW_Textstyle& value) { return value.handle == 0x11u; });
+        if (generatedGuardPrepared
+            && generatedStyle != generatedOutput.textStyles.end()) {
+            const double originalHeight = generatedStyle->height;
+            const auto asciiPath = std::filesystem::temp_directory_path()
+                / ("libdxfrw-style-resource-bound-"
+                   + std::to_string(std::chrono::steady_clock::now()
+                                        .time_since_epoch().count())
+                   + ".dxf");
+            const std::string sentinel = "preserve-existing-style-output\n";
+            {
+                std::ofstream destination(asciiPath, std::ios::binary);
+                destination.write(sentinel.data(),
+                                  static_cast<std::streamsize>(sentinel.size()));
+            }
+            generatedStyle->height = originalHeight + 0.125;
+            generatedMutationRefused = !generatedWriter.fileExport(
+                asciiPath.string(), DRW::AC1018, false, &generatedOutput, true);
+            std::ifstream afterRefusal(asciiPath, std::ios::binary);
+            const std::string retained(
+                (std::istreambuf_iterator<char>(afterRefusal)),
+                std::istreambuf_iterator<char>());
+            generatedDestinationPreserved = retained == sentinel;
+            generatedStyle->height = originalHeight;
+            generatedAsciiRetry = generatedWriter.fileExport(
+                asciiPath.string(), DRW::AC1018, false, &generatedOutput, true);
+            if (generatedAsciiRetry) {
+                dx_iface readback;
+                dx_data outputData;
+                const bool imported = readback.fileImport(
+                    asciiPath.string(), &outputData, false);
+                generatedAsciiReadback = imported
+                    && std::any_of(outputData.textStyles.begin(),
+                                   outputData.textStyles.end(),
+                        [&generatedStyle](const DRW_Textstyle& value) {
+                            return value.name == generatedStyle->name
+                                && value.font == generatedStyle->font
+                                && value.height == generatedStyle->height;
+                        });
+            }
+            std::error_code cleanupError;
+            std::filesystem::remove(asciiPath, cleanupError);
+
+            const auto binaryPath = std::filesystem::temp_directory_path()
+                / ("libdxfrw-style-resource-bound-"
+                   + std::to_string(std::chrono::steady_clock::now()
+                                        .time_since_epoch().count())
+                   + ".dxf");
+            generatedBinaryRetry = generatedWriter.fileExport(
+                binaryPath.string(), DRW::AC1018, true, &generatedOutput, true);
+            if (generatedBinaryRetry) {
+                dx_iface readback;
+                dx_data outputData;
+                const bool imported = readback.fileImport(
+                    binaryPath.string(), &outputData, false);
+                generatedBinaryReadback = imported
+                    && std::any_of(outputData.textStyles.begin(),
+                                   outputData.textStyles.end(),
+                        [&generatedStyle](const DRW_Textstyle& value) {
+                            return value.name == generatedStyle->name
+                                && value.font == generatedStyle->font
+                                && value.height == generatedStyle->height;
+                        });
+            }
+            std::filesystem::remove(binaryPath, cleanupError);
+        }
+    }
     const bool passed = sourceBound && haveStyle && haveAppId
         && styleMutationRefused
         && styleRetryRestored && appIdMutationRefused && appIdRetryRestored
-        && scratchWritten && partialImportWithheld && restoredImportRetry;
+        && scratchWritten && partialImportWithheld && restoredImportRetry
+        && generatedGuardPrepared && generatedMutationRefused
+        && generatedDestinationPreserved && generatedAsciiRetry
+        && generatedAsciiReadback && generatedBinaryRetry
+        && generatedBinaryReadback;
     std::cout << "physical STYLE resource adapter binding selected=" << selected
               << " imported=" << imported << " sourceBound=" << sourceBound
               << " styleMutationRefused=" << styleMutationRefused
@@ -38234,6 +38353,14 @@ bool inspectPhysicalStyleResourceAdapterBinding(
               << " restoredImportRetry=" << restoredImportRetry
               << " sourceBoundExportSucceeded=" << sourceBoundExportSucceeded
               << " sourceBoundStyleReadback=" << sourceBoundStyleReadback
+              << " generatedGuardPrepared=" << generatedGuardPrepared
+              << " generatedMutationRefused=" << generatedMutationRefused
+              << " generatedDestinationPreserved="
+              << generatedDestinationPreserved
+              << " generatedAsciiRetry=" << generatedAsciiRetry
+              << " generatedAsciiReadback=" << generatedAsciiReadback
+              << " generatedBinaryRetry=" << generatedBinaryRetry
+              << " generatedBinaryReadback=" << generatedBinaryReadback
               << " result=" << (passed ? "PASS" : "FAIL") << '\n';
     return passed;
 }

@@ -77429,9 +77429,22 @@ bool dx_iface::finalizeDxfWrite() {
             dxfW->dxfWriteEmittedSourceTableHandle(
                 m_verifiedStyleRecordSelected);
         if (!dxfW->dxfWriteSourceTableHasIdentity(
-                m_verifiedStyleRecordSelected, emitted, "STYLE", 0x3u))
+                m_verifiedStyleRecordSelected, emitted, "STYLE", 0x3u)) {
+            if (m_debugDwgOutputQualification) {
+                std::cerr << "DWG STYLE final row mismatch: source=0x"
+                          << std::hex << m_verifiedStyleRecordSelected
+                          << " emitted=0x" << emitted << std::dec
+                          << " count=" << dxfW->dxfWriteRecordHandleCount(emitted)
+                          << " identity="
+                          << dxfW->dxfWriteRecordHasIdentity(
+                              emitted, "STYLE", "TABLES")
+                          << " owner="
+                          << dxfW->dxfWriteRecordHasOwner(emitted, 0x3u)
+                          << '\n';
+            }
             return failFinalization(
                 "DWG STYLE emitted TABLES record identity");
+        }
     }
     if (m_selectedDwgAssociativeSource != nullptr
         && !hasUnchangedSelectedDwgAssociativeNetworks())
@@ -86986,6 +86999,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         || !m_dxfAssociativeGeometrySources.empty()
         || !m_dxfAssociativeValueSources.empty()
         || needsDimensionAssociationInventory
+        || cData->m_verifiedStyleResourceSource != nullptr
         || cData->dwgProxyEntityPresent
         || !m_dwgAssociativeDimensionDependencies.empty());
     if ((!m_dxfMLineStyles.empty() || needsDxfMLineConsumerInspection())

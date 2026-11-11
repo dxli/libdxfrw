@@ -1938,6 +1938,8 @@ public:
             && (!dxfW || !hasUnchangedVerifiedStyleResourceSource(
                     *cData, m_verifiedStyleControlSelected,
                     m_verifiedStyleRecordSelected))) {
+            if (m_debugDwgOutputQualification)
+                std::cerr << "STYLE source changed before TABLES staging\n";
             if (dxfW != nullptr)
                 (void)dxfW->writeTextstyle(nullptr);
             return;
@@ -1956,21 +1958,6 @@ public:
                 return;
             }
             dxfW->writeTextstyle(&(*it));
-        }
-        if (selectedSourcePair) {
-            if (dxfW == nullptr)
-                return;
-            const std::uint32_t emitted =
-                dxfW->dxfWriteEmittedSourceTableHandle(
-                    m_verifiedStyleRecordSelected);
-            if (emitted == 0u
-                || dxfW->dxfWriteRecordHandleCount(emitted) != 1u
-                || !dxfW->dxfWriteRecordHasIdentity(
-                    emitted, "STYLE", "TABLES")
-                || !dxfW->dxfWriteRecordHasOwner(emitted, 0x3u)) {
-                (void)dxfW->writeTextstyle(nullptr);
-                return;
-            }
         }
     }
     virtual void writeVports() override{
@@ -3574,6 +3561,7 @@ private:
         m_verifiedStyleResourcePending;
     std::size_t m_verifiedStyleResourcePendingBytes{0u};
     friend class DxWholeSourceTestAccess;
+    friend class DxIfaceStyleResourceTestAccess;
     friend class DxIfaceMlineDependencyTestAccess;
     friend class DxIfaceDwgLtypeControlOutputTestAccess;
     bool mayOmitUnreferencedEmptyTextStyle(

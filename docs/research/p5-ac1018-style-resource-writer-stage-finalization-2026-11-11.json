@@ -2,7 +2,7 @@
   "schema": "libdxfrw-research-receipt-v1",
   "topic": "P5 AC1018 selected STYLE resource writer-stage and finalization revalidation",
   "date": "2026-11-11",
-  "status": "local-implementation-compiled; writer-path execution not qualified",
+  "status": "generated source-bound writer control passed; physical whole-source export remains preflight-refused",
   "source": {
     "path": "/private/tmp/p5-desc-input/input.dwg",
     "sha256": "1ba45d704ed7cc846ea6d4d08c7c78062f8090842ebc9e9a4cdefcb44ea6ab2a",
@@ -27,7 +27,7 @@
     ],
     "writer_stage": [
       "Before STYLE rows are emitted, recheck the imported STYLE_CONTROL/STYLE source pair and the same-import typed STYLE/APPID snapshots.",
-      "After STYLE rows are staged, require exactly one emitted source STYLE row, TABLES identity, and owner handle 0x3. Any failure marks the active DXF write failed."
+      "Enable the bounded record inventory for selected STYLE source bundles so finalization can verify the completed emitted row."
     ],
     "finalization": [
       "Before dxfRW atomically publishes output, recheck the selected source pair and typed snapshot.",
@@ -56,10 +56,19 @@
       },
       "scope_limit": "The source-binding assertions pass. The export attempt exposes an unrelated AC1018 SUN graph preflight blocker, so this physical input does not execute the new writer-stage/finalization checks or prove serialized STYLE field equality/readback."
     },
+    "generated_source_bound_writer_control": {
+      "source_binding": "Reuses the completed physical import's source token, STYLE_CONTROL/STYLE frame tickets, and selected typed STYLE/APPID rows in a minimal generated dx_data output model. No drawing fixture is written or committed.",
+      "source_mutation": "Changing selected STYLE height is refused before STYLE emission; an existing destination sentinel remains byte-identical.",
+      "retry": "Restoring the source-matching height and retrying with the same adapter succeeds.",
+      "ascii": "write succeeds; fresh DXF import reads back selected STYLE name, font, and height",
+      "binary": "write succeeds; fresh Binary DXF import reads back selected STYLE name, font, and height",
+      "result": "passed",
+      "scope_limit": "This proves the selected source guard, staged writer path, finalization identity check, atomic refusal/retry, and typed readback for the generated minimal output model. It does not qualify full physical-source output, exact source/output field-byte equality, resource ordering, font semantics, or whole-file support."
+    },
     "diff_check": "passed"
   },
   "remaining": [
-    "Create a bounded source-bound writer control that reaches STYLE and the pre-commit callback without bypassing the source's SUN graph gate; preserve and report that AC1018 whole-source blocker.",
+    "Resolve the AC1018 physical whole-source SUN preflight blocker with evidence-backed profile handling; do not bypass it to promote STYLE output.",
     "Prove exact STYLE output bytes/fields and fresh ASCII/Binary readback under the selected output profile.",
     "Close ordered APPID/STYLE and remaining LTYPE dependencies, font meaning, producer breadth, and whole-source integrity before any output or support promotion."
   ]

@@ -1640,20 +1640,23 @@ created locally from scratch for the specific control.
   [adapter source-binding receipt](docs/research/p5-ac1018-style-resource-adapter-binding-2026-11-11.json).
   **Writer-stage/finalization revalidation (2026-11-11):** when this selected
   source bundle is present, `writeTextstyles` rechecks the same-import source
-  and typed STYLE/APPID snapshot before emission, then verifies the staged
-  STYLE row is unique, owned by STYLE table handle `0x3`, and recorded in
-  TABLES. `finalizeDxfWrite`, which runs before `dxfRW` atomically publishes
-  output, repeats the source check and requires the completed source-to-output
-  STYLE row identity. The focused adapter target builds and the physical
-  source-binding/retry diagnostic passes. That diagnostic does not execute
-  the STYLE writer stage: its real AC1018 export attempt stops during output
-  preparation because the unrelated SUN graph requires a same-version AC1021+
-  source and target. The TABLES callbacks and atomic finalization are not reached.
-  Keep that whole-source blocker intact; next build a bounded source-bound
-  writer control that reaches STYLE without bypassing SUN validation. Physical
-  staged-output behavior, exact STYLE field bytes, rollback/readback, ordered
-  resource closure, and font meaning remain open. These checks do not grant
-  output permission or waive other gates. See the
+  and typed STYLE/APPID snapshot immediately before emission. The adapter
+  enables the bounded writer record inventory for this selected source bundle;
+  `finalizeDxfWrite`, before `dxfRW` atomically publishes output, repeats the
+  source check and requires the completed unique STYLE row, source-to-output
+  identity, TABLES section, and table owner `0x3`. A generated minimal output
+  model reuses the selected control/STYLE tickets and typed STYLE/APPID rows
+  from the completed physical import. Its mutation attempt fails without
+  changing an existing destination, then corrected same-adapter retry succeeds
+  in ASCII and Binary; fresh imports read back the selected name, font, and
+  height. This exercises staging, finalization, retry, and typed readback for
+  that generated model, not full physical-source output or exact field-byte
+  equality. No DWG/DXF fixture is written or committed. The separate full
+  AC1018 source export attempt still stops during output preparation because
+  its unrelated SUN graph requires a same-version AC1021+ source and target;
+  preserve that blocker and do not bypass it to promote STYLE output. Exact
+  physical STYLE field bytes, ordered resource closure, and font meaning remain
+  open. These checks do not grant output permission or waive other gates. See the
   [writer-stage/finalization receipt](docs/research/p5-ac1018-style-resource-writer-stage-finalization-2026-11-11.json).
   A bounded standalone
   LTYPE_CONTROL/ByBlock observer now checks selected frame fields and roles
