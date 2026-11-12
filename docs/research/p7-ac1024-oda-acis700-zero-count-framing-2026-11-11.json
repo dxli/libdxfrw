@@ -52,11 +52,11 @@
   "implementation": {
     "files": {
       "src/drw_acis.cpp": "Admits a zero ACIS record count as unknown for version 700 only, matching the existing version-scoped 21200/21500/21800 behavior. Completion still requires the explicit terminal marker and full input consumption. The bounded SAT v1 serializer preserves SAT 700 only for AC1024, uses v700 @string, integer, pointer, and Boolean token spellings, and refuses the same carrier for AC1027.",
-      "tests/acis_sat_allocation_tests.cpp": "Adds in-memory, locally generated ACIS 700 framing and serializer controls for integer/pointer spellings, plane-surface interval/sense booleans, coedge sense and straight-curve booleans. It verifies complete parsing, missing-terminal refusal, AC1024 conversion, atomic AC1027 refusal, and allocation-failure rollback with same-buffer retry. No external DWG/DXF/SAT fixture was added."
+      "tests/acis_sat_allocation_tests.cpp": "Adds in-memory, locally generated ACIS 700 framing and serializer controls for integer/pointer spellings, plane-surface interval/sense booleans, coedge sense, straight-curve booleans, and body-transform literal preservation. It verifies complete parsing, missing-terminal refusal, AC1024 conversion, atomic AC1027 refusal, and allocation-failure rollback with same-buffer retry. No external DWG/DXF/SAT fixture was added."
     },
     "sourceHashes": {
       "src/drw_acis.cpp": "b27e53f71a8980fd56c8ee10b3f7082431121a271ce475f20895682fd49003d5",
-      "tests/acis_sat_allocation_tests.cpp": "370d211f1ab8b967f61eaec19a582a8b6248f42388c7c3189547a2c267c6704f"
+      "tests/acis_sat_allocation_tests.cpp": "7fd528a68e0cf442af5c132f14d002bad05b411619e936da3bde6c730a2dddb2"
     },
     "scopeLimit": "Only the selected standard ACIS 7.00 carrier to AC1024 SAT 700 serialization is qualified. This does not establish DXF/DWG output admission, native B-rep validity, independent geometry semantics, other producer profiles, or a 3D support claim."
   },
@@ -95,7 +95,7 @@
     },
     "generatedControl": {
       "command": "cmake --build build-gcc --target libdxfrw_acis_sat_allocation_tests -j4 && ctest --test-dir build-gcc -R '^acis_sat_allocation_rollback_retry$' --output-on-failure",
-      "result": "PASS 1/1; generated complete terminal parsing, missing-terminal refusal, v700 SAT 700 token grammar, AC1024 serialization, atomic AC1027 refusal, exhaustive reached-allocation failure rollback, and same-buffer retry verified."
+      "result": "PASS 1/1; generated complete terminal parsing, missing-terminal refusal, v700 SAT 700 token grammar, exact body-transform matrix/translation/flag literal preservation, AC1024 serialization, atomic AC1027 refusal, exhaustive reached-allocation failure rollback, and same-buffer retry verified."
     },
     "independentKernel": {
       "repository": "https://github.com/HakanSeven12/OpenCADStudio",

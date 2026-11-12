@@ -85,8 +85,9 @@ ACIS 7.00 carrier to SAT 700, including v700 string/integer/pointer/Boolean
 spellings. Its 1,297-token output matches ODA File Converter's independent DXF
 SAT export except for the expected creation timestamp and equivalent numeric
 exponent spellings. Generated controls cover those token classes, allocation
-rollback and same-buffer retry, and preserve caller output when v700 is
-requested for AC1027. This does not qualify
+rollback and same-buffer retry; a locally authored transform vector now also
+asserts exact ACIS body matrix, translation, and flag serialization. The
+controls preserve caller output when v700 is requested for AC1027. This does not qualify
 native B-rep semantics, whole-source output admission, producer-wide behavior,
 or a 3D support claim. The ODA output and online SAT remain in `/tmp`; no
 drawing fixture was committed. See the [ACIS 700 receipt](docs/research/p7-ac1024-oda-acis700-zero-count-framing-2026-11-11.json).

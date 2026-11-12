@@ -52,7 +52,8 @@ void appendRawDouble(std::vector<std::uint8_t>& bytes, double value) {
 
 std::vector<std::uint8_t> makeSab(std::uint32_t version = 21200u,
                                   bool addVersionedFloat = false,
-                                  std::uint32_t flags = 0u) {
+                                  std::uint32_t flags = 0u,
+                                  bool addVersion700Transform = false) {
     std::vector<std::uint8_t> bytes{
         'A','C','I','S',' ','B','i','n','a','r','y','F','i','l','e'};
     appendU32(bytes, version);
@@ -95,6 +96,20 @@ std::vector<std::uint8_t> makeSab(std::uint32_t version = 21200u,
         bytes.insert(bytes.end(), {DRW_SabTag::BoolTrue,
                                    DRW_SabTag::BoolFalse,
                                    DRW_SabTag::RecordEnd});
+    }
+    if (version == 700u && addVersion700Transform) {
+        appendString(bytes, DRW_SabTag::EntityType, "transform", 9u);
+        bytes.push_back(DRW_SabTag::Pointer);
+        appendU32(bytes, static_cast<std::uint32_t>(-1));
+        bytes.push_back(DRW_SabTag::Int);
+        appendU32(bytes, static_cast<std::uint32_t>(-1));
+        const std::string transform =
+            "1 0 0 0 1 0 0 0 1 388.5 388.5 388.5 1 "
+            "no_rotate no_reflect no_shear ";
+        bytes.push_back(DRW_SabTag::LiteralStr);
+        appendU32(bytes, static_cast<std::uint32_t>(transform.size()));
+        bytes.insert(bytes.end(), transform.begin(), transform.end());
+        bytes.push_back(DRW_SabTag::RecordEnd);
     }
     bytes.insert(bytes.end(), {0x0Eu,0x03u,'E','n','d',
                                0x0Eu,0x02u,'o','f',
@@ -193,6 +208,25 @@ int main() {
         std::fprintf(stderr, "ACIS 700 AC1024 SAT conversion mismatch: %s\n",
                      actual700.substr(0u, 160u).c_str());
         return 11;
+    }
+    const std::vector<std::uint8_t> sab700Transform =
+        makeSab(700u, false, 0u, true);
+    std::vector<std::uint8_t> converted700Transform;
+    const std::string expectedTransform =
+        "transform $-1 -1 1 0 0 0 1 0 0 0 1 388.5 388.5 388.5 1 "
+        "no_rotate no_reflect no_shear";
+    if (!drw_convertSabToSatV1(sab700Transform.data(),
+                               sab700Transform.size(), DRW::AC1024,
+                               converted700Transform)
+        || std::string(converted700Transform.begin(),
+                       converted700Transform.end()).find(expectedTransform)
+            == std::string::npos) {
+        const std::string actual(converted700Transform.begin(),
+                                 converted700Transform.end());
+        std::fprintf(stderr,
+                     "ACIS 700 body-transform SAT serialization mismatch: %s\n",
+                     actual.c_str());
+        return 22;
     }
     std::vector<std::uint8_t> refused700{0xA5u, 0x5Au};
     if (drw_convertSabToSatV1(sab700.data(), sab700.size(), DRW::AC1027,
