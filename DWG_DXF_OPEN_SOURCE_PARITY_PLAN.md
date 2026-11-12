@@ -7209,6 +7209,18 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 
 ## P6 — residual semantic and version audit
 
+**AC1021 3D POLYLINE DWG flag admission (2026-11-12):** writer admission now
+matches ODA v5.4.1 §20.4.17: the second raw flag byte carries closed only;
+the first represents spline type 5/6 and implies group-70 bit 4. Conflicting
+topology, unrepresented curve-fit/plinegen bits, unsupported curve type 8 and
+spline flag/type mismatches refuse atomically instead of silently changing
+the entity. Generated controls verify flag-9 closed readback, valid type-5
+spline-fit readback, each refusal, and corrected same-writer retry. The
+focused POLYLINE cohort passes 23/23 in 4.33 seconds; no fixture was added.
+This closes only the bounded AC1021 writer field-mapping gap; other producer
+profiles and native curve semantics remain open. See the [flag admission
+receipt](docs/research/p6-ac1021-polyline3d-dwg-flag-admission-2026-11-12.json).
+
 The DXF MTEXT writer now avoids emitting redundant group 50 when its group-11
 WCS direction vector is authoritative, for both standalone MTEXT and the
 R2018 embedded-MTEXT body used by ATTRIB/ATTDEF. Autodesk's DXF definition

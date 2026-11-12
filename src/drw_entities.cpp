@@ -34193,6 +34193,23 @@ bool DRW_Polyline::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_
     (void)bs; (void)strBuf;
     if (!validatePayloadFields())
         return false;
+    const unsigned topologyFlags = static_cast<unsigned>(flags & (8 | 16 | 64));
+    if ((topologyFlags & (topologyFlags - 1u)) != 0u
+        || ((flags & 32) != 0 && (flags & 16) == 0))
+        return false;
+    const bool encodedAs3dPolyline = (flags & 8) != 0
+        && (flags & (16 | 64)) == 0;
+    if (encodedAs3dPolyline) {
+        // ODA §20.4.17 stores only the closed bit from DXF group 70 in the
+        // second RC. The first RC represents curve type 5/6 and implies the
+        // DXF spline-fit bit (4). Reject other group-70 bits and inconsistent
+        // curve metadata rather than silently dropping or changing them.
+        const bool splineCurveType = curvetype == 5 || curvetype == 6;
+        if ((flags & ~(1 | 4 | 8)) != 0
+            || (curvetype != 0 && !splineCurveType)
+            || (((flags & 4) != 0) != splineCurveType))
+            return false;
+    }
     const dwgBufferW *const legacyLookupBuffer =
         handleBuf != nullptr ? handleBuf : buf;
     std::uint32_t legacyPrevious = 0u;

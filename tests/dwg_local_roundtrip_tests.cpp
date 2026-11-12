@@ -569,7 +569,54 @@ public:
         const auto before = writer.buffer();
         if (writer.encodeEntity(&invalid) || writer.buffer() != before) return false;
         invalid.extData.clear();
-        return writer.encodeEntity(&invalid);
+        if (!writer.encodeEntity(&invalid)) return false;
+
+        DRW_Polyline unrepresentable = polyline;
+        unrepresentable.handle = 0u;
+        const auto refusedWithoutMutation = [&](int flags, int curveType) {
+            unrepresentable.flags = flags;
+            unrepresentable.curvetype = curveType;
+            const auto seeded = writer.buffer();
+            if (writer.encodeEntity(&unrepresentable)
+                || writer.buffer() != seeded)
+                return false;
+            return true;
+        };
+        if (!refusedWithoutMutation(8 | 2, 0)       // curve-fit flag has no 3D DWG field
+            || !refusedWithoutMutation(8 | 128, 0)  // continuous linetype flag has no field
+            || !refusedWithoutMutation(8 | 16, 0)   // conflicting mesh topology
+            || !refusedWithoutMutation(8 | 64, 0)   // conflicting polyface topology
+            || !refusedWithoutMutation(32, 0)       // closed-N flag requires mesh topology
+            || !refusedWithoutMutation(8 | 4, 0)    // spline flag without spline subtype
+            || !refusedWithoutMutation(8 | 4, 8)    // DXF-only curve type 8
+            || !refusedWithoutMutation(8, 5))       // spline subtype without group-70 bit 4
+            return false;
+        unrepresentable.flags = 9;
+        unrepresentable.curvetype = 0;
+        if (!writer.encodeEntity(&unrepresentable)) return false;
+
+        DRW_Polyline splineFit = polyline;
+        splineFit.handle = 0u;
+        splineFit.flags = 8 | 4;
+        splineFit.curvetype = 5;
+        if (!writer.encodeEntity(&splineFit)) return false;
+        CapturedObjectFrame splineFrame;
+        if (!captureObjectFrame(writer, splineFit.handle, splineFrame)) return false;
+        dwgBuffer splineEnvelope(splineFrame.bytes.data(), splineFrame.bytes.size());
+        const auto splineLength = splineEnvelope.getModularShort();
+        const auto splineOffset = splineEnvelope.getPosition();
+        if (!splineEnvelope.isGood() || splineLength <= 0
+            || splineOffset + static_cast<std::size_t>(splineLength) + 2u
+                != splineFrame.bytes.size())
+            return false;
+        std::vector<std::uint8_t> splineBody(
+            splineFrame.bytes.begin() + static_cast<std::ptrdiff_t>(splineOffset),
+            splineFrame.bytes.begin() + static_cast<std::ptrdiff_t>(
+                splineOffset + static_cast<std::size_t>(splineLength)));
+        if (!parse(splineBody) || probe.flags != (8 | 4)
+            || probe.curvetype != 5)
+            return false;
+        return true;
     }
 
     static bool checkR2007LwPolylineFooter() {
