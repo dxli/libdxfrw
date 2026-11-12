@@ -36359,6 +36359,8 @@ bool dxfRW::writeMLeaderStyle(DRW_MLeaderStyle *ent) {
         || !remappedReference(ent->blockHandle.ref, blockHandle))
         return failDxfWrite();
 
+    RecordStateScope state(*this, ent);
+    DxfWriterRecordScope record(*writer);
     writer->writeString(0, "MLEADERSTYLE");
     writer->writeString(5, toHexStr(emittedHandle));
     if (!writeTableEntryAppData(*ent))
@@ -36423,7 +36425,12 @@ bool dxfRW::writeMLeaderStyle(DRW_MLeaderStyle *ent) {
         writer->writeBool(298, ent->textExtended);
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    return !writer->hasWriteError();
+    if (writer->hasWriteError()
+        || !bindDxfWriteSourceObjectHandle(ent->handle, emittedHandle)
+        || !record.commit())
+        return false;
+    state.commit();
+    return true;
 }
 
 //MLINESTYLE is a FIXED built-in (no CLASS record). The group-code shape is the

@@ -12,9 +12,9 @@
     "sourceSha256": {
       "tests/mleaderstyle_objects_allocation_tests.cpp": "8fbc97016629d941a4fb9492b0d37ef3fb854131130e03dac8257bd5bbbabee3",
       "tests/CMakeLists.txt": "38450638f6a435a4d27283d12ce962d003a6f514e8eca0c14bba33cac74b12d9",
-      "src/libdxfrw.cpp": "1b089077496da8f34d3c0f4a914354fd499fac4e1a09e461a6893827e8107213"
+      "src/libdxfrw.cpp": "1a26587f2c29e5b0b80d993d2ed1d2d562c28748a144ee82263c82dfeaac3295"
     },
-    "behavior": "The generated whole-file DXF writer control injects each observed ordinary allocation failure while dxfRW::writeMLeaderStyle serializes one typed object. Each failure returns false, retains pre-existing destination bytes and the source object's handle, owner, text fields, and EED values; retry on the same dxfRW instance succeeds with byte-identical output and typed MLEADERSTYLE readback."
+    "behavior": "The typed writer now stages each MLEADERSTYLE record and its source-object identity binding in rollback scopes. The generated whole-file DXF writer control injects each observed ordinary allocation failure while dxfRW::writeMLeaderStyle serializes one typed object. Each failure returns false, retains pre-existing destination bytes and the source object's handle, owner, text fields, and EED values; retry on the same dxfRW instance succeeds with byte-identical output and typed MLEADERSTYLE readback."
   },
   "generatedProfile": {
     "version": "AC1027",
@@ -41,6 +41,7 @@
     "asanBuild": "cmake --build build-asan-custom --target libdxfrw_mleaderstyle_objects_allocation_tests -j4",
     "asanTest": "ctest --test-dir build-asan-custom -R '^libdxfrw_mleaderstyle_objects_allocation$' --output-on-failure",
     "asanResult": "PASS (1/1)",
+    "focusedRegressionCohort": "Six MLEADERSTYLE writer, source-domain, closure, and allocation CTests passed 6/6.",
     "fullSuites": "not run"
   },
   "limitations": [
