@@ -35383,6 +35383,7 @@ bool dxfRW::writeTableGeometry(DRW_TableGeometry *ent) {
     }
 
     if (writer->hasWriteError() || !preflightDxfWrite()
+        || !bindDxfWriteSourceObjectHandle(ent->handle, handle)
         || !record.commit())
         return fail();
     state.commit();
