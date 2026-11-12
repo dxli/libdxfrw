@@ -5239,55 +5239,61 @@ void testTableStyleHandleRoles(TestContext& t) {
         }
     }
 
-    const auto makeR24Frame = [](std::uint8_t textRole,
+    const auto makeR24Frame = [](DRW::Version version,
+                                 std::uint8_t textRole,
                                  std::uint8_t lineTypeRole,
                                  TableStyleFrame& frame) {
         return makeTableStyleFrame(
-            DRW::AC1024, 5, 1u, frame,
+            version, 5, 1u, frame,
             0u, 0u, 0u, 0u, 0u, true, 1u, 0u, 1, 0, 4, 2,
             false, 101, 1, 0, 0, 1, 0u, textRole, lineTypeRole);
     };
-    for (const std::uint8_t wrongRole :
-         {DRW::DwgSoftPointer, DRW::DwgHardOwnership,
-          DRW::DwgSoftOwnership}) {
-        for (const bool borderHandle : {false, true}) {
-            TableStyleFrame valid;
-            TableStyleFrame malformed;
-            const bool built = makeR24Frame(DRW::DwgHardPointer,
-                                             DRW::DwgHardPointer, valid)
-                && makeR24Frame(
-                    borderHandle ? DRW::DwgHardPointer : wrongRole,
-                    borderHandle ? wrongRole : DRW::DwgHardPointer,
-                    malformed);
-            t.expect(built, "AC1024 TABLESTYLE role vectors build");
-            if (!built)
-                continue;
+    for (const DRW::Version version :
+         {DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
+        for (const std::uint8_t wrongRole :
+             {DRW::DwgSoftPointer, DRW::DwgHardOwnership,
+              DRW::DwgSoftOwnership}) {
+            for (const bool borderHandle : {false, true}) {
+                TableStyleFrame valid;
+                TableStyleFrame malformed;
+                const bool built = makeR24Frame(
+                    version, DRW::DwgHardPointer, DRW::DwgHardPointer, valid)
+                    && makeR24Frame(
+                        version,
+                        borderHandle ? DRW::DwgHardPointer : wrongRole,
+                        borderHandle ? wrongRole : DRW::DwgHardPointer,
+                        malformed);
+                t.expect(built, "R2010+ TABLESTYLE role vectors build");
+                if (!built)
+                    continue;
 
-            const auto parse = [](TableStyleCodecProbe& parsed,
-                                  const TableStyleFrame& frame) {
-                DRW_TextCodec codec;
-                codec.setVersion(DRW::AC1024, false);
-                dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
-                return parsed.parseDwg(DRW::AC1024, &input,
-                                       frame.handleBits) && input.isGood();
-            };
-            TableStyleCodecProbe parsed;
-            const bool validRead = parse(parsed, valid);
-            t.expect(validRead && parsed.handle == 0xA100u
-                         && parsed.m_tableCellStyle.m_borders.size() == 1u,
-                     "AC1024 TABLESTYLE accepts hard-pointer handle profile");
-            if (!validRead)
-                continue;
-            const bool malformedRejected = !parse(parsed, malformed);
-            t.expect(malformedRejected && parsed.handle == 0u
-                         && parsed.m_name.empty()
-                         && parsed.m_tableCellStyle.m_borders.empty(),
-                     std::string("AC1024 TABLESTYLE rejects wrong ")
-                         + (borderHandle ? "border-linetype" : "text-style")
-                         + " handle role atomically");
-            t.expect(parse(parsed, valid) && parsed.handle == 0xA100u
-                         && parsed.m_tableCellStyle.m_borders.size() == 1u,
-                     "AC1024 TABLESTYLE retries corrected role on same object");
+                const auto parse = [version](TableStyleCodecProbe& parsed,
+                                             const TableStyleFrame& frame) {
+                    DRW_TextCodec codec;
+                    codec.setVersion(version, false);
+                    dwgBuffer input(frame.bytes.data(), frame.bytes.size(),
+                                    &codec);
+                    return parsed.parseDwg(version, &input,
+                                           frame.handleBits) && input.isGood();
+                };
+                TableStyleCodecProbe parsed;
+                const bool validRead = parse(parsed, valid);
+                t.expect(validRead && parsed.handle == 0xA100u
+                             && parsed.m_tableCellStyle.m_borders.size() == 1u,
+                         "R2010+ TABLESTYLE accepts hard-pointer handle profile");
+                if (!validRead)
+                    continue;
+                const bool malformedRejected = !parse(parsed, malformed);
+                t.expect(malformedRejected && parsed.handle == 0u
+                             && parsed.m_name.empty()
+                             && parsed.m_tableCellStyle.m_borders.empty(),
+                         std::string("R2010+ TABLESTYLE rejects wrong ")
+                             + (borderHandle ? "border-linetype" : "text-style")
+                             + " handle role atomically");
+                t.expect(parse(parsed, valid) && parsed.handle == 0xA100u
+                             && parsed.m_tableCellStyle.m_borders.size() == 1u,
+                         "R2010+ TABLESTYLE retries corrected role on same object");
+            }
         }
     }
 }
