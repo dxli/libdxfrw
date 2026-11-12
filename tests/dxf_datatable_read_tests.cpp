@@ -12,10 +12,12 @@
 namespace {
 struct Reader final : LC3CompatCheck {
     void addDataTable(const DRW_DataTable& value) override { tables.push_back(value); }
+    void addXRecord(const DRW_XRecord& value) override { xrecords.push_back(value); }
     void addRawDxfObject(const DRW_RawDxfObject& value) override {
         if (value.name == "DATATABLE") raw.push_back(value);
     }
     std::vector<DRW_DataTable> tables;
+    std::vector<DRW_XRecord> xrecords;
     std::vector<DRW_RawDxfObject> raw;
 };
 
@@ -34,13 +36,27 @@ struct Export final : LC3CompatCheck {
             {1, "INTEGER_2", {{-3, 0.0, ""}, {4, 0.0, ""}}}
         };
         table.rowHandles = {0x116u, 0x117u};
+        firstChild.handle = 0x116u;
+        firstChild.parentHandle = table.handle;
+        firstChild.m_cloning = 1;
+        firstChild.m_dataEntries.emplace_back(1, "alpha child record");
+        secondChild.handle = 0x117u;
+        secondChild.parentHandle = table.handle;
+        secondChild.m_cloning = 1;
+        secondChild.m_dataEntries.emplace_back(1, "beta child record");
     }
 
     dxfRW& codec;
     DRW_DataTable table;
+    DRW_XRecord firstChild;
+    DRW_XRecord secondChild;
     bool emitted{false};
 
-    void writeObjects() override { emitted = codec.writeDataTable(&table); }
+    void writeObjects() override {
+        emitted = codec.writeDataTable(&table)
+            && codec.writeXRecord(&firstChild)
+            && codec.writeXRecord(&secondChild);
+    }
     bool finalizeDxfWrite() override { return emitted; }
 };
 
@@ -138,8 +154,12 @@ bool writeAndRead(const std::filesystem::path& path, bool binary) {
     Reader readback;
     dxfRW reader(path.string().c_str());
     return reader.read(&readback, false) && readback.tables.size() == 1u
-        && readback.raw.size() == 1u
-        && verify(readback.tables.front(), true, true);
+        && readback.raw.size() == 1u && readback.xrecords.size() == 2u
+        && verify(readback.tables.front(), true, true)
+        && readback.xrecords[0].handle == 0x216u
+        && readback.xrecords[0].parentHandle == 0x215u
+        && readback.xrecords[1].handle == 0x217u
+        && readback.xrecords[1].parentHandle == 0x215u;
 }
 }
 

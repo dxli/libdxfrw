@@ -1850,9 +1850,11 @@ created locally from scratch for the specific control.
   handles, stages the record transactionally, and writes ordered cells and
   group-360 children. Generated ASCII/Binary write/readback passes; a missing
   child handle preserves the existing destination and the same codec succeeds
-  after correction. This is local codec evidence only: callers still must
-  emit and resolve each child XRECORD and close TABLESTYLE/TABLECONTENT/
-  TABLEGEOMETRY/DATATABLE/XRECORD dependencies before claiming graph output.
+  after correction. The generated graph control emits two row XRECORDs, then
+  checks their remapped identities/owners against the DATATABLE references on
+  fresh readback. This closes only that locally authored row subgraph. Physical
+  source identities, owner-role evidence, the remaining TABLESTYLE/TABLECONTENT/
+  TABLEGEOMETRY/XRECORD dependencies, and strict source output remain open.
   It establishes no native semantic meaning, DWG source replay, or support
   promotion ([read receipt](docs/research/p5-dxf-datatable-read-projection-2026-11-11.json),
   [writer receipt](docs/research/p5-dxf-datatable-write-projection-2026-11-11.json)).

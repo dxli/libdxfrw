@@ -19,6 +19,7 @@
     "ascii_full_write_and_readback": true,
     "binary_full_write_and_readback": true,
     "record_owner_and_child_handle_remapping_readback": true,
+    "two_row_xrecords_written_and_owner_checked": true,
     "incomplete_child_handles_refused": true,
     "destination_sentinel_preserved": true,
     "corrected_same_codec_retry": true,
