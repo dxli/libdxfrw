@@ -26860,6 +26860,20 @@ void testHatchOcsWcsCoordinateMapping(TestContext& t) {
              "HATCH OCS mapping preserves a tiny component after large terms cancel");
 
     const double maximum = std::numeric_limits<double>::max();
+    hatch.basePoint.z = 0.6 * maximum;
+    const DRW_Coord mixedScaleElevatedPoint = hatch.boundaryPointToWcs(
+        DRW_Coord(0.0, 1.0e-100, 0.6 * maximum));
+    const double elevatedComponent = (1.2 / std::sqrt(2.0)) * maximum;
+    t.expect(std::isfinite(mixedScaleElevatedPoint.x)
+                 && std::isfinite(mixedScaleElevatedPoint.y)
+                 && std::isfinite(mixedScaleElevatedPoint.z)
+                 && std::abs(mixedScaleElevatedPoint.x / maximum
+                             - elevatedComponent / maximum) < 1e-14
+                 && std::abs(mixedScaleElevatedPoint.y / maximum
+                             - elevatedComponent / maximum) < 1e-14
+                 && mixedScaleElevatedPoint.z == 1.0e-100,
+             "HATCH elevated OCS mapping preserves a tiny component when Z addition overflows");
+
     hatch.extPoint = DRW_Coord(1.0, 1.0, 1.0);
     hatch.basePoint.z = 0.6 * maximum;
     const DRW_Coord positiveElevatedOverflow =

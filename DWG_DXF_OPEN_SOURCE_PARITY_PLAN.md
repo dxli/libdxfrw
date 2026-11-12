@@ -20,6 +20,14 @@ passes 1/1. This closes only the generated underflow-after-cancellation case;
 arbitrary finite-coordinate exactness, native rendering and producer
 qualification remain open. Receipt: [mixed-scale OCS dot](docs/research/p6-ocs-mixed-scale-dot-cancellation-2026-11-11.json).
 
+**P6 HATCH elevated OCS mixed-scale cancellation (2026-11-11):** when adding
+boundary Z to HATCH elevation overflows, the stable four-term point transform
+now preserves nonzero coordinates lost by common-scale normalization. A
+generated `(1,1,0)` normal case combines two `0.6 * DBL_MAX` Z contributions
+into finite WCS X/Y while retaining a `1e-100` WCS Z coordinate. The focused
+HATCH/MPOLYGON OCS/WCS CTest passes 1/1. General exactness and native/producer
+qualification remain open. See [the elevated OCS receipt](docs/research/p6-hatch-elevated-ocs-mixed-scale-cancellation-2026-11-11.json).
+
 **Latest P6 local implementation slices (2026-11-11, scaled OCS dot products):**
 the explicit legacy-extrusion recovery API now scales finite coordinates before
 its inverse-basis dot products and uses compensated accumulation with fused
@@ -1543,6 +1551,15 @@ created locally from scratch for the specific control.
   HATCH/MPOLYGON OCS/WCS selector passes. This does not prove exact arithmetic
   for all finite inputs or native/producer semantics. See the
   [mixed-scale dot receipt](docs/research/p6-ocs-mixed-scale-dot-cancellation-2026-11-11.json).
+
+- **P6 elevated HATCH OCS mixed-scale dot:** the four-term stable point
+  transform now detects a nonzero coordinate lost during scaling and recomputes
+  its bounded products in the original exponent range, pairing opposite signs
+  before compensated accumulation. A generated boundary point preserves a
+  `1e-100` WCS component while its direct elevation sum overflows and the other
+  two transformed components remain finite. This is limited to the tested
+  underflow-after-cancellation path; general exactness and CAD qualification
+  remain open. See the [receipt](docs/research/p6-hatch-elevated-ocs-mixed-scale-cancellation-2026-11-11.json).
 
 - **P6 VIEW typed-null handle roles:** `DRW_View::parseDwg` now accepts a
   zero-valued, zero-payload absolute typed-null handle (codes 2–5) in an

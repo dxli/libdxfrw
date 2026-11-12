@@ -470,9 +470,73 @@ bool transformOcsCoordinateWithZOffsetStable(
     }
     const double values[] = {coordinate.x / scale, coordinate.y / scale,
                              coordinate.z / scale, zOffset / scale};
-    const auto dot = [&values, scale](double x, double y, double z,
+    const auto dot = [&values, &coordinate, zOffset, scale](double x, double y, double z,
                                double& output) noexcept {
         const double coefficients[] = {x, y, z, z};
+        if ((coordinate.x != 0.0 && values[0] == 0.0)
+            || (coordinate.y != 0.0 && values[1] == 0.0)
+            || (coordinate.z != 0.0 && values[2] == 0.0)
+            || (zOffset != 0.0 && values[3] == 0.0)) {
+            const double components[] = {coordinate.x, coordinate.y,
+                                         coordinate.z, zOffset};
+            double products[4]{};
+            double errors[4]{};
+            for (std::size_t i = 0; i < 4u; ++i) {
+                products[i] = coefficients[i] * components[i];
+                errors[i] = std::fma(coefficients[i], components[i],
+                                     -products[i]);
+            }
+            std::size_t first = 0u;
+            std::size_t second = 0u;
+            bool foundOppositePair = false;
+            double largestPair = -1.0;
+            for (std::size_t i = 0; i < 4u; ++i) {
+                for (std::size_t j = i + 1u; j < 4u; ++j) {
+                    if (std::signbit(products[i])
+                            == std::signbit(products[j])
+                        || products[i] == 0.0 || products[j] == 0.0)
+                        continue;
+                    const double pairMagnitude = std::max(
+                        std::fabs(products[i]), std::fabs(products[j]));
+                    if (!foundOppositePair || pairMagnitude > largestPair) {
+                        first = i;
+                        second = j;
+                        largestPair = pairMagnitude;
+                        foundOppositePair = true;
+                    }
+                }
+            }
+            double sum = foundOppositePair
+                ? products[first] + products[second] : products[0];
+            double correction = 0.0;
+            const auto addCompensated = [&sum, &correction](double value) {
+                const double next = sum + value;
+                if (!std::isfinite(next))
+                    return false;
+                correction += std::fabs(sum) >= std::fabs(value)
+                    ? (sum - next) + value : (value - next) + sum;
+                sum = next;
+                return std::isfinite(correction);
+            };
+            if (foundOppositePair) {
+                for (std::size_t i = 0; i < 4u; ++i) {
+                    if (i != first && i != second
+                        && !addCompensated(products[i]))
+                        return false;
+                }
+            } else {
+                for (std::size_t i = 1u; i < 4u; ++i) {
+                    if (!addCompensated(products[i]))
+                        return false;
+                }
+            }
+            for (const double error : errors) {
+                if (!addCompensated(error))
+                    return false;
+            }
+            output = sum + correction;
+            return std::isfinite(output);
+        }
         double sum = 0.0;
         double correction = 0.0;
         for (std::size_t i = 0; i < 4u; ++i) {
