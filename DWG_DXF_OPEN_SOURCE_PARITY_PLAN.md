@@ -1692,6 +1692,14 @@ created locally from scratch for the specific control.
   establish DWG POINT parsing or native point-symbol rendering
   ([receipt](docs/research/p8-3d-consumer-point-wcs-fields-2026-11-12.json)).
 
+- **P8/S8.3.16 generated 3DLINE callback fields:** the neutral consumer probe
+  now checks direct 3D start/end coordinates, extrusion, and thickness for a
+  locally authored `3DLINE`. ASCII and Binary AC1027 readback preserve these
+  values under `ext=false` and `ext=true`; the focused CTest passes 1/1. This
+  verifies libdxfrw's distinct custom `3DLINE` callback transport only; it is
+  not a standard-DXF interoperability or native-consumer qualification and
+  does not add DWG producer evidence ([receipt](docs/research/p8-3d-consumer-3dline-fields-2026-11-12.json)).
+
 - **P6 generated IMAGEDEF hard-owner reader profile:** the shared OBJECTS
   prologue preflight and typed `DRW_ImageDef` parser now explicitly accept the
   ODA §20.4.81 hard-owner parent code-3 emitted by this writer. Generated

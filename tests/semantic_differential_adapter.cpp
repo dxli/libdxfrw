@@ -2542,6 +2542,17 @@ void SemanticSink::writeEntities() {
         point.xAxisAngle = 0.25;
         wrote = dxfWriter_->writePoint(&point) && wrote;
 
+        // 3DLINE is a distinct LibreCAD/libdxfrw entity profile. Its endpoints
+        // and extrusion vector are stored as direct 3D coordinates, independent
+        // of the legacy OCS-to-WCS option used for planar entities.
+        DRW_3DLine line3d;
+        line3d.layer = "probe_3dline_wcs";
+        line3d.basePoint = DRW_Coord{-3.0, 5.0, 11.0};
+        line3d.secPoint = DRW_Coord{7.0, -13.0, 17.0};
+        line3d.extPoint = DRW_Coord{1.0, 0.0, 0.0};
+        line3d.thickness = 0.625;
+        wrote = dxfWriter_->write3DLine(&line3d) && wrote;
+
         DRW_Polyline polyline;
         polyline.flags = 8;
         polyline.vertexcount = 2;
@@ -3736,6 +3747,18 @@ bool run3DConsumerProbe(bool binary) {
     };
     if (!expectPoint(consumer))
         return false;
+    const auto expect3DLine = [&](const SemanticSink& sink) {
+        return expectEntityField(sink, "3DLINE", "probe_3dline_wcs", "start",
+                                 pointJson(DRW_Coord{-3.0, 5.0, 11.0}))
+            && expectEntityField(sink, "3DLINE", "probe_3dline_wcs", "end",
+                                 pointJson(DRW_Coord{7.0, -13.0, 17.0}))
+            && expectEntityField(sink, "3DLINE", "probe_3dline_wcs", "extrusion",
+                                 pointJson(DRW_Coord{1.0, 0.0, 0.0}))
+            && expectEntityDouble(sink, "3DLINE", "probe_3dline_wcs",
+                                  "thickness", 0.625);
+    };
+    if (!expect3DLine(consumer))
+        return false;
 
     if (!expectEntityField(legacyConsumer, "CIRCLE", defaultCircleLayer, "center",
                            "{\"x\":6,\"y\":-3,\"z\":1.5}")
@@ -3777,6 +3800,8 @@ bool run3DConsumerProbe(bool binary) {
     if (!expectRayAndXline(legacyConsumer))
         return false;
     if (!expectPoint(legacyConsumer))
+        return false;
+    if (!expect3DLine(legacyConsumer))
         return false;
 
     // DXF ELLIPSE stores its center and major-axis vector in WCS. Unlike ARC

@@ -10685,3 +10685,12 @@ full suites for the planned checkpoints above. Every implementation slice
 must update the plan and receipt, commit only intended files, report its commit
 and fast validation, and self-unblock by selecting the next ready slice.
 Preserve unrelated worktree changes and never stage external DWG/DXF evidence.
+
+**P8/S8.3.16 3DLINE callback fields (2026-11-12):** a locally authored AC1027
+custom `3DLINE` now passes generated ASCII/Binary callback checks for direct
+start/end coordinates, extrusion, and thickness under both extrusion modes.
+The focused `libdxfrw_3d_consumer_probe` passes 1/1. This is same-library
+custom-entity transport evidence only; it does not qualify standard DXF
+interoperability, DWG producer behavior, or native consumer semantics. See the
+[implementation checkpoint](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#current-execution-checkpoint-2026-11-12)
+and [receipt](docs/research/p8-3d-consumer-3dline-fields-2026-11-12.json).
