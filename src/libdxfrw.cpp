@@ -35977,7 +35977,9 @@ bool dxfRW::writeSpatialFilter(DRW_SpatialFilter *ent) {
         || !writeMatrix12(ent->m_insertTransform)
         || (!ent->extData.empty() && !writeExtData(ent->extData)))
         return false;
-    if (!preflightDxfWrite() || !record.commit()) {
+    if (!preflightDxfWrite()
+        || !bindDxfWriteSourceObjectHandle(ent->handle, handle)
+        || !record.commit()) {
         m_writeError = true;
         return false;
     }
