@@ -11106,6 +11106,19 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
     bool hasParsedAcisPayload = false;
     bool parsedHasWireframe = false;
     bool parsedWireframePresence = false;
+    const auto readWireframePresenceAt = [&](std::uint64_t startBit) {
+        dwgBuffer wireframeProbe = sourceBuf->forkIndependent();
+        if (!wireframeProbe.setPosition(startBit >> 3))
+            return false;
+        wireframeProbe.setBitPos(static_cast<std::uint8_t>(startBit & 7u));
+        if (!wireframeProbe.isGood())
+            return false;
+        bool value = false;
+        if (!readBoundedBit(wireframeProbe, bodyEndBit, value))
+            return false;
+        parsedHasWireframe = value;
+        return true;
+    };
     static constexpr std::uint8_t sabAcisEndMarker[] = {
         0x0E, 0x03, 'E', 'n', 'd', 0x0E, 0x02, 'o', 'f',
         0x0E, 0x04, 'A', 'C', 'I', 'S', 0x0D, 0x04,
@@ -11154,6 +11167,8 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
                     parsedAcisPayloadRanges.push_back(
                         std::move(parsedInlineAcisRange));
                     hasParsedAcisPayload = true;
+                    parsedWireframePresence = readWireframePresenceAt(
+                        payloadEndBit);
                 }
             }
         }
@@ -11229,8 +11244,8 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
                 // bit after the bounded SAT-v1 block sequence. Retain only
                 // the presence flag here; wireframe records and transforms
                 // remain opaque and must not be inferred from SAT geometry.
-                parsedWireframePresence = readBoundedBit(
-                    satProbe, bodyEndBit, parsedHasWireframe);
+                parsedWireframePresence = readWireframePresenceAt(
+                    currentDwgBit(&satProbe));
             }
         }
     } catch (...) {

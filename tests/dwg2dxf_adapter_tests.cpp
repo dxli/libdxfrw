@@ -88714,6 +88714,53 @@ static bool inventoryPhysicalAc1018SatV1(const std::string& sourcePath) {
     return true;
 }
 
+static bool physicalAc1024WireframePresence(const std::string& sourcePath) {
+    const auto fail = [](const char* reason) {
+        std::cerr << "AC1024 physical wireframe presence: " << reason << '\n';
+        return false;
+    };
+    dx_data source;
+    dx_iface importer;
+    if (!importer.fileImport(sourcePath, &source, false)
+        || source.sourceFormat != dx_source_format::DWG
+        || source.sourceVersion != DRW::AC1024)
+        return fail("could not import the AC1024 source");
+
+    const std::set<std::uint32_t> expectedHandles{
+        0x183u, 0x191u, 0x195u, 0x1DAu, 0x20Fu};
+    std::set<std::uint32_t> seenHandles;
+    const auto inspectBlock = [&expectedHandles, &seenHandles](
+                                  const dx_ifaceBlock* block) {
+        if (block == nullptr)
+            return true;
+        for (const DRW_Entity* entity : block->ent) {
+            const auto* modeler =
+                dynamic_cast<const DRW_ModelerGeometry*>(entity);
+            if (modeler == nullptr || modeler->eType != DRW::E3DSOLID)
+                continue;
+            if (expectedHandles.find(modeler->handle)
+                    == expectedHandles.end()
+                || !modeler->m_hasWireframe
+                || modeler->m_dwgAcisPayload.empty()
+                || !seenHandles.insert(modeler->handle).second)
+                return false;
+        }
+        return true;
+    };
+    if (!inspectBlock(source.mBlock))
+        return fail("unexpected, duplicate, or unqualified modeler record");
+    for (const dx_ifaceBlock* block : source.blocks) {
+        if (!inspectBlock(block))
+            return fail("unexpected, duplicate, or unqualified modeler record");
+    }
+    if (seenHandles != expectedHandles)
+        return fail("wireframe-positive source handles did not all decode");
+    std::cout << "AC1024 physical wireframe presence: "
+              << seenHandles.size()
+              << " inline-SAB 3DSOLID records matched LibreDWG\n";
+    return true;
+}
+
 static bool readHeaderInteger(const DRW_Header& header, const char* name,
                               int expectedCode, int& value) {
     auto found = header.vars.find(name);
@@ -88948,6 +88995,9 @@ static bool physicalAc1018SatV1Projection(const std::string& sourcePath,
 }
 
 int main(int argc, char** argv) {
+    if (argc == 3
+        && std::string(argv[1]) == "--modeler-ac1024-wireframe-presence")
+        return physicalAc1024WireframePresence(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--modeler-ac1018-physical-sat-v1-inventory") {
         return inventoryPhysicalAc1018SatV1(argv[2]) ? 0 : 1;
