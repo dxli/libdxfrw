@@ -2,13 +2,14 @@
 
 ## Progress estimate (2026-11-12)
 
-Since the current execution queue was last reset, **19 implementation slices
+Since the current execution queue was last reset, **20 implementation slices
 are complete and 6 phase exit gates remain open**, giving a rough item-count
-progress estimate of **76.0% (19 / (19 + 6))**. The completed slices are
+progress estimate of **76.9% (20 / (20 + 6))**. The completed slices are
 represented by commits `787d65c6`, `e1c1cfe3`, `3feb4e6f`, `c9a64797`,
 `26e76b8c`, `9ebf0b78`, `dae9d0bd`, `d25b13b5`, `d9beb8f5`, `66883da5`,
 `dd2a0f4d`, `f35540b9`, `86ed0fd2`, `e96cc6ed`, `1f151ad3`, `27a7126c`,
-`524dfa02`, `4dcf6779`, `27e67de9`, `7089be6c` and `16aabb94`. Commits
+`524dfa02`, `4dcf6779`, `27e67de9`, `7089be6c`, `16aabb94` and `529bc1c1`.
+Commits
 `27a7126c` and
 `524dfa02` complete and then strengthen one transaction slice; `4dcf6779` and
 `27e67de9` implement and finalize the next slice's receipt. This estimate
@@ -1120,6 +1121,14 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    evidence.
 
 Completed P6 encoder-allocation rollback/retry and raw-shell recovery slices have been removed from this queue; their implementation and focused validation receipts remain under `docs/research/` and in Git history. Reopen one only if new evidence exposes a regression.
+
+The generated AC1024 `BLOCKMOVEACTION` direct-writer allocation sweep is also
+complete: all 12 ASCII and 12 Binary allocation offsets preserve caller fields
+and roll back source identity; fresh-writer retries reproduce clean output
+with remapped owner/dependency roles and exact typed action fields. The fast
+adapter profile still passes alongside this direct callback test. This closes
+only the selected generated transaction path; physical producer coverage,
+graph closure, and native action semantics remain open ([receipt](docs/research/p6-dynamic-block-move-action-allocation-rollback-2026-11-12.json)).
 
 After every slice: run its focused fast checks; update this queue and the
 relevant receipt; commit code, plan and receipt together; report the commit and

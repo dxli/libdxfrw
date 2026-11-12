@@ -595,6 +595,145 @@ DRW_DynamicBlockObject makeStretchAction() {
     return object;
 }
 
+DRW_DynamicBlockObject makeMoveAction() {
+    DRW_DynamicBlockObject object("BLOCKMOVEACTION");
+    object.handle = 0x1134u;
+    object.parentHandle = 0x110Fu;
+    object.m_kind = DRW_DynamicBlockObject::Kind::MoveAction;
+    object.m_bodyFullyDecoded = true;
+    object.m_evalExprParsed = true;
+    object.m_parentId = std::numeric_limits<std::uint32_t>::max();
+    object.m_major = 29u;
+    object.m_minor = 2u;
+    object.m_valueCode = -9999;
+    object.m_nodeId = 81u
+        + static_cast<std::uint32_t>(object.m_kind);
+    object.m_elementParsed = true;
+    object.m_elementName = "MoveHinge";
+    object.m_elementMajor = 29u;
+    object.m_elementMinor = 2u;
+    object.m_actionCount = 3;
+    object.m_actionIndexes = {17, 24, 31};
+    object.m_dependencyCount = 2;
+    object.m_dependencyHandles = {0x1127u, 0x1128u};
+    object.m_displayLocation = DRW_Coord(45.0, -15.0, 0.0);
+    object.m_connectionCodes = {1, 8};
+    object.m_connectionNames = {"EndXDelta", "EndYDelta"};
+    object.m_actionOffsetX = 0.5;
+    object.m_actionOffsetY = 0.0;
+    return object;
+}
+
+std::map<std::uint32_t, std::uint32_t> moveActionRemap() {
+    return {{0x1127u, 0x6127u}, {0x1128u, 0x6128u}};
+}
+
+bool moveActionSourceUnchanged(const DRW_DynamicBlockObject& object) {
+    return object.handle == 0x1134u
+        && static_cast<std::uint32_t>(object.parentHandle) == 0x110Fu
+        && object.m_kind == DRW_DynamicBlockObject::Kind::MoveAction
+        && object.m_bodyFullyDecoded && object.m_evalExprParsed
+        && object.m_parentId == std::numeric_limits<std::uint32_t>::max()
+        && object.m_nodeId == 81u
+            + static_cast<std::uint32_t>(object.m_kind)
+        && object.m_elementParsed && object.m_elementName == "MoveHinge"
+        && object.m_actionCount == 3
+        && object.m_actionIndexes == std::vector<std::int32_t>{17, 24, 31}
+        && object.m_dependencyCount == 2
+        && object.m_dependencyHandles
+            == std::vector<std::uint32_t>{0x1127u, 0x1128u}
+        && object.m_connectionCodes == std::vector<std::int32_t>{1, 8}
+        && object.m_connectionNames
+            == std::vector<UTF8STRING>{"EndXDelta", "EndYDelta"}
+        && object.m_actionOffsetX == 0.5 && object.m_actionOffsetY == 0.0;
+}
+
+bool moveActionWireReadback(const std::string& bytes, bool binary) {
+    std::istringstream input(bytes);
+    std::unique_ptr<dxfReader> reader = binary
+        ? std::unique_ptr<dxfReader>(std::make_unique<dxfReaderBinary>(&input))
+        : std::unique_ptr<dxfReader>(std::make_unique<dxfReaderAscii>(&input));
+    int code = 0;
+    if (!reader->readRec(&code) || code != 0
+        || reader->getString() != "BLOCKMOVEACTION")
+        return false;
+    bool ended = false;
+    bool hasHandle = false;
+    bool hasNode = false;
+    bool hasActionCount = false;
+    bool hasDependencyCount = false;
+    bool hasOffsetX = false;
+    bool hasOffsetY = false;
+    bool hasSubclass = false;
+    std::vector<std::uint32_t> ownerAndDependencies;
+    std::vector<std::int32_t> actionIndexes;
+    std::vector<std::int32_t> connectionCodes;
+    std::vector<std::string> connectionNames;
+    while (reader->readRec(&code)) {
+        if (code == 0) {
+            ended = reader->getString() == "WIRE_END";
+            break;
+        }
+        switch (code) {
+        case 5:
+            hasHandle = reader->getHandleString() == 0x1134u;
+            break;
+        case 330:
+            ownerAndDependencies.push_back(reader->getHandleString());
+            break;
+        case 90:
+            hasNode = reader->getInt32() == 81
+                + static_cast<std::int32_t>(
+                    DRW_DynamicBlockObject::Kind::MoveAction);
+            break;
+        case 70:
+            hasActionCount = reader->getInt32() == 3;
+            break;
+        case 71:
+            hasDependencyCount = reader->getInt32() == 2;
+            break;
+        case 91:
+            actionIndexes.push_back(reader->getInt32());
+            break;
+        case 92:
+        case 93:
+            connectionCodes.push_back(reader->getInt32());
+            break;
+        case 140:
+            hasOffsetX = reader->getDouble() == 0.5;
+            break;
+        case 141:
+            hasOffsetY = reader->getDouble() == 0.0;
+            break;
+        case 100:
+            hasSubclass = hasSubclass
+                || reader->getString() == "AcDbBlockMoveAction";
+            break;
+        case 301:
+        case 302:
+            connectionNames.push_back(reader->getString());
+            break;
+        default:
+            break;
+        }
+    }
+    return ended && hasHandle && hasNode && hasActionCount
+        && hasDependencyCount && hasOffsetX && hasOffsetY && hasSubclass
+        && ownerAndDependencies
+            == std::vector<std::uint32_t>{0x110Fu, 0x6127u, 0x6128u}
+        && actionIndexes == std::vector<std::int32_t>{17, 24, 31}
+        && connectionCodes == std::vector<std::int32_t>{1, 8}
+        && connectionNames
+            == std::vector<std::string>{"EndXDelta", "EndYDelta"};
+}
+
+bool moveActionAllocationSweep(bool binary) {
+    return dynamicBlockAllocationSweep(
+        "MoveAction", binary, makeMoveAction,
+        moveActionSourceUnchanged, moveActionWireReadback,
+        moveActionRemap());
+}
+
 std::map<std::uint32_t, std::uint32_t> stretchActionRemap() {
     return {{0x1127u, 0x6127u}, {0x1143u, 0x6143u},
             {0x1144u, 0x6144u}};
@@ -943,6 +1082,8 @@ int main() {
         && basePointAllocationSweep(true)
         && alignmentAllocationSweep(false)
         && alignmentAllocationSweep(true)
+        && moveActionAllocationSweep(false)
+        && moveActionAllocationSweep(true)
         && stretchActionAllocationSweep(false)
         && stretchActionAllocationSweep(true) ? 0 : 1;
 }
