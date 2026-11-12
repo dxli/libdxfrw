@@ -703,6 +703,8 @@ public:
     /// the caller supplies the owning dictionary and referenced object graph.
     bool registerTableContentObjectClass(DRW_TableContentObject *object);
     bool writeTableContent(DRW_TableContentObject *object);
+    bool registerTableGeometryObjectClass(DRW_TableGeometry *object);
+    bool writeTableGeometry(DRW_TableGeometry *object);
     /// Atomically write the AC1021 TABLESTYLE extension-DICTIONARY graph
     /// containing one CELLSTYLEMAP at the canonical round-trip key. The
     /// caller supplies and links all three objects; malformed ownership,

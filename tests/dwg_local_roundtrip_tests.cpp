@@ -10739,6 +10739,233 @@ private:
     dx_data data_;
 };
 
+class TableGeometryDwgRoundTripInterface final : public dx_iface {
+public:
+    static constexpr std::uint32_t kGeometry = 0xF280u;
+    static constexpr std::uint32_t kSentinel = 0xF290u;
+
+    explicit TableGeometryDwgRoundTripInterface(dwgRW *writer = nullptr)
+        : writer_(writer) {
+        cData = &data_;
+        geometry_.handle = kGeometry;
+        geometry_.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
+        geometry_.m_rowCount = 2;
+        geometry_.m_columnCount = 2;
+        geometry_.m_cellCount = 4;
+        geometry_.m_cells.resize(4u);
+        const std::int32_t flags[] = {3, 4, 7, 3};
+        for (std::size_t i = 0; i < geometry_.m_cells.size(); ++i) {
+            auto& cell = geometry_.m_cells[i];
+            cell.m_flags = flags[i];
+            cell.m_widthWithGap = 10.25 + static_cast<double>(i);
+            cell.m_heightWithGap = 4.5 + static_cast<double>(i);
+        }
+        DRW_TableGeometryContent content;
+        content.m_topLeft = DRW_Coord(1.25, 2.5, 3.75);
+        content.m_center = DRW_Coord(4.5, 5.25, 6.125);
+        content.m_contentWidth = 7.5;
+        content.m_contentHeight = 8.25;
+        content.m_width = 9.5;
+        content.m_height = 10.75;
+        content.m_dwgUnknownValue = 0.0;
+        content.m_hasDwgUnknownValue = true;
+        geometry_.m_cells[2].m_contents.push_back(content);
+    }
+
+    void writeHeader(DRW_Header& header) override { header.vars.clear(); }
+    void writeDwgClasses() override {
+        if (writer_ == nullptr)
+            return;
+        if (writer_->getVersion() == DRW::AC1021) {
+            registered_ = writer_->registerDwgNamedObjectDictionaryEntry(
+                    "LOCAL_TABLE_GEOMETRY", kGeometry)
+                && writer_->registerDwgNamedObjectDictionaryEntry(
+                    "LOCAL_TABLE_GEOMETRY_SENTINEL", kSentinel)
+                && writer_->registerTableGeometryObjectClass(&geometry_);
+            classNumber_ = writer_->getDwgTypedClassNumber(
+                "AcDbTableGeometry", "TABLEGEOMETRY");
+        } else {
+            refusedRegistration_ =
+                !writer_->registerTableGeometryObjectClass(&geometry_);
+        }
+    }
+    void collectDwgAppIds() override {}
+    void writeBlocks() override {}
+    void writeBlockRecords() override {}
+    void writeEntities() override {}
+    void writeLTypes() override {}
+    void writeLayers() override {}
+    void writeTextstyles() override {}
+    void writeVports() override {}
+    void writeDimstyles() override {}
+    void writeViews() override {}
+    void writeUCSs() override {}
+    void writeAppId() override {}
+    bool finalizeDwgWrite() override { return true; }
+    bool finalizeDwgWriteStructure() override { return true; }
+
+    void writeObjects() override {
+        if (writer_ == nullptr)
+            return;
+        if (writer_->getVersion() == DRW::AC1021 && registered_) {
+            DRW_TableGeometry invalid = geometry_;
+            invalid.m_cells[0].m_unknownHandle = 0xF2A0u;
+            const bool rejectedTarget = !writer_->writeTableGeometry(&invalid);
+            invalid = geometry_;
+            invalid.m_cells[2].m_contents[0].m_dwgUnknownValue = 1.0;
+            const bool rejectedUnknownField = !writer_->writeTableGeometry(&invalid);
+            invalid = geometry_;
+            invalid.m_cells[2].m_contents[0].m_hasDwgUnknownValue = false;
+            invalid.m_cells[2].m_contents[0].m_dwgUnknownValue = 1.0;
+            const bool rejectedUnmarkedUnknownField =
+                !writer_->writeTableGeometry(&invalid);
+            invalid = geometry_;
+            invalid.m_cellCount = 3;
+            const bool rejectedCount = !writer_->writeTableGeometry(&invalid);
+            invalid = geometry_;
+            invalid.m_cells[1].m_widthWithGap =
+                std::numeric_limits<double>::quiet_NaN();
+            const bool rejectedNonFinite = !writer_->writeTableGeometry(&invalid);
+            const bool written = writer_->writeTableGeometry(&geometry_);
+            DRW::DwgObjectFrameReceipt frame;
+            frameSeen_ = written && writer_->getLastDwgObjectFrame(frame)
+                && frame.objectHandle == kGeometry
+                && frame.classNumber == classNumber_;
+            DRW_XRecord sentinel;
+            sentinel.handle = kSentinel;
+            sentinel.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
+            sentinel.m_values.emplace_back(1, UTF8STRING("after-tablegeometry"));
+            sentinelWritten_ = writer_->writeXRecord(&sentinel);
+            allWritten_ = rejectedTarget && rejectedUnknownField && rejectedCount
+                && rejectedUnmarkedUnknownField
+                && rejectedNonFinite
+                && frameSeen_ && sentinelWritten_;
+        } else {
+            refusalControls_ = refusedRegistration_
+                && !writer_->writeTableGeometry(&geometry_)
+                && writer_->getDwgTypedClassNumber(
+                    "AcDbTableGeometry", "TABLEGEOMETRY") == 0u;
+            allWritten_ = refusalControls_;
+        }
+        classCountsValid_ = writer_->validateDwgClassInstanceCounts();
+    }
+
+    void addTableGeometry(const DRW_TableGeometry& value) override {
+        if (value.handle != kGeometry)
+            return;
+        geometryRead_ = value;
+        ++geometryCallbacks_;
+    }
+    void addXRecord(const DRW_XRecord& value) override {
+        if (value.handle == kSentinel)
+            sentinelSeen_ = value.parentHandle == DRW::DwgNamedObjectsDictionaryHandle
+                && value.m_values.size() == 1u
+                && value.m_values[0].type() == DRW_Variant::STRING
+                && UTF8STRING(value.m_values[0].c_str()) == "after-tablegeometry";
+    }
+    void addUnsupportedObject(const DRW_UnsupportedObject& value) override {
+        if (value.m_handle == kGeometry && value.m_recordName == "TABLEGEOMETRY") {
+            ++rawCallbacks_;
+            rawClass_ = value;
+        }
+    }
+
+    bool readMatches(bool supported) const {
+        if (!supported)
+            return geometryCallbacks_ == 0u && rawCallbacks_ == 0u;
+        const auto& cells = geometryRead_.m_cells;
+        if (!sentinelSeen_ || geometryCallbacks_ != 1u || rawCallbacks_ != 1u
+            || geometryRead_.parentHandle != DRW::DwgNamedObjectsDictionaryHandle
+            || geometryRead_.m_rowCount != 2 || geometryRead_.m_columnCount != 2
+            || geometryRead_.m_cellCount != 4 || cells.size() != 4u
+            || cells[0].m_flags != 3 || cells[1].m_flags != 4
+            || cells[2].m_flags != 7 || cells[3].m_flags != 3
+            || cells[2].m_contents.size() != 1u
+            || cells[2].m_contents[0].m_topLeft.x != 1.25
+            || cells[2].m_contents[0].m_topLeft.y != 2.5
+            || cells[2].m_contents[0].m_topLeft.z != 3.75
+            || cells[2].m_contents[0].m_center.x != 4.5
+            || cells[2].m_contents[0].m_center.y != 5.25
+            || cells[2].m_contents[0].m_center.z != 6.125
+            || cells[2].m_contents[0].m_contentWidth != 7.5
+            || cells[2].m_contents[0].m_contentHeight != 8.25
+            || cells[2].m_contents[0].m_width != 9.5
+            || cells[2].m_contents[0].m_height != 10.75
+            || !cells[2].m_contents[0].m_hasDwgUnknownValue
+            || cells[2].m_contents[0].m_dwgUnknownValue != 0.0)
+            return false;
+        for (std::size_t i = 0; i < cells.size(); ++i) {
+            if (cells[i].m_unknownHandle != 0
+                || cells[i].m_widthWithGap != 10.25 + static_cast<double>(i)
+                || cells[i].m_heightWithGap != 4.5 + static_cast<double>(i))
+                return false;
+        }
+        return rawClass_.m_hasClassDefinition
+            && rawClass_.m_className == "AcDbTableGeometry"
+            && rawClass_.m_objectType >= 500u
+            && rawClass_.m_classAppName == "ObjectDBX Classes"
+            && rawClass_.m_classProxyFlag == 1152u
+            && rawClass_.m_classEntityFlagRaw == 0x00
+            && rawClass_.m_classDwgVersion == 27
+            && rawClass_.m_classMaintenanceVersion == 1;
+    }
+
+    dwgRW *writer_ = nullptr;
+    DRW_TableGeometry geometry_;
+    DRW_TableGeometry geometryRead_;
+    DRW_UnsupportedObject rawClass_;
+    std::uint16_t classNumber_ = 0u;
+    std::size_t geometryCallbacks_ = 0u;
+    std::size_t rawCallbacks_ = 0u;
+    bool registered_ = false;
+    bool refusedRegistration_ = false;
+    bool frameSeen_ = false;
+    bool sentinelWritten_ = false;
+    bool sentinelSeen_ = false;
+    bool refusalControls_ = false;
+    bool allWritten_ = false;
+    bool classCountsValid_ = false;
+private:
+    dx_data data_;
+};
+
+bool runTableGeometryDwgRoundTrip(const std::filesystem::path& directory) {
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    for (DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+        const auto path = directory / ("libdxfrw-tablegeometry-dwg-"
+            + std::to_string(unique) + "-"
+            + std::to_string(static_cast<int>(version)) + ".dwg");
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() { std::error_code error; std::filesystem::remove(path, error); }
+        } cleanup{path};
+        dwgRW writer(path.string().c_str());
+        TableGeometryDwgRoundTripInterface source(&writer);
+        const bool written = writer.write(&source, version, true);
+        if (!written || !source.allWritten_ || !source.classCountsValid_) {
+            const auto diagnostic = writer.getLastDiagnostic();
+            std::cerr << "TABLEGEOMETRY DWG write failed version="
+                      << static_cast<int>(version) << " complete="
+                      << source.allWritten_ << " counts=" << source.classCountsValid_
+                      << " diagnostic=" << diagnostic.code << ": "
+                      << diagnostic.message << '\n';
+            return false;
+        }
+        dwgRW reader(path.string().c_str());
+        TableGeometryDwgRoundTripInterface sink;
+        if (!reader.read(&sink, false) || !sink.readMatches(version == DRW::AC1021)) {
+            const auto diagnostic = reader.getLastDiagnostic();
+            std::cerr << "TABLEGEOMETRY DWG read failed version="
+                      << static_cast<int>(version) << " typed="
+                      << sink.geometryCallbacks_ << " raw=" << sink.rawCallbacks_
+                      << " diagnostic=" << diagnostic.code << ": "
+                      << diagnostic.message << '\n';
+            return false;
+        }
+    }
+    return true;
+}
+
 bool runTableContentObjectRoundTrip(const std::filesystem::path& directory) {
     const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
     for (DRW::Version version : {DRW::AC1015, DRW::AC1018, DRW::AC1021,
@@ -40872,6 +41099,12 @@ int main(int argc, char** argv) {
         && std::string(argv[1]) == "--table-content-dwg-object-roundtrip") {
         const bool passed = runTableContentObjectRoundTrip(directory);
         std::cout << "AC1021 TABLECONTENT object/class round trip and version refusals: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    } else if (argc == 2
+        && std::string(argv[1]) == "--tablegeometry-dwg-object-roundtrip") {
+        const bool passed = runTableGeometryDwgRoundTrip(directory);
+        std::cout << "AC1021 TABLEGEOMETRY object/class round trip and refusal controls: "
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     } else if (argc == 2

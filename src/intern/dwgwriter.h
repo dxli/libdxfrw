@@ -1157,6 +1157,25 @@ public:
             && registerTypedObjectClass(definition, handle);
     }
 
+    bool registerTableGeometryObjectClass(std::uint32_t handle = 0) {
+        if (m_version != DRW::AC1021)
+            return false;
+        DwgClassDefinition definition;
+        // The ordinal is local to this CLASSES section. Keep the identity and
+        // version trailer from the observed AC1021 class profile, but allocate
+        // the ordinal for this output file.
+        definition.m_classNum = nextFreeCustomClassNum();
+        definition.m_proxyFlag = 0x480;
+        definition.m_appName = "ObjectDBX Classes";
+        definition.m_className = "AcDbTableGeometry";
+        definition.m_recordName = "TABLEGEOMETRY";
+        definition.m_entityFlagRaw = 0x00;
+        definition.m_dwgVersion = 27;
+        definition.m_maintenanceVersion = 1;
+        return definition.m_classNum >= 500
+            && registerTypedObjectClass(definition, handle);
+    }
+
     bool registerMaterialObjectClass(std::uint32_t handle = 0) {
         return registerTypedObjectClassRow<dwgTypedClassRowIndex("Material")>(handle);
     }
