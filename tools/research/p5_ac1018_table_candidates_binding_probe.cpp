@@ -20,6 +20,8 @@ int main(int argc,char**argv) {
     for(std::size_t i=0;i<table.ownedChildren.size();++i)
         if(table.ownedChildren[i]!=0xbeu+i)return 7;
     std::cout<<"same-import observation passed: 10 XRECORDs, 2 custom frames, 9 child links; "
+             <<"TABLECONTENT class="<<content.classNumber
+             <<" DATATABLE class="<<table.classNumber<<"; "
              <<"entity failures="<<data.dwgReadOutcome.observations.entityParseFailures
              <<" object failures="<<data.dwgReadOutcome.observations.objectParseFailures<<'\n';
     return 0;

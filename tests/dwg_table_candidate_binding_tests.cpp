@@ -308,6 +308,24 @@ bool run(const char* contentPath,const char* dataPath,const char* wrongPath,
     if(reader.enableVerifiedTableCandidates(invalid,contentHandle,dataHandle))return false;
     if(!reader.fileImport(path.string(),&baseline,false)||!live(baseline))return false;
     auto& snapshot=DxIfaceStandardDwgCaptureTestAccess::raw(baseline,dataHandle);
+    DRW_DwgClassCoverageEntry* selectedClass=nullptr;
+    std::size_t selectedClassMatches=0u;
+    for (DRW_DwgClassCoverageEntry& entry : baseline.dwgClassCoverage.m_entries) {
+        if (entry.m_classNumber != snapshot.m_objectType)
+            continue;
+        selectedClass=&entry;
+        ++selectedClassMatches;
+    }
+    if (selectedClassMatches!=1u || selectedClass==nullptr
+        || !baseline.hasUnchangedDwgClassEvidence())return false;
+    selectedClass->m_proxyFlag^=1;
+    if(live(baseline))return false;
+    selectedClass->m_proxyFlag^=1;
+    if(!live(baseline))return false;
+    ++selectedClass->m_instanceCount;
+    if(live(baseline))return false;
+    --selectedClass->m_instanceCount;
+    if(!live(baseline))return false;
     snapshot.m_rawBytes[0]^=1u;
     Content c;Data t;c.handle=1u;t.handle=1u;
     if(dx_iface::hasUnchangedVerifiedXRecordSource(baseline,rootHandle)

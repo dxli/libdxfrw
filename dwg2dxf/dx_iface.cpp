@@ -30106,6 +30106,44 @@ bool dx_iface::validateVerifiedTableCandidates(const dx_data& data,
             || !DwgDataTableAc1018Candidate::inspect(dataSource->raw,parsedTable)
             || parsedContent.parentHandle!=parsedTable.parentHandle
             || parsedTable.ownedChildren.size()+1u+(xrecords.requiresVerifiedStyleXRecord?1u:0u)!=xrecords.records.size()) return false;
+        const auto classMetadataMatches = [&data](
+                const DRW_UnsupportedObject& raw,
+                std::uint16_t classNumber) noexcept {
+            if (!data.hasUnchangedDwgClassEvidence())
+                return false;
+            const DRW_DwgClassCoverageEntry* selected = nullptr;
+            std::size_t matches = 0u;
+            for (const DRW_DwgClassCoverageEntry& entry :
+                 data.dwgClassCoverage.m_entries) {
+                if (entry.m_classNumber != classNumber)
+                    continue;
+                selected = &entry;
+                ++matches;
+            }
+            return matches == 1u && selected != nullptr
+                && selected->m_state == DRW_DwgClassCoverageState::Published
+                && selected->m_classNumber == raw.m_objectType
+                && selected->m_recordName == raw.m_recordName
+                && selected->m_className == raw.m_className
+                && selected->m_appName == raw.m_classAppName
+                && selected->m_proxyFlag == raw.m_classProxyFlag
+                && selected->m_wasAProxyFlag
+                    == (raw.m_classWasProxy ? 1 : 0)
+                && selected->m_entityFlagRaw == raw.m_classEntityFlagRaw
+                && selected->m_entityFlag == (raw.m_isEntity ? 1 : 0)
+                && selected->m_dwgVersion == raw.m_classDwgVersion
+                && selected->m_maintenanceVersion
+                    == raw.m_classMaintenanceVersion
+                && selected->m_unknown1 == raw.m_classUnknown1
+                && selected->m_unknown2 == raw.m_classUnknown2
+                && selected->m_instanceCount > 0;
+        };
+        if (data.dwgReadOutcome.sourceVersion != DRW::AC1018
+            || !classMetadataMatches(contentSource->raw,
+                                     parsedContent.classNumber)
+            || !classMetadataMatches(dataSource->raw,
+                                     parsedTable.classNumber))
+            return false;
         DwgTableGeometryAc1018Candidate::Result parsedGeometry;
         if (tableGeometry && (!DwgTableGeometryAc1018Candidate::inspect(geometrySource->raw,parsedGeometry)
             || parsedGeometry.parentHandle!=parsedContent.parentHandle)) return false;

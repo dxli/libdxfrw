@@ -1888,6 +1888,17 @@ created locally from scratch for the specific control.
   and their code-4 parent roles in the same import; it accepts the observed
   five/six-pair shapes and does not assert the witness's cell-value semantics
   ([receipt](docs/research/p5-ac1018-table-nine-child-source-binding-2026-11-11.json)).
+  The combined candidate query now also joins each selected TABLECONTENT and
+  DATATABLE object class number to exactly one source-joined published CLASSES
+  row, comparing its record/class/app names, proxy and entity flags, instance
+  count, version trailer and unknown trailer fields. Generated mutation/retry
+  controls reject changed proxy flags or instance counts; the hash-pinned AC1018
+  physical source passes for both selected rows. This closes only their class
+  tuple binding; it does not authorize populated TABLE output or qualify other
+  custom classes. The pinned physical witness maps TABLECONTENT to class 514
+  and DATATABLE to class 517 under the observed AC1018 CLASSES report.
+  The focused candidate test and in-tree `dwg2dxf` consumer both rebuild and
+  pass after this gate was added.
   The reader-verified extension dictionary now binds its code-4 numeric owner
   target and code-2 root entry ([receipt](docs/research/p5-ac1018-table-extension-dictionary-one-sided-binding-2026-11-11.json)).
   A post-BLOCKS private, CRC-checked entity reread now authenticates the TABLE
