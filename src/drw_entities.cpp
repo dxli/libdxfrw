@@ -11104,6 +11104,8 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
     std::vector<std::uint8_t> parsedInlineAcisPayload;
     std::vector<DRW_ModelerPayloadRange> parsedAcisPayloadRanges;
     bool hasParsedAcisPayload = false;
+    bool parsedHasWireframe = false;
+    bool parsedWireframePresence = false;
     static constexpr std::uint8_t sabAcisEndMarker[] = {
         0x0E, 0x03, 'E', 'n', 'd', 0x0E, 0x02, 'o', 'f',
         0x0E, 0x04, 'A', 'C', 'I', 'S', 0x0D, 0x04,
@@ -11223,6 +11225,12 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
                 parsedInlineAcisPayload = std::move(satPayload);
                 parsedAcisPayloadRanges = std::move(satRanges);
                 hasParsedAcisPayload = true;
+                // ODA v5.4.1 §20.4.41 places the common wireframe-presence
+                // bit after the bounded SAT-v1 block sequence. Retain only
+                // the presence flag here; wireframe records and transforms
+                // remain opaque and must not be inferred from SAT geometry.
+                parsedWireframePresence = readBoundedBit(
+                    satProbe, bodyEndBit, parsedHasWireframe);
             }
         }
     } catch (...) {
@@ -11286,6 +11294,8 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
     m_hasModelerData = parsedHasModelerData;
     m_modelerDataUnknownBit = parsedUnknownBit;
     m_modelerVersion = parsedModelerVersion;
+    if (parsedWireframePresence)
+        m_hasWireframe = parsedHasWireframe;
     m_historyHandle = parsedHistoryHandle;
     m_hasDwgHistoryHandleField = hasParsedHistoryHandleField;
     m_dwgHistoryHandleField = parsedHistoryHandleField;

@@ -88794,6 +88794,11 @@ static bool physicalAc1018SatV1Projection(const std::string& sourcePath,
         return fail("requested source handle is missing or ambiguous");
     if (selected == nullptr || selectedBlock == nullptr)
         return fail("no parsed AC1018 3DSOLID SAT-v1 carrier was available");
+    // LibreDWG 0.14 reports wireframe_data_present=0 for all 48 3DSOLID
+    // records in this exact hash-bound source. Keep the independent field
+    // comparison alongside the carrier projection check.
+    if (selected->m_hasWireframe)
+        return fail("source wireframe-presence bit differs from LibreDWG");
 
     dx_data projection;
     projection.sourceVersion = DRW::AC1018;
