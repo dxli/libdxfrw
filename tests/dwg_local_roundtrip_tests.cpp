@@ -10929,16 +10929,26 @@ private:
     dx_data data_;
 };
 
-bool runTableGeometryDwgRoundTrip(const std::filesystem::path& directory) {
+bool runTableGeometryDwgRoundTrip(
+    const std::filesystem::path& directory,
+    const std::filesystem::path *retainedOutput = nullptr) {
     const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
     for (DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
-        const auto path = directory / ("libdxfrw-tablegeometry-dwg-"
-            + std::to_string(unique) + "-"
-            + std::to_string(static_cast<int>(version)) + ".dwg");
+        const bool retain = retainedOutput != nullptr && version == DRW::AC1021;
+        const auto path = retain ? *retainedOutput
+            : directory / ("libdxfrw-tablegeometry-dwg-"
+                + std::to_string(unique) + "-"
+                + std::to_string(static_cast<int>(version)) + ".dwg");
         struct Cleanup {
             std::filesystem::path path;
-            ~Cleanup() { std::error_code error; std::filesystem::remove(path, error); }
-        } cleanup{path};
+            bool remove = true;
+            ~Cleanup() {
+                if (remove) {
+                    std::error_code error;
+                    std::filesystem::remove(path, error);
+                }
+            }
+        } cleanup{path, !retain};
         dwgRW writer(path.string().c_str());
         TableGeometryDwgRoundTripInterface source(&writer);
         const bool written = writer.write(&source, version, true);
@@ -41101,9 +41111,12 @@ int main(int argc, char** argv) {
         std::cout << "AC1021 TABLECONTENT object/class round trip and version refusals: "
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
-    } else if (argc == 2
+    } else if ((argc == 2 || argc == 3)
         && std::string(argv[1]) == "--tablegeometry-dwg-object-roundtrip") {
-        const bool passed = runTableGeometryDwgRoundTrip(directory);
+        const std::filesystem::path retainedOutput = argc == 3
+            ? std::filesystem::path(argv[2]) : std::filesystem::path();
+        const bool passed = runTableGeometryDwgRoundTrip(
+            directory, argc == 3 ? &retainedOutput : nullptr);
         std::cout << "AC1021 TABLEGEOMETRY object/class round trip and refusal controls: "
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
