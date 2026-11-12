@@ -88749,7 +88749,8 @@ bool sunStudyDxfGraph(const std::string& source) {
     return true;
 }
 
-static bool physicalAc1018SatV1Projection(const std::string& sourcePath) {
+static bool physicalAc1018SatV1Projection(const std::string& sourcePath,
+                                          std::uint32_t requestedHandle) {
     const auto fail = [](const char* reason) {
         std::cerr << "AC1018 physical SAT-v1 projection: " << reason << '\n';
         return false;
@@ -88763,7 +88764,9 @@ static bool physicalAc1018SatV1Projection(const std::string& sourcePath) {
 
     const DRW_ModelerGeometry* selected = nullptr;
     const dx_ifaceBlock* selectedBlock = nullptr;
-    const auto findInBlock = [&selected, &selectedBlock](
+    unsigned requestedMatches = 0u;
+    const auto findInBlock = [&selected, &selectedBlock, &requestedMatches,
+                              requestedHandle](
             const dx_ifaceBlock* block) {
         if (block == nullptr) return;
         for (const DRW_Entity* entity : block->ent) {
@@ -88773,6 +88776,14 @@ static bool physicalAc1018SatV1Projection(const std::string& sourcePath) {
                 || modeler->m_dwgSourceVersion != DRW::AC1018
                 || modeler->m_dwgAcisPayload.empty())
                 continue;
+            if (requestedHandle != 0u && modeler->handle != requestedHandle)
+                continue;
+            if (requestedHandle != 0u) {
+                ++requestedMatches;
+                selected = modeler;
+                selectedBlock = block;
+                continue;
+            }
             if (selected == nullptr
                 || modeler->m_dwgAcisPayload.size()
                     > selected->m_dwgAcisPayload.size()) {
@@ -88784,6 +88795,8 @@ static bool physicalAc1018SatV1Projection(const std::string& sourcePath) {
     findInBlock(source.mBlock);
     for (const dx_ifaceBlock* block : source.blocks)
         findInBlock(block);
+    if (requestedHandle != 0u && requestedMatches != 1u)
+        return fail("requested source handle is missing or ambiguous");
     if (selected == nullptr || selectedBlock == nullptr)
         return fail("no parsed AC1018 3DSOLID SAT-v1 carrier was available");
 
@@ -88908,9 +88921,21 @@ static bool physicalAc1018SatV1Projection(const std::string& sourcePath) {
 }
 
 int main(int argc, char** argv) {
-    if (argc == 3
-        && std::string(argv[1]) == "--modeler-ac1018-physical-sat-v1-projection")
-        return physicalAc1018SatV1Projection(argv[2]) ? 0 : 1;
+    if ((argc == 3 || argc == 4)
+        && std::string(argv[1]) == "--modeler-ac1018-physical-sat-v1-projection") {
+        std::uint32_t requestedHandle = 0u;
+        if (argc == 4) {
+            try {
+                const auto parsed = std::stoull(argv[3], nullptr, 0);
+                if (parsed == 0u || parsed > std::numeric_limits<std::uint32_t>::max())
+                    return 2;
+                requestedHandle = static_cast<std::uint32_t>(parsed);
+            } catch (...) {
+                return 2;
+            }
+        }
+        return physicalAc1018SatV1Projection(argv[2], requestedHandle) ? 0 : 1;
+    }
     if (argc == 2
         && std::string(argv[1]) == "--table-scalar-override-output")
         return tableScalarOverrideOutput(false)
