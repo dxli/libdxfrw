@@ -4963,7 +4963,9 @@ void testTableStyleDwgEncodeAllocationRollback(TestContext& t) {
 }
 
 void testTableStyleContentFormatEnumDomains(TestContext& t) {
-    constexpr DRW::Version version = DRW::AC1032;
+    constexpr std::array<DRW::Version, 3> versions{{
+        DRW::AC1024, DRW::AC1027, DRW::AC1032
+    }};
     struct Case {
         std::int32_t valueDataType;
         std::int32_t valueUnitType;
@@ -4985,48 +4987,93 @@ void testTableStyleContentFormatEnumDomains(TestContext& t) {
     for (const std::int32_t value : {-1, 0, 10})
         cases.push_back({0, 0, value, false});
 
-    for (const Case& item : cases) {
-        TableStyleFrame frame;
-        const bool built = makeTableStyleContentFormatFrame(
-            version, item.valueDataType, item.valueUnitType,
-            item.cellAlignment, frame);
-        const std::string label = "AC1032 TABLESTYLE content format "
-            + std::to_string(item.valueDataType) + "/"
-            + std::to_string(item.valueUnitType) + "/"
-            + std::to_string(item.cellAlignment);
-        t.expect(built, label + " generated frame builds");
-        if (!built)
-            continue;
+    for (const DRW::Version version : versions) {
+        for (const Case& item : cases) {
+            TableStyleFrame frame;
+            const bool built = makeTableStyleContentFormatFrame(
+                version, item.valueDataType, item.valueUnitType,
+                item.cellAlignment, frame);
+            const std::string label = "TABLESTYLE content format "
+                + std::to_string(version) + "/"
+                + std::to_string(item.valueDataType) + "/"
+                + std::to_string(item.valueUnitType) + "/"
+                + std::to_string(item.cellAlignment);
+            t.expect(built, label + " generated frame builds");
+            if (!built)
+                continue;
 
-        DRW_TextCodec codec;
-        codec.setVersion(version, false);
-        dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
-        TableStyleCodecProbe parsed;
-        if (!item.expectedRead) {
-            parsed.m_name = "stale-name";
-            parsed.handle = 0xFFFFu;
-        }
-        const bool read = parsed.parseDwg(version, &input, frame.handleBits);
-        t.expect(read == item.expectedRead,
-                 label + " follows the ODA value/unit/alignment domains");
-        if (item.expectedRead) {
-            const DRW_TableStyleContentFormat& format =
-                parsed.m_tableCellStyle.m_contentFormat;
-            t.expect(input.isGood() && parsed.handle == 0xA100u
-                         && format.m_valueDataType == item.valueDataType
-                         && format.m_valueUnitType == item.valueUnitType
-                         && format.m_cellAlignment == item.cellAlignment
-                         && format.m_valueFormatString == "0.00"
-                         && parsed.m_tableCellStyle.m_id == 4,
-                     label + " retains enums and trailing identity");
-        } else {
-            t.expect(!input.isGood() && parsed.handle == 0u
-                         && parsed.m_name.empty()
-                         && parsed.m_tableCellStyle.m_contentFormat
-                                .m_valueDataType == 0,
-                     label + " refuses atomically and clears prior typed state");
+            DRW_TextCodec codec;
+            codec.setVersion(version, false);
+            dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+            TableStyleCodecProbe parsed;
+            if (!item.expectedRead) {
+                parsed.m_name = "stale-name";
+                parsed.handle = 0xFFFFu;
+            }
+            const bool read = parsed.parseDwg(version, &input,
+                                              frame.handleBits);
+            t.expect(read == item.expectedRead,
+                     label + " follows the ODA value/unit/alignment domains");
+            if (item.expectedRead) {
+                const DRW_TableStyleContentFormat& format =
+                    parsed.m_tableCellStyle.m_contentFormat;
+                t.expect(input.isGood() && parsed.handle == 0xA100u
+                             && format.m_valueDataType == item.valueDataType
+                             && format.m_valueUnitType == item.valueUnitType
+                             && format.m_cellAlignment == item.cellAlignment
+                             && format.m_valueFormatString == "0.00"
+                             && parsed.m_tableCellStyle.m_id == 4,
+                         label + " retains enums and trailing identity");
+            } else {
+                t.expect(!input.isGood() && parsed.handle == 0u
+                             && parsed.m_name.empty()
+                             && parsed.m_tableCellStyle.m_contentFormat
+                                    .m_valueDataType == 0,
+                         label + " refuses atomically and clears prior typed state");
+            }
         }
     }
+
+    // Exercise interactions between all ODA-listed enum values, rather than
+    // only varying one field while the other two remain at a default.
+    std::size_t admittedCombinations = 0u;
+    for (const DRW::Version version : versions) {
+        for (const std::int32_t dataType :
+             {0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512}) {
+            for (const std::int32_t unitType : {0, 1, 2, 4, 8}) {
+                for (std::int32_t alignment = 1; alignment <= 9;
+                     ++alignment) {
+                    TableStyleFrame frame;
+                    const bool built = makeTableStyleContentFormatFrame(
+                        version, dataType, unitType, alignment, frame);
+                    if (!built) {
+                        t.expect(false,
+                            "generated TABLESTYLE enum combination builds");
+                        continue;
+                    }
+                    DRW_TextCodec codec;
+                    codec.setVersion(version, false);
+                    dwgBuffer input(frame.bytes.data(), frame.bytes.size(),
+                                    &codec);
+                    TableStyleCodecProbe parsed;
+                    if (!parsed.parseDwg(version, &input, frame.handleBits)) {
+                        t.expect(false,
+                            "ODA-listed TABLESTYLE enum combination parses");
+                        continue;
+                    }
+                    const DRW_TableStyleContentFormat& format =
+                        parsed.m_tableCellStyle.m_contentFormat;
+                    t.expect(input.isGood() && format.m_valueDataType == dataType
+                                 && format.m_valueUnitType == unitType
+                                 && format.m_cellAlignment == alignment,
+                             "TABLESTYLE enum combination retains all values");
+                    ++admittedCombinations;
+                }
+            }
+        }
+    }
+    t.expect(admittedCombinations == 1485u,
+             "all 1,485 ODA-listed R2010+ enum combinations parse");
 }
 
 void testLegacyTableStyleUnitTypeDomains(TestContext& t) {
@@ -31522,7 +31569,7 @@ int main(int argc, char** argv) {
         && std::string(argv[1]) == "--tablestyle-content-format-enum-domains") {
         TestContext context;
         testTableStyleContentFormatEnumDomains(context);
-        std::cout << "AC1032 TABLESTYLE content-format enum domains: "
+        std::cout << "R2010+ TABLESTYLE content-format enum domains: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
