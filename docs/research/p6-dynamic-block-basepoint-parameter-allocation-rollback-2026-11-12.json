@@ -39,7 +39,7 @@
       "command": "ctest --test-dir build-asan-custom -R 'libdxfrw_dynamic_block_objects_allocation|dwg2dxf_dynamic_block_visibility_parameter$|dwg2dxf_dynamic_block_basepoint_parameter_writer$' --output-on-failure",
       "result": "PASS 3/3; 1.70 seconds total"
     },
-    "diffCheck": "PENDING"
+    "diffCheck": "PASS"
   },
   "limitations": [
     "Fault injection is at the low-level record writer; it does not establish whole-file destination rollback under allocation failure.",
