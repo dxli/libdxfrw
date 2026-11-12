@@ -82,9 +82,14 @@ bool writeInput(const std::filesystem::path& path, bool binary,
     return str(0, "ENDSEC") && str(0, "EOF") && !writer->hasWriteError();
 }
 
-bool verify(const DRW_DataTable& table, bool expectHandles) {
-    return table.tType == DRW::DATATABLE && table.handle == 0x115u
-        && table.parentHandle == 0x114u && table.flags == 2
+bool verify(const DRW_DataTable& table, bool expectHandles,
+            bool remapped = false) {
+    const std::uint32_t tableHandle = remapped ? 0x215u : 0x115u;
+    const std::uint32_t ownerHandle = remapped ? 0x214u : 0x114u;
+    const std::uint32_t firstRowHandle = remapped ? 0x216u : 0x116u;
+    const std::uint32_t secondRowHandle = remapped ? 0x217u : 0x117u;
+    return table.tType == DRW::DATATABLE && table.handle == tableHandle
+        && table.parentHandle == ownerHandle && table.flags == 2
         && table.columnCount == 4 && table.rowCount == 2
         && table.tableName == "TABLE_NAME" && table.columns.size() == 4u
         && table.columns[0].type == 2 && table.columns[0].text == "DOUBLE"
@@ -104,12 +109,14 @@ bool verify(const DRW_DataTable& table, bool expectHandles) {
         && table.columns[3].rows[0].dataLong == -3
         && table.columns[3].rows[1].dataLong == 4
         && table.rowHandles.size() == (expectHandles ? 2u : 1u)
-        && table.rowHandles[0] == 0x116u
-        && (!expectHandles || table.rowHandles[1] == 0x117u);
+        && table.rowHandles[0] == firstRowHandle
+        && (!expectHandles || table.rowHandles[1] == secondRowHandle);
 }
 
 bool writeAndRead(const std::filesystem::path& path, bool binary) {
     dxfRW codec(path.string().c_str());
+    codec.setHandleRemap({{0x114u, 0x214u}, {0x115u, 0x215u},
+                          {0x116u, 0x216u}, {0x117u, 0x217u}});
     Export output(codec);
     output.table.rowHandles.pop_back();
     {
@@ -131,7 +138,8 @@ bool writeAndRead(const std::filesystem::path& path, bool binary) {
     Reader readback;
     dxfRW reader(path.string().c_str());
     return reader.read(&readback, false) && readback.tables.size() == 1u
-        && readback.raw.size() == 1u && verify(readback.tables.front(), true);
+        && readback.raw.size() == 1u
+        && verify(readback.tables.front(), true, true);
 }
 }
 
