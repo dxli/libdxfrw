@@ -35196,6 +35196,9 @@ bool dxfRW::writeTableContent(DRW_TableContentObject *ent) {
             return failDxfWrite();
         if (!preflightDxfWrite())
             return failDxfWrite();
+        if (!promoteMintedDxfWriteObjectIdentity(ent->handle, handle)
+            || !bindDxfWriteSourceObjectHandle(ent->handle, handle))
+            return failDxfWrite();
         if (!record.commit())
             return failDxfWrite();
         state.commit();
@@ -35303,6 +35306,8 @@ bool dxfRW::writeTableContent(DRW_TableContentObject *ent) {
         return failDxfWrite();
     }
     if (writer->hasWriteError() || !preflightDxfWrite()
+        || !promoteMintedDxfWriteObjectIdentity(ent->handle, handle)
+        || !bindDxfWriteSourceObjectHandle(ent->handle, handle)
         || !record.commit()) {
         return failDxfWrite();
     }
