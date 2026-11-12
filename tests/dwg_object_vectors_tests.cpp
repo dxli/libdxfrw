@@ -30866,8 +30866,10 @@ void testDictionaryWithDefaultHandleRole(TestContext& t) {
 }
 
 void testDictionaryWithDefaultDwgEncodeAllocationRollback(TestContext& t) {
-    for (const DRW::Version version : {DRW::AC1015, DRW::AC1018,
-                                       DRW::AC1021}) {
+    for (const DRW::Version version : {DRW::AC1012, DRW::AC1015,
+                                       DRW::AC1018, DRW::AC1021,
+                                       DRW::AC1024, DRW::AC1027,
+                                       DRW::AC1032}) {
         DRW_TextCodec codec;
         codec.setVersion(version, false);
         DictionaryWithDefaultCodecProbe source;
@@ -30910,7 +30912,11 @@ void testDictionaryWithDefaultDwgEncodeAllocationRollback(TestContext& t) {
             const auto bodyBefore = body.data();
             const auto stringsBefore = strings.data();
             const auto handlesBefore = handles.data();
-            const auto handleOccurrencesBefore =
+            const auto bodyOccurrencesBefore =
+                body.handleOccurrences().size();
+            const auto stringsOccurrencesBefore =
+                strings.handleOccurrences().size();
+            const auto handlesOccurrencesBefore =
                 handles.handleOccurrences().size();
             const auto bodyBitsBefore = body.bitCount();
             const auto stringsBitsBefore = strings.bitCount();
@@ -30931,6 +30937,12 @@ void testDictionaryWithDefaultDwgEncodeAllocationRollback(TestContext& t) {
                     && body.data() == expectedBody.data()
                     && strings.data() == expectedStrings.data()
                     && handles.data() == expectedHandles.data()
+                    && body.handleOccurrences().size()
+                        == expectedBody.handleOccurrences().size()
+                    && strings.handleOccurrences().size()
+                        == expectedStrings.handleOccurrences().size()
+                    && handles.handleOccurrences().size()
+                        == expectedHandles.handleOccurrences().size()
                     && body.bitCount() == expectedBody.bitCount()
                     && strings.bitCount() == expectedStrings.bitCount()
                     && handles.bitCount() == expectedHandles.bitCount();
@@ -30942,8 +30954,11 @@ void testDictionaryWithDefaultDwgEncodeAllocationRollback(TestContext& t) {
                 && body.data() == bodyBefore
                 && strings.data() == stringsBefore
                 && handles.data() == handlesBefore
+                && body.handleOccurrences().size() == bodyOccurrencesBefore
+                && strings.handleOccurrences().size()
+                    == stringsOccurrencesBefore
                 && handles.handleOccurrences().size()
-                    == handleOccurrencesBefore
+                    == handlesOccurrencesBefore
                 && body.bitCount() == bodyBitsBefore
                 && strings.bitCount() == stringsBitsBefore
                 && handles.bitCount() == handlesBitsBefore;
@@ -30952,6 +30967,10 @@ void testDictionaryWithDefaultDwgEncodeAllocationRollback(TestContext& t) {
                 && body.data() == expectedBody.data()
                 && strings.data() == expectedStrings.data()
                 && handles.data() == expectedHandles.data()
+                && body.handleOccurrences().size()
+                    == expectedBody.handleOccurrences().size()
+                && strings.handleOccurrences().size()
+                    == expectedStrings.handleOccurrences().size()
                 && handles.handleOccurrences().size()
                     == expectedHandles.handleOccurrences().size()
                 && body.bitCount() == expectedBody.bitCount()
@@ -30968,8 +30987,12 @@ void testDictionaryWithDefaultDwgEncodeAllocationRollback(TestContext& t) {
                      + std::to_string(static_cast<int>(version))
                      + " across " + std::to_string(failures)
                      + " reached failure offsets");
-        const char *const versionName = version == DRW::AC1015 ? "AC1015"
-            : version == DRW::AC1018 ? "AC1018" : "AC1021";
+        const char *const versionName = version == DRW::AC1012 ? "AC1012"
+            : version == DRW::AC1015 ? "AC1015"
+            : version == DRW::AC1018 ? "AC1018"
+            : version == DRW::AC1021 ? "AC1021"
+            : version == DRW::AC1024 ? "AC1024"
+            : version == DRW::AC1027 ? "AC1027" : "AC1032";
         std::cout << "DICTIONARYWDFLT " << versionName << ": " << failures
                   << " allocation failures reached; "
                   << (reachedFailureFreeOffset ? "clean boundary reached"
