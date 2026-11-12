@@ -2182,8 +2182,10 @@ created locally from scratch for the specific control.
   complete same-import sealed source selection before retrieving its immutable
   typed baseline and applying the projection. Stale or mutated source input
   refuses without changing the caller's projected vector; a restored source
-  succeeds on retry. This binds projection to source evidence, but still does
-  not authenticate mapped output identities/roles or grant output permission
+  succeeds on retry. First and last measured adapter-projection allocation
+  failures also preserve the previous vector and permit retry. This binds
+  projection to source evidence, but still does not authenticate mapped output
+  identities/roles or grant output permission
   ([adapter receipt](docs/research/p5-ac1018-table-xrecord-capability-bound-projection-2026-11-11.json)).
   Next resolve each mapped target to an emitted identity with exact
   role/type/owner and recursive closure, stage the actual XRECORD bytes under

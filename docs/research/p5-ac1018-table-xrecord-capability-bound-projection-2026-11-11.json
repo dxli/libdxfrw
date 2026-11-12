@@ -19,6 +19,7 @@
       "The generated physical AC1018 import's sealed TABLE bundle projects the three mapped values with their ordered group codes.",
       "Mutating the live typed root makes the source capability and projection refuse; the old projected vector remains intact.",
       "Restoring the typed source permits the same adapter/data pair to project successfully again.",
+      "First and last measured allocation failures in the adapter projection preserve the caller's prior vector, clear the source result, and permit a clean retry.",
       "The existing whole-file strict export still refuses and preserves the pre-existing destination sentinel."
     ]
   },
