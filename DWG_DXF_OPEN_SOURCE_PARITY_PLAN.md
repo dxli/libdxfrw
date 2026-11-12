@@ -7239,6 +7239,20 @@ focused POLYLINE cohort passes 23/23; no fixture was added. This closes only
 these bounded DWG serialization-loss paths; complete PFACE/MESH semantic and
 native consumer qualification remains open. See the [loss-guard receipt](docs/research/p6-pface-mesh-dwg-loss-guard-2026-11-12.json).
 
+**DWG VERTEX omitted-field loss guards (2026-11-12):** ODA v5.4.1
+§20.4.11–20.4.15 (pp. 118–120) specifies that 2D VERTEX carries its ID only
+in R2010+, 3D/MESH/PFACE coordinate vertices carry only flags and a point,
+and PFACE face records carry only four vertex indices. The writer now resolves
+the emitted subtype before staging and refuses a pre-R2010 2D ID, omitted
+coordinate-vertex widths/bulge/tangent/ID, and omitted PFACE-face values. It
+allows the canonical DXF face-role bit 128 because DWG object type 0x0E already
+encodes that role. Generated AC1021 controls verify each profile's refusal
+preserves the destination and corrected same-writer retry succeeds; the
+focused POLYLINE selector passes. No fixture was added. This closes only
+silent loss in these bounded vertex writer profiles, not producer breadth,
+full topology or native consumer semantics. See the [VERTEX loss-guard
+receipt](docs/research/p6-dwg-vertex-omitted-field-loss-guard-2026-11-12.json).
+
 The DXF MTEXT writer now avoids emitting redundant group 50 when its group-11
 WCS direction vector is authoritative, for both standalone MTEXT and the
 R2018 embedded-MTEXT body used by ATTRIB/ATTDEF. Autodesk's DXF definition

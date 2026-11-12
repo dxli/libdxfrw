@@ -499,6 +499,57 @@ public:
         if (!writer.prepareDwgClassManifest() || !writer.writeFileHeaderStub()
             || !writer.writeDwgHeader() || !writer.writeDwgClasses()
             || !writer.writeDwgObjects()) return false;
+        const auto refusesVertexWithoutMutation = [&writer](DRW_Vertex& vertex) {
+            const auto seeded = writer.buffer();
+            return !writer.encodeEntity(&vertex) && writer.buffer() == seeded;
+        };
+        const auto expectVertexRefusal = [&refusesVertexWithoutMutation](
+                DRW_Vertex& vertex, const char* profile) {
+            if (refusesVertexWithoutMutation(vertex)) return true;
+            std::cerr << profile << " was not refused atomically\n";
+            return false;
+        };
+        const auto expectVertexRetry = [&writer](DRW_Vertex& vertex,
+                                                 const char* profile) {
+            if (writer.encodeEntity(&vertex)) return true;
+            std::cerr << profile << " corrected retry failed\n";
+            return false;
+        };
+        DRW_Vertex old2dVertex;
+        old2dVertex.setDwgSubtype(DRW_Vertex::DwgSubtype::Vertex2D);
+        old2dVertex.identifier = 7;
+        if (!expectVertexRefusal(old2dVertex, "2D pre-R2010 ID")) return false;
+        old2dVertex.identifier = 0;
+        if (!expectVertexRetry(old2dVertex, "2D")) return false;
+
+        DRW_Vertex spatialVertex;
+        spatialVertex.setDwgSubtype(DRW_Vertex::DwgSubtype::Vertex3D);
+        spatialVertex.stawidth = 0.5;
+        if (!expectVertexRefusal(spatialVertex, "3D omitted width")) return false;
+        spatialVertex.stawidth = 0.0;
+        if (!expectVertexRetry(spatialVertex, "3D")) return false;
+
+        DRW_Vertex meshVertex;
+        meshVertex.setDwgSubtype(DRW_Vertex::DwgSubtype::Mesh);
+        meshVertex.bulge = 0.25;
+        if (!expectVertexRefusal(meshVertex, "MESH omitted bulge")) return false;
+        meshVertex.bulge = 0.0;
+        if (!expectVertexRetry(meshVertex, "MESH")) return false;
+
+        DRW_Vertex polyfaceVertex;
+        polyfaceVertex.setDwgSubtype(DRW_Vertex::DwgSubtype::Polyface);
+        polyfaceVertex.identifier = 9;
+        if (!expectVertexRefusal(polyfaceVertex, "PFACE omitted identifier")) return false;
+        polyfaceVertex.identifier = 0;
+        if (!expectVertexRetry(polyfaceVertex, "PFACE")) return false;
+
+        DRW_Vertex faceVertex;
+        faceVertex.setDwgSubtype(DRW_Vertex::DwgSubtype::PolyfaceFace);
+        faceVertex.flags = 128; // DXF's face-role marker is implied by DWG type 0x0E.
+        faceVertex.basePoint.x = 1.0;
+        if (!expectVertexRefusal(faceVertex, "PFACE face omitted point")) return false;
+        faceVertex.basePoint.x = 0.0;
+        if (!expectVertexRetry(faceVertex, "PFACE face")) return false;
         struct PolylineProbe : DRW_Polyline {
             bool common(dwgBuffer& b) { return DRW_Entity::parseDwgCommon(DRW::AC1021, &b, 0u); }
             using DRW_Polyline::parseDwg;

@@ -34090,6 +34090,39 @@ bool DRW_Vertex::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t 
     (void)bs; (void)strBuf;
     if (!validatePayloadFields())
         return false;
+    std::uint8_t dwgType = 0;
+    switch (m_dwgSubtype) {
+    case DwgSubtype::Vertex2D:     dwgType = 0x0A; break;
+    case DwgSubtype::Vertex3D:     dwgType = 0x0B; break;
+    case DwgSubtype::Mesh:         dwgType = 0x0C; break;
+    case DwgSubtype::Polyface:     dwgType = 0x0D; break;
+    case DwgSubtype::PolyfaceFace: dwgType = 0x0E; break;
+    case DwgSubtype::Auto:
+        if ((flags & 64) != 0)
+            dwgType = 0x0D;
+        else if ((flags & 128) != 0)
+            dwgType = 0x0E;
+        else if ((flags & 16) != 0)
+            dwgType = 0x0C;
+        else if ((flags & 32) != 0 || (flags & 8) != 0)
+            dwgType = 0x0B;
+        else
+            dwgType = 0x0A;
+        break;
+    default:
+        return false;
+    }
+    if ((dwgType == 0x0A && version <= DRW::AC1021 && identifier != 0)
+        || ((dwgType == 0x0B || dwgType == 0x0C || dwgType == 0x0D)
+            && (stawidth != 0.0 || endwidth != 0.0 || bulge != 0.0
+                || tgdir != 0.0 || identifier != 0))
+        || (dwgType == 0x0E
+            && ((flags != 0 && flags != 128)
+                || basePoint.x != 0.0 || basePoint.y != 0.0
+                || basePoint.z != 0.0 || stawidth != 0.0
+                || endwidth != 0.0 || bulge != 0.0 || tgdir != 0.0
+                || identifier != 0)))
+        return false;
     const double tangentRadians = tgdir / ARAD;
     const bool is2D = m_dwgSubtype == DwgSubtype::Vertex2D
         || (m_dwgSubtype == DwgSubtype::Auto && (flags & (64 | 128 | 16 | 32 | 8)) == 0);
@@ -34098,28 +34131,10 @@ bool DRW_Vertex::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t 
         return false;
     return encodeEntityDwgTransaction(
         oType, buf, nullptr, handleBuf,
-        [this, version, tangentRadians](dwgBufferW *body, dwgBufferW *strings,
+        [this, version, tangentRadians, dwgType](dwgBufferW *body, dwgBufferW *strings,
                                        dwgBufferW *handles) {
             (void)strings;
-            switch (m_dwgSubtype) {
-            case DwgSubtype::Vertex2D:     oType = 0x0A; break;
-            case DwgSubtype::Vertex3D:     oType = 0x0B; break;
-            case DwgSubtype::Mesh:         oType = 0x0C; break;
-            case DwgSubtype::Polyface:     oType = 0x0D; break;
-            case DwgSubtype::PolyfaceFace: oType = 0x0E; break;
-            case DwgSubtype::Auto:
-                if ((flags & 64) != 0)
-                    oType = 0x0D;  // VERTEX_PFACE coordinate vertex
-                else if ((flags & 128) != 0)
-                    oType = 0x0E;  // VERTEX_PFACE_FACE
-                else if ((flags & 16) != 0)
-                    oType = 0x0C;  // VERTEX_MESH
-                else if ((flags & 32) != 0 || (flags & 8) != 0)
-                    oType = 0x0B;  // VERTEX_3D
-                else
-                    oType = 0x0A;  // VERTEX_2D
-                break;
-            }
+            oType = dwgType;
 
             if (!encodeDwgCommon(version, body))
                 return false;
