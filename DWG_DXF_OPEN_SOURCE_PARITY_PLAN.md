@@ -5558,12 +5558,15 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
 
 - **P6 SORTENTSTABLE DXF OBJECTS writer transaction safety:** a generated
   full-file ASCII/Binary AC1027 allocation sweep now exercises the public
-  `writeSortEntsTable` path. All 19 ASCII and 18 Binary reached allocation
+  `writeSortEntsTable` path. All 18 ASCII and 17 Binary reached allocation
   failures preserve the seeded destination and caller table state; retrying
-  the same writer/table reproduces clean bytes and typed readback, including
-  handle roles and EED values. The focused CTest passes in normal and ASan
-  builds. This proves local rollback/retry and codec readback only. Non-model
-  and paper-space owner profiles remain refused, and no source graph,
+  the same writer/table reproduces clean bytes and typed readback. The
+  generated file contains four real model-space LINE targets, and readback
+  verifies each remapped group-331 handle resolves to its LINE and that
+  group 330 names the model-space BLOCK_RECORD. EED values are also checked.
+  The focused CTest passes in normal and ASan builds. This proves generated
+  graph closure and local rollback/retry only. Non-model and paper-space
+  owner profiles remain refused, and no source graph,
   producer, native-consumer, or broader SORTENTSTABLE support claim is
   established. The files are generated in memory/from scratch under a
   temporary directory and deleted; no fixture was added. See the [allocation

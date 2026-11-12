@@ -1,29 +1,30 @@
 {
   "title": "SORTENTSTABLE DXF OBJECTS writer allocation rollback and retry",
   "date": "2026-11-12",
-  "scope": "Generated full-file ASCII/Binary AC1027 SORTENTSTABLE codec transaction control only; no source-producer or support claim.",
+  "scope": "Generated full-file ASCII/Binary AC1027 SORTENTSTABLE graph and codec transaction control only; no source-producer or support claim.",
   "implementation": {
     "writer": "dxfRW::writeSortEntsTable",
     "path": "Public DXF OBJECTS callback in a complete dxfRW::write operation",
-    "profile": "NOD parent, model-space block owner, four entity/sort-handle pairs, and two EED values"
+    "profile": "NOD parent, model-space BLOCK_RECORD owner, four emitted model-space LINE targets paired with sort keys, and two EED values"
   },
   "generated_profiles": [
     {
       "encoding": "ASCII DXF",
       "version": "AC1027",
-      "reached_allocation_failures": 19
+      "reached_allocation_failures": 18
     },
     {
       "encoding": "Binary DXF",
       "version": "AC1027",
-      "reached_allocation_failures": 18
+      "reached_allocation_failures": 17
     }
   ],
   "assertions": [
     "Each injected allocation failure returns a failed write and preserves pre-existing destination bytes.",
     "The caller DRW_SortEntsTable, including handles, owner, sort pairs, and EED values, is unchanged after failure.",
-    "Retry with the same writer and table succeeds and produces byte-identical output to the clean write.",
-    "Fresh typed libdxfrw readback reproduces the selected table fields and EED values for ASCII and Binary DXF."
+    "The generated graph writes four model-space LINE targets; after serialization each remapped group-331 target resolves to its emitted LINE, whose owner is the model-space BLOCK_RECORD.",
+    "Retry with the same writer and table reproduces byte-identical output to the clean write.",
+    "Fresh typed libdxfrw readback reproduces selected table fields and EED values for ASCII and Binary DXF."
   ],
   "validation": {
     "normal_build": "cmake --build build --target libdxfrw_sortents_objects_allocation_tests -j4: PASS",
@@ -31,17 +32,17 @@
     "asan_configuration": "cmake -S . -B build-asan-custom -DCMAKE_POLICY_VERSION_MINIMUM=3.5; retained -fsanitize=address -fno-omit-frame-pointer flags",
     "asan_build": "cmake --build build-asan-custom --target libdxfrw_sortents_objects_allocation_tests -j4: PASS",
     "asan_ctest": "ctest --test-dir build-asan-custom -R '^libdxfrw_sortents_objects_allocation$' --output-on-failure: 1/1 PASS",
-    "observed_allocation_counts": "ASCII 19; Binary 18 in both normal and ASan executables",
+    "observed_allocation_counts": "ASCII 18; Binary 17 in both normal and ASan executables",
     "git_diff_check": "PASS"
   },
   "limitations": [
-    "This generated profile establishes rollback, retry, byte equality, and same-library readback only.",
-    "SORTENTSTABLE source-owner and dependency closure, non-model/paper-space profiles, producer coverage, and native consumer behavior remain unqualified; strict support gates are unchanged.",
-    "DXF files are generated from scratch in a temporary directory and removed by the test; no DWG/DXF fixture was added."
+    "Generated controls establish graph closure for this authored four-LINE profile, rollback, retry, byte equality, and same-library readback only.",
+    "No physical source graph, producer coverage, non-model/paper-space owner qualification, or native consumer behavior is established; strict support gates are unchanged.",
+    "DXF files are generated from scratch in a temporary directory and removed; no DWG/DXF fixture was added."
   ],
   "artifact_sha256": {
-    "tests/sortents_objects_allocation_tests.cpp": "c4a37e425fcd7adf76a077f0c29e9be9cc484709b39f856f8c29e98eac996b76",
+    "tests/sortents_objects_allocation_tests.cpp": "c151105a00fcfec5100737f97b783108a3c5ad502c14072b527e102ca99b0cdb",
     "tests/CMakeLists.txt": "f76f52c2cd2100890e78f7a88f91b0e6b53f2c07d753b6a191dbb2ffd8db878a",
-    "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "7ca3fb894d742cbe26bf618957df2963299bb58e03f1d82f912201baacf04c70"
+    "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "6f50bfdea2b5ede2daf593dff82d83e06668ecd356c4797bd849e78b7481c47e"
   }
 }
