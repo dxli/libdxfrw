@@ -3855,9 +3855,15 @@ behavior independently. Local macOS checks do not satisfy those platform gates.
   reference refusal. Keep generated files in scratch storage.
 - **External and consumer gates:** P7 independent ACIS/ACDS meaning, P8 clean
   consumer/native Linux and Windows qualification, and P9's six
-  `DEFERRED_EXTERNAL` rows remain open. Local parser/codec evidence cannot
-  promote those claims. Existing selected LibreCAD_3 persistence checks do not
-  replace a clean consumer or native application qualification.
+  `DEFERRED_EXTERNAL` rows remain open. The generated tilted AC1021 SPLINE
+  profile now passes FreeCAD 1.1.4 open/insert using exact curve samples and
+  length. The initial bounds-only assertion was an invalid oracle: OCCT reports
+  a conservative Y maximum of 35.4375, while direct curve evaluations at
+  fractions 0, 0.5, and 1 match the authored WCS points and the analytic length.
+  The profile now skips tight-bound comparison for splines and checks the
+  actual curve. Local parser/codec evidence cannot promote broader claims.
+  Existing selected LibreCAD_3 persistence checks do not replace clean consumer
+  or native application qualification. See the [tilted-SPLINE receipt](docs/research/p8-freecad-ac1021-tilted-spline-open-insert-2026-11-12.json).
 
 ### Next work packets
 
@@ -8181,35 +8187,26 @@ DWG support. No fixture was added. See the [macOS 1.1.4 receipt](docs/research/p
 **P8 generated AC1021 primitive open/insert qualification (2026-11-12):** the
 optional native-consumer workflow now generates a fresh AC1021 drawing with
 one 3D POINT, one nonzero-Z LINE, one elevated CIRCLE, one elevated ARC, one
-full ELLIPSE, and a three-vertex LWPOLYLINE. Through the
+full ELLIPSE, a three-vertex LWPOLYLINE, and a degree-2 tilted planar SPLINE.
+Through the
 hash-checked installed `dwg2dxf`, FreeCAD 1.1.4's C++ DXF importer successfully
 opened and inserted the drawing at a Unicode path. Both operations reported
-exactly one record of each expected type, no unsupported features, and five
-valid shapes with edge counts 1/1/1/1/2/0, vertex counts 2/1/2/1/3/1, and authored
-bounds and total edge lengths within the stated tolerance. The POINT's
+exactly one record of each expected type, no unsupported features, and seven
+valid shapes. The
+earlier primitive bounds and edge lengths remain checked. SPLINE qualification
+checks exact points at normalized parameters 0, 0.5 and 1, its single-edge
+topology, and its analytic length; it deliberately does not use OCCT's
+non-tight bounding box as a curve oracle. The POINT's
 nonzero-Z coordinate is preserved as a one-vertex shape with zero edge length.
 The locally installed converter was byte-identical to this build;
 the generated DWG/DXF remained in temporary directories and no fixture was
 added. This qualifies only the generated AC1021 primitive transport and
 FreeCAD 1.1.4 macOS ARM64 route. The repository workflow pins FreeCAD 1.1.3;
 hosted Linux/Windows runs, other entity/version profiles, native application
-semantics and broad support claims remain open. See the [primitive
-qualification receipt](docs/research/p8-freecad-ac1021-generated-primitives-open-insert-2026-11-12.json).
-
-**P8 generated tilted-SPLINE consumer screen (2026-11-12):** a temporary,
-from-scratch AC1021 control added a degree-2 planar spline with three WCS
-control points to the same installed-converter/FreeCAD route. `dwg2dxf`
-completed and its DXF retained all three authored group-10 WCS points and the
-calculated plane normal. FreeCAD 1.1.4's C++ importer reported one SPLINE and
-no unsupported features, but the resulting shape's maximum Y was 35.4375;
-the exact clamped quadratic from those control points has maximum Y 34.5.
-Both open and insert therefore fail semantic geometry qualification despite
-successful conversion/import. The six-entity POINT/LINE/CIRCLE/ARC/ELLIPSE/
-LWPOLYLINE profile was restored and passes 2/2. Do not alter libdxfrw output
-from this single consumer observation or count entity acceptance as geometric
-support. Keep tilted SPLINE unqualified until an independent CAD consumer or
-native producer/consumer witness resolves the interpretation. No fixture was
-committed. See the [consumer mismatch receipt](docs/research/p8-freecad-ac1021-tilted-spline-semantic-mismatch-2026-11-12.json).
+semantics and broad support claims remain open. The full seven-entity local
+profile passes both open and insert in 2.48 seconds. See the [primitive
+qualification receipt](docs/research/p8-freecad-ac1021-generated-primitives-open-insert-2026-11-12.json)
+and the [tilted-SPLINE receipt](docs/research/p8-freecad-ac1021-tilted-spline-open-insert-2026-11-12.json).
 
 **FreeCAD ACIS consumer boundary (2026-11-12):** FreeCAD's current Draft DXF
 documentation says its built-in DXF importer cannot read ACIS/SAT solid blobs;

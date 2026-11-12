@@ -9845,6 +9845,22 @@ public:
         polyline.addVertex(DRW_Vertex2D(18.0, 20.0, 0.0));
         wrotePolyline_ = writer_->writeLWPolyline(&polyline)
             && polyline.handle != 0u;
+
+        DRW_Spline spline;
+        spline.m_scenario = 1;
+        spline.degree = 2;
+        spline.nknots = 6;
+        spline.ncontrol = 3;
+        spline.knotslist = {0.0, 0.0, 0.0, 1.0, 1.0, 1.0};
+        spline.normalVec = {0.0, 0.0, 1.0};
+        spline.controllist.push_back(
+            std::make_shared<DRW_Coord>(31.0, 32.0, 33.0));
+        spline.controllist.push_back(
+            std::make_shared<DRW_Coord>(33.0, 37.0, 35.0));
+        spline.controllist.push_back(
+            std::make_shared<DRW_Coord>(35.0, 32.0, 37.0));
+        wroteSpline_ = writer_->writeSpline(&spline)
+            && spline.handle != 0u;
     }
     void writeObjects() override {}
     void writeLTypes() override {}
@@ -9857,7 +9873,7 @@ public:
     void writeAppId() override {}
     bool finalizeDwgWrite() override {
         return wrotePoint_ && wroteLine_ && wroteCircle_ && wroteArc_
-            && wroteEllipse_ && wrotePolyline_;
+            && wroteEllipse_ && wrotePolyline_ && wroteSpline_;
     }
     bool finalizeDwgWriteStructure() override { return true; }
 
@@ -9869,6 +9885,7 @@ private:
     bool wroteArc_ {false};
     bool wroteEllipse_ {false};
     bool wrotePolyline_ {false};
+    bool wroteSpline_ {false};
 };
 
 class Dwg3DFaceFlagWriter final : public dx_iface {
