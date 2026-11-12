@@ -1676,6 +1676,14 @@ created locally from scratch for the specific control.
   support remain unqualified
   ([receipt](docs/research/p8-3d-consumer-solid-ocs-fields-2026-11-12.json)).
 
+- **P8/S8.3.14 generated RAY/XLINE WCS consumer fields:** the neutral sink
+  retains each entity's WCS start point and unit direction vector. Generated
+  nonzero-Z profiles round-trip through ASCII/Binary DXF and retain identical
+  WCS values with `ext=false` and `ext=true`. Autodesk's DXF references specify
+  these fields in WCS. The focused CTest passes 1/1; this adds no independent
+  interoperability, DWG parsing, or native consumer evidence
+  ([receipt](docs/research/p8-3d-consumer-ray-xline-wcs-fields-2026-11-12.json)).
+
 - **P6 generated IMAGEDEF hard-owner reader profile:** the shared OBJECTS
   prologue preflight and typed `DRW_ImageDef` parser now explicitly accept the
   ODA §20.4.81 hard-owner parent code-3 emitted by this writer. Generated
