@@ -33204,7 +33204,9 @@ bool dxfRW::writeDictionaryWithDefault(DRW_DictionaryWithDefault *ent) {
         return false;
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    if (!preflightDxfWrite() || !record.commit()) {
+    if (!preflightDxfWrite()
+        || !bindDxfWriteSourceObjectHandle(ent->handle, handle)
+        || !record.commit()) {
         m_writeError = true;
         return false;
     }
@@ -33237,7 +33239,9 @@ bool dxfRW::writeAcDbPlaceholder(DRW_AcDbPlaceholder *ent) {
         || !writeTableEntryAppData(*ent))
         return false;
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
-    if (!preflightDxfWrite() || !record.commit()) {
+    if (!preflightDxfWrite()
+        || !bindDxfWriteSourceObjectHandle(ent->handle, handle)
+        || !record.commit()) {
         m_writeError = true;
         return false;
     }
