@@ -21,6 +21,10 @@
     "allocationSweep": "PASS: 5,348 allocation offsets across nine entity families and 325 entity/version/stream-layout profiles",
     "focusedTests": "ctest --test-dir build-gcc -R '^(dwg_entity_encoder_allocation_rollback_retry|libdxfrw_dwg_object_vectors)$' --output-on-failure",
     "result": "PASS (2/2)",
+    "asanBuild": "cmake -S . -B build-asan-custom -DCMAKE_POLICY_VERSION_MINIMUM=3.5 && cmake --build build-asan-custom --target libdxfrw_dwg_entity_encoder_allocation_tests libdxfrw_dwg_object_vectors_tests -j4",
+    "asanConfiguration": "-fsanitize=address -fno-omit-frame-pointer",
+    "asanFocusedTests": "ctest --test-dir build-asan-custom -R '^(dwg_entity_encoder_allocation_rollback_retry|libdxfrw_dwg_object_vectors)$' --output-on-failure",
+    "asanResult": "PASS (2/2)",
     "diffCheck": "git diff --check: PASS"
   },
   "coverage": [
