@@ -1684,6 +1684,14 @@ created locally from scratch for the specific control.
   interoperability, DWG parsing, or native consumer evidence
   ([receipt](docs/research/p8-3d-consumer-ray-xline-wcs-fields-2026-11-12.json)).
 
+- **P8/S8.3.15 generated POINT WCS consumer fields:** the semantic sink now
+  captures WCS location, extrusion, thickness, and X-axis angle. A generated
+  nonzero-Z point with an oblique extrusion retains these values in ASCII and
+  Binary DXF under both extrusion modes. The focused CTest passes 1/1.
+  Autodesk's DXF reference defines the point location as WCS; this does not
+  establish DWG POINT parsing or native point-symbol rendering
+  ([receipt](docs/research/p8-3d-consumer-point-wcs-fields-2026-11-12.json)).
+
 - **P6 generated IMAGEDEF hard-owner reader profile:** the shared OBJECTS
   prologue preflight and typed `DRW_ImageDef` parser now explicitly accept the
   ODA §20.4.81 hard-owner parent code-3 emitted by this writer. Generated

@@ -842,6 +842,8 @@ public:
         std::vector<Field> fields = entityFields(d, "POINT", "POINT");
         fields.push_back(pointField("basePoint", d.basePoint));
         fields.push_back(pointField("extrusion", d.extPoint));
+        fields.push_back(doubleField("thickness", d.thickness));
+        fields.push_back(doubleField("xAxisAngle", d.xAxisAngle));
         addEntityRecord("addPoint", "POINT", fields, d, false);
     }
     void addLine(const DRW_Line& d) override {
@@ -2532,6 +2534,14 @@ void SemanticSink::writeEntities() {
         xline.secPoint = DRW_Coord{0.0, 1.0, 0.0};
         wrote = dxfWriter_->writeXline(&xline) && wrote;
 
+        DRW_Point point;
+        point.layer = "probe_point_wcs";
+        point.basePoint = DRW_Coord{8.0, -6.0, 14.0};
+        point.extPoint = DRW_Coord{0.0, 1.0, 0.0};
+        point.thickness = 0.75;
+        point.xAxisAngle = 0.25;
+        wrote = dxfWriter_->writePoint(&point) && wrote;
+
         DRW_Polyline polyline;
         polyline.flags = 8;
         polyline.vertexcount = 2;
@@ -3716,6 +3726,16 @@ bool run3DConsumerProbe(bool binary) {
     };
     if (!expectRayAndXline(consumer))
         return false;
+    const auto expectPoint = [&](const SemanticSink& sink) {
+        return expectEntityField(sink, "POINT", "probe_point_wcs", "basePoint",
+                                 pointJson(DRW_Coord{8.0, -6.0, 14.0}))
+            && expectEntityField(sink, "POINT", "probe_point_wcs", "extrusion",
+                                 pointJson(DRW_Coord{0.0, 1.0, 0.0}))
+            && expectEntityDouble(sink, "POINT", "probe_point_wcs", "thickness", 0.75)
+            && expectEntityDouble(sink, "POINT", "probe_point_wcs", "xAxisAngle", 0.25);
+    };
+    if (!expectPoint(consumer))
+        return false;
 
     if (!expectEntityField(legacyConsumer, "CIRCLE", defaultCircleLayer, "center",
                            "{\"x\":6,\"y\":-3,\"z\":1.5}")
@@ -3755,6 +3775,8 @@ bool run3DConsumerProbe(bool binary) {
             DRW_Coord{-6.0, 3.0, 4.0}, DRW_Coord{-2.0, 3.0, 4.0}}}, 0.5))
         return false;
     if (!expectRayAndXline(legacyConsumer))
+        return false;
+    if (!expectPoint(legacyConsumer))
         return false;
 
     // DXF ELLIPSE stores its center and major-axis vector in WCS. Unlike ARC
