@@ -23717,16 +23717,43 @@ bool runAc1024Acis700SatDxfRoundTrip() {
         std::filesystem::remove(output, ec);
         std::filesystem::remove(reexport, ec);
 
+        const std::string priorBytes = "prior modeler destination";
+        {
+            std::ofstream prior(output, std::ios::binary);
+            prior.write(priorBytes.data(),
+                        static_cast<std::streamsize>(priorBytes.size()));
+            if (!prior.good())
+                return failStage("seed wireframe refusal destination");
+        }
+        dx_data flaggedSource;
+        DRW_AppId flaggedAppId;
+        flaggedAppId.name = appIdName;
+        flaggedSource.appIds.push_back(flaggedAppId);
+        auto* flaggedModeler =
+            new DRW_ModelerGeometry(sourceModeler);
+        flaggedModeler->m_hasWireframe = true;
+        flaggedSource.mBlock->ent.push_back(flaggedModeler);
+        dx_iface exporter;
+        if (exporter.fileExport(output.string(), DRW::AC1024, binary,
+                                &flaggedSource, false))
+            return failStage("unmapped wireframe output was accepted");
+        {
+            std::ifstream prior(output, std::ios::binary);
+            const std::string retained{
+                std::istreambuf_iterator<char>(prior), {}};
+            if (retained != priorBytes)
+                return failStage("wireframe refusal changed destination");
+        }
+
         dx_data source;
         DRW_AppId appId;
         appId.name = appIdName;
         source.appIds.push_back(appId);
         source.mBlock->ent.push_back(
             new DRW_ModelerGeometry(sourceModeler));
-        dx_iface exporter;
         if (!exporter.fileExport(output.string(), DRW::AC1024, binary,
                                  &source, false))
-            return failStage("same-version source-bound ASCII/Binary export");
+            return failStage("wireframe-cleared source-bound retry");
 
         dx_data imported;
         dx_iface importer;
@@ -23742,6 +23769,7 @@ bool runAc1024Acis700SatDxfRoundTrip() {
                 && decoded->m_rawBytes == expectedDxfPayload
                 && !decoded->m_dxfPayloadChunks.empty()
                 && decoded->m_dwgAcisPayload.empty()
+                && !decoded->m_hasWireframe
                 && decoded->m_dwgSourceVersion == DRW::UNKNOWNV;
             found = found && std::any_of(decoded->extData.begin(),
                 decoded->extData.end(), [&appIdName](const auto& value) {
@@ -23776,7 +23804,8 @@ bool runAc1024Acis700SatDxfRoundTrip() {
                     static_cast<const DRW_ModelerGeometry *>(entity);
                 replayMatches = decoded->m_modelerVersion == 1u
                     && decoded->m_rawBytes == expectedDxfPayload
-                    && !decoded->m_dxfPayloadChunks.empty();
+                    && !decoded->m_dxfPayloadChunks.empty()
+                    && !decoded->m_hasWireframe;
                 break;
             }
         }

@@ -16999,6 +16999,15 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
         return rejectDxfWriteWithReason(
             "3DSOLID/REGION/BODY",
             "runtime type or public entity tag is not exact");
+    // The DWG modeler frame may carry a separate display wireframe and
+    // viewport silhouettes after its ACIS payload. DXF has no qualified
+    // mapping for those fields; emitting only SAT/SAB would silently discard
+    // source data. Keep this explicit until a source-backed mapping exists.
+    if (ent->m_hasWireframe)
+        return rejectDxfWriteWithReason(
+            "3DSOLID/REGION/BODY",
+            "DWG modeler wireframe/silhouette data "
+            "has no qualified DXF mapping");
     const bool writeAc1027Shell = version >= DRW::AC1027;
     if (!writeAc1027Shell
         && (ent->m_hasDxfModelerFlag || ent->m_hasDxfModelerUid))
