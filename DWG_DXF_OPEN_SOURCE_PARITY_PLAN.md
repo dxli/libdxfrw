@@ -5556,6 +5556,19 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
   No DWG/DXF fixture was added. See the [allocation rollback
   receipt](docs/research/p6-viewport-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
+- **P6 SORTENTSTABLE DXF OBJECTS writer transaction safety:** a generated
+  full-file ASCII/Binary AC1027 allocation sweep now exercises the public
+  `writeSortEntsTable` path. All 19 ASCII and 18 Binary reached allocation
+  failures preserve the seeded destination and caller table state; retrying
+  the same writer/table reproduces clean bytes and typed readback, including
+  handle roles and EED values. The focused CTest passes in normal and ASan
+  builds. This proves local rollback/retry and codec readback only. Non-model
+  and paper-space owner profiles remain refused, and no source graph,
+  producer, native-consumer, or broader SORTENTSTABLE support claim is
+  established. The files are generated in memory/from scratch under a
+  temporary directory and deleted; no fixture was added. See the [allocation
+  rollback receipt](docs/research/p6-sortents-objects-dxf-allocation-rollback-retry-2026-11-12.json).
+
 After every slice: run its focused fast checks; update this queue and the
 relevant receipt; commit code, plan and receipt together; report the commit and
 next eligible slice, then continue. Keep fixtures out of commits unless already

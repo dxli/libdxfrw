@@ -1,0 +1,39 @@
+{
+  "title": "SORTENTSTABLE DXF OBJECTS writer allocation rollback and retry",
+  "date": "2026-11-12",
+  "scope": "Generated full-file ASCII/Binary AC1027 SORTENTSTABLE codec transaction control only; no source-producer or support claim.",
+  "implementation": {
+    "writer": "dxfRW::writeSortEntsTable",
+    "path": "Public DXF OBJECTS callback in a complete dxfRW::write operation",
+    "profile": "NOD parent, model-space block owner, four entity/sort-handle pairs, and two EED values"
+  },
+  "generated_profiles": [
+    {"encoding": "ASCII DXF", "version": "AC1027", "reached_allocation_failures": 19},
+    {"encoding": "Binary DXF", "version": "AC1027", "reached_allocation_failures": 18}
+  ],
+  "assertions": [
+    "Each injected allocation failure returns a failed write and preserves pre-existing destination bytes.",
+    "The caller DRW_SortEntsTable, including handles, owner, sort pairs, and EED values, is unchanged after failure.",
+    "Retry with the same writer and table succeeds and produces byte-identical output to the clean write.",
+    "Fresh typed libdxfrw readback reproduces the selected table fields and EED values for ASCII and Binary DXF."
+  ],
+  "validation": {
+    "normal_build": "cmake --build build --target libdxfrw_sortents_objects_allocation_tests -j4: PASS",
+    "normal_ctest": "ctest --test-dir build -R '^libdxfrw_sortents_objects_allocation$' --output-on-failure: 1/1 PASS",
+    "asan_configuration": "cmake -S . -B build-asan-custom -DCMAKE_POLICY_VERSION_MINIMUM=3.5; retained -fsanitize=address -fno-omit-frame-pointer flags",
+    "asan_build": "cmake --build build-asan-custom --target libdxfrw_sortents_objects_allocation_tests -j4: PASS",
+    "asan_ctest": "ctest --test-dir build-asan-custom -R '^libdxfrw_sortents_objects_allocation$' --output-on-failure: 1/1 PASS",
+    "observed_allocation_counts": "ASCII 19; Binary 18 in both normal and ASan executables",
+    "git_diff_check": "PASS"
+  },
+  "limitations": [
+    "This generated profile establishes rollback, retry, byte equality, and same-library readback only.",
+    "SORTENTSTABLE source-owner and dependency closure, non-model/paper-space profiles, producer coverage, and native consumer behavior remain unqualified; strict support gates are unchanged.",
+    "DXF files are generated from scratch in a temporary directory and removed by the test; no DWG/DXF fixture was added."
+  ],
+  "artifact_sha256": {
+    "tests/sortents_objects_allocation_tests.cpp": "c4a37e425fcd7adf76a077f0c29e9be9cc484709b39f856f8c29e98eac996b76",
+    "tests/CMakeLists.txt": "006bfb0154b214faf2dd78cf7edb29ac8b62e192aa31e497e445b158a84d85ab",
+    "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "4f62039be641b7e027494ebc43e1caf8588599b1e1365eba695bf26b48046aac"
+  }
+}
