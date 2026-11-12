@@ -1661,6 +1661,18 @@ created locally from scratch for the specific control.
   role checks; it does not establish producer prevalence, dependency closure,
   DXF output, or TABLE semantics. See the [role receipt](docs/research/p5-tablestyle-cellstylemap-handle-role-generated-2026-11-12.json).
 
+- **P5 generated legacy TABLESTYLE output order (2026-11-12):** a dedicated
+  fast selector now checks the complete contiguous legacy header/row/border
+  group sequence after both ASCII and Binary output and fresh typed/raw
+  readback. It passes 1/1 and uses only an in-memory generated AC1021 graph;
+  no fixture or physical-source output claim is added. The pinned AC1018
+  TABLESTYLE source observer records a different source identity/value profile
+  than the older opt-in physical output selector expects, and the physical
+  output attempt also reaches unrelated source-version graph refusals. Keep
+  physical source graph closure and output qualification open; do not use that
+  selector as evidence until its binding and intended partial-output scope are
+  reconciled. See the [generated order receipt](docs/research/p5-generated-tablestyle-legacy-group-order-2026-11-12.json).
+
 - **P6 direct TABLECONTENT DWG encoder allocation rollback:** the direct
   `DRW_TableContentObject::encodeDwg` entry point now catches allocation and
   serialization exceptions across payload validation and staged output, and

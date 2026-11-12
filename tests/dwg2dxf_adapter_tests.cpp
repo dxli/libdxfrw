@@ -39449,6 +39449,88 @@ bool typedDwgTableStyleDxfRoundTrip(
             != std::vector<int>({0x10, 0x20, 0x10000})
         || doubleValues(140) != std::vector<double>({1.25, 2.25, 3.25}))
         return fail("typed DWG-origin TABLESTYLE emitted wrong field groups");
+
+    // Pin the complete legacy writer sequence. The value-set assertions above
+    // do not detect reordered or interleaved row groups.
+    std::vector<DRW_Variant> expectedOrder;
+    const auto expectInteger = [&expectedOrder](int code, int value) {
+        expectedOrder.emplace_back(code, static_cast<std::int32_t>(value));
+    };
+    const auto expectDouble = [&expectedOrder](int code, double value) {
+        expectedOrder.emplace_back(code, value);
+    };
+    const auto expectString = [&expectedOrder](int code,
+                                               const std::string& value) {
+        expectedOrder.emplace_back(code, value);
+    };
+    const DRW_TableStyle& sourceStyle = data.tableStyles.front();
+    expectString(100, "AcDbTableStyle");
+    expectInteger(280, 0);
+    expectString(3, sourceStyle.m_name);
+    expectInteger(70, sourceStyle.m_flowDirection);
+    expectInteger(71, sourceStyle.m_flags);
+    expectDouble(40, sourceStyle.m_horizontalCellMargin);
+    expectDouble(41, sourceStyle.m_verticalCellMargin);
+    expectInteger(280, sourceStyle.m_titleSuppressed ? 1 : 0);
+    expectInteger(281, sourceStyle.m_headerSuppressed ? 1 : 0);
+    for (const DRW_TableStyleRowStyle& row : sourceStyle.m_rowStyles) {
+        expectString(7, "TABLE_FONT");
+        expectDouble(140, row.m_textHeight);
+        expectInteger(170, row.m_textAlignment);
+        expectInteger(62, row.m_textColor);
+        expectInteger(63, row.m_fillColor);
+        expectInteger(283, row.m_hasBackgroundColor ? 1 : 0);
+        for (int border = 0; border < 6; ++border)
+            expectInteger(274 + border,
+                row.m_borders[static_cast<std::size_t>(border)].m_lineWeight);
+        for (int border = 0; border < 6; ++border)
+            expectInteger(284 + border,
+                row.m_borders[static_cast<std::size_t>(border)].m_visible);
+        for (int border = 0; border < 6; ++border)
+            expectInteger(64 + border,
+                row.m_borders[static_cast<std::size_t>(border)].m_color);
+        expectInteger(90, row.m_valueDataType);
+        expectInteger(91, row.m_valueUnitType);
+    }
+    const auto styleMarker = std::find_if(
+        raw.groups.begin(), raw.groups.end(), [](const DRW_Variant& group) {
+            return group.code() == 100
+                && group.type() == DRW_Variant::STRING
+                && group.c_str() != nullptr
+                && std::string(group.c_str()) == "AcDbTableStyle";
+        });
+    if (styleMarker == raw.groups.end()
+        || static_cast<std::size_t>(raw.groups.end() - styleMarker)
+            < expectedOrder.size())
+        return fail("typed DWG-origin TABLESTYLE ordered record is truncated");
+    for (std::size_t index = 0u; index < expectedOrder.size(); ++index) {
+        const DRW_Variant& actual = *(styleMarker
+            + static_cast<std::ptrdiff_t>(index));
+        const DRW_Variant& expected = expectedOrder[index];
+        bool equal = actual.code() == expected.code()
+            && actual.type() == expected.type();
+        if (equal) {
+            switch (expected.type()) {
+            case DRW_Variant::INTEGER:
+                equal = actual.i_val() == expected.i_val();
+                break;
+            case DRW_Variant::DOUBLE:
+                equal = actual.d_val() == expected.d_val();
+                break;
+            case DRW_Variant::STRING:
+                equal = actual.c_str() != nullptr
+                    && expected.c_str() != nullptr
+                    && std::string(actual.c_str()) == expected.c_str();
+                break;
+            default:
+                equal = false;
+                break;
+            }
+        }
+        if (!equal)
+            return fail("typed DWG-origin TABLESTYLE group order or value changed at index "
+                + std::to_string(index));
+    }
     for (std::size_t index = 0; index < 3u; ++index) {
         if (readback.tableStyles.front().m_rowStyles[index].m_valueDataType
                 != expectedValueDataTypes[index]
@@ -89638,6 +89720,13 @@ int main(int argc, char** argv) {
         return tableStyleNestedRawNetRoundTrip(false, nonce)
                 && tableStyleNestedRawNetRoundTrip(true, nonce)
             ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--tablestyle-legacy-ordered-writer") {
+        const auto nonce = static_cast<std::uint64_t>(
+            std::chrono::steady_clock::now().time_since_epoch().count());
+        return typedDwgTableStyleDxfRoundTrip(false, nonce)
+            && typedDwgTableStyleDxfRoundTrip(true, nonce) ? 0 : 1;
     }
     if (argc == 2
         && std::string(argv[1]) == "--tablestyle-r24-typed-writer") {
