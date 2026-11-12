@@ -88749,6 +88749,64 @@ bool sunStudyDxfGraph(const std::string& source) {
     return true;
 }
 
+static bool inventoryPhysicalAc1018SatV1(const std::string& sourcePath) {
+    const auto fail = [](const char* reason) {
+        std::cerr << "AC1018 physical SAT-v1 inventory: " << reason << '\n';
+        return false;
+    };
+    dx_data source;
+    dx_iface importer;
+    if (!importer.fileImport(sourcePath, &source, false)
+        || source.sourceFormat != dx_source_format::DWG
+        || source.sourceVersion != DRW::AC1018)
+        return fail("could not import the AC1018 source");
+
+    std::set<std::uint32_t> handles;
+    std::size_t count = 0u;
+    std::size_t totalBytes = 0u;
+    std::size_t largestBytes = 0u;
+    std::uint32_t largestHandle = 0u;
+    const auto inspectBlock = [&handles, &count, &totalBytes, &largestBytes,
+                               &largestHandle](const dx_ifaceBlock* block) {
+        if (block == nullptr) return true;
+        for (const DRW_Entity* entity : block->ent) {
+            const auto* modeler = dynamic_cast<const DRW_ModelerGeometry*>(entity);
+            if (modeler == nullptr || modeler->eType != DRW::E3DSOLID
+                || modeler->m_modelerVersion != 1u
+                || modeler->m_dwgSourceVersion != DRW::AC1018
+                || modeler->m_dwgAcisPayload.empty())
+                continue;
+            if (modeler->handle == DRW::NoHandle
+                || !handles.insert(modeler->handle).second)
+                return false;
+            ++count;
+            totalBytes += modeler->m_dwgAcisPayload.size();
+            if (modeler->m_dwgAcisPayload.size() > largestBytes) {
+                largestBytes = modeler->m_dwgAcisPayload.size();
+                largestHandle = modeler->handle;
+            }
+            std::cout << "handle=0x" << std::hex << modeler->handle << std::dec
+                      << " satBytes=" << modeler->m_dwgAcisPayload.size()
+                      << " objectBytes=" << modeler->m_objectSize
+                      << " payloadRanges=" << modeler->m_payloadRanges.size()
+                      << " layer=" << modeler->layer << '\n';
+        }
+        return true;
+    };
+    if (!inspectBlock(source.mBlock))
+        return fail("modeler handles are null or duplicated");
+    for (const dx_ifaceBlock* block : source.blocks) {
+        if (!inspectBlock(block))
+            return fail("modeler handles are null or duplicated");
+    }
+    if (count == 0u)
+        return fail("no parsed AC1018 3DSOLID SAT-v1 carriers were available");
+    std::cout << "count=" << count << " totalSatBytes=" << totalBytes
+              << " largestHandle=0x" << std::hex << largestHandle << std::dec
+              << " largestSatBytes=" << largestBytes << '\n';
+    return true;
+}
+
 static bool physicalAc1018SatV1Projection(const std::string& sourcePath,
                                           std::uint32_t requestedHandle) {
     const auto fail = [](const char* reason) {
@@ -88921,6 +88979,10 @@ static bool physicalAc1018SatV1Projection(const std::string& sourcePath,
 }
 
 int main(int argc, char** argv) {
+    if (argc == 3
+        && std::string(argv[1]) == "--modeler-ac1018-physical-sat-v1-inventory") {
+        return inventoryPhysicalAc1018SatV1(argv[2]) ? 0 : 1;
+    }
     if ((argc == 3 || argc == 4)
         && std::string(argv[1]) == "--modeler-ac1018-physical-sat-v1-projection") {
         std::uint32_t requestedHandle = 0u;
