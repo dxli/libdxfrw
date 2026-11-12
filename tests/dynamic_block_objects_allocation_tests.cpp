@@ -182,14 +182,18 @@ bool visibilityWireReadback(const std::string& bytes, bool binary) {
         && flatReferenceCount == 117u && stateReferenceCount == 116u;
 }
 
-bool visibilityAllocationSweep(bool binary) {
+template <typename Factory, typename SourceCheck, typename WireCheck>
+bool dynamicBlockAllocationSweep(
+        const char* profile, bool binary, const Factory& makeObject,
+        const SourceCheck& sourceUnchanged, const WireCheck& wireReadback,
+        const std::map<std::uint32_t, std::uint32_t>& remap) {
     constexpr long calibrationLimit = 1000000;
     std::ostringstream cleanBytes;
     dxfRW cleanCodec("");
     DxfDynamicBlockTestAccess::attachWriter(
         cleanCodec, DRW::AC1024, binary, cleanBytes);
-    cleanCodec.setHandleRemap(visibilityRemap());
-    DRW_DynamicBlockObject cleanObject = makeVisibilityParameter();
+    cleanCodec.setHandleRemap(remap);
+    DRW_DynamicBlockObject cleanObject = makeObject();
     long allocationCount = 0;
     bool cleanWrite = false;
     {
@@ -197,18 +201,19 @@ bool visibilityAllocationSweep(bool binary) {
         cleanWrite = cleanCodec.writeDynamicBlockObject(&cleanObject);
         allocationCount = calibrationLimit - allocationsBeforeFailure;
     }
-    if (!cleanWrite || !visibilitySourceUnchanged(cleanObject)
-        || cleanCodec.getWritingContext()
-                ->sourceHandleToWrittenObjectMap.count(cleanObject.handle)
-            != 1u
-        || cleanCodec.getWritingContext()
-                ->sourceHandleToWrittenObjectMap.at(cleanObject.handle)
+    const DRW_WritingContext* cleanContext =
+        cleanCodec.getWritingContext();
+    if (!cleanWrite || !sourceUnchanged(cleanObject)
+        || cleanContext == nullptr
+        || cleanContext->sourceHandleToWrittenObjectMap.count(
+               cleanObject.handle) != 1u
+        || cleanContext->sourceHandleToWrittenObjectMap.at(cleanObject.handle)
             != cleanCodec.remapHandle(cleanObject.handle)
         || !DxfDynamicBlockTestAccess::writeEnd(cleanCodec)
-        || !visibilityWireReadback(cleanBytes.str(), binary)
-        || allocationCount <= 0) {
-        std::cerr << "clean VisibilityParameter write/readback failed (binary="
-                  << binary << ") allocations=" << allocationCount << '\n';
+        || !wireReadback(cleanBytes.str(), binary) || allocationCount <= 0) {
+        std::cerr << "clean " << profile
+                  << " write/readback failed (binary=" << binary
+                  << ") allocations=" << allocationCount << '\n';
         return false;
     }
 
@@ -217,8 +222,8 @@ bool visibilityAllocationSweep(bool binary) {
         dxfRW failedCodec("");
         DxfDynamicBlockTestAccess::attachWriter(
             failedCodec, DRW::AC1024, binary, failedBytes);
-        failedCodec.setHandleRemap(visibilityRemap());
-        DRW_DynamicBlockObject object = makeVisibilityParameter();
+        failedCodec.setHandleRemap(remap);
+        DRW_DynamicBlockObject object = makeObject();
         const std::size_t failuresBefore = failedAllocations;
         bool wrote = false;
         try {
@@ -230,13 +235,12 @@ bool visibilityAllocationSweep(bool binary) {
         allocationsBeforeFailure = -1;
         const DRW_WritingContext* context = failedCodec.getWritingContext();
         if (wrote || failedAllocations == failuresBefore
-            || !visibilitySourceUnchanged(object) || context == nullptr
+            || !sourceUnchanged(object) || context == nullptr
             || context->sourceHandleToWrittenObjectMap.count(object.handle)
                 != 0u) {
-            std::cerr << "VisibilityParameter allocation rollback failed at "
+            std::cerr << profile << " allocation rollback failed at "
                       << (binary ? "Binary" : "ASCII")
                       << " offset=" << offset << " wrote=" << wrote
-                      << " failed=" << (failedAllocations != failuresBefore)
                       << " identityAbsent="
                       << (context != nullptr
                           && context->sourceHandleToWrittenObjectMap.count(
@@ -245,35 +249,38 @@ bool visibilityAllocationSweep(bool binary) {
             return false;
         }
 
-        // A fresh low-level writer must be able to publish the same source
-        // after rollback. Reusing the failed writer is outside this contract:
-        // its stream may contain a partial record and its write error is sticky.
+        // The failed low-level writer can retain partial stream bytes and a
+        // sticky write error. Prove the source is retryable in a fresh writer.
         std::ostringstream retryBytes;
         dxfRW retryCodec("");
         DxfDynamicBlockTestAccess::attachWriter(
             retryCodec, DRW::AC1024, binary, retryBytes);
-        retryCodec.setHandleRemap(visibilityRemap());
+        retryCodec.setHandleRemap(remap);
         const bool retryWrote = retryCodec.writeDynamicBlockObject(&object);
         const DRW_WritingContext* retryContext =
             retryCodec.getWritingContext();
-        if (!retryWrote || !visibilitySourceUnchanged(object)
-            || retryContext == nullptr
+        if (!retryWrote || !sourceUnchanged(object) || retryContext == nullptr
             || retryContext->sourceHandleToWrittenObjectMap.count(
                    object.handle) != 1u
             || !DxfDynamicBlockTestAccess::writeEnd(retryCodec)
-            || !visibilityWireReadback(retryBytes.str(), binary)) {
-            std::cerr << "VisibilityParameter fresh-writer retry failed at "
+            || !wireReadback(retryBytes.str(), binary)) {
+            std::cerr << profile << " fresh-writer retry failed at "
                       << (binary ? "Binary" : "ASCII")
                       << " offset=" << offset << '\n';
             return false;
         }
     }
-    std::cout << (binary ? "Binary" : "ASCII")
-              << " VisibilityParameter allocation offsets="
-              << allocationCount
-              << "; full 117-handle/four-state source rollback and "
-              << "fresh-writer retries pass\n";
+    std::cout << (binary ? "Binary" : "ASCII") << ' ' << profile
+              << " allocation offsets=" << allocationCount
+              << "; source rollback and fresh-writer retries pass\n";
     return true;
+}
+
+bool visibilityAllocationSweep(bool binary) {
+    return dynamicBlockAllocationSweep(
+        "VisibilityParameter", binary, makeVisibilityParameter,
+        visibilitySourceUnchanged, visibilityWireReadback,
+        visibilityRemap());
 }
 
 DRW_DynamicBlockObject makeBasePointParameter() {
@@ -382,87 +389,9 @@ bool basePointWireReadback(const std::string& bytes, bool binary) {
 }
 
 bool basePointAllocationSweep(bool binary) {
-    constexpr long calibrationLimit = 1000000;
-    std::ostringstream cleanBytes;
-    dxfRW cleanCodec("");
-    DxfDynamicBlockTestAccess::attachWriter(
-        cleanCodec, DRW::AC1024, binary, cleanBytes);
-    DRW_DynamicBlockObject cleanObject = makeBasePointParameter();
-    long allocationCount = 0;
-    bool cleanWrite = false;
-    {
-        AllocationFailure failure(calibrationLimit);
-        cleanWrite = cleanCodec.writeDynamicBlockObject(&cleanObject);
-        allocationCount = calibrationLimit - allocationsBeforeFailure;
-    }
-    if (!cleanWrite || !basePointSourceUnchanged(cleanObject)
-        || cleanCodec.getWritingContext()
-                ->sourceHandleToWrittenObjectMap.count(cleanObject.handle)
-            != 1u
-        || !DxfDynamicBlockTestAccess::writeEnd(cleanCodec)
-        || !basePointWireReadback(cleanBytes.str(), binary)
-        || allocationCount <= 0) {
-        std::cerr << "clean BasePointParameter write/readback failed "
-                  << "(binary=" << binary << ") allocations="
-                  << allocationCount << '\n';
-        return false;
-    }
-
-    for (long offset = 0; offset < allocationCount; ++offset) {
-        std::ostringstream failedBytes;
-        dxfRW failedCodec("");
-        DxfDynamicBlockTestAccess::attachWriter(
-            failedCodec, DRW::AC1024, binary, failedBytes);
-        DRW_DynamicBlockObject object = makeBasePointParameter();
-        const std::size_t failuresBefore = failedAllocations;
-        bool wrote = false;
-        try {
-            AllocationFailure failure(offset);
-            wrote = failedCodec.writeDynamicBlockObject(&object);
-        } catch (const std::bad_alloc&) {
-            allocationsBeforeFailure = -1;
-        }
-        allocationsBeforeFailure = -1;
-        const DRW_WritingContext* context = failedCodec.getWritingContext();
-        if (wrote || failedAllocations == failuresBefore
-            || !basePointSourceUnchanged(object) || context == nullptr
-            || context->sourceHandleToWrittenObjectMap.count(object.handle)
-                != 0u) {
-            std::cerr << "BasePointParameter allocation rollback failed at "
-                      << (binary ? "Binary" : "ASCII")
-                      << " offset=" << offset << " wrote=" << wrote
-                      << " identityAbsent="
-                      << (context != nullptr
-                          && context->sourceHandleToWrittenObjectMap.count(
-                                 object.handle) == 0u)
-                      << '\n';
-            return false;
-        }
-
-        std::ostringstream retryBytes;
-        dxfRW retryCodec("");
-        DxfDynamicBlockTestAccess::attachWriter(
-            retryCodec, DRW::AC1024, binary, retryBytes);
-        const bool retryWrote = retryCodec.writeDynamicBlockObject(&object);
-        const DRW_WritingContext* retryContext =
-            retryCodec.getWritingContext();
-        if (!retryWrote || !basePointSourceUnchanged(object)
-            || retryContext == nullptr
-            || retryContext->sourceHandleToWrittenObjectMap.count(
-                   object.handle) != 1u
-            || !DxfDynamicBlockTestAccess::writeEnd(retryCodec)
-            || !basePointWireReadback(retryBytes.str(), binary)) {
-            std::cerr << "BasePointParameter fresh-writer retry failed at "
-                      << (binary ? "Binary" : "ASCII")
-                      << " offset=" << offset << '\n';
-            return false;
-        }
-    }
-    std::cout << (binary ? "Binary" : "ASCII")
-              << " BasePointParameter allocation offsets="
-              << allocationCount
-              << "; source rollback and fresh-writer retries pass\n";
-    return true;
+    return dynamicBlockAllocationSweep(
+        "BasePointParameter", binary, makeBasePointParameter,
+        basePointSourceUnchanged, basePointWireReadback, {});
 }
 
 DRW_DynamicBlockObject makeAlignmentParameter() {
@@ -628,87 +557,9 @@ bool alignmentWireReadback(const std::string& bytes, bool binary) {
 }
 
 bool alignmentAllocationSweep(bool binary) {
-    constexpr long calibrationLimit = 1000000;
-    std::ostringstream cleanBytes;
-    dxfRW cleanCodec("");
-    DxfDynamicBlockTestAccess::attachWriter(
-        cleanCodec, DRW::AC1024, binary, cleanBytes);
-    DRW_DynamicBlockObject cleanObject = makeAlignmentParameter();
-    long allocationCount = 0;
-    bool cleanWrite = false;
-    {
-        AllocationFailure failure(calibrationLimit);
-        cleanWrite = cleanCodec.writeDynamicBlockObject(&cleanObject);
-        allocationCount = calibrationLimit - allocationsBeforeFailure;
-    }
-    if (!cleanWrite || !alignmentSourceUnchanged(cleanObject)
-        || cleanCodec.getWritingContext()
-                ->sourceHandleToWrittenObjectMap.count(cleanObject.handle)
-            != 1u
-        || !DxfDynamicBlockTestAccess::writeEnd(cleanCodec)
-        || !alignmentWireReadback(cleanBytes.str(), binary)
-        || allocationCount <= 0) {
-        std::cerr << "clean AlignmentParameter write/readback failed "
-                  << "(binary=" << binary << ") allocations="
-                  << allocationCount << '\n';
-        return false;
-    }
-
-    for (long offset = 0; offset < allocationCount; ++offset) {
-        std::ostringstream failedBytes;
-        dxfRW failedCodec("");
-        DxfDynamicBlockTestAccess::attachWriter(
-            failedCodec, DRW::AC1024, binary, failedBytes);
-        DRW_DynamicBlockObject object = makeAlignmentParameter();
-        const std::size_t failuresBefore = failedAllocations;
-        bool wrote = false;
-        try {
-            AllocationFailure failure(offset);
-            wrote = failedCodec.writeDynamicBlockObject(&object);
-        } catch (const std::bad_alloc&) {
-            allocationsBeforeFailure = -1;
-        }
-        allocationsBeforeFailure = -1;
-        const DRW_WritingContext* context = failedCodec.getWritingContext();
-        if (wrote || failedAllocations == failuresBefore
-            || !alignmentSourceUnchanged(object) || context == nullptr
-            || context->sourceHandleToWrittenObjectMap.count(object.handle)
-                != 0u) {
-            std::cerr << "AlignmentParameter allocation rollback failed at "
-                      << (binary ? "Binary" : "ASCII")
-                      << " offset=" << offset << " wrote=" << wrote
-                      << " identityAbsent="
-                      << (context != nullptr
-                          && context->sourceHandleToWrittenObjectMap.count(
-                                 object.handle) == 0u)
-                      << '\n';
-            return false;
-        }
-
-        std::ostringstream retryBytes;
-        dxfRW retryCodec("");
-        DxfDynamicBlockTestAccess::attachWriter(
-            retryCodec, DRW::AC1024, binary, retryBytes);
-        const bool retryWrote = retryCodec.writeDynamicBlockObject(&object);
-        const DRW_WritingContext* retryContext =
-            retryCodec.getWritingContext();
-        if (!retryWrote || !alignmentSourceUnchanged(object)
-            || retryContext == nullptr
-            || retryContext->sourceHandleToWrittenObjectMap.count(
-                   object.handle) != 1u
-            || !DxfDynamicBlockTestAccess::writeEnd(retryCodec)
-            || !alignmentWireReadback(retryBytes.str(), binary)) {
-            std::cerr << "AlignmentParameter fresh-writer retry failed at "
-                      << (binary ? "Binary" : "ASCII")
-                      << " offset=" << offset << '\n';
-            return false;
-        }
-    }
-    std::cout << (binary ? "Binary" : "ASCII")
-              << " AlignmentParameter allocation offsets="
-              << allocationCount
-              << "; source rollback and fresh-writer retries pass\n";
-    return true;
+    return dynamicBlockAllocationSweep(
+        "AlignmentParameter", binary, makeAlignmentParameter,
+        alignmentSourceUnchanged, alignmentWireReadback, {});
 }
 
 bool wireReadback(const std::string& bytes, bool binary) {
