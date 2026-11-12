@@ -1577,6 +1577,20 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-12)
 
+- **P6 AC1015 LTYPE_CONTROL legacy import profile:** an existing local
+  AC1015 sample (`simple.dwg`, SHA-256
+  `6702705ed765af035761a77170ea1486d01f513690b3fd8dc8295957ddc89e58`)
+  reaches LTYPE_CONTROL with BL count 25 and 27 child handles in the historical
+  all-soft-pointer profile. `DRW_ObjControl` now admits that exact bounded
+  profile for AC1015, including canonical-null owner/XDictionary encodings, and
+  keeps it separate from ODA/current-writer profiles. Generated count, fixed
+  built-in ordering, role-mutation, truncation and corrected-object retry
+  controls pass in the focused LTYPE selector. The reader records the observed
+  child-role mismatch as an integrity error. The same drawing's LTYPE record
+  bodies still fail typed parsing and the complete read remains unsuccessful;
+  this is a control-object compatibility fix only, not an AC1015 file-support
+  promotion. No drawing fixture was added. See the [profile receipt](docs/research/p6-ac1015-ltype-control-legacy-import-profile-2026-11-12.json).
+
 - **P5 Content Format enum combinations:** the generated TABLESTYLE fast
   control crosses all 11 ODA §20.4.99 data types, five DWG unit types, and nine
   alignments in the R2010, R2013, and R2018 body layouts (1,485 admitted

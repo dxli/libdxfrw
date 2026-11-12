@@ -42,13 +42,15 @@ bool slots(const DRW_ObjControl& obj, unsigned count,
 struct Body {std::vector<std::uint8_t> data;std::uint32_t handleBits;};
 Body build(DRW::Version version,unsigned count,bool legacy,int corruption=0,
            bool forceLong=false,bool legacyOrder=false,
-           bool previousCurrentWriterOrder=false) {
+           bool previousCurrentWriterOrder=false,
+           bool historicalSoftPointerTail=false) {
     dwgBufferW b;
     b.putObjType(version,DRW::DwgLTypeControlObjectType);
     const auto sizeBit=b.bitCount();
     if(version<DRW::AC1024)b.putRawLong32(0);
     b.putHandle(ref(0,DRW::DwgLtypeControlHandle));
-    b.putBitShort(0);b.putBitLong(0);b.putBit(0);
+    b.putBitShort(0);b.putBitLong(0);
+    if(version>DRW::AC1015)b.putBit(0);
     if(version>DRW::AC1024)b.putBit(0);
     if(legacy)b.putBitShort(count);
     else if(forceLong){b.put2Bits(0);b.putRawLong32(count);}
@@ -64,8 +66,10 @@ Body build(DRW::Version version,unsigned count,bool legacy,int corruption=0,
     }
     const auto boundary=static_cast<std::uint32_t>(b.bitCount());
     if(version<DRW::AC1024)b.patchRawLong32AtBit(sizeBit,boundary);
-    b.putHandle(ref(corruption==1?0:DRW::DwgSoftPointer,0));
-    b.putHandle(ref(DRW::DwgHardOwnership,0));
+    b.putHandle(ref(corruption==1?0:DRW::DwgSoftPointer,
+                    corruption==14?0x99u:0u));
+    b.putHandle(ref(corruption==13?0:DRW::DwgHardOwnership,
+                    corruption==15?0x98u:0u));
     auto values=children(count, legacyOrder);
     if (previousCurrentWriterOrder && !legacyOrder)
         std::swap(values[count], values[count + 1u]);
@@ -74,12 +78,15 @@ Body build(DRW::Version version,unsigned count,bool legacy,int corruption=0,
     for(std::size_t i=0;i<values.size();++i) {
         const auto role = corruption==12 && i==count
             ? DRW::DwgSoftOwnership
-            : (legacyOrder ? DRW::DwgSoftOwnership
+            : (historicalSoftPointerTail ? DRW::DwgSoftPointer
+               : (legacyOrder ? DRW::DwgSoftOwnership
                            : (i >= count ? DRW::DwgHardOwnership
-                                         : DRW::DwgSoftOwnership));
+                                         : DRW::DwgSoftOwnership)));
         b.putHandle(ref(role,values[i]));
     }
     b.alignToByte();
+    if(version==DRW::AC1015)
+        b.patchRawLong32AtBit(sizeBit,static_cast<std::uint32_t>(b.bitCount()));
     auto data=b.data();
     if(corruption==4)data.pop_back();
     const auto handleBits=version>=DRW::AC1024
@@ -88,7 +95,8 @@ Body build(DRW::Version version,unsigned count,bool legacy,int corruption=0,
 }
 bool parse(const Body& b,DRW::Version version,unsigned count,
            DRW_ObjControl& object,bool legacyOrder=false,
-           bool previousCurrentWriterOrder=false) {
+           bool previousCurrentWriterOrder=false,
+           bool historicalSoftPointerTail=false) {
     dwgBuffer in(const_cast<std::uint8_t*>(b.data.data()),b.data.size());
     if (!object.parseDwg(version,&in,b.handleBits)
         || object.orderedHandleRoles.size() != count + 2u)
@@ -98,10 +106,11 @@ bool parse(const Body& b,DRW::Version version,unsigned count,
         std::swap(expected[count],expected[count+1u]);
     if(object.orderedHandleSlots!=expected)return false;
     for (std::size_t index = 0; index < object.orderedHandleRoles.size(); ++index) {
-        const std::uint8_t expected = legacyOrder
-            ? DRW::DwgSoftOwnership
+        const std::uint8_t expected = historicalSoftPointerTail
+            ? DRW::DwgSoftPointer
+            : (legacyOrder ? DRW::DwgSoftOwnership
             : (index < count ? DRW::DwgSoftOwnership
-                             : DRW::DwgHardOwnership);
+                             : DRW::DwgHardOwnership));
         if (object.orderedHandleRoles[index] != expected)
             return false;
     }
@@ -266,6 +275,37 @@ int main(int argc,char** argv){
             if(parse(bad,version,count,c)){std::cerr<<"compact body gap accepted\n";return 1;}
             auto good=build(version,count,false);if(!parse(good,version,count,c))return 1;
             auto full=build(version,count,false,0,true);if(!parse(full,version,count,c))return 1;}
+    }
+    {
+        constexpr unsigned count=25;
+        DRW_ObjControl control;
+        const auto historical=build(DRW::AC1015,count,false,0,false,true,
+                                    false,true);
+        if(!parse(historical,DRW::AC1015,count,control,true,false,true)) {
+            std::cerr<<"AC1015 historical soft-pointer LTYPE_CONTROL rejected\n";
+            return 1;
+        }
+        for(int nullHeader:{1,13}) {
+            const auto nullProfile=build(DRW::AC1015,count,false,nullHeader,
+                                         false,true,false,true);
+            if(!parse(nullProfile,DRW::AC1015,count,control,true,false,true)) {
+                std::cerr<<"AC1015 canonical-null LTYPE_CONTROL header rejected\n";
+                return 1;
+            }
+        }
+        for(int bad:{2,3,4,12,14,15}) {
+            const auto invalid=build(DRW::AC1015,count,false,bad,false,true,
+                                     false,true);
+            if(parse(invalid,DRW::AC1015,count,control,true,false,true)) {
+                std::cerr<<"AC1015 malformed historical LTYPE_CONTROL accepted mode="
+                         <<bad<<'\n';
+                return 1;
+            }
+            if(!parse(historical,DRW::AC1015,count,control,true,false,true)) {
+                std::cerr<<"AC1015 historical LTYPE_CONTROL retry failed\n";
+                return 1;
+            }
+        }
     }
     std::cout<<"multi-version LTYPE_CONTROL count and legacy retry PASS\n";return 0;
 }

@@ -15660,9 +15660,11 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
         return false;
       dwgHandle owner, xdict, child;
       bool valid = readDwgHandleChecked(legacy, 0, false, owner)
-          && owner.code == DRW::DwgSoftPointer && owner.size == 0 && owner.ref == 0
+          && owner.code == DRW::DwgSoftPointer
+          && owner.size == 0 && owner.ref == 0
           && readDwgHandleChecked(legacy, 0, false, xdict)
-          && xdict.code == DRW::DwgHardOwnership && xdict.size == 0 && xdict.ref == 0;
+          && xdict.code == DRW::DwgHardOwnership
+          && xdict.size == 0 && xdict.ref == 0;
       // Keep reading the pre-correction libdxfrw writer profile. The current
       // output profile uses N soft-owned table entries followed by the two
       // hard-owned phantom records observed in ODA-produced sources.
@@ -15731,9 +15733,10 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
     // and separate from the ODA and current-writer ownership profiles;
     // readDwgTables records the role mismatch so strict output admission can
     // continue to refuse it.
-    const auto validHistoricalLibreCADTail = [&](dwgBuffer legacy,
-                                                  std::int32_t count) {
-      if ((version != DRW::AC1021 && version != DRW::AC1027)
+    const auto validLegacySoftPointerTail = [&](dwgBuffer legacy,
+                                                 std::int32_t count) {
+      if ((version != DRW::AC1015 && version != DRW::AC1021
+           && version != DRW::AC1027)
           || count < 1
           || static_cast<std::uint32_t>(count) > dwgSafety::MaxOwnedObjectCount
           || handle != DRW::DwgLtypeControlHandle || numReactors != 0
@@ -15741,12 +15744,16 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
           || hasDataStorageBinaryData())
         return false;
       dwgHandle owner, xdict, child;
+      const auto nullOrRole = [](const dwgHandle& value,
+                                 std::uint8_t role) {
+        return ((value.code == role
+                 || value.code == DRW::DwgNullReference)
+                && value.size == 0 && value.ref == 0);
+      };
       if (!readDwgHandleChecked(legacy, 0, false, owner)
-          || owner.code != DRW::DwgNullReference || owner.size != 0
-          || owner.ref != 0
+          || !nullOrRole(owner, DRW::DwgSoftPointer)
           || !readDwgHandleChecked(legacy, 0, false, xdict)
-          || xdict.code != DRW::DwgHardOwnership || xdict.size != 0
-          || xdict.ref != 0)
+          || !nullOrRole(xdict, DRW::DwgHardOwnership))
         return false;
       const std::uint32_t builtinOrder[] = {
           DRW::DwgLtypeByBlockHandle,
@@ -15782,6 +15789,10 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
       if (!controlCurrentBit(candidate, end) || end > countLimit)
         return false;
       if (end == countLimit) return true;
+      if (!detached)
+        return validWriterTail(candidate.forkIndependent(), count)
+            || validLegacySoftPointerTail(candidate.forkIndependent(),
+                                           count);
       // R2007's writer zero-aligns after the immediate absent flag. The
       // R2010+ writer additionally emits a 24-bit zero absent-string footer.
       // Require the exact trailer and complete fixed writer graph.
@@ -15792,7 +15803,7 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
           && aligned + extra == bodyEndBit;
       const bool tailMatch = alignedMatch
           && (validWriterTail(hBuff.forkIndependent(), count)
-              || validHistoricalLibreCADTail(hBuff.forkIndependent(), count));
+              || validLegacySoftPointerTail(hBuff.forkIndependent(), count));
       if (!tailMatch) return false;
       dwgBuffer trailer = candidate.forkIndependent();
       for (std::uint64_t i = end; i < bodyEndBit; ++i)
@@ -15820,7 +15831,7 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
         stringBit = false;
         countRead = historicalCountRead
             && readControlBit(tail, bodyEndBit, stringBit) && !stringBit
-            && validHistoricalLibreCADTail(tail, historicalCount);
+            && validLegacySoftPointerTail(tail, historicalCount);
         if (countRead) {
           rawNumEntries = historicalCount;
           *buf = candidate;
