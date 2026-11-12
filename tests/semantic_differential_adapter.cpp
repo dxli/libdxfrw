@@ -2593,6 +2593,13 @@ void SemanticSink::writeEntities() {
         nurbs.vvec2 = DRW_Coord{79.0, 80.0, 81.0};
         wrote = dxfWriter_->writeSurface(&nurbs) && wrote;
 
+        DRW_PlaneSurface plane;
+        plane.layer = "probe_plane_surface";
+        plane.modelerFormatVersion = 3;
+        plane.uIsolines = 5;
+        plane.vIsolines = 7;
+        wrote = dxfWriter_->writeSurface(&plane) && wrote;
+
         DRW_ExtrudedSurface extruded;
         extruded.layer = "probe_extruded_surface";
         extruded.modelerFormatVersion = 2;
@@ -3722,6 +3729,22 @@ bool run3DConsumerProbe(bool binary) {
                                  "{\"x\":79,\"y\":80,\"z\":81}");
     };
     if (!expectNurbsSurface(consumer) || !expectNurbsSurface(legacyConsumer))
+        return false;
+
+    const auto expectPlaneSurface = [&](const SemanticSink& sink) {
+        const std::string layer = "probe_plane_surface";
+        return expectEntityField(sink, "PLANESURFACE", layer,
+                                 "modelerFormatVersion", "3")
+            && expectEntityField(sink, "PLANESURFACE", layer,
+                                 "uIsolines", "5")
+            && expectEntityField(sink, "PLANESURFACE", layer,
+                                 "vIsolines", "7")
+            && expectEntityField(sink, "PLANESURFACE", layer,
+                                 "hasRawAcisData", "false")
+            && expectEntityField(sink, "PLANESURFACE", layer,
+                                 "rawAcisByteCount", "0");
+    };
+    if (!expectPlaneSurface(consumer) || !expectPlaneSurface(legacyConsumer))
         return false;
 
     const auto expectExtrudedSurface = [&](const SemanticSink& sink) {
