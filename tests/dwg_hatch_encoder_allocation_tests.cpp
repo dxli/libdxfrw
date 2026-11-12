@@ -65,6 +65,12 @@ public:
     std::int16_t rawType() const { return oType; }
 };
 
+class GeoPositionMarkerProbe final : public DRW_GeoPositionMarker {
+public:
+    using DRW_GeoPositionMarker::encodeDwg;
+    std::int16_t rawType() const { return oType; }
+};
+
 struct Buffers {
     dwgBufferW body;
     dwgBufferW strings;
@@ -112,7 +118,7 @@ void route(AliasLayout layout, Buffers& buffers,
 }
 
 template <class Shape>
-Shape makeShape() {
+Shape makeShape(DRW::Version version) {
     Shape shape;
     shape.handle = 0x40u;
     if constexpr (std::is_same_v<Shape, MLeaderProbe>) {
@@ -131,6 +137,18 @@ Shape makeShape() {
         line.arrowHandle.ref = 0x56u;
         root.leaderLines.push_back(line);
         shape.context.roots.push_back(root);
+    } else if constexpr (std::is_same_v<Shape, GeoPositionMarkerProbe>) {
+        shape.m_classVersion = 2u;
+        shape.m_position = {1.0, 2.0, 3.0};
+        shape.m_radius = 2.5;
+        shape.m_notes = "AllocationRetryGeoPositionMarker";
+        shape.m_landingGap = 0.5;
+        shape.m_mtextVisible = true;
+        shape.m_textAlignment = 3u;
+        shape.m_enableFrameText = version >= DRW::AC1032;
+        shape.mtext = std::make_unique<DRW_MText>();
+        shape.mtext->text = "embedded allocation retry marker";
+        shape.mtext->height = 0.75;
     } else if constexpr (std::is_same_v<Shape, ArcAlignedTextProbe>) {
         shape.m_center = {1.0, 2.0, 0.0};
         shape.m_radius = 12.5;
@@ -225,7 +243,7 @@ bool encode(DRW::Version version, Shape& shape, AliasLayout layout,
 template <class Shape>
 bool sweep(DRW::Version version, AliasLayout layout,
            std::int16_t expectedType, unsigned long& reachedFailures) {
-    Shape clean = makeShape<Shape>();
+    Shape clean = makeShape<Shape>(version);
     Buffers cleanBuffers;
     seed(cleanBuffers);
     if (!encode(version, clean, layout, cleanBuffers)
@@ -237,7 +255,7 @@ bool sweep(DRW::Version version, AliasLayout layout,
 
     bool reachedSuccess = false;
     for (long failIndex = 0; failIndex < 128; ++failIndex) {
-        Shape shape = makeShape<Shape>();
+        Shape shape = makeShape<Shape>(version);
         Buffers buffers;
         seed(buffers);
         const Buffers before = buffers;
@@ -348,6 +366,15 @@ int main() {
             totalReachedFailures += reachedFailures;
         }
     }
+    for (const DRW::Version version : {DRW::AC1027, DRW::AC1032}) {
+        for (const auto layout : layouts) {
+            unsigned long reachedFailures = 0u;
+            if (!sweep<GeoPositionMarkerProbe>(version, layout, 1164,
+                                               reachedFailures))
+                return 1;
+            totalReachedFailures += reachedFailures;
+        }
+    }
     for (const auto version : versions) {
         for (const auto layout : layouts) {
             unsigned long reachedFailures = 0u;
@@ -371,14 +398,16 @@ int main() {
         std::cerr << "HATCH allocation injector did not fire\n";
         return 1;
     }
-    std::cout << "HATCH/MPOLYGON/MLEADER/ARCALIGNEDTEXT/LIGHT/SECTIONOBJECT "
+    std::cout << "HATCH/MPOLYGON/MLEADER/ARCALIGNEDTEXT/LIGHT/SECTIONOBJECT/"
+              << "GEOPOSITIONMARKER "
               << "DWG encode allocation "
               << "rollback/retry "
               << "passed across " << sizeof(versions) / sizeof(versions[0])
               << " HATCH-family/ARCALIGNEDTEXT versions, 3 MLEADER versions "
               << "and 4 LIGHT/SECTIONOBJECT versions, "
               << sizeof(layouts) / sizeof(layouts[0])
-                     * (sizeof(versions) / sizeof(versions[0]) * 3u + 3u + 8u)
+                     * (sizeof(versions) / sizeof(versions[0]) * 3u + 3u + 8u
+                        + 2u)
               << " entity/version/layout profiles; " << totalReachedFailures
               << " allocation offsets exercised\n";
     return 0;

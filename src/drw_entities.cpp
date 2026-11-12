@@ -20560,30 +20560,36 @@ bool DRW_GeoPositionMarker::encodeDwg(DRW::Version v, dwgBufferW *buf,
     if (m_enableFrameText && (v < DRW::AC1032 || mtext == nullptr))
         return false;
 
-    oType = kDwgType;
-    if (!encodeDwgCommon(v, buf, strBuf))
-        return false;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [&](dwgBufferW *body, dwgBufferW *strings,
+            dwgBufferW *handles) {
+            oType = kDwgType;
+            if (!encodeDwgCommon(v, body, strings))
+                return false;
 
-    dwgBufferW *stringBuffer = strBuf ? strBuf : buf;
-    buf->putBitLong(m_classVersion);
-    buf->put3BitDouble(m_position);
-    buf->putBitDouble(m_radius);
-    stringBuffer->putVariableText(v, m_notes);
-    buf->putBitDouble(m_landingGap);
-    buf->putBit(m_mtextVisible ? 1 : 0);
-    buf->putRawChar8(m_textAlignment);
-    buf->putBit(m_enableFrameText ? 1 : 0);
+            dwgBufferW *stringBuffer = strings ? strings : body;
+            body->putBitLong(m_classVersion);
+            body->put3BitDouble(m_position);
+            body->putBitDouble(m_radius);
+            stringBuffer->putVariableText(v, m_notes);
+            body->putBitDouble(m_landingGap);
+            body->putBit(m_mtextVisible ? 1 : 0);
+            body->putRawChar8(m_textAlignment);
+            body->putBit(m_enableFrameText ? 1 : 0);
 
-    dwgBufferW embeddedHandles;
-    if (m_enableFrameText
-        && !encodeEmbeddedMTextDwg(v, buf, strBuf, &embeddedHandles, *mtext))
-        return false;
-    if (!encodeDwgEntHandle(v, buf, handleBuf))
-        return false;
+            dwgBufferW embeddedHandles;
+            if (m_enableFrameText
+                && !encodeEmbeddedMTextDwg(v, body, strings,
+                                           &embeddedHandles, *mtext))
+                return false;
+            if (!encodeDwgEntHandle(v, body, handles))
+                return false;
 
-    dwgBufferW *resolvedHandles = handleBuf ? handleBuf : buf;
-    appendBitBuffer(resolvedHandles, embeddedHandles);
-    return true;
+            dwgBufferW *resolvedHandles = handles ? handles : body;
+            appendBitBuffer(resolvedHandles, embeddedHandles);
+            return true;
+        });
 }
 
 bool DRW_Attrib::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
