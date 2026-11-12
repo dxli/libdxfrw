@@ -5876,6 +5876,20 @@ target_link_libraries(libdxfrw_dxf_datatable_read_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dxf_datatable_read COMMAND libdxfrw_dxf_datatable_read_tests)
 set_tests_properties(libdxfrw_dxf_datatable_read PROPERTIES LABELS "dxf;fast;table" TIMEOUT 30)
 
+add_executable(libdxfrw_field_objects_allocation_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/field_objects_allocation_tests.cpp
+    ${_libdxfrw_test_adapter_source})
+target_compile_features(libdxfrw_field_objects_allocation_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_field_objects_allocation_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_field_objects_allocation_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/dwg2dxf ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_field_objects_allocation_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_field_objects_allocation
+    COMMAND libdxfrw_field_objects_allocation_tests
+        ${CMAKE_CURRENT_BINARY_DIR}/field-objects-allocation)
+set_tests_properties(libdxfrw_field_objects_allocation PROPERTIES
+    LABELS "dxf;fast;field;transaction" TIMEOUT 30)
+
 add_executable(libdxfrw_evaluation_graph_objects_allocation_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/evaluation_graph_objects_allocation_tests.cpp
     ${_libdxfrw_test_adapter_source})

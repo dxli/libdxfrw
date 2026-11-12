@@ -1642,6 +1642,7 @@ public:
         AmbiguousSourceHandleInsert,
         WrittenSourceEntityHandleInsert,
         SourceObjectIdentityInsert,
+        WrittenDxfFieldSourceHandleInsert,
         ModelerSourceHandleInsert,
         ImageReactorInsert,
         ImageSourceReactorInsert,

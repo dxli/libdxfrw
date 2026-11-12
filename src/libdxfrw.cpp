@@ -2986,6 +2986,9 @@ private:
                 m_owner.m_writingContext.sourceHandleToWrittenObjectMap.erase(
                     mutation.handle);
                 break;
+            case DxfWriteMutationKind::WrittenDxfFieldSourceHandleInsert:
+                m_owner.m_writtenDxfFieldSourceHandles.erase(mutation.handle);
+                break;
             case DxfWriteMutationKind::ModelerSourceHandleInsert:
                 m_owner.m_writingContext.modelerSourceHandleToMintedMap.erase(
                     mutation.handle);
@@ -36083,6 +36086,7 @@ bool dxfRW::writeField(DRW_Field *ent) {
     if (!preflightTableEntry(ent))
         return false;
 
+    try {
     auto writeString = [this](int code, const std::string& value) {
         return writer->writeString(code, value);
     };
@@ -36128,6 +36132,9 @@ bool dxfRW::writeField(DRW_Field *ent) {
                             return hasValidFieldValueReference(child.m_value);
                         }))
         return false;
+
+    RecordStateScope state(*this, ent);
+    DxfWriterRecordScope record(*writer);
     bool written = writeString(0, "FIELD")
         && writeString(5, toHexStr(emittedHandle));
     if (version > DRW::AC1014) {
@@ -36180,18 +36187,26 @@ bool dxfRW::writeField(DRW_Field *ent) {
         && writeUtf8String(301, ent->m_valueString)
         && writer->writeInt32(98, ent->m_valueStringLength);
     if (!written || (!ent->extData.empty() && !writeExtData(ent->extData))) {
-        m_writeError = true;
         return false;
     }
     if (!bindDxfWriteSourceObjectHandle(sourceHandle, emittedHandle))
         return false;
-    try {
-        if (!m_writtenDxfFieldSourceHandles.insert(sourceHandle).second)
-            return failDxfWrite();
-    } catch (...) {
-        return failDxfWrite();
+    const std::size_t mutationCheckpoint = m_dxfWriteMutations.size();
+    if (m_recordStateScopeDepth != 0)
+        m_dxfWriteMutations.push_back({
+            DxfWriteMutationKind::WrittenDxfFieldSourceHandleInsert,
+            {}, sourceHandle, 0, false});
+    if (!m_writtenDxfFieldSourceHandles.insert(sourceHandle).second) {
+        m_dxfWriteMutations.resize(mutationCheckpoint);
+        return false;
     }
+    if (!record.commit())
+        return false;
+    state.commit();
     return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 // FIELDLIST (AcDbIdSet / AcDbFieldList, custom class).
@@ -36219,6 +36234,9 @@ bool dxfRW::writeFieldList(DRW_FieldList *ent) {
     };
     const std::uint32_t sourceHandle = ent->handle;
     const std::uint32_t emittedHandle = remapObjectHandle(sourceHandle);
+    try {
+    RecordStateScope state(*this, ent);
+    DxfWriterRecordScope record(*writer);
     bool written = writeString(0, "FIELDLIST")
         && writeString(5, toHexStr(emittedHandle));
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
@@ -36232,10 +36250,16 @@ bool dxfRW::writeFieldList(DRW_FieldList *ent) {
         written = written && writeString(330, toHexStr(remapObjectHandle(field)));
     written = written && writeString(100, "AcDbFieldList");
     if (!written || (!ent->extData.empty() && !writeExtData(ent->extData))) {
-        m_writeError = true;
         return false;
     }
-    return bindDxfWriteSourceObjectHandle(sourceHandle, emittedHandle);
+    if (!bindDxfWriteSourceObjectHandle(sourceHandle, emittedHandle)
+        || !record.commit())
+        return false;
+    state.commit();
+    return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 // MLEADERSTYLE (AcDbMLeaderStyle, custom class). The style name is carried by
