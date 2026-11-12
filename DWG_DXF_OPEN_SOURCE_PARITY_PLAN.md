@@ -10,6 +10,16 @@ cases pass the focused HATCH/MPOLYGON OCS-to-WCS CTest (1/1). This closes only
 that arithmetic case; native rendering, external producer behavior and broad
 coordinate qualification remain open. Receipt: [HATCH elevation-Z overflow](docs/research/p6-hatch-elevation-z-overflow-fast-slice-2026-11-11.json).
 
+**Latest P6 local implementation slice (2026-11-11, OCS mixed-scale cancellation):**
+the stable OCS dot product now preserves a tiny nonzero coordinate component
+when normalization by a much larger component would underflow it before large
+opposite-sign terms cancel. The generated HATCH control uses normal `(1,1,0)`
+and OCS vector `(1e308, 1e-100, 1e308)`; all three WCS components are finite,
+including the exactly preserved `1e-100` Z result. The focused OCS/WCS CTest
+passes 1/1. This closes only the generated underflow-after-cancellation case;
+arbitrary finite-coordinate exactness, native rendering and producer
+qualification remain open. Receipt: [mixed-scale OCS dot](docs/research/p6-ocs-mixed-scale-dot-cancellation-2026-11-11.json).
+
 **Latest P6 local implementation slices (2026-11-11, scaled OCS dot products):**
 the explicit legacy-extrusion recovery API now scales finite coordinates before
 its inverse-basis dot products and uses compensated accumulation with fused
@@ -1523,6 +1533,16 @@ created locally from scratch for the specific control.
   group-91 semantics, broad producer coverage, or native override/rendering
   behavior. No DWG/DXF fixture was added. See the
   [role-validation receipt](docs/research/p6-viewport-dwg-handle-role-validation-2026-11-11.json).
+
+- **P6 OCS mixed-scale dot cancellation:** `scaledCompensatedDot` now detects
+  when scale-normalizing a finite vector would erase a nonzero component and
+  recomputes its bounded three-term OCS dot product in the original exponent
+  range, cancelling an opposite-sign pair first to avoid intermediate
+  overflow. A generated `(1,1,0)` normal control preserves the `1e-100` WCS
+  component after exact cancellation of two `1e308` terms. The focused
+  HATCH/MPOLYGON OCS/WCS selector passes. This does not prove exact arithmetic
+  for all finite inputs or native/producer semantics. See the
+  [mixed-scale dot receipt](docs/research/p6-ocs-mixed-scale-dot-cancellation-2026-11-11.json).
 
 - **P6 VIEW typed-null handle roles:** `DRW_View::parseDwg` now accepts a
   zero-valued, zero-payload absolute typed-null handle (codes 2–5) in an

@@ -352,6 +352,70 @@ bool scaledCompensatedDot(const double* coefficients,
     const double values[] = {coordinate.x / scale,
                              coordinate.y / scale,
                              coordinate.z / scale};
+    if ((coordinate.x != 0.0 && values[0] == 0.0)
+        || (coordinate.y != 0.0 && values[1] == 0.0)
+        || (coordinate.z != 0.0 && values[2] == 0.0)) {
+        // Scaling the entire vector can underflow a small component before
+        // large opposite-sign terms cancel. Recompute the three products in
+        // their original exponent range; OCS basis coefficients are bounded
+        // by one, so each individual product remains representable. Pair an
+        // opposite-sign pair first to avoid an overflowing intermediate sum.
+        double products[3]{};
+        double errors[3]{};
+        for (std::size_t i = 0; i < 3u; ++i) {
+            const double component = i == 0u ? coordinate.x
+                : i == 1u ? coordinate.y : coordinate.z;
+            products[i] = coefficients[i] * component;
+            errors[i] = std::fma(coefficients[i], component, -products[i]);
+        }
+        std::size_t first = 0u;
+        std::size_t second = 0u;
+        bool foundOppositePair = false;
+        double largestPair = -1.0;
+        for (std::size_t i = 0; i < 3u; ++i) {
+            for (std::size_t j = i + 1u; j < 3u; ++j) {
+                if (std::signbit(products[i]) == std::signbit(products[j])
+                    || products[i] == 0.0 || products[j] == 0.0)
+                    continue;
+                const double pairMagnitude = std::max(std::fabs(products[i]),
+                                                       std::fabs(products[j]));
+                if (!foundOppositePair || pairMagnitude > largestPair) {
+                    first = i;
+                    second = j;
+                    largestPair = pairMagnitude;
+                    foundOppositePair = true;
+                }
+            }
+        }
+        std::size_t remaining = 0u;
+        while (remaining == first || remaining == second)
+            ++remaining;
+        double sum = foundOppositePair
+            ? products[first] + products[second] : products[0];
+        double correction = 0.0;
+        const auto addCompensated = [&sum, &correction](double value) {
+            const double next = sum + value;
+            if (!std::isfinite(next))
+                return false;
+            correction += std::fabs(sum) >= std::fabs(value)
+                ? (sum - next) + value : (value - next) + sum;
+            sum = next;
+            return std::isfinite(correction);
+        };
+        if (!foundOppositePair) {
+            if (!addCompensated(products[1])
+                || !addCompensated(products[2]))
+                return false;
+        } else if (!addCompensated(products[remaining])) {
+            return false;
+        }
+        for (const double error : errors) {
+            if (!addCompensated(error))
+                return false;
+        }
+        result = sum + correction;
+        return std::isfinite(result);
+    }
     double sum = 0.0;
     double correction = 0.0;
     for (std::size_t i = 0; i < 3u; ++i) {

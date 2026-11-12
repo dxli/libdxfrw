@@ -26846,6 +26846,19 @@ void testHatchOcsWcsCoordinateMapping(TestContext& t) {
                              - 0.8844190238400710) < 1e-14,
              "HATCH OCS point avoids overflowing an intermediate sum when the WCS result is finite");
 
+    hatch.extPoint = DRW_Coord(1.0, 1.0, 0.0);
+    const DRW_Coord mixedScaleOcsVector(1.0e308, 1.0e-100, 1.0e308);
+    const DRW_Coord mixedScaleWcsVector =
+        hatch.boundaryVectorToWcs(mixedScaleOcsVector);
+    t.expect(std::isfinite(mixedScaleWcsVector.x)
+                 && std::isfinite(mixedScaleWcsVector.y)
+                 && std::isfinite(mixedScaleWcsVector.z)
+                 && std::abs(mixedScaleWcsVector.x / 1.0e308) < 1e-14
+                 && std::abs(mixedScaleWcsVector.y / 1.0e308
+                             - std::sqrt(2.0)) < 1e-14
+                 && mixedScaleWcsVector.z == 1.0e-100,
+             "HATCH OCS mapping preserves a tiny component after large terms cancel");
+
     const double maximum = std::numeric_limits<double>::max();
     hatch.extPoint = DRW_Coord(1.0, 1.0, 1.0);
     hatch.basePoint.z = 0.6 * maximum;
