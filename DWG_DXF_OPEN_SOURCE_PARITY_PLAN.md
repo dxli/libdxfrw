@@ -3050,6 +3050,17 @@ rollback remains the responsibility of the enclosing whole-file transaction;
 this closes only SORTENTSTABLE identity-state rollback, not named-block owner
 qualification or native ordering semantics (see the [receipt](docs/research/p6-sortents-direct-record-identity-rollback-2026-11-12.json)).
 
+**Dynamic-block PurgePreventer allocation rollback (2026-11-12):** the direct
+`writeDynamicBlockObject` record writer now has a generated ASCII/Binary
+allocation sweep for the admitted PurgePreventer profile. All 11 allocation
+offsets per encoding preserve caller fields and leave no partial source-object
+identity; the clean record's exact handle, owner/reactor, subclass, and flag
+fields are checked on wire readback. Normal and ASan focused tests pass. The
+existing adapter profile test separately retains full graph/typed readback
+coverage. This does not inject failures across the whole-file adapter route or
+qualify other dynamic-block subclasses, source schemas, or native behavior
+(see the [receipt](docs/research/p6-dynamic-block-purge-preventer-allocation-rollback-2026-11-12.json)).
+
 **AC1021 3D POLYLINE DWG flag admission (2026-11-12):** writer admission now
 matches ODA v5.4.1 §20.4.17: the second raw flag byte carries closed only;
 the first represents spline type 5/6 and implies group-70 bit 4. Conflicting

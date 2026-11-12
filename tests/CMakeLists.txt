@@ -5946,6 +5946,17 @@ target_link_libraries(libdxfrw_sortents_objects_allocation_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_sortents_objects_allocation COMMAND libdxfrw_sortents_objects_allocation_tests)
 set_tests_properties(libdxfrw_sortents_objects_allocation PROPERTIES LABELS "dxf;fast;sortents;transaction" TIMEOUT 30)
 
+add_executable(libdxfrw_dynamic_block_objects_allocation_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dynamic_block_objects_allocation_tests.cpp)
+target_compile_features(libdxfrw_dynamic_block_objects_allocation_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dynamic_block_objects_allocation_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dynamic_block_objects_allocation_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dynamic_block_objects_allocation_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dynamic_block_objects_allocation
+    COMMAND libdxfrw_dynamic_block_objects_allocation_tests)
+set_tests_properties(libdxfrw_dynamic_block_objects_allocation PROPERTIES
+    LABELS "dxf;fast;dynamic-block;allocation;transaction;generated" TIMEOUT 60)
+
 add_executable(libdxfrw_mline_style_objects_allocation_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/mline_style_objects_allocation_tests.cpp)
 target_compile_features(libdxfrw_mline_style_objects_allocation_tests PRIVATE cxx_std_17)
