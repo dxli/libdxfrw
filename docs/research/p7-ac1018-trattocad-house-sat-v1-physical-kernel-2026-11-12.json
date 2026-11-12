@@ -1722,16 +1722,18 @@
     "kernelCommand": "For each extracted /private/tmp/trattocad-house-<handle>.sat, set LIBDXFRW_SAT_PATH and run cargo test -q --manifest-path /private/tmp/opencadstudio-p7/Cargo.toml -p ocs_acis --test libdxfrw_ac1018_sat1_probe -- --nocapture with CARGO_TARGET_DIR=/private/tmp/opencad-p7-target.",
     "kernelResult": "PASS: 48/48 SAT 4.0 payloads parsed and lifted to one body each; zero surface/curve/reference loss and zero OpenCADKernel validation flaws.",
     "artifacts": "DWG, extracted SAT payloads and DXFs remain under /private/tmp and the system temp directory. No DWG/DXF/SAT fixture was added to libdxfrw.",
-    "pairedDxfResult": "PASS: the official paired AC1018 DXF contains exactly matching normalized SAT-v1 payloads for all 48 selected source handles; both files and all extracted payloads remain in /private/tmp."
+    "pairedDxfResult": "PASS: the official paired AC1018 DXF contains exactly matching normalized SAT-v1 payloads for all 48 selected source handles; both files and all extracted payloads remain in /private/tmp.",
+    "geometryResult": "PASS: all 48 lifted bodies have finite kernel bounds and kernel mass properties; conservative AABBs, adaptive mesh-integrated volumes/centroids, and fixed-tolerance tessellated areas are recorded. Handle 0x2d spans exactly 10000 x 8000 mm in X/Y, matching the publisher stated 10 x 8 m dimensions and the paired DXF $INSUNITS=4 declaration. All metrics remain uncorroborated except this bounded dimensional agreement."
   },
   "limitations": [
     "This is a second source-distinct AC1018 drawing from the same public publisher as the pulley sample, not an independently authenticated second producer/toolchain.",
     "The website describes five true solids, but this receipt does not independently compare these 48 SAT bodies with native-source expected geometry, drawing placement, units, assembly membership, or displayed component count.",
     "The independent SAT route does not validate DWG entity-to-AcDs association; the exact per-entity SAT payloads are bounded by the libdxfrw source reader and projection selector.",
     "No native AutoCAD/ODA rewrite, native CAD import/measurement, platform qualification, or whole-document output proof was performed.",
-    "The paired DWG and DXF are both published by TrattoCAD and do not constitute independent producer implementations or native semantic validation."
+    "The paired DWG and DXF are both published by TrattoCAD and do not constitute independent producer implementations or native semantic validation.",
+    "The 10 m \u00d7 8 m comparison uses the publisher description and its own paired DXF unit declaration; per-body mass properties and mesh areas are independent kernel calculations but do not yet have external per-object expected values or native source measurements."
   ],
-  "claimEffect": "Adds selected source-distinct AC1018 SAT-v1 parser/kernel and per-carrier DXF transport evidence only. It does not qualify producer breadth, native 3D semantics, ACDS/whole-document closure, or general DWG/DXF/ACIS support.",
+  "claimEffect": "Adds exact cross-format SAT identity, independent topology/kernel lifting for 48 carriers, and one bounded X/Y dimension agreement with the publisher description. It does not qualify an independent producer, exact per-body mass/area semantics, native 3D acceptance, whole-document closure, or general DWG/DXF/ACIS support.",
   "pairedDxfBinding": {
     "dxfUrl": "https://trattocad.com/samples/trattocad-sample-3d-house.dxf",
     "dxfPath": "/private/tmp/trattocad-sample-3d-house.dxf",
@@ -1740,5 +1742,1558 @@
     "format": "AC1018 ASCII DXF",
     "result": "All 48 source-handle 3DSOLID SAT-v1 payloads at handles 0x2a\u20130x59 decode byte-for-byte equal to the SAT extracted from the paired DWG. The published pair and output of the libdxfrw selector therefore agree on each exact normalized SAT body.",
     "method": "tools/research/decode_dxf_sat1.py selected each unique exact handle and reversed the group 1/3 SAT-v1 transform; cmp compared each extracted file against the corresponding hash-bound DWG SAT extracted for the kernel checks."
+  },
+  "geometryEvidence": {
+    "publishedDimension": {
+      "claim": "TrattoCAD describes the house as 10 by 8 m.",
+      "publisherUrl": "https://trattocad.com/samples",
+      "dxfHeaderVariable": "$INSUNITS",
+      "dxfHeaderValue": 4,
+      "unitDefinition": "Millimeters",
+      "unitAuthority": "https://help.autodesk.com/cloudhelp/2025/ENU/AutoCAD-Core/files/GUID-A58A87BB-482B-4042-A00A-EEF55A2B4FD8.htm"
+    },
+    "selectedDimensionComparison": {
+      "sourceHandle": "0x2d",
+      "entityType": "3DSOLID",
+      "layer": "A-WALL",
+      "kernelBoundsMm": {
+        "min": [
+          0.0,
+          0.0,
+          3000.0
+        ],
+        "max": [
+          10000.0,
+          8000.0,
+          5700.0
+        ],
+        "size": [
+          10000.0,
+          8000.0,
+          2700.0
+        ]
+      },
+      "comparison": "The exact 10,000 mm \u00d7 8,000 mm X/Y carrier bounds agree with the publisher-reported 10 m \u00d7 8 m plan dimensions after applying the paired DXF millimeter unit declaration.",
+      "scope": "This checks one body AABB against a publisher statement. It does not independently verify the publisher statement, whole-assembly dimensions, native rendering, placement, or all geometry."
+    },
+    "measurementMethod": {
+      "kernel": "Pinned OpenCADKernel 802f751 body_bounds and mass_properties; ACadRust SAT parser ce8a148.",
+      "bounds": "Conservative per-body AABB from the independent kernel. These are not exact face-by-face extrema certificates for every surface class.",
+      "volumeCentroid": "Kernel mass_properties returned values for all 48 bodies; analytic_mass_properties returned None for all 48, so volume/centroid came from the kernel adaptive mesh-integral path and are estimates, not independently matched exact values.",
+      "surfaceArea": "Computed as the sum of triangle areas from kernel mesh_body with max_angle=0.05 radians and chord tolerance=1e-5 drawing units; this is tessellated area, not exact surface area.",
+      "triangleCountRange": [
+        8,
+        168
+      ],
+      "overlapWarning": "Per-carrier volumes overlap in the assembly and must not be summed as whole-model volume."
+    },
+    "perCarrierMeasurements": [
+      {
+        "sourceHandle": "0x2a",
+        "bounds": {
+          "min": [
+            -300.0,
+            -300.0,
+            -300.0
+          ],
+          "max": [
+            10300.0,
+            8300.0,
+            0.0
+          ],
+          "size": [
+            10600.0,
+            8600.0,
+            300.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 27348000000.0,
+          "centroid": [
+            5000.0,
+            4000.0,
+            -150.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 193840000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x2b",
+        "bounds": {
+          "min": [
+            0.0,
+            0.0,
+            2700.0
+          ],
+          "max": [
+            10000.0,
+            8000.0,
+            3000.0
+          ],
+          "size": [
+            10000.0,
+            8000.0,
+            300.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 22829999999.999996,
+          "centroid": [
+            4907.752956636005,
+            4028.1865965834427,
+            2850.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 165940000.0,
+        "meshTriangleCount": 32
+      },
+      {
+        "sourceHandle": "0x2c",
+        "bounds": {
+          "min": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "max": [
+            10000.0,
+            8000.0,
+            2700.0
+          ],
+          "size": [
+            10000.0,
+            8000.0,
+            2700.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 24504000000.00005,
+          "centroid": [
+            5000.0,
+            4103.69735553379,
+            1325.8814887365334
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 194920000.0,
+        "meshTriangleCount": 168
+      },
+      {
+        "sourceHandle": "0x2d",
+        "bounds": {
+          "min": [
+            0.0,
+            0.0,
+            3000.0
+          ],
+          "max": [
+            10000.0,
+            8000.0,
+            5700.0
+          ],
+          "size": [
+            10000.0,
+            8000.0,
+            2700.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 24372000000.000076,
+          "centroid": [
+            4999.999999999997,
+            4125.110782865583,
+            4327.104874446086
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 194040000.0,
+        "meshTriangleCount": 168
+      },
+      {
+        "sourceHandle": "0x2e",
+        "bounds": {
+          "min": [
+            3500.0,
+            300.0,
+            0.0
+          ],
+          "max": [
+            3620.0,
+            7700.0,
+            2700.0
+          ],
+          "size": [
+            120.0,
+            7400.0,
+            2700.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 2170800000.0,
+          "centroid": [
+            3560.0,
+            3744.029850746269,
+            1381.3432835820895
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 39108000.0,
+        "meshTriangleCount": 28
+      },
+      {
+        "sourceHandle": "0x2f",
+        "bounds": {
+          "min": [
+            3500.0,
+            300.0,
+            3000.0
+          ],
+          "max": [
+            3620.0,
+            7700.0,
+            5700.0
+          ],
+          "size": [
+            120.0,
+            7400.0,
+            2700.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 2170800000.0,
+          "centroid": [
+            3560.0,
+            3744.0298507462694,
+            4381.3432835820895
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 39108000.0,
+        "meshTriangleCount": 28
+      },
+      {
+        "sourceHandle": "0x30",
+        "bounds": {
+          "min": [
+            4500.0,
+            125.0,
+            0.0
+          ],
+          "max": [
+            5500.0,
+            175.0,
+            2200.0
+          ],
+          "size": [
+            1000.0,
+            50.0,
+            2200.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 110000000.00000001,
+          "centroid": [
+            5000.0,
+            150.0,
+            1100.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 4720000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x31",
+        "bounds": {
+          "min": [
+            1500.0,
+            125.0,
+            900.0
+          ],
+          "max": [
+            2700.0,
+            175.0,
+            2300.0
+          ],
+          "size": [
+            1200.0,
+            50.0,
+            1400.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 84000000.0,
+          "centroid": [
+            2100.0,
+            150.0,
+            1600.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 3620000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x32",
+        "bounds": {
+          "min": [
+            7300.0,
+            125.0,
+            900.0
+          ],
+          "max": [
+            8500.0,
+            175.0,
+            2300.0
+          ],
+          "size": [
+            1200.0,
+            50.0,
+            1400.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 84000000.0,
+          "centroid": [
+            7900.0,
+            150.0,
+            1600.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 3620000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x33",
+        "bounds": {
+          "min": [
+            2000.0,
+            7825.0,
+            900.0
+          ],
+          "max": [
+            3200.0,
+            7875.0,
+            2300.0
+          ],
+          "size": [
+            1200.0,
+            50.0,
+            1400.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 84000000.0,
+          "centroid": [
+            2600.0,
+            7850.0,
+            1600.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 3620000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x34",
+        "bounds": {
+          "min": [
+            6800.0,
+            7825.0,
+            900.0
+          ],
+          "max": [
+            8000.0,
+            7875.0,
+            2300.0
+          ],
+          "size": [
+            1200.0,
+            50.0,
+            1400.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 84000000.0,
+          "centroid": [
+            7400.0,
+            7850.0,
+            1600.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 3620000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x35",
+        "bounds": {
+          "min": [
+            9825.0,
+            3400.0,
+            900.0
+          ],
+          "max": [
+            9875.0,
+            4600.0,
+            2300.0
+          ],
+          "size": [
+            50.0,
+            1200.0,
+            1400.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 84000000.0,
+          "centroid": [
+            9850.0,
+            4000.0,
+            1600.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 3620000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x36",
+        "bounds": {
+          "min": [
+            125.0,
+            3400.0,
+            900.0
+          ],
+          "max": [
+            175.0,
+            4600.0,
+            2300.0
+          ],
+          "size": [
+            50.0,
+            1200.0,
+            1400.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 84000000.0,
+          "centroid": [
+            150.0,
+            4000.0,
+            1600.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 3620000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x37",
+        "bounds": {
+          "min": [
+            1500.0,
+            125.0,
+            3900.0
+          ],
+          "max": [
+            2700.0,
+            175.0,
+            5300.0
+          ],
+          "size": [
+            1200.0,
+            50.0,
+            1400.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 84000000.0,
+          "centroid": [
+            2100.0,
+            150.0,
+            4600.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 3620000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x38",
+        "bounds": {
+          "min": [
+            4400.0,
+            125.0,
+            3000.0
+          ],
+          "max": [
+            5600.0,
+            175.0,
+            5200.0
+          ],
+          "size": [
+            1200.0,
+            50.0,
+            2200.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 132000000.0,
+          "centroid": [
+            5000.0,
+            150.0,
+            4100.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 5620000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x39",
+        "bounds": {
+          "min": [
+            7300.0,
+            125.0,
+            3900.0
+          ],
+          "max": [
+            8500.0,
+            175.0,
+            5300.0
+          ],
+          "size": [
+            1200.0,
+            50.0,
+            1400.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 84000000.0,
+          "centroid": [
+            7900.0,
+            150.0,
+            4600.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 3620000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x3a",
+        "bounds": {
+          "min": [
+            2000.0,
+            7825.0,
+            3900.0
+          ],
+          "max": [
+            3200.0,
+            7875.0,
+            5300.0
+          ],
+          "size": [
+            1200.0,
+            50.0,
+            1400.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 84000000.0,
+          "centroid": [
+            2600.0,
+            7850.0,
+            4600.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 3620000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x3b",
+        "bounds": {
+          "min": [
+            6800.0,
+            7825.0,
+            3900.0
+          ],
+          "max": [
+            8000.0,
+            7875.0,
+            5300.0
+          ],
+          "size": [
+            1200.0,
+            50.0,
+            1400.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 84000000.0,
+          "centroid": [
+            7400.0,
+            7850.0,
+            4600.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 3620000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x3c",
+        "bounds": {
+          "min": [
+            9825.0,
+            3400.0,
+            3900.0
+          ],
+          "max": [
+            9875.0,
+            4600.0,
+            5300.0
+          ],
+          "size": [
+            50.0,
+            1200.0,
+            1400.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 84000000.0,
+          "centroid": [
+            9850.0,
+            4000.0,
+            4600.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 3620000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x3d",
+        "bounds": {
+          "min": [
+            125.0,
+            3400.0,
+            3900.0
+          ],
+          "max": [
+            175.0,
+            4600.0,
+            5300.0
+          ],
+          "size": [
+            50.0,
+            1200.0,
+            1400.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 84000000.0,
+          "centroid": [
+            150.0,
+            4000.0,
+            4600.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 3620000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x3e",
+        "bounds": {
+          "min": [
+            6300.0,
+            900.0,
+            0.0
+          ],
+          "max": [
+            7300.0,
+            1170.0,
+            177.0
+          ],
+          "size": [
+            1000.0,
+            270.0,
+            177.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 47790000.0,
+          "centroid": [
+            6800.0,
+            1035.0,
+            88.5
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 989580.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x3f",
+        "bounds": {
+          "min": [
+            6300.0,
+            1170.0,
+            0.0
+          ],
+          "max": [
+            7300.0,
+            1440.0,
+            354.0
+          ],
+          "size": [
+            1000.0,
+            270.0,
+            354.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 95580000.0,
+          "centroid": [
+            6800.0,
+            1305.0,
+            177.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 1439160.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x40",
+        "bounds": {
+          "min": [
+            6300.0,
+            1440.0,
+            0.0
+          ],
+          "max": [
+            7300.0,
+            1710.0,
+            531.0
+          ],
+          "size": [
+            1000.0,
+            270.0,
+            531.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 143370000.0,
+          "centroid": [
+            6800.0,
+            1575.0,
+            265.5
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 1888740.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x41",
+        "bounds": {
+          "min": [
+            6300.0,
+            1710.0,
+            0.0
+          ],
+          "max": [
+            7300.0,
+            1980.0,
+            708.0
+          ],
+          "size": [
+            1000.0,
+            270.0,
+            708.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 191160000.0,
+          "centroid": [
+            6800.0,
+            1845.0,
+            354.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 2338320.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x42",
+        "bounds": {
+          "min": [
+            6300.0,
+            1980.0,
+            0.0
+          ],
+          "max": [
+            7300.0,
+            2250.0,
+            885.0
+          ],
+          "size": [
+            1000.0,
+            270.0,
+            885.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 238950000.0,
+          "centroid": [
+            6800.0,
+            2115.0,
+            442.5
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 2787900.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x43",
+        "bounds": {
+          "min": [
+            6300.0,
+            2250.0,
+            0.0
+          ],
+          "max": [
+            7300.0,
+            2520.0,
+            1062.0
+          ],
+          "size": [
+            1000.0,
+            270.0,
+            1062.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 286740000.0,
+          "centroid": [
+            6800.0,
+            2385.0,
+            531.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 3237480.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x44",
+        "bounds": {
+          "min": [
+            6300.0,
+            2520.0,
+            0.0
+          ],
+          "max": [
+            7300.0,
+            2790.0,
+            1239.0
+          ],
+          "size": [
+            1000.0,
+            270.0,
+            1239.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 334530000.0,
+          "centroid": [
+            6800.0,
+            2655.0,
+            619.5
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 3687060.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x45",
+        "bounds": {
+          "min": [
+            6300.0,
+            2790.0,
+            0.0
+          ],
+          "max": [
+            7300.0,
+            3060.0,
+            1416.0
+          ],
+          "size": [
+            1000.0,
+            270.0,
+            1416.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 382320000.0,
+          "centroid": [
+            6800.0,
+            2925.0,
+            708.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 4136640.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x46",
+        "bounds": {
+          "min": [
+            6300.0,
+            3060.0,
+            0.0
+          ],
+          "max": [
+            7300.0,
+            3330.0,
+            1592.0
+          ],
+          "size": [
+            1000.0,
+            270.0,
+            1592.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 429840000.0,
+          "centroid": [
+            6800.0,
+            3195.0,
+            796.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 4583680.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x47",
+        "bounds": {
+          "min": [
+            6300.0,
+            3330.0,
+            0.0
+          ],
+          "max": [
+            7300.0,
+            3600.0,
+            1768.0
+          ],
+          "size": [
+            1000.0,
+            270.0,
+            1768.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 477360000.0,
+          "centroid": [
+            6800.0,
+            3465.0,
+            884.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 5030720.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x48",
+        "bounds": {
+          "min": [
+            6300.0,
+            3600.0,
+            0.0
+          ],
+          "max": [
+            7300.0,
+            3870.0,
+            1944.0
+          ],
+          "size": [
+            1000.0,
+            270.0,
+            1944.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 524880000.0,
+          "centroid": [
+            6800.0,
+            3735.0,
+            972.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 5477760.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x49",
+        "bounds": {
+          "min": [
+            6300.0,
+            3870.0,
+            0.0
+          ],
+          "max": [
+            7300.0,
+            4140.0,
+            2120.0
+          ],
+          "size": [
+            1000.0,
+            270.0,
+            2120.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 572400000.0,
+          "centroid": [
+            6800.0,
+            4005.0,
+            1060.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 5924800.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x4a",
+        "bounds": {
+          "min": [
+            6300.0,
+            4140.0,
+            0.0
+          ],
+          "max": [
+            7300.0,
+            4410.0,
+            2296.0
+          ],
+          "size": [
+            1000.0,
+            270.0,
+            2296.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 619920000.0,
+          "centroid": [
+            6800.0,
+            4275.0,
+            1148.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 6371840.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x4b",
+        "bounds": {
+          "min": [
+            6300.0,
+            4410.0,
+            0.0
+          ],
+          "max": [
+            7300.0,
+            4680.0,
+            2472.0
+          ],
+          "size": [
+            1000.0,
+            270.0,
+            2472.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 667440000.0,
+          "centroid": [
+            6800.0,
+            4545.0,
+            1236.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 6818880.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x4c",
+        "bounds": {
+          "min": [
+            6300.0,
+            4680.0,
+            0.0
+          ],
+          "max": [
+            7300.0,
+            4950.0,
+            2648.0
+          ],
+          "size": [
+            1000.0,
+            270.0,
+            2648.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 714960000.0,
+          "centroid": [
+            6800.0,
+            4815.0,
+            1324.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 7265920.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x4d",
+        "bounds": {
+          "min": [
+            6300.0,
+            4950.0,
+            0.0
+          ],
+          "max": [
+            7300.0,
+            5220.0,
+            2824.0
+          ],
+          "size": [
+            1000.0,
+            270.0,
+            2824.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 762480000.0,
+          "centroid": [
+            6800.0,
+            5085.0,
+            1412.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 7712960.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x4e",
+        "bounds": {
+          "min": [
+            6300.0,
+            5220.0,
+            0.0
+          ],
+          "max": [
+            7300.0,
+            5400.0,
+            3000.0
+          ],
+          "size": [
+            1000.0,
+            180.0,
+            3000.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 540000000.0,
+          "centroid": [
+            6800.0,
+            5310.0,
+            1500.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 7440000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x4f",
+        "bounds": {
+          "min": [
+            4100.0,
+            -1200.0,
+            2800.0
+          ],
+          "max": [
+            5900.0,
+            0.0,
+            3000.0
+          ],
+          "size": [
+            1800.0,
+            1200.0,
+            200.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 432000000.0,
+          "centroid": [
+            5000.0,
+            -600.0,
+            2900.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 5520000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x50",
+        "bounds": {
+          "min": [
+            4100.0,
+            -1200.0,
+            3000.0
+          ],
+          "max": [
+            5900.0,
+            -1160.0,
+            4000.0
+          ],
+          "size": [
+            1800.0,
+            40.0,
+            1000.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 72000000.0,
+          "centroid": [
+            5000.0,
+            -1180.0,
+            3500.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 3824000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x51",
+        "bounds": {
+          "min": [
+            4100.0,
+            -1160.0,
+            3000.0
+          ],
+          "max": [
+            4140.0,
+            0.0,
+            4000.0
+          ],
+          "size": [
+            40.0,
+            1160.0,
+            1000.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 46399999.99999999,
+          "centroid": [
+            4120.0,
+            -580.0,
+            3500.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 2492800.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x52",
+        "bounds": {
+          "min": [
+            5860.0,
+            -1160.0,
+            3000.0
+          ],
+          "max": [
+            5900.0,
+            0.0,
+            4000.0
+          ],
+          "size": [
+            40.0,
+            1160.0,
+            1000.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 46399999.99999999,
+          "centroid": [
+            5880.0,
+            -580.0,
+            3500.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 2492800.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x53",
+        "bounds": {
+          "min": [
+            0.0,
+            0.0,
+            5700.0
+          ],
+          "max": [
+            300.0,
+            8000.0,
+            7478.0
+          ],
+          "size": [
+            300.0,
+            8000.0,
+            1778.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 2133599999.9999998,
+          "centroid": [
+            150.0,
+            4000.0,
+            6292.666666666667
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 19250416.235100597,
+        "meshTriangleCount": 8
+      },
+      {
+        "sourceHandle": "0x54",
+        "bounds": {
+          "min": [
+            9700.0,
+            0.0,
+            5700.0
+          ],
+          "max": [
+            10000.0,
+            8000.0,
+            7478.0
+          ],
+          "size": [
+            300.0,
+            8000.0,
+            1778.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 2133599999.9999998,
+          "centroid": [
+            9850.0,
+            4000.0,
+            6292.666666666667
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 19250416.235100597,
+        "meshTriangleCount": 8
+      },
+      {
+        "sourceHandle": "0x55",
+        "bounds": {
+          "min": [
+            8000.0,
+            5800.0,
+            3000.0
+          ],
+          "max": [
+            8600.0,
+            6400.0,
+            8100.0
+          ],
+          "size": [
+            600.0,
+            600.0,
+            5100.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 1836000000.0,
+          "centroid": [
+            8300.0,
+            6100.0,
+            5550.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 12960000.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x56",
+        "bounds": {
+          "min": [
+            -500.00000000000006,
+            -500.0000000000009,
+            5478.0
+          ],
+          "max": [
+            10500.0,
+            8500.0,
+            7728.0
+          ],
+          "size": [
+            11000.0,
+            9000.0,
+            2250.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 24660000000.000004,
+          "centroid": [
+            4987.956204379561,
+            3992.335766423358,
+            6602.756690997568
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 226486963.01537058,
+        "meshTriangleCount": 40
+      },
+      {
+        "sourceHandle": "0x57",
+        "bounds": {
+          "min": [
+            6260.0,
+            1460.0,
+            3000.0
+          ],
+          "max": [
+            6300.0,
+            5400.0,
+            4000.0
+          ],
+          "size": [
+            40.0,
+            3940.0,
+            1000.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 157600000.0,
+          "centroid": [
+            6280.0,
+            3430.0,
+            3500.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 8275200.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x58",
+        "bounds": {
+          "min": [
+            7300.0,
+            1460.0,
+            3000.0
+          ],
+          "max": [
+            7340.0,
+            5400.0,
+            4000.0
+          ],
+          "size": [
+            40.0,
+            3940.0,
+            1000.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 157600000.0,
+          "centroid": [
+            7320.0,
+            3430.0,
+            3500.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 8275200.0,
+        "meshTriangleCount": 12
+      },
+      {
+        "sourceHandle": "0x59",
+        "bounds": {
+          "min": [
+            6300.0,
+            1460.0,
+            3000.0
+          ],
+          "max": [
+            7300.0,
+            1500.0,
+            4000.0
+          ],
+          "size": [
+            1000.0,
+            40.0,
+            1000.0
+          ]
+        },
+        "kernelMass": {
+          "volume": 40000000.0,
+          "centroid": [
+            6800.0,
+            1480.0,
+            3500.0
+          ],
+          "analytic": false
+        },
+        "meshSurfaceArea": 2160000.0,
+        "meshTriangleCount": 12
+      }
+    ],
+    "aggregateBoundsOfAll48CarriersMm": {
+      "min": [
+        -500.00000000000006,
+        -1200.0,
+        -300.0
+      ],
+      "max": [
+        10500.0,
+        8500.0,
+        8100.0
+      ],
+      "size": [
+        11000.0,
+        9700.0,
+        8400.0
+      ],
+      "scope": "Union of independent kernel body bounds across the 48 projected SAT carriers; includes eaves, porch and other projecting bodies, not the publisher stated 10 m \u00d7 8 m footprint."
+    }
   }
 }
