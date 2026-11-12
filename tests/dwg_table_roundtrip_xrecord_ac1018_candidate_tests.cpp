@@ -1,10 +1,16 @@
 #include "intern/dwg_table_roundtrip_xrecord_ac1018_candidate.h"
 #include "intern/dwgbufferw.h"
+#include "lc3_compat_check.cpp"
+#include <array>
+#include <chrono>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <memory>
 #include <new>
+#include <sstream>
 #include <string>
 namespace fault { long remaining=-1; std::size_t count=0; bool active=false; }
 void* operator new(std::size_t n) {
@@ -155,11 +161,66 @@ bool referenceProjection() {
     std::cout<<"reference projection controls passed; allocation faults="<<count<<'\n';
     return true;
 }
+class ProjectedDxfWriter final:public LC3CompatCheck {
+public:
+    explicit ProjectedDxfWriter(dxfRW& value):writer(value){}
+    void writeObjects() override {written=writer.writeXRecord(&record);}
+    bool finalizeDxfWrite() override {return written;}
+    dxfRW& writer;
+    DRW_XRecord record;
+    bool written{false};
+};
+class ProjectedDxfReader final:public LC3CompatCheck {
+public:
+    void addXRecord(const DRW_XRecord& value) override {records.push_back(value);}
+    std::vector<DRW_XRecord> records;
+};
+bool dxfHandleRemapRoundtrip(const Fixture& f,
+                             const std::vector<DRW_Variant>& entries,
+                             bool binary) {
+    const auto path=std::filesystem::temp_directory_path()
+        /("libdxfrw-table-xrecord-remap-"
+          +std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())
+          +(binary?"-binary.dxf":"-ascii.dxf"));
+    struct Cleanup {std::filesystem::path path;~Cleanup(){std::error_code error;std::filesystem::remove(path,error);}} cleanup{path};
+    dxfRW writer(path.string().c_str());
+    writer.setHandleRemap({{0xbbu,0x401u},{0xbcu,0x400u},
+                           {0x501u,0x901u},{0x502u,0x902u},{0x503u,0x903u}});
+    ProjectedDxfWriter adapter(writer);
+    adapter.record=f.typed;
+    adapter.record.m_dataEntries=entries;
+    if(!writer.write(&adapter,DRW::AC1018,binary)||!adapter.written)return false;
+    dxfRW check(path.string().c_str());ProjectedDxfReader decoded;
+    if(!check.read(&decoded,false)||decoded.records.size()!=1u)return false;
+    const auto& record=decoded.records[0];
+    if(record.handle!=0x400u||record.parentHandle!=0x401u
+        ||record.reactorHandles.size()!=1u||record.reactorHandles[0]!=0x401u
+        ||record.m_dataEntries.size()!=entries.size())return false;
+    constexpr std::array<std::size_t,3> indexes{{1u,7u,12u}};
+    constexpr std::array<std::uint64_t,3> expected{{0x901u,0x902u,0x903u}};
+    for(std::size_t i=0;i<indexes.size();++i) {
+        const auto& value=record.m_dataEntries[indexes[i]];
+        if(value.code()!=entries[indexes[i]].code()
+            ||value.type()!=DRW_Variant::INTEGER64
+            ||value.i64_val()!=static_cast<std::int64_t>(expected[i]))return false;
+    }
+    return record.m_dataEntries[0].stringEquals("ACAD_ROUNDTRIP_2008_TABLE_ENTITY")
+        &&record.m_dataEntries[8].stringEquals("ACAD_ROUNDTRIP_PRE2007_TABLE")
+        &&record.m_dataEntries[11].stringEquals("ACAD_ROUNDTRIP_PRE2007_TABLECELL");
+}
+bool dxfHandleRemapRoundtrips() {
+    const auto f=build();const std::array<std::uint32_t,3> targets{{0x501u,0x502u,0x503u}};
+    std::vector<DRW_Variant> entries;Result source;
+    if(!DwgTableRoundtripXRecordAc1018Candidate::projectReferences(
+           f.raw,f.typed,targets,entries,source))return false;
+    return dxfHandleRemapRoundtrip(f,entries,false)
+        &&dxfHandleRemapRoundtrip(f,entries,true);
+}
 bool refused(const Fixture& f){Result r;r.handle=7u;r.references[2].target=2u;return !DwgTableRoundtripXRecordAc1018Candidate::inspect(f.raw,f.typed,r)&&clear(r);}
 bool generated() {
     auto f=build();const auto original=f.raw.m_rawBytes;Result r;
     if(!DwgTableRoundtripXRecordAc1018Candidate::inspect(f.raw,f.typed,r)||!matches(r))return false;
-    if(!referenceProjection())return false;
+    if(!referenceProjection()||!dxfHandleRemapRoundtrips())return false;
     for(std::size_t n=0;n<original.size();++n){
         f.raw.m_rawBytes.assign(original.begin(),original.begin()+n);f.raw.m_objectSize=static_cast<std::uint32_t>(n);
         if(!refused(f))return false;

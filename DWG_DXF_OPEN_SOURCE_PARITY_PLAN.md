@@ -2187,6 +2187,12 @@ created locally from scratch for the specific control.
   projection to source evidence, but still does not authenticate mapped output
   identities/roles or grant output permission
   ([adapter receipt](docs/research/p5-ac1018-table-xrecord-capability-bound-projection-2026-11-11.json)).
+  The projected XRECORD now also passes full generated AC1018 ASCII and Binary
+  DXF write/readback with `dxfRW` handle remapping applied to the record,
+  owner/reactor and all three 360/361 values. This verifies serializer and
+  parser handle translation for the selected ordered values only; it does not
+  bind the mapped targets to emitted graph nodes or relax strict physical-source
+  refusal ([DXF remap receipt](docs/research/p5-ac1018-table-xrecord-dxf-remap-readback-2026-11-11.json)).
   Next resolve each mapped target to an emitted identity with exact
   role/type/owner and recursive closure, stage the actual XRECORD bytes under
   the live capability, and prove finalization revalidation, rollback, retry,
