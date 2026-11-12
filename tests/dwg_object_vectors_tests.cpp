@@ -3682,6 +3682,78 @@ bool makeLegacyTableStyleFrame(
     return true;
 }
 
+bool makeAc1018LegacyTableStyleFrame(TableStyleFrame& frame,
+                                     int wrongRowHandleIndex = -1,
+                                     std::uint8_t wrongRowHandleRole =
+                                         DRW::DwgHardPointer) {
+    constexpr DRW::Version version = DRW::AC1018;
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    TableStyleCodecProbe source;
+    source.handle = 0xA100u;
+    source.parentHandle = 0xA200u;
+    source.m_name = "Generated AC1018 legacy table style";
+    source.m_rowStyles.resize(3u);
+    for (DRW_TableStyleRowStyle& row : source.m_rowStyles) {
+        row.m_textStyleHandle = 0xA300u;
+        row.m_textHeight = 2.5;
+        row.m_textAlignment = 1;
+        row.m_borders.resize(6u);
+    }
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    if (!source.encodeDwg(version, &body, &strings, &handles))
+        return false;
+    if (wrongRowHandleIndex >= 0) {
+        int rowIndex = 0;
+        bool roleChanged = false;
+        for (const DRW::DwgHandleWriteOccurrence& occurrence :
+             handles.handleOccurrences()) {
+            if (occurrence.reference != 0xA300u
+                || occurrence.code != DRW::DwgHardPointer)
+                continue;
+            if (rowIndex++ != wrongRowHandleIndex)
+                continue;
+            if (occurrence.startBit % 8u != 0u
+                || occurrence.startBit / 8u >= handles.data().size())
+                return false;
+            std::uint8_t& roleByte = handles.data()[
+                static_cast<std::size_t>(occurrence.startBit / 8u)];
+            roleByte = static_cast<std::uint8_t>(
+                (wrongRowHandleRole << 4u) | (roleByte & 0x0Fu));
+            roleChanged = true;
+            break;
+        }
+        if (!roleChanged)
+            return false;
+    }
+
+    dwgBufferW object(&codec);
+    object.putObjType(version, DRW_TableStyle::kDwgClassNum);
+    const std::uint64_t sizeBit = object.bitCount();
+    object.putRawLong32(0u);
+    dwgHandle ownHandle;
+    ownHandle.ref = source.handle;
+    object.putHandle(ownHandle);
+    object.putBitShort(0u); // no EED
+    object.putBitLong(0); // no reactors
+    object.putBit(1u); // no extension dictionary
+    appendBits(object, body);
+    handles.alignToByte();
+    if (!object.isGood() || !handles.isGood()
+        || handles.bitCount() > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
+    object.putBytes(handles.data().data(), handles.size());
+    if (!object.isGood()
+        || object.bitCount() > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    object.patchRawLong32AtBit(
+        sizeBit, static_cast<std::uint32_t>(object.bitCount()));
+    frame.bytes = object.data();
+    return true;
+}
+
 void testTableStyleDataFlagRange(TestContext& t) {
     constexpr DRW::Version version = DRW::AC1032;
     struct Case {
@@ -5452,6 +5524,45 @@ void testLegacyTableStyleRowTextStyleHandleRole(TestContext& t) {
                      && retryInput.isGood() && parsed.handle == 0xA100u
                      && parsed.m_rowStyles.size() == 3u,
                  "AC1021 legacy TABLESTYLE accepts corrected row role on same object");
+    }
+
+    codec.setVersion(DRW::AC1018, false);
+    for (const std::uint8_t wrongRole :
+         {DRW::DwgSoftPointer, DRW::DwgHardOwnership,
+          DRW::DwgSoftOwnership}) {
+        TableStyleFrame valid;
+        TableStyleFrame malformed;
+        const bool built = makeAc1018LegacyTableStyleFrame(valid)
+            && makeAc1018LegacyTableStyleFrame(malformed, 1, wrongRole);
+        t.expect(built,
+                 "AC1018 legacy TABLESTYLE inline row-role vectors build from scratch");
+        if (!built)
+            continue;
+
+        TableStyleCodecProbe parsed;
+        dwgBuffer validInput(valid.bytes.data(), valid.bytes.size(), &codec);
+        const bool validRead = parsed.parseDwg(
+            DRW::AC1018, &validInput, valid.handleBits);
+        t.expect(validRead && validInput.isGood()
+                     && parsed.m_rowStyles.size() == 3u,
+                 "AC1018 legacy TABLESTYLE reads hard-pointer row text styles");
+        if (!validRead)
+            continue;
+
+        dwgBuffer malformedInput(malformed.bytes.data(),
+                                 malformed.bytes.size(), &codec);
+        const bool rejected = !parsed.parseDwg(
+            DRW::AC1018, &malformedInput, malformed.handleBits);
+        t.expect(rejected && !malformedInput.isGood()
+                     && parsed.handle == 0u && parsed.m_name.empty()
+                     && parsed.m_rowStyles.empty(),
+                 "AC1018 legacy TABLESTYLE rejects wrong inline row role atomically");
+
+        dwgBuffer retryInput(valid.bytes.data(), valid.bytes.size(), &codec);
+        t.expect(parsed.parseDwg(DRW::AC1018, &retryInput, valid.handleBits)
+                     && retryInput.isGood() && parsed.handle == 0xA100u
+                     && parsed.m_rowStyles.size() == 3u,
+                 "AC1018 legacy TABLESTYLE accepts corrected inline role on same object");
     }
 }
 

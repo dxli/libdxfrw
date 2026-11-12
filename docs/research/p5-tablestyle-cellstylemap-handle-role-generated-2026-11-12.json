@@ -19,6 +19,7 @@
     "covered_paths": [
       "AC1018 inline CELLSTYLEMAP handle parsing",
       "AC1021 CELLSTYLEMAP detached handle stream parsing",
+      "AC1018 legacy TABLESTYLE inline row-style text-style handle parsing",
       "AC1021 legacy TABLESTYLE row-style text-style handle stream parsing",
       "AC1024 TABLESTYLE detached handle stream parsing",
       "AC1027 TABLESTYLE detached handle stream parsing",
