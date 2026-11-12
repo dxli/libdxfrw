@@ -1506,11 +1506,13 @@ created locally from scratch for the specific control.
   code-4 mismatch. Generated AC1015/AC1018/AC1021/AC1024/AC1027 controls
   verify code-4 null publication and raw span retention after a wrong-role
   failure, then corrected-input retry on the same parser; the focused test
-  passes. The physical conference-room sample still fails its VIEW record
-  read at a later, not-yet-isolated point and carries a separate HEADER
-  envelope discrepancy (expected 816 bytes, observed 820); keep that sample
-  qualification open and do not infer broader VIEW support. No fixture was
-  added. See the [typed-null receipt](docs/research/p6-view-typed-null-handle-role-validation-2026-11-11.json).
+  passes. On physical recheck, the parser accepts the typed-null `baseUcs`
+  field, then exhausts the bounded handle stream while trying to read the
+  following `namedUcs` field. ODA §20.4.60 specifies both fields for R2000+;
+  do not synthesize the absent handle or weaken frame bounds. The sample also
+  carries a separate HEADER envelope discrepancy (expected 816 bytes, observed
+  820). Keep physical sample qualification open; no fixture was added. See
+  the [typed-null receipt](docs/research/p6-view-typed-null-handle-role-validation-2026-11-11.json).
 
 - **P6 DIMASSOC whole-file allocation rollback:** the generated AC1024 ASCII
   and Binary DXF control now injects failure at all 21 reached allocations

@@ -36,9 +36,25 @@
   },
   "physicalSampleRecheck": {
     "command": "ctest --test-dir build -R '^dwg_read_AC1024_visualization_-_conference_room$' --output-on-failure",
-    "result": "still fails with BAD_READ_TABLES; the role-mismatch diagnostic is no longer present, but a VIEW record still fails later in parsing",
+    "beforeFixTrace": "The hash-bound Camera1 VIEW frame failed because its baseUcs handle was raw code 4, target 0, while the parser accepted only canonical null code 0 or the expected non-null role.",
+    "afterFixTrace": {
+      "acceptedHandleSequence": [
+        {"field": "control", "rawCode": 4, "size": 1, "target": 6},
+        {"field": "xdict", "rawCode": 3, "size": 2, "target": 730},
+        {"field": "xrefBlock", "rawCode": 5, "size": 0, "target": 0},
+        {"field": "background", "rawCode": 4, "size": 0, "target": 0},
+        {"field": "visualStyle", "rawCode": 5, "size": 1, "target": 163},
+        {"field": "sun", "rawCode": 3, "size": 0, "target": 0},
+        {"field": "baseUcs", "rawCode": 4, "size": 0, "target": 0}
+      ],
+      "failure": "The bounded frame has no remaining encoded handle for namedUcs; readBoundedObjectHandle fails at that field.",
+      "specification": "ODA v5.4.1 §20.4.60 defines both Base UCS Handle and Named UCS Handle for R2000+ VIEW records.",
+      "decision": "Keep the record failure and do not synthesize a missing handle or relax the frame boundary."
+    },
+    "result": "The parser no longer rejects the observed typed-null baseUcs role; the physical sample remains rejected at the absent following namedUcs handle, so BAD_READ_TABLES remains correct for this incomplete profile.",
     "separateIntegrityObservation": "The reader reports an AC1024 HEADER section envelope discrepancy at file offset 16: expected 816 bytes, observed 820 bytes.",
-    "disposition": "Keep physical sample qualification open. The exact later VIEW failure has not been isolated, and the HEADER observation is independent."
+    "softeningExperiment": "Temporarily allowing the failed VIEW row to be skipped made the read operation succeed but left one source frame unresolved; the existing sample harness correctly rejected this incomplete coverage. That change was reverted.",
+    "disposition": "Keep physical sample qualification open. The missing namedUcs field and HEADER discrepancy are independent source-integrity gaps."
   },
   "fixturePolicy": "No DWG or DXF fixture was added. The generated profile is encoded in memory.",
   "claimBoundary": "This closes only the local typed-null VIEW handle-role parser control. It does not prove target existence, ownership graph closure, whole-file conversion, native VIEW semantics, or broader producer support."
