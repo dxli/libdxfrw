@@ -4667,6 +4667,69 @@ void testCellStyleMapDwgEncodeRoundTrip(TestContext& t) {
         const bool read = parsed.parseDwg(version, &input, frame.handleBits);
         t.expect(read && input.isGood(),
                  "AC1021 CELLSTYLEMAP encoded frame parses successfully");
+        if (read && input.isGood()) {
+            dwgBufferW roleBody(&codec), roleStrings(&codec), roleHandles(&codec);
+            const bool handlesEncoded = source.encodeDwg(
+                version, &roleBody, &roleStrings, &roleHandles);
+            t.expect(handlesEncoded,
+                     "AC1021 CELLSTYLEMAP role-control handle stream builds");
+            const std::uint64_t handleStreamStartBit =
+                static_cast<std::uint64_t>(frame.bytes.size()) * 8u
+                - frame.handleBits;
+            for (const auto& field :
+                 {std::pair<const char*, std::uint64_t>{"text-style", 0xA400u},
+                  {"border-linetype", 0xA500u}}) {
+                const auto occurrence = std::find_if(
+                    roleHandles.handleOccurrences().begin(),
+                    roleHandles.handleOccurrences().end(),
+                    [&field](const DRW::DwgHandleWriteOccurrence& item) {
+                        return item.reference == field.second
+                            && item.code == DRW::DwgHardPointer;
+                    });
+                const bool occurrenceFound = handlesEncoded
+                    && occurrence != roleHandles.handleOccurrences().end();
+                t.expect(occurrenceFound,
+                         std::string("AC1021 CELLSTYLEMAP ") + field.first
+                             + " handle occurrence is identified");
+                if (!occurrenceFound)
+                    continue;
+                for (const std::uint8_t wrongRole :
+                     {DRW::DwgSoftPointer, DRW::DwgHardOwnership,
+                      DRW::DwgSoftOwnership}) {
+                    std::vector<std::uint8_t> malformedBytes = frame.bytes;
+                    const std::uint64_t roleBit = handleStreamStartBit
+                        + occurrence->startBit;
+                    const bool roleByteAvailable = roleBit % 8u == 0u
+                        && roleBit / 8u < malformedBytes.size();
+                    t.expect(roleByteAvailable,
+                             "AC1021 CELLSTYLEMAP handle role byte is bounded");
+                    if (!roleByteAvailable)
+                        continue;
+                    std::uint8_t& roleByte = malformedBytes[
+                        static_cast<std::size_t>(roleBit / 8u)];
+                    roleByte = static_cast<std::uint8_t>(
+                        (wrongRole << 4u) | (roleByte & 0x0Fu));
+                    CellStyleMapCodecProbe retryable;
+                    dwgBuffer malformed(malformedBytes.data(),
+                                        malformedBytes.size(), &codec);
+                    const bool rejected = !retryable.parseDwg(
+                        version, &malformed, frame.handleBits);
+                    t.expect(rejected && !malformed.isGood()
+                                 && retryable.handle == 0u
+                                 && retryable.m_cellStyles.empty(),
+                             std::string("AC1021 CELLSTYLEMAP rejects wrong ")
+                                 + field.first + " role atomically");
+                    dwgBuffer corrected(frame.bytes.data(), frame.bytes.size(),
+                                        &codec);
+                    t.expect(retryable.parseDwg(
+                                 version, &corrected, frame.handleBits)
+                                 && corrected.isGood()
+                                 && retryable.handle == source.handle
+                                 && retryable.m_cellStyles.size() == 3u,
+                             "AC1021 CELLSTYLEMAP accepts corrected role on same object");
+                }
+            }
+        }
         t.expect(parsed.handle == source.handle
                      && parsed.parentHandle == source.parentHandle,
                  "AC1021 CELLSTYLEMAP object and parent handles round-trip");
