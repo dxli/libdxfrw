@@ -83,6 +83,19 @@ public:
     std::int16_t rawType() const { return oType; }
 };
 
+template <class SurfaceType>
+class SurfaceSubtypeProbe final : public SurfaceType {
+public:
+    using DRW_Surface::encodeDwg;
+    std::int16_t rawType() const { return this->oType; }
+};
+
+using ExtrudedSurfaceProbe = SurfaceSubtypeProbe<DRW_ExtrudedSurface>;
+using RevolvedSurfaceProbe = SurfaceSubtypeProbe<DRW_RevolvedSurface>;
+using SweptSurfaceProbe = SurfaceSubtypeProbe<DRW_SweptSurface>;
+using LoftedSurfaceProbe = SurfaceSubtypeProbe<DRW_LoftedSurface>;
+using NurbsSurfaceProbe = SurfaceSubtypeProbe<DRW_NurbsSurface>;
+
 struct Buffers {
     dwgBufferW body;
     dwgBufferW strings;
@@ -155,6 +168,48 @@ Shape makeShape(DRW::Version version) {
         shape.setDwgClassNum(DRW_PlaneSurface::kDwgClassNum);
         shape.uIsolines = 4;
         shape.vIsolines = 6;
+    } else if constexpr (std::is_same_v<Shape, ExtrudedSurfaceProbe>) {
+        shape.setDwgClassNum(DRW_ExtrudedSurface::kDwgClassNum);
+        shape.modelerFormatVersion = 1;
+        shape.uIsolines = 4;
+        shape.vIsolines = 5;
+        shape.sweepVector = {0.0, 0.0, 1.0};
+        shape.referenceVector = {1.0, 0.0, 0.0};
+        shape.scaleFactor = 1.25;
+    } else if constexpr (std::is_same_v<Shape, RevolvedSurfaceProbe>) {
+        shape.setDwgClassNum(DRW_RevolvedSurface::kDwgClassNum);
+        shape.modelerFormatVersion = 1;
+        shape.axisPoint = {1.0, 2.0, 3.0};
+        shape.axisVector = {0.0, 0.0, 1.0};
+        shape.revolveAngle = 1.5;
+    } else if constexpr (std::is_same_v<Shape, SweptSurfaceProbe>) {
+        shape.setDwgClassNum(DRW_SweptSurface::kDwgClassNum);
+        shape.modelerFormatVersion = 1;
+        shape.sweepEntityId = 4u;
+        shape.sweepData = {0x01u, 0xA5u};
+        shape.pathEntityId = 5u;
+        shape.pathData = {0xFEu, 0x7Fu};
+        shape.referenceVector = {1.0, 2.0, 3.0};
+        shape.scaleFactor = 1.1;
+    } else if constexpr (std::is_same_v<Shape, LoftedSurfaceProbe>) {
+        shape.setDwgClassNum(DRW_LoftedSurface::kDwgClassNum);
+        shape.modelerFormatVersion = 1;
+        shape.numCrossSections = 1;
+        shape.numGuideCurves = 1;
+        shape.crossSectionHandles = {0x61u};
+        shape.guideCurveHandles = {0x62u};
+        shape.pathCurveHandle = 0x63u;
+        shape.dxfReferenceData.emplace_back(90, std::int32_t{2});
+    } else if constexpr (std::is_same_v<Shape, NurbsSurfaceProbe>) {
+        shape.setDwgClassNum(DRW_NurbsSurface::kDwgClassNum);
+        shape.uIsolines = 12;
+        shape.vIsolines = 13;
+        shape.short170 = 14;
+        shape.cvHullDisplay = true;
+        shape.uvec1 = {1.0, 0.0, 0.0};
+        shape.vvec1 = {0.0, 1.0, 0.0};
+        shape.uvec2 = {2.0, 0.0, 0.0};
+        shape.vvec2 = {0.0, 2.0, 0.0};
     } else if constexpr (std::is_same_v<Shape, GeoPositionMarkerProbe>) {
         shape.m_classVersion = 2u;
         shape.m_position = {1.0, 2.0, 3.0};
@@ -379,6 +434,32 @@ int main() {
          {DRW::AC1021, DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
         for (const auto layout : layouts) {
             unsigned long reachedFailures = 0u;
+            if (!sweep<ExtrudedSurfaceProbe>(version, layout, 521,
+                                             reachedFailures))
+                return 1;
+            totalReachedFailures += reachedFailures;
+            if (!sweep<RevolvedSurfaceProbe>(version, layout, 531,
+                                             reachedFailures))
+                return 1;
+            totalReachedFailures += reachedFailures;
+            if (!sweep<SweptSurfaceProbe>(version, layout, 533,
+                                          reachedFailures))
+                return 1;
+            totalReachedFailures += reachedFailures;
+            if (!sweep<LoftedSurfaceProbe>(version, layout, 529,
+                                           reachedFailures))
+                return 1;
+            totalReachedFailures += reachedFailures;
+            if (!sweep<NurbsSurfaceProbe>(version, layout, 537,
+                                          reachedFailures))
+                return 1;
+            totalReachedFailures += reachedFailures;
+        }
+    }
+    for (const DRW::Version version :
+         {DRW::AC1021, DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
+        for (const auto layout : layouts) {
+            unsigned long reachedFailures = 0u;
             if (!sweep<LightProbe>(version, layout, 502, reachedFailures))
                 return 1;
             totalReachedFailures += reachedFailures;
@@ -436,7 +517,7 @@ int main() {
         return 1;
     }
     std::cout << "HATCH/MPOLYGON/MLEADER/ARCALIGNEDTEXT/LIGHT/SECTIONOBJECT/"
-              << "GEOPOSITIONMARKER/CAMERA/PLANESURFACE "
+              << "GEOPOSITIONMARKER/CAMERA/ALL-SURFACE-SUBTYPES "
               << "DWG encode allocation "
               << "rollback/retry "
               << "passed across " << sizeof(versions) / sizeof(versions[0])
@@ -444,7 +525,7 @@ int main() {
               << "and 4 LIGHT/SECTIONOBJECT versions, "
               << sizeof(layouts) / sizeof(layouts[0])
                      * (sizeof(versions) / sizeof(versions[0]) * 4u + 3u
-                        + 8u + 2u + 4u)
+                        + 8u + 2u + 4u + 20u)
               << " entity/version/layout profiles; " << totalReachedFailures
               << " allocation offsets exercised\n";
     return 0;
