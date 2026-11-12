@@ -8159,6 +8159,20 @@ it does not qualify those entity types, semantic preservation, producer-wide
 support, native DWG opening, or Linux/Windows behavior. The source was not
 added to the repository. See the [FreeCAD import observation receipt](docs/research/p8-freecad-ac1021-tablet-import-observation-2026-11-10.json).
 
+**Native FreeCAD installed-converter open/insert recheck (2026-11-12):** the
+existing strict integration harness passed both `open` and `insert` on macOS
+arm64 with the locally installed FreeCAD 1.1.4 revision
+`4fd3bf320d9566a27e60069fc8387448aaa3a094`. It generated one AC1021 3D LINE
+from scratch, verified exact endpoints and bounds after FreeCAD's C++ DXF
+importer, and asserted the installed converter path/hash (matching the current
+build) and temporary Unicode/spaces paths. The sandboxed run stopped before
+import because Qt could not detect ARM NEON; the unsandboxed direct harness
+runs passed. The pinned CI workflow targets FreeCAD 1.1.3, so its test correctly
+refused the locally installed 1.1.4 revision; this local result does not close
+the pinned 1.1.3, Linux, or Windows gates. It qualifies one generated LINE
+route only, not physical producers, broader entities, ACIS solids, or native
+DWG support. No fixture was added. See the [macOS 1.1.4 receipt](docs/research/p8-macos-freecad-114-generated-ac1021-line-qualification-2026-11-12.json).
+
 **FreeCAD ACIS consumer boundary (2026-11-12):** FreeCAD's current Draft DXF
 documentation says its built-in DXF importer cannot read ACIS/SAT solid blobs;
 its documented C++ entity list excludes 3DSOLID, REGION, and BODY. Its DWG
