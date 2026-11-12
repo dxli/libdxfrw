@@ -30865,6 +30865,119 @@ void testDictionaryWithDefaultHandleRole(TestContext& t) {
     }
 }
 
+void testDictionaryWithDefaultDwgEncodeAllocationRollback(TestContext& t) {
+    for (const DRW::Version version : {DRW::AC1015, DRW::AC1018,
+                                       DRW::AC1021}) {
+        DRW_TextCodec codec;
+        codec.setVersion(version, false);
+        DictionaryWithDefaultCodecProbe source;
+        source.handle = 0x550u;
+        source.parentHandle = 0x500u;
+        source.cloning = 1u;
+        source.hardOwner = 1u;
+        source.m_entries.push_back({"Default", 0x551u});
+        source.m_defaultEntryHandle = 0x551u;
+
+        dwgHandle seedHandle;
+        seedHandle.code = DRW::DwgSoftPointer;
+        seedHandle.rawCode = DRW::DwgSoftPointer;
+        seedHandle.size = 1u;
+        seedHandle.ref = 0xAAu;
+        seedHandle.ref64 = 0xAAu;
+        dwgBufferW expectedBody(&codec), expectedStrings(&codec),
+            expectedHandles(&codec);
+        expectedBody.putRawChar8(0x5Au);
+        expectedStrings.putVariableText(version, "retry-string-sentinel");
+        expectedHandles.putHandle(seedHandle);
+        DictionaryWithDefaultCodecProbe cleanSource = source;
+        const bool expectedEncoded = cleanSource.encodeDwg(
+            version, &expectedBody, &expectedStrings, &expectedHandles);
+        t.expect(expectedEncoded,
+                 "DICTIONARYWDFLT clean allocation baseline encodes in "
+                     + std::to_string(static_cast<int>(version)));
+        if (!expectedEncoded)
+            continue;
+
+        unsigned failures = 0u;
+        bool reachedFailureFreeOffset = false;
+        bool rollbackAndRetry = true;
+        for (long failAt = 0; failAt < 256; ++failAt) {
+            DictionaryWithDefaultCodecProbe attempt = source;
+            dwgBufferW body(&codec), strings(&codec), handles(&codec);
+            body.putRawChar8(0x5Au);
+            strings.putVariableText(version, "retry-string-sentinel");
+            handles.putHandle(seedHandle);
+            const auto bodyBefore = body.data();
+            const auto stringsBefore = strings.data();
+            const auto handlesBefore = handles.data();
+            const auto handleOccurrencesBefore =
+                handles.handleOccurrences().size();
+            const auto bodyBitsBefore = body.bitCount();
+            const auto stringsBitsBefore = strings.bitCount();
+            const auto handlesBitsBefore = handles.bitCount();
+
+            allocationFailureCountdown = failAt;
+            bool encoded = false;
+            bool threw = false;
+            try {
+                encoded = attempt.encodeDwg(
+                    version, &body, &strings, &handles);
+            } catch (const std::bad_alloc&) {
+                threw = true;
+            }
+            const long countdownAfter = allocationFailureCountdown.exchange(-1);
+            if (countdownAfter >= 0) {
+                reachedFailureFreeOffset = encoded && !threw
+                    && body.data() == expectedBody.data()
+                    && strings.data() == expectedStrings.data()
+                    && handles.data() == expectedHandles.data()
+                    && body.bitCount() == expectedBody.bitCount()
+                    && strings.bitCount() == expectedStrings.bitCount()
+                    && handles.bitCount() == expectedHandles.bitCount();
+                break;
+            }
+
+            ++failures;
+            const bool rolledBack = !encoded && !threw
+                && body.data() == bodyBefore
+                && strings.data() == stringsBefore
+                && handles.data() == handlesBefore
+                && handles.handleOccurrences().size()
+                    == handleOccurrencesBefore
+                && body.bitCount() == bodyBitsBefore
+                && strings.bitCount() == stringsBitsBefore
+                && handles.bitCount() == handlesBitsBefore;
+            const bool retried = attempt.encodeDwg(
+                    version, &body, &strings, &handles)
+                && body.data() == expectedBody.data()
+                && strings.data() == expectedStrings.data()
+                && handles.data() == expectedHandles.data()
+                && handles.handleOccurrences().size()
+                    == expectedHandles.handleOccurrences().size()
+                && body.bitCount() == expectedBody.bitCount()
+                && strings.bitCount() == expectedStrings.bitCount()
+                && handles.bitCount() == expectedHandles.bitCount();
+            rollbackAndRetry = rollbackAndRetry && rolledBack && retried;
+            if (!rollbackAndRetry)
+                break;
+        }
+        allocationFailureCountdown = -1;
+        t.expect(failures > 0u && reachedFailureFreeOffset
+                     && rollbackAndRetry,
+                 "DICTIONARYWDFLT allocation rollback and same-object retry in "
+                     + std::to_string(static_cast<int>(version))
+                     + " across " + std::to_string(failures)
+                     + " reached failure offsets");
+        const char *const versionName = version == DRW::AC1015 ? "AC1015"
+            : version == DRW::AC1018 ? "AC1018" : "AC1021";
+        std::cout << "DICTIONARYWDFLT " << versionName << ": " << failures
+                  << " allocation failures reached; "
+                  << (reachedFailureFreeOffset ? "clean boundary reached"
+                                                : "clean boundary missing")
+                  << '\n';
+    }
+}
+
 void testScaleDwgPositiveUnitDomain(TestContext& t) {
     const std::array<DRW::Version, 6> versions{{
         DRW::AC1015, DRW::AC1018, DRW::AC1021,
@@ -31010,6 +31123,15 @@ int main(int argc, char** argv) {
         TestContext context;
         testDictionaryWithDefaultHandleRole(context);
         std::cout << "DICTIONARYWDFLT default handle role: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1])
+            == "--dictionary-default-dwg-encode-allocation-rollback") {
+        TestContext context;
+        testDictionaryWithDefaultDwgEncodeAllocationRollback(context);
+        std::cout << "DICTIONARYWDFLT DWG encoder allocation rollback/retry: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

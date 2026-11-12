@@ -1611,6 +1611,16 @@ created locally from scratch for the specific control.
   settle every producer/version. No drawing fixture was added. See the
   [VIEW associated-UCS receipt](docs/research/p6-view-associated-ucs-handle-sequence-2026-11-12.json).
 
+- **P6 DICTIONARYWDFLT DWG encoder allocation rollback:** the direct encoder's
+  staged-write behavior now has a generated failure/retry control for AC1015,
+  AC1018, and AC1021. The sweep reaches 16, 16, and 22 injected allocation
+  failures respectively; each failure preserves seeded body/string/handle
+  buffers, and same-object retry matches clean output before the first
+  failure-free offset also matches the clean baseline. The focused CTest passes
+  1/1. This closes only allocation rollback for this generated profile; it does
+  not establish producer semantics, graph closure, or output qualification. No
+  fixture was added. See the [transaction receipt](docs/research/p6-dictionarywdefault-dwg-encoder-allocation-rollback-retry-2026-11-12.json).
+
 - **P6 AC1015 LTYPE_CONTROL legacy import profile:** an existing local
   AC1015 sample (`simple.dwg`, SHA-256
   `6702705ed765af035761a77170ea1486d01f513690b3fd8dc8295957ddc89e58`)

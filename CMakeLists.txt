@@ -1857,6 +1857,13 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_dictionary_default_handle_role PROPERTIES
         LABELS "fast;dwg;object-vectors;graph;generated"
         TIMEOUT 15)
+    add_test(NAME libdxfrw_dictionary_default_dwg_encode_allocation_retry
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --dictionary-default-dwg-encode-allocation-rollback)
+    set_tests_properties(
+        libdxfrw_dictionary_default_dwg_encode_allocation_retry PROPERTIES
+        LABELS "fast;dwg;object-vectors;allocation;transaction;generated"
+        TIMEOUT 30)
     add_test(NAME libdxfrw_dimassoc_dwg_detail_readback
         COMMAND libdxfrw_dwg_object_vectors_tests
             --dimassoc-dwg-detail-readback)
