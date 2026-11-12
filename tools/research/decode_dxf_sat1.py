@@ -129,7 +129,13 @@ def extract_sat1_payload(dxf: bytes, handle: str) -> bytes:
     except ValueError as exc:
         raise DecodeError("decoded payload has a malformed SAT header") from exc
     end_line = payload.splitlines()[-1]
-    if end_line not in {b"#End-of-ACIS-data", b"#End-of-ASM-data"}:
+    # SAT/ASM end markers are ordinary unprefixed tokens in the pinned
+    # InventorLoader and ezdxf readers. Also retain the prefixed spellings
+    # accepted by this helper before it encountered an unprefixed source.
+    if end_line not in {
+        b"End-of-ACIS-data", b"End-of-ASM-data",
+        b"#End-of-ACIS-data", b"#End-of-ASM-data",
+    }:
         raise DecodeError("decoded payload does not end with an ACIS/ASM end marker")
     return payload
 
