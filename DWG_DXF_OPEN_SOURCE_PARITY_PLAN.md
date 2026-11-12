@@ -7,10 +7,11 @@ are complete and 6 phase exit gates remain open**, giving a rough item-count
 progress estimate of **72.7% (16 / (16 + 6))**. The completed slices are
 represented by commits `787d65c6`, `e1c1cfe3`, `3feb4e6f`, `c9a64797`,
 `26e76b8c`, `9ebf0b78`, `dae9d0bd`, `d25b13b5`, `d9beb8f5`, `66883da5`,
-`dd2a0f4d`, `f35540b9`, `86ed0fd2`, `e96cc6ed`, `1f151ad3` and `27a7126c`.
-This estimate treats a small implementation slice and a broad phase gate as
-equal items, so it indicates queue progress, not effort-weighted completion of
-DWG/DXF parity.
+`dd2a0f4d`, `f35540b9`, `86ed0fd2`, `e96cc6ed`, `1f151ad3`, `27a7126c` and
+`524dfa02`. The last two commits complete and then strengthen one transaction
+slice. This estimate treats a small implementation slice and a broad phase
+gate as equal items, so it indicates queue progress, not effort-weighted
+completion of DWG/DXF parity.
 
 **Gate completion remains 0 of 6 (0%)**: P4–P8 are OPEN and P9 is
 DEFERRED_EXTERNAL. No phase gate has met its full evidence requirements.
