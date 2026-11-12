@@ -57,6 +57,23 @@ bool run() {
  }
  axial.extPoint={0.,2.,0.};if(!conversion(axial,tilt))return false;
  axial.extPoint={0.,std::numeric_limits<double>::denorm_min(),0.};if(!conversion(axial,tilt))return false;
+ const double largest=std::numeric_limits<double>::max();
+ auto extreme=native.poly;
+ extreme.extPoint={-0.5598695611870558,-0.5866966310980342,0.585092417925947};
+ extreme.elevation=0.14921939908714688*largest;
+ for(auto& vertex:extreme.vertlist){
+  vertex->x=-0.869681926769897*largest;
+  vertex->y=0.9829157734821004*largest;
+ }
+ std::vector<DRW_Coord> extremeOutput;
+ if(!DRW_DxfGeometry::lwPolylineVerticesToWcs(extreme,extremeOutput)
+    ||extremeOutput.size()!=extreme.vertlist.size())return false;
+ for(const auto& point:extremeOutput){
+  if(!std::isfinite(point.x)||!std::isfinite(point.y)||!std::isfinite(point.z)
+     ||std::fabs(point.x/largest-(-0.31568660864772236))>=1e-14
+     ||std::fabs(point.y/largest-0.9289141273359566)>=1e-14
+     ||std::fabs(point.z/largest-0.884419023840071)>=1e-14)return false;
+ }
  for(int mutation=0;mutation<11;++mutation) {
   auto bad=native.poly;const double inf=std::numeric_limits<double>::infinity();
   if(mutation==0)bad.extPoint={0.,0.,0.};

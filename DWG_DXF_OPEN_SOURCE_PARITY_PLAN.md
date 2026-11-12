@@ -23,6 +23,16 @@ to that path. This closes only the generated arithmetic case, not all extreme
 inputs or native rendering/producer qualification. No drawing fixture was
 added. See the [forward scaled-dot receipt](docs/research/p6-legacy-ocs-forward-scaled-dot-overflow-2026-11-11.json).
 
+**P6 LWPOLYLINE OCS-to-WCS overflow slice (2026-11-11):**
+`DRW_DxfGeometry::lwPolylineVerticesToWcs` now uses the shared OCS transform
+instead of duplicating its own three-term basis sums. Its dedicated generated
+test drives every vertex near `DBL_MAX` through the cancellation case and
+verifies finite normalized WCS points; the focused selector passes 1/1. The
+helper still stages all vertices and publishes the output vector only after
+the complete conversion succeeds. This closes only the bounded arithmetic
+case and does not promote producer or CAD-rendering support. No drawing fixture
+was added. See the [LWPOLYLINE scaled-dot receipt](docs/research/p6-lwpolyline-ocs-scaled-dot-overflow-2026-11-11.json).
+
 **Latest P7 implementation slice (2026-11-11, ACIS 700 zero-count framing):**
 an ODA File Converter 27.1.0.0-produced AC1024 DWG from the known cube SAT
 sample contains an `ACIS BinaryFile` version-700 SAB with record count zero,

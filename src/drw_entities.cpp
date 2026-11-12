@@ -17189,10 +17189,8 @@ bool DRW_DxfGeometry::lwPolylineVerticesToWcs(
         for (const auto& vertex : input.vertlist) {
             if (!vertex || !std::isfinite(vertex->x) || !std::isfinite(vertex->y))
                 return false;
-            const DRW_Coord point(
-                axisX.x * vertex->x + axisY.x * vertex->y + axisZ.x * input.elevation,
-                axisX.y * vertex->x + axisY.y * vertex->y + axisZ.y * input.elevation,
-                axisX.z * vertex->x + axisY.z * vertex->y + axisZ.z * input.elevation);
+            const DRW_Coord point = transformOcsCoordinate(
+                n, DRW_Coord(vertex->x, vertex->y, input.elevation));
             if (!std::isfinite(point.x) || !std::isfinite(point.y)
                 || !std::isfinite(point.z))
                 return false;
