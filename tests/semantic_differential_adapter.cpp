@@ -657,6 +657,9 @@ public:
     void enableNestedMTextAttributeProbe() {
         nestedMTextAttributeProbe_ = true;
     }
+    void enablePlaneSurfaceInlinePayloadProbe() {
+        planeSurfaceInlinePayloadProbe_ = true;
+    }
     void enableModelerCarrierProbe() { modelerCarrierProbe_ = true; }
     void enablePartialDwgReadbackControl() {
         partialDwgReadbackControl_ = true;
@@ -2293,6 +2296,7 @@ private:
     bool writeRecipeSucceeded_ = true;
     bool threeDConsumerProbe_ = false;
     bool nestedMTextAttributeProbe_ = false;
+    bool planeSurfaceInlinePayloadProbe_ = false;
     bool modelerCarrierProbe_ = false;
     bool partialDwgReadbackControl_ = false;
     bool opaqueDwgReadbackControl_ = false;
@@ -2335,6 +2339,22 @@ void SemanticSink::writeEntities() {
         return;
     }
 #ifdef LIBDXFRW_SEMANTIC_3D_CONSUMER_PROBE
+    if (planeSurfaceInlinePayloadProbe_) {
+        if (dxfWriter_ == nullptr) {
+            writeRecipeSucceeded_ = false;
+            return;
+        }
+        DRW_PlaneSurface plane;
+        plane.layer = "probe_plane_surface_inline_payload";
+        plane.modelerFormatVersion = 1;
+        const std::string acis = "ACIS 7.0\nopaque-plane";
+        plane.rawAcisData.assign(acis.begin(), acis.end());
+        plane.dxfPayloadChunks.emplace_back(1, 0, 8);
+        plane.dxfPayloadChunks.emplace_back(1, 9, acis.size() - 9);
+        writeRecipeSucceeded_ = dxfWriter_->writeSurface(&plane)
+            && writeRecipeSucceeded_;
+        return;
+    }
     if (nestedMTextAttributeProbe_) {
         if (dxfWriter_ == nullptr) {
             writeRecipeSucceeded_ = false;
@@ -4338,6 +4358,74 @@ bool runNestedMTextAttributeProbe(bool binary) {
     return true;
 }
 
+bool runPlaneSurfaceInlinePayloadRefusal(bool binary) {
+    std::error_code error;
+    const auto root = std::filesystem::temp_directory_path(error);
+    if (error)
+        return false;
+    const auto stamp = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto directory = root / ("libdxfrw-plane-inline-refusal-"
+        + std::to_string(stamp) + (binary ? "-bin" : "-ascii"));
+    if (!std::filesystem::create_directory(directory, error) || error)
+        return false;
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    } cleanup{directory};
+
+    const auto output = directory / "plane-inline-refusal.dxf";
+    const std::string sentinel = "preserve AC1027 plane payload destination";
+    {
+        std::ofstream seed(output, std::ios::binary | std::ios::trunc);
+        seed << sentinel;
+        if (!seed)
+            return false;
+    }
+    const auto destinationMatches = [&](const std::string& expected) {
+        std::ifstream stream(output, std::ios::binary);
+        const std::string contents(std::istreambuf_iterator<char>{stream},
+                                   std::istreambuf_iterator<char>{});
+        return contents == expected;
+    };
+
+    const std::string outputName = output.string();
+    dxfRW writer(outputName.c_str());
+    SemanticSink invalid("dxfRW", "write");
+    invalid.enablePlaneSurfaceInlinePayloadProbe();
+    invalid.configureWrite(&writer);
+    if (writer.write(&invalid, DRW::AC1027, binary)
+        || invalid.writeRecipeSucceeded() || !destinationMatches(sentinel)) {
+        std::cerr << "AC1027 inline plane surface was not refused atomically"
+                  << ": binary=" << binary
+                  << ", recipe=" << invalid.writeRecipeSucceeded()
+                  << ", destinationPreserved="
+                  << destinationMatches(sentinel) << '\n';
+        return false;
+    }
+
+    SemanticSink corrected("dxfRW", "write");
+    corrected.configureWrite(&writer);
+    if (!writer.write(&corrected, DRW::AC1027, binary)
+        || !corrected.writeRecipeSucceeded()) {
+        std::cerr << "same-writer corrected plane payload retry failed"
+                  << ": binary=" << binary << '\n';
+        return false;
+    }
+    SemanticSink readback("dxfRW", "read");
+    dxfRW reader(outputName.c_str());
+    if (!reader.read(&readback, false) || !readback.diagnostics.empty()
+        || !fieldEquals(readback, "LINE", "start", "{\"x\":1,\"y\":2,\"z\":3}")) {
+        std::cerr << "same-writer corrected content failed readback"
+                  << ": binary=" << binary << '\n';
+        return false;
+    }
+    return true;
+}
+
 bool runModelerCarrierProbe(bool binary) {
     std::error_code error;
     const std::filesystem::path temporaryRoot =
@@ -4953,6 +5041,8 @@ int selfTest() {
     if (!run3DConsumerProbe(false) || !run3DConsumerProbe(true)
         || !runNestedMTextAttributeProbe(false)
         || !runNestedMTextAttributeProbe(true)
+        || !runPlaneSurfaceInlinePayloadRefusal(false)
+        || !runPlaneSurfaceInlinePayloadRefusal(true)
         || !runModelerCarrierProbe(false) || !runModelerCarrierProbe(true))
         return fail(__LINE__);
 #endif
