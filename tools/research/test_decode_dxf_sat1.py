@@ -65,6 +65,13 @@ class DecodeDxfSat1Tests(unittest.TestCase):
         with self.assertRaises(decode_dxf_sat1.DecodeError):
             decode_dxf_sat1.extract_sat1_payload(drawing, "A")
 
+    def test_terminal_marker_with_trailing_dxf_padding_is_accepted(self) -> None:
+        drawing, expected = _carrier(b"End-of-ACIS-data \t")
+        self.assertEqual(
+            decode_dxf_sat1.extract_sat1_payload(drawing, "A"),
+            expected,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

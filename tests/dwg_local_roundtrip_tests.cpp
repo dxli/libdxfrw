@@ -6,6 +6,7 @@
 #include <cctype>
 #include <chrono>
 #include <cstring>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -19309,8 +19310,17 @@ bool runAcshTorusSourceProjection(
         &selected, selectedBinary, true);
     const bool fullSourceRefused = refusesWithoutPublishing(
         &physical, fullSource);
-    std::filesystem::remove(selectedAscii, ec);
-    std::filesystem::remove(selectedBinary, ec);
+    const char* keepOutputValue =
+        std::getenv("LIBDXFRW_KEEP_ACSH_TORUS_PROJECTION");
+    const bool keepOutputs = keepOutputValue != nullptr
+        && keepOutputValue[0] != '\0' && keepOutputValue[0] != '0';
+    if (keepOutputs) {
+        std::cout << "Kept AC1021 TORUS projection files: "
+                  << selectedAscii << " ; " << selectedBinary << '\n';
+    } else {
+        std::filesystem::remove(selectedAscii, ec);
+        std::filesystem::remove(selectedBinary, ec);
+    }
     std::filesystem::remove(fullSource, ec);
     std::cout << "AC1021 selected physical subgraph projection: ASCII readback="
               << selectedAsciiPassed << " Binary readback="

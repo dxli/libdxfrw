@@ -8077,6 +8077,19 @@ not qualify mesh geometry or native behavior ([receipt](docs/research/p6-dxf-pol
   topology, surface area, native application acceptance or broader ACIS/ACDS
   support. No fixture was added; see the [receipt](docs/research/
   p7-opencadkernel-independent-torus-2026-11-10.json).
+  **Direct SAT-to-kernel retry (2026-11-12):** a temporary output-retention
+  switch was added to the source-projection probe so its exact ASCII DXF could
+  feed the independent route. The corrected SAT1 decoder now accepts the
+  writer's trailing whitespace after `End-of-ACIS-data`; it recovered the
+  1,057-byte ACIS 21500 SAT payload from emitted handle `0x459`. The pinned
+  ACadRust parser accepts the file and reports 13 records, but the unchanged
+  OpenCADKernel `ocs_acis::lift` returns zero bodies with no loss entries
+  (one body/lump/shell/face record, no loops/coedges/edges/vertices); the probe
+  fails its nonempty-body requirement. This is a parser-plus-lift boundary,
+  not kernel geometry evidence and not a reason to normalize the source rows.
+  Do not repeat this exact profile; require a version-aware independent
+  topology reader or authoritative 21500 field map. See the [direct-lift
+  receipt](docs/research/p7-ac1021-sat21200-independent-lift-boundary-2026-11-12.json).
 - Complete source placement, units/transforms, topology, trims, periodicity and
   spline geometry beyond locally verified analytic helpers. A local wireframe or
   repaired/count-only graph is not B-rep support evidence.
