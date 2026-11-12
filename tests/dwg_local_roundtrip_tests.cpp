@@ -9808,6 +9808,10 @@ public:
     void writeEntities() override {
         if (writer_ == nullptr)
             return;
+        DRW_Point point;
+        point.basePoint = {21.0, 22.0, 23.0};
+        wrotePoint_ = writer_->writePoint(&point) && point.handle != 0u;
+
         DRW_Line line;
         line.basePoint = {1.0, 2.0, 3.0};
         line.secPoint = {4.0, 5.0, 6.0};
@@ -9843,13 +9847,15 @@ public:
     void writeUCSs() override {}
     void writeAppId() override {}
     bool finalizeDwgWrite() override {
-        return wroteLine_ && wroteCircle_ && wroteArc_ && wrotePolyline_;
+        return wrotePoint_ && wroteLine_ && wroteCircle_ && wroteArc_
+            && wrotePolyline_;
     }
     bool finalizeDwgWriteStructure() override { return true; }
 
 private:
     dwgRW* writer_ {nullptr};
     bool wroteLine_ {false};
+    bool wrotePoint_ {false};
     bool wroteCircle_ {false};
     bool wroteArc_ {false};
     bool wrotePolyline_ {false};

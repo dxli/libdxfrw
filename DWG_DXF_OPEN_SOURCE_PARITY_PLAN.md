@@ -8181,12 +8181,14 @@ DWG support. No fixture was added. See the [macOS 1.1.4 receipt](docs/research/p
 **P8 generated AC1021 primitive open/insert qualification (2026-11-12):** the
 optional native-consumer workflow now generates a fresh AC1021 drawing with
 one nonzero-Z LINE, one elevated CIRCLE, one elevated ARC, and a three-vertex
-LWPOLYLINE. Through the
+LWPOLYLINE plus one 3D POINT. Through the
 hash-checked installed `dwg2dxf`, FreeCAD 1.1.4's C++ DXF importer successfully
 opened and inserted the drawing at a Unicode path. Both operations reported
-exactly one record of each expected type, no unsupported features, and four
-valid shapes with edge counts 1/1/1/2 and authored bounds and total edge
-lengths within the stated tolerance. The locally installed converter was byte-identical to this build;
+exactly one record of each expected type, no unsupported features, and five
+valid shapes with edge counts 1/1/1/2/0, vertex counts 2/1/2/3/1, and authored
+bounds and total edge lengths within the stated tolerance. The POINT's
+nonzero-Z coordinate is preserved as a one-vertex shape with zero edge length.
+The locally installed converter was byte-identical to this build;
 the generated DWG/DXF remained in temporary directories and no fixture was
 added. This qualifies only the generated AC1021 primitive transport and
 FreeCAD 1.1.4 macOS ARM64 route. The repository workflow pins FreeCAD 1.1.3;
