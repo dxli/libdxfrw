@@ -3061,6 +3061,19 @@ coverage. This does not inject failures across the whole-file adapter route or
 qualify other dynamic-block subclasses, source schemas, or native behavior
 (see the [receipt](docs/research/p6-dynamic-block-purge-preventer-allocation-rollback-2026-11-12.json)).
 
+**Dynamic-block VisibilityParameter allocation rollback (2026-11-12):** the
+same direct writer now has a generated AC1024 ASCII/Binary allocation sweep
+for a bounded VisibilityParameter with one remapped block reference and one
+state membership. All 22 ASCII and 20 Binary injected allocation failures
+preserve the caller record and remove any partial source identity; each source
+then writes and reads successfully through a fresh writer. The clean record
+readback checks record identity, owner, and both remapped reference roles. The
+existing adapter profile continues to verify the full 117-block, four-state
+wire sequence and typed readback. Normal and ASan focused checks pass. This
+does not inject failures through the whole-file adapter transaction or expand
+the admitted producer/schema/graph/native profile (see the
+[receipt](docs/research/p6-dynamic-block-visibility-parameter-allocation-rollback-2026-11-12.json)).
+
 **AC1021 3D POLYLINE DWG flag admission (2026-11-12):** writer admission now
 matches ODA v5.4.1 §20.4.17: the second raw flag byte carries closed only;
 the first represents spline type 5/6 and implies group-70 bit 4. Conflicting

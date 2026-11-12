@@ -6,6 +6,8 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <limits>
+#include <map>
 #include <memory>
 #include <new>
 #include <sstream>
@@ -52,6 +54,189 @@ DRW_DynamicBlockObject makePurgePreventer() {
     object.m_purgeBlockHandle = 0xE700u;
     object.m_bodyFullyDecoded = true;
     return object;
+}
+
+DRW_DynamicBlockObject makeVisibilityParameter() {
+    DRW_DynamicBlockObject object("BLOCKVISIBILITYPARAMETER");
+    object.handle = 0xE818u;
+    object.parentHandle = 0xE817u;
+    object.m_kind = DRW_DynamicBlockObject::Kind::VisibilityParameter;
+    object.m_bodyFullyDecoded = true;
+    object.m_evalExprParsed = true;
+    object.m_parentId = std::numeric_limits<std::uint32_t>::max();
+    object.m_major = 29u;
+    object.m_minor = 2u;
+    object.m_valueCode = -9999;
+    object.m_nodeId = 16u;
+    object.m_elementParsed = true;
+    object.m_elementName = "Visibility State";
+    object.m_elementMajor = 29u;
+    object.m_elementMinor = 2u;
+    object.m_propertyInfoCount = 17;
+    object.m_isInitialized = true;
+    object.m_visibilityName = "State A";
+    object.m_blockCount = 1;
+    object.m_blockHandles.push_back(0x100u);
+    object.m_stateCount = 1;
+    object.m_stateNames.push_back("State A");
+    object.m_stateBlockHandles.push_back({0x100u});
+    object.m_stateParameterHandles.emplace_back();
+    return object;
+}
+
+std::map<std::uint32_t, std::uint32_t> visibilityRemap() {
+    return {{0x100u, 0x5100u}};
+}
+
+bool visibilitySourceUnchanged(const DRW_DynamicBlockObject& object) {
+    return object.handle == 0xE818u
+        && static_cast<std::uint32_t>(object.parentHandle) == 0xE817u
+        && object.m_kind
+            == DRW_DynamicBlockObject::Kind::VisibilityParameter
+        && object.m_bodyFullyDecoded && object.m_evalExprParsed
+        && object.m_elementName == "Visibility State"
+        && object.m_visibilityName == "State A"
+        && object.m_blockCount == 1
+        && object.m_blockHandles == std::vector<std::uint32_t>{0x100u}
+        && object.m_stateCount == 1
+        && object.m_stateNames == std::vector<std::string>{"State A"}
+        && object.m_stateBlockHandles
+            == std::vector<std::vector<std::uint32_t>>{{0x100u}}
+        && object.m_stateParameterHandles.size() == 1u
+        && object.m_stateParameterHandles.front().empty();
+}
+
+bool visibilityWireReadback(const std::string& bytes, bool binary) {
+    std::istringstream input(bytes);
+    std::unique_ptr<dxfReader> reader = binary
+        ? std::unique_ptr<dxfReader>(std::make_unique<dxfReaderBinary>(&input))
+        : std::unique_ptr<dxfReader>(std::make_unique<dxfReaderAscii>(&input));
+    int code = 0;
+    if (!reader->readRec(&code) || code != 0
+        || reader->getString() != "BLOCKVISIBILITYPARAMETER")
+        return false;
+    bool hasHandle = false;
+    bool hasOwner = false;
+    bool hasFlatReference = false;
+    bool hasStateReference = false;
+    bool ended = false;
+    while (reader->readRec(&code)) {
+        if (code == 0) {
+            ended = reader->getString() == "WIRE_END";
+            break;
+        }
+        switch (code) {
+        case 5:
+            hasHandle = reader->getHandleString() == 0xE818u;
+            break;
+        case 330:
+            hasOwner = reader->getHandleString() == 0xE817u;
+            break;
+        case 331:
+            hasFlatReference = reader->getHandleString() == 0x5100u;
+            break;
+        case 332:
+            hasStateReference = reader->getHandleString() == 0x5100u;
+            break;
+        default:
+            break;
+        }
+    }
+    return ended && hasHandle && hasOwner && hasFlatReference
+        && hasStateReference;
+}
+
+bool visibilityAllocationSweep(bool binary) {
+    constexpr long calibrationLimit = 1000000;
+    std::ostringstream cleanBytes;
+    dxfRW cleanCodec("");
+    DxfDynamicBlockTestAccess::attachWriter(
+        cleanCodec, DRW::AC1024, binary, cleanBytes);
+    cleanCodec.setHandleRemap(visibilityRemap());
+    DRW_DynamicBlockObject cleanObject = makeVisibilityParameter();
+    long allocationCount = 0;
+    bool cleanWrite = false;
+    {
+        AllocationFailure failure(calibrationLimit);
+        cleanWrite = cleanCodec.writeDynamicBlockObject(&cleanObject);
+        allocationCount = calibrationLimit - allocationsBeforeFailure;
+    }
+    if (!cleanWrite || !visibilitySourceUnchanged(cleanObject)
+        || cleanCodec.getWritingContext()
+                ->sourceHandleToWrittenObjectMap.count(cleanObject.handle)
+            != 1u
+        || cleanCodec.getWritingContext()
+                ->sourceHandleToWrittenObjectMap.at(cleanObject.handle)
+            != cleanCodec.remapHandle(cleanObject.handle)
+        || !DxfDynamicBlockTestAccess::writeEnd(cleanCodec)
+        || !visibilityWireReadback(cleanBytes.str(), binary)
+        || allocationCount <= 0) {
+        std::cerr << "clean VisibilityParameter write/readback failed (binary="
+                  << binary << ") allocations=" << allocationCount << '\n';
+        return false;
+    }
+
+    for (long offset = 0; offset < allocationCount; ++offset) {
+        std::ostringstream failedBytes;
+        dxfRW failedCodec("");
+        DxfDynamicBlockTestAccess::attachWriter(
+            failedCodec, DRW::AC1024, binary, failedBytes);
+        failedCodec.setHandleRemap(visibilityRemap());
+        DRW_DynamicBlockObject object = makeVisibilityParameter();
+        const std::size_t failuresBefore = failedAllocations;
+        bool wrote = false;
+        try {
+            AllocationFailure failure(offset);
+            wrote = failedCodec.writeDynamicBlockObject(&object);
+        } catch (const std::bad_alloc&) {
+            allocationsBeforeFailure = -1;
+        }
+        allocationsBeforeFailure = -1;
+        const DRW_WritingContext* context = failedCodec.getWritingContext();
+        if (wrote || failedAllocations == failuresBefore
+            || !visibilitySourceUnchanged(object) || context == nullptr
+            || context->sourceHandleToWrittenObjectMap.count(object.handle)
+                != 0u) {
+            std::cerr << "VisibilityParameter allocation rollback failed at "
+                      << (binary ? "Binary" : "ASCII")
+                      << " offset=" << offset << " wrote=" << wrote
+                      << " failed=" << (failedAllocations != failuresBefore)
+                      << " identityAbsent="
+                      << (context != nullptr
+                          && context->sourceHandleToWrittenObjectMap.count(
+                                 object.handle) == 0u)
+                      << '\n';
+            return false;
+        }
+
+        // A fresh low-level writer must be able to publish the same source
+        // after rollback. Reusing the failed writer is outside this contract:
+        // its stream may contain a partial record and its write error is sticky.
+        std::ostringstream retryBytes;
+        dxfRW retryCodec("");
+        DxfDynamicBlockTestAccess::attachWriter(
+            retryCodec, DRW::AC1024, binary, retryBytes);
+        retryCodec.setHandleRemap(visibilityRemap());
+        const bool retryWrote = retryCodec.writeDynamicBlockObject(&object);
+        const DRW_WritingContext* retryContext =
+            retryCodec.getWritingContext();
+        if (!retryWrote || !visibilitySourceUnchanged(object)
+            || retryContext == nullptr
+            || retryContext->sourceHandleToWrittenObjectMap.count(
+                   object.handle) != 1u
+            || !DxfDynamicBlockTestAccess::writeEnd(retryCodec)
+            || !visibilityWireReadback(retryBytes.str(), binary)) {
+            std::cerr << "VisibilityParameter fresh-writer retry failed at "
+                      << (binary ? "Binary" : "ASCII")
+                      << " offset=" << offset << '\n';
+            return false;
+        }
+    }
+    std::cout << (binary ? "Binary" : "ASCII")
+              << " VisibilityParameter allocation offsets="
+              << allocationCount
+              << "; source rollback and fresh-writer retries pass\n";
+    return true;
 }
 
 bool wireReadback(const std::string& bytes, bool binary) {
@@ -215,5 +400,7 @@ void operator delete(void* value, std::size_t) noexcept { std::free(value); }
 void operator delete[](void* value, std::size_t) noexcept { std::free(value); }
 
 int main() {
-    return allocationSweep(false) && allocationSweep(true) ? 0 : 1;
+    return allocationSweep(false) && allocationSweep(true)
+        && visibilityAllocationSweep(false)
+        && visibilityAllocationSweep(true) ? 0 : 1;
 }
