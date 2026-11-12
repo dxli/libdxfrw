@@ -294,6 +294,14 @@ class BackgroundCodecProbe final : public DRW_Background {
 public:
     using DRW_Background::encodeDwg;
     using DRW_Background::parseDwg;
+    bool encodeDwg(DRW::Version version, dwgBufferW* buf, std::uint32_t,
+                   dwgBufferW* strBuf, dwgBufferW* handleBuf) const {
+        return DRW_Background::encodeDwg(version, buf, strBuf, handleBuf);
+    }
+    std::uint16_t dwgType() const {
+        return m_kind == Ibl ? kDwgClassNumIbl
+             : m_kind == Skylight ? kDwgClassNumSkylight : 0u;
+    }
 };
 
 class ObjectContextCodecProbe final : public DRW_ObjectContextData {
@@ -26952,6 +26960,25 @@ void checkEntityDwgEncodeAllocationRollback(TestContext &t, Probe source,
             << '\n';
 }
 
+void testBackgroundDwgEncodeAllocationRollback(TestContext& t) {
+  BackgroundCodecProbe background;
+  background.m_kind = DRW_Background::Ibl;
+  background.handle = 0xBA10u;
+  background.parentHandle = 0xBA20u;
+  background.reactorHandles = {0xBA30u};
+  background.xDictHandle = 0xBA40u;
+  background.setDwgCommonObjectState(1, 1, false);
+  background.m_classVersion = 1;
+  background.m_iblName = "BACKGROUND_ALLOCATION_RETRY";
+  background.m_enabled = true;
+  background.m_displayImage = false;
+  background.m_rotation = 0.375;
+  background.m_secondaryBackgroundHandle = 0xBA50u;
+  checkEntityDwgEncodeAllocationRollback(
+      t, background, DRW::AC1024, DRW_Background::kDwgClassNumIbl,
+      "AC1024 IBL_BACKGROUND");
+}
+
 void testArcEllipseDwgEncodeAllocationRollback(TestContext &t) {
   for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
     const std::uint32_t baseHandle = version == DRW::AC1021 ? 0xAE10u : 0xAE20u;
@@ -31539,6 +31566,14 @@ int main(int argc, char** argv) {
       testMTextBackgroundCmcRoundTrip(context);
       testMTextDxfBackgroundTrueColor(context);
       std::cout << "MTEXT background CMC preservation: "
+                << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+      return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) ==
+                         "--background-dwg-encode-allocation-rollback") {
+      TestContext context;
+      testBackgroundDwgEncodeAllocationRollback(context);
+      std::cout << "BACKGROUND DWG encoder allocation rollback/retry: "
                 << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
       return context.failures == 0 ? 0 : 1;
     }

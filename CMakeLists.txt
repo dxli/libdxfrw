@@ -2167,6 +2167,13 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dwg_object_vectors_tests --mtext-background-cmc)
     set_tests_properties(libdxfrw_mtext_background_cmc PROPERTIES
         LABELS "fast;dwg;object-vectors;cmc;mtext" TIMEOUT 10)
+    add_test(NAME libdxfrw_background_dwg_encode_allocation_rollback
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --background-dwg-encode-allocation-rollback)
+    set_tests_properties(libdxfrw_background_dwg_encode_allocation_rollback
+        PROPERTIES
+            LABELS "fast;dwg;object-vectors;background;generated;transaction"
+            TIMEOUT 20)
     add_test(NAME libdxfrw_mtext_dwg_encode_allocation_rollback
         COMMAND libdxfrw_dwg_object_vectors_tests
             --mtext-dwg-encode-allocation-rollback)

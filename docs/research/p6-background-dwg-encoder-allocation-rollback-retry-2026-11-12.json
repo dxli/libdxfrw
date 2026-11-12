@@ -1,0 +1,39 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "date": "2026-11-12",
+  "title": "BACKGROUND DWG encoder allocation rollback and retry",
+  "status": "IMPLEMENTED_FAST_CONTROL_PASS",
+  "scope": "Verify allocation-failure transaction behavior for one generated AC1024 IBL_BACKGROUND encoder profile.",
+  "profile": {
+    "version": "AC1024",
+    "kind": "IBL_BACKGROUND",
+    "body": "class version, enabled/display flags, rotation",
+    "strings": "nonempty IBL name",
+    "handles": "parent, one reactor, extension dictionary, secondary background hard pointer",
+    "fixture": "generated in memory; no DWG/DXF file added"
+  },
+  "checks": {
+    "allocationFailures": 19,
+    "destinations": "seeded body, string and handle buffers retain bytes, bit counts and handle occurrence state after every injected failure",
+    "sameObjectRetry": "every failed attempt retries the same object and buffers; bytes and cursors match the clean encoding",
+    "aliasing": "all-stream shared-buffer failure preserves the buffer and same-object retry matches clean output",
+    "limits": "transaction evidence only; no source-producer, semantic, graph-closure, native-consumer or support claim"
+  },
+  "validation": {
+    "configure": "cmake -S . -B build-gcc -DCMAKE_POLICY_VERSION_MINIMUM=3.5",
+    "build": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests -j4",
+    "focusedTest": "ctest --test-dir build-gcc -R '^libdxfrw_background_dwg_encode_allocation_rollback$' --output-on-failure",
+    "focusedResult": "PASS 1/1 in 0.28 seconds",
+    "selector": "build-gcc/libdxfrw_dwg_object_vectors_tests --background-dwg-encode-allocation-rollback",
+    "selectorResult": "PASS; 19 injected allocation failures; rollback/retry PASS",
+    "diffCheck": "PASS: git diff --check",
+    "fullSuites": "NOT RUN"
+  },
+  "bindings": {
+    "tests/dwg_object_vectors_tests.cpp": "f70976cfb820386a5d9c2a5389da8ad3c3a251a889318395aa56314ea305c4b9",
+    "CMakeLists.txt": "cb5601f89910bf2cc3ad88c6652b9777991c0c38a27fb4341a7eb31afb42f3f9",
+    "testExecutable": "1ebe9362e373af645bc8c04579f1bc906fb4b0c0cee325c708e9feb51038cbc7"
+  },
+  "newFixtureCommitted": false,
+  "supportClaimEffect": "none"
+}
