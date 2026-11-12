@@ -8215,9 +8215,12 @@ bool DRW_View::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
         std::uint64_t endBit = 0u;
         if (!objectCurrentBit(*hBuf, endBit) || endBit < startBit)
             return false;
-        const bool canonicalNull = field.ref == 0u
-            && field.rawCode == DRW::DwgNullReference;
-        if (field.rawCode != expectedRole && !canonicalNull) {
+        const bool nullReference = field.ref == 0u && field.ref64 == 0u
+            && field.size == 0u
+            && (field.rawCode == DRW::DwgNullReference
+                || (field.rawCode >= DRW::DwgSoftOwnership
+                    && field.rawCode <= DRW::DwgHardPointer));
+        if (field.rawCode != expectedRole && !nullReference) {
             DRW_DBG("VIEW handle role mismatch for ");
             DRW_DBG(name); DRW_DBG(": raw code ");
             DRW_DBG(static_cast<unsigned int>(field.rawCode));

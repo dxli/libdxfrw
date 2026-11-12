@@ -1499,6 +1499,19 @@ created locally from scratch for the specific control.
   behavior. No DWG/DXF fixture was added. See the
   [role-validation receipt](docs/research/p6-viewport-dwg-handle-role-validation-2026-11-11.json).
 
+- **P6 VIEW typed-null handle roles:** `DRW_View::parseDwg` now accepts a
+  zero-valued, zero-payload absolute typed-null handle (codes 2–5) in an
+  optional field while continuing to require the specified role for every
+  non-null reference. This fixes the observed AC1024 `Camera1` base-UCS
+  code-4 mismatch. Generated AC1015/AC1018/AC1021/AC1024/AC1027 controls
+  verify code-4 null publication and raw span retention after a wrong-role
+  failure, then corrected-input retry on the same parser; the focused test
+  passes. The physical conference-room sample still fails its VIEW record
+  read at a later, not-yet-isolated point and carries a separate HEADER
+  envelope discrepancy (expected 816 bytes, observed 820); keep that sample
+  qualification open and do not infer broader VIEW support. No fixture was
+  added. See the [typed-null receipt](docs/research/p6-view-typed-null-handle-role-validation-2026-11-11.json).
+
 - **P6 DIMASSOC whole-file allocation rollback:** the generated AC1024 ASCII
   and Binary DXF control now injects failure at all 21 reached allocations
   inside the DIMASSOC record callback. Every failed `dxfRW::write()` preserves

@@ -5346,7 +5346,9 @@ bool makeTableEntryHandleFrame(
     DRW::Version version, DRW_TableEntry& source, std::uint16_t objectType,
     dwgBufferW& body, dwgBufferW& strings,
     const std::vector<VportHandleField>& fields, int wrongRoleIndex,
-    bool canonicalNulls, VportHandleFrame& frame) {
+    bool canonicalNulls, VportHandleFrame& frame,
+    int typedNullIndex = -1,
+    std::uint8_t typedNullCode = DRW::DwgNullReference) {
     dwgBufferW object;
     object.putObjType(version, objectType);
     const bool explicitPrefixObjectSize =
@@ -5387,16 +5389,19 @@ bool makeTableEntryHandleFrame(
     }
 
     dwgBufferW handles;
-    const auto put = [&handles, canonicalNulls, wrongRoleIndex](
+    const auto put = [&handles, canonicalNulls, wrongRoleIndex,
+                      typedNullIndex, typedNullCode](
         std::size_t index, const VportHandleField& field) {
+        const bool typedNull = static_cast<int>(index) == typedNullIndex;
         dwgHandle value;
         value.code = canonicalNulls ? DRW::DwgNullReference
-            : (static_cast<int>(index) == wrongRoleIndex
+            : (typedNull ? typedNullCode
+                : static_cast<int>(index) == wrongRoleIndex
                 ? (field.role == DRW::DwgHardOwnership
                     ? DRW::DwgSoftPointer : DRW::DwgHardOwnership)
                 : field.role);
         value.rawCode = value.code;
-        value.ref = canonicalNulls ? 0u : field.target;
+        value.ref = canonicalNulls || typedNull ? 0u : field.target;
         value.ref64 = value.ref;
         handles.putHandle(value);
     };
@@ -5513,7 +5518,8 @@ std::vector<VportHandleField> viewHandleFieldsFor(
 
 bool makeViewHandleFrame(DRW::Version version, ViewCodecProbe& source,
                          int wrongRoleIndex, bool canonicalNulls,
-                         VportHandleFrame& frame) {
+                         VportHandleFrame& frame, int typedNullIndex = -1,
+                         std::uint8_t typedNullCode = DRW::DwgNullReference) {
     DRW_TextCodec codec;
     codec.setVersion(version, false);
     dwgBufferW body(&codec), strings(&codec), ignoredHandles(&codec);
@@ -5522,7 +5528,7 @@ bool makeViewHandleFrame(DRW::Version version, ViewCodecProbe& source,
     const auto fields = viewHandleFieldsFor(version, source);
     return makeTableEntryHandleFrame(version, source, 61u, body, strings,
                                      fields, wrongRoleIndex, canonicalNulls,
-                                     frame);
+                                     frame, typedNullIndex, typedNullCode);
 }
 
 bool mutateDimstyleReservedCmcIndex(dwgBufferW& bodyData,
@@ -19921,6 +19927,45 @@ void testAc1012PlusViewHandleRoles(TestContext& t) {
             }
             t.expect(nullProfile, std::string("VIEW ") + versionName(version)
                          + " accepts canonical null field roles");
+
+            if (version > DRW::AC1014) {
+                const auto baseUcs = std::find_if(
+                    fields.begin(), fields.end(),
+                    [](const VportHandleField& field) {
+                        return field.name == "baseUcs";
+                    });
+                const int baseUcsIndex = baseUcs == fields.end() ? -1
+                    : static_cast<int>(baseUcs - fields.begin());
+                VportHandleFrame typedNullFrame;
+                const bool typedNullBuilt = baseUcsIndex >= 0
+                    && makeViewHandleFrame(
+                        version, source, -1, false, typedNullFrame,
+                        baseUcsIndex, DRW::DwgSoftPointer);
+                ViewCodecProbe typedNullRetry;
+                VportHandleFrame wrongBaseUcsFrame;
+                const bool wrongRoleBuilt = baseUcsIndex >= 0
+                    && makeViewHandleFrame(
+                        version, source, baseUcsIndex, false,
+                        wrongBaseUcsFrame);
+                const bool wrongRoleRejected = wrongRoleBuilt
+                    && !parse(version, typedNullRetry, wrongBaseUcsFrame);
+                const bool typedNullRead = typedNullBuilt && wrongRoleRejected
+                    && parse(version, typedNullRetry, typedNullFrame);
+                const auto typedNullSpan = std::find_if(
+                    typedNullRetry.dwgHandleFieldSpans().begin(),
+                    typedNullRetry.dwgHandleFieldSpans().end(),
+                    [](const DRW_DwgSubrecordRange& item) {
+                        return item.m_name == "baseUcs";
+                    });
+                t.expect(typedNullRead
+                             && typedNullRetry.baseUCS_ID == 0u
+                             && typedNullSpan
+                                 != typedNullRetry.dwgHandleFieldSpans().end()
+                             && typedNullSpan->m_rawHandleCode
+                                 == DRW::DwgSoftPointer,
+                         std::string("VIEW ") + versionName(version)
+                             + " accepts typed-null base UCS and retries after wrong role");
+            }
 
             for (std::size_t index = 0u; index < fields.size(); ++index) {
                 VportHandleFrame badFrame;
