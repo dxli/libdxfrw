@@ -109,6 +109,15 @@ value and do not validate it against body counts or use it to derive boundaries.
 Resolve only with a version-qualified ACIS 21.5 producer/schema witness,
 preferably a multi-root source. See the [cross-version header screen](docs/research/p7-acis-21500-header-third-integer-cross-version-screen-2026-11-11.json).
 
+**P7 ACIS 21500 format-family qualification (2026-11-11):** ODA maps AutoCAD
+R24/2010 to SAT/SAB version 21500 and states that AutoCAD's 20800-and-later
+SAT/SAB formats are modified and are not native Spatial ACIS formats. This
+further weakens transferring native ACIS 7.0 header semantics to 21500; the
+ODA article does not define the third integer. Keep the field raw and require
+Autodesk-version-specific evidence before using it for record bounds or
+top-level counts. See the [header cross-version receipt](docs/research/p7-acis-21500-header-third-integer-cross-version-screen-2026-11-11.json)
+and [ODA's SAT/SAB version overview](https://www.opendesign.com/blog/2017/october/working-sat-and-sab-files-teigha).
+
 **P4 AC1024 version-2 inline constraint-node slice (2026-11-11):** the
 reader now handles the bounded R2010 inline envelope for positive-count
 version-2 groups: detached class name, sparse node ID, raw status byte,

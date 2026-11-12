@@ -16,6 +16,12 @@
       "url": "https://github.com/cadmpeg/cadmpeg/blob/main/docs/formats/asm.md",
       "finding": "For its explicitly scoped ACIS 217/218 widths, the entity-count word is the RecordTable index of the first owned record: asmheader is index 0, saved top-level entities occupy indices 1 through entity_count exclusive, and the first owned record is at entity_count.",
       "versionScope": "ACIS 217/218 only; not evidence for ACIS 215."
+    },
+    {
+      "title": "Working with .sat and .sab Files in Teigha (Open Design Alliance)",
+      "url": "https://www.opendesign.com/blog/2017/october/working-sat-and-sab-files-teigha",
+      "finding": "Maps AutoCAD R24/2010 to SAT/SAB version 21500 and says AutoCAD versions 20800 and later use modified SAT/SAB formats that are not native to Spatial ACIS and require additional conversion before use by the Spatial ACIS library.",
+      "versionScope": "Confirms the Autodesk-modified format family and release mapping; it does not define the third header integer."
     }
   ],
   "sourceObservations": [
@@ -34,11 +40,12 @@
       "interpretation": "A second source-distinct one-body case also has value 2; it does not distinguish body-count from saved-entity/boundary interpretations. Producer metadata is not independently authenticated."
     }
   ],
-  "conclusion": "The evidence makes a saved top-level-entity or first-owned-record-boundary interpretation more plausible than a literal body count for the observed records, because both contain asmheader plus one body and declare 2. The ACIS 7.0 description and the 217/218 implementation are cross-version analogies, not an authoritative ACIS 21.5 schema or producer confirmation. No 21500 semantic rule is admitted.",
+  "conclusion": "The evidence makes a saved top-level-entity or first-owned-record-boundary interpretation more plausible than a literal body count for the observed records, because both contain asmheader plus one body and declare 2. The ODA source establishes that 21500 is in AutoCAD's modified-format family, which further weakens direct transfer of native Spatial ACIS 7.0 semantics; the 217/218 implementation is also cross-version evidence. No version-specific 21500 semantic rule is admitted.",
   "implementationDecision": "Do not rename the field as a body count, validate it against body records, derive a source boundary from it, or change SAT output behavior. Preserve the raw integer. Require a version-qualified 21500 producer/schema witness, preferably including a multi-root case, before semantic use.",
   "claimEffect": "Narrows the hypothesis space and documents why the two existing one-body samples are nondiscriminating. Does not close the 21500 header gate or promote parser, output, B-rep, native, platform, or support claims.",
   "limitations": [
     "The available ACIS 7.0 reference predates ACIS 21.5.",
+    "ODA identifies 21500 as an Autodesk-modified SAT/SAB format, but its public article does not define the third header field.",
     "The cadmpeg specification is scoped to 217/218, not 215.",
     "Both local AC1024 sources have one rooted body and raw third integer 2.",
     "No authenticated ACIS 21.5 producer, SDK header definition, or independent multi-root source was found in this screen.",
