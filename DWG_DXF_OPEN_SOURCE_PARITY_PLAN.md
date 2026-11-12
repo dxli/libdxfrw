@@ -4968,8 +4968,14 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    qualify output or native semantics. See the [current audit
    receipt](docs/research/p6-ac1027-cover-reference-guard-audit-refresh-2026-11-07.json)
    and runner `tools/research/audit_ac1027_source_references.py`. The prior
-   interim-guard receipt's LAYER/LTYPE role and target mutations remain required
-   negative controls.
+   **LAYER/LTYPE peer-audit mutations now have generated negative controls:**
+   `audit_ac1027_source_references.py --self-test` checks the recognized
+   PlotStyle/Material/LTYPE peer fields, then mutates the LAYER lineType role
+   code and target independently; both mutations must be refused. The live
+   hash-bound Cover profile still requires all four peer-exposed LAYER fields,
+   while ODA's unknown trailing H remains separately unqualified. This is
+   verifier-integrity coverage, not new wire or support evidence. See the
+   [mutation-control receipt](docs/research/p6-ac1027-layer-ltype-peer-mutation-controls-2026-11-12.json).
 
    **AC1027 TABLESTYLE body-reference profile completed (2026-11-08):** for
    Cover handle 106 (type 504, class `AcDbTableStyle`, owner/reactor 105), the

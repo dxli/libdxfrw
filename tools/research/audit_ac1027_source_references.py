@@ -142,6 +142,72 @@ def peer_handle(value: object) -> int | None:
     return None
 
 
+def verify_layer_peer_fields(
+    source_fields: list[dict[str, object]], peer_layer: dict[str, object]
+) -> list[dict[str, object]]:
+    peer_field_names = {
+        "xrefBlock": "xref", "plotStyle": "plotstyle",
+        "material": "material", "lineType": "ltype",
+    }
+    matched_fields = []
+    for source_field in source_fields:
+        role = str(source_field["role"])
+        peer_name = peer_field_names.get(role)
+        if peer_name is None:
+            continue  # LibreDWG does not expose ODA's unknown trailing H.
+        wire = peer_layer.get(peer_name)
+        target = peer_handle(wire)
+        raw_role = int(wire[0]) if isinstance(wire, list) and wire else -1
+        if (
+            target != int(source_field["targetHandle"])
+            or raw_role != int(source_field["code"])
+        ):
+            raise SystemExit(
+                f"LibreDWG LAYER {role} identity/role differs from source-bound profile"
+            )
+        matched_fields.append({
+            "role": role,
+            "peerField": peer_name,
+            "peerRoleCode": raw_role,
+            "peerTargetHandle": target,
+            "matchesSource": True,
+        })
+    return matched_fields
+
+
+def self_test_layer_peer_fields() -> None:
+    source_fields: list[dict[str, object]] = [
+        {"role": "plotStyle", "code": 5, "targetHandle": 15},
+        {"role": "material", "code": 5, "targetHandle": 70},
+        {"role": "lineType", "code": 5, "targetHandle": 22},
+    ]
+    peer_layer: dict[str, object] = {
+        "plotstyle": [5, 15], "material": [5, 70], "ltype": [5, 22],
+    }
+    if len(verify_layer_peer_fields(source_fields, peer_layer)) != 3:
+        raise SystemExit("generated LAYER/LTYPE peer control did not match")
+
+    wrong_role = [dict(field) for field in source_fields]
+    wrong_role[-1]["code"] = 4
+    wrong_target = [dict(field) for field in source_fields]
+    wrong_target[-1]["targetHandle"] = 23
+    for label, fields in (("role", wrong_role), ("target", wrong_target)):
+        try:
+            verify_layer_peer_fields(fields, peer_layer)
+        except SystemExit:
+            continue
+        raise SystemExit(f"generated LAYER/LTYPE {label} mutation was admitted")
+
+
+def _verify_layer_peer_fields_for_profile(
+    source_fields: list[dict[str, object]], peer_layer: dict[str, object]
+) -> list[dict[str, object]]:
+    matched_fields = verify_layer_peer_fields(source_fields, peer_layer)
+    if len(matched_fields) != 4:
+        raise SystemExit("LibreDWG did not independently expose four LAYER fields")
+    return matched_fields
+
+
 def verify_peer_profiles(
     peer_json_path: Path,
     peer_schema_path: Path,
@@ -351,35 +417,9 @@ def verify_peer_profiles(
         if len(peer_layers) != 1 or layer_names.get(0x10) != "0":
             raise SystemExit("LibreDWG minJSON lacks the hash-bound Cover LAYER 0")
         peer_layer = peer_layers[0]
-        peer_field_names = {
-            "xrefBlock": "xref", "plotStyle": "plotstyle",
-            "material": "material", "lineType": "ltype",
-        }
-        matched_fields = []
-        for source_field in source_fields:
-            role = str(source_field["role"])
-            peer_name = peer_field_names.get(role)
-            if peer_name is None:
-                continue  # LibreDWG does not expose ODA's unknown trailing H.
-            wire = peer_layer.get(peer_name)
-            target = peer_handle(wire)
-            raw_role = int(wire[0]) if isinstance(wire, list) and wire else -1
-            if (
-                target != int(source_field["targetHandle"])
-                or raw_role != int(source_field["code"])
-            ):
-                raise SystemExit(
-                    f"LibreDWG LAYER {role} identity/role differs from source-bound profile"
-                )
-            matched_fields.append({
-                "role": role,
-                "peerField": peer_name,
-                "peerRoleCode": raw_role,
-                "peerTargetHandle": target,
-                "matchesSource": True,
-            })
-        if len(matched_fields) != 4:
-            raise SystemExit("LibreDWG did not independently expose four LAYER fields")
+        matched_fields = _verify_layer_peer_fields_for_profile(
+            source_fields, peer_layer
+        )
         matched_layer = {
             "handle": 0x10,
             "name": "0",
@@ -548,12 +588,19 @@ def verify_peer_profiles(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--executable", required=True, type=Path)
-    parser.add_argument("--source", required=True, type=Path)
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--executable", type=Path)
+    parser.add_argument("--source", type=Path)
     parser.add_argument("--peer-json", type=Path)
     parser.add_argument("--peer-schema", type=Path)
     parser.add_argument("--timeout", type=float, default=30.0)
     args = parser.parse_args()
+    if args.self_test:
+        self_test_layer_peer_fields()
+        print("generated LAYER/LTYPE role and target mutation controls passed")
+        return 0
+    if args.executable is None or args.source is None:
+        parser.error("--executable and --source are required unless --self-test is used")
     executable = args.executable.resolve(strict=True)
     source = args.source.resolve(strict=True)
     if not executable.is_file() or not source.is_file():
