@@ -2492,6 +2492,18 @@ void SemanticSink::writeEntities() {
         nestedAttribute->lockPosition = true;
         nestedAttribute->style = "Standard";
         outerInsert.attlist.push_back(nestedAttribute);
+        auto secondNestedAttribute = std::make_shared<DRW_Attrib>();
+        secondNestedAttribute->tag = "NESTED_NOTE";
+        secondNestedAttribute->text = "ARRAY PARENT";
+        secondNestedAttribute->basePoint = DRW_Coord{-3.0, 15.0, 22.0};
+        secondNestedAttribute->extPoint = DRW_Coord{0.0, 0.0, 1.0};
+        secondNestedAttribute->height = 1.25;
+        secondNestedAttribute->angle = -0.2;
+        secondNestedAttribute->widthscale = 1.1;
+        secondNestedAttribute->attribFlags = 1;
+        secondNestedAttribute->m_fieldLength = 5;
+        secondNestedAttribute->style = "Standard";
+        outerInsert.attlist.push_back(secondNestedAttribute);
         outerInsert.seqEndEntity = std::make_shared<DRW_SeqEnd>();
         wrote = dxfWriter_->writeInsert(&outerInsert) && wrote;
 
@@ -3846,7 +3858,7 @@ bool run3DConsumerProbe(bool binary) {
             && expectEntityDouble(sink, "INSERT", outerLayer,
                                   "rotationAngle", -0.4)
             && expectEntityField(sink, "INSERT", outerLayer,
-                                 "attributeCount", "1")
+                                 "attributeCount", "2")
             && expectEntityField(sink, "INSERT", outerLayer,
                                  "hasSequenceEnd", "true")
             && expectEntityField(sink, "INSERT", outerLayer,
@@ -3874,7 +3886,26 @@ bool run3DConsumerProbe(bool binary) {
             && expectEntityField(sink, "INSERT", outerLayer,
                                  "attribute.0.lockPosition", "true")
             && expectEntityField(sink, "INSERT", outerLayer,
-                                 "attribute.0.style", "\"Standard\"");
+                                 "attribute.0.style", "\"Standard\"")
+            && expectEntityField(sink, "INSERT", outerLayer,
+                                 "attribute.1.tag", "\"NESTED_NOTE\"")
+            && expectEntityField(sink, "INSERT", outerLayer,
+                                 "attribute.1.text", "\"ARRAY PARENT\"")
+            && expectEntityField(sink, "INSERT", outerLayer,
+                                 "attribute.1.insertionPoint",
+                                 "{\"x\":-3,\"y\":15,\"z\":22}")
+            && expectEntityDouble(sink, "INSERT", outerLayer,
+                                  "attribute.1.height", 1.25)
+            && expectEntityDouble(sink, "INSERT", outerLayer,
+                                  "attribute.1.rotationAngle", -0.2)
+            && expectEntityDouble(sink, "INSERT", outerLayer,
+                                  "attribute.1.widthScale", 1.1)
+            && expectEntityField(sink, "INSERT", outerLayer,
+                                 "attribute.1.flags", "1")
+            && expectEntityField(sink, "INSERT", outerLayer,
+                                 "attribute.1.fieldLength", "5")
+            && expectEntityField(sink, "INSERT", outerLayer,
+                                 "attribute.1.style", "\"Standard\"");
     };
     if (!expectNestedInsertFields(consumer, false)
         || !expectNestedInsertFields(legacyConsumer, true)

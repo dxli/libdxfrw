@@ -1657,6 +1657,15 @@ created locally from scratch for the specific control.
   interoperability, DWG ownership/handle semantics, text placement or native
   rendering ([receipt](docs/research/p8-3d-consumer-insert-attrib-chain-2026-11-12.json)).
 
+- **P8/S8.3.10 generated ordered multi-ATTRIB chain:** the nested INSERT now
+  carries two distinct ATTRIB records. The probe verifies `attributeCount=2`,
+  preserves list order, and checks each tag/text, insertion point, height,
+  rotation, width scale, flags, field length and style together with SEQEND
+  presence in ASCII/Binary DXF under both extrusion modes. Focused CTest passes
+  1/1. This establishes only locally generated chain transport, not independent
+  interoperability, DWG handle ownership, or native text placement
+  ([receipt](docs/research/p8-3d-consumer-insert-multi-attrib-chain-2026-11-12.json)).
+
 - **P6 generated IMAGEDEF hard-owner reader profile:** the shared OBJECTS
   prologue preflight and typed `DRW_ImageDef` parser now explicitly accept the
   ODA §20.4.81 hard-owner parent code-3 emitted by this writer. Generated
