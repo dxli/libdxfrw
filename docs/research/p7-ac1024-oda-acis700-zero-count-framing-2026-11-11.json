@@ -97,6 +97,32 @@
       "command": "cmake --build build-gcc --target libdxfrw_acis_sat_allocation_tests -j4 && ctest --test-dir build-gcc -R '^acis_sat_allocation_rollback_retry$' --output-on-failure",
       "result": "PASS 1/1; generated complete terminal parsing, missing-terminal refusal, v700 SAT 700 token grammar, AC1024 serialization, atomic AC1027 refusal, exhaustive reached-allocation failure rollback, and same-buffer retry verified."
     },
+    "independentKernel": {
+      "repository": "https://github.com/HakanSeven12/OpenCADStudio",
+      "revision": "36981c6abe76e4b69d0a8ac5e210c35a0e8f681c",
+      "kernel": "OpenCADKernel",
+      "kernelRevision": "802f75134a5606d34bd34dac0d3508565537b067",
+      "satParser": "ACadRust",
+      "satParserRevision": "ce8a148568e7a80a80f50797bf287a651d1259c7",
+      "normalization": "None; both original public SAT and exact hash-bound libdxfrw SAT output were parsed and lifted directly.",
+      "probe": "/private/tmp/opencadstudio-p7/crates/ocs_acis/tests/libdxfrw_ac1024_sat700_probe.rs",
+      "probeSha256": "bac79b8b7b8d5eb874ac0f86d974fa610302b7f842e19f155a7f3562ff790bcc",
+      "inputs": [
+        {
+          "role": "original public ACIS 7.0 source SAT",
+          "path": "/private/tmp/libdxfrw-acis21500/cube_sat_700.sat",
+          "sha256": "343766d21e6653260aebed3a9c09171c3c7ab3d2f76ed7427642cc02f4ff58dd"
+        },
+        {
+          "role": "exact libdxfrw SAT 700 serializer output",
+          "path": "/private/tmp/libdxfrw-acis21500/libdxfrw-roundtrip.sat",
+          "sha256": "119ed8a97ce3d4d72d8d197157244f4f310fb0fccde6c0dd780becba1ef08920"
+        }
+      ],
+      "command": "LIBDXFRW_SAT_PATH=<input.sat> CARGO_TARGET_DIR=/private/tmp/opencad-p7-target cargo test -q --manifest-path /private/tmp/opencadstudio-p7/Cargo.toml -p ocs_acis --test libdxfrw_ac1024_sat700_probe -- --nocapture",
+      "result": "PASS for both inputs: ACadRust parsed SAT 7.0; OpenCADKernel lifted one body with one lump/shell, six faces/loops, 24 coedges, 12 edges and eight vertices; surface/curve/broken-reference loss was zero and body validation reported zero flaws.",
+      "limitations": "This independently validates direct SAT 700 parsing and closed topology for the selected cube carrier. No independent expected dimensions, source DWG association, native source import, platform breadth or whole-document output is established. Probe and inputs remain scratch-only."
+    },
     "diffCheck": "PASS: git diff --check"
   },
   "authorityBoundary": {

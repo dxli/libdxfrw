@@ -105,6 +105,19 @@ output gates open. No drawing fixture was added. See the [native B-rep
 receipt](docs/research/p7-ac1024-acis700-freecad-cube-native-brep-2026-11-11.json)
 and [reproducible probe](tools/research/freecad_acis700_sat_probe.py).
 
+**P7 ACIS 7.0 independent-kernel check (2026-11-12):** the exact
+hash-bound libdxfrw SAT 700 output (SHA-256
+`119ed8a97ce3d4d72d8d197157244f4f310fb0fccde6c0dd780becba1ef08920`) and
+the original public SAT source were each parsed without normalization by
+pinned ACadRust and lifted by pinned non-OCCT OpenCADKernel. Both produced one
+body/lump/shell, six faces/loops, 24 coedges, 12 edges and eight vertices, with
+zero surface/curve/reference loss and zero kernel validation flaws. The probe
+and both inputs remain scratch-only. This independently confirms SAT 7.0
+parseability and closed topology for this cube carrier; it supplies no
+independent expected dimensions, DWG-to-AcDs association, native-source import,
+broader producer/version qualification or whole-document output admission.
+Keep those gates open. See the [ACIS 700 receipt](docs/research/p7-ac1024-oda-acis700-zero-count-framing-2026-11-11.json).
+
 **P7 local cylinder-normal slice (2026-11-11):** added a point-based local
 normal helper for the already bounded canonical ACIS cylinder profile. It
 requires the caller's finite nonnegative surface-distance tolerance and known
