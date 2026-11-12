@@ -15,7 +15,7 @@
   },
   "implementation": {
     "file": "src/drw_objects.cpp",
-    "behavior": "Transactional handle reads preserve existing cursor and output state on failure; TABLESTYLE/CELLSTYLEMAP text-style and border-linetype fields require DwgHardPointer or a canonical null reference.",
+    "behavior": "Transactional handle reads preserve existing cursor and output state on failure; TABLESTYLE/CELLSTYLEMAP text-style and border-linetype fields require the DwgHardPointer role for typed references and also accept canonical null references.",
     "covered_paths": [
       "AC1018 inline CELLSTYLEMAP handle parsing",
       "AC1021 CELLSTYLEMAP detached handle stream parsing",

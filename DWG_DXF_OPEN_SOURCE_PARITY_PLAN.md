@@ -1590,9 +1590,8 @@ created locally from scratch for the specific control.
   the [TABLESTYLE receipt](docs/research/p5-tablestyle-content-format-enum-combination-matrix-2026-11-12.json)
   and [CELLSTYLEMAP receipt](docs/research/p5-ac1021-cellstylemap-content-format-enum-combination-matrix-2026-11-12.json).
 
-- **P5 TABLESTYLE/CELLSTYLEMAP handle-role guard:** text-style and border
-  linetype references now require their DWG hard-pointer role, accepting only
-  canonical null handles as the null form. Generated AC1018 inline
+- **P5 TABLESTYLE/CELLSTYLEMAP handle-role guard:** typed text-style and border-linetype references now require the DWG
+  hard-pointer role; canonical null references are also accepted. Generated AC1018 inline
   CELLSTYLEMAP, AC1021 CELLSTYLEMAP detached-handle, AC1021 legacy TABLESTYLE
   row-style, and AC1024/AC1027/AC1032 TABLESTYLE detached-handle controls
   reject soft-pointer, hard-ownership, and soft-ownership mutations for the
