@@ -2,13 +2,14 @@
 
 ## Progress estimate (2026-11-12)
 
-Since the current execution queue was last reset, **18 implementation slices
+Since the current execution queue was last reset, **19 implementation slices
 are complete and 6 phase exit gates remain open**, giving a rough item-count
-progress estimate of **75.0% (18 / (18 + 6))**. The completed slices are
+progress estimate of **76.0% (19 / (19 + 6))**. The completed slices are
 represented by commits `787d65c6`, `e1c1cfe3`, `3feb4e6f`, `c9a64797`,
 `26e76b8c`, `9ebf0b78`, `dae9d0bd`, `d25b13b5`, `d9beb8f5`, `66883da5`,
 `dd2a0f4d`, `f35540b9`, `86ed0fd2`, `e96cc6ed`, `1f151ad3`, `27a7126c`,
-`524dfa02`, `4dcf6779`, `27e67de9` and `7089be6c`. Commits `27a7126c` and
+`524dfa02`, `4dcf6779`, `27e67de9`, `7089be6c` and `16aabb94`. Commits
+`27a7126c` and
 `524dfa02` complete and then strengthen one transaction slice; `4dcf6779` and
 `27e67de9` implement and finalize the next slice's receipt. This estimate
 treats a small implementation slice and a broad phase gate as equal items, so
