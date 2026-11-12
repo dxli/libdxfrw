@@ -1721,13 +1721,24 @@
     "projectionResult": "PASS: all 48 exact handles independently pass same-version ASCII/Binary projection, fresh readback, byte-exact normalized SAT comparison, remapped handle consistency, and layer/EED checks.",
     "kernelCommand": "For each extracted /private/tmp/trattocad-house-<handle>.sat, set LIBDXFRW_SAT_PATH and run cargo test -q --manifest-path /private/tmp/opencadstudio-p7/Cargo.toml -p ocs_acis --test libdxfrw_ac1018_sat1_probe -- --nocapture with CARGO_TARGET_DIR=/private/tmp/opencad-p7-target.",
     "kernelResult": "PASS: 48/48 SAT 4.0 payloads parsed and lifted to one body each; zero surface/curve/reference loss and zero OpenCADKernel validation flaws.",
-    "artifacts": "DWG, extracted SAT payloads and DXFs remain under /private/tmp and the system temp directory. No DWG/DXF/SAT fixture was added to libdxfrw."
+    "artifacts": "DWG, extracted SAT payloads and DXFs remain under /private/tmp and the system temp directory. No DWG/DXF/SAT fixture was added to libdxfrw.",
+    "pairedDxfResult": "PASS: the official paired AC1018 DXF contains exactly matching normalized SAT-v1 payloads for all 48 selected source handles; both files and all extracted payloads remain in /private/tmp."
   },
   "limitations": [
     "This is a second source-distinct AC1018 drawing from the same public publisher as the pulley sample, not an independently authenticated second producer/toolchain.",
     "The website describes five true solids, but this receipt does not independently compare these 48 SAT bodies with native-source expected geometry, drawing placement, units, assembly membership, or displayed component count.",
     "The independent SAT route does not validate DWG entity-to-AcDs association; the exact per-entity SAT payloads are bounded by the libdxfrw source reader and projection selector.",
-    "No native AutoCAD/ODA rewrite, native CAD import/measurement, platform qualification, or whole-document output proof was performed."
+    "No native AutoCAD/ODA rewrite, native CAD import/measurement, platform qualification, or whole-document output proof was performed.",
+    "The paired DWG and DXF are both published by TrattoCAD and do not constitute independent producer implementations or native semantic validation."
   ],
-  "claimEffect": "Adds selected source-distinct AC1018 SAT-v1 parser/kernel and per-carrier DXF transport evidence only. It does not qualify producer breadth, native 3D semantics, ACDS/whole-document closure, or general DWG/DXF/ACIS support."
+  "claimEffect": "Adds selected source-distinct AC1018 SAT-v1 parser/kernel and per-carrier DXF transport evidence only. It does not qualify producer breadth, native 3D semantics, ACDS/whole-document closure, or general DWG/DXF/ACIS support.",
+  "pairedDxfBinding": {
+    "dxfUrl": "https://trattocad.com/samples/trattocad-sample-3d-house.dxf",
+    "dxfPath": "/private/tmp/trattocad-sample-3d-house.dxf",
+    "dxfBytes": 334575,
+    "dxfSha256": "703ec49ec6a26773ceb835fc062a7d942c6d0e36d031118572d59474599b7ff7",
+    "format": "AC1018 ASCII DXF",
+    "result": "All 48 source-handle 3DSOLID SAT-v1 payloads at handles 0x2a\u20130x59 decode byte-for-byte equal to the SAT extracted from the paired DWG. The published pair and output of the libdxfrw selector therefore agree on each exact normalized SAT body.",
+    "method": "tools/research/decode_dxf_sat1.py selected each unique exact handle and reversed the group 1/3 SAT-v1 transform; cmp compared each extracted file against the corresponding hash-bound DWG SAT extracted for the kernel checks."
+  }
 }
