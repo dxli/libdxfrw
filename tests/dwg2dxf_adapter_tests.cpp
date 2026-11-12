@@ -88773,16 +88773,17 @@ static bool physicalAc1018SatV1Projection(const std::string& sourcePath) {
                 || modeler->m_dwgSourceVersion != DRW::AC1018
                 || modeler->m_dwgAcisPayload.empty())
                 continue;
-            selected = modeler;
-            selectedBlock = block;
-            return;
+            if (selected == nullptr
+                || modeler->m_dwgAcisPayload.size()
+                    > selected->m_dwgAcisPayload.size()) {
+                selected = modeler;
+                selectedBlock = block;
+            }
         }
     };
     findInBlock(source.mBlock);
-    for (const dx_ifaceBlock* block : source.blocks) {
-        if (selected != nullptr) break;
+    for (const dx_ifaceBlock* block : source.blocks)
         findInBlock(block);
-    }
     if (selected == nullptr || selectedBlock == nullptr)
         return fail("no parsed AC1018 3DSOLID SAT-v1 carrier was available");
 

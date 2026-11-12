@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "date": "2026-11-12",
-  "title": "Selected physical AC1018 SAT-v1 source to same-version DXF projection",
-  "scope": "Project one bounded physical AC1018 3DSOLID SAT-v1 carrier through same-version ASCII and Binary DXF, then prove exact decoded SAT text and selected entity metadata on fresh import.",
+  "title": "Largest physical AC1018 SAT-v1 source to same-version DXF projection",
+  "scope": "Project the largest bounded physical AC1018 3DSOLID SAT-v1 carrier in the selected source through same-version ASCII and Binary DXF, then prove exact decoded SAT text and selected entity metadata on fresh import.",
   "source": {
     "receipt": "p7-ac1018-sat-v1-bounded-extraction-2026-11-11.json",
     "local_path": "/private/tmp/p7-trattocad-pulley.dwg",
@@ -11,35 +11,35 @@
     "producer_provenance": "unverified; the publisher advertises a 3D pulley DWG sample"
   },
   "selected_record": {
-    "source_handle": "0x27",
+    "source_handle": "0x2d",
     "entity": "3DSOLID",
     "dwg_type": 38,
     "modeler_version": 1,
-    "decoded_sat_bytes": 14581,
-    "layer": "3D-STAFFA",
-    "eed_fields": 0,
+    "decoded_sat_bytes": 234503,
+    "selection": "Largest of the seven source-bound AC1018 modeler-version-1 solids in this DWG.",
+    "metadata": "The layer, EED field count/shape and remapped output identity are checked on fresh import.",
     "projection_scope": "Selected solid only, with source symbol tables and block-record metadata; unrelated entities, layouts, and graph members are excluded."
   },
   "implementation": {
     "file": "tests/dwg2dxf_adapter_tests.cpp",
     "selector": "--modeler-ac1018-physical-sat-v1-projection <source.dwg>",
-    "behavior": "The selector imports the physical DWG, isolates source handle 0x27, writes same-version AC1018 ASCII and Binary DXF, freshly imports each output, reverses the SAT-v1 text transform, and compares the normalized payload byte-for-byte. It also checks unique 3DSOLID readback, consistent nonzero output identity, layer preservation, EED field shape, and ownership-safe block projection construction."
+    "behavior": "The selector imports the physical DWG, selects the largest qualifying modeler-version-1 3DSOLID (source handle 0x2d), writes same-version AC1018 ASCII and Binary DXF, freshly imports each output, reverses the SAT-v1 text transform, and compares the normalized payload byte-for-byte. It also checks unique 3DSOLID readback, consistent nonzero output identity, layer preservation, EED field shape, and ownership-safe block projection construction."
   },
   "validation": {
     "build": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j4",
     "build_result": "passed with -Werror",
     "focused_run": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --modeler-ac1018-physical-sat-v1-projection /private/tmp/p7-trattocad-pulley.dwg",
-    "focused_result": "PASS; source handle 0x27 maps to output handle 0x40; ASCII and Binary fresh-import SAT payloads both exactly match the normalized 14,581-byte source payload",
+    "focused_result": "PASS; largest source handle 0x2d maps to output handle 0x40; ASCII and Binary fresh-import SAT payloads both exactly match the normalized 234,503-byte source payload",
     "asan_build": "cmake --build build-asan-custom --target libdxfrw_dwg2dxf_adapter_tests -j4",
     "asan_run": "ASAN_OPTIONS=halt_on_error=1 build-asan-custom/tests/libdxfrw_dwg2dxf_adapter_tests --modeler-ac1018-physical-sat-v1-projection /private/tmp/p7-trattocad-pulley.dwg",
     "asan_result": "PASS; address sanitizer reported no errors. LeakSanitizer is unsupported by this platform's runtime, so detect_leaks was not enabled.",
-    "ascii_output_sha256": "40e1556e59f54dca54f6f1a4d5855d327ee903f812d4b40f79c886085cc61654",
-    "binary_output_sha256": "0229e1d668be3eb46373b7c47b439e6a64801a56c1a1d33cf8f94c9d8686f186",
+    "ascii_output_sha256": "9bc70c57104f5f126ed5158288c862d582be9e2f6492ed8e8795bfd3dcf06529",
+    "binary_output_sha256": "21512834e27f7ac8652601d8f5043d03c5560cb423337c414b6d1389f96cd883",
     "git_diff_check": "passed"
   },
   "nonclaims": [
     "The source producer is not independently authenticated.",
-    "This source contains no EED fields on the selected solid, so it provides no EED APPID or layer-reference dependency evidence.",
+    "Preserving the selected record's layer/EED metadata does not establish EED dependency closure or APPID semantics.",
     "The projection is selected-record transport evidence; it does not prove SAT topology, geometry semantics, native CAD acceptance, producer breadth, or whole-document closure.",
     "The other six SAT-v1 records and the remaining 18 opaque records in the source are not included in this projection.",
     "No DWG or DXF fixture was added to the repository."
