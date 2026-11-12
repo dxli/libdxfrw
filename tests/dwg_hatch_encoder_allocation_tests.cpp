@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <new>
+#include <type_traits>
 #include <vector>
 
 namespace {
@@ -31,6 +32,12 @@ bool failAllocation() noexcept {
 class HatchProbe final : public DRW_Hatch {
 public:
     using DRW_Hatch::encodeDwg;
+    std::int16_t rawType() const { return oType; }
+};
+
+class MPolygonProbe final : public DRW_MPolygon {
+public:
+    using DRW_MPolygon::encodeDwg;
     std::int16_t rawType() const { return oType; }
 };
 
@@ -80,16 +87,25 @@ void route(AliasLayout layout, Buffers& buffers,
     }
 }
 
-HatchProbe makeHatch() {
-    HatchProbe hatch;
-    hatch.handle = 0x40u;
-    hatch.name = "ANSI31";
-    hatch.solid = false;
-    hatch.associative = true;
-    hatch.angle = 17.0;
-    hatch.scale = 0.75;
-    hatch.pixelSize = 2.5;
-    hatch.seedPoints = {{1.0, 2.0, 0.0}, {3.0, 4.0, 0.0}};
+template <class Shape>
+Shape makeShape() {
+    Shape shape;
+    shape.handle = 0x40u;
+    shape.name = "ANSI31";
+    shape.solid = false;
+    shape.associative = true;
+    shape.angle = 17.0;
+    shape.scale = 0.75;
+
+    if constexpr (std::is_same_v<Shape, HatchProbe>) {
+        shape.pixelSize = 2.5;
+        shape.seedPoints = {{1.0, 2.0, 0.0}, {3.0, 4.0, 0.0}};
+    } else {
+        shape.fillColorAci = 42;
+        shape.xDirX = 1.0;
+        shape.xDirY = 0.0;
+        shape.degenerateLoops = 1;
+    }
 
     DRW_Hatch::PatternLine pattern;
     pattern.angle = 30.0;
@@ -98,7 +114,7 @@ HatchProbe makeHatch() {
     pattern.offsetX = 0.75;
     pattern.offsetY = 1.0;
     pattern.dashList = {1.0, -0.25, 0.5};
-    hatch.patternLines.push_back(pattern);
+    shape.patternLines.push_back(pattern);
 
     auto loop = std::make_shared<DRW_HatchLoop>(4);
     auto line = std::make_shared<DRW_Line>();
@@ -107,8 +123,8 @@ HatchProbe makeHatch() {
     loop->objlist.push_back(line);
     loop->m_boundaryHandles = {0x60u};
     loop->update();
-    hatch.appendLoop(loop);
-    return hatch;
+    shape.appendLoop(loop);
+    return shape;
 }
 
 bool sameBuffers(const Buffers& left, const Buffers& right) {
@@ -120,47 +136,49 @@ bool sameBuffers(const Buffers& left, const Buffers& right) {
         && left.handles.bitPos() == right.handles.bitPos();
 }
 
-bool encode(DRW::Version version, HatchProbe& hatch, AliasLayout layout,
+template <class Shape>
+bool encode(DRW::Version version, Shape& shape, AliasLayout layout,
             Buffers& buffers) {
     dwgBufferW* strings = nullptr;
     dwgBufferW* handles = nullptr;
     route(layout, buffers, strings, handles);
-    return hatch.encodeDwg(version, &buffers.body, 0u, strings, handles);
+    return shape.encodeDwg(version, &buffers.body, 0u, strings, handles);
 }
 
+template <class Shape>
 bool sweep(DRW::Version version, AliasLayout layout,
-           unsigned long& reachedFailures) {
-    HatchProbe clean = makeHatch();
+           std::int16_t expectedType, unsigned long& reachedFailures) {
+    Shape clean = makeShape<Shape>();
     Buffers cleanBuffers;
     seed(cleanBuffers);
     if (!encode(version, clean, layout, cleanBuffers)
-        || clean.rawType() != 78) {
-        std::cerr << "clean HATCH encoding failed for version "
+        || clean.rawType() != expectedType) {
+        std::cerr << "clean entity encoding failed for version "
                   << static_cast<int>(version) << '\n';
         return false;
     }
 
     bool reachedSuccess = false;
     for (long failIndex = 0; failIndex < 128; ++failIndex) {
-        HatchProbe hatch = makeHatch();
+        Shape shape = makeShape<Shape>();
         Buffers buffers;
         seed(buffers);
         const Buffers before = buffers;
-        const auto oldType = hatch.rawType();
-        const auto oldHandle = hatch.handle;
+        const auto oldType = shape.rawType();
+        const auto oldHandle = shape.handle;
         const auto failuresBefore = failedAllocations.load(
             std::memory_order_relaxed);
 
         allocationsBeforeFailure.store(failIndex,
                                        std::memory_order_relaxed);
-        const bool encoded = encode(version, hatch, layout, buffers);
+        const bool encoded = encode(version, shape, layout, buffers);
         allocationsBeforeFailure.store(-1, std::memory_order_relaxed);
 
         if (encoded) {
             if (!sameBuffers(buffers, cleanBuffers)
-                || hatch.rawType() != clean.rawType()
-                || hatch.handle != clean.handle) {
-                std::cerr << "HATCH output differs after allocation sweep\n";
+                || shape.rawType() != clean.rawType()
+                || shape.handle != clean.handle) {
+                std::cerr << "entity output differs after allocation sweep\n";
                 return false;
             }
             reachedFailures = static_cast<unsigned long>(failIndex);
@@ -171,17 +189,17 @@ bool sweep(DRW::Version version, AliasLayout layout,
         if (failedAllocations.load(std::memory_order_relaxed)
                 == failuresBefore
             || !sameBuffers(buffers, before)
-            || hatch.rawType() != oldType || hatch.handle != oldHandle) {
-            std::cerr << "HATCH allocation failure did not roll back\n";
+            || shape.rawType() != oldType || shape.handle != oldHandle) {
+            std::cerr << "entity allocation failure did not roll back\n";
             return false;
         }
 
         // Same object, same buffers, corrected retry must reproduce clean bytes.
-        if (!encode(version, hatch, layout, buffers)
+        if (!encode(version, shape, layout, buffers)
             || !sameBuffers(buffers, cleanBuffers)
-            || hatch.rawType() != clean.rawType()
-            || hatch.handle != clean.handle) {
-            std::cerr << "HATCH same-object retry failed\n";
+            || shape.rawType() != clean.rawType()
+            || shape.handle != clean.handle) {
+            std::cerr << "entity same-object retry failed\n";
             return false;
         }
     }
@@ -224,7 +242,12 @@ int main() {
     for (const auto version : versions) {
         for (const auto layout : layouts) {
             unsigned long reachedFailures = 0u;
-            if (!sweep(version, layout, reachedFailures))
+            if (!sweep<HatchProbe>(version, layout, 78, reachedFailures))
+                return 1;
+            totalReachedFailures += reachedFailures;
+            if (!sweep<MPolygonProbe>(version, layout,
+                                     DRW_MPolygon::kDwgClassNum,
+                                     reachedFailures))
                 return 1;
             totalReachedFailures += reachedFailures;
         }
@@ -234,11 +257,12 @@ int main() {
         std::cerr << "HATCH allocation injector did not fire\n";
         return 1;
     }
-    std::cout << "HATCH DWG encode allocation rollback/retry passed across "
-              << sizeof(versions) / sizeof(versions[0]) << " versions and "
+    std::cout << "HATCH/MPOLYGON DWG encode allocation rollback/retry passed "
+              << "across " << sizeof(versions) / sizeof(versions[0])
+              << " versions, "
               << sizeof(layouts) / sizeof(layouts[0])
-                     * sizeof(versions) / sizeof(versions[0])
-              << " version/layout profiles; " << totalReachedFailures
+                     * sizeof(versions) / sizeof(versions[0]) * 2u
+              << " entity/version/layout profiles; " << totalReachedFailures
               << " allocation offsets exercised\n";
     return 0;
 }

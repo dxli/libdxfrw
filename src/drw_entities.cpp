@@ -24588,69 +24588,76 @@ bool DRW_MPolygon::encodeDwg(DRW::Version version, dwgBufferW *buf,
                              std::uint32_t bs, dwgBufferW *strBuf,
                              dwgBufferW *handleBuf) {
     (void)bs;
-    DwgMPolygonFillColor fillColor;
-    if (!validateDwgHatchData(*this, version)
-        || !prepareDwgMPolygonFillColor(version, buf, strBuf, *this,
-                                        fillColor)
-        || !isValidCount(degenerateLoops, kMaxHatchItems))
-        return false;
-    oType = kDwgClassNum;
-    if (!encodeDwgCommon(version, buf, strBuf))
-        return false;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [&](dwgBufferW *body, dwgBufferW *strings, dwgBufferW *handles) {
+            DwgMPolygonFillColor fillColor;
+            if (!validateDwgHatchData(*this, version)
+                || !prepareDwgMPolygonFillColor(version, body, strings, *this,
+                                                fillColor)
+                || !isValidCount(degenerateLoops, kMaxHatchItems))
+                return false;
+            oType = kDwgClassNum;
+            if (!encodeDwgCommon(version, body, strings))
+                return false;
 
-    dwgBufferW *sb = strBuf ? strBuf : buf;
+            dwgBufferW *sb = strings ? strings : body;
 
-    // AcDbMPolygon has a leading style field before the HATCH-like gradient
-    // prologue. The same style is emitted again after the boundary data.
-    buf->putBitShort(static_cast<std::uint16_t>(hstyle));
-    encodeDwgGradientData(version, buf, sb);
+            // AcDbMPolygon has a leading style field before the HATCH-like
+            // gradient prologue. It repeats the style after boundary data.
+            body->putBitShort(static_cast<std::uint16_t>(hstyle));
+            encodeDwgGradientData(version, body, sb);
 
-    buf->putBitDouble(basePoint.z);
-    buf->put3BitDouble(extPoint);
-    sb->putVariableText(version, name);
-    buf->putBit(static_cast<std::uint8_t>(solid));
-    buf->putBit(static_cast<std::uint8_t>(associative));
-    if (!encodeDwgBoundaryData(version, buf)) return false;
+            body->putBitDouble(basePoint.z);
+            body->put3BitDouble(extPoint);
+            sb->putVariableText(version, name);
+            body->putBit(static_cast<std::uint8_t>(solid));
+            body->putBit(static_cast<std::uint8_t>(associative));
+            if (!encodeDwgBoundaryData(version, body)) return false;
 
-    buf->putBitShort(static_cast<std::uint16_t>(hstyle));
-    buf->putBitShort(static_cast<std::uint16_t>(hpattern));
+            body->putBitShort(static_cast<std::uint16_t>(hstyle));
+            body->putBitShort(static_cast<std::uint16_t>(hpattern));
 
-    if (!solid) {
-        buf->putBitDouble(angle);
-        buf->putBitDouble(scale);
-        buf->putBit(static_cast<std::uint8_t>(doubleflag));
-        buf->putBitShort(static_cast<std::uint16_t>(patternLines.size()));
-        for (const PatternLine& pl : patternLines) {
-            buf->putBitDouble(pl.angle);
-            buf->putBitDouble(pl.baseX);
-            buf->putBitDouble(pl.baseY);
-            buf->putBitDouble(pl.offsetX);
-            buf->putBitDouble(pl.offsetY);
-            buf->putBitShort(static_cast<std::uint16_t>(pl.dashList.size()));
-            for (double dash : pl.dashList)
-                buf->putBitDouble(dash);
-        }
-    }
+            if (!solid) {
+                body->putBitDouble(angle);
+                body->putBitDouble(scale);
+                body->putBit(static_cast<std::uint8_t>(doubleflag));
+                body->putBitShort(
+                    static_cast<std::uint16_t>(patternLines.size()));
+                for (const PatternLine& pl : patternLines) {
+                    body->putBitDouble(pl.angle);
+                    body->putBitDouble(pl.baseX);
+                    body->putBitDouble(pl.baseY);
+                    body->putBitDouble(pl.offsetX);
+                    body->putBitDouble(pl.offsetY);
+                    body->putBitShort(
+                        static_cast<std::uint16_t>(pl.dashList.size()));
+                    for (double dash : pl.dashList)
+                        body->putBitDouble(dash);
+                }
+            }
 
-    if (version < DRW::AC1018) {
-        buf->putCmColor(version, fillColor.colorIndex);
-    } else if (fillColor.preserveFlags) {
-        buf->putCmColorWithFlags(version, fillColor.method,
+            if (version < DRW::AC1018) {
+                body->putCmColor(version, fillColor.colorIndex);
+            } else if (fillColor.preserveFlags) {
+                body->putCmColorWithFlags(
+                    version, fillColor.method, fillColor.colorIndex,
+                    fillColor.rgb24, fillColorName, fillColorBookName,
+                    fillColor.flags, sb);
+            } else {
+                body->putCmColor(version, fillColor.method,
                                  fillColor.colorIndex, fillColor.rgb24,
-                                 fillColorName, fillColorBookName,
-                                 fillColor.flags, sb);
-    } else {
-        buf->putCmColor(version, fillColor.method, fillColor.colorIndex,
-                        fillColor.rgb24, fillColorName, fillColorBookName, sb);
-    }
-    if (!buf->isGood() || !sb->isGood())
-        return false;
-    buf->put2RawDouble(DRW_Coord{xDirX, xDirY, 0.0});
-    buf->putBitLong(degenerateLoops);
+                                 fillColorName, fillColorBookName, sb);
+            }
+            if (!body->isGood() || !sb->isGood())
+                return false;
+            body->put2RawDouble(DRW_Coord{xDirX, xDirY, 0.0});
+            body->putBitLong(degenerateLoops);
 
-    if (!encodeDwgEntHandle(version, buf, handleBuf))
-        return false;
-    return writeDwgHatchBoundaryHandles(looplist, buf, handleBuf);
+            if (!encodeDwgEntHandle(version, body, handles))
+                return false;
+            return writeDwgHatchBoundaryHandles(looplist, body, handles);
+        });
 }
 
 bool DRW_Hatch::parseDwgBoundaryData(
