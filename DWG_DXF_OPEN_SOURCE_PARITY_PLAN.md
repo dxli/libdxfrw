@@ -3076,6 +3076,20 @@ does not inject failures through the whole-file adapter transaction or expand
 the admitted producer/schema/graph/native profile (see the
 [receipt](docs/research/p6-dynamic-block-visibility-parameter-allocation-rollback-2026-11-12.json)).
 
+**Dynamic-block BasePointParameter allocation rollback (2026-11-12):** the
+direct AC1024 ASCII/Binary writer now has an allocation-failure sweep for the
+BasePointParameter profile. All 14 ASCII and 12 Binary injected failures
+preserve the source fields and leave no partial source identity; each case
+then succeeds and reads back through a fresh writer. Clean wire checks cover
+record/owner identity, node, subclass, parameter values, and the defining,
+point, and base-point coordinates. The existing adapter profile still checks
+the complete emitted group order, typed readback, invalid-coordinate
+destination preservation, corrected same-writer retry, and raw-only tail
+handling. Normal and ASan focused cohorts pass. This covers only the admitted
+BasePointParameter shape; whole-file allocation injection and broader source,
+graph, and native qualification remain open (see the
+[receipt](docs/research/p6-dynamic-block-basepoint-parameter-allocation-rollback-2026-11-12.json)).
+
 **AC1021 3D POLYLINE DWG flag admission (2026-11-12):** writer admission now
 matches ODA v5.4.1 §20.4.17: the second raw flag byte carries closed only;
 the first represents spline type 5/6 and implies group-70 bit 4. Conflicting

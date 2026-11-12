@@ -275,6 +275,195 @@ bool visibilityAllocationSweep(bool binary) {
     return true;
 }
 
+DRW_DynamicBlockObject makeBasePointParameter() {
+    DRW_DynamicBlockObject object("BLOCKBASEPOINTPARAMETER");
+    object.handle = 0x1135u;
+    object.parentHandle = 0x110Fu;
+    object.m_kind = DRW_DynamicBlockObject::Kind::BasePointParameter;
+    object.m_bodyFullyDecoded = true;
+    object.m_evalExprParsed = true;
+    object.m_parentId = std::numeric_limits<std::uint32_t>::max();
+    object.m_major = 29u;
+    object.m_minor = 2u;
+    object.m_valueCode = -9999;
+    object.m_nodeId = 79u;
+    object.m_elementParsed = true;
+    object.m_elementName = "Base Point";
+    object.m_elementMajor = 29u;
+    object.m_elementMinor = 2u;
+    object.m_showProperties = true;
+    object.m_defPoint = DRW_Coord(11.25, -12.5, 13.75);
+    object.m_parameterValue93 = -4;
+    object.m_parameterValue170 = 2;
+    object.m_parameterValue171 = 3;
+    object.m_point = DRW_Coord(21.25, -22.5, 23.75);
+    object.m_basePoint = DRW_Coord(-31.25, 32.5, -33.75);
+    return object;
+}
+
+bool basePointSourceUnchanged(const DRW_DynamicBlockObject& object) {
+    return object.handle == 0x1135u
+        && static_cast<std::uint32_t>(object.parentHandle) == 0x110Fu
+        && object.m_kind
+            == DRW_DynamicBlockObject::Kind::BasePointParameter
+        && object.m_bodyFullyDecoded && object.m_evalExprParsed
+        && object.m_parentId == std::numeric_limits<std::uint32_t>::max()
+        && object.m_nodeId == 79u && object.m_elementParsed
+        && object.m_elementName == "Base Point"
+        && object.m_showProperties
+        && object.m_defPoint.x == 11.25 && object.m_defPoint.y == -12.5
+        && object.m_defPoint.z == 13.75
+        && object.m_parameterValue93 == -4
+        && object.m_parameterValue170 == 2
+        && object.m_parameterValue171 == 3
+        && object.m_point.x == 21.25 && object.m_point.y == -22.5
+        && object.m_point.z == 23.75
+        && object.m_basePoint.x == -31.25
+        && object.m_basePoint.y == 32.5
+        && object.m_basePoint.z == -33.75;
+}
+
+bool basePointWireReadback(const std::string& bytes, bool binary) {
+    std::istringstream input(bytes);
+    std::unique_ptr<dxfReader> reader = binary
+        ? std::unique_ptr<dxfReader>(std::make_unique<dxfReaderBinary>(&input))
+        : std::unique_ptr<dxfReader>(std::make_unique<dxfReaderAscii>(&input));
+    int code = 0;
+    if (!reader->readRec(&code) || code != 0
+        || reader->getString() != "BLOCKBASEPOINTPARAMETER")
+        return false;
+    bool hasHandle = false;
+    bool hasOwner = false;
+    bool hasNode = false;
+    bool hasDefPointX = false;
+    bool hasParamValue = false;
+    bool hasPointX = false;
+    bool hasBasePointZ = false;
+    bool hasSubclass = false;
+    bool ended = false;
+    while (reader->readRec(&code)) {
+        if (code == 0) {
+            ended = reader->getString() == "WIRE_END";
+            break;
+        }
+        switch (code) {
+        case 5:
+            hasHandle = reader->getHandleString() == 0x1135u;
+            break;
+        case 330:
+            hasOwner = reader->getHandleString() == 0x110Fu;
+            break;
+        case 90:
+            hasNode = reader->getInt32() == 79;
+            break;
+        case 1010:
+            hasDefPointX = reader->getDouble() == 11.25;
+            break;
+        case 93:
+            hasParamValue = reader->getInt32() == -4;
+            break;
+        case 1011:
+            hasPointX = reader->getDouble() == 21.25;
+            break;
+        case 1032:
+            hasBasePointZ = reader->getDouble() == -33.75;
+            break;
+        case 100:
+            hasSubclass = hasSubclass
+                || reader->getString() == "AcDbBlockBasepointParameter";
+            break;
+        default:
+            break;
+        }
+    }
+    return ended && hasHandle && hasOwner && hasNode && hasDefPointX
+        && hasParamValue && hasPointX && hasBasePointZ && hasSubclass;
+}
+
+bool basePointAllocationSweep(bool binary) {
+    constexpr long calibrationLimit = 1000000;
+    std::ostringstream cleanBytes;
+    dxfRW cleanCodec("");
+    DxfDynamicBlockTestAccess::attachWriter(
+        cleanCodec, DRW::AC1024, binary, cleanBytes);
+    DRW_DynamicBlockObject cleanObject = makeBasePointParameter();
+    long allocationCount = 0;
+    bool cleanWrite = false;
+    {
+        AllocationFailure failure(calibrationLimit);
+        cleanWrite = cleanCodec.writeDynamicBlockObject(&cleanObject);
+        allocationCount = calibrationLimit - allocationsBeforeFailure;
+    }
+    if (!cleanWrite || !basePointSourceUnchanged(cleanObject)
+        || cleanCodec.getWritingContext()
+                ->sourceHandleToWrittenObjectMap.count(cleanObject.handle)
+            != 1u
+        || !DxfDynamicBlockTestAccess::writeEnd(cleanCodec)
+        || !basePointWireReadback(cleanBytes.str(), binary)
+        || allocationCount <= 0) {
+        std::cerr << "clean BasePointParameter write/readback failed "
+                  << "(binary=" << binary << ") allocations="
+                  << allocationCount << '\n';
+        return false;
+    }
+
+    for (long offset = 0; offset < allocationCount; ++offset) {
+        std::ostringstream failedBytes;
+        dxfRW failedCodec("");
+        DxfDynamicBlockTestAccess::attachWriter(
+            failedCodec, DRW::AC1024, binary, failedBytes);
+        DRW_DynamicBlockObject object = makeBasePointParameter();
+        const std::size_t failuresBefore = failedAllocations;
+        bool wrote = false;
+        try {
+            AllocationFailure failure(offset);
+            wrote = failedCodec.writeDynamicBlockObject(&object);
+        } catch (const std::bad_alloc&) {
+            allocationsBeforeFailure = -1;
+        }
+        allocationsBeforeFailure = -1;
+        const DRW_WritingContext* context = failedCodec.getWritingContext();
+        if (wrote || failedAllocations == failuresBefore
+            || !basePointSourceUnchanged(object) || context == nullptr
+            || context->sourceHandleToWrittenObjectMap.count(object.handle)
+                != 0u) {
+            std::cerr << "BasePointParameter allocation rollback failed at "
+                      << (binary ? "Binary" : "ASCII")
+                      << " offset=" << offset << " wrote=" << wrote
+                      << " identityAbsent="
+                      << (context != nullptr
+                          && context->sourceHandleToWrittenObjectMap.count(
+                                 object.handle) == 0u)
+                      << '\n';
+            return false;
+        }
+
+        std::ostringstream retryBytes;
+        dxfRW retryCodec("");
+        DxfDynamicBlockTestAccess::attachWriter(
+            retryCodec, DRW::AC1024, binary, retryBytes);
+        const bool retryWrote = retryCodec.writeDynamicBlockObject(&object);
+        const DRW_WritingContext* retryContext =
+            retryCodec.getWritingContext();
+        if (!retryWrote || !basePointSourceUnchanged(object)
+            || retryContext == nullptr
+            || retryContext->sourceHandleToWrittenObjectMap.count(
+                   object.handle) != 1u
+            || !DxfDynamicBlockTestAccess::writeEnd(retryCodec)
+            || !basePointWireReadback(retryBytes.str(), binary)) {
+            std::cerr << "BasePointParameter fresh-writer retry failed at "
+                      << (binary ? "Binary" : "ASCII")
+                      << " offset=" << offset << '\n';
+            return false;
+        }
+    }
+    std::cout << (binary ? "Binary" : "ASCII")
+              << " BasePointParameter allocation offsets="
+              << allocationCount
+              << "; source rollback and fresh-writer retries pass\n";
+    return true;
+}
+
 bool wireReadback(const std::string& bytes, bool binary) {
     std::istringstream input(bytes);
     std::unique_ptr<dxfReader> reader = binary
@@ -438,5 +627,7 @@ void operator delete[](void* value, std::size_t) noexcept { std::free(value); }
 int main() {
     return allocationSweep(false) && allocationSweep(true)
         && visibilityAllocationSweep(false)
-        && visibilityAllocationSweep(true) ? 0 : 1;
+        && visibilityAllocationSweep(true)
+        && basePointAllocationSweep(false)
+        && basePointAllocationSweep(true) ? 0 : 1;
 }
