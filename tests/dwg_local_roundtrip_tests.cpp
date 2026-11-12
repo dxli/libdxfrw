@@ -9860,6 +9860,20 @@ public:
         wrote3dPolyline_ = writer_->writePolyline(&spatialPolyline)
             && spatialPolyline.handle != 0u;
 
+        DRW_Polyline closed2dPolyline;
+        closed2dPolyline.flags = 1; // Closed classic 2D POLYLINE.
+        closed2dPolyline.vertexcount = 4;
+        const std::array<DRW_Coord, 4> closed2dPoints {{
+            {91.0, 92.0, 0.0}, {95.0, 92.0, 0.0},
+            {95.0, 96.0, 0.0}, {91.0, 96.0, 0.0}}};
+        for (const DRW_Coord& point : closed2dPoints) {
+            DRW_Vertex vertex(point.x, point.y, point.z, 0.0);
+            vertex.setDwgSubtype(DRW_Vertex::DwgSubtype::Vertex2D);
+            closed2dPolyline.addVertex(vertex);
+        }
+        wroteClosed2dPolyline_ = writer_->writePolyline(&closed2dPolyline)
+            && closed2dPolyline.handle != 0u;
+
         DRW_Spline spline;
         spline.m_scenario = 1;
         spline.degree = 2;
@@ -9888,7 +9902,7 @@ public:
     bool finalizeDwgWrite() override {
         return wrotePoint_ && wroteLine_ && wroteCircle_ && wroteArc_
             && wroteEllipse_ && wrotePolyline_ && wrote3dPolyline_
-            && wroteSpline_;
+            && wroteClosed2dPolyline_ && wroteSpline_;
     }
     bool finalizeDwgWriteStructure() override { return true; }
 
@@ -9901,6 +9915,7 @@ private:
     bool wroteEllipse_ {false};
     bool wrotePolyline_ {false};
     bool wrote3dPolyline_ {false};
+    bool wroteClosed2dPolyline_ {false};
     bool wroteSpline_ {false};
 };
 

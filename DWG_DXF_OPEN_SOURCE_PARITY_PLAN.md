@@ -8232,6 +8232,16 @@ group-70 output or claim closed 3D POLYLINE preservation. Seek consumer-side
 resolution or another eligible native consumer before qualifying this profile.
 See the [closed 3D POLYLINE gap receipt](docs/research/p8-freecad-ac1021-closed-3d-polyline-import-gap-2026-11-12.json).
 
+**P8 closed classic 2D POLYLINE qualification (2026-11-12):** the same
+scratch-generated AC1021 profile now includes a closed classic 2D `POLYLINE`
+with four `Vertex2D` points. FreeCAD 1.1.4 open and insert both preserve its
+ordered coordinates, four-edge/four-vertex topology, one closed wire, exact
+bounds and perimeter; the focused pair passes in 3.05 seconds. This confirms
+the importer gap above is bounded to the tested 3D profile and does not apply
+to this selected 2D profile. Physical-source breadth, pinned FreeCAD 1.1.3,
+Linux/Windows, other flags and broad semantics remain open. See the [closed
+2D POLYLINE receipt](docs/research/p8-freecad-ac1021-classic-2d-closed-polyline-open-insert-2026-11-12.json).
+
 **FreeCAD ACIS consumer boundary (2026-11-12):** FreeCAD's current Draft DXF
 documentation says its built-in DXF importer cannot read ACIS/SAT solid blobs;
 its documented C++ entity list excludes 3DSOLID, REGION, and BODY. Its DWG

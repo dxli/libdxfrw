@@ -131,7 +131,8 @@ def line_pass_json(result):
 
 
 def assert_primitive_geometry(document, stats, expected_counts, expected_shapes,
-                              expected_spline_samples, expected_polyline_points):
+                              expected_spline_samples, expected_polyline_points,
+                              expected_closed_2d_polyline_points):
     """Check authored primitive geometry after native DXF import."""
     counts = stats.get("entityCounts", {})
     for entity, expected in expected_counts.items():
@@ -250,13 +251,34 @@ def assert_primitive_geometry(document, stats, expected_counts, expected_shapes,
             raise AssertionError(
                 "expected exactly one classic 3D POLYLINE with authored ordered vertices; "
                 "observed %d matches" % len(verified_polyline_points))
+    verified_closed_2d_polylines = []
+    if expected_closed_2d_polyline_points:
+        for obj in features:
+            shape = obj.Shape
+            points = [(float(vertex.Point.x), float(vertex.Point.y),
+                       float(vertex.Point.z)) for vertex in shape.Vertexes]
+            if (len(points) == len(expected_closed_2d_polyline_points)
+                    and all(coordinates_match(actual, wanted)
+                            for actual, wanted in zip(
+                                points, expected_closed_2d_polyline_points))):
+                wires = list(shape.Wires)
+                if (len(wires) != 1 or wires[0].isClosed() is not True
+                        or len(shape.Edges) != len(expected_closed_2d_polyline_points)):
+                    raise AssertionError(
+                        "classic 2D POLYLINE vertices imported but closed-wire topology was lost")
+                verified_closed_2d_polylines.append(points)
+        if len(verified_closed_2d_polylines) != 1:
+            raise AssertionError(
+                "expected exactly one closed classic 2D POLYLINE with authored ordered vertices; "
+                "observed %d matches" % len(verified_closed_2d_polylines))
     return {"shape_bounds": [item[1] for item in observed],
             "edge_counts": [item[2] for item in observed],
             "vertex_counts": [item[3] for item in observed],
             "shape_lengths": [item[4] for item in observed],
             "spline_bounds_checked": False if actual_spline_count else None,
             "spline_samples": verified_spline_samples,
-            "polyline_points": verified_polyline_points}
+            "polyline_points": verified_polyline_points,
+            "closed_2d_polyline_points": verified_closed_2d_polylines}
 
 
 def line_predicate_self_test():
@@ -888,6 +910,20 @@ if expected_polyline_points_json:
             raise ValueError("expected at least two finite 3D POLYLINE vertices")
     except Exception as error:
         raise RuntimeError("invalid FreeCAD POLYLINE expectations: %s" % error)
+expected_closed_2d_polyline_points = []
+expected_closed_2d_polyline_json = os.environ.get(
+    "LIBDXFRW_FREECAD_EXPECT_CLOSED_2D_POLYLINE_POINTS")
+if expected_closed_2d_polyline_json:
+    try:
+        expected_closed_2d_polyline_points = [
+            tuple(float(value) for value in point)
+            for point in json.loads(expected_closed_2d_polyline_json)]
+        if (len(expected_closed_2d_polyline_points) < 3
+                or any(len(point) != 3 or not all(math.isfinite(value) for value in point)
+                       for point in expected_closed_2d_polyline_points)):
+            raise ValueError("expected at least three finite 3D points for closed 2D POLYLINE")
+    except Exception as error:
+        raise RuntimeError("invalid closed 2D POLYLINE expectations: %s" % error)
 if expected_primitive_counts or expected_primitive_shapes:
     try:
         if not expected_primitive_counts or not expected_primitive_shapes:
@@ -917,6 +953,9 @@ if expected_primitive_counts or expected_primitive_shapes:
             raise ValueError("SPLINE imports require expected curve sample points")
         if expected_counts.get("POLYLINE", 0) and not expected_polyline_points:
             raise ValueError("POLYLINE imports require expected ordered vertex points")
+        if (expected_counts.get("POLYLINE", 0) < 2
+                and expected_closed_2d_polyline_points):
+            raise ValueError("closed classic 2D POLYLINE requires a POLYLINE count of at least 2")
         expected_primitives = {"counts": expected_counts, "shapes": expected_shapes}
     except Exception as error:
         raise RuntimeError(
@@ -1119,7 +1158,7 @@ try:
         geometry = assert_primitive_geometry(
             doc, stats, expected_primitives["counts"],
             expected_primitives["shapes"], expected_spline_samples,
-            expected_polyline_points)
+            expected_polyline_points, expected_closed_2d_polyline_points)
         if unsupported:
             raise AssertionError(
                 "FreeCAD reported unsupported features: %r" % unsupported
