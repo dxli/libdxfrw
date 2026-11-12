@@ -1624,6 +1624,18 @@ created locally from scratch for the specific control.
   independent DXF interoperability, DWG transform layouts, downstream MINSERT
   array expansion, or native consumer semantics ([receipt](docs/research/p8-3d-consumer-nested-insert-matrix-2026-11-12.json)).
 
+- **P8/S8.3.7 generated MINSERT array-cell transform:** the independent matrix
+  oracle now expands a selected second MINSERT cell from its row/column
+  spacing, rotates that offset by the block-reference angle without applying
+  the child block scale, then composes the cell through the parent INSERT's
+  mirrored/nonuniform scale and oblique OCS. It checks expected WCS endpoints
+  for both native OCS and legacy WCS insertion-point representations. This
+  offset rule is cross-checked against ezdxf's implementation, which is an
+  implementation analogy rather than normative evidence. The focused CTest
+  passes 1/1. The test still does not execute a native consumer's array
+  expansion or qualify DXF interoperability, DWG layouts, or support claims
+  ([receipt](docs/research/p8-3d-consumer-minsert-grid-transform-2026-11-12.json)).
+
 - **P6 generated IMAGEDEF hard-owner reader profile:** the shared OBJECTS
   prologue preflight and typed `DRW_ImageDef` parser now explicitly accept the
   ODA §20.4.81 hard-owner parent code-3 emitted by this writer. Generated

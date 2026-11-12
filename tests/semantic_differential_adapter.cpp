@@ -3912,6 +3912,15 @@ bool run3DConsumerProbe(bool binary) {
     const Matrix4 innerNative = makeInsertMatrix(
         DRW_Coord{4.0, 5.0, 6.0}, DRW_Coord{0.0, 0.0, 1.0},
         1.5, 0.5, 2.0, 0.3, DRW_Coord{1.0, -2.0, 0.5}, false);
+    // MINSERT spacing is rotated into OCS but is not multiplied by the
+    // referenced block's scale. This mirrors ezdxf's virtual-cell expansion.
+    const DRW_Coord rotatedArrayOffset = transformPoint(
+        rotationZMatrix(0.3), DRW_Coord{7.0, 11.0, 0.0});
+    const Matrix4 innerArrayCellNative = makeInsertMatrix(
+        DRW_Coord{4.0 + rotatedArrayOffset.x,
+                  5.0 + rotatedArrayOffset.y, 6.0},
+        DRW_Coord{0.0, 0.0, 1.0}, 1.5, 0.5, 2.0, 0.3,
+        DRW_Coord{1.0, -2.0, 0.5}, false);
     const Matrix4 outerNative = makeInsertMatrix(
         DRW_Coord{20.0, -5.0, 3.0}, DRW_Coord{0.0, 1.0, 0.0},
         2.0, -1.0, 0.75, -0.4, DRW_Coord{-3.0, 2.0, 1.0}, false);
@@ -3922,10 +3931,22 @@ bool run3DConsumerProbe(bool binary) {
         multiplyMatrix(outerNative, innerNative), DRW_Coord{1.0, 2.0, 3.0});
     const DRW_Coord expectedNativeEnd = transformPoint(
         multiplyMatrix(outerNative, innerNative), DRW_Coord{4.0, -1.0, 2.0});
+    const DRW_Coord expectedArrayCellNativeStart = transformPoint(
+        multiplyMatrix(outerNative, innerArrayCellNative),
+        DRW_Coord{1.0, 2.0, 3.0});
+    const DRW_Coord expectedArrayCellNativeEnd = transformPoint(
+        multiplyMatrix(outerNative, innerArrayCellNative),
+        DRW_Coord{4.0, -1.0, 2.0});
     const DRW_Coord expectedLegacyStart = transformPoint(
         multiplyMatrix(outerLegacy, innerNative), DRW_Coord{1.0, 2.0, 3.0});
     const DRW_Coord expectedLegacyEnd = transformPoint(
         multiplyMatrix(outerLegacy, innerNative), DRW_Coord{4.0, -1.0, 2.0});
+    const DRW_Coord expectedArrayCellLegacyStart = transformPoint(
+        multiplyMatrix(outerLegacy, innerArrayCellNative),
+        DRW_Coord{1.0, 2.0, 3.0});
+    const DRW_Coord expectedArrayCellLegacyEnd = transformPoint(
+        multiplyMatrix(outerLegacy, innerArrayCellNative),
+        DRW_Coord{4.0, -1.0, 2.0});
     const auto closePoint = [](const DRW_Coord& actual,
                                const DRW_Coord& expected) {
         return std::fabs(actual.x - expected.x) < 1.0e-11
@@ -3936,8 +3957,18 @@ bool run3DConsumerProbe(bool binary) {
                                                    10.5, -14.5145621709052})
         || !closePoint(expectedNativeEnd, DRW_Coord{-38.6698381138937,
                                                     9.0, -18.1130149497834})
+        || !closePoint(expectedArrayCellNativeStart,
+                       DRW_Coord{-31.3266287411441, 10.5,
+                                 -28.7756380263298})
+        || !closePoint(expectedArrayCellNativeEnd,
+                       DRW_Coord{-40.1026876109896, 9.0,
+                                 -32.3740908052080})
         || !closePoint(expectedLegacyStart, expectedNativeStart)
-        || !closePoint(expectedLegacyEnd, expectedNativeEnd)) {
+        || !closePoint(expectedLegacyEnd, expectedNativeEnd)
+        || !closePoint(expectedArrayCellLegacyStart,
+                       expectedArrayCellNativeStart)
+        || !closePoint(expectedArrayCellLegacyEnd,
+                       expectedArrayCellNativeEnd)) {
         std::cerr << "nested INSERT matrix oracle mismatch: nativeStart={"
                   << number(expectedNativeStart.x) << ','
                   << number(expectedNativeStart.y) << ','
@@ -3947,7 +3978,13 @@ bool run3DConsumerProbe(bool binary) {
                   << number(expectedNativeEnd.z) << "}, legacyStart={"
                   << number(expectedLegacyStart.x) << ','
                   << number(expectedLegacyStart.y) << ','
-                  << number(expectedLegacyStart.z) << "}\n";
+                  << number(expectedLegacyStart.z) << "}, arrayCellStart={"
+                  << number(expectedArrayCellNativeStart.x) << ','
+                  << number(expectedArrayCellNativeStart.y) << ','
+                  << number(expectedArrayCellNativeStart.z) << "}, arrayCellEnd={"
+                  << number(expectedArrayCellNativeEnd.x) << ','
+                  << number(expectedArrayCellNativeEnd.y) << ','
+                  << number(expectedArrayCellNativeEnd.z) << "}\n";
         return false;
     }
 
