@@ -29082,6 +29082,154 @@ bool dx_iface::enableVerifiedTableProjectionSource(const std::vector<std::uint32
     m_verifiedTableProjectionSelected=true;return true;
 }
 
+bool dx_iface::enableVerifiedTableCacheSourceFrames(
+        std::uint32_t blockRecordHandle, std::uint32_t blockHandle) noexcept {
+    if (!m_verifiedTableProjectionSelected || m_verifiedXRecordReadData
+        || blockRecordHandle == 0u || blockRecordHandle == DRW::NoHandle
+        || blockHandle == 0u || blockHandle == DRW::NoHandle
+        || blockRecordHandle == blockHandle
+        || m_verifiedTableCacheBlockRecordSelected != 0u
+        || m_verifiedTableCacheBlockSelected != 0u)
+        return false;
+    m_verifiedTableCacheBlockRecordSelected = blockRecordHandle;
+    m_verifiedTableCacheBlockSelected = blockHandle;
+    return true;
+}
+
+std::uint32_t dx_iface::verifiedTableCacheBlockRecordSelection()
+        const noexcept {
+    return m_verifiedTableProjectionSelected
+        ? m_verifiedTableCacheBlockRecordSelected : 0u;
+}
+
+std::uint32_t dx_iface::verifiedTableCacheBlockSelection() const noexcept {
+    return m_verifiedTableProjectionSelected
+        ? m_verifiedTableCacheBlockSelected : 0u;
+}
+
+void dx_iface::verifiedTableCacheSource(
+        const DwgVerifiedTableCacheSourceTicket& ticket) noexcept {
+    auto *data = cData;
+    const auto fail = [data]() noexcept {
+        if (!data)
+            return;
+        try {
+            auto capture = data->m_verifiedTableCacheSource
+                ? std::make_shared<dx_data::VerifiedTableCacheSource>(
+                    *data->m_verifiedTableCacheSource)
+                : std::make_shared<dx_data::VerifiedTableCacheSource>();
+            capture->failed = true;
+            data->m_verifiedTableCacheSource = std::move(capture);
+        } catch (...) {
+            data->m_verifiedTableCacheSource.reset();
+        }
+    };
+    if (!data || data->sourceFormat != dx_source_format::DWG
+        || !m_verifiedTableProjectionSelected
+        || m_verifiedTableCacheBlockRecordSelected == 0u
+        || m_verifiedTableCacheBlockSelected == 0u
+        || !data->m_verifiedXRecordImportToken
+        || data->importGeneration == 0u || ticket.version() != DRW::AC1018
+        || ticket.space() != DRW_DwgFrameOffsetSpace::DecodedBuffer
+        || ticket.offset() != ticket.frame().offset()
+        || ticket.frame().body().empty()
+        || ticket.frame().body().size() > 64u * 1024u) {
+        fail();
+        return;
+    }
+    try {
+        auto capture = data->m_verifiedTableCacheSource
+            ? std::make_shared<dx_data::VerifiedTableCacheSource>(
+                *data->m_verifiedTableCacheSource)
+            : std::make_shared<dx_data::VerifiedTableCacheSource>();
+        if (capture->failed
+            || (capture->generation != 0u
+                && (capture->generation != data->importGeneration
+                    || capture->importToken != data->m_verifiedXRecordImportToken
+                    || capture->selectedBlockRecord
+                        != m_verifiedTableCacheBlockRecordSelected
+                    || capture->selectedBlock
+                        != m_verifiedTableCacheBlockSelected))
+            || capture->frames.size() >= 2u) {
+            capture->failed = true;
+            data->m_verifiedTableCacheSource = std::move(capture);
+            return;
+        }
+        if (capture->generation == 0u) {
+            capture->generation = data->importGeneration;
+            capture->importToken = data->m_verifiedXRecordImportToken;
+            capture->selectedBlockRecord =
+                m_verifiedTableCacheBlockRecordSelected;
+            capture->selectedBlock = m_verifiedTableCacheBlockSelected;
+        }
+        dx_data::VerifiedTableCacheSourceFrame row;
+        row.kind = ticket.kind();
+        row.version = ticket.version();
+        row.handle = ticket.handle();
+        row.offset = ticket.offset();
+        row.ordinal = ticket.ordinal();
+        row.space = ticket.space();
+        row.objectDataBitSize = ticket.frame().objectDataBitSize();
+        row.handleStreamBitSize = ticket.frame().handleStreamBitSize();
+        row.body = ticket.frame().body();
+        if (ticket.kind() == DwgVerifiedTableCacheSourceKind::BlockRecord) {
+            if (ticket.handle() != capture->selectedBlockRecord
+                || ticket.blockRecordModel() == nullptr
+                || ticket.blockModel() != nullptr
+                || ticket.blockRecordModel()->handle != ticket.handle()
+                || ticket.blockRecordModel()->name != "*T1"
+                || ticket.blockRecordModel()->entityMapCount() != 15u) {
+                capture->failed = true;
+                data->m_verifiedTableCacheSource = std::move(capture);
+                return;
+            }
+            row.blockRecordModel =
+                std::make_shared<const DRW_Block_Record>(
+                    *ticket.blockRecordModel());
+        } else if (ticket.kind()
+                   == DwgVerifiedTableCacheSourceKind::BlockEntity) {
+            if (ticket.handle() != capture->selectedBlock
+                || ticket.blockModel() == nullptr
+                || ticket.blockRecordModel() != nullptr
+                || ticket.blockModel()->handle != ticket.handle()
+                || ticket.blockModel()->name != "*T1"
+                || ticket.blockModel()->parentHandle
+                    != capture->selectedBlockRecord) {
+                capture->failed = true;
+                data->m_verifiedTableCacheSource = std::move(capture);
+                return;
+            }
+            row.blockModel = std::make_shared<const DRW_Block>(
+                *ticket.blockModel());
+        } else {
+            capture->failed = true;
+            data->m_verifiedTableCacheSource = std::move(capture);
+            return;
+        }
+        for (const auto& prior : capture->frames) {
+            if (prior.kind == row.kind || prior.handle == row.handle
+                || prior.ordinal == row.ordinal
+                || (prior.space == row.space && prior.offset == row.offset)) {
+                capture->failed = true;
+                data->m_verifiedTableCacheSource = std::move(capture);
+                return;
+            }
+        }
+        constexpr std::size_t maxBytes = 128u * 1024u;
+        if (capture->retainedBytes > maxBytes
+            || row.body.size() > maxBytes - capture->retainedBytes) {
+            capture->failed = true;
+            data->m_verifiedTableCacheSource = std::move(capture);
+            return;
+        }
+        capture->retainedBytes += row.body.size();
+        capture->frames.push_back(std::move(row));
+        data->m_verifiedTableCacheSource = std::move(capture);
+    } catch (...) {
+        fail();
+    }
+}
+
 bool dx_iface::enableVerifiedTableStyleSource(const std::vector<std::uint32_t>& xrecords,
         std::uint32_t content,std::uint32_t table,std::uint32_t geometry,
         std::uint32_t entity,std::uint32_t dictionary,std::uint32_t style) noexcept {
@@ -30437,6 +30585,122 @@ bool dx_iface::matchesVerifiedTableCacheMembershipCandidate(const dx_data& data,
     }
     return selected && DwgTableCacheMembershipAc1018Candidate::matches(
         *selected,data.blockRecords,data.blocks);
+}
+
+bool dx_iface::hasUnchangedVerifiedTableCacheSourceFrames(
+        const dx_data& data, std::uint32_t blockRecordHandle,
+        std::uint32_t blockHandle) noexcept {
+    const auto& capture = data.m_verifiedTableCacheSource;
+    if (!capture || capture->failed || !capture->importToken
+        || capture->importToken != data.m_verifiedXRecordImportToken
+        || capture->generation != data.importGeneration
+        || capture->selectedBlockRecord != blockRecordHandle
+        || capture->selectedBlock != blockHandle
+        || blockRecordHandle == 0u || blockHandle == 0u
+        || blockRecordHandle == blockHandle || capture->frames.size() != 2u
+        || capture->retainedBytes > 128u * 1024u)
+        return false;
+    const dx_data::VerifiedTableCacheSourceFrame* recordFrame = nullptr;
+    const dx_data::VerifiedTableCacheSourceFrame* blockFrame = nullptr;
+    std::size_t retainedBytes = 0u;
+    for (const auto& row : capture->frames) {
+        if (row.version != DRW::AC1018
+            || row.space != DRW_DwgFrameOffsetSpace::DecodedBuffer
+            || row.body.empty() || row.body.size() > 64u * 1024u
+            || row.body.size() > 128u * 1024u - retainedBytes
+            || row.objectDataBitSize > row.body.size() * 8u
+            || row.handleStreamBitSize > row.body.size() * 8u
+            || row.offset == 0u || row.handle == 0u
+            || (row.kind == DwgVerifiedTableCacheSourceKind::BlockRecord
+                ? (row.handle != blockRecordHandle || !row.blockRecordModel
+                    || row.blockModel)
+                : row.kind == DwgVerifiedTableCacheSourceKind::BlockEntity
+                    ? (row.handle != blockHandle || !row.blockModel
+                        || row.blockRecordModel)
+                    : true))
+            return false;
+        retainedBytes += row.body.size();
+        if (row.kind == DwgVerifiedTableCacheSourceKind::BlockRecord) {
+            if (recordFrame)
+                return false;
+            recordFrame = &row;
+        } else {
+            if (blockFrame)
+                return false;
+            blockFrame = &row;
+        }
+    }
+    if (!recordFrame || !blockFrame
+        || retainedBytes != capture->retainedBytes
+        || recordFrame->ordinal == blockFrame->ordinal
+        || (recordFrame->space == blockFrame->space
+            && recordFrame->offset == blockFrame->offset))
+        return false;
+
+    const auto& sourceRecord = *recordFrame->blockRecordModel;
+    const DRW_Block_Record* liveRecord = nullptr;
+    for (const auto& candidate : data.blockRecords) {
+        if (candidate.handle != blockRecordHandle)
+            continue;
+        if (liveRecord)
+            return false;
+        liveRecord = &candidate;
+    }
+    if (!liveRecord || sourceRecord.tType != DRW::BLOCK_RECORD
+        || liveRecord->tType != DRW::BLOCK_RECORD
+        || !standardDwgCommonEqual(sourceRecord,*liveRecord,DRW::AC1018)
+        || sourceRecord.handle != liveRecord->handle
+        || sourceRecord.parentHandle != liveRecord->parentHandle
+        || sourceRecord.name != liveRecord->name
+        || sourceRecord.flags != liveRecord->flags
+        || sourceRecord.xrefUnloaded != liveRecord->xrefUnloaded
+        || sourceRecord.insUnits != liveRecord->insUnits
+        || sourceRecord.basePoint.x != liveRecord->basePoint.x
+        || sourceRecord.basePoint.y != liveRecord->basePoint.y
+        || sourceRecord.basePoint.z != liveRecord->basePoint.z
+        || sourceRecord.xrefIndex != liveRecord->xrefIndex
+        || sourceRecord.xrefPath != liveRecord->xrefPath
+        || sourceRecord.description != liveRecord->description
+        || sourceRecord.previewData != liveRecord->previewData
+        || sourceRecord.canExplode != liveRecord->canExplode
+        || sourceRecord.blockScaling != liveRecord->blockScaling
+        || sourceRecord.layoutHandle != liveRecord->layoutHandle
+        || sourceRecord.insertCount != liveRecord->insertCount
+        || sourceRecord.insertHandles != liveRecord->insertHandles
+        || sourceRecord.entityMapCount() != liveRecord->entityMapCount()
+        || sourceRecord.extensionDictionaryFlag()
+            != liveRecord->extensionDictionaryFlag()
+        || sourceRecord.xDictHandle != liveRecord->xDictHandle
+        || sourceRecord.reactorCount() != liveRecord->reactorCount()
+        || sourceRecord.reactorHandles != liveRecord->reactorHandles)
+        return false;
+
+    const auto& sourceBlock = *blockFrame->blockModel;
+    const dx_ifaceBlock* liveBlock = nullptr;
+    for (const auto* candidate : data.blocks) {
+        if (!candidate || candidate->handle != blockHandle)
+            continue;
+        if (liveBlock)
+            return false;
+        liveBlock = candidate;
+    }
+    if (!liveBlock || sourceBlock.handle != liveBlock->handle
+        || sourceBlock.name != liveBlock->name
+        || sourceBlock.parentHandle != liveBlock->parentHandle
+        || sourceBlock.basePoint.x != liveBlock->basePoint.x
+        || sourceBlock.basePoint.y != liveBlock->basePoint.y
+        || sourceBlock.basePoint.z != liveBlock->basePoint.z
+        || sourceBlock.flags != liveBlock->flags
+        || sourceBlock.xrefUnloaded != liveBlock->xrefUnloaded
+        || sourceBlock.insUnits != liveBlock->insUnits
+        || sourceBlock.xrefPath != liveBlock->xrefPath
+        || sourceBlock.description != liveBlock->description
+        || sourceBlock.previewData != liveBlock->previewData
+        || liveBlock->parentHandle != blockRecordHandle
+        || !liveBlock->hasEndBlockData
+        || liveBlock->ent.size() != liveRecord->entityMapCount())
+        return false;
+    return true;
 }
 
 bool dx_iface::hasUnchangedDwgTableProjection(const dx_data& data,const DRW_Table& source) noexcept {

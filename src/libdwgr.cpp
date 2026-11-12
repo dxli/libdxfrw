@@ -1137,6 +1137,7 @@ bool dwgRW::readInstalledReader() {
     if (isOk && error == DRW::BAD_NONE && iface != nullptr) {
         reader->deliverVerifiedXRecord(*iface);
         reader->deliverVerifiedTableCandidates(*iface);
+        reader->deliverVerifiedTableCacheSources(*iface);
     }
     reader.reset();
     return isOk;

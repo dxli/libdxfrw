@@ -1203,6 +1203,7 @@ private:
   // Only dwgRW may flush after successful whole-read completion.
   void deliverVerifiedXRecord(DRW_Interface& target) noexcept;
   void deliverVerifiedTableCandidates(DRW_Interface& target) noexcept;
+  void deliverVerifiedTableCacheSources(DRW_Interface& target) noexcept;
   struct VerifiedXRecordPending {
     DRW::Version version{DRW::UNKNOWNV};
     std::uint32_t handle{0u}, offset{0u};
@@ -1234,6 +1235,19 @@ private:
   std::vector<VerifiedTableCandidatePending> m_verifiedTableCandidates;
   std::size_t m_verifiedTableCandidateBytes{0u};
   bool m_verifiedTableCandidateFailed{false};
+  struct VerifiedTableCacheSourcePending {
+    DwgVerifiedTableCacheSourceKind kind{DwgVerifiedTableCacheSourceKind::BlockRecord};
+    DRW::Version version{DRW::UNKNOWNV};
+    std::uint32_t handle{0u}, offset{0u};
+    std::uint64_t ordinal{0u};
+    DRW_DwgFrameOffsetSpace space{DRW_DwgFrameOffsetSpace::Unknown};
+    DwgObjectFrame frame;
+    std::shared_ptr<const DRW_Block_Record> blockRecordModel;
+    std::shared_ptr<const DRW_Block> blockModel;
+  };
+  std::vector<VerifiedTableCacheSourcePending> m_verifiedTableCacheSources;
+  std::size_t m_verifiedTableCacheSourceBytes{0u};
+  bool m_verifiedTableCacheSourceFailed{false};
 protected:
   struct DwgSourceFrameLease;
   struct DwgFramePublicationArtifacts {

@@ -72,7 +72,8 @@ class dx_iface : public DRW_Interface, public DRW_DxfClassSourceHandler, public 
                  public DRW_DxfSparseMaterialRawPolicy,
                  public DRW_DxfPointCloudDefinitionSourceHandler,
                  public WholeSourceV2::Handler, public DwgVerifiedXRecordSink,
-                 public DwgVerifiedTableCandidateSink {
+                 public DwgVerifiedTableCandidateSink,
+                 public DwgVerifiedTableCacheSourceSink {
 public:
     // Source observation only. This does not permit DWG or DXF replay.
     bool enableVerifiedXRecordSource(std::uint32_t handle) noexcept;
@@ -147,6 +148,18 @@ public:
         const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
         std::uint32_t tableEntity,std::uint32_t dictionary) noexcept;
+    static bool hasUnchangedVerifiedTableCacheSourceFrames(
+        const dx_data&, std::uint32_t blockRecordHandle,
+        std::uint32_t blockHandle) noexcept;
+    bool enableVerifiedTableCacheSourceFrames(
+        std::uint32_t blockRecordHandle,
+        std::uint32_t blockHandle) noexcept;
+    std::uint32_t verifiedTableCacheBlockRecordSelection()
+        const noexcept override;
+    std::uint32_t verifiedTableCacheBlockSelection()
+        const noexcept override;
+    void verifiedTableCacheSource(
+        const DwgVerifiedTableCacheSourceTicket&) noexcept override;
     // Reader-authenticated TABLESTYLE selected wire projection only; this
     // does not certify the complete typed model or grant output authority.
     bool enableVerifiedTableStyleSource(const std::vector<std::uint32_t>& xrecords,
@@ -3608,6 +3621,8 @@ private:
     bool m_verifiedTableRoundtripSelected{false};
     bool m_verifiedTableRoundtripChildrenSelected{false};
     std::uint32_t m_verifiedTableEntitySelected{0u},m_verifiedTableDictionarySelected{0u};
+    std::uint32_t m_verifiedTableCacheBlockRecordSelected{0u};
+    std::uint32_t m_verifiedTableCacheBlockSelected{0u};
     bool m_verifiedReciprocalTableSelected{false};
     bool m_verifiedTableModelSelected{false};
     bool m_verifiedTableProjectionSelected{false};

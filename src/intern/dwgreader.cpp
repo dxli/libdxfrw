@@ -133,6 +133,7 @@ namespace {
 // AC1018 STYLE/LTYPE control and record tickets. Keep capacity above the
 // selected graph's eight records while the aggregate-byte limits bound input.
 constexpr std::size_t maxVerifiedTableCandidateCount = 16u;
+constexpr std::size_t maxVerifiedTableCacheSourceBytes = 128u * 1024u;
 
 bool isSpaceBlockRecordName(const std::string &name);
 bool isPaperSpaceBlockRecordName(const std::string &name);
@@ -8149,6 +8150,9 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
                               DwgIntegrityAddressSpace offsetSpace) {
   DRW_DBG("\ndwgReader::readDwgTables start\n");
   m_dwgStyleEedSourceReferences.clear();
+  m_verifiedTableCacheSources.clear();
+  m_verifiedTableCacheSourceBytes = 0u;
+  m_verifiedTableCacheSourceFailed = false;
   bool ret = true;
   bool ret2 = true;
   objHandle oc;
@@ -9468,6 +9472,61 @@ bool dwgReader::readDwgBlocks(DRW_Interface &intfa, dwgBuffer *dbuf,
     DRW_DBG(" Name= ");
     DRW_DBG(bkr->name);
     DRW_DBG("\n");
+    auto *cacheSink =
+        dynamic_cast<DwgVerifiedTableCacheSourceSink *>(&intfa);
+    const std::uint32_t selectedCacheRecord = cacheSink
+        ? cacheSink->verifiedTableCacheBlockRecordSelection() : 0u;
+    const std::uint32_t selectedCacheBlock = cacheSink
+        ? cacheSink->verifiedTableCacheBlockSelection() : 0u;
+    if (selectedCacheRecord != 0u && selectedCacheBlock != 0u
+        && bkr->handle == selectedCacheRecord) {
+      try {
+        constexpr std::size_t maxFrame = 64u * 1024u;
+        const auto sourceIndex = m_dwgSourceFrameIndexes.find(bkr->handle);
+        if (version != DRW::AC1018 || selectedCacheRecord == selectedCacheBlock
+            || m_verifiedTableCacheSourceFailed
+            || !m_verifiedTableCacheSources.empty()
+            || sourceIndex == m_dwgSourceFrameIndexes.end()
+            || sourceIndex->second >= m_dwgSourceFrameLedger.size()) {
+          m_verifiedTableCacheSourceFailed = true;
+        } else {
+          const auto& source = m_dwgSourceFrameLedger[sourceIndex->second];
+          DwgObjectFrame sourceFrame;
+          if (source.m_handle != bkr->handle
+              || source.m_disposition != DRW_DwgFrameDisposition::Published
+              || source.m_publicationCount != 1u
+              || !sourceFrame.readAt(*dbuf, version, source.m_sourceOffset)
+              || sourceFrame.body().size() > maxFrame) {
+            m_verifiedTableCacheSourceFailed = true;
+          } else {
+            dwgBuffer type(sourceFrame.body().data(),
+                           sourceFrame.body().size(), &decoder);
+            if (type.getObjType(version) != kBlockTable.recordType
+                || !type.isGood()) {
+              m_verifiedTableCacheSourceFailed = true;
+            } else {
+              VerifiedTableCacheSourcePending pending;
+              pending.kind = DwgVerifiedTableCacheSourceKind::BlockRecord;
+              pending.version = version;
+              pending.handle = source.m_handle;
+              pending.offset = source.m_sourceOffset;
+              pending.ordinal = source.m_sourceMapOrdinal;
+              pending.space = source.m_sourceOffsetSpace;
+              pending.frame = std::move(sourceFrame);
+              pending.blockRecordModel =
+                  std::make_shared<const DRW_Block_Record>(*bkr);
+              m_verifiedTableCacheSourceBytes =
+                  pending.frame.body().size();
+              m_verifiedTableCacheSources.push_back(std::move(pending));
+            }
+          }
+        }
+      } catch (...) {
+        m_verifiedTableCacheSourceFailed = true;
+        m_verifiedTableCacheSources.clear();
+        m_verifiedTableCacheSourceBytes = 0u;
+      }
+    }
     DRW_DBG("\nFinding Block, handle= ");
     DRW_DBGH(bkr->block);
     DRW_DBG("\n");
@@ -9533,6 +9592,50 @@ bool dwgReader::readDwgBlocks(DRW_Interface &intfa, dwgBuffer *dbuf,
     bk.xrefUnloaded = bkr->xrefUnloaded;
     bk.insUnits = bkr->insUnits;
     bk.xrefPath = bkr->xrefPath;
+
+    if (auto *cacheSink =
+            dynamic_cast<DwgVerifiedTableCacheSourceSink *>(&intfa)) {
+      const std::uint32_t selectedRecord =
+          cacheSink->verifiedTableCacheBlockRecordSelection();
+      const std::uint32_t selectedBlock =
+          cacheSink->verifiedTableCacheBlockSelection();
+      if (selectedRecord != 0u && selectedBlock == bk.handle) {
+        try {
+          constexpr std::size_t maxFrame = 64u * 1024u;
+          const auto record = std::find_if(
+              m_verifiedTableCacheSources.begin(),
+              m_verifiedTableCacheSources.end(),
+              [selectedRecord](const VerifiedTableCacheSourcePending& item) {
+                return item.kind == DwgVerifiedTableCacheSourceKind::BlockRecord
+                    && item.handle == selectedRecord;
+              });
+          if (version != DRW::AC1018 || bkr->handle != selectedRecord
+              || record == m_verifiedTableCacheSources.end()
+              || frame.body().size() > maxFrame
+              || m_verifiedTableCacheSources.size() != 1u
+              || m_verifiedTableCacheSourceBytes
+                     > maxVerifiedTableCacheSourceBytes - frame.body().size()) {
+            m_verifiedTableCacheSourceFailed = true;
+          } else {
+            VerifiedTableCacheSourcePending pending;
+            pending.kind = DwgVerifiedTableCacheSourceKind::BlockEntity;
+            pending.version = version;
+            pending.handle = bk.handle;
+            pending.offset = oc.loc;
+            pending.ordinal = oc.sourceOrdinal;
+            pending.space = oc.sourceOffsetSpace;
+            pending.frame = frame;
+            pending.blockModel = std::make_shared<const DRW_Block>(bk);
+            m_verifiedTableCacheSourceBytes += pending.frame.body().size();
+            m_verifiedTableCacheSources.push_back(std::move(pending));
+          }
+        } catch (...) {
+          m_verifiedTableCacheSourceFailed = true;
+          m_verifiedTableCacheSources.clear();
+          m_verifiedTableCacheSourceBytes = 0u;
+        }
+      }
+    }
 
     // Validate the ownership graph before publishing any callbacks. The
     // R2004+ BLOCK_HEADER vector is authoritative; a missing, duplicate,
@@ -13481,6 +13584,69 @@ void dwgReader::deliverVerifiedTableCandidates(DRW_Interface& target) noexcept {
         item.ltypeModel.get(),item.styleModel.get());
     sink->verifiedTableCandidate(ticket);
   }
+}
+
+void dwgReader::deliverVerifiedTableCacheSources(DRW_Interface& target) noexcept {
+  if (m_verifiedTableCacheSourceFailed
+      || m_verifiedTableCacheSources.size() != 2u
+      || m_entityParseFailures != 0u || m_objectParseFailures != 0u
+      || m_dwgFrameCoverageIntegrityViolation
+      || m_dwgFrameCoverageStatus != DRW_DwgFrameCoverageStatus::FinalizedComplete)
+    return;
+  auto *sink = dynamic_cast<DwgVerifiedTableCacheSourceSink *>(&target);
+  if (!sink)
+    return;
+  const std::uint32_t selectedRecord =
+      sink->verifiedTableCacheBlockRecordSelection();
+  const std::uint32_t selectedBlock =
+      sink->verifiedTableCacheBlockSelection();
+  if (selectedRecord == 0u || selectedBlock == 0u
+      || selectedRecord == selectedBlock)
+    return;
+  const auto record = std::find_if(
+      m_verifiedTableCacheSources.cbegin(), m_verifiedTableCacheSources.cend(),
+      [selectedRecord](const VerifiedTableCacheSourcePending& item) {
+        return item.kind == DwgVerifiedTableCacheSourceKind::BlockRecord
+            && item.handle == selectedRecord;
+      });
+  const auto block = std::find_if(
+      m_verifiedTableCacheSources.cbegin(), m_verifiedTableCacheSources.cend(),
+      [selectedBlock](const VerifiedTableCacheSourcePending& item) {
+        return item.kind == DwgVerifiedTableCacheSourceKind::BlockEntity
+            && item.handle == selectedBlock;
+      });
+  if (record == m_verifiedTableCacheSources.cend()
+      || block == m_verifiedTableCacheSources.cend()
+      || !record->blockRecordModel || !block->blockModel
+      || record->version != DRW::AC1018 || block->version != DRW::AC1018)
+    return;
+  const auto matchesFinalLedger = [this](
+          const VerifiedTableCacheSourcePending& item) noexcept {
+    const auto index = m_dwgSourceFrameIndexes.find(item.handle);
+    if (index == m_dwgSourceFrameIndexes.end()
+        || index->second >= m_dwgSourceFrameLedger.size())
+      return false;
+    const auto& source = m_dwgSourceFrameLedger[index->second];
+    return source.m_handle == item.handle
+        && source.m_sourceOffset == item.offset
+        && source.m_sourceMapOrdinal == item.ordinal
+        && source.m_sourceOffsetSpace == item.space
+        && source.m_disposition == DRW_DwgFrameDisposition::Published
+        && source.m_publicationCount == 1u
+        && item.frame.offset() == item.offset;
+  };
+  if (!matchesFinalLedger(*record) || !matchesFinalLedger(*block))
+    return;
+  for (const auto *item : {&*record, &*block}) {
+    DwgVerifiedTableCacheSourceTicket ticket(
+        item->kind, item->version, item->handle, item->offset, item->ordinal,
+        item->space, item->frame, item->blockRecordModel.get(),
+        item->blockModel.get());
+    sink->verifiedTableCacheSource(ticket);
+  }
+  std::vector<VerifiedTableCacheSourcePending>().swap(
+      m_verifiedTableCacheSources);
+  m_verifiedTableCacheSourceBytes = 0u;
 }
 
 bool dwgReader::publishDeferredRawObjects(

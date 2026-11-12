@@ -24,6 +24,8 @@ bool enable(dx_iface& r){return r.enableVerifiedTableProjectionSource(selected,0
 bool live(const dx_data& d){return dx_iface::hasUnchangedVerifiedTableProjectionSource(d,selected,0xb9u,0xbdu,0xbau,0x9cu,0xbbu);}
 bool cacheCandidate(const dx_data& d){return dx_iface::matchesVerifiedTableCacheMembershipCandidate(
     d,selected,0xb9u,0xbdu,0xbau,0x9cu,0xbbu);}
+bool cacheSourceFrames(const dx_data& d){return dx_iface::hasUnchangedVerifiedTableCacheSourceFrames(
+    d,0x9du,0xa6u);}
 class FaultProbe final:public dx_iface {
 public:bool inject=true,seen=false;
     void verifiedTableCandidate(const DwgVerifiedTableCandidateTicket& t) noexcept override {
@@ -59,8 +61,9 @@ int main(int argc,char**argv) {
     if(argc!=2)return 2;
     Probe reader;reader.path=argv[1];dx_data data;if(!enable(reader)
         || reader.enableVerifiedTableProjectionSource(selected,0xb9u,0xbdu,0xbau,0xbbu,0xbbu)
+        || !reader.enableVerifiedTableCacheSourceFrames(0x9du,0xa6u)
         || !reader.fileImport(argv[1],&data,false) || !reader.hit || !reader.unknown || !live(data)
-        || !cacheCandidate(data))return 3;
+        || !cacheCandidate(data) || !cacheSourceFrames(data))return 3;
     auto selectedBlock=std::find_if(data.blocks.begin(),data.blocks.end(),[](const dx_ifaceBlock* b){
         return b && b->name=="*T1";
     });

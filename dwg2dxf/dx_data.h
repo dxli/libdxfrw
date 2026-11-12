@@ -32,6 +32,8 @@
 #include "dx_visualstyle_source_profile.h"
 #include "dx_rendersettings_source_profile.h"
 #include "dx_rendering_roots.h"
+#include "intern/dwgobjectframe.h"
+#include "intern/dwg_xrecord_verified_source.h"
 
 #include <array>
 #include <atomic>
@@ -2714,6 +2716,26 @@ private:
     std::shared_ptr<const unsigned char> m_verifiedXRecordImportToken;
     std::shared_ptr<const VerifiedXRecordSources> m_verifiedXRecordSource;
     std::shared_ptr<const VerifiedTableCandidateSources> m_verifiedTableCandidateSource;
+    struct VerifiedTableCacheSourceFrame {
+        DwgVerifiedTableCacheSourceKind kind{DwgVerifiedTableCacheSourceKind::BlockRecord};
+        DRW::Version version{DRW::UNKNOWNV};
+        std::uint32_t handle{0u}, offset{0u};
+        std::uint64_t ordinal{0u};
+        DRW_DwgFrameOffsetSpace space{DRW_DwgFrameOffsetSpace::Unknown};
+        std::uint32_t objectDataBitSize{0u}, handleStreamBitSize{0u};
+        std::vector<std::uint8_t> body;
+        std::shared_ptr<const DRW_Block_Record> blockRecordModel;
+        std::shared_ptr<const DRW_Block> blockModel;
+    };
+    struct VerifiedTableCacheSource {
+        std::shared_ptr<const unsigned char> importToken;
+        std::uint64_t generation{0u};
+        std::uint32_t selectedBlockRecord{0u}, selectedBlock{0u};
+        std::vector<VerifiedTableCacheSourceFrame> frames;
+        std::size_t retainedBytes{0u};
+        bool failed{false};
+    };
+    std::shared_ptr<const VerifiedTableCacheSource> m_verifiedTableCacheSource;
     struct VerifiedStyleResourceSources {
         std::shared_ptr<const unsigned char> importToken;
         std::uint64_t generation{0u};

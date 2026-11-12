@@ -93,4 +93,58 @@ public:
     virtual bool wantsVerifiedTableCandidate(std::uint32_t handle) const noexcept=0;
     virtual void verifiedTableCandidate(const DwgVerifiedTableCandidateTicket&) noexcept=0;
 };
+
+enum class DwgVerifiedTableCacheSourceKind : std::uint8_t {
+    BlockRecord,
+    BlockEntity
+};
+
+class DwgVerifiedTableCacheSourceTicket final {
+    friend class dwgReader;
+    DwgVerifiedTableCacheSourceTicket(
+            DwgVerifiedTableCacheSourceKind kind, DRW::Version version,
+            std::uint32_t handle, std::uint32_t offset, std::uint64_t ordinal,
+            DRW_DwgFrameOffsetSpace space, const DwgObjectFrame& frame,
+            const DRW_Block_Record* blockRecord,
+            const DRW_Block* block) noexcept
+        : kind_(kind), version_(version), handle_(handle), offset_(offset),
+          ordinal_(ordinal), space_(space), frame_(frame),
+          blockRecord_(blockRecord), block_(block) {}
+public:
+    DwgVerifiedTableCacheSourceTicket(
+            const DwgVerifiedTableCacheSourceTicket&) = delete;
+    DwgVerifiedTableCacheSourceTicket& operator=(
+            const DwgVerifiedTableCacheSourceTicket&) = delete;
+    DwgVerifiedTableCacheSourceKind kind() const noexcept { return kind_; }
+    DRW::Version version() const noexcept { return version_; }
+    std::uint32_t handle() const noexcept { return handle_; }
+    std::uint32_t offset() const noexcept { return offset_; }
+    std::uint64_t ordinal() const noexcept { return ordinal_; }
+    DRW_DwgFrameOffsetSpace space() const noexcept { return space_; }
+    const DwgObjectFrame& frame() const noexcept { return frame_; }
+    const DRW_Block_Record* blockRecordModel() const noexcept {
+        return blockRecord_;
+    }
+    const DRW_Block* blockModel() const noexcept { return block_; }
+private:
+    DwgVerifiedTableCacheSourceKind kind_;
+    DRW::Version version_;
+    std::uint32_t handle_, offset_;
+    std::uint64_t ordinal_;
+    DRW_DwgFrameOffsetSpace space_;
+    const DwgObjectFrame& frame_;
+    const DRW_Block_Record* blockRecord_;
+    const DRW_Block* block_;
+};
+
+class DwgVerifiedTableCacheSourceSink {
+public:
+    virtual ~DwgVerifiedTableCacheSourceSink() = default;
+    virtual std::uint32_t verifiedTableCacheBlockRecordSelection()
+        const noexcept = 0;
+    virtual std::uint32_t verifiedTableCacheBlockSelection()
+        const noexcept = 0;
+    virtual void verifiedTableCacheSource(
+        const DwgVerifiedTableCacheSourceTicket&) noexcept = 0;
+};
 #endif
