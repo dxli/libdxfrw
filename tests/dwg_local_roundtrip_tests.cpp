@@ -39429,7 +39429,8 @@ public:
             }
         }
         if (m_useParsedProxyCache) {
-            table.proxyGraphics = generatedTableProxyCache();
+            table.proxyGraphics = m_hasParsedProxyCacheOverride
+                ? m_parsedProxyCacheOverride : generatedTableProxyCache();
             table.numProxyGraph = static_cast<int>(table.proxyGraphics.size());
             DrwEntityEncodeTestAccess::markParsedProxyGraphics(
                 table, DRW::AC1018);
@@ -39638,6 +39639,11 @@ public:
     void useParsedProxyCache(bool use) noexcept {
         m_useParsedProxyCache = use;
     }
+    void useParsedProxyCache(const std::string& cache) {
+        m_parsedProxyCacheOverride = cache;
+        m_hasParsedProxyCacheOverride = true;
+        m_useParsedProxyCache = true;
+    }
     void setExtensionMode(int mode) noexcept {
         m_extensionMode = mode;
         m_derivedCodecCalled = false;
@@ -39760,6 +39766,8 @@ private:
     bool m_emitDbColor {false};
     bool m_useParsedBlockRecordMetadata {false};
     bool m_useParsedProxyCache {false};
+    bool m_hasParsedProxyCacheOverride {false};
+    std::string m_parsedProxyCacheOverride;
     int m_extensionMode {0};
     bool m_testExtensionRollback {false};
     bool m_derivedCodecCalled {false};
@@ -40267,6 +40275,159 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
     return true;
 }
 
+bool testPhysicalAc1018TableBodyWholeFileRoundTrip(
+    const std::filesystem::path& sourcePath,
+    const char* retainedOutput = nullptr) {
+    dx_iface sourceReader;
+    dx_data sourceData;
+    if (!sourceReader.fileImport(sourcePath.string(), &sourceData, false)
+        || sourceData.sourceVersion != DRW::AC1018
+        || sourceData.tables.size() != 1u) {
+        std::cerr << "physical AC1018 TABLE source import/profile mismatch\n";
+        return false;
+    }
+    const DRW_Table sourceTable = sourceData.tables.front();
+    if (!sourceTable.m_hasSemanticContent
+        || !sourceTable.m_semanticContentComplete
+        || sourceTable.proxyGraphics.empty()
+        || sourceTable.numProxyGraph
+            != static_cast<int>(sourceTable.proxyGraphics.size())
+        || sourceTable.m_content.m_rows.size() != 3u
+        || sourceTable.m_content.m_columns.size() != 3u
+        || sourceTable.m_content.m_subrecordRanges.size() != 8u) {
+        std::cerr << "physical AC1018 TABLE selected profile mismatch\n";
+        return false;
+    }
+
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch().count();
+    const auto outputPath = retainedOutput != nullptr
+        ? std::filesystem::path(retainedOutput)
+        : std::filesystem::temp_directory_path()
+            / ("libdxfrw-ac1018-physical-table-body-"
+               + std::to_string(nonce) + ".dwg");
+    struct Cleanup {
+        std::filesystem::path path;
+        bool removeOutput;
+        ~Cleanup() {
+            if (removeOutput) {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        }
+    } cleanup{outputPath, retainedOutput == nullptr};
+
+    dx_data writerData;
+    dwgRW output(outputPath.string().c_str());
+    TableStyleNodWholeFileAdapter producer(
+        &output, &writerData, true, false, false);
+    producer.table = sourceTable;
+    producer.table.handle = 0xA720u;
+    producer.table.parentHandle = DRW::NoHandle;
+    producer.table.xDictHandle = 0u;
+    producer.table.blockRecH.ref = 0u;
+    producer.table.m_tableStyleHandle =
+        TableStyleNodWholeFileAdapter::kStyleHandle;
+    producer.table.m_content.m_tableStyleHandle =
+        TableStyleNodWholeFileAdapter::kStyleHandle;
+    producer.table.setDwgLayerHandle(0u);
+    producer.useParsedBlockRecordMetadata(true);
+    producer.useParsedProxyCache(sourceTable.proxyGraphics);
+    std::cout << "physical TABLE output preflight layer='"
+              << producer.table.layer << "' layerHandle="
+              << producer.table.dwgLayerHandle() << " ltypeHandle="
+              << producer.table.dwgLinetypeHandle() << " styleHandle=0x"
+              << std::hex << producer.table.m_tableStyleHandle << std::dec
+              << " overrideFlags=" << producer.table.m_tableOverrideFlags
+              << " textStyleHandles=";
+    for (const std::uint32_t handle :
+         producer.table.m_tableRowTextStyleHandles)
+        std::cout << handle << ',';
+    std::cout << " textStyleNames=";
+    for (const std::string& name : producer.table.m_tableRowTextStyleNames)
+        std::cout << '[' << name << ']';
+    std::cout << " plotStyle=" << producer.table.plotStyle
+              << " colorHandle=" << producer.table.dwgAcDbColorHandle()
+              << " blockRole="
+              << static_cast<unsigned>(producer.table.blockRecH.code) << '/'
+              << static_cast<unsigned>(producer.table.blockRecH.rawCode)
+              << '/' << static_cast<unsigned>(producer.table.blockRecH.size)
+              << '\n';
+    if (!output.write(&producer, DRW::AC1018, true) || !producer.ready) {
+        const DRW_OperationDiagnostic diagnostic = output.getLastDiagnostic();
+        std::cerr << "physical AC1018 TABLE body output failed code="
+                  << diagnostic.code << '\n';
+        return false;
+    }
+
+    dx_data readData;
+    dx_iface freshReader;
+    freshReader.cData = &readData;
+    dwgRW input(outputPath.string().c_str());
+    if (!input.read(&freshReader, false) || readData.tables.size() != 1u) {
+        std::cerr << "physical AC1018 TABLE body fresh readback failed code="
+                  << input.getLastDiagnostic().code << '\n';
+        return false;
+    }
+    const DRW_Table& emitted = readData.tables.front();
+    const auto sameContent = [](const DRW_Table& lhs,
+                                const DRW_Table& rhs) {
+        if (lhs.m_content.m_rows.size() != rhs.m_content.m_rows.size()
+            || lhs.m_content.m_columns.size()
+                != rhs.m_content.m_columns.size())
+            return false;
+        for (std::size_t i = 0u; i < lhs.m_content.m_columns.size(); ++i) {
+            if (lhs.m_content.m_columns[i].m_width
+                != rhs.m_content.m_columns[i].m_width)
+                return false;
+        }
+        for (std::size_t row = 0u; row < lhs.m_content.m_rows.size(); ++row) {
+            const DRW_TableRow& a = lhs.m_content.m_rows[row];
+            const DRW_TableRow& b = rhs.m_content.m_rows[row];
+            if (a.m_height != b.m_height || a.m_cells.size() != b.m_cells.size())
+                return false;
+            for (std::size_t column = 0u; column < a.m_cells.size(); ++column) {
+                const DRW_TableCell& x = a.m_cells[column];
+                const DRW_TableCell& y = b.m_cells[column];
+                if (x.m_type != y.m_type || x.m_isMerged != y.m_isMerged
+                    || x.m_mergedWidth != y.m_mergedWidth
+                    || x.m_mergedHeight != y.m_mergedHeight
+                    || x.m_contents.size() != y.m_contents.size())
+                    return false;
+                for (std::size_t content = 0u;
+                     content < x.m_contents.size(); ++content) {
+                    if (x.m_contents[content].m_type
+                            != y.m_contents[content].m_type
+                        || x.m_contents[content].m_text
+                            != y.m_contents[content].m_text)
+                        return false;
+                }
+            }
+        }
+        return true;
+    };
+    const bool passed = emitted.handle == producer.table.handle
+        && emitted.xDictHandle == 0u
+        && emitted.m_tableStyleHandle
+            == TableStyleNodWholeFileAdapter::kStyleHandle
+        && emitted.blockRecH.ref != 0u
+        && emitted.proxyGraphics == sourceTable.proxyGraphics
+        && emitted.numProxyGraph == sourceTable.numProxyGraph
+        && emitted.m_dataVersion == sourceTable.m_dataVersion
+        && emitted.m_valueFlag == sourceTable.m_valueFlag
+        && emitted.m_content.m_subrecordRanges.size()
+            == sourceTable.m_content.m_subrecordRanges.size()
+        && emitted.m_semanticContentComplete
+        && sameContent(sourceTable, emitted);
+    std::cout << "physical AC1018 TABLE body round-trip sourceHandle=0x"
+              << std::hex << sourceTable.handle << " outputHandle=0x"
+              << emitted.handle << std::dec << " sourceProxyBytes="
+              << sourceTable.proxyGraphics.size() << " ranges="
+              << sourceTable.m_content.m_subrecordRanges.size()
+              << " result=" << (passed ? "PASS" : "FAIL") << '\n';
+    return passed;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -40300,6 +40461,13 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--inspect-physical-table-codec") {
         return inspectPhysicalTableDirectCodec(argv[2]) ? 0 : 1;
+    }
+    if (argc == 4
+        && std::string(argv[1])
+            == "--physical-ac1018-table-body-roundtrip") {
+        const bool passed = testPhysicalAc1018TableBodyWholeFileRoundTrip(
+            argv[2], argv[3]);
+        return passed ? 0 : 1;
     }
     if (argc == 3
         && std::string(argv[1]) == "--inspect-physical-style-eed-appid") {
