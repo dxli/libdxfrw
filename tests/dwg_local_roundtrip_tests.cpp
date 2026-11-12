@@ -616,7 +616,54 @@ public:
         if (!parse(splineBody) || probe.flags != (8 | 4)
             || probe.curvetype != 5)
             return false;
-        return true;
+
+        DRW_Polyline polyface;
+        polyface.flags = 64 | 1; // PFACE body has no closed-M flag field.
+        const auto rejectPolyface = [&]() {
+            const auto seeded = writer.buffer();
+            return !writer.encodeEntity(&polyface) && writer.buffer() == seeded;
+        };
+        if (!rejectPolyface()) return false;
+        polyface.flags = 64;
+        polyface.curvetype = 5; // PFACE body carries no group-75 field.
+        if (!rejectPolyface()) return false;
+        polyface.curvetype = 0;
+        polyface.smoothM = 1;
+        if (!rejectPolyface()) return false;
+        polyface.smoothM = 0;
+        polyface.basePoint.x = 0.25;
+        if (!rejectPolyface()) return false;
+        polyface.basePoint.x = 0.0;
+        polyface.extPoint.x = 0.25;
+        if (!rejectPolyface()) return false;
+        polyface.extPoint.x = 0.0;
+        polyface.defstawidth = 0.25; // no PFACE width field
+        if (!rejectPolyface()) return false;
+        polyface.defstawidth = 0.0;
+        polyface.thickness = 0.5;
+        if (!rejectPolyface()) return false;
+        polyface.thickness = 0.0;
+        if (!writer.encodeEntity(&polyface)) return false;
+
+        DRW_Polyline mesh;
+        mesh.flags = 16;
+        mesh.thickness = 0.5; // mesh body has no thickness field
+        const auto rejectMesh = [&]() {
+            const auto seeded = writer.buffer();
+            return !writer.encodeEntity(&mesh) && writer.buffer() == seeded;
+        };
+        if (!rejectMesh()) return false;
+        mesh.thickness = 0.0;
+        mesh.basePoint.z = 1.0;
+        if (!rejectMesh()) return false;
+        mesh.basePoint.z = 0.0;
+        mesh.extPoint.y = 0.25;
+        if (!rejectMesh()) return false;
+        mesh.extPoint.y = 0.0;
+        mesh.defendwidth = 0.5;
+        if (!rejectMesh()) return false;
+        mesh.defendwidth = 0.0;
+        return writer.encodeEntity(&mesh);
     }
 
     static bool checkR2007LwPolylineFooter() {

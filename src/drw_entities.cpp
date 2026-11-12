@@ -34197,6 +34197,16 @@ bool DRW_Polyline::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_
     if ((topologyFlags & (topologyFlags - 1u)) != 0u
         || ((flags & 32) != 0 && (flags & 16) == 0))
         return false;
+    const bool unusedPointFieldsAreDefault = basePoint.x == 0.0
+        && basePoint.y == 0.0 && basePoint.z == 0.0
+        && extPoint.x == 0.0 && extPoint.y == 0.0 && extPoint.z == 1.0
+        && defstawidth == 0.0 && defendwidth == 0.0 && thickness == 0.0;
+    if ((flags & 64) != 0
+        && (flags != 64 || curvetype != 0 || smoothM != 0 || smoothN != 0
+            || !unusedPointFieldsAreDefault))
+        return false;
+    if ((flags & 16) != 0 && !unusedPointFieldsAreDefault)
+        return false;
     const bool encodedAs3dPolyline = (flags & 8) != 0
         && (flags & (16 | 64)) == 0;
     if (encodedAs3dPolyline) {

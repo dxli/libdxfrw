@@ -7221,6 +7221,19 @@ This closes only the bounded AC1021 writer field-mapping gap; other producer
 profiles and native curve semantics remain open. See the [flag admission
 receipt](docs/research/p6-ac1021-polyline3d-dwg-flag-admission-2026-11-12.json).
 
+**PFACE/MESH DWG writer loss guards (2026-11-12):** ODA v5.4.1
+§20.4.33 (p. 134) defines the PFACE body with vertex/face counts and handles,
+not group-70 closure, curve/smooth metadata, widths, thickness, base point or
+extrusion. §20.4.34 (p. 134) defines MESH flags/curve type/counts/smooth
+density and handles, but no thickness, base point, extrusion or widths. The
+writer now refuses PFACE values outside its represented profile and refuses
+nondefault omitted point/width/thickness fields for PFACE and MESH before
+publishing staged bytes. Generated controls check seeded-buffer preservation
+for each tested loss and successful same-writer correction/retry. The focused
+POLYLINE cohort passes 23/23; no fixture was added. This closes only these
+bounded DWG serialization-loss paths; complete PFACE/MESH semantic and native
+consumer qualification remains open. See the [loss-guard receipt](docs/research/p6-pface-mesh-dwg-loss-guard-2026-11-12.json).
+
 The DXF MTEXT writer now avoids emitting redundant group 50 when its group-11
 WCS direction vector is authoritative, for both standalone MTEXT and the
 R2018 embedded-MTEXT body used by ATTRIB/ATTDEF. Autodesk's DXF definition
