@@ -83,6 +83,12 @@ int main(int argc,char**argv) {
     if(cacheCandidate(data))return 63;
     (*firstChild)->handle=childHandle;
     if(!cacheCandidate(data))return 64;
+    auto secondChild=std::next(firstChild);
+    if(secondChild==(*selectedBlock)->ent.end() || !*secondChild)return 67;
+    std::iter_swap(firstChild,secondChild);
+    if(cacheCandidate(data))return 68;
+    std::iter_swap(firstChild,secondChild);
+    if(!cacheCandidate(data))return 69;
     data.blockRecords.push_back(*selectedRecord);
     if(cacheCandidate(data))return 65;
     data.blockRecords.pop_back();

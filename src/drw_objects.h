@@ -2718,6 +2718,12 @@ public:
   [[nodiscard]] std::size_t entityMapCount() const noexcept {
     return entMap.size();
   }
+  // Compare a caller-assembled membership sequence without exposing the
+  // parser/writer-owned handle map itself.
+  [[nodiscard]] bool matchesEntityMap(
+      const std::vector<std::uint32_t> &handles) const noexcept {
+    return entMap == handles;
+  }
 protected:
   // dwg parser
 private:

@@ -1912,7 +1912,9 @@ created locally from scratch for the specific control.
   The diagnostic now also checks a bounded AC1018 `*T1` cache-membership
   candidate: unique matching TABLE/BLOCK_RECORD/BLOCK names, reciprocal
   callback parent handles, a complete 15-member entity map, unique child
-  handles, and the observed 7-MTEXT/8-LINE profile. The selected physical
+  handles, exact source BLOCK_RECORD entity-map order, and the observed
+  7-MTEXT/8-LINE profile. The comparison uses a narrow `matchesEntityMap`
+  accessor and keeps the parser-owned handle vector encapsulated. The selected physical
   source passes; mutations to the block parent, child identity, and duplicate
   BLOCK_RECORD refuse and recover after restoration. This is same-import
   callback correlation only. A follow-up opt-in reader ticket now retains

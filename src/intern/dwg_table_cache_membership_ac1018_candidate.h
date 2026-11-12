@@ -46,6 +46,12 @@ inline bool matches(const DRW_Table& table,
 
     std::size_t mtext = 0u;
     std::size_t line = 0u;
+    std::vector<std::uint32_t> childHandles;
+    try {
+        childHandles.reserve(block->ent.size());
+    } catch (...) {
+        return false;
+    }
     for (auto* entity : block->ent) {
         if (!entity || entity->handle == 0u || entity->handle == DRW::NoHandle
             || entity->parentHandle != record->handle)
@@ -56,6 +62,11 @@ inline bool matches(const DRW_Table& table,
             ++line;
         else
             return false;
+        try {
+            childHandles.push_back(entity->handle);
+        } catch (...) {
+            return false;
+        }
         for (auto* prior : block->ent) {
             if (prior == entity)
                 break;
@@ -63,7 +74,8 @@ inline bool matches(const DRW_Table& table,
                 return false;
         }
     }
-    return mtext == 7u && line == 8u;
+    return mtext == 7u && line == 8u
+        && record->matchesEntityMap(childHandles);
 }
 }
 
