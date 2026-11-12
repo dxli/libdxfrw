@@ -1939,27 +1939,35 @@ created locally from scratch for the specific control.
   source's TABLE `0x9c` has an extension-dictionary hard-owner reference to
   DICTIONARY `0xbb`; its `ACAD_XREC_ROUNDTRIP` entry owns XRECORD `0xbc`,
   which references TABLECONTENT `0xb9`, TABLEGEOMETRY `0xba` and DATATABLE
-  `0xbd`. A generated range-empty TABLE with an empty fixed extension
-  dictionary now passes transactional DWG output and fresh readback; the
-  non-NOD dictionary receipt validates identity, type, owner and empty
-  membership. Wrong owner/type, missing and populated targets, collision
-  attempts, nested rollback and retry are covered. Direct TABLE encoding and
-  parsed source ranges remain refused, and unidentified failed frame attempts
-  reaching common facade accounting conservatively block the extension
-  profile. Public frame, registration, table-record and block entry points now
-  also record escaping exceptions even when a consumer catches them inside its
-  callback. The flag refuses extension output; it does not roll back a frame.
-  Explicit transaction rollback separately removes a partially emitted frame
-  and restores the flag, permitting retry. Non-emitting administrative calls
-  such as inline reservation failures remain outside this exception guarantee.
-  Next qualify the physical
-  populated graph: XRECORD membership, owner/reactor and embedded handle roles,
-  all referenced object bodies, source binding and transactional closure.
-  LibreDWG's decoded TABLECONTENT fields are unreliable for
-  this file; its object identities and links are bounded observations, not
-  semantic proof. See the [physical graph receipt](docs/research/p5-ac1018-table-extension-dictionary-physical-graph-2026-11-10.json)
-  [generated empty-graph receipt](docs/research/p5-ac1018-table-empty-extension-graph-2026-11-11.json),
-  and [caught-exception receipt](docs/research/p5-table-extension-caught-exception-2026-11-11.json).
+  `0xbd`. The pinned physical profile now has source-bound receipts for the
+  TABLE/dictionary edge, XRECORD dictionary membership, the root XRECORD's
+  ordered 360/361/360 targets and body/owner/reactor spans, TABLECONTENT's
+  bounded body and 50 handle fields, TABLEGEOMETRY's zero-cell profile,
+  DATATABLE's bounded profile, and all nine DATATABLE-owned XRECORDs. The
+  relevant class/frame capabilities are tied to one completed import, and the
+  records are cross-checked against the same-version ODA DXF projection. These
+  observations close source-capture work for this pinned graph; they do not
+  prove native TABLE meaning or authorize output.
+
+  A generated range-empty TABLE with an empty fixed extension dictionary passes
+  transactional DWG output and fresh readback. Wrong owner/type, missing and
+  populated targets, collision attempts, nested rollback and retry are covered.
+  Direct TABLE encoding with a populated source graph and parsed source ranges
+  remains refused. Public frame, registration, table-record and block entry
+  points record escaping callback exceptions; explicit transaction rollback
+  removes a partial frame and restores admission state. Non-emitting
+  administrative failures such as inline reservation remain outside that
+  exception guarantee. Do not repeat the completed source census or promote
+  this profile from peer agreement. The remaining gates are the TABLESTYLE
+  dependency closure, XRECORD codepage-45 interpretation, the unrelated HEADER
+  integrity observation, transaction-safe populated-graph output/readback, and
+  independent/native TABLE semantic acceptance. LibreDWG's TABLECONTENT field
+  projection is not a semantic oracle. See the [physical graph
+  receipt](docs/research/p5-ac1018-table-extension-dictionary-physical-graph-2026-11-10.json),
+  [candidate binding](docs/research/p5-ac1018-table-candidates-reader-binding-2026-11-11.json),
+  [root XRECORD binding](docs/research/p5-ac1018-table-roundtrip-binding-2026-11-11.json),
+  [TABLECONTENT walk](docs/research/p5-ac1018-tablecontent-complete-body-walk-2026-11-11.json),
+  and [generated empty-graph receipt](docs/research/p5-ac1018-table-empty-extension-graph-2026-11-11.json).
 
   Recursive source closure also requires DATATABLE `0xbd`'s nine hard-owned
   XRECORDs `0xbe`–`0xc6`, whose source bodies and owner links are now
