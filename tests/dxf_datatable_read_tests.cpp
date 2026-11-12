@@ -4,10 +4,42 @@
 #include "intern/dxfwriter.h"
 
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <memory>
+#include <new>
+#include <string>
 #include <vector>
+
+namespace {
+long allocationsBeforeFailure = -1;
+std::size_t failedAllocations = 0u;
+struct AllocationFailure {
+    explicit AllocationFailure(long count) { allocationsBeforeFailure = count; }
+    ~AllocationFailure() { allocationsBeforeFailure = -1; }
+};
+}
+
+void* operator new(std::size_t size) {
+    if (allocationsBeforeFailure == 0) {
+        ++failedAllocations;
+        allocationsBeforeFailure = -1;
+        throw std::bad_alloc();
+    }
+    if (allocationsBeforeFailure > 0)
+        --allocationsBeforeFailure;
+    if (void* value = std::malloc(size == 0u ? 1u : size))
+        return value;
+    throw std::bad_alloc();
+}
+
+void* operator new[](std::size_t size) { return ::operator new(size); }
+void operator delete(void* value) noexcept { std::free(value); }
+void operator delete[](void* value) noexcept { std::free(value); }
+void operator delete(void* value, std::size_t) noexcept { std::free(value); }
+void operator delete[](void* value, std::size_t) noexcept { std::free(value); }
 
 namespace {
 struct Reader final : LC3CompatCheck {
@@ -51,11 +83,29 @@ struct Export final : LC3CompatCheck {
     DRW_XRecord firstChild;
     DRW_XRecord secondChild;
     bool emitted{false};
+    long failAt = -1;
+    long reached = 0;
 
     void writeObjects() override {
-        emitted = codec.writeDataTable(&table)
-            && codec.writeXRecord(&firstChild)
+        bool tableWritten = false;
+        if (failAt < 0) {
+            tableWritten = codec.writeDataTable(&table);
+        } else {
+            const std::size_t before = failedAllocations;
+            AllocationFailure failure(failAt);
+            try {
+                tableWritten = codec.writeDataTable(&table);
+            } catch (const std::bad_alloc&) {
+                tableWritten = false;
+            }
+            reached = failedAllocations != before
+                ? static_cast<long>(failedAllocations - before)
+                : failAt - allocationsBeforeFailure;
+        }
+        emitted = tableWritten && codec.writeXRecord(&firstChild)
             && codec.writeXRecord(&secondChild);
+        if (!emitted)
+            (void)codec.writeRawDxfObject(nullptr);
     }
     bool finalizeDxfWrite() override { return emitted; }
 };
@@ -175,6 +225,88 @@ bool writeAndRead(const std::filesystem::path& path, bool binary) {
         && readback.xrecords[1].handle == 0x217u
         && readback.xrecords[1].parentHandle == 0x215u;
 }
+
+bool readBytes(const std::filesystem::path& path, std::string& bytes) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input)
+        return false;
+    bytes.assign(std::istreambuf_iterator<char>{input},
+                 std::istreambuf_iterator<char>{});
+    return !input.bad();
+}
+
+bool readbackMatches(const std::filesystem::path& path) {
+    Reader readback;
+    dxfRW reader(path.string().c_str());
+    return reader.read(&readback, false) && readback.tables.size() == 1u
+        && readback.raw.size() == 1u && readback.xrecords.size() == 2u
+        && verify(readback.tables.front(), true, true)
+        && readback.xrecords[0].handle == 0x216u
+        && readback.xrecords[0].parentHandle == 0x215u
+        && readback.xrecords[1].handle == 0x217u
+        && readback.xrecords[1].parentHandle == 0x215u;
+}
+
+bool allocationSweep(const std::filesystem::path& path) {
+    const std::string prior = "prior DATATABLE bytes\n";
+    for (const bool binary : {false, true}) {
+        long allocationCount = 0;
+        std::string expectedBytes;
+        {
+            dxfRW codec(path.string().c_str());
+            codec.setHandleRemap({{0x114u, 0x214u}, {0x115u, 0x215u},
+                                  {0x116u, 0x216u}, {0x117u, 0x217u}});
+            Export exporter(codec);
+            exporter.failAt = 1000000;
+            const bool written = codec.write(&exporter, DRW::AC1024, binary);
+            if (!written || !exporter.emitted || !readbackMatches(path)
+                || !readBytes(path, expectedBytes))
+                return false;
+            allocationCount = exporter.reached;
+        }
+        if (allocationCount <= 0)
+            return false;
+
+        for (long offset = 0; offset < allocationCount; ++offset) {
+            {
+                std::ofstream output(path, std::ios::binary | std::ios::trunc);
+                output << prior;
+                if (!output)
+                    return false;
+            }
+            dxfRW codec(path.string().c_str());
+            codec.setHandleRemap({{0x114u, 0x214u}, {0x115u, 0x215u},
+                                  {0x116u, 0x216u}, {0x117u, 0x217u}});
+            Export exporter(codec);
+            exporter.failAt = offset;
+            const bool written = codec.write(&exporter, DRW::AC1024, binary);
+            exporter.failAt = -1;
+            std::string current;
+            if (written || exporter.emitted || exporter.reached != 1
+                || !readBytes(path, current) || current != prior
+                || exporter.table.handle != 0x115u
+                || exporter.table.parentHandle != 0x114u
+                || exporter.table.tableName != "TABLE_NAME"
+                || exporter.table.columns.size() != 4u
+                || exporter.table.rowHandles
+                    != std::vector<std::uint32_t>{0x116u, 0x117u}
+                || exporter.firstChild.handle != 0x116u
+                || exporter.secondChild.handle != 0x117u)
+                return false;
+
+            const bool retried = codec.write(&exporter, DRW::AC1024, binary);
+            std::string retryBytes;
+            if (!retried || !exporter.emitted
+                || !readBytes(path, retryBytes)
+                || retryBytes != expectedBytes || !readbackMatches(path))
+                return false;
+        }
+        std::cout << "DATATABLE DXF " << (binary ? "Binary" : "ASCII")
+                  << ": allocation offsets=" << allocationCount
+                  << ", rollback/retry/readback=PASS\n";
+    }
+    return true;
+}
 }
 
 int main() {
@@ -224,5 +356,5 @@ int main() {
         }
         if (!writeAndRead(path, binary)) return 9;
     }
-    return 0;
+    return allocationSweep(path) ? 0 : 12;
 }
