@@ -40076,6 +40076,51 @@ bool testTableStyleNodWholeFileRoundTrip(const char* retainedOutput = nullptr,
         || !table->m_content.m_rows[0].m_cells[2].m_isMerged) {
         return false;
     }
+    const std::array<double, 3> expectedTableColumnWidths {{
+        152.0, 152.0, 152.0
+    }};
+    const std::array<double, 3> expectedTableRowHeights {{
+        11.0, 9.0, 9.0
+    }};
+    const std::array<std::array<const char*, 3>, 3> expectedTableCellText {{
+        {{"Title", "", ""}}, {{"1", "2", "3"}}, {{"4", "5", "6"}}
+    }};
+    for (std::size_t column = 0u; column < expectedTableColumnWidths.size();
+         ++column) {
+        if (table->m_content.m_columns[column].m_width
+            != expectedTableColumnWidths[column]) {
+            std::cerr << "TABLE typed column width mismatch column="
+                      << column << '\n';
+            return false;
+        }
+    }
+    for (std::size_t rowIndex = 0u;
+         rowIndex < expectedTableRowHeights.size(); ++rowIndex) {
+        const DRW_TableRow& row = table->m_content.m_rows[rowIndex];
+        if (row.m_height != expectedTableRowHeights[rowIndex]
+            || row.m_cells.size() != expectedTableCellText[rowIndex].size()) {
+            std::cerr << "TABLE typed row geometry mismatch row="
+                      << rowIndex << '\n';
+            return false;
+        }
+        for (std::size_t column = 0u;
+             column < expectedTableCellText[rowIndex].size(); ++column) {
+            const DRW_TableCell& cell = row.m_cells[column];
+            const bool mergedAnchor = rowIndex == 0u && column == 0u;
+            const bool mergedCovered = rowIndex == 0u && column != 0u;
+            if (cell.m_type != 1 || cell.m_contents.size() != 1u
+                || cell.m_contents.front().m_type != 1
+                || cell.m_contents.front().m_text
+                    != expectedTableCellText[rowIndex][column]
+                || cell.m_isMerged != mergedCovered
+                || cell.m_mergedWidth != (mergedAnchor ? 3 : 1)
+                || cell.m_mergedHeight != 1) {
+                std::cerr << "TABLE typed cell readback mismatch row="
+                          << rowIndex << " column=" << column << '\n';
+                return false;
+            }
+        }
+    }
     if (emitZeroMaskRanges) {
         const auto& ranges = table->m_content.m_subrecordRanges;
         const std::size_t expectedCellRanges = 7u;

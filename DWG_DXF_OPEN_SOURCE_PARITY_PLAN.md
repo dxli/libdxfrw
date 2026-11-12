@@ -3748,21 +3748,18 @@ behavior independently. Local macOS checks do not satisfy those platform gates.
   at the source-reference gate. The generated invalid-body/shell-valid control
   and prior recovery controls pass `libdxfrw_persistent_manager_prefix_dispatch`
   (1/1). See the [action-parameter receipt](docs/research/p6-ac1027-osnap-action-param-raw-only-shell-recovery-2026-11-08.json).
-- **AC1018 TABLE writer checkpoint:** commit `1a590aed` adds a generated
-  low-level control that emits a real TABLE entity frame with writer-local
-  `AcDbTable` class identity/count bookkeeping, then rolls the frame and class
-  ledger back through an outer compound checkpoint. The placeholder `*T`
-  block is empty; this proves only frame/class transaction mechanics. The
-  commit `c0cb07f3` extends the focused control to route class registration
-  and frame emission through an explicit `dwgRW` transaction: caller class
-  state, frame bytes, handle/class ledgers and success count roll back after a
-  failure injected following an earlier `*T` owned geometry frame; one retry
-  then commits on the same facade. The generated LINEs are transaction probes
-  only, not TABLE rendering evidence. Next build the smallest semantically complete
-  `*T` geometry/reference graph from a bounded, source-supported profile. Keep
-  `dwgRW::writeTable` fail-closed until that graph and its
-  physical-source, independent-reader/native qualification gates pass. See the
-  [TABLE readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
+- **AC1018 TABLE writer checkpoint:** commits `1a590aed` and `c0cb07f3`
+  established TABLE frame/class rollback and retry, initially with an empty
+  `*T` block and LINE transaction probes. That early control is superseded for
+  the bounded generated plain-text profile: `dwgRW::writeTable` now closes the
+  TABLESTYLE/NOD, TABLE, `*T` BLOCK_RECORD, ordered child and reverse INSERT
+  graph, and fresh whole-file readback checks the typed 3x3 grid plus all 15
+  cached LINE/MTEXT records. The focused selector now checks every cell value,
+  row height, column width and merged-cell role, not only the first merged row.
+  This is generated writer/readback evidence; physical-source replay, native
+  acceptance/rendering, and broader TABLE profiles remain gated. See the
+  [readback receipt](docs/research/p5-ac1018-generated-table-full-grid-readback-2026-11-12.json)
+  and [TABLE readiness receipt](docs/research/p5-dwg-table-encoder-readiness-2026-11-08.json).
 - **AC1018 TABLE source graph screen:** the local AutoCAD 2004 sample is
   independently decoded by LibreDWG 0.14: TABLE handle `0x4F2` points to
   BLOCK_RECORD `0x4F3` named `*T`, whose ordered owned-handle list resolves to
@@ -3809,10 +3806,11 @@ behavior independently. Local macOS checks do not satisfy those platform gates.
   virtual-edge flags) and one complete 4-bit TABLE override span (zero enabled
   masks). Instrumented ACadSharp cursor positions independently reproduce all
   eight spans under a constant 35,888-bit cursor-origin bias; these are bits in
-  decompressed object bodies, not DWG file offsets. Next complete the compound
-  `*T` graph transaction and fresh independent readback. This one ODA-converted
-  drawing still does not establish native AutoCAD acceptance or geometry
-  generation. No drawing fixture was added. Full hashes, field values,
+  decompressed object bodies, not DWG file offsets. The compound generated
+  `*T` graph transaction and fresh readback are complete for the bounded
+  plain-text profile; the physical peer still does not establish native
+  AutoCAD acceptance or geometry generation. No drawing fixture was added.
+  Full hashes, field values,
   provenance, and limitations are in the
   [ODA TABLE peer receipt](docs/research/p5-ac1018-oda-table-physical-peer-profile-2026-11-09.json).
 - **AC1018 merged-cell codec slice completed (2026-11-09):** the direct body
