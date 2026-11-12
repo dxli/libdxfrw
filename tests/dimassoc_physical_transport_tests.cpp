@@ -421,6 +421,16 @@ bool emitAndReadback(const DimensionAssociationProbe& source,
                   << '\n';
         return false;
     }
+    const DRW_WritingContext* writeContext = writer.getWritingContext();
+    if (writeContext == nullptr
+        || writeContext->sourceHandleToWrittenObjectMap.count(source.handle)
+            != 1u
+        || writeContext->sourceHandleToWrittenObjectMap.at(source.handle)
+            != writer.remapHandle(source.handle)) {
+        std::cerr << "DIMASSOC source identity was not registered handle="
+                  << std::hex << source.handle << std::dec << '\n';
+        return false;
+    }
 
     std::istringstream input(bytes.str());
     std::unique_ptr<dxfReader> reader;
@@ -555,20 +565,34 @@ bool allocationRollbackRetry(bool binary) {
         }
         allocationsBeforeFailure = -1;
         if (wrote || failedAllocations == before
-            || !destinationIsSentinel()) {
+            || !destinationIsSentinel()
+            || codec.getWritingContext() == nullptr
+            || codec.getWritingContext()->sourceHandleToWrittenObjectMap
+                    .count(source.handle) != 0u) {
             std::remove(outputPathString.c_str());
             std::cerr << "DIMASSOC " << (binary ? "binary" : "ASCII")
                       << " allocation offset=" << offset
                       << " wrote=" << wrote
                       << " failedAllocations=" << failedAllocations - before
                       << " destinationPreserved="
-                      << destinationIsSentinel() << '\n';
+                      << destinationIsSentinel()
+                      << " identityRolledBack="
+                      << (codec.getWritingContext() != nullptr
+                          && codec.getWritingContext()
+                              ->sourceHandleToWrittenObjectMap.count(
+                                  source.handle) == 0u)
+                      << '\n';
             return false;
         }
         exporter.failAt = -1;
         exporter.emitted = false;
         if (!codec.write(&exporter, DRW::AC1024, binary)
-            || !exporter.emitted || !readbackIsExact()) {
+            || !exporter.emitted || !readbackIsExact()
+            || codec.getWritingContext() == nullptr
+            || codec.getWritingContext()->sourceHandleToWrittenObjectMap
+                    .count(source.handle) != 1u
+            || codec.getWritingContext()->sourceHandleToWrittenObjectMap.at(
+                   source.handle) != codec.remapHandle(source.handle)) {
             std::remove(outputPathString.c_str());
             std::cerr << "DIMASSOC corrected retry/readback failed at offset "
                       << offset << '\n';

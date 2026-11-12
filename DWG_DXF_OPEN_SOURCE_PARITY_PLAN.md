@@ -3029,6 +3029,17 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 
 ## P6 — residual semantic and version audit
 
+**DIMASSOC DXF source identity (2026-11-12):** `writeDimensionAssociation`
+now registers each nonzero source handle against the emitted DIMASSOC record
+inside `RecordStateScope`, before record commit. The existing ASCII/Binary
+allocation sweep now checks that failed attempts leave no source-object
+identity, then verifies same-codec retry restores the exact binding and fresh
+typed readback. Normal closure/retry and allocation tests pass 4/4; the
+allocation sweep also passes under ASan. This closes identity bookkeeping for
+the bounded DIMASSOC writer path only; source profile breadth, graph closure,
+native associative behavior and whole-file qualification remain open (see
+the [identity and rollback receipt](docs/research/p6-dimassoc-dxf-source-identity-rollback-2026-11-12.json)).
+
 **AC1021 3D POLYLINE DWG flag admission (2026-11-12):** writer admission now
 matches ODA v5.4.1 §20.4.17: the second raw flag byte carries closed only;
 the first represents spline type 5/6 and implies group-70 bit 4. Conflicting

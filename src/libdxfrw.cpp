@@ -37832,6 +37832,8 @@ bool dxfRW::writeDimensionAssociation(DRW_DimensionAssociation *ent) {
         return false;
     }
 
+    RecordStateScope state(*this, ent);
+
     const std::uint32_t sourceHandle = ent->handle;
     const std::uint32_t emittedHandle = sourceHandle == 0
         ? 0 : remapObjectHandle(sourceHandle);
@@ -38001,8 +38003,12 @@ bool dxfRW::writeDimensionAssociation(DRW_DimensionAssociation *ent) {
     if (!written || (!ent->extData.empty() && !writeExtData(ent->extData))) {
         return failDxfWrite();
     }
-    if (!preflightDxfWrite() || !record.commit())
+    if (!preflightDxfWrite()
+        || (sourceHandle != 0u
+            && !bindDxfWriteSourceObjectHandle(sourceHandle, emittedHandle))
+        || !record.commit())
         return failDxfWrite();
+    state.commit();
     return true;
 }
 
