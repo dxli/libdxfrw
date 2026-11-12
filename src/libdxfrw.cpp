@@ -36568,7 +36568,9 @@ bool dxfRW::writeMLineStyle(DRW_MLineStyle *ent) {
     }
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    if (!preflightDxfWrite() || writer->hasWriteError() || !record.commit())
+    if (!preflightDxfWrite() || writer->hasWriteError()
+        || !bindDxfWriteSourceObjectHandle(ent->handle, handle)
+        || !record.commit())
         return failDxfWrite();
     state.commit();
     return true;
