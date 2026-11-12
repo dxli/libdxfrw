@@ -33738,7 +33738,9 @@ bool dxfRW::writeDataLink(DRW_DataLink *ent) {
         return failDxfWrite();
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return failDxfWrite();
-    if (!preflightDxfWrite() || !record.commit())
+    if (!preflightDxfWrite()
+        || !bindDxfWriteSourceObjectHandle(ent->handle, handle)
+        || !record.commit())
         return failDxfWrite();
     state.commit();
     return true;
