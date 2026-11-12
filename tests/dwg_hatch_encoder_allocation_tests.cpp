@@ -59,6 +59,12 @@ public:
     std::int16_t rawType() const { return oType; }
 };
 
+class SectionObjectProbe final : public DRW_SectionObject {
+public:
+    using DRW_SectionObject::encodeDwg;
+    std::int16_t rawType() const { return oType; }
+};
+
 struct Buffers {
     dwgBufferW body;
     dwgBufferW strings;
@@ -149,6 +155,17 @@ Shape makeShape() {
         shape.m_intensity = 1.75;
         shape.m_position = {1.0, 2.0, 3.0};
         shape.m_target = {4.0, 5.0, 6.0};
+    } else if constexpr (std::is_same_v<Shape, SectionObjectProbe>) {
+        shape.m_state = 3u;
+        shape.m_flags = 5u;
+        shape.m_name = "AllocationRetrySection";
+        shape.m_vertDir = {0.0, 0.0, 1.0};
+        shape.m_topHeight = 8.0;
+        shape.m_bottomHeight = -2.0;
+        shape.m_indicatorColor = 7u;
+        shape.m_verts = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+        shape.m_blVerts = {{-1.0, -2.0, -3.0}};
+        shape.m_sectionSettingsHandle = 0x61u;
     } else {
         shape.name = "ANSI31";
         shape.solid = false;
@@ -321,6 +338,16 @@ int main() {
             totalReachedFailures += reachedFailures;
         }
     }
+    for (const DRW::Version version :
+         {DRW::AC1021, DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
+        for (const auto layout : layouts) {
+            unsigned long reachedFailures = 0u;
+            if (!sweep<SectionObjectProbe>(version, layout, 564,
+                                           reachedFailures))
+                return 1;
+            totalReachedFailures += reachedFailures;
+        }
+    }
     for (const auto version : versions) {
         for (const auto layout : layouts) {
             unsigned long reachedFailures = 0u;
@@ -344,13 +371,14 @@ int main() {
         std::cerr << "HATCH allocation injector did not fire\n";
         return 1;
     }
-    std::cout << "HATCH/MPOLYGON/MLEADER/ARCALIGNEDTEXT/LIGHT DWG encode allocation "
+    std::cout << "HATCH/MPOLYGON/MLEADER/ARCALIGNEDTEXT/LIGHT/SECTIONOBJECT "
+              << "DWG encode allocation "
               << "rollback/retry "
               << "passed across " << sizeof(versions) / sizeof(versions[0])
               << " HATCH-family/ARCALIGNEDTEXT versions, 3 MLEADER versions "
-              << "and 4 LIGHT versions, "
+              << "and 4 LIGHT/SECTIONOBJECT versions, "
               << sizeof(layouts) / sizeof(layouts[0])
-                     * (sizeof(versions) / sizeof(versions[0]) * 3u + 3u + 4u)
+                     * (sizeof(versions) / sizeof(versions[0]) * 3u + 3u + 8u)
               << " entity/version/layout profiles; " << totalReachedFailures
               << " allocation offsets exercised\n";
     return 0;

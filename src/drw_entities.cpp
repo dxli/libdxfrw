@@ -13839,46 +13839,54 @@ bool DRW_SectionObject::encodeDwg(DRW::Version v, dwgBufferW *buf,
     if ((hasColorNames || hasFlaggedStrings)
         && (strBuf == nullptr || strBuf == buf))
         return false;
-    oType = kDwgClassNum;
-    if (!encodeDwgCommon(v, buf, strBuf))
-        return false;
-    dwgBufferW *stringBuffer = strBuf != nullptr ? strBuf : buf;
-    buf->putBitLong(static_cast<std::int32_t>(m_state));
-    buf->putBitLong(static_cast<std::int32_t>(m_flags));
-    stringBuffer->putVariableText(v, m_name);
-    buf->put3BitDouble(m_vertDir);
-    buf->putBitDouble(m_topHeight);
-    buf->putBitDouble(m_bottomHeight);
-    buf->putBitShort(m_indicatorAlpha);
-    if (m_indicatorColorRgb >= 0 || hasColorNames || hasFlaggedStrings
-        || m_indicatorColorDwgMethod != 0) {
-        const std::uint8_t method = m_indicatorColorDwgMethod != 0
-            ? m_indicatorColorDwgMethod : canonicalColorMethod;
-        if (hasCmcMetadata) {
-            buf->putCmColorWithFlags(
-                v, method, static_cast<std::uint16_t>(m_indicatorColor),
-                m_indicatorColorRgb, m_indicatorColorName,
-                m_indicatorColorBookName, m_indicatorColorDwgFlags, strBuf);
-        } else {
-            buf->putCmColor(v, method,
-                            static_cast<std::uint16_t>(m_indicatorColor),
-                            m_indicatorColorRgb, m_indicatorColorName,
-                            m_indicatorColorBookName, strBuf);
-        }
-    } else {
-        buf->putCmColor(v, static_cast<std::uint16_t>(m_indicatorColor));
-    }
-    buf->putBitLong(static_cast<std::int32_t>(m_verts.size()));
-    for (const DRW_Coord& point : m_verts)
-        buf->put3BitDouble(point);
-    buf->putBitLong(static_cast<std::int32_t>(m_blVerts.size()));
-    for (const DRW_Coord& point : m_blVerts)
-        buf->put3BitDouble(point);
-    if (!encodeDwgEntHandle(v, buf, handleBuf))
-        return false;
-    putHardPointerHandle(handleBuf != nullptr ? handleBuf : buf,
-                         m_sectionSettingsHandle);
-    return true;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [&](dwgBufferW *body, dwgBufferW *strings, dwgBufferW *handles) {
+            oType = kDwgClassNum;
+            if (!encodeDwgCommon(v, body, strings))
+                return false;
+            dwgBufferW *stringBuffer = strings != nullptr ? strings : body;
+            body->putBitLong(static_cast<std::int32_t>(m_state));
+            body->putBitLong(static_cast<std::int32_t>(m_flags));
+            stringBuffer->putVariableText(v, m_name);
+            body->put3BitDouble(m_vertDir);
+            body->putBitDouble(m_topHeight);
+            body->putBitDouble(m_bottomHeight);
+            body->putBitShort(m_indicatorAlpha);
+            if (m_indicatorColorRgb >= 0 || hasColorNames || hasFlaggedStrings
+                || m_indicatorColorDwgMethod != 0) {
+                const std::uint8_t method = m_indicatorColorDwgMethod != 0
+                    ? m_indicatorColorDwgMethod : canonicalColorMethod;
+                if (hasCmcMetadata) {
+                    body->putCmColorWithFlags(
+                        v, method,
+                        static_cast<std::uint16_t>(m_indicatorColor),
+                        m_indicatorColorRgb, m_indicatorColorName,
+                        m_indicatorColorBookName,
+                        m_indicatorColorDwgFlags, strings);
+                } else {
+                    body->putCmColor(
+                        v, method,
+                        static_cast<std::uint16_t>(m_indicatorColor),
+                        m_indicatorColorRgb, m_indicatorColorName,
+                        m_indicatorColorBookName, strings);
+                }
+            } else {
+                body->putCmColor(
+                    v, static_cast<std::uint16_t>(m_indicatorColor));
+            }
+            body->putBitLong(static_cast<std::int32_t>(m_verts.size()));
+            for (const DRW_Coord& point : m_verts)
+                body->put3BitDouble(point);
+            body->putBitLong(static_cast<std::int32_t>(m_blVerts.size()));
+            for (const DRW_Coord& point : m_blVerts)
+                body->put3BitDouble(point);
+            if (!encodeDwgEntHandle(v, body, handles))
+                return false;
+            putHardPointerHandle(handles != nullptr ? handles : body,
+                                 m_sectionSettingsHandle);
+            return true;
+        });
 }
 
 bool DRW_Tolerance::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
