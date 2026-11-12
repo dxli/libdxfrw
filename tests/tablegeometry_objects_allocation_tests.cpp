@@ -24,23 +24,34 @@ DRW_TableGeometry makeGeometry() {
     DRW_TableGeometry geometry;
     geometry.handle = 0xD7C1u;
     geometry.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
-    geometry.m_rowCount = 1;
-    geometry.m_columnCount = 1;
-    geometry.m_cellCount = 1;
+    geometry.m_rowCount = 2;
+    geometry.m_columnCount = 2;
+    geometry.m_cellCount = 4;
 
-    DRW_TableGeometryCell cell;
-    cell.m_flags = 7;
-    cell.m_widthWithGap = 12.5;
-    cell.m_heightWithGap = 6.25;
-    DRW_TableGeometryContent content;
-    content.m_topLeft = {1.0, 2.0, 0.0};
-    content.m_center = {7.0, 5.0, 0.0};
-    content.m_contentWidth = 10.0;
-    content.m_contentHeight = 4.0;
-    content.m_width = 11.0;
-    content.m_height = 5.0;
-    cell.m_contents.push_back(content);
-    geometry.m_cells.push_back(std::move(cell));
+    const auto makeContent = [](double offset) {
+        DRW_TableGeometryContent content;
+        content.m_topLeft = {1.0 + offset, 2.0 + offset, 0.0};
+        content.m_center = {7.0 + offset, 5.0 + offset, 0.0};
+        content.m_contentWidth = 10.0 + offset;
+        content.m_contentHeight = 4.0 + offset;
+        content.m_width = 11.0 + offset;
+        content.m_height = 5.0 + offset;
+        return content;
+    };
+    const auto addCell = [&geometry](std::int32_t flags, double width,
+                                     double height,
+                                     std::vector<DRW_TableGeometryContent> contents) {
+        DRW_TableGeometryCell cell;
+        cell.m_flags = flags;
+        cell.m_widthWithGap = width;
+        cell.m_heightWithGap = height;
+        cell.m_contents = std::move(contents);
+        geometry.m_cells.push_back(std::move(cell));
+    };
+    addCell(3, 12.5, 6.25, {});
+    addCell(4, 13.5, 7.25, {makeContent(0.0)});
+    addCell(7, 14.5, 8.25, {makeContent(1.0), makeContent(2.0)});
+    addCell(3, 15.5, 9.25, {makeContent(3.0)});
     return geometry;
 }
 
@@ -93,6 +104,9 @@ public:
     std::vector<DRW_TableGeometry> records;
 };
 
+bool sourceMatches(const DRW_TableGeometry& actual,
+                   const DRW_TableGeometry& expected);
+
 bool readBytes(const std::filesystem::path& path, std::string& bytes) {
     std::ifstream input(path, std::ios::binary);
     if (!input)
@@ -107,24 +121,7 @@ bool readbackMatches(const std::filesystem::path& path) {
     Readback reader;
     if (!codec.read(&reader, false) || reader.records.size() != 1u)
         return false;
-    const DRW_TableGeometry& geometry = reader.records.front();
-    if (geometry.handle != 0xD7C1u
-        || geometry.parentHandle != DRW::DwgNamedObjectsDictionaryHandle
-        || geometry.m_rowCount != 1 || geometry.m_columnCount != 1
-        || geometry.m_cellCount != 1 || geometry.m_cells.size() != 1u)
-        return false;
-    const DRW_TableGeometryCell& cell = geometry.m_cells.front();
-    if (cell.m_flags != 7 || cell.m_widthWithGap != 12.5
-        || cell.m_heightWithGap != 6.25 || cell.m_unknownHandle != 0u
-        || cell.m_contents.size() != 1u)
-        return false;
-    const DRW_TableGeometryContent& content = cell.m_contents.front();
-    return content.m_topLeft.x == 1.0 && content.m_topLeft.y == 2.0
-        && content.m_topLeft.z == 0.0 && content.m_center.x == 7.0
-        && content.m_center.y == 5.0 && content.m_center.z == 0.0
-        && content.m_contentWidth == 10.0
-        && content.m_contentHeight == 4.0 && content.m_width == 11.0
-        && content.m_height == 5.0 && content.m_unknown == 0;
+    return sourceMatches(reader.records.front(), makeGeometry());
 }
 
 bool sourceMatches(const DRW_TableGeometry& actual,
