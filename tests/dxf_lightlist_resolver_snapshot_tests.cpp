@@ -2,12 +2,43 @@
 #include "lc3_compat_check.cpp"
 #include "libdxfrw.h"
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <new>
 #include <stdexcept>
 #include <string>
+#include <vector>
+
+namespace {
+long allocationsBeforeFailure = -1;
+std::size_t failedAllocations = 0u;
+struct AllocationFailure {
+    explicit AllocationFailure(long count) { allocationsBeforeFailure = count; }
+    ~AllocationFailure() { allocationsBeforeFailure = -1; }
+};
+}
+
+void* operator new(std::size_t size) {
+    if (allocationsBeforeFailure == 0) {
+        ++failedAllocations;
+        allocationsBeforeFailure = -1;
+        throw std::bad_alloc();
+    }
+    if (allocationsBeforeFailure > 0)
+        --allocationsBeforeFailure;
+    if (void* value = std::malloc(size == 0u ? 1u : size))
+        return value;
+    throw std::bad_alloc();
+}
+
+void* operator new[](std::size_t size) { return ::operator new(size); }
+void operator delete(void* value) noexcept { std::free(value); }
+void operator delete[](void* value) noexcept { std::free(value); }
+void operator delete(void* value, std::size_t) noexcept { std::free(value); }
+void operator delete[](void* value, std::size_t) noexcept { std::free(value); }
 
 static DRW_LightList makeList() {
     DRW_LightList list; list.handle=0xD00u; list.name="caller-name"; list.parentHandle=0xA02u;
@@ -31,10 +62,31 @@ struct Writer final : LC3CompatCheck {
         line.extData.push_back(std::make_shared<DRW_Variant>(1005,std::string("D00")));
         lineAccepted=writer.writeLine(&line);
     }
-    void writeObjects() override { accepted=writer.writeLightList(&list); }
+    void writeObjects() override {
+        if (failAt < 0) {
+            accepted = writer.writeLightList(&list);
+        } else {
+            const std::size_t before = failedAllocations;
+            AllocationFailure failure(failAt);
+            try {
+                accepted = writer.writeLightList(&list);
+            } catch (const std::bad_alloc&) {
+                reached = failedAllocations != before
+                    ? static_cast<long>(failedAllocations - before)
+                    : failAt - allocationsBeforeFailure;
+                throw;
+            }
+            reached = failedAllocations != before
+                ? static_cast<long>(failedAllocations - before)
+                : failAt - allocationsBeforeFailure;
+        }
+        if (!accepted)
+            (void)writer.writeRawDxfObject(nullptr);
+    }
     bool finalizeDxfWrite() override { return accepted && (!precedingLine || lineAccepted); }
     dxfRW& writer; DRW_LightList list=makeList(); bool accepted=false;
     bool precedingLine=false, lineAccepted=false;
+    long failAt=-1, reached=0;
 };
 struct Reader final : LC3CompatCheck {
     void addLightList(const DRW_LightList& value) override { list=value; ++count; }
@@ -90,6 +142,87 @@ static int physical(const std::filesystem::path& source, const std::filesystem::
     }
     return 0;
 }
+
+static bool readBytes(const std::filesystem::path& path, std::string& bytes) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input)
+        return false;
+    bytes.assign(std::istreambuf_iterator<char>{input},
+                 std::istreambuf_iterator<char>{});
+    return !input.bad();
+}
+
+static bool allocationSweep(const std::filesystem::path& directory) {
+    const auto path = directory / "allocation-lightlist.dxf";
+    const std::string prior = "prior LIGHTLIST bytes\n";
+    for (const bool binary : {false, true}) {
+        long allocationCount = 0;
+        std::string expectedBytes;
+        {
+            dxfRW codec(path.string().c_str());
+            Writer exporter(codec);
+            codec.setHandleRemap({{0xD00u, 0xAD00u}});
+            codec.setReferenceResolver([](std::uint32_t handle) {
+                return handle + 0x10000u;
+            });
+            exporter.failAt = 1000000;
+            const bool written = codec.write(&exporter, DRW::AC1027, binary);
+            if (!written || !exporter.accepted || !readSnapshot(path)
+                || !readBytes(path, expectedBytes))
+                return false;
+            allocationCount = exporter.reached;
+        }
+        if (allocationCount <= 0)
+            return false;
+
+        for (long offset = 0; offset < allocationCount; ++offset) {
+            {
+                std::ofstream output(path, std::ios::binary | std::ios::trunc);
+                output << prior;
+                if (!output)
+                    return false;
+            }
+            dxfRW codec(path.string().c_str());
+            Writer exporter(codec);
+            codec.setHandleRemap({{0xD00u, 0xAD00u}});
+            codec.setReferenceResolver([](std::uint32_t handle) {
+                return handle + 0x10000u;
+            });
+            exporter.failAt = offset;
+            const std::string expectedName = "caller-name";
+            const auto expectedLights = exporter.list.m_lights;
+            const bool written = codec.write(&exporter, DRW::AC1027, binary);
+            exporter.failAt = -1;
+            std::string current;
+            if (written || exporter.accepted || exporter.reached != 1
+                || !readBytes(path, current) || current != prior
+                || exporter.list.handle != 0xD00u
+                || exporter.list.name != expectedName
+                || exporter.list.parentHandle != 0xA02u
+                || exporter.list.xDictHandle != 0xA03u
+                || exporter.list.m_classVersion != 1u
+                || exporter.list.m_lightCount != 2u
+                || exporter.list.m_lights.size() != expectedLights.size()
+                || exporter.list.m_lights[0].m_handle != expectedLights[0].m_handle
+                || exporter.list.m_lights[0].m_name != expectedLights[0].m_name
+                || exporter.list.m_lights[1].m_handle != expectedLights[1].m_handle
+                || exporter.list.m_lights[1].m_name != expectedLights[1].m_name)
+                return false;
+
+            const bool retried = codec.write(&exporter, DRW::AC1027, binary);
+            std::string retryBytes;
+            if (!retried || !exporter.accepted
+                || !readBytes(path, retryBytes) || retryBytes != expectedBytes
+                || !readSnapshot(path))
+                return false;
+        }
+        std::cout << "LIGHTLIST DXF " << (binary ? "Binary" : "ASCII")
+                  << ": allocation offsets=" << allocationCount
+                  << ", rollback/retry/readback=PASS\n";
+    }
+    return true;
+}
+
 int main(int argc,char** argv) {
     if(argc==2 || argc==3)return physical(argv[1],argc==3?argv[2]:"");
     if(argc!=1)return 10;
@@ -244,6 +377,10 @@ int main(int argc,char** argv) {
             output.setReferenceResolver([](std::uint32_t h){return h+0x10000u;});
             if(!output.write(&writer,DRW::AC1027,binary)||!writer.accepted||!readSnapshot(path))return 3;
         }
+    }
+    if (!allocationSweep(dir)) {
+        std::cerr << "LIGHTLIST DXF allocation rollback/retry failed\n";
+        return 30;
     }
     return 0;
 }
