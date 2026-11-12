@@ -6051,7 +6051,8 @@ public:
     double snapPY = 0.0;    /*!< Snap base point Y, code 23 */
     double snapSpPX = 0.0;    /*!< Snap spacing X, code 14 */
     double snapSpPY = 0.0;    /*!< Snap spacing Y, code 24 */
-    //TODO: complete in dxf
+    // Modeled VIEWPORT DXF groups are handled by parseCode/writeViewport;
+    // group 91 remains fail-closed pending wire-format evidence.
     DRW_Coord viewDir;        /*!< View direction vector, code 16, 26 & 36 */
     DRW_Coord viewTarget;     /*!< View target point, code 17, 27, 37 */
     double viewLength = 0.0;  /*!< Perspective lens length, code 42 */

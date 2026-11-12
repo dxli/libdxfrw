@@ -6194,6 +6194,9 @@ from the existing 335/343/344 path. Resume only with an authenticated native
 ASCII/Binary producer pair that establishes its physical carrier and handle
 remapping behavior. Native paper-space override activation remains a separate
 gate. See the [group-91 conflict receipt](docs/research/p5-viewport-group91-wire-type-conflict-2026-11-08.json).
+All other modeled VIEWPORT fields already have DXF parse/write handling; the
+stale broad TODO comments in the class and DWG parser were removed so they do
+not imply that group 91 or the full DXF codec is ready for speculative changes.
 
 DXF SUN parsing retains a separately supplied RGB group regardless of the
 order of group 63, so the existing strict output refusal cannot be bypassed by

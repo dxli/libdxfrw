@@ -33728,7 +33728,6 @@ bool DRW_Viewport::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
         return fail();
     DRW_DBG("center "); DRW_DBGPT(basePoint.x, basePoint.y, basePoint.z);
     DRW_DBG("\nWidth: "); DRW_DBG(pswidth); DRW_DBG(", Height: "); DRW_DBG(psheight); DRW_DBG("\n");
-    //RLZ TODO: complete in dxf
     if (version > DRW::AC1014) {//2000+
         if (!readBoundedBitCoord(*buf, bodyEndBit, viewTarget)
             || !readBoundedBitCoord(*buf, bodyEndBit, viewDir)
