@@ -9045,6 +9045,19 @@ memory and no DWG/DXF fixture was added. See the [fallback proxy receipt](docs/r
   graph ([callback-loss refusal receipt](docs/research/p8-unqualified-object-callback-loss-refusal-2026-11-03.json)).
   This guard is not output support and does not reduce the remaining
   qualification work.
+  **New source-acquisition leads (2026-11-12):** two Autodesk Community
+  discussions list user-uploaded DWGs named `CAMERA MOTION PATH.dwg` and
+  `MOTION PATH EXAMPLE.dwg`; a second thread also lists an edited
+  `CAMERA MOTION PATH-ALW.dwg`. The available page view exposes the filenames
+  and discussion text but no retrievable attachment URLs or bytes. The posts
+  are user uploads and do not establish the drawing producer/version. Treat
+  these as leads only: do not use them as source-span or semantic evidence,
+  add them as fixtures, or enable output until the exact bytes are acquired,
+  hashed, and their producer and graph integrity are assessed. Autodesk's
+  ObjectARX API documents MotionPath camera/target paths, viewport association,
+  frame rate, frame count, and corner deceleration; those API semantics still
+  do not establish DWG field order or handle roles. See the [source-acquisition
+  lead receipt](docs/research/p8-action-path-autodesk-community-source-leads-2026-11-12.json).
   Keep unsupported DWG profiles refused until those gates pass.
 - The earlier positive-test failure is resolved at the harness/source-selection
   layer. Its trace identified an error-level `HeaderCurrentDimensionStyleReference`
