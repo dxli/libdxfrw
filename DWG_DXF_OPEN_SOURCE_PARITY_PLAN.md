@@ -8221,6 +8221,17 @@ ARM64; other POLYLINE profiles, physical producer sources, FreeCAD 1.1.3,
 Linux/Windows, native DWG and broad semantic claims remain open. See the
 [POLYLINE consumer receipt](docs/research/p8-freecad-ac1021-classic-3d-polyline-open-insert-2026-11-12.json).
 
+**P8 closed classic 3D POLYLINE boundary (2026-11-12):** an additional
+generated AC1021 case has the documented closed and 3D bits set together
+(group 70 = 9), four 3D vertices, and four VERTEX records in the emitted DXF.
+FreeCAD 1.1.4 reads the POLYLINE but constructs a three-edge open shape; both
+open/insert qualification attempts fail the expected closed-topology check.
+The emitted header flags match Autodesk's [POLYLINE DXF definition](https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-ABF6B778-BE20-4B49-9B58-A94E64CEFFF3.htm).
+Treat this as a downstream importer gap for this route; do not change correct
+group-70 output or claim closed 3D POLYLINE preservation. Seek consumer-side
+resolution or another eligible native consumer before qualifying this profile.
+See the [closed 3D POLYLINE gap receipt](docs/research/p8-freecad-ac1021-closed-3d-polyline-import-gap-2026-11-12.json).
+
 **FreeCAD ACIS consumer boundary (2026-11-12):** FreeCAD's current Draft DXF
 documentation says its built-in DXF importer cannot read ACIS/SAT solid blobs;
 its documented C++ entity list excludes 3DSOLID, REGION, and BODY. Its DWG
