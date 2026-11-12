@@ -1259,7 +1259,55 @@ public:
     void addDimOrdinate(const DRW_DimOrdinate* d) override { addDimension("addDimOrdinate", "DIMORDINATE", d); }
     void addDimArc(const DRW_DimArc* d) override { addDimension("addDimArc", "DIMARC", d); }
     void addLeader(const DRW_Leader* d) override { addPointerEntity("addLeader", "LEADER", d); }
-    void addHatch(const DRW_Hatch* d) override { addPointerEntity("addHatch", "HATCH", d); }
+    void addHatch(const DRW_Hatch* d) override {
+        if (d == nullptr) { addNullDiagnostic("addHatch"); return; }
+        if (!threeDConsumerProbe_) {
+            addPointerEntity("addHatch", "HATCH", d);
+            return;
+        }
+        std::vector<Field> fields = entityFields(*d, "HATCH", "HATCH");
+        fields.push_back(stringField("name", d->name));
+        fields.push_back(intField("solid", d->solid));
+        fields.push_back(intField("associative", d->associative));
+        fields.push_back(doubleField("elevation", d->basePoint.z));
+        fields.push_back(pointField("extrusion", d->extPoint));
+        fields.push_back(uintField("loopCount", d->looplist.size()));
+        for (std::size_t i = 0; i < d->looplist.size(); ++i) {
+            const auto& loop = d->looplist[i];
+            if (!loop) {
+                fields.push_back(boolField("loop." + std::to_string(i)
+                                               + ".present", false));
+                continue;
+            }
+            const std::string prefix = "loop." + std::to_string(i) + ".";
+            fields.push_back(boolField(prefix + "present", true));
+            fields.push_back(intField(prefix + "type", loop->type));
+            fields.push_back(uintField(prefix + "objectCount",
+                                       loop->objlist.size()));
+            for (std::size_t j = 0; j < loop->objlist.size(); ++j) {
+                const auto* polyline = dynamic_cast<const DRW_LWPolyline*>(
+                    loop->objlist[j].get());
+                if (polyline == nullptr)
+                    continue;
+                fields.push_back(uintField(prefix + "vertexCount",
+                                           polyline->vertlist.size()));
+                fields.push_back(boolField(prefix + "closed",
+                                           (polyline->flags & 1) != 0));
+                for (std::size_t k = 0; k < polyline->vertlist.size(); ++k) {
+                    const auto& vertex = polyline->vertlist[k];
+                    if (!vertex)
+                        continue;
+                    const std::string vertexPrefix = prefix + "vertex."
+                        + std::to_string(k) + ".";
+                    const DRW_Coord ocs{vertex->x, vertex->y, 0.0};
+                    fields.push_back(pointField(vertexPrefix + "ocs", ocs));
+                    fields.push_back(pointField(vertexPrefix + "wcs",
+                                                d->boundaryPointToWcs(ocs)));
+                }
+            }
+        }
+        addEntityRecord("addHatch", "HATCH", std::move(fields), *d, false);
+    }
     void addMPolygon(const DRW_MPolygon* d) override {
         if (d == nullptr) { addNullDiagnostic("addMPolygon"); return; }
         std::vector<Field> fields = entityFields(*d, "MPOLYGON", "MPOLYGON");
@@ -2811,6 +2859,29 @@ void SemanticSink::writeEntities() {
         lofted.dxfReferenceData.emplace_back(310,
             std::vector<std::uint8_t>{0x12u, 0x34u, 0x56u});
         wrote = dxfWriter_->writeSurface(&lofted) && wrote;
+
+        // HATCH boundary vertices are stored in OCS; the callback also
+        // exposes the hatch elevation and extrusion needed by a consumer to
+        // derive WCS coordinates. Keep a non-default normal and elevation so
+        // the probe detects accidental loss or projection of either value.
+        DRW_Hatch hatch;
+        hatch.layer = "probe_hatch_ocs_boundary";
+        hatch.name = "SOLID";
+        hatch.solid = 1;
+        hatch.associative = 0;
+        hatch.loopsnum = 1;
+        hatch.basePoint = DRW_Coord{0.0, 0.0, 4.0};
+        hatch.extPoint = DRW_Coord{1.0, 0.0, 0.0};
+        auto hatchLoop = std::make_shared<DRW_HatchLoop>(2);
+        auto hatchBoundary = std::make_shared<DRW_LWPolyline>();
+        hatchBoundary->flags = 1;
+        hatchBoundary->addVertex(DRW_Vertex2D{2.0, 3.0, 0.0});
+        hatchBoundary->addVertex(DRW_Vertex2D{5.0, 3.0, 0.0});
+        hatchBoundary->addVertex(DRW_Vertex2D{5.0, 7.0, 0.0});
+        hatchLoop->objlist.push_back(hatchBoundary);
+        hatchLoop->update();
+        hatch.appendLoop(hatchLoop);
+        wrote = dxfWriter_->writeHatch(&hatch) && wrote;
         writeRecipeSucceeded_ = wrote && writeRecipeSucceeded_;
         return;
     }
@@ -3641,6 +3712,7 @@ bool run3DConsumerProbe(bool binary) {
     }
 
     SemanticSink consumer("dxfRW", "read");
+    consumer.enable3DConsumerProbe();
     dxfRW reader(outputName.c_str());
     const bool readSucceeded = reader.read(&consumer, false);
     if (!readSucceeded || !consumer.diagnostics.empty()) {
@@ -3657,6 +3729,7 @@ bool run3DConsumerProbe(bool binary) {
     // local (x,y,elevation) therefore maps to (-x,elevation,y):
     // (2,3,5) -> (-2,5,3) and (4,5,5) -> (-4,5,5).
     SemanticSink legacyConsumer("dxfRW", "read");
+    legacyConsumer.enable3DConsumerProbe();
     dxfRW legacyReader(outputName.c_str());
     const bool legacyReadSucceeded = legacyReader.read(&legacyConsumer, true);
     if (!legacyReadSucceeded || !legacyConsumer.diagnostics.empty()) {
@@ -4510,6 +4583,46 @@ bool run3DConsumerProbe(bool binary) {
         || !fieldEquals(consumer, "LOFTEDSURFACE",
                         "dxfReferenceData.1.byteCount", "3"))
         return false;
+
+    for (const SemanticSink* sink : {&consumer, &legacyConsumer}) {
+        if (!expectEntityField(*sink, "HATCH", "probe_hatch_ocs_boundary",
+                               "solid", "1")
+            || !expectEntityField(*sink, "HATCH", "probe_hatch_ocs_boundary",
+                                  "associative", "0")
+            || !expectEntityField(*sink, "HATCH", "probe_hatch_ocs_boundary",
+                                  "elevation", "4")
+            || !expectEntityField(*sink, "HATCH", "probe_hatch_ocs_boundary",
+                                  "extrusion", "{\"x\":1,\"y\":0,\"z\":0}")
+            || !expectEntityField(*sink, "HATCH", "probe_hatch_ocs_boundary",
+                                  "loopCount", "1")
+            || !expectEntityField(*sink, "HATCH", "probe_hatch_ocs_boundary",
+                                  "loop.0.type", "2")
+            || !expectEntityField(*sink, "HATCH", "probe_hatch_ocs_boundary",
+                                  "loop.0.objectCount", "1")
+            || !expectEntityField(*sink, "HATCH", "probe_hatch_ocs_boundary",
+                                  "loop.0.closed", "true")
+            || !expectEntityField(*sink, "HATCH", "probe_hatch_ocs_boundary",
+                                  "loop.0.vertexCount", "3")
+            || !expectEntityField(*sink, "HATCH", "probe_hatch_ocs_boundary",
+                                  "loop.0.vertex.0.ocs",
+                                  "{\"x\":2,\"y\":3,\"z\":0}")
+            || !expectEntityField(*sink, "HATCH", "probe_hatch_ocs_boundary",
+                                  "loop.0.vertex.0.wcs",
+                                  "{\"x\":4,\"y\":2,\"z\":3}")
+            || !expectEntityField(*sink, "HATCH", "probe_hatch_ocs_boundary",
+                                  "loop.0.vertex.1.ocs",
+                                  "{\"x\":5,\"y\":3,\"z\":0}")
+            || !expectEntityField(*sink, "HATCH", "probe_hatch_ocs_boundary",
+                                  "loop.0.vertex.1.wcs",
+                                  "{\"x\":4,\"y\":5,\"z\":3}")
+            || !expectEntityField(*sink, "HATCH", "probe_hatch_ocs_boundary",
+                                  "loop.0.vertex.2.ocs",
+                                  "{\"x\":5,\"y\":7,\"z\":0}")
+            || !expectEntityField(*sink, "HATCH", "probe_hatch_ocs_boundary",
+                                  "loop.0.vertex.2.wcs",
+                                  "{\"x\":4,\"y\":5,\"z\":7}"))
+            return false;
+    }
 
     bool foundBinaryReference = false;
     const std::vector<std::uint8_t> expectedBytes{0x12u, 0x34u, 0x56u};

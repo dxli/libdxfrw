@@ -1736,6 +1736,20 @@ created locally from scratch for the specific control.
   construction or change format support claims
   ([receipt](docs/research/p8-3d-consumer-mesh-default-legacy-fallback-2026-11-12.json)).
 
+- **P8/S8.3.20 generated HATCH OCS boundary callback fields (2026-11-12):**
+  the 3D consumer probe writes an in-memory AC1027 solid HATCH with one closed
+  polyline loop, elevation 4, and extrusion `(1,0,0)`. ASCII/Binary readback
+  checks fill/associativity, loop kind/count, retained OCS boundary vertices,
+  and independently helper-mapped WCS points through both `ext=false` and
+  legacy `ext=true` sinks. The owning focused CTest passes 1/1 in normal and
+  AddressSanitizer builds. HATCH callbacks retain OCS boundary geometry; WCS
+  coordinates here are a consumer-side projection using
+  `boundaryPointToWcs`, not an automatic callback transform. This is generated
+  same-library transport and coordinate-helper evidence only; it does not
+  establish independent interoperability, DWG producer semantics, hatch fill
+  evaluation, or native consumer support claims
+  ([receipt](docs/research/p8-3d-consumer-hatch-ocs-boundary-fields-2026-11-12.json)).
+
 - **P8 native FreeCAD MESH DXF consumer check (2026-11-12):** FreeCAD 1.1.4
   Revision `20260928` launched with the host ARM64 NEON feature visible and
   successfully completed Draft's DXF import for a locally authored AC1027

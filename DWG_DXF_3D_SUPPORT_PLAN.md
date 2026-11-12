@@ -10732,3 +10732,18 @@ property-override semantics and
 does not qualify native MESH construction or broaden support claims. See the
 [implementation checkpoint](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#current-execution-checkpoint-2026-11-12)
 and [receipt](docs/research/p8-3d-consumer-mesh-default-legacy-fallback-2026-11-12.json).
+
+**P8/S8.3.20 HATCH OCS boundary callback fields (2026-11-12):** generated
+AC1027 ASCII/Binary consumer-probe readback checks a solid HATCH, its
+non-associative state, one closed-polyline boundary loop, elevation 4,
+extrusion `(1,0,0)`, and selected OCS vertex coordinates. The probe computes
+expected WCS coordinates with `DRW_Hatch::boundaryPointToWcs` and confirms
+those projections in both native-OCS and legacy-extrusion callback modes. The
+owning CTest passes 1/1 in normal and AddressSanitizer builds. This helper
+mapping is explicit consumer-side work: `DRW_Hatch::applyExtrusion()` does not
+project the boundary in the callback. Evidence is limited to generated
+same-library transport and helper behavior; hatch pattern/fill semantics,
+independent interoperability, DWG producer behavior and native consumer
+construction remain unqualified. No support claim changes. See the
+[parity-plan checkpoint](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#current-execution-checkpoint-2026-11-12)
+and [receipt](docs/research/p8-3d-consumer-hatch-ocs-boundary-fields-2026-11-12.json).
