@@ -1769,6 +1769,7 @@ target_compile_options(libdxfrw_tablecontent_objects_allocation_tests
 target_include_directories(libdxfrw_tablecontent_objects_allocation_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/dwg2dxf
     ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/intern
 )
 target_link_libraries(libdxfrw_tablecontent_objects_allocation_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_tablecontent_objects_allocation_retry

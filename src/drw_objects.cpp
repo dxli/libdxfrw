@@ -24637,7 +24637,7 @@ bool DRW_TableContentObject::validateDwgPayload(DRW::Version version) const {
 
 bool DRW_TableContentObject::encodeDwg(DRW::Version version, dwgBufferW *buf,
                                       dwgBufferW *strBuf,
-                                      dwgBufferW *handleBuf) const {
+                                      dwgBufferW *handleBuf) const try {
     if (buf == nullptr || strBuf == nullptr || handleBuf == nullptr
         || buf == strBuf || buf == handleBuf || strBuf == handleBuf
         || !buf->isGood() || !strBuf->isGood() || !handleBuf->isGood()
@@ -24736,6 +24736,11 @@ bool DRW_TableContentObject::encodeDwg(DRW::Version version, dwgBufferW *buf,
     strBuf->swap(strings);
     handleBuf->swap(handles);
     return true;
+} catch (...) {
+    // This public object writer uses staged copies to preserve all three
+    // caller buffers. Keep allocation failures inside that transaction and
+    // report them through the normal false-return contract.
+    return false;
 }
 
 DRW_Field::DwgReferencePolicy DRW_Field::dwgReferencePolicy(

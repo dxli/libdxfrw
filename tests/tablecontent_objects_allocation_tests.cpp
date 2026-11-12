@@ -2,6 +2,7 @@
 // Generated TABLECONTENT OBJECTS allocation-failure rollback and retry.
 #include "lc3_compat_check.cpp"
 #include "dx_iface.h"
+#include "dwgbufferw.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -19,6 +20,101 @@ struct AllocationFailure {
     explicit AllocationFailure(long count) { allocationsBeforeFailure = count; }
     ~AllocationFailure() { allocationsBeforeFailure = -1; }
 };
+
+class TableContentEncoderProbe final : public DRW_TableContentObject {
+public:
+    using DRW_TableContentObject::encodeDwg;
+};
+
+bool encodeDirect(const TableContentEncoderProbe& source,
+                  dwgBufferW& body, dwgBufferW& strings,
+                  dwgBufferW& handles) {
+    return source.encodeDwg(DRW::AC1021, &body, &strings, &handles);
+}
+
+bool sameBuffer(const dwgBufferW& actual, const dwgBufferW& expected) {
+    if (actual.data() != expected.data()
+        || actual.bitPos() != expected.bitPos()
+        || actual.bitCount() != expected.bitCount()
+        || actual.handleOccurrences().size()
+            != expected.handleOccurrences().size())
+        return false;
+    for (std::size_t i = 0; i < actual.handleOccurrences().size(); ++i) {
+        const auto& a = actual.handleOccurrences()[i];
+        const auto& e = expected.handleOccurrences()[i];
+        if (a.code != e.code || a.reference != e.reference
+            || a.startBit != e.startBit || a.endBit != e.endBit)
+            return false;
+    }
+    return true;
+}
+
+bool runDirectEncoderAllocationSweep() {
+    TableContentEncoderProbe source;
+    source.m_semanticContentComplete = true;
+    source.m_content.m_name = "direct allocation table";
+    source.m_content.m_description = "direct rollback";
+    DRW_TableColumn column;
+    column.m_name = "Value";
+    source.m_content.m_columns.push_back(column);
+    DRW_TableCell cell;
+    DRW_TableRow row;
+    row.m_cells.push_back(cell);
+    source.m_content.m_rows.push_back(row);
+
+    dwgBufferW body, strings, handles;
+    body.putBit(1);
+    strings.putBit(0);
+    handles.putBit(1);
+    dwgHandle seedHandle;
+    seedHandle.code = DRW::DwgHardPointer;
+    seedHandle.ref = 0x7711u;
+    handles.putHandle(seedHandle);
+    const dwgBufferW cleanBody = body;
+    const dwgBufferW cleanStrings = strings;
+    const dwgBufferW cleanHandles = handles;
+
+    long allocationCount = 0;
+    const std::size_t failedBeforeCalibration = failedAllocations;
+    {
+        AllocationFailure failure(1000000);
+        if (!encodeDirect(source, body, strings, handles))
+            return false;
+        allocationCount = 1000000 - allocationsBeforeFailure;
+        if (failedAllocations != failedBeforeCalibration)
+            return false;
+    }
+    if (allocationCount <= 0)
+        return false;
+    const dwgBufferW expectedBody = body;
+    const dwgBufferW expectedStrings = strings;
+    const dwgBufferW expectedHandles = handles;
+
+    for (long offset = 0; offset < allocationCount; ++offset) {
+        body = cleanBody;
+        strings = cleanStrings;
+        handles = cleanHandles;
+        const std::size_t failedBefore = failedAllocations;
+        bool encoded = false;
+        {
+            AllocationFailure failure(offset);
+            encoded = encodeDirect(source, body, strings, handles);
+        }
+        if (encoded || failedAllocations != failedBefore + 1u
+            || !sameBuffer(body, cleanBody)
+            || !sameBuffer(strings, cleanStrings)
+            || !sameBuffer(handles, cleanHandles))
+            return false;
+        if (!encodeDirect(source, body, strings, handles)
+            || !sameBuffer(body, expectedBody)
+            || !sameBuffer(strings, expectedStrings)
+            || !sameBuffer(handles, expectedHandles))
+            return false;
+    }
+    std::cout << "TABLECONTENT direct encoder: allocation offsets="
+              << allocationCount << ", rollback/retry=PASS\n";
+    return true;
+}
 
 class TableContentExport final : public LC3CompatCheck {
 public:
@@ -135,6 +231,8 @@ bool run(const std::filesystem::path& directory) {
     if (!std::filesystem::create_directories(directory)
         && !std::filesystem::is_directory(directory))
         return fail("could not create scratch directory");
+    if (!runDirectEncoderAllocationSweep())
+        return fail("direct encoder allocation rollback/retry failed");
     const auto output = directory / "tablecontent-objects.dxf";
     const std::string sentinel = "prior TABLECONTENT destination bytes\n";
     dxfRW codec(output.string().c_str());
