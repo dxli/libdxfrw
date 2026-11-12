@@ -1634,7 +1634,12 @@ created locally from scratch for the specific control.
   null dash handles when every remaining segment has no shape/text resource.
   Generated controls cover the three built-ins, full inline handles, one
   omitted terminal null, refusal when the common handle tail is absent, and
-  same-object retry. `libdxfrw_dwg_ltype_multiversion_count` passes 1/1. A
+  same-object retry. A generated complex-shape segment additionally proves
+  that a truncated non-null style handle is refused and the complete shape
+  handle is accepted on the same parser instance; this keeps the omitted-null
+  compatibility rule limited to resource-free dash segments. The focused
+  `libdxfrw_dwg_ltype_multiversion_count` selector passes 1/1 in normal and
+  ASan builds. No drawing fixture was added. A
   fresh debug conversion reaches the next TABLES record and now fails at the
   AC1015 LAYER parser; there are no LTYPE parse warnings. The LAYER frame
   declares an 80-bit body; parsing its name (`0`) consumes the entire boundary,

@@ -22,13 +22,15 @@
       "name-only import for the three exact AC1015 built-in names when the declared body ends immediately after the name",
       "parse inline handle tail only when the typed body stops before the declared object boundary and require exact consumption",
       "tolerate exhausted trailing null dash handles only when every remaining segment has no shape or text resource",
-      "refuse a missing common handle tail and permit same-parser retry after refusal"
+      "refuse a missing common handle tail and permit same-parser retry after refusal",
+      "generated complex-shape segment refuses a truncated non-null style handle, then parses its complete handle on the same parser instance"
     ]
   },
   "validation": {
     "build": "cmake --build build-gcc --target libdxfrw_dwg_ltype_multiversion_count_tests dwg2dxf -j4",
     "focusedTest": "ctest --test-dir build-gcc -R '^libdxfrw_dwg_ltype_multiversion_count$' --output-on-failure",
-    "focusedTestResult": "PASS 1/1",
+    "focusedTestResult": "PASS 1/1 in normal and ASan builds",
+    "generatedResourceControl": "A from-scratch AC1015 complex-shape LTYPE control proves that the simple-segment omitted-null compatibility rule does not admit an absent non-null shape-style reference; corrected full input succeeds on the same parser instance.",
     "physicalRead": "A debug conversion of the pinned sample reports no LTYPE parser warnings and advances to the subsequent LAYER record, where parsing fails with BAD_READ_TABLES.",
     "qualification": "Does not qualify the complete AC1015 file, layer parsing, output, producer interoperability, or support claims."
   },

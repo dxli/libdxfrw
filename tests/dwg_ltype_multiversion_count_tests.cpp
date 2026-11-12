@@ -212,7 +212,49 @@ bool checkAc1015InlineLtypeHandleTail() {
         return false;
     if (parseExpected(makeFrame(handleStream.bitCount()), parsed))
         return false;
-    return parseExpected(makeFrame(0u), parsed);
+    if (!parseExpected(makeFrame(0u), parsed))
+        return false;
+
+    DRW_LType complexSource;
+    complexSource.updateValues(
+        "GENERATED_SHAPE", "generated AC1015 shape resource", 1, 2.0,
+        std::vector<double>{2.0});
+    complexSource.handle = 0x5A1u;
+    DRW_LTypeSegment shapeSegment;
+    shapeSegment.length = 2.0;
+    shapeSegment.complexShapeCode = 42;
+    shapeSegment.styleHandle = ref(DRW::DwgHardPointer, 0x31u);
+    complexSource.segments.push_back(shapeSegment);
+    complexSource.shapeHandles.push_back(0x31u);
+    source = complexSource;
+    body = dwgBufferW{};
+    handleStream = dwgBufferW{};
+    if (!source.encodeDwg(DRW::AC1015, &body, nullptr, &handleStream))
+        return false;
+
+    // Unlike simple dash segments, a complex shape segment requires its
+    // non-null style reference. An exhausted inline tail must not synthesize
+    // a null handle for this resource-bearing record. The same parser accepts
+    // the complete frame after refusing the truncated resource reference.
+    const auto missingShapeHandleBytes = makeFrame(8u);
+    dwgBuffer truncatedShapeInput(
+        const_cast<std::uint8_t*>(missingShapeHandleBytes.data()),
+        missingShapeHandleBytes.size());
+    LTypeParser complexParsed;
+    if (complexParsed.parseBody(DRW::AC1015, &truncatedShapeInput))
+        return false;
+    const auto completeShapeBytes = makeFrame(0u);
+    dwgBuffer completeShapeInput(
+        const_cast<std::uint8_t*>(completeShapeBytes.data()),
+        completeShapeBytes.size());
+    return complexParsed.parseBody(DRW::AC1015, &completeShapeInput)
+        && completeShapeInput.isGood()
+        && complexParsed.name == source.name
+        && complexParsed.size == 1
+        && complexParsed.segments.size() == 1u
+        && complexParsed.segments[0].complexShapeCode == 42
+        && complexParsed.segments[0].styleHandle.ref == 0x31u
+        && complexParsed.shapeHandles == std::vector<std::uint32_t>{0x31u};
 }
 }
 
