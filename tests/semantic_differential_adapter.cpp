@@ -2507,6 +2507,11 @@ void SemanticSink::writeEntities() {
 
         DRW_3Dface face;
         face.layer = "probe_3dface_wcs";
+        face.lineType = "DASHED";
+        face.color = 5;
+        face.color24 = 0x2468AC;
+        face.visible = false;
+        face.space = DRW::PaperSpace;
         face.basePoint = DRW_Coord{1.0, 2.0, 3.0};
         face.secPoint = DRW_Coord{4.0, 5.0, 6.0};
         face.thirdPoint = DRW_Coord{7.0, 8.0, 9.0};
@@ -3790,9 +3795,19 @@ bool run3DConsumerProbe(bool binary) {
             && expectEntityField(sink, "3DFACE", "probe_3dface_wcs", "corner.3",
                                  pointJson(DRW_Coord{10.0, 11.0, 12.0}))
             && expectEntityField(sink, "3DFACE", "probe_3dface_wcs",
-                                 "invisibleEdgeFlags", "5");
+                                 "invisibleEdgeFlags", "5")
+            && expectEntityField(sink, "3DFACE", "probe_3dface_wcs",
+                                 "lineType", jsonString("DASHED"))
+            && expectEntityField(sink, "3DFACE", "probe_3dface_wcs",
+                                 "color", "5")
+            && expectEntityField(sink, "3DFACE", "probe_3dface_wcs",
+                                 "color24", "2386092")
+            && expectEntityField(sink, "3DFACE", "probe_3dface_wcs",
+                                 "visible", "false")
+            && expectEntityField(sink, "3DFACE", "probe_3dface_wcs",
+                                 "space", "1");
     };
-    if (!expect3DFace(consumer))
+    if (!expect3DFace(consumer) || !expect3DFace(legacyConsumer))
         return false;
 
     if (!expectEntityField(legacyConsumer, "CIRCLE", defaultCircleLayer, "center",

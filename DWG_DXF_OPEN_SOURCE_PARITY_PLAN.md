@@ -1701,12 +1701,15 @@ created locally from scratch for the specific control.
   does not add DWG producer evidence ([receipt](docs/research/p8-3d-consumer-3dline-fields-2026-11-12.json)).
 
 - **P8/S8.3.17 generated 3DFACE WCS callback fields:** the existing generated
-  face now has a distinct layer and its four nonzero-Z corners plus invisible-
-  edge mask are asserted after ASCII/Binary readback under both extrusion
-  modes. The focused CTest passes 1/1. Autodesk documents all four corners in
-  WCS and the group-70 edge mask; this verifies callback transport only, not
-  DWG producer behavior or FreeCAD rendering (which is separately observed as
-  unsupported) ([receipt](docs/research/p8-3d-consumer-3dface-wcs-fields-2026-11-12.json)).
+  face now checks all four nonzero-Z corners, invisible-edge mask, linetype,
+  ACI and true color, visibility, and model/paper space after ASCII/Binary
+  readback under both extrusion modes and through both consumer sinks. The
+  focused CTest passes 1/1. Autodesk documents the WCS corner and edge-mask
+  fields; the added values exercise common entity callback delivery. This is
+  generated same-library transport evidence only, not independent
+  interoperability, DWG producer behavior, or native rendering (FreeCAD's
+  importer is separately observed as not supporting 3DFACE). See the
+  [expanded receipt](docs/research/p8-3d-consumer-3dface-common-callback-fields-2026-11-12.json).
 
 - **P8/S8.3.18 generated MESH geometry callback fields:** the AC1027 probe now
   checks version, blend-crease state, subdivision level, all vertex

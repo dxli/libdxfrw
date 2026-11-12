@@ -10696,13 +10696,14 @@ interoperability, DWG producer behavior, or native consumer semantics. See the
 and [receipt](docs/research/p8-3d-consumer-3dline-fields-2026-11-12.json).
 
 **P8/S8.3.17 3DFACE callback fields (2026-11-12):** the local AC1027
-consumer probe now checks all four WCS corners and invisible-edge mask 5 after
-ASCII/Binary readback under both extrusion modes. Autodesk's DXF reference
-defines these corner coordinates in WCS. The focused
-`libdxfrw_3d_consumer_probe` passes 1/1. This is callback transport evidence;
-it does not overturn the separate FreeCAD observation that its importer
-reports 3DFACE unsupported. See the [implementation checkpoint](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#current-execution-checkpoint-2026-11-12)
-and [receipt](docs/research/p8-3d-consumer-3dface-wcs-fields-2026-11-12.json).
+consumer probe checks all four WCS corners, invisible-edge mask 5, linetype,
+ACI/true color, visibility, and model/paper space after ASCII/Binary readback
+under both extrusion modes and through both consumer sinks. The focused
+`libdxfrw_3d_consumer_probe` passes 1/1. This is generated same-library
+callback transport only; it does not establish independent interoperability
+or DWG producer behavior and does not overturn the separate FreeCAD observation
+that its importer reports 3DFACE unsupported. See the [implementation checkpoint](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#current-execution-checkpoint-2026-11-12)
+and [receipt](docs/research/p8-3d-consumer-3dface-common-callback-fields-2026-11-12.json).
 
 **P8/S8.3.18 MESH geometry callback fields (2026-11-12):** generated AC1027
 ASCII/Binary readback now checks version, blend-crease state, subdivision
