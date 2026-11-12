@@ -1667,11 +1667,18 @@ created locally from scratch for the specific control.
   readback. It passes 1/1 and uses only an in-memory generated AC1021 graph;
   no fixture or physical-source output claim is added. The pinned AC1018
   TABLESTYLE source observer records a different source identity/value profile
-  than the older opt-in physical output selector expects, and the physical
-  output attempt also reaches unrelated source-version graph refusals. Keep
-  physical source graph closure and output qualification open; do not use that
-  selector as evidence until its binding and intended partial-output scope are
-  reconciled. See the [generated order receipt](docs/research/p5-generated-tablestyle-legacy-group-order-2026-11-12.json).
+  than the old opt-in output selector expected. The corrected physical
+  selector confirms the profile and reaches the unrelated source-version gate.
+  Keep physical source graph closure and output qualification open; do not use
+  that selector as output evidence. The physical refusal selector is now
+  rebound to the pinned source's current handle, margin, height, and opaque-CMC
+  values; it confirms ASCII/Binary full-import export preserves the destination
+  and leaves TABLESTYLE/dictionary qualification false at the unrelated
+  ModelDocViewStyle exact-source-version gate. This is fail-closed source
+  evidence only. The TABLESTYLE extension dictionary, XRECORD/CELLSTYLEMAP
+  descendants, resource closure, and output/readback remain open. See the
+  [generated order receipt](docs/research/p5-generated-tablestyle-legacy-group-order-2026-11-12.json)
+  and [physical refusal receipt](docs/research/p5-ac1018-tablestyle-physical-output-refusal-2026-11-12.json).
 
 - **P6 direct TABLECONTENT DWG encoder allocation rollback:** the direct
   `DRW_TableContentObject::encodeDwg` entry point now catches allocation and
