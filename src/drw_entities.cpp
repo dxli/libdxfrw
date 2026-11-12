@@ -34197,6 +34197,28 @@ bool DRW_Polyline::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_
     if ((topologyFlags & (topologyFlags - 1u)) != 0u
         || ((flags & 32) != 0 && (flags & 16) == 0))
         return false;
+    if ((flags & 64) != 0) {
+        std::size_t coordinateCount = 0u;
+        std::size_t faceRecordCount = 0u;
+        for (const auto& vertex : vertlist) {
+            const PolyfaceVertexRole role = polyfaceVertexRole(*vertex);
+            if (role == PolyfaceVertexRole::Invalid)
+                return false;
+            if (role == PolyfaceVertexRole::Coordinate)
+                ++coordinateCount;
+            else
+                ++faceRecordCount;
+        }
+        if (static_cast<std::size_t>(vertexcount) != coordinateCount
+            || static_cast<std::size_t>(facecount) != faceRecordCount)
+            return false;
+    } else if ((flags & 16) != 0) {
+        const std::uint64_t gridVertexCount =
+            static_cast<std::uint64_t>(vertexcount)
+            * static_cast<std::uint64_t>(facecount);
+        if (gridVertexCount != static_cast<std::uint64_t>(vertlist.size()))
+            return false;
+    }
     const bool unusedPointFieldsAreDefault = basePoint.x == 0.0
         && basePoint.y == 0.0 && basePoint.z == 0.0
         && extPoint.x == 0.0 && extPoint.y == 0.0 && extPoint.z == 1.0

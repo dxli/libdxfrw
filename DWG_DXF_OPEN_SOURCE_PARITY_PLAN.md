@@ -7228,14 +7228,16 @@ extrusion. §20.4.34 (p. 134) defines MESH flags/curve type/counts/smooth
 density and handles, but no thickness, base point, extrusion or widths. The
 writer now refuses PFACE values outside its represented profile and refuses
 nondefault omitted point/width/thickness fields for PFACE and MESH before
-publishing staged bytes. Generated controls check seeded-buffer preservation
-for each tested loss and successful same-writer correction/retry; valid empty
-PFACE and MESH profiles also parse back from the generated object frames with
-their flags and vertex/face counts intact. The focused POLYLINE cohort passes
-23/23; the owning wire-roundtrip selector passes 1/1 after readback was added;
-no fixture was added. This closes only these
-bounded DWG serialization-loss paths; complete PFACE/MESH semantic and native
-consumer qualification remains open. See the [loss-guard receipt](docs/research/p6-pface-mesh-dwg-loss-guard-2026-11-12.json).
+publishing staged bytes. It also checks PFACE group-71/72 values against the
+actual coordinate and face record counts, and MESH's M×N dimensions against
+its owned vertex count; contradictory metadata is refused instead of emitting
+a body that disagrees with its handle stream. Generated controls check seeded-
+buffer preservation for each tested loss and successful same-writer
+correction/retry. Empty and populated PFACE profiles and empty and 2×2 MESH
+profiles parse back from generated frames with flags/counts intact. The
+focused POLYLINE cohort passes 23/23; no fixture was added. This closes only
+these bounded DWG serialization-loss paths; complete PFACE/MESH semantic and
+native consumer qualification remains open. See the [loss-guard receipt](docs/research/p6-pface-mesh-dwg-loss-guard-2026-11-12.json).
 
 The DXF MTEXT writer now avoids emitting redundant group 50 when its group-11
 WCS direction vector is authoritative, for both standalone MTEXT and the

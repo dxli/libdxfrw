@@ -644,6 +644,12 @@ public:
         polyface.thickness = 0.5;
         if (!rejectPolyface()) return false;
         polyface.thickness = 0.0;
+        polyface.vertexcount = 1; // PFACE counts coordinate VERTEX records.
+        if (!rejectPolyface()) return false;
+        polyface.vertexcount = 0;
+        polyface.facecount = 1; // PFACE face count must match face records.
+        if (!rejectPolyface()) return false;
+        polyface.facecount = 0;
         if (!writer.encodeEntity(&polyface)) return false;
 
         const auto roundTripTopology = [&writer, &probe](
@@ -667,6 +673,40 @@ public:
         };
         if (!roundTripTopology(polyface, 64)) return false;
 
+        const auto rejectPolylineWithoutMutation =
+            [&writer](DRW_Polyline& value) {
+                const auto seeded = writer.buffer();
+                return !writer.encodeEntity(&value)
+                    && writer.buffer() == seeded;
+            };
+        DRW_Polyline populatedPolyface;
+        populatedPolyface.flags = 64;
+        populatedPolyface.vertexcount = 4;
+        populatedPolyface.facecount = 1;
+        for (const DRW_Coord& point : std::array<DRW_Coord, 4>{{
+                 {0.0, 0.0, 0.0}, {1.0, 0.0, 0.0},
+                 {1.0, 1.0, 0.0}, {0.0, 1.0, 0.0}}}) {
+            DRW_Vertex coordinate(point.x, point.y, point.z, 0.0);
+            coordinate.setDwgSubtype(DRW_Vertex::DwgSubtype::Polyface);
+            populatedPolyface.addVertex(coordinate);
+        }
+        DRW_Vertex face;
+        face.setDwgSubtype(DRW_Vertex::DwgSubtype::PolyfaceFace);
+        face.vindex1 = 1;
+        face.vindex2 = 2;
+        face.vindex3 = 3;
+        face.vindex4 = 4;
+        populatedPolyface.addVertex(face);
+        populatedPolyface.vertexcount = 3;
+        if (!rejectPolylineWithoutMutation(populatedPolyface)) return false;
+        populatedPolyface.vertexcount = 4;
+        populatedPolyface.facecount = 0;
+        if (!rejectPolylineWithoutMutation(populatedPolyface)) return false;
+        populatedPolyface.facecount = 1;
+        if (!writer.encodeEntity(&populatedPolyface)
+            || !roundTripTopology(populatedPolyface, 64))
+            return false;
+
         DRW_Polyline mesh;
         mesh.flags = 16;
         mesh.thickness = 0.5; // mesh body has no thickness field
@@ -685,8 +725,33 @@ public:
         mesh.defendwidth = 0.5;
         if (!rejectMesh()) return false;
         mesh.defendwidth = 0.0;
-        return writer.encodeEntity(&mesh)
-            && roundTripTopology(mesh, 16);
+        mesh.vertexcount = 1;
+        mesh.facecount = 1; // MESH body counts define its vertex grid.
+        if (!rejectMesh()) return false;
+        mesh.vertexcount = 0;
+        mesh.facecount = 0;
+        if (!writer.encodeEntity(&mesh)
+            || !roundTripTopology(mesh, 16))
+            return false;
+
+        DRW_Polyline meshGrid;
+        meshGrid.flags = 16;
+        meshGrid.vertexcount = 2;
+        meshGrid.facecount = 2;
+        for (const DRW_Coord& point : std::array<DRW_Coord, 4>{{
+                 {0.0, 0.0, 0.0}, {1.0, 0.0, 0.0},
+                 {1.0, 1.0, 0.0}, {0.0, 1.0, 0.0}}}) {
+            DRW_Vertex vertex(point.x, point.y, point.z, 0.0);
+            vertex.setDwgSubtype(DRW_Vertex::DwgSubtype::Mesh);
+            meshGrid.addVertex(vertex);
+        }
+        meshGrid.vertexcount = 1;
+        meshGrid.facecount = 3;
+        if (!rejectPolylineWithoutMutation(meshGrid)) return false;
+        meshGrid.vertexcount = 2;
+        meshGrid.facecount = 2;
+        return writer.encodeEntity(&meshGrid)
+            && roundTripTopology(meshGrid, 16);
     }
 
     static bool checkR2007LwPolylineFooter() {
