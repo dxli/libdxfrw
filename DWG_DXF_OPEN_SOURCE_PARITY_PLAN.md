@@ -7020,7 +7020,10 @@ the DXF form. DWG common-entity and embedded-MTEXT writers convert legacy
 type-2 caller values to the DWG type-3 form. ByLayer remains omitted; ByBlock
 is preserved; unknown methods fail output while DXF reads retain unknown raw
 values tolerantly. This does not alter public object layout. The new fast
-boundary selector and existing ASCII/Binary XREF round-trip selector pass.
+boundary selector also drives the production `DRW_Line::encodeDwg` path with
+DXF-form explicit alpha and checks that unknown-method refusal leaves seeded
+body/string/handle destinations unchanged; the existing ASCII/Binary XREF
+round-trip selector passes as well.
 Broader DXF/DWG fixture executables still report unrelated finalizer,
 VIEWPORT, TABLE, and LTYPE_CONTROL failures; see the [transparency boundary
 receipt](docs/research/p6-transparency-format-boundary-roundtrip-2026-11-11.json)

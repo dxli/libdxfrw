@@ -6666,6 +6666,36 @@ void testTransparencyFormatBoundaries(TestContext& t) {
                  && !toDwgAlphaRaw(static_cast<int>(0x02000180u), converted)
                  && !fromDxfGroup440(0x02000180u, entityValue),
              "unknown transparency methods fail closed at format boundaries");
+
+    LineCodecProbe source;
+    source.setDwgType(19u);
+    source.handle = 0xAD10u;
+    source.basePoint = DRW_Coord(1.25, 2.5, 0.0);
+    source.secPoint = DRW_Coord(4.5, 5.75, 0.0);
+    source.transparency = static_cast<int>(0x02000080u);
+    dwgBufferW encoded;
+    const bool wrote = source.encodeDwg(DRW::AC1021, &encoded);
+    t.expect(wrote && encoded.bitCount() > 0u,
+             "DWG LINE encoder accepts DXF alpha and publishes an ENC body");
+
+    LineCodecProbe invalid = source;
+    invalid.transparency = static_cast<int>(0x04000080u);
+    dwgBufferW refused;
+    refused.putBitLong(0xA55Au);
+    dwgBufferW strings;
+    strings.putBitLong(0x5AA5u);
+    dwgBufferW handles;
+    handles.putBitLong(0xAA55u);
+    const auto refusedBefore = refused.data();
+    const auto stringsBefore = strings.data();
+    const auto handlesBefore = handles.data();
+    const std::uint64_t refusedBits = refused.bitCount();
+    t.expect(!invalid.encodeDwg(DRW::AC1021, &refused, 0u, &strings, &handles)
+                 && refused.data() == refusedBefore
+                 && refused.bitCount() == refusedBits
+                 && strings.data() == stringsBefore
+                 && handles.data() == handlesBefore,
+             "DWG LINE unknown transparency method refusal preserves all destinations");
 }
 
 void testEnColorReservedFlagsRefusal(TestContext& t) {

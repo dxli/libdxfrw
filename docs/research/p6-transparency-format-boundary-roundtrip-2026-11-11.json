@@ -51,7 +51,7 @@
     "focused": [
       {
         "command": "ctest --test-dir build-gcc -R '^libdxfrw_dwg_dxf_transparency_boundaries$' --output-on-failure",
-        "result": "Passed 1/1; covers DWG alpha type 3 ↔ DXF type 2 conversion, ByBlock, ByLayer, the legacy transparent sentinel, and unknown-method refusal."
+        "result": "Passed 1/1; covers DWG alpha type 3 ↔ DXF type 2 conversion, ByBlock, ByLayer, the legacy transparent sentinel, and unknown-method refusal. It also invokes the production DRW_Line::encodeDwg path with DXF-form explicit alpha and verifies that an unknown-method refusal preserves pre-seeded body/string/handle destinations."
       },
       {
         "command": "ctest --test-dir build-gcc -R '^libdxfrw_dxf_transparency_xref_roundtrip$' --output-on-failure",
