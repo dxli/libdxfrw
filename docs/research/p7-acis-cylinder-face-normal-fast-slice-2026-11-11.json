@@ -23,6 +23,7 @@
     "generatedCases": [
       "forward and reversed face sense",
       "non-unit axis with an oblique radial direction",
+      "oblique axis where finite point-origin subtraction overflows near DBL_MAX",
       "axis singularity refusal",
       "just-outside-tolerance refusal",
       "unknown face-sense refusal",

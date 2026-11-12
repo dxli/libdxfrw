@@ -72,12 +72,14 @@ and [reproducible probe](tools/research/freecad_acis700_sat_probe.py).
 normal helper for the already bounded canonical ACIS cylinder profile. It
 requires the caller's finite nonnegative surface-distance tolerance and known
 face sense, normalizes the radial direction for non-unit axes, reverses it for
-reversed face sense, and refuses the axis singularity or any invalid/outside
-point without modifying the output. The parser-fed fast graph-preservation
-CTest passes. This extends local untrimmed geometry inspection only; it does
-not qualify native ACIS orientation, trims, placement, units, B-rep validity,
-or consumer support. No drawing fixture was added. See the [cylinder normal
-receipt](docs/research/p7-acis-cylinder-face-normal-fast-slice-2026-11-11.json).
+reversed face sense, and uses scaled coordinate differences when finite
+point-origin subtraction overflows. It refuses the axis singularity or any
+invalid/outside point without modifying the output. Parser-fed regular,
+non-unit-axis, reversed-sense and near-`DBL_MAX` oblique controls pass the fast
+graph-preservation CTest. This extends local untrimmed geometry inspection
+only; it does not qualify native ACIS orientation, trims, placement, units,
+B-rep validity, or consumer support. No drawing fixture was added. See the
+[cylinder normal receipt](docs/research/p7-acis-cylinder-face-normal-fast-slice-2026-11-11.json).
 
 **P7 AC1024 inline SAB 700 DXF carrier (2026-11-11):** the writer now admits
 only the observed same-version profile: marker-bounded, complete zero-count

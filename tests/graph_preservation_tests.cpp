@@ -7999,6 +7999,28 @@ void testAcisRootedBodyProjection(TestContext& t) {
             && std::fabs(obliqueCylinderNormal.y - 1.0 / std::sqrt(2.0))
                 < 1e-14
             && obliqueCylinderNormal.z == 0.0;
+        const double maxCylinderNormalCoordinate =
+            std::numeric_limits<double>::max();
+        DRW_AcisFace overflowingObliqueCylinder = forwardCylinderFace;
+        overflowingObliqueCylinder.p0 = DRW_Coord(
+            -0.75 * maxCylinderNormalCoordinate,
+            -0.75 * maxCylinderNormalCoordinate, 0.0);
+        overflowingObliqueCylinder.p1 = DRW_Coord(1.0, 1.0, 0.0);
+        overflowingObliqueCylinder.p2 = DRW_Coord(
+            0.125 * maxCylinderNormalCoordinate,
+            -0.125 * maxCylinderNormalCoordinate, 0.0);
+        DRW_Coord overflowingObliqueCylinderNormal(91.0, 92.0, 93.0);
+        const bool overflowingObliqueCylinderNormalOk =
+            drw_evaluateAcisCylinderFaceNormal(
+                overflowingObliqueCylinder,
+                DRW_Coord(maxCylinderNormalCoordinate,
+                          0.75 * maxCylinderNormalCoordinate, 0.0),
+                1e293, overflowingObliqueCylinderNormal)
+            && std::fabs(overflowingObliqueCylinderNormal.x
+                         - 1.0 / std::sqrt(2.0)) < 1e-14
+            && std::fabs(overflowingObliqueCylinderNormal.y
+                         + 1.0 / std::sqrt(2.0)) < 1e-14
+            && overflowingObliqueCylinderNormal.z == 0.0;
         DRW_Coord unchangedCylinderNormal(91.0, 92.0, 93.0);
         DRW_AcisFace unknownCylinderSense = forwardCylinderFace;
         unknownCylinderSense.hasSense = false;
@@ -8020,8 +8042,9 @@ void testAcisRootedBodyProjection(TestContext& t) {
             && unchangedCylinderNormal.y == 92.0
             && unchangedCylinderNormal.z == 93.0;
         t.expect(forwardCylinderNormalOk && reversedCylinderNormalOk
-                     && obliqueCylinderNormalOk,
-                 "parser-fed cylinder face normal follows radial direction, normalized axis, and face sense");
+                     && obliqueCylinderNormalOk
+                     && overflowingObliqueCylinderNormalOk,
+                 "parser-fed cylinder face normal handles forward/reversed sense, oblique and overflow-scaled axes");
         t.expect(cylinderNormalRefusals,
                  "cylinder face normal refuses axis singularities, outside tolerance, unknown sense and non-finite points atomically");
         DRW_AcisFace nonUnitCylinderAxis = *projectedCylinderFace;
