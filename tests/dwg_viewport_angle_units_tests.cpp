@@ -80,6 +80,39 @@ static bool viewportHandleRoles(){
      ||parsed.namedUcsHandle!=source.namedUcsHandle
      ||parsed.baseUcsHandle!=source.baseUcsHandle)return false;
  }
+ dwgBufferW typedNullHandles;
+ bool typedNullFound=false;
+ for(const auto& occurrence:encodedOccurrences){
+  if(occurrence.reference!=0x720u)continue;
+  const std::size_t byte=static_cast<std::size_t>(occurrence.startBit/8u);
+  if((occurrence.startBit%8u)!=0u||byte>=handles.data().size())
+   return false;
+  const std::uint8_t size=static_cast<std::uint8_t>(
+      handles.data()[byte]&0x0Fu);
+  if(byte+size>=handles.data().size())return false;
+  typedNullHandles.putBytes(handles.data().data(),byte);
+  typedNullHandles.putRawChar8(0x50u); // typed hard-pointer null
+  const std::size_t suffix=byte+1u+size;
+  if(suffix<handles.data().size())
+   typedNullHandles.putBytes(handles.data().data()+suffix,
+                             handles.data().size()-suffix);
+  if(!typedNullHandles.isGood())return false;
+  typedNullFound=true;break;
+ }
+ if(!typedNullFound)return false;
+ dwgBufferW typedNull;std::uint32_t typedNullBits=0;
+ if(!appendBits(typedNull,body)||!appendBits(typedNull,typedNullHandles))
+  return false;
+ typedNullBits=static_cast<std::uint32_t>(typedNullHandles.bitCount());
+ const auto typedNullBytes=typedNull.data();
+ dwgBuffer typedNullInput(typedNullBytes.data(),typedNullBytes.size());
+ ViewportProbe typedNullParsed;
+ if(!typedNullParsed.parseDwg(version,&typedNullInput,typedNullBits)
+    ||!typedNullInput.isGood()||typedNullParsed.frozenLayerHandles.size()!=1u
+    ||typedNullParsed.frozenLayerHandles[0]!=0u
+    ||typedNullParsed.clipBoundaryHandle!=source.clipBoundaryHandle
+    ||typedNullParsed.namedUcsHandle!=source.namedUcsHandle
+    ||typedNullParsed.baseUcsHandle!=source.baseUcsHandle)return false;
  dwgBufferW relative;std::uint32_t relativeBits=0;
  if(!buildInput(0x720u,0x0Au,true,relative,relativeBits))return false;
  const auto relativeBytes=relative.data();

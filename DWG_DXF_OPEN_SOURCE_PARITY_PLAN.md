@@ -1489,10 +1489,14 @@ created locally from scratch for the specific control.
   32-bit handle model fail closed. Generated AC1018 controls reject wrong
   frozen-layer, clip, named-UCS, and base-UCS roles, reset all parsed state,
   then accept corrected input on the same instance. A relative soft-pointer
-  control verifies base-handle resolution. The focused viewport test passes
-  1/1. This is generated field-role/parser evidence only: it does not establish
-  target existence, graph closure, group-91 semantics, producer coverage, or
-  native override/rendering behavior. No DWG/DXF fixture was added. See the
+  control verifies base-handle resolution. A physical AC1024
+  `visualization_-_sun_and_sky_demo.dwg` reader run exposed typed null
+  references encoded with absolute code 5 in soft-pointer fields; null handles
+  now accept absolute relation codes with zero payload while non-null handles
+  remain role-checked. The rebuilt sample reader and generated viewport test
+  pass (2/2). This does not establish target existence, graph closure,
+  group-91 semantics, broad producer coverage, or native override/rendering
+  behavior. No DWG/DXF fixture was added. See the
   [role-validation receipt](docs/research/p6-viewport-dwg-handle-role-validation-2026-11-11.json).
 
 - **P6 DIMASSOC whole-file allocation rollback:** the generated AC1024 ASCII

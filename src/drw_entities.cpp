@@ -1623,9 +1623,11 @@ bool readBoundedDwgHandleWithRole(dwgBuffer& buffer,
     if (!rawProbe.isGood() || currentDwgBit(&rawProbe) > endBit)
         return false;
 
-    // Null references use code zero regardless of the field's non-null role.
+    // Null references may retain an absolute relation code in the stream;
+    // with no target, accept the untyped null or any absolute typed null.
     const bool validRole = raw.ref64 == 0
-        ? raw.code == 0
+        ? raw.size == 0u
+            && (raw.code == 0u || (raw.code >= 0x02u && raw.code <= 0x05u))
         : role == DwgHandleReferenceRole::SoftPointer
             ? isDwgSoftPointerHandleCode(raw.code)
             : role == DwgHandleReferenceRole::HardPointer
