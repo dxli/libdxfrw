@@ -2597,12 +2597,16 @@ void SemanticSink::writeEntities() {
 
         DRW_Mesh mesh;
         mesh.layer = "probe_mesh_geometry";
+        mesh.version = 7;
+        mesh.blendCrease = true;
+        mesh.subdivisionLevel = 5;
         mesh.vertices = {DRW_Coord{20.0, 21.0, 22.0},
                          DRW_Coord{23.0, 24.0, 25.0},
                          DRW_Coord{26.0, 27.0, 28.0}};
         mesh.faces = {{0, 1, 2}};
         mesh.edges = {{0, 1}, {1, 2}};
         mesh.creases = {0.25, 0.75};
+        mesh.propertyOverrides = {{17, {0, 2}}, {29, {1, 3}}};
         wrote = dxfWriter_->writeMesh(&mesh) && wrote;
 
         DRW_Insert insert;
@@ -4405,6 +4409,12 @@ bool run3DConsumerProbe(bool binary) {
 
     const auto expectMesh = [&](const SemanticSink& sink) {
         return expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "version", "7")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "blendCrease", "true")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "subdivisionLevel", "5")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
                                  "vertexCount", "3")
             && expectEntityField(sink, "MESH", "probe_mesh_geometry",
                                  "vertex.0", "{\"x\":20,\"y\":21,\"z\":22}")
@@ -4429,7 +4439,25 @@ bool run3DConsumerProbe(bool binary) {
             && expectEntityDouble(sink, "MESH", "probe_mesh_geometry",
                                   "crease.0", 0.25)
             && expectEntityDouble(sink, "MESH", "probe_mesh_geometry",
-                                  "crease.1", 0.75);
+                                  "crease.1", 0.75)
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "propertyOverrideCount", "2")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "propertyOverride.0.subEntityMarker", "17")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "propertyOverride.0.propertyTypeCount", "2")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "propertyOverride.0.propertyType.0", "0")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "propertyOverride.0.propertyType.1", "2")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "propertyOverride.1.subEntityMarker", "29")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "propertyOverride.1.propertyTypeCount", "2")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "propertyOverride.1.propertyType.0", "1")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "propertyOverride.1.propertyType.1", "3");
     };
     if (!expectMesh(consumer) || !expectMesh(legacyConsumer))
         return false;

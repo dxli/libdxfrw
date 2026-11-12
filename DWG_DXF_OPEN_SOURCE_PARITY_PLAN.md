@@ -1709,12 +1709,12 @@ created locally from scratch for the specific control.
   unsupported) ([receipt](docs/research/p8-3d-consumer-3dface-wcs-fields-2026-11-12.json)).
 
 - **P8/S8.3.18 generated MESH geometry callback fields:** the AC1027 probe now
-  checks all three vertex coordinates, the ordered triangular face indices,
-  both edge endpoints, and both crease values after ASCII/Binary readback in
-  both extrusion modes. The focused CTest passes 1/1. Autodesk's MESH DXF
-  table defines vertex positions, face-list items, edge indices, and crease
-  values; this is generated same-library transport evidence, not native mesh
-  construction or DWG producer qualification
+  checks version, blend-crease state, subdivision level, all vertex
+  coordinates, ordered face indices, edge endpoints, crease values, and two
+  ordered sub-entity property overrides after ASCII/Binary readback in both
+  extrusion modes. The focused CTest passes 1/1. Autodesk's MESH DXF table
+  defines these fields; this is generated same-library transport evidence,
+  not native mesh construction or DWG producer qualification
   ([receipt](docs/research/p8-3d-consumer-mesh-geometry-fields-2026-11-12.json)).
 
 - **P8/S8.3.19 default MESH compatibility projection (2026-11-12):** the

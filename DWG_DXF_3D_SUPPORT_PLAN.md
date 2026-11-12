@@ -10705,11 +10705,13 @@ reports 3DFACE unsupported. See the [implementation checkpoint](DWG_DXF_OPEN_SOU
 and [receipt](docs/research/p8-3d-consumer-3dface-wcs-fields-2026-11-12.json).
 
 **P8/S8.3.18 MESH geometry callback fields (2026-11-12):** generated AC1027
-ASCII/Binary readback now checks three MESH vertex positions, the triangular
-face index sequence, two edge endpoint pairs, and both crease values in
-`ext=false` and `ext=true` modes. The focused
-`libdxfrw_3d_consumer_probe` passes 1/1. Autodesk documents these MESH DXF
-fields, but this test proves only same-library callback transport; native mesh
+ASCII/Binary readback now checks version, blend-crease state, subdivision
+level, three vertex positions, the triangular face index sequence, two edge
+endpoint pairs, both crease values, and two ordered sub-entity property
+overrides in `ext=false` and `ext=true` modes. The focused
+`libdxfrw_3d_consumer_probe` passes 1/1. Autodesk documents these DXF fields,
+but this test proves only same-library callback transport; the DWG-only
+unknown tail and legacy `subdivVertices` slot are excluded. Native mesh
 construction, independent interoperability, and DWG producer support remain
 open. See the [implementation checkpoint](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#current-execution-checkpoint-2026-11-12)
 and [receipt](docs/research/p8-3d-consumer-mesh-geometry-fields-2026-11-12.json).
