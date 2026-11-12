@@ -30,6 +30,9 @@
     "build_result": "passed with -Werror",
     "focused_run": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --modeler-ac1018-physical-sat-v1-projection /private/tmp/p7-trattocad-pulley.dwg",
     "focused_result": "PASS; source handle 0x27 maps to output handle 0x40; ASCII and Binary fresh-import SAT payloads both exactly match the normalized 14,581-byte source payload",
+    "asan_build": "cmake --build build-asan-custom --target libdxfrw_dwg2dxf_adapter_tests -j4",
+    "asan_run": "ASAN_OPTIONS=halt_on_error=1 build-asan-custom/tests/libdxfrw_dwg2dxf_adapter_tests --modeler-ac1018-physical-sat-v1-projection /private/tmp/p7-trattocad-pulley.dwg",
+    "asan_result": "PASS; address sanitizer reported no errors. LeakSanitizer is unsupported by this platform's runtime, so detect_leaks was not enabled.",
     "ascii_output_sha256": "40e1556e59f54dca54f6f1a4d5855d327ee903f812d4b40f79c886085cc61654",
     "binary_output_sha256": "0229e1d668be3eb46373b7c47b439e6a64801a56c1a1d33cf8f94c9d8686f186",
     "git_diff_check": "passed"
