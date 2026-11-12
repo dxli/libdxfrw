@@ -1067,7 +1067,16 @@ public:
         addEntityRecord("addInsert", "INSERT", fields, d, false);
     }
     SEMANTIC_OPAQUE_VALUE(addTable, DRW_Table, "TABLE")
-    void addTrace(const DRW_Trace& d) override { addBasicEntity("addTrace", "TRACE", d); }
+    void addTrace(const DRW_Trace& d) override {
+        std::vector<Field> fields = entityFields(d, "TRACE", "TRACE");
+        fields.push_back(pointField("corner.0", d.basePoint));
+        fields.push_back(pointField("corner.1", d.secPoint));
+        fields.push_back(pointField("corner.2", d.thirdPoint));
+        fields.push_back(pointField("corner.3", d.fourPoint));
+        fields.push_back(doubleField("thickness", d.thickness));
+        fields.push_back(pointField("extrusion", d.extPoint));
+        addEntityRecord("addTrace", "TRACE", fields, d, false);
+    }
     void add3dFace(const DRW_3Dface& d) override {
         std::vector<Field> fields = entityFields(d, "3DFACE", "3DFACE");
         fields.push_back(pointField("corner.0", d.basePoint));
@@ -1151,7 +1160,16 @@ public:
     SEMANTIC_OPAQUE_VALUE(addCamera, DRW_Camera, "CAMERA")
     SEMANTIC_OPAQUE_VALUE(addGeoPositionMarker, DRW_GeoPositionMarker, "GEOPOSITIONMARKER")
     SEMANTIC_OPAQUE_VALUE(addSectionObject, DRW_SectionObject, "SECTIONOBJECT")
-    void addSolid(const DRW_Solid& d) override { addBasicEntity("addSolid", "SOLID", d); }
+    void addSolid(const DRW_Solid& d) override {
+        std::vector<Field> fields = entityFields(d, "SOLID", "SOLID");
+        fields.push_back(pointField("corner.0", d.basePoint));
+        fields.push_back(pointField("corner.1", d.secPoint));
+        fields.push_back(pointField("corner.2", d.thirdPoint));
+        fields.push_back(pointField("corner.3", d.fourPoint));
+        fields.push_back(doubleField("thickness", d.thickness));
+        fields.push_back(pointField("extrusion", d.extPoint));
+        addEntityRecord("addSolid", "SOLID", fields, d, false);
+    }
     void addMText(const DRW_MText& d) override {
         std::vector<Field> fields = entityFields(d, "MTEXT", "MTEXT");
         fields.push_back(stringField("text", d.text));
@@ -2478,6 +2496,30 @@ void SemanticSink::writeEntities() {
         face.invisibleflag = DRW_3Dface::FirstEdge | DRW_3Dface::ThirdEdge;
         wrote = dxfWriter_->write3dface(&face) && wrote;
 
+        // SOLID corner coordinates are OCS values. Keep the four corners at
+        // one nonzero OCS elevation and use an oblique normal so the legacy
+        // extrusion projection has a nontrivial, independently calculable
+        // WCS result.
+        DRW_Solid solid;
+        solid.layer = "probe_solid_oblique_ocs";
+        solid.basePoint = DRW_Coord{1.0, 1.0, 2.0};
+        solid.secPoint = DRW_Coord{5.0, 1.0, 2.0};
+        solid.thirdPoint = DRW_Coord{5.0, 4.0, 2.0};
+        solid.fourPoint = DRW_Coord{1.0, 4.0, 2.0};
+        solid.extPoint = DRW_Coord{0.0, 1.0, 0.0};
+        solid.thickness = 0.25;
+        wrote = dxfWriter_->writeSolid(&solid) && wrote;
+
+        DRW_Trace trace;
+        trace.layer = "probe_trace_oblique_ocs";
+        trace.basePoint = DRW_Coord{2.0, 1.0, 3.0};
+        trace.secPoint = DRW_Coord{6.0, 1.0, 3.0};
+        trace.thirdPoint = DRW_Coord{6.0, 4.0, 3.0};
+        trace.fourPoint = DRW_Coord{2.0, 4.0, 3.0};
+        trace.extPoint = DRW_Coord{0.0, 1.0, 0.0};
+        trace.thickness = 0.5;
+        wrote = dxfWriter_->writeTrace(&trace) && wrote;
+
         DRW_Polyline polyline;
         polyline.flags = 8;
         polyline.vertexcount = 2;
@@ -3628,6 +3670,29 @@ bool run3DConsumerProbe(bool binary) {
                                "endAngleRadians", rawArcEnd))
         return false;
 
+    const auto expectObliqueQuad = [&](const SemanticSink& sink,
+                                       const std::string& entity,
+                                       const std::string& layer,
+                                       const std::array<DRW_Coord, 4>& corners,
+                                       double thickness) {
+        for (std::size_t i = 0; i < corners.size(); ++i) {
+            if (!expectEntityField(sink, entity, layer,
+                                   "corner." + std::to_string(i),
+                                   pointJson(corners[i])))
+                return false;
+        }
+        return expectEntityField(sink, entity, layer, "extrusion",
+                                 pointJson(DRW_Coord{0.0, 1.0, 0.0}))
+            && expectEntityDouble(sink, entity, layer, "thickness", thickness);
+    };
+    if (!expectObliqueQuad(consumer, "SOLID", "probe_solid_oblique_ocs", {{
+            DRW_Coord{1.0, 1.0, 2.0}, DRW_Coord{5.0, 1.0, 2.0},
+            DRW_Coord{5.0, 4.0, 2.0}, DRW_Coord{1.0, 4.0, 2.0}}}, 0.25)
+        || !expectObliqueQuad(consumer, "TRACE", "probe_trace_oblique_ocs", {{
+            DRW_Coord{2.0, 1.0, 3.0}, DRW_Coord{6.0, 1.0, 3.0},
+            DRW_Coord{6.0, 4.0, 3.0}, DRW_Coord{2.0, 4.0, 3.0}}}, 0.5))
+        return false;
+
     if (!expectEntityField(legacyConsumer, "CIRCLE", defaultCircleLayer, "center",
                            "{\"x\":6,\"y\":-3,\"z\":1.5}")
         || !expectEntityField(legacyConsumer, "CIRCLE", defaultCircleLayer, "extrusion",
@@ -3656,6 +3721,14 @@ bool run3DConsumerProbe(bool binary) {
                                "startAngleRadians", M_PI - rawArcEnd)
         || !expectEntityDouble(legacyConsumer, "ARC", negativeArcLayer,
                                "endAngleRadians", M_PI - rawArcStart))
+        return false;
+
+    if (!expectObliqueQuad(legacyConsumer, "SOLID", "probe_solid_oblique_ocs", {{
+            DRW_Coord{-1.0, 2.0, 1.0}, DRW_Coord{-5.0, 2.0, 1.0},
+            DRW_Coord{-5.0, 2.0, 4.0}, DRW_Coord{-1.0, 2.0, 4.0}}}, 0.25)
+        || !expectObliqueQuad(legacyConsumer, "TRACE", "probe_trace_oblique_ocs", {{
+            DRW_Coord{-2.0, 3.0, 1.0}, DRW_Coord{-6.0, 3.0, 1.0},
+            DRW_Coord{-6.0, 3.0, 4.0}, DRW_Coord{-2.0, 3.0, 4.0}}}, 0.5))
         return false;
 
     // DXF ELLIPSE stores its center and major-axis vector in WCS. Unlike ARC

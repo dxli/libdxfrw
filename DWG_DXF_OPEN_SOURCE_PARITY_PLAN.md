@@ -1666,6 +1666,16 @@ created locally from scratch for the specific control.
   interoperability, DWG handle ownership, or native text placement
   ([receipt](docs/research/p8-3d-consumer-insert-multi-attrib-chain-2026-11-12.json)).
 
+- **P8/S8.3.13 generated SOLID/TRACE OCS consumer fields:** the neutral
+  consumer sink now retains all four corner vectors, thickness and extrusion
+  for both record types. Generated oblique-OCS samples have distinct nonzero
+  shared elevations; ASCII/Binary readback verifies raw corners with
+  `ext=false` and independently calculated WCS corners with legacy `ext=true`.
+  The focused CTest passes 1/1. This closes only selected callback and
+  projection transport; DWG parsing, external interoperability, and native 3D
+  support remain unqualified
+  ([receipt](docs/research/p8-3d-consumer-solid-ocs-fields-2026-11-12.json)).
+
 - **P6 generated IMAGEDEF hard-owner reader profile:** the shared OBJECTS
   prologue preflight and typed `DRW_ImageDef` parser now explicitly accept the
   ODA §20.4.81 hard-owner parent code-3 emitted by this writer. Generated
