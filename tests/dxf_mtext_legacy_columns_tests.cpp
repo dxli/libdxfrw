@@ -4,6 +4,7 @@
 #include "intern/dxfwriter.h"
 #include "lc3_compat_check.cpp"
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -18,7 +19,11 @@ struct Capture : LC3CompatCheck {
         if (const auto* found = dynamic_cast<const DRW_MTextLegacyColumns*>(&data))
             columns = std::make_unique<DRW_MTextLegacyColumns>(*found);
     }
+    void addAttDef(const DRW_Attdef& data) override {
+        definition = std::make_unique<DRW_Attdef>(data);
+    }
     int count = 0; DRW_MText base; std::unique_ptr<DRW_MTextLegacyColumns> columns;
+    std::unique_ptr<DRW_Attdef> definition;
 };
 struct Exporter : LC3CompatCheck {
     explicit Exporter(dxfRW& codec):out(codec){}
@@ -26,10 +31,12 @@ struct Exporter : LC3CompatCheck {
         if (entry==1) ok=out.writeText(value);
         else if (entry==2) ok=out.writeLine(value);
         else if (entry==3) ok=out.writePoint(value);
+        else if (entry==4) ok=out.writeAttdef(definition);
         else ok=out.writeMText(value);
     }
     bool finalizeDxfWrite() override {return ignore || ok;}
-    dxfRW& out; DRW_MText* value = nullptr; bool ok = false, ignore = false; int entry = 0;
+    dxfRW& out; DRW_MText* value = nullptr; DRW_Attdef* definition = nullptr;
+    bool ok = false, ignore = false; int entry = 0;
 };
 struct DwgExporter : dx_iface {
     explicit DwgExporter(dwgRW& codec):out(codec){}
@@ -135,6 +142,57 @@ bool check(bool binary, const std::filesystem::path& inputPath,
     dxfRW reread(outputPath.string().c_str()); Capture plain;
     if (!reread.read(&plain,false) || plain.count!=1 || plain.columns
         || plain.base.ltypeScale!=3.5 || plain.base.angle!=30.) return false;
+    // A legacy API value can carry both a nonzero direction vector and an
+    // angle. DXF group 11 is the authoritative orientation in that case, so
+    // emit the vector without a redundant group 50. Preserve the direction
+    // and derived angle in ASCII and Binary readback.
+    DRW_MText directed; directed.text="direction"; directed.height=2.;
+    directed.angle=30.; directed.secPoint={0.8660254037844386,0.5,0.};
+    dxfRW directionOutput(outputPath.string().c_str());
+    Exporter directionExporter(directionOutput); directionExporter.value=&directed;
+    if (!directionOutput.write(&directionExporter,DRW::AC1027,binary)
+        || !directionExporter.ok) return false;
+    const std::string directionBytes=contents(outputPath);
+    if (!binary) {
+        const std::size_t entity=directionBytes.find("MTEXT");
+        const std::size_t end=directionBytes.find("ENDSEC",entity);
+        if (entity==std::string::npos || end==std::string::npos
+            || directionBytes.substr(entity,end-entity).find("\n 50\n")!=std::string::npos)
+            return false;
+    }
+    dxfRW directionInput(outputPath.string().c_str()); Capture directionRead;
+    if (!directionInput.read(&directionRead,false) || directionRead.count!=1
+        || std::abs(directionRead.base.secPoint.x-directed.secPoint.x)>1e-10
+        || std::abs(directionRead.base.secPoint.y-directed.secPoint.y)>1e-10
+        || std::abs(directionRead.base.angle-30.)>1e-10) return false;
+    DRW_Attdef nested; nested.text="fallback"; nested.tag="TAG";
+    nested.prompt="Prompt"; nested.height=1.;
+    nested.mtext=std::make_unique<DRW_MText>();
+    nested.mtext->text="embedded"; nested.mtext->height=2.;
+    nested.mtext->angle=30.;
+    nested.mtext->secPoint={0.8660254037844386,0.5,0.};
+    dxfRW embeddedOutput(outputPath.string().c_str());
+    Exporter embeddedExporter(embeddedOutput); embeddedExporter.entry=4;
+    embeddedExporter.definition=&nested;
+    if (!embeddedOutput.write(&embeddedExporter,DRW::AC1032,binary)
+        || !embeddedExporter.ok) return false;
+    const std::string embeddedBytes=contents(outputPath);
+    if (!binary) {
+        const std::size_t embedded=embeddedBytes.find("Embedded Object");
+        const std::size_t end=embeddedBytes.find("ENDSEC",embedded);
+        if (embedded==std::string::npos || end==std::string::npos
+            || embeddedBytes.substr(embedded,end-embedded).find("\n 50\n")!=std::string::npos)
+            return false;
+    }
+    dxfRW embeddedInput(outputPath.string().c_str()); Capture embeddedRead;
+    if (!embeddedInput.read(&embeddedRead,false) || !embeddedRead.definition
+        || !embeddedRead.definition->mtext
+        || embeddedRead.definition->mtext->text!="embedded"
+        || std::abs(embeddedRead.definition->mtext->angle-30.)>1e-10
+        || std::abs(embeddedRead.definition->mtext->secPoint.x
+                    -nested.mtext->secPoint.x)>1e-10
+        || std::abs(embeddedRead.definition->mtext->secPoint.y
+                    -nested.mtext->secPoint.y)>1e-10) return false;
     // The stock adapter must retain the derived carrier, not slice it, and
     // refuse unsupported output before replacing the destination.
     dx_data imported; dx_iface adapter;

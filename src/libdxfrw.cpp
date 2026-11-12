@@ -14049,9 +14049,12 @@ bool dxfRW::writeEmbeddedMText(DRW_MText *ent) {
     }
     const auto orientation = ent->dxfOrientationForOutput();
     const bool legacyOrientation = orientation == DRW_MText::DxfOrientationMode::LegacyApi;
-    if (orientation == DRW_MText::DxfOrientationMode::Direction
-        || (legacyOrientation && (ent->secPoint.x != 0.0 || ent->secPoint.y != 0.0
-                                   || ent->secPoint.z != 0.0))) {
+    const bool writeDirection =
+        orientation == DRW_MText::DxfOrientationMode::Direction
+        || (legacyOrientation
+            && (ent->secPoint.x != 0.0 || ent->secPoint.y != 0.0
+                || ent->secPoint.z != 0.0));
+    if (writeDirection) {
         writer->writeDouble(11, ent->secPoint.x);
         writer->writeDouble(21, ent->secPoint.y);
         writer->writeDouble(31, ent->secPoint.z);
@@ -14060,8 +14063,9 @@ bool dxfRW::writeEmbeddedMText(DRW_MText *ent) {
         writer->writeDouble(42, ent->m_r2018ExtentsWidth);
     if (ent->m_r2018ExtentsHeight != 0.0)
         writer->writeDouble(43, ent->m_r2018ExtentsHeight);
-    if (orientation == DRW_MText::DxfOrientationMode::Rotation
-        || (legacyOrientation && ent->angle != 0.0))
+    if (!writeDirection
+        && (orientation == DRW_MText::DxfOrientationMode::Rotation
+            || (legacyOrientation && ent->angle != 0.0)))
         writer->writeDouble(50, ent->angle);
     writer->writeInt16(73, ent->linespacingStyle);
     writer->writeDouble(44, ent->interlin);
@@ -14707,14 +14711,21 @@ bool dxfRW::writeMText(DRW_MText *ent){
         writer->writeDouble(230, ent->extPoint.z);
         const auto orientation = ent->dxfOrientationForOutput();
         const bool legacyOrientation = orientation == DRW_MText::DxfOrientationMode::LegacyApi;
-        if (orientation != DRW_MText::DxfOrientationMode::Direction)
+        const bool writeDirection =
+            orientation == DRW_MText::DxfOrientationMode::Direction
+            || (legacyOrientation
+                && (ent->secPoint.x != 0.0 || ent->secPoint.y != 0.0
+                    || ent->secPoint.z != 0.0));
+        // When group 11 is present, group 50 is only an input convenience and
+        // the direction vector takes precedence. Avoid emitting both: some
+        // independent DXF readers reject group 50 on MTEXT even though the
+        // documented vector carries the same orientation.
+        if (!writeDirection)
             writer->writeDouble(50, ent->angle);
         // MTEXT may carry an explicit WCS x-axis direction (groups 11/21/31)
         // instead of deriving its rotation from group 50. Preserve it when
         // present; a zero vector means the optional field was absent.
-        if (orientation == DRW_MText::DxfOrientationMode::Direction
-            || (legacyOrientation && (ent->secPoint.x != 0.0 || ent->secPoint.y != 0.0
-                                       || ent->secPoint.z != 0.0))) {
+        if (writeDirection) {
             writer->writeDouble(11, ent->secPoint.x);
             writer->writeDouble(21, ent->secPoint.y);
             writer->writeDouble(31, ent->secPoint.z);

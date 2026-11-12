@@ -1551,6 +1551,20 @@ created locally from scratch for the specific control.
   behavior. No DWG/DXF fixture was added. See the
   [role-validation receipt](docs/research/p6-viewport-dwg-handle-role-validation-2026-11-11.json).
 
+- **P6 MTEXT DXF orientation peer compatibility:** standalone and embedded
+  MTEXT writers now emit group 50 only when rotation is authoritative; when
+  group 11 direction is authoritative, they emit the direction vector without
+  a redundant rotation field. Autodesk documents group 50 as a convenience
+  converted to the group-11 vector and says the last field wins if both are
+  present. The old dual-field output was rejected by LibreDWG 0.14
+  `dxf2dwg` as `Invalid DXF code 50 for MTEXT`; the new output converts, and
+  `dwgread` parses all 15 isolated `*T1` members (7 MTEXT, 8 LINE). The focused
+  ASCII/Binary test also checks standalone and embedded-MTEXT readback keeps
+  the direction and derived angle. LibreDWG emitted unrelated header/handle
+  warnings; this is a selected interoperability result, not semantic equality,
+  native rendering, complete TABLE graph closure, or a support claim. See the
+  [peer-compatibility receipt](docs/research/p6-dxf-mtext-direction-vector-peer-compat-2026-11-11.json).
+
 - **P6 OCS mixed-scale dot cancellation:** `scaledCompensatedDot` now detects
   when scale-normalizing a finite vector would erase a nonzero component and
   recomputes its bounded three-term OCS dot product in the original exponent
@@ -6969,6 +6983,19 @@ guard does not qualify physical legacy FIELD prevalence, source-to-output
 conversion, or native evaluation; see the [guard receipt](docs/research/p5-field-legacy-dxf-format-flag-guard-2026-11-02.json).
 
 ## P6 — residual semantic and version audit
+
+The DXF MTEXT writer now avoids emitting redundant group 50 when its group-11
+WCS direction vector is authoritative, for both standalone MTEXT and the
+R2018 embedded-MTEXT body used by ATTRIB/ATTDEF. Autodesk's DXF definition
+allows group 50 as a rotation convenience and gives the vector precedence
+when both are present. LibreDWG 0.14 had rejected the previous dual-field
+output; it now converts the isolated AC1018 `*T1` DXF and reads all 15 cache
+entities. Generated ASCII/Binary controls verify the direction and derived
+angle after standalone and embedded readback. The peer emitted nonfatal header
+and handle warnings, and the isolated file replaces source layer/style
+resources, so this proves a narrow syntax/interoperability route only. Exact
+independent field agreement, native display, full source graph and TABLE
+qualification remain open ([receipt](docs/research/p6-dxf-mtext-direction-vector-peer-compat-2026-11-11.json)).
 
 HATCH/MPOLYGON boundary-point conversion now has a stable fallback for
 elevation-plus-boundary-Z overflow when the final rotated coordinates remain
