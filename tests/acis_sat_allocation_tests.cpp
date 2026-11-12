@@ -204,6 +204,17 @@ int main() {
                      "ACIS 21500 raw entity word altered record framing\n");
         return 20;
     }
+    std::vector<std::uint8_t> sat21500EntityWord;
+    if (!drw_convertSabToSatV1(sab21500EntityWord.data(),
+                               sab21500EntityWord.size(), DRW::AC1024,
+                               sat21500EntityWord)
+        || std::string(sat21500EntityWord.begin(),
+                       sat21500EntityWord.end()).find("21500 4 2 0 \n")
+            != 0u) {
+        std::fprintf(stderr,
+                     "ACIS 21500 raw header word changed in SAT output\n");
+        return 21;
+    }
 
     const std::vector<std::uint8_t> sab700 = makeSab(700u);
     DRW_SabData parsed700;

@@ -96,7 +96,9 @@ drawing fixture was committed. See the [ACIS 700 receipt](docs/research/p7-ac102
 generated ACIS 21500 SAB control now declares zero `numRecords`, raw third word
 `2`, and five records including the explicit terminal marker. It verifies the
 parser preserves the third word without treating it as a record limit, and
-requires full terminal framing before completion. The focused
+requires full terminal framing before completion. AC1024 SAT projection also
+preserves that raw word as `2` while deriving the separate record count from
+the four emitted nonterminal records. The focused
 `acis_sat_allocation_rollback_retry` selector passes. This protects the
 current raw-only behavior; it does not resolve the 21500 field semantics. The
 ACIS 7.0 reference describes a related saved-entity-list count, while ODA
