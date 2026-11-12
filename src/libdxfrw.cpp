@@ -24358,6 +24358,10 @@ bool dxfRW::processObjects() {
         else if (normalizedEntity == "CELLSTYLEMAP") {
             processed = processCellStyleMap();
         }
+        else if (normalizedEntity == "DATATABLE"
+                 || normalizedEntity == "ACDBDATATABLE") {
+            processed = processDataTable();
+        }
         else if (normalizedEntity == "MLEADERSTYLE") {
             processed = processMLeaderStyle();
         }
@@ -28135,6 +28139,36 @@ bool dxfRW::processCellStyleMap() {
                 iface->addCellStyleMap(data);
             else
                 DRW_DBG("CELLSTYLEMAP typed DXF projection incomplete; retaining raw object only\n");
+            iface->addRawDxfObject(raw);
+            return true;
+        }
+        if (!captureAndParseRawDxfGroup(raw, code, data))
+            return setError(DRW::BAD_CODE_PARSED);
+    }
+    return setError(DRW::BAD_READ_OBJECTS);
+}
+
+// DATATABLE (AcDbDataTable): project the ordered scalar columns and retain
+// row-child handles, while preserving the complete raw DXF object. A partial
+// typed view is delivered only when the advertised counts and all populated
+// columns have consistent bounds; this does not authorize child graph output.
+bool dxfRW::processDataTable() {
+    DRW_DBG("dxfRW::processDataTable");
+    int code = 0;
+    DRW_DataTable data;
+    DRW_RawDxfObject raw;
+    if (!copyRawDxfCarrierName(raw, nextentity))
+        return setError(DRW::BAD_CODE_PARSED);
+    while (reader->readRec(&code)) {
+        if (code == 0) {
+            if (!acceptObjectBoundary(code))
+                return setError(DRW::BAD_READ_OBJECTS);
+            const bool ready = data.hasCompleteDxfProjection()
+                && data.columns.size() <= dwgSafety::MaxOwnedObjectCount;
+            if (ready)
+                iface->addDataTable(data);
+            else
+                DRW_DBG("DATATABLE typed DXF projection incomplete; retaining raw object only\n");
             iface->addRawDxfObject(raw);
             return true;
         }

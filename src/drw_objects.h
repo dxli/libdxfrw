@@ -4121,10 +4121,18 @@ public:
     rowCount = 0;
     tableName.clear();
     columns.clear();
+    rowHandles.clear();
+    dxfColumn = -1;
+    dxfProjectionComplete = true;
+    dxfSeenFields = 0u;
+    dxfRetainedStringBytes = 0u;
+    dxfStoredCellCount = 0u;
+    dxfRetainedStringLease.reset();
     DRW_TableEntry::reset();
   }
 
 protected:
+  bool parseCode(int code, const std::unique_ptr<dxfReader> &reader) override;
   bool parseDwg(DRW::Version version, dwgBuffer *buf,
                 std::uint32_t bs = 0) override;
 
@@ -4134,6 +4142,30 @@ public:
   int rowCount = 0;     /*!< DXF 91 (num_rows) */
   UTF8STRING tableName; /*!< DXF 1 */
   std::vector<Column> columns;
+  //! DXF group-360 child references in file order. Their row-XRECORD role is
+  //! observed in the supported source profile; consumers must still resolve
+  //! and validate targets before writing a graph.
+  std::vector<std::uint32_t> rowHandles;
+
+  bool hasCompleteDxfProjection() const noexcept {
+    if (!dxfProjectionComplete || (dxfSeenFields & 0x0fu) != 0x0fu
+        || columnCount < 0 || rowCount < 0
+        || static_cast<std::size_t>(columnCount) != columns.size()
+        || rowHandles.size() != static_cast<std::size_t>(rowCount))
+      return false;
+    for (const auto& column : columns)
+      if (column.rows.size() != static_cast<std::size_t>(rowCount))
+        return false;
+    return true;
+  }
+
+private:
+  int dxfColumn = -1;
+  bool dxfProjectionComplete = true;
+  std::uint8_t dxfSeenFields = 0u;
+  std::size_t dxfRetainedStringBytes = 0u;
+  std::size_t dxfStoredCellCount = 0u;
+  std::shared_ptr<DxfReadRetainedLease> dxfRetainedStringLease;
 };
 
 //! Class to handle RASTERVARIABLES (AcDbRasterVariables).

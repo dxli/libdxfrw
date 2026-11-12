@@ -1837,6 +1837,15 @@ created locally from scratch for the specific control.
   wire profile, exact boundaries and child-owner roles with bounded resources
   and transactional failure. Its public raw input is forgeable: it is not
   reader-origin provenance, general DATATABLE semantics, or output authority.
+  **DXF ingest slice completed (2026-11-11):** `dxfRW` now dispatches
+  DATATABLE/ACDBDATATABLE objects through a bounded typed projection for the
+  observed group-70/90/91/1 header, ordered 92/2 columns, type-matched 40/93/3
+  scalar rows, and ordered 360 child handles. The complete raw DXF object is
+  retained in all cases; missing row references and unsupported column types
+  suppress the typed callback without failing import. Generated scratch-only
+  ASCII/Binary controls pass for scalar projection and raw-only fallback. This
+  adds no DXF writer, target resolution, graph closure, DWG source authority,
+  semantic meaning, or support promotion ([receipt](docs/research/p5-dxf-datatable-read-projection-2026-11-11.json)).
   A separate opt-in binding now ties both TABLECONTENT and DATATABLE candidates
   and the selected XRECORD set to CRC-checked frames in one completed import;
   missing or changed members invalidate the whole bundle. The root XRECORD's

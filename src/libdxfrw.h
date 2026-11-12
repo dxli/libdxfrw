@@ -1444,6 +1444,7 @@ public:
     bool processSpatialFilter();
     bool processTableStyle();
     bool processCellStyleMap();
+    bool processDataTable();
     bool processMLeaderStyle();
     bool processSortEntsTable();
     bool processDimAssoc();

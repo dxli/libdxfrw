@@ -12441,6 +12441,136 @@ bool DRW_DataTable::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t
     }
 }
 
+// DATATABLE's DXF representation is substantially more descriptive than its
+// partially documented DWG body. Keep the typed projection deliberately
+// literal: the type/name pair starts a column, its supported scalar group
+// supplies ordered row values, and group 360 handles are retained separately
+// for later graph resolution. Unknown semantic relationships are not inferred.
+bool DRW_DataTable::parseCode(int code,
+                              const std::unique_ptr<dxfReader>& reader) {
+    if (!reader)
+        return false;
+    try {
+        const auto readString = [this, &reader](UTF8STRING& destination) {
+            if (!reader->chargeTypedVariantNode())
+                return false;
+            UTF8STRING value = reader->getUtf8String();
+            if (value.size() > std::numeric_limits<std::size_t>::max()
+                                   - dxfRetainedStringBytes
+                || !retainDxfReadBytes(dxfRetainedStringLease,
+                                       reader->retainedByteBudget(),
+                                       value.size()))
+                return false;
+            dxfRetainedStringBytes += value.size();
+            destination = std::move(value);
+            return true;
+        };
+        switch (code) {
+        case 70:
+            flags = reader->getInt32();
+            dxfSeenFields |= 0x01u;
+            return true;
+        case 90:
+            columnCount = reader->getInt32();
+            dxfSeenFields |= 0x02u;
+            return columnCount >= 0
+                && static_cast<std::size_t>(columnCount)
+                       <= dwgSafety::MaxOwnedObjectCount;
+        case 91:
+            rowCount = reader->getInt32();
+            dxfSeenFields |= 0x04u;
+            return rowCount >= 0
+                && static_cast<std::size_t>(rowCount)
+                       <= dwgSafety::MaxOwnedObjectCount;
+        case 1:
+            if (!readString(tableName))
+                return false;
+            dxfSeenFields |= 0x08u;
+            return true;
+        case 92: {
+            if (columns.size() >= dwgSafety::MaxOwnedObjectCount)
+                return false;
+            Column column;
+            column.type = reader->getInt32();
+            if (column.type != 1 && column.type != 2 && column.type != 6)
+                dxfProjectionComplete = false;
+            columns.push_back(std::move(column));
+            dxfColumn = static_cast<int>(columns.size() - 1u);
+            return true;
+        }
+        case 2:
+            if (dxfColumn < 0
+                || static_cast<std::size_t>(dxfColumn) >= columns.size())
+                return false;
+            return readString(
+                columns[static_cast<std::size_t>(dxfColumn)].text);
+        case 40:
+        case 93:
+        case 3: {
+            if (dxfColumn < 0
+                || static_cast<std::size_t>(dxfColumn) >= columns.size())
+                return false;
+            auto& column = columns[static_cast<std::size_t>(dxfColumn)];
+            const bool typeMatches = (column.type == 2 && code == 40)
+                || (column.type == 1 && code == 93)
+                || (column.type == 6 && code == 3);
+            if (!typeMatches) {
+                dxfProjectionComplete = false;
+                return true;
+            }
+            if (column.rows.size() >= dwgSafety::MaxOwnedObjectCount
+                || dxfStoredCellCount >= dwgSafety::MaxOwnedObjectCount
+                || (rowCount >= 0
+                    && column.rows.size() >= static_cast<std::size_t>(rowCount))) {
+                dxfProjectionComplete = false;
+                return true;
+            }
+            Row row;
+            if (code == 40) {
+                const double value = reader->getDouble();
+                if (!std::isfinite(value)) {
+                    dxfProjectionComplete = false;
+                    return true;
+                }
+                row.dataDouble = value;
+            } else if (code == 93) {
+                row.dataLong = reader->getInt32();
+            } else if (!readString(row.dataString)) {
+                return false;
+            }
+            column.rows.push_back(std::move(row));
+            ++dxfStoredCellCount;
+            return true;
+        }
+        case 360: {
+            if (!reader->isValidHandleString())
+                return false;
+            if (rowHandles.size() >= dwgSafety::MaxOwnedObjectCount
+                || (rowCount >= 0
+                    && rowHandles.size() >= static_cast<std::size_t>(rowCount))) {
+                dxfProjectionComplete = false;
+                return true;
+            }
+            const std::uint32_t target = reader->getHandleString();
+            if (target == 0u) {
+                dxfProjectionComplete = false;
+                return true;
+            }
+            rowHandles.push_back(target);
+            return true;
+        }
+        default: {
+            if (DRW_TableEntry::parseCode(code, reader))
+                return true;
+            dxfProjectionComplete = false;
+            return true;
+        }
+        }
+    } catch (...) {
+        return false;
+    }
+}
+
 bool DRW_RasterVariables::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     switch (code) {
     case 90:
