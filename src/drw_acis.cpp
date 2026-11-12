@@ -6752,6 +6752,70 @@ bool drw_pointWithinToleranceOfAcisCylinderSurface(
     return true;
 }
 
+bool drw_evaluateAcisCylinderFaceNormal(
+    const DRW_AcisFace& face, const DRW_Coord& point,
+    double linearTolerance, DRW_Coord& faceNormal) noexcept {
+    if (!face.hasSense || !isFinite(point)
+        || !std::isfinite(linearTolerance) || linearTolerance < 0.0)
+        return false;
+
+    DRW_Coord unitAxis;
+    double radius = 0.0;
+    if (!acisCylinderSurfaceFrame(face, unitAxis, radius))
+        return false;
+
+    double signedDistance = 0.0;
+    if (!drw_pointWithinToleranceOfAcisCylinderSurface(
+            face, point, linearTolerance, signedDistance))
+        return false;
+
+    DRW_Coord radial;
+    unsigned int axisCoordinate = 0u;
+    if (acisCylinderAxisAlignedCoordinate(unitAxis, axisCoordinate)) {
+        if (!acisCylinderAxisAlignedRadial(point, face.p0, axisCoordinate,
+                                           radial, nullptr))
+            return false;
+    } else {
+        DRW_Coord delta(point.x - face.p0.x, point.y - face.p0.y,
+                        point.z - face.p0.z);
+        if (!isFinite(delta)) {
+            const double coordinateScale = std::max(
+                std::max(std::fabs(point.x),
+                         std::max(std::fabs(point.y), std::fabs(point.z))),
+                std::max(std::fabs(face.p0.x),
+                         std::max(std::fabs(face.p0.y),
+                                  std::fabs(face.p0.z))));
+            if (coordinateScale == 0.0)
+                return false;
+            delta = DRW_Coord(
+                point.x / coordinateScale - face.p0.x / coordinateScale,
+                point.y / coordinateScale - face.p0.y / coordinateScale,
+                point.z / coordinateScale - face.p0.z / coordinateScale);
+        }
+        if (!isFinite(delta))
+            return false;
+        const double deltaScale = std::max(
+            std::fabs(delta.x),
+            std::max(std::fabs(delta.y), std::fabs(delta.z)));
+        if (deltaScale == 0.0)
+            return false;
+        const DRW_Coord scaledDelta(delta.x / deltaScale,
+                                    delta.y / deltaScale,
+                                    delta.z / deltaScale);
+        const double axial = scaledDelta.x * unitAxis.x
+            + scaledDelta.y * unitAxis.y
+            + scaledDelta.z * unitAxis.z;
+        radial = DRW_Coord(scaledDelta.x - axial * unitAxis.x,
+                           scaledDelta.y - axial * unitAxis.y,
+                           scaledDelta.z - axial * unitAxis.z);
+    }
+
+    if (!isFinite(radial)
+        || (radial.x == 0.0 && radial.y == 0.0 && radial.z == 0.0))
+        return false;
+    return drw_orientAcisFaceNormal(face, radial, faceNormal);
+}
+
 bool drw_pointWithinToleranceOfAcisTorusSurface(
     const DRW_AcisFace& face, const DRW_Coord& point,
     double linearTolerance, double& signedDistance) noexcept {

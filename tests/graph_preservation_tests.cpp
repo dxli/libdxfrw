@@ -7963,6 +7963,67 @@ void testAcisRootedBodyProjection(TestContext& t) {
                 *projectedCylinderFace, DRW_Coord(2.0, 3.0, 10.0), 4.0,
                 cylinderSignedDistance)
             && cylinderSignedDistance == -4.0;
+        DRW_AcisFace forwardCylinderFace = *projectedCylinderFace;
+        forwardCylinderFace.hasSense = true;
+        forwardCylinderFace.senseReversed = false;
+        DRW_Coord forwardCylinderNormal(91.0, 92.0, 93.0);
+        const bool forwardCylinderNormalOk =
+            drw_evaluateAcisCylinderFaceNormal(
+                forwardCylinderFace, DRW_Coord(6.0, 3.0, 9.0), 0.0,
+                forwardCylinderNormal)
+            && forwardCylinderNormal.x == 1.0
+            && forwardCylinderNormal.y == 0.0
+            && forwardCylinderNormal.z == 0.0;
+        DRW_AcisFace reversedCylinderFace = forwardCylinderFace;
+        reversedCylinderFace.senseReversed = true;
+        DRW_Coord reversedCylinderNormal(91.0, 92.0, 93.0);
+        const bool reversedCylinderNormalOk =
+            drw_evaluateAcisCylinderFaceNormal(
+                reversedCylinderFace, DRW_Coord(6.0, 3.0, 9.0), 0.0,
+                reversedCylinderNormal)
+            && reversedCylinderNormal.x == -1.0
+            && reversedCylinderNormal.y == 0.0
+            && reversedCylinderNormal.z == 0.0;
+        DRW_AcisFace obliqueCylinderFace = forwardCylinderFace;
+        obliqueCylinderFace.p1 = DRW_Coord(0.0, 0.0, 7.0);
+        const double cylinderDiagonal = 4.0 / std::sqrt(2.0);
+        DRW_Coord obliqueCylinderNormal(91.0, 92.0, 93.0);
+        const bool obliqueCylinderNormalOk =
+            drw_evaluateAcisCylinderFaceNormal(
+                obliqueCylinderFace,
+                DRW_Coord(2.0 + cylinderDiagonal,
+                          3.0 + cylinderDiagonal, 10.0),
+                0.0, obliqueCylinderNormal)
+            && std::fabs(obliqueCylinderNormal.x - 1.0 / std::sqrt(2.0))
+                < 1e-14
+            && std::fabs(obliqueCylinderNormal.y - 1.0 / std::sqrt(2.0))
+                < 1e-14
+            && obliqueCylinderNormal.z == 0.0;
+        DRW_Coord unchangedCylinderNormal(91.0, 92.0, 93.0);
+        DRW_AcisFace unknownCylinderSense = forwardCylinderFace;
+        unknownCylinderSense.hasSense = false;
+        const bool cylinderNormalRefusals =
+            !drw_evaluateAcisCylinderFaceNormal(
+                forwardCylinderFace, DRW_Coord(2.0, 3.0, 9.0), 4.0,
+                unchangedCylinderNormal)
+            && !drw_evaluateAcisCylinderFaceNormal(
+                forwardCylinderFace, DRW_Coord(8.0, 3.0, 9.0),
+                std::nextafter(2.0, 0.0), unchangedCylinderNormal)
+            && !drw_evaluateAcisCylinderFaceNormal(
+                unknownCylinderSense, DRW_Coord(6.0, 3.0, 9.0), 0.0,
+                unchangedCylinderNormal)
+            && !drw_evaluateAcisCylinderFaceNormal(
+                forwardCylinderFace,
+                DRW_Coord(std::numeric_limits<double>::quiet_NaN(), 3.0, 9.0),
+                0.0, unchangedCylinderNormal)
+            && unchangedCylinderNormal.x == 91.0
+            && unchangedCylinderNormal.y == 92.0
+            && unchangedCylinderNormal.z == 93.0;
+        t.expect(forwardCylinderNormalOk && reversedCylinderNormalOk
+                     && obliqueCylinderNormalOk,
+                 "parser-fed cylinder face normal follows radial direction, normalized axis, and face sense");
+        t.expect(cylinderNormalRefusals,
+                 "cylinder face normal refuses axis singularities, outside tolerance, unknown sense and non-finite points atomically");
         DRW_AcisFace nonUnitCylinderAxis = *projectedCylinderFace;
         nonUnitCylinderAxis.p1 = DRW_Coord(0.0, 0.0, 7.0);
         const double radiusOverRootTwo = 4.0 / std::sqrt(2.0);

@@ -2057,6 +2057,17 @@ LIBDXFRW_EXPORT bool drw_pointWithinToleranceOfAcisCylinderSurface(
     const DRW_AcisFace& face, const DRW_Coord& point,
     double linearTolerance, double& signedDistance) noexcept;
 
+//! Return the local radial unit normal of a point on the canonical
+//! untrimmed ACIS cylinder locus, adjusted by the retained face-sense flag.
+//! The point must lie within the caller-supplied finite nonnegative tolerance.
+//! Points on the cylinder axis have no radial normal and fail. This does not
+//! apply trims, placement, units, or B-rep validity and is not independent
+//! qualification of native ACIS face orientation. On failure,
+//! `faceNormal` is unchanged.
+LIBDXFRW_EXPORT bool drw_evaluateAcisCylinderFaceNormal(
+    const DRW_AcisFace& face, const DRW_Coord& point,
+    double linearTolerance, DRW_Coord& faceNormal) noexcept;
+
 //! Test signed distance to the untrimmed locus of a regular ring torus.
 //! This accepts only finite faces with majorRadius > minorRadius > 0 and a
 //! nonzero axis. The axis is normalized for calculation; the stored frame and

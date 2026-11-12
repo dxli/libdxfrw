@@ -68,6 +68,17 @@ output gates open. No drawing fixture was added. See the [native B-rep
 receipt](docs/research/p7-ac1024-acis700-freecad-cube-native-brep-2026-11-11.json)
 and [reproducible probe](tools/research/freecad_acis700_sat_probe.py).
 
+**P7 local cylinder-normal slice (2026-11-11):** added a point-based local
+normal helper for the already bounded canonical ACIS cylinder profile. It
+requires the caller's finite nonnegative surface-distance tolerance and known
+face sense, normalizes the radial direction for non-unit axes, reverses it for
+reversed face sense, and refuses the axis singularity or any invalid/outside
+point without modifying the output. The parser-fed fast graph-preservation
+CTest passes. This extends local untrimmed geometry inspection only; it does
+not qualify native ACIS orientation, trims, placement, units, B-rep validity,
+or consumer support. No drawing fixture was added. See the [cylinder normal
+receipt](docs/research/p7-acis-cylinder-face-normal-fast-slice-2026-11-11.json).
+
 **P7 AC1024 inline SAB 700 DXF carrier (2026-11-11):** the writer now admits
 only the observed same-version profile: marker-bounded, complete zero-count
 ACIS 700 SAB on an AC1024 modeler-version-2 3DSOLID, one declared body,
