@@ -2,7 +2,7 @@
   "schema": "libdxfrw-research-receipt-v1",
   "date": "2026-11-11",
   "id": "p7-ac1024-acis700-freecad-cube-native-brep-2026-11-11",
-  "purpose": "Check whether the selected AC1024 ACIS 700 SAT serialization can be parsed by an independent SAT reader and built as a valid native FreeCAD Part solid.",
+  "purpose": "Check whether the selected AC1024 ACIS 700 SAT serialization can be parsed by an independent SAT reader and built as a valid placed native FreeCAD Part solid.",
   "sourceChain": {
     "publicSat": {
       "url": "https://raw.githubusercontent.com/monozukuri-ai/cq-acis/main/corpus/data/ezdxf/cube_sat_700.sat",
@@ -46,15 +46,35 @@
     "importerUtilsSha256": "ce95b3dd5cd1c5a69adf61a03549e196a88e14b254dc3f482d694e3e78404715",
     "importerConstantsSha256": "f7db288e42fdd1653caccbdc2b4f3e73c13d0dcf41b2a0856dc71f6b1d65807e",
     "compatibilityAdjustment": "The unmodified InventorLoader _getNextText header helper rejects standard ACIS 700 @length strings with int('...'). The checked-in probe applies a runtime-only one-method adjustment to accept that prefix. Its record tokenizer, entity builders and FreeCAD Part operations are unchanged.",
-    "nativeOperations": "InventorLoader AcisReader.readText, typed body/lump/shell/face entity builders, face.build, FreeCAD Part.Shell, Part.makeSolid"
+    "nativeOperations": "InventorLoader AcisReader.readText, typed body/lump/shell/face entity builders, face.build, FreeCAD Part.Shell, Part.makeSolid, and applying the body's referenced Transform placement to the resulting solid"
   },
   "result": {
     "bodyCount": 1,
     "faceCount": 6,
     "shellClosed": true,
     "shapeValid": true,
-    "topologyFacesEdgesVertices": [6, 12, 8],
-    "bounds": [-388.5, -388.5, -388.5, 388.5, 388.5, 388.5],
+    "topologyFacesEdgesVertices": [
+      6,
+      12,
+      8
+    ],
+    "bodySpaceBounds": [
+      -388.5,
+      -388.5,
+      -388.5,
+      388.5,
+      388.5,
+      388.5
+    ],
+    "bodyTransform": "Placement [Pos=(388.5,388.5,388.5), Yaw-Pitch-Roll=(0,0,0)]",
+    "bounds": [
+      0.0,
+      0.0,
+      0.0,
+      777.0,
+      777.0,
+      777.0
+    ],
     "area": 3622373.9999999995,
     "analyticCubeArea": 3622374.0,
     "relativeAreaError": 1.2855141056879805e-16,
@@ -64,7 +84,7 @@
   },
   "reproduction": {
     "script": "tools/research/freecad_acis700_sat_probe.py",
-    "scriptSha256": "373505969ce2292d53b6deceffc79eab660a2c8c58868fec2354922815a7c552",
+    "scriptSha256": "c8b87de550c69ca973777bfc30e21ff2544a16808c50d37abb4fbf83d621933d",
     "environment": {
       "P7_SAT_PATH": "/tmp/libdxfrw-acis21500/libdxfrw-roundtrip.sat",
       "P7_INVENTORLOADER_PATH": "/private/tmp/p7-inventorloader"
@@ -75,7 +95,8 @@
     "The runtime header compatibility adjustment is research-only and does not change the pinned InventorLoader source or production code.",
     "InventorLoader and FreeCAD Part use the same OpenCASCADE kernel, so the check is not an independent-kernel comparison.",
     "The check uses FreeCAD's native Part library but does not exercise GUI DWG/DXF import or the bundled importerSAT application route.",
+    "The SAT body Transform is applied, but this does not validate the upstream DWG entity-to-AcDs placement/ownership association.",
     "It does not qualify DWG placement/history, broader ACIS/ACDS profiles, whole-source output admission, or general 3D support."
   ],
-  "claimEffect": "Adds bounded native FreeCAD Part B-rep and analytic cube measurement evidence for the exact AC1024 ACIS 700 SAT payload. It does not promote DWG, DXF, ACIS/ACDS, or general 3D support claims."
+  "claimEffect": "Adds bounded native FreeCAD Part B-rep and analytic cube measurement evidence for the exact AC1024 ACIS 700 SAT payload, including its body-space-to-world Transform. It does not promote DWG, DXF, ACIS/ACDS, or general 3D support claims."
 }

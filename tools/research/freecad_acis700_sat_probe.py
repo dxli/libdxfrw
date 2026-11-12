@@ -1,4 +1,4 @@
-"""Build a selected ACIS 700 SAT cube through InventorLoader and FreeCAD Part.
+"""Build a placed ACIS 700 SAT cube through InventorLoader and FreeCAD Part.
 
 Run this script inside FreeCADCmd's Python environment with
 P7_SAT_PATH and P7_INVENTORLOADER_PATH set. The single runtime patch adapts
@@ -104,6 +104,19 @@ shape = Part.makeSolid(shell)
 if not shell.isValid() or not shell.isClosed() or not shape.isValid():
     raise ValueError("native FreeCAD shell or solid is invalid")
 
+# ACIS BODY topology is defined in body space; its TRANSFORM record positions
+# the body in world space. The pinned InventorLoader exposes that reference
+# separately from its face builders, so apply it before reporting world bounds.
+body_transform = bodies[0].getTransform()
+if body_transform is None:
+    raise ValueError("SAT body has no transform record")
+placement = body_transform.getPlacement()
+placed_shape = shape.transformShape(placement.toMatrix(), True)
+if placed_shape is not None:
+    shape = placed_shape
+if not shape.isValid():
+    raise ValueError("native FreeCAD placed solid is invalid")
+
 box = shape.optimalBoundingBox(False, False)
 area = shape.Area
 volume = shape.Volume
@@ -118,6 +131,7 @@ result = {
     "shell_closed": shell.isClosed(),
     "valid": shape.isValid(),
     "topology": [len(shape.Faces), len(shape.Edges), len(shape.Vertexes)],
+    "bodyPlacement": str(placement),
     "bounds": [box.XMin, box.YMin, box.ZMin,
                box.XMax, box.YMax, box.ZMax],
     "area": area,
@@ -128,8 +142,7 @@ result = {
 }
 if result["topology"] != [6, 12, 8]:
     raise ValueError("unexpected cube topology: " + repr(result["topology"]))
-if result["bounds"] != [-388.5, -388.5, -388.5,
-                        388.5, 388.5, 388.5]:
+if result["bounds"] != [0.0, 0.0, 0.0, 777.0, 777.0, 777.0]:
     raise ValueError("unexpected cube bounds: " + repr(result["bounds"]))
 if max(result["relative_area_error"], result["relative_volume_error"]) > 1e-12:
     raise ValueError("native measurements differ from cube formulas")

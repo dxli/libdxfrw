@@ -120,15 +120,16 @@
         }
       ],
       "command": "LIBDXFRW_SAT_PATH=<input.sat> CARGO_TARGET_DIR=/private/tmp/opencad-p7-target cargo test -q --manifest-path /private/tmp/opencadstudio-p7/Cargo.toml -p ocs_acis --test libdxfrw_ac1024_sat700_probe -- --nocapture",
-      "result": "PASS for both inputs: ACadRust parsed SAT 7.0; OpenCADKernel lifted one body with one lump/shell, six faces/loops, 24 coedges, 12 edges and eight vertices; surface/curve/broken-reference loss was zero and body validation reported zero flaws.",
-      "limitations": "This independently validates direct SAT 700 parsing and closed topology for the selected cube carrier. No independent expected dimensions, source DWG association, native source import, platform breadth or whole-document output is established. Probe and inputs remain scratch-only."
+      "result": "PASS for both inputs: ACadRust parsed SAT 7.0; OpenCADKernel lifted one body with one lump/shell, six faces/loops, 24 coedges, 12 edges and eight vertices; surface/curve/broken-reference loss was zero and body validation reported zero flaws. The libdxfrw output's world bounds are [0,0,0] to [777,777,777], centroid [388.5,388.5,388.5], mesh area 3622374 and mass-properties volume 469097433.",
+      "freecadCrossCheck": "After applying the exact SAT BODY-to-TRANSFORM placement in the native FreeCAD probe, FreeCAD bounds are [0,0,0] to [777,777,777], area 3622373.9999999995 and volume 469097432.99999994. These agree with OpenCADKernel's world bounds and measurements; relative analytic area/volume errors in the FreeCAD result are 1.29e-16 and 1.27e-16. The checked-in reproduction script is tools/research/freecad_acis700_sat_probe.py at SHA-256 c8b87de550c69ca973777bfc30e21ff2544a16808c50d37abb4fbf83d621933d.",
+      "limitations": "This independently validates direct SAT 700 parsing, body placement, closed topology and bounded cube metrics for the selected carrier. It does not validate DWG entity-to-AcDs association, native source CAD import, other geometry/producers, platform breadth or whole-document output. Probe and source inputs remain scratch-only."
     },
     "diffCheck": "PASS: git diff --check"
   },
   "authorityBoundary": {
     "odaReference": "https://www.opendesign.com/blog/2017/october/working-sat-and-sab-files-teigha",
     "use": "ODA describes DWG release-to-default SAT/SAB version mappings and the Autodesk-modified dialect boundary. The sample experiment is an ODA converter output observation only; it does not establish Autodesk producer behavior or resolve the separate ACIS 21500 header semantics.",
-    "semanticCeiling": "Framing, structural inventory, and token-level AC1024 SAT 700 serialization agreement from one ODA-produced carrier. No independent geometry semantic oracle, B-rep kernel, native acceptance, output admission, or producer-wide version profile is established."
+    "semanticCeiling": "One ODA-produced AC1024 ACIS 700 carrier has direct SAT serialization agreement, independent ACadRust parsing, a zero-flaw non-OCCT OpenCADKernel closed-topology lift and matching placed cube metrics against the native FreeCAD Part result. This does not establish Autodesk-native DWG semantics, DWG entity-to-AcDs association, broader ACIS 700 geometry, producer-wide support, whole-source output or general 3D support."
   },
   "claimEffect": "Closes the parser's bounded ACIS 700 zero-count framing refusal for streams with an explicit terminal marker and implements the selected AC1024 SAT 700 serializer profile. Does not promote DWG, DXF, ACIS/ACDS, or 3D support claims."
 }
