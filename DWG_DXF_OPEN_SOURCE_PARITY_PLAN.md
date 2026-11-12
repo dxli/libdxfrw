@@ -3104,6 +3104,18 @@ transaction control only; it does not qualify physical producer coverage,
 graph closure, or native interpretation (see the
 [receipt](docs/research/p6-dynamic-block-alignment-parameter-allocation-rollback-2026-11-12.json)).
 
+**Dynamic-block StretchAction allocation rollback (2026-11-12):** the direct
+AC1024 ASCII/Binary writer now sweeps the nested BLOCKSTRETCHACTION profile,
+including one dependency, two handle references, action indexes, stretch
+points, and handle/code reference-index arrays. All 14 injected allocation
+failures per encoding preserve the source vectors and identity map; each is
+followed by fresh-writer output/readback proving remapped dependency and
+handle roles, nested indexes, and action fields. The existing actions adapter
+control also passes its exact sequence and corrected retry checks. Normal and
+ASan focused cohorts pass. This is a generated callback transaction profile,
+not physical source, complete graph, or native action-semantic qualification
+(see the [receipt](docs/research/p6-dynamic-block-stretch-action-allocation-rollback-2026-11-12.json)).
+
 **AC1021 3D POLYLINE DWG flag admission (2026-11-12):** writer admission now
 matches ODA v5.4.1 §20.4.17: the second raw flag byte carries closed only;
 the first represents spline type 5/6 and implies group-70 bit 4. Conflicting

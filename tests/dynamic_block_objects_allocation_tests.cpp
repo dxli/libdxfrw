@@ -556,6 +556,219 @@ bool alignmentWireReadback(const std::string& bytes, bool binary) {
         && hasAlignmentSubclass;
 }
 
+DRW_DynamicBlockObject makeStretchAction() {
+    DRW_DynamicBlockObject object("BLOCKSTRETCHACTION");
+    object.handle = 0x1136u;
+    object.parentHandle = 0x110Fu;
+    object.m_kind = DRW_DynamicBlockObject::Kind::StretchAction;
+    object.m_bodyFullyDecoded = true;
+    object.m_evalExprParsed = true;
+    object.m_parentId = std::numeric_limits<std::uint32_t>::max();
+    object.m_major = 29u;
+    object.m_minor = 2u;
+    object.m_valueCode = -9999;
+    object.m_nodeId = 90u;
+    object.m_elementParsed = true;
+    object.m_elementName = "Stretch0";
+    object.m_elementMajor = 29u;
+    object.m_elementMinor = 2u;
+    object.m_actionCount = 2;
+    object.m_actionIndexes = {17, 24};
+    object.m_dependencyCount = 1;
+    object.m_dependencyHandles = {0x1127u};
+    object.m_displayLocation = DRW_Coord(45.0, -15.0, 0.0);
+    object.m_connectionCodes = {1, 8};
+    object.m_connectionNames = {"EndXDelta", "EndYDelta"};
+    object.m_stretchPointCount = 2;
+    object.m_stretchPoints = {
+        DRW_Coord(34.5, 4.5, 0.0), DRW_Coord(26.0, -6.5, 0.0)};
+    object.m_handleReferenceCount = 2;
+    object.m_handleReferenceHandles = {0x1143u, 0x1144u};
+    object.m_handleReferenceIndexCounts = {2, 1};
+    object.m_handleReferenceIndexes = {{1, 2}, {0}};
+    object.m_codeReferenceCount = 1;
+    object.m_codeReferenceCodes = {31};
+    object.m_codeReferenceIndexCounts = {2};
+    object.m_codeReferenceIndexes = {{1, 2}};
+    object.m_actionOffsetX = 1.0;
+    object.m_actionOffsetY = 0.0;
+    return object;
+}
+
+std::map<std::uint32_t, std::uint32_t> stretchActionRemap() {
+    return {{0x1127u, 0x6127u}, {0x1143u, 0x6143u},
+            {0x1144u, 0x6144u}};
+}
+
+bool stretchActionSourceUnchanged(const DRW_DynamicBlockObject& object) {
+    return object.handle == 0x1136u
+        && static_cast<std::uint32_t>(object.parentHandle) == 0x110Fu
+        && object.m_kind == DRW_DynamicBlockObject::Kind::StretchAction
+        && object.m_bodyFullyDecoded && object.m_evalExprParsed
+        && object.m_parentId == std::numeric_limits<std::uint32_t>::max()
+        && object.m_nodeId == 90u && object.m_elementParsed
+        && object.m_elementName == "Stretch0"
+        && object.m_actionCount == 2
+        && object.m_actionIndexes == std::vector<std::int32_t>{17, 24}
+        && object.m_dependencyCount == 1
+        && object.m_dependencyHandles == std::vector<std::uint32_t>{0x1127u}
+        && object.m_connectionCodes == std::vector<std::int32_t>{1, 8}
+        && object.m_connectionNames
+            == std::vector<UTF8STRING>{"EndXDelta", "EndYDelta"}
+        && object.m_stretchPointCount == 2
+        && object.m_stretchPoints.size() == 2u
+        && object.m_stretchPoints[0].x == 34.5
+        && object.m_stretchPoints[0].y == 4.5
+        && object.m_stretchPoints[1].x == 26.0
+        && object.m_stretchPoints[1].y == -6.5
+        && object.m_handleReferenceCount == 2
+        && object.m_handleReferenceHandles
+            == std::vector<std::uint32_t>{0x1143u, 0x1144u}
+        && object.m_handleReferenceIndexCounts
+            == std::vector<std::int32_t>{2, 1}
+        && object.m_handleReferenceIndexes
+            == std::vector<std::vector<std::int32_t>>{{1, 2}, {0}}
+        && object.m_codeReferenceCount == 1
+        && object.m_codeReferenceCodes == std::vector<std::int32_t>{31}
+        && object.m_codeReferenceIndexCounts == std::vector<std::int32_t>{2}
+        && object.m_codeReferenceIndexes
+            == std::vector<std::vector<std::int32_t>>{{1, 2}}
+        && object.m_actionOffsetX == 1.0 && object.m_actionOffsetY == 0.0;
+}
+
+bool stretchActionWireReadback(const std::string& bytes, bool binary) {
+    std::istringstream input(bytes);
+    std::unique_ptr<dxfReader> reader = binary
+        ? std::unique_ptr<dxfReader>(std::make_unique<dxfReaderBinary>(&input))
+        : std::unique_ptr<dxfReader>(std::make_unique<dxfReaderAscii>(&input));
+    int code = 0;
+    if (!reader->readRec(&code) || code != 0
+        || reader->getString() != "BLOCKSTRETCHACTION")
+        return false;
+    bool hasHandle = false;
+    bool hasNode = false;
+    bool hasActionCount = false;
+    bool hasDependencyCount = false;
+    bool hasStretchSubclass = false;
+    bool ended = false;
+    std::vector<std::uint32_t> ownerAndDependencies;
+    std::vector<std::uint32_t> handleReferences;
+    std::vector<std::int32_t> actionIndexes;
+    std::vector<std::int32_t> connections;
+    std::vector<std::string> connectionNames;
+    std::vector<std::int32_t> referenceCounts;
+    std::vector<std::int32_t> referenceIndexes;
+    std::vector<std::int32_t> codeReferences;
+    std::vector<double> stretchPointXY;
+    std::int32_t stretchPointCount = -1;
+    std::int32_t handleReferenceCount = -1;
+    std::int32_t codeReferenceCount = -1;
+    bool hasOffsets = false;
+    while (reader->readRec(&code)) {
+        if (code == 0) {
+            ended = reader->getString() == "WIRE_END";
+            break;
+        }
+        switch (code) {
+        case 5:
+            hasHandle = reader->getHandleString() == 0x1136u;
+            break;
+        case 330:
+            ownerAndDependencies.push_back(reader->getHandleString());
+            break;
+        case 331:
+            handleReferences.push_back(reader->getHandleString());
+            break;
+        case 90:
+            hasNode = reader->getInt32() == 90;
+            break;
+        case 70:
+            hasActionCount = reader->getInt32() == 2;
+            break;
+        case 71:
+            hasDependencyCount = reader->getInt32() == 1;
+            break;
+        case 72:
+            stretchPointCount = reader->getInt32();
+            break;
+        case 73:
+            handleReferenceCount = reader->getInt32();
+            break;
+        case 74:
+        case 76:
+            referenceCounts.push_back(reader->getInt32());
+            break;
+        case 91:
+            actionIndexes.push_back(reader->getInt32());
+            break;
+        case 92:
+        case 93:
+            connections.push_back(reader->getInt32());
+            break;
+        case 94:
+            referenceIndexes.push_back(reader->getInt32());
+            break;
+        case 95:
+            codeReferences.push_back(reader->getInt32());
+            break;
+        case 75:
+            codeReferenceCount = reader->getInt32();
+            break;
+        case 1011:
+        case 1021:
+            stretchPointXY.push_back(reader->getDouble());
+            break;
+        case 140:
+            hasOffsets = reader->getDouble() == 1.0;
+            break;
+        case 141:
+            hasOffsets = hasOffsets && reader->getDouble() == 0.0;
+            break;
+        case 280:
+            if (reader->getInt32() != 1)
+                return false;
+            break;
+        case 100:
+            hasStretchSubclass = hasStretchSubclass
+                || reader->getString() == "AcDbBlockStretchAction";
+            break;
+        case 301:
+        case 302:
+            connectionNames.push_back(reader->getString());
+            break;
+        default:
+            break;
+        }
+    }
+    const bool ownerRoles = ownerAndDependencies
+        == std::vector<std::uint32_t>{0x110Fu, 0x6127u};
+    const bool remappedHandleRoles = handleReferences
+        == std::vector<std::uint32_t>{0x6143u, 0x6144u};
+    const bool references = referenceCounts
+        == std::vector<std::int32_t>{2, 1, 2}
+        && referenceIndexes
+            == std::vector<std::int32_t>{1, 2, 0, 1, 2}
+        && codeReferences == std::vector<std::int32_t>{31};
+    return ended && hasHandle && hasNode && hasActionCount
+        && hasDependencyCount && hasStretchSubclass && ownerRoles
+        && remappedHandleRoles
+        && actionIndexes == std::vector<std::int32_t>{17, 24}
+        && connections == std::vector<std::int32_t>{1, 8}
+        && connectionNames
+            == std::vector<std::string>{"EndXDelta", "EndYDelta"}
+        && stretchPointCount == 2 && handleReferenceCount == 2
+        && codeReferenceCount == 1 && references
+        && stretchPointXY == std::vector<double>{34.5, 4.5, 26.0, -6.5}
+        && hasOffsets;
+}
+
+bool stretchActionAllocationSweep(bool binary) {
+    return dynamicBlockAllocationSweep(
+        "StretchAction", binary, makeStretchAction,
+        stretchActionSourceUnchanged, stretchActionWireReadback,
+        stretchActionRemap());
+}
+
 bool alignmentAllocationSweep(bool binary) {
     return dynamicBlockAllocationSweep(
         "AlignmentParameter", binary, makeAlignmentParameter,
@@ -729,5 +942,7 @@ int main() {
         && basePointAllocationSweep(false)
         && basePointAllocationSweep(true)
         && alignmentAllocationSweep(false)
-        && alignmentAllocationSweep(true) ? 0 : 1;
+        && alignmentAllocationSweep(true)
+        && stretchActionAllocationSweep(false)
+        && stretchActionAllocationSweep(true) ? 0 : 1;
 }
