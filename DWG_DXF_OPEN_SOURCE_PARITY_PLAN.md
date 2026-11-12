@@ -194,7 +194,15 @@ cross-version analogies, not 21500 schema evidence; the samples cannot
 distinguish a top-level-entity count from a boundary index. Preserve the raw
 value and do not validate it against body counts or use it to derive boundaries.
 Resolve only with a version-qualified ACIS 21.5 producer/schema witness,
-preferably a multi-root source. See the [cross-version header screen](docs/research/p7-acis-21500-header-third-integer-cross-version-screen-2026-11-11.json).
+preferably a multi-root source. A targeted local recheck then covered the valid
+minJSON outputs for three AC1024 drawings and found 53 payloads, all with the
+same `(21500, recordCount=0, thirdWord=2, flags=24)` header. This broadens one
+unauthenticated source profile but remains nondiscriminating. Five other
+valid exports had no selected ACIS payload; a sixth AC1024 export was invalid
+JSON despite a zero exit code and is excluded, so the scan is not a complete
+corpus result. Keep the raw field and seek version-qualified evidence. See the
+[cross-version header screen](docs/research/p7-acis-21500-header-third-integer-cross-version-screen-2026-11-11.json)
+and [targeted local profile screen](docs/research/p7-acis-21500-local-header-profile-screen-2026-11-12.json).
 
 **P7 ACIS 21500 format-family qualification (2026-11-11):** ODA maps AutoCAD
 R24/2010 to SAT/SAB version 21500 and states that AutoCAD's 20800-and-later
