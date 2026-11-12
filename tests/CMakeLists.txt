@@ -4236,6 +4236,22 @@ set_tests_properties(dwg_sat_v1_bounded_extraction PROPERTIES
     TIMEOUT 30
 )
 
+# The SAT-v1 body is an optional decoded view of an otherwise-valid DWG
+# modeler frame. Verify that failure to allocate that view does not fail the
+# enclosing record parse, and that a retry repopulates the exact carrier.
+add_executable(libdxfrw_modeler_sat_v1_allocation_tests
+    modeler_sat_v1_allocation_tests.cpp
+)
+target_link_libraries(libdxfrw_modeler_sat_v1_allocation_tests PRIVATE dxfrw)
+add_test(
+    NAME dwg_sat_v1_optional_extraction_allocation_retry
+    COMMAND $<TARGET_FILE:libdxfrw_modeler_sat_v1_allocation_tests>
+)
+set_tests_properties(dwg_sat_v1_optional_extraction_allocation_retry PROPERTIES
+    LABELS "fast;dwg;3d;acis;generated;allocation"
+    TIMEOUT 30
+)
+
 # Exercise the source-bound AC1024 ACIS 700 to SAT 700 route without adding an
 # external DWG/DXF/SAT fixture to the repository.
 add_test(
