@@ -1692,6 +1692,8 @@ public:
     bool failDxfWrite() noexcept;
     bool bindDxfWriteSourceObjectHandle(std::uint32_t sourceHandle,
                                        std::uint32_t emittedHandle);
+    bool promoteMintedDxfWriteObjectIdentity(
+        std::uint32_t sourceHandle, std::uint32_t emittedHandle);
     bool bindDxfWriteSourceTableHandle(std::uint32_t sourceHandle,
                                       std::uint32_t emittedHandle,
                                       bool allowLayerZeroEntityAlias = false);

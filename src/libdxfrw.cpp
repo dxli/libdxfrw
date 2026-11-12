@@ -4752,6 +4752,28 @@ bool dxfRW::bindDxfWriteSourceObjectHandle(
     return true;
 }
 
+bool dxfRW::promoteMintedDxfWriteObjectIdentity(
+        std::uint32_t sourceHandle, std::uint32_t emittedHandle) {
+    const auto minted =
+        m_writingContext.sourceHandleToMintedMap.find(sourceHandle);
+    if (minted == m_writingContext.sourceHandleToMintedMap.end())
+        return true;
+    if (sourceHandle == 0u || sourceHandle == DRW::NoHandle
+        || emittedHandle == 0u || emittedHandle == DRW::NoHandle
+        || minted->second != emittedHandle || m_recordStateScopeDepth == 0u)
+        return failDxfWrite();
+
+    try {
+        m_dxfWriteMutations.push_back({
+            DxfWriteMutationKind::SourceHandleErase, {}, sourceHandle,
+            minted->second, true});
+    } catch (...) {
+        return failDxfWrite();
+    }
+    m_writingContext.sourceHandleToMintedMap.erase(minted);
+    return true;
+}
+
 bool dxfRW::enableDxfEntitiesDeliveryLedger(std::size_t scopes,std::size_t records,std::size_t groups,
         std::size_t dispatches,std::size_t events,std::size_t bytes,std::size_t work) noexcept {
     if(m_wholeOperationActive)return false;
@@ -13397,6 +13419,8 @@ bool dxfRW::writeTableStyle(
             return failDxfWrite();
         }
         if (writer->hasWriteError() || !preflightDxfWrite()
+            || !promoteMintedDxfWriteObjectIdentity(ent->handle, handle)
+            || !bindDxfWriteSourceObjectHandle(ent->handle, handle)
             || !record.commit()) {
             DRW_DBG("DXF R24 TABLESTYLE final writer commit failed\n");
             return failDxfWrite();
@@ -13602,7 +13626,10 @@ bool dxfRW::writeTableStyle(
             && writer->writeInt32(91, row.m_valueUnitType);
     }
     if (!written || (!ent->extData.empty() && !writeExtData(ent->extData))
-        || writer->hasWriteError() || !preflightDxfWrite() || !record.commit())
+        || writer->hasWriteError() || !preflightDxfWrite()
+        || !promoteMintedDxfWriteObjectIdentity(ent->handle, handle)
+        || !bindDxfWriteSourceObjectHandle(ent->handle, handle)
+        || !record.commit())
         return failDxfWrite();
     state.commit();
     return true;
@@ -13985,22 +14012,8 @@ bool dxfRW::writeCellStyleMap(DRW_CellStyleMap *ent) {
     if ((!ent->extData.empty() && !writeExtData(ent->extData))
         || writer->hasWriteError() || !preflightDxfWrite())
         return failDxfWrite();
-    const auto mintedIdentity =
-        m_writingContext.sourceHandleToMintedMap.find(ent->handle);
-    if (mintedIdentity != m_writingContext.sourceHandleToMintedMap.end()) {
-        if (mintedIdentity->second != handle)
-            return reject("CELLSTYLEMAP minted identity disagrees with record handle");
-        try {
-            if (m_recordStateScopeDepth != 0u) {
-                m_dxfWriteMutations.push_back({
-                    DxfWriteMutationKind::SourceHandleErase, {}, ent->handle,
-                    mintedIdentity->second, true});
-            }
-        } catch (...) {
-            return reject("CELLSTYLEMAP identity promotion staging failed");
-        }
-        m_writingContext.sourceHandleToMintedMap.erase(mintedIdentity);
-    }
+    if (!promoteMintedDxfWriteObjectIdentity(ent->handle, handle))
+        return reject("CELLSTYLEMAP minted identity promotion failed");
     if (!bindDxfWriteSourceObjectHandle(ent->handle, handle))
         return reject("CELLSTYLEMAP source identity binding failed");
     if (!record.commit())
