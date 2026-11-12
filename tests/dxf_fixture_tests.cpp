@@ -26858,6 +26858,10 @@ void testHatchOcsWcsCoordinateMapping(TestContext& t) {
                              - std::sqrt(2.0)) < 1e-14
                  && mixedScaleWcsVector.z == 1.0e-100,
              "HATCH OCS mapping preserves a tiny component after large terms cancel");
+    const DRW_Coord subnormalScaleWcsVector = hatch.boundaryVectorToWcs(
+        DRW_Coord(1.0e308, 1.0e-15, 1.0e308));
+    t.expect(subnormalScaleWcsVector.z == 1.0e-15,
+             "HATCH OCS mapping avoids subnormal scaling error in a representable component");
 
     const double maximum = std::numeric_limits<double>::max();
     hatch.basePoint.z = 0.6 * maximum;
@@ -26873,6 +26877,10 @@ void testHatchOcsWcsCoordinateMapping(TestContext& t) {
                              - elevatedComponent / maximum) < 1e-14
                  && mixedScaleElevatedPoint.z == 1.0e-100,
              "HATCH elevated OCS mapping preserves a tiny component when Z addition overflows");
+    const DRW_Coord subnormalScaleElevatedPoint = hatch.boundaryPointToWcs(
+        DRW_Coord(0.0, 1.0e-15, 0.6 * maximum));
+    t.expect(subnormalScaleElevatedPoint.z == 1.0e-15,
+             "HATCH elevated OCS mapping avoids subnormal scaling error in a representable component");
 
     hatch.extPoint = DRW_Coord(1.0, 1.0, 1.0);
     hatch.basePoint.z = 0.6 * maximum;

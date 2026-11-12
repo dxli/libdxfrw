@@ -28,6 +28,15 @@ into finite WCS X/Y while retaining a `1e-100` WCS Z coordinate. The focused
 HATCH/MPOLYGON OCS/WCS CTest passes 1/1. General exactness and native/producer
 qualification remain open. See [the elevated OCS receipt](docs/research/p6-hatch-elevated-ocs-mixed-scale-cancellation-2026-11-11.json).
 
+**Latest P6 OCS precision slice (2026-11-11, subnormal normalized terms):**
+the three-term and elevated four-term OCS transforms now take the original
+exponent-range path when common normalization produces a subnormal term, not
+only when it rounds that term to zero. Generated HATCH vector and point cases
+preserve a representable `1e-15` coordinate alongside `1e308` coordinates;
+the focused selector passes 1/1. This covers the demonstrated subnormal
+scaling loss only, not correctly rounded arbitrary finite transforms. See
+[the subnormal OCS receipt](docs/research/p6-ocs-subnormal-scaled-term-precision-2026-11-11.json).
+
 **Latest P6 local implementation slices (2026-11-11, scaled OCS dot products):**
 the explicit legacy-extrusion recovery API now scales finite coordinates before
 its inverse-basis dot products and uses compensated accumulation with fused
@@ -1560,6 +1569,13 @@ created locally from scratch for the specific control.
   two transformed components remain finite. This is limited to the tested
   underflow-after-cancellation path; general exactness and CAD qualification
   remain open. See the [receipt](docs/research/p6-hatch-elevated-ocs-mixed-scale-cancellation-2026-11-11.json).
+
+- **P6 subnormal normalized OCS terms:** both stable dot paths now detect
+  subnormal as well as zero normalized components and use the original
+  exponent-range compensated products. Generated vector and elevation-overflow
+  point controls preserve representable `1e-15` outputs beside `1e308` terms.
+  The focused HATCH/MPOLYGON selector passes. General exactness and CAD
+  qualification remain open. See the [receipt](docs/research/p6-ocs-subnormal-scaled-term-precision-2026-11-11.json).
 
 - **P6 VIEW typed-null handle roles:** `DRW_View::parseDwg` now accepts a
   zero-valued, zero-payload absolute typed-null handle (codes 2–5) in an

@@ -352,9 +352,12 @@ bool scaledCompensatedDot(const double* coefficients,
     const double values[] = {coordinate.x / scale,
                              coordinate.y / scale,
                              coordinate.z / scale};
-    if ((coordinate.x != 0.0 && values[0] == 0.0)
-        || (coordinate.y != 0.0 && values[1] == 0.0)
-        || (coordinate.z != 0.0 && values[2] == 0.0)) {
+    if ((coordinate.x != 0.0 && (values[0] == 0.0
+            || std::fpclassify(values[0]) == FP_SUBNORMAL))
+        || (coordinate.y != 0.0 && (values[1] == 0.0
+            || std::fpclassify(values[1]) == FP_SUBNORMAL))
+        || (coordinate.z != 0.0 && (values[2] == 0.0
+            || std::fpclassify(values[2]) == FP_SUBNORMAL))) {
         // Scaling the entire vector can underflow a small component before
         // large opposite-sign terms cancel. Recompute the three products in
         // their original exponent range; OCS basis coefficients are bounded
@@ -473,10 +476,14 @@ bool transformOcsCoordinateWithZOffsetStable(
     const auto dot = [&values, &coordinate, zOffset, scale](double x, double y, double z,
                                double& output) noexcept {
         const double coefficients[] = {x, y, z, z};
-        if ((coordinate.x != 0.0 && values[0] == 0.0)
-            || (coordinate.y != 0.0 && values[1] == 0.0)
-            || (coordinate.z != 0.0 && values[2] == 0.0)
-            || (zOffset != 0.0 && values[3] == 0.0)) {
+        if ((coordinate.x != 0.0 && (values[0] == 0.0
+                || std::fpclassify(values[0]) == FP_SUBNORMAL))
+            || (coordinate.y != 0.0 && (values[1] == 0.0
+                || std::fpclassify(values[1]) == FP_SUBNORMAL))
+            || (coordinate.z != 0.0 && (values[2] == 0.0
+                || std::fpclassify(values[2]) == FP_SUBNORMAL))
+            || (zOffset != 0.0 && (values[3] == 0.0
+                || std::fpclassify(values[3]) == FP_SUBNORMAL))) {
             const double components[] = {coordinate.x, coordinate.y,
                                          coordinate.z, zOffset};
             double products[4]{};
