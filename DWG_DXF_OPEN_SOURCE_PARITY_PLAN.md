@@ -3039,6 +3039,17 @@ the bounded DIMASSOC writer path only; source profile breadth, graph closure,
 native associative behavior and whole-file qualification remain open (see
 the [identity and rollback receipt](docs/research/p6-dimassoc-dxf-source-identity-rollback-2026-11-12.json)).
 
+**SORTENTSTABLE direct-record identity rollback (2026-11-12):**
+`writeSortEntsTable` now wraps its identity binding and record commit in
+`RecordStateScope`. A direct low-level ASCII/Binary allocation sweep checks
+that each failed attempt preserves the caller record and removes any partial
+source-object identity; clean output is typed-read back. The existing whole-file
+sweep separately verifies destination preservation and same-adapter retry.
+The focused test passes in normal and ASan builds. Generic ostream short-write
+rollback remains the responsibility of the enclosing whole-file transaction;
+this closes only SORTENTSTABLE identity-state rollback, not named-block owner
+qualification or native ordering semantics (see the [receipt](docs/research/p6-sortents-direct-record-identity-rollback-2026-11-12.json)).
+
 **AC1021 3D POLYLINE DWG flag admission (2026-11-12):** writer admission now
 matches ODA v5.4.1 §20.4.17: the second raw flag byte carries closed only;
 the first represents spline type 5/6 and implies group-70 bit 4. Conflicting

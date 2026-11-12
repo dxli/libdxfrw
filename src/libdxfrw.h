@@ -1394,6 +1394,7 @@ private:
     friend class DxIfaceStandardDwgCaptureTestAccess;
     friend class DxfXdataInt16TestAccess;
     friend class DxfGroupSetterTestAccess;
+    friend class DxfSortEntsTableTestAccess;
     enum class DxfEntityBoundary {
         NextEntity,
         EndSection,

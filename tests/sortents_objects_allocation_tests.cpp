@@ -2,16 +2,39 @@
 // Generated SORTENTSTABLE OBJECTS allocation rollback/retry control.
 #include "lc3_compat_check.cpp"
 #include "libdxfrw.h"
+#include "intern/dxfreader.h"
+#include "intern/dxfwriter.h"
 
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <memory>
 #include <new>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
+
+class DxfSortEntsTableTestAccess {
+public:
+    static void attachWriter(dxfRW& codec, DRW::Version version,
+                             bool binary, std::ostream& output) {
+        codec.version = version;
+        codec.binFile = binary;
+        codec.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&output));
+    }
+
+    static bool writeEnd(dxfRW& codec) {
+        return codec.writer != nullptr
+            && codec.writer->writeString(0, "WIRE_END");
+    }
+};
 
 namespace {
 long allocationsBeforeFailure = -1;
@@ -189,6 +212,115 @@ bool sourceMatches(const DRW_SortEntsTable& actual) {
     return true;
 }
 
+bool directRecordReadback(const std::string& bytes, bool binary) {
+    class SortEntsTableProbe final : public DRW_SortEntsTable {
+    public:
+        using DRW_SortEntsTable::parseCode;
+    };
+    std::istringstream input(bytes);
+    std::unique_ptr<dxfReader> reader = binary
+        ? std::unique_ptr<dxfReader>(std::make_unique<dxfReaderBinary>(&input))
+        : std::unique_ptr<dxfReader>(std::make_unique<dxfReaderAscii>(&input));
+    int code = 0;
+    if (!reader->readRec(&code) || code != 0
+        || reader->getString() != "SORTENTSTABLE")
+        return false;
+    SortEntsTableProbe decoded;
+    bool ended = false;
+    while (reader->readRec(&code)) {
+        if (code == 0) {
+            ended = reader->getString() == "WIRE_END";
+            break;
+        }
+        if (!decoded.parseCode(code, reader))
+            return false;
+    }
+    return ended && sourceMatches(decoded);
+}
+
+bool directRecordAllocationSweep() {
+    constexpr long calibrationLimit = 1000000;
+    const auto writeDirect = [](dxfRW& codec, DRW_SortEntsTable& table) {
+        return codec.writeSortEntsTable(&table);
+    };
+    for (const bool binary : {false, true}) {
+        std::string expectedBytes;
+        long allocationCount = 0;
+        {
+            std::ostringstream bytes;
+            dxfRW codec("");
+            DxfSortEntsTableTestAccess::attachWriter(
+                codec, DRW::AC1027, binary, bytes);
+            DRW_SortEntsTable table = makeSortTable();
+            bool written = false;
+            {
+                AllocationFailure failure(calibrationLimit);
+                written = writeDirect(codec, table);
+                allocationCount = calibrationLimit
+                    - allocationsBeforeFailure;
+            }
+            if (!written || !sourceMatches(table)
+                || codec.getWritingContext()
+                    ->sourceHandleToWrittenObjectMap.count(table.handle) != 1u
+                || codec.getWritingContext()
+                    ->sourceHandleToWrittenObjectMap.at(table.handle)
+                    != codec.remapHandle(table.handle)
+                || !DxfSortEntsTableTestAccess::writeEnd(codec))
+                return false;
+            expectedBytes = bytes.str();
+            if (!directRecordReadback(expectedBytes, binary))
+                return false;
+        }
+        if (allocationCount <= 0)
+            return false;
+
+        for (long offset = 0; offset < allocationCount; ++offset) {
+            std::ostringstream bytes;
+            dxfRW codec("");
+            DxfSortEntsTableTestAccess::attachWriter(
+                codec, DRW::AC1027, binary, bytes);
+            DRW_SortEntsTable table = makeSortTable();
+            const std::size_t failuresBefore = failedAllocations;
+            bool written = false;
+            try {
+                AllocationFailure failure(offset);
+                written = writeDirect(codec, table);
+            } catch (const std::bad_alloc&) {
+                allocationsBeforeFailure = -1;
+            }
+            allocationsBeforeFailure = -1;
+            const DRW_WritingContext* context = codec.getWritingContext();
+            // A low-level record commit can encounter a short write after a
+            // generic ostream accepted a prefix. Whole-file allocationSweep
+            // separately verifies that the enclosing output transaction
+            // preserves the destination sentinel and retries successfully.
+            if (written || failedAllocations == failuresBefore
+                || !sourceMatches(table)
+                || context == nullptr
+                || context->sourceHandleToWrittenObjectMap.count(table.handle)
+                    != 0u) {
+                std::cerr << "direct SORTENTSTABLE allocation rollback failed at "
+                          << (binary ? "Binary" : "ASCII")
+                          << " offset=" << offset
+                          << " wrote=" << written
+                          << " allocationFailed="
+                          << (failedAllocations != failuresBefore)
+                          << " sourcePreserved=" << sourceMatches(table)
+                          << " identityAbsent="
+                          << (context != nullptr
+                              && context->sourceHandleToWrittenObjectMap
+                                     .count(table.handle) == 0u)
+                          << '\n';
+                return false;
+            }
+        }
+        std::cout << (binary ? "Binary" : "ASCII")
+                  << " direct SORTENTSTABLE allocation offsets="
+                  << allocationCount << '\n';
+    }
+    return true;
+}
+
 bool allocationSweep(const std::filesystem::path& directory) {
     const auto path = directory / "sortents-allocation.dxf";
     const std::string prior = "prior SORTENTSTABLE destination\n";
@@ -319,5 +451,6 @@ int main() {
             std::filesystem::remove_all(path, error);
         }
     } cleanup{directory};
-    return allocationSweep(directory) && ownerScopeControls(directory) ? 0 : 2;
+    return directRecordAllocationSweep()
+        && allocationSweep(directory) && ownerScopeControls(directory) ? 0 : 2;
 }

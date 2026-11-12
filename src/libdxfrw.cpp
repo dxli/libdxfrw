@@ -36071,6 +36071,8 @@ bool dxfRW::writeSortEntsTable(DRW_SortEntsTable *ent) {
                        }))
         return failDxfWrite();
 
+    RecordStateScope state(*this, ent);
+
     std::vector<std::uint32_t> entities;
     try {
         entities.reserve(ent->m_entityHandles.size());
@@ -36119,6 +36121,7 @@ bool dxfRW::writeSortEntsTable(DRW_SortEntsTable *ent) {
         || !bindDxfWriteSourceObjectHandle(ent->handle, self)
         || !record.commit())
         return failDxfWrite();
+    state.commit();
     return true;
 }
 
