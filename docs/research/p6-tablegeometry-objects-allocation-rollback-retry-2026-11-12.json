@@ -1,0 +1,38 @@
+{
+  "title": "Generated TABLEGEOMETRY DXF OBJECTS allocation rollback and retry",
+  "date": "2026-11-12",
+  "scope": "One locally authored AC1027 TABLEGEOMETRY object with a 1x1 cell and one bounded content geometry record; ASCII and Binary DXF OBJECTS callback writes.",
+  "source": {
+    "kind": "generated-from-scratch-in-test",
+    "fixtureCommitted": false,
+    "temporaryOutputRemoved": true,
+    "testSource": "tests/tablegeometry_objects_allocation_tests.cpp",
+    "testSourceSha256": "896b24384d48904fa4d5d413dda38bd524ef69ac12e4b06c683d28767228f251",
+    "cmakeSource": "tests/CMakeLists.txt",
+    "cmakeSourceSha256": "80b40f5c7066e661ccff715b312df84695af8806b51620bca674b89d6a51b64a"
+  },
+  "checks": {
+    "asciiAllocationFailureOffsets": 7,
+    "binaryAllocationFailureOffsets": 7,
+    "eachFailurePreservesPreexistingDestination": true,
+    "eachFailurePreservesCallerTableGeometry": true,
+    "sameCodecRetryAfterEachFailure": true,
+    "retryBytesMatchCleanCalibrationExactly": true,
+    "freshTypedReadbackChecksCellAndContentFields": true,
+    "onlyGeneratedScratchFilesUsed": true
+  },
+  "validation": {
+    "configure": "cmake -S . -B build-gcc -DCMAKE_POLICY_VERSION_MINIMUM=3.5",
+    "build": "cmake --build build-gcc --target libdxfrw_tablegeometry_objects_allocation_tests -j4",
+    "test": "ctest --test-dir build-gcc -R '^libdxfrw_tablegeometry_objects_allocation$' --output-on-failure",
+    "testResult": "passed 1/1",
+    "directSelectorResult": "ASCII and Binary each passed all 7 allocation-failure offsets, rollback, retry, and typed readback",
+    "diffCheck": "git diff --check passed",
+    "testExecutableSha256": "b7abcf6003ee828f948973c46a7154918cc8db99c91109b8e61032e388b4a726"
+  },
+  "limitations": [
+    "Generated transaction evidence only; no physical producer or independent semantic evidence.",
+    "Does not qualify non-null TABLEGEOMETRY cell references, extension graphs, native rendering, strict whole-drawing output, or feature support.",
+    "Other OBJECTS builders and broader whole-drawing failure states remain open."
+  ]
+}
