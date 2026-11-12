@@ -83,6 +83,12 @@ public:
     std::int16_t rawType() const { return oType; }
 };
 
+class RawPlaneSurfaceProbe final : public DRW_PlaneSurface {
+public:
+    using DRW_Surface::encodeDwg;
+    std::int16_t rawType() const { return oType; }
+};
+
 template <class SurfaceType>
 class SurfaceSubtypeProbe final : public SurfaceType {
 public:
@@ -168,6 +174,12 @@ Shape makeShape(DRW::Version version) {
         shape.setDwgClassNum(DRW_PlaneSurface::kDwgClassNum);
         shape.uIsolines = 4;
         shape.vIsolines = 6;
+    } else if constexpr (std::is_same_v<Shape, RawPlaneSurfaceProbe>) {
+        shape.setDwgClassNum(DRW_PlaneSurface::kDwgClassNum);
+        shape.hasRawDwgBody = true;
+        shape.rawDwgBodyVersion = version;
+        shape.rawDwgBodyBitSize = 13u;
+        shape.rawAcisData = {0xA5u, 0x1Fu};
     } else if constexpr (std::is_same_v<Shape, ExtrudedSurfaceProbe>) {
         shape.setDwgClassNum(DRW_ExtrudedSurface::kDwgClassNum);
         shape.modelerFormatVersion = 1;
@@ -434,6 +446,16 @@ int main() {
          {DRW::AC1021, DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
         for (const auto layout : layouts) {
             unsigned long reachedFailures = 0u;
+            if (!sweep<RawPlaneSurfaceProbe>(version, layout, 535,
+                                             reachedFailures))
+                return 1;
+            totalReachedFailures += reachedFailures;
+        }
+    }
+    for (const DRW::Version version :
+         {DRW::AC1021, DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
+        for (const auto layout : layouts) {
+            unsigned long reachedFailures = 0u;
             if (!sweep<ExtrudedSurfaceProbe>(version, layout, 521,
                                              reachedFailures))
                 return 1;
@@ -517,7 +539,7 @@ int main() {
         return 1;
     }
     std::cout << "HATCH/MPOLYGON/MLEADER/ARCALIGNEDTEXT/LIGHT/SECTIONOBJECT/"
-              << "GEOPOSITIONMARKER/CAMERA/ALL-SURFACE-SUBTYPES "
+              << "GEOPOSITIONMARKER/CAMERA/ALL-SURFACE-SUBTYPES/RAW-BODY "
               << "DWG encode allocation "
               << "rollback/retry "
               << "passed across " << sizeof(versions) / sizeof(versions[0])
@@ -525,7 +547,7 @@ int main() {
               << "and 4 LIGHT/SECTIONOBJECT versions, "
               << sizeof(layouts) / sizeof(layouts[0])
                      * (sizeof(versions) / sizeof(versions[0]) * 4u + 3u
-                        + 8u + 2u + 4u + 20u)
+                        + 8u + 2u + 4u + 20u + 4u)
               << " entity/version/layout profiles; " << totalReachedFailures
               << " allocation offsets exercised\n";
     return 0;
