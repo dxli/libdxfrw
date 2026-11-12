@@ -12603,9 +12603,11 @@ bool DRW_DataTable::parseCode(int code,
                 return true;
             }
             const std::uint32_t target = reader->getHandleString();
-            if (target == 0u) {
+            if (target == 0u || target == DRW::NoHandle
+                || target == handle
+                || target == static_cast<std::uint32_t>(parentHandle)
+                || !dxfRowHandleSet.insert(target).second) {
                 dxfProjectionComplete = false;
-                return true;
             }
             rowHandles.push_back(target);
             return true;

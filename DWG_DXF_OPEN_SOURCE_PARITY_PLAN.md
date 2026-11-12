@@ -1860,7 +1860,10 @@ created locally from scratch for the specific control.
   retaining the complete raw object. Generated ASCII/Binary controls cover
   duplicate flags, a missing first-column name, a duplicate name, and a missing
   final-column name. This preserves ambiguous input losslessly without
-  publishing a partial `DRW_DataTable`; it adds no schema or producer claim.
+  publishing a partial `DRW_DataTable`. Duplicate row-child handles and
+  references aliasing the table or its owner also force raw-only fallback;
+  generated ASCII/Binary controls cover those cases. This adds no schema or
+  producer claim.
   It establishes no native semantic meaning, DWG source replay, or support
   promotion ([read receipt](docs/research/p5-dxf-datatable-read-projection-2026-11-11.json),
   [writer receipt](docs/research/p5-dxf-datatable-write-projection-2026-11-11.json)).

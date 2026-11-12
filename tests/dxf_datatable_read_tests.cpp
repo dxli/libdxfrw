@@ -102,9 +102,13 @@ bool writeInput(const std::filesystem::path& path, bool binary,
         || !str(3, "beta") || !integer(92, 1)
         || (malformedProjection != 4 && !str(2, "INTEGER_2"))
         || !integer(93, -3) || !integer(93, 4)
-        || (referenceCount >= 1u && !str(360, "116")))
+        || (referenceCount >= 1u
+            && !str(360, malformedProjection == 9 ? "115"
+                         : malformedProjection == 10 ? "114" : "116")))
         return false;
-    if (referenceCount >= 2u && !str(360, "117")) return false;
+    if (referenceCount >= 2u
+        && !str(360, malformedProjection == 8 ? "116" : "117"))
+        return false;
     return str(0, "ENDSEC") && str(0, "EOF") && !writer->hasWriteError();
 }
 
@@ -210,7 +214,7 @@ int main() {
         if (!reader.read(&unknownColumn, false) || !unknownColumn.tables.empty()
             || unknownColumn.raw.size() != 1u)
             return 8;
-        for (const int malformed : {1, 2, 3, 4, 5, 6, 7}) {
+        for (const int malformed : {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}) {
             if (!writeInput(path, binary, 2u, false, malformed)) return 10;
             Reader malformedProjection;
             if (!reader.read(&malformedProjection, false)

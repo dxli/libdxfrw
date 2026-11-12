@@ -38,6 +38,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -4123,6 +4124,7 @@ public:
     columns.clear();
     dxfColumnNameSeen.clear();
     rowHandles.clear();
+    dxfRowHandleSet.clear();
     dxfColumn = -1;
     dxfProjectionComplete = true;
     dxfSeenFields = 0u;
@@ -4152,10 +4154,16 @@ public:
 
   bool hasCompleteDxfProjection() const noexcept {
     if (!dxfProjectionComplete || (dxfSeenFields & 0x0fu) != 0x0fu
-        || dxfColumnNameSeen.size() != columns.size())
+        || dxfColumnNameSeen.size() != columns.size()
+        || dxfRowHandleSet.size() != rowHandles.size())
       return false;
     for (const bool seen : dxfColumnNameSeen)
       if (!seen)
+        return false;
+    for (const std::uint32_t target : rowHandles)
+      if (target == 0u || target == DRW::NoHandle
+          || target == handle
+          || target == static_cast<std::uint32_t>(parentHandle))
         return false;
     return isDxfPayloadWritable();
   }
@@ -4165,6 +4173,7 @@ private:
   bool dxfProjectionComplete = true;
   std::uint8_t dxfSeenFields = 0u;
   std::vector<bool> dxfColumnNameSeen;
+  std::unordered_set<std::uint32_t> dxfRowHandleSet;
   std::size_t dxfRetainedStringBytes = 0u;
   std::size_t dxfStoredCellCount = 0u;
   std::shared_ptr<DxfReadRetainedLease> dxfRetainedStringLease;

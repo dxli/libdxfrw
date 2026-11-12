@@ -34,14 +34,16 @@
       "incomplete_child_reference_count_raw_only": true,
       "unsupported_column_type_raw_only": true,
       "duplicate_singleton_header_raw_only": true,
-      "missing_or_duplicate_column_name_raw_only": true
+      "missing_or_duplicate_column_name_raw_only": true,
+      "duplicate_or_owner_aliased_row_handle_raw_only": true
     },
     "binary": {
       "complete_profile_typed_callback": true,
       "incomplete_child_reference_count_raw_only": true,
       "unsupported_column_type_raw_only": true,
       "duplicate_singleton_header_raw_only": true,
-      "missing_or_duplicate_column_name_raw_only": true
+      "missing_or_duplicate_column_name_raw_only": true,
+      "duplicate_or_owner_aliased_row_handle_raw_only": true
     },
     "temporary_files_removed": true
   },
@@ -49,7 +51,7 @@
     "build": "cmake --build build-gcc --target libdxfrw_dxf_datatable_read_tests -j4",
     "build_result": "passed",
     "focused_test": "ctest --test-dir build-gcc -R '^libdxfrw_dxf_datatable_read$' --output-on-failure",
-    "focused_test_result": "1/1 passed; duplicate singleton and column-name ambiguity controls included",
+    "focused_test_result": "1/1 passed; duplicate singleton/column-name and row-handle graph-integrity controls included",
     "diff_check": "git diff --check passed"
   },
   "limitations": [
