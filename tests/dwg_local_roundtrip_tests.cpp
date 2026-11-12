@@ -9829,6 +9829,15 @@ public:
         arc.endangle = 1.25;
         wroteArc_ = writer_->writeArc(&arc) && arc.handle != 0u;
 
+        DRW_Ellipse ellipse;
+        ellipse.basePoint = {26.0, 27.0, 28.0};
+        ellipse.secPoint = {4.0, 0.0, 0.0};
+        ellipse.ratio = 0.5;
+        ellipse.staparam = 0.0;
+        ellipse.endparam = 6.283185307179586476925286766559;
+        wroteEllipse_ = writer_->writeEllipse(&ellipse)
+            && ellipse.handle != 0u;
+
         DRW_LWPolyline polyline;
         polyline.vertexnum = 3;
         polyline.addVertex(DRW_Vertex2D(16.0, 17.0, 0.0));
@@ -9848,7 +9857,7 @@ public:
     void writeAppId() override {}
     bool finalizeDwgWrite() override {
         return wrotePoint_ && wroteLine_ && wroteCircle_ && wroteArc_
-            && wrotePolyline_;
+            && wroteEllipse_ && wrotePolyline_;
     }
     bool finalizeDwgWriteStructure() override { return true; }
 
@@ -9858,6 +9867,7 @@ private:
     bool wrotePoint_ {false};
     bool wroteCircle_ {false};
     bool wroteArc_ {false};
+    bool wroteEllipse_ {false};
     bool wrotePolyline_ {false};
 };
 

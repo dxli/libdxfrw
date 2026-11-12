@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "date": "2026-11-12",
-  "title": "Generated AC1021 POINT/LINE/CIRCLE/ARC/LWPOLYLINE FreeCAD open and insert qualification",
-  "scope": "One from-scratch AC1021 DWG with one 3D POINT, one nonzero-Z LINE, one elevated CIRCLE, one elevated ARC, and one three-vertex LWPOLYLINE, converted by the installed libdxfrw dwg2dxf and consumed through FreeCAD's C++ DXF importer.",
+  "title": "Generated AC1021 POINT/LINE/CIRCLE/ARC/ELLIPSE/LWPOLYLINE FreeCAD open and insert qualification",
+  "scope": "One from-scratch AC1021 DWG with one 3D POINT, one nonzero-Z LINE, one elevated CIRCLE, one elevated ARC, one full ELLIPSE, and one three-vertex LWPOLYLINE, converted by the installed libdxfrw dwg2dxf and consumed through FreeCAD's C++ DXF importer.",
   "platform": {
     "os": "macOS 27.2.1",
     "architecture": "arm64",
@@ -14,15 +14,16 @@
   },
   "source": {
     "generator": "tests/dwg_local_roundtrip_tests.cpp --generate-freecad-primitives-source",
-    "generatorExecutableSha256": "ae04e77010df24878b67a2fbbdc7f89a962e6797f50923725fe3ad4c6bb7f9e9",
+    "generatorExecutableSha256": "94245d0bb21e9f5e9143ad6ce8ec6cacaada9b1cf0b9c91547f6576e89a57866",
     "magic": "AC1021",
-    "sha256": "01f28d7b773c3de4f9f8329d18c8a98b1d94f59c32c5dcd41f3d7f9532e4f82e",
+    "sha256": "2b092f95338d2d52c790fa3d0dd89cb56919b3256f3a33e1beba5fd8d02fca4b",
     "entities": {
       "LINE": 1,
       "CIRCLE": 1,
       "ARC": 1,
       "LWPOLYLINE": 1,
-      "POINT": 1
+      "POINT": 1,
+      "ELLIPSE": 1
     },
     "committedFixture": false
   },
@@ -33,7 +34,7 @@
     "sameBytesAsBuild": true
   },
   "convertedDxf": {
-    "sha256": "802a203a098fdf2fe88aaa4b5f33cfae17e224ccd8dba09aa7a916e49cc35dbc",
+    "sha256": "5458bf3cd93c8769bfda92968804613b9cccff8e1466a0fb21ccb4f3a0f42c05",
     "committedFixture": false
   },
   "expectedGeometry": [
@@ -99,6 +100,20 @@
       "edgeCount": 0,
       "vertexCount": 1,
       "edgeLengthSum": 0
+    },
+    {
+      "entity": "ELLIPSE",
+      "bounds": [
+        22,
+        25,
+        28,
+        30,
+        29,
+        28
+      ],
+      "edgeCount": 1,
+      "vertexCount": 1,
+      "edgeLengthSum": 19.37689644109535
     }
   ],
   "observedGeometry": {
@@ -142,6 +157,14 @@
         21.0,
         22.0,
         23.0
+      ],
+      [
+        22.0,
+        25.0,
+        28.0,
+        30.0,
+        29.0,
+        28.0
       ]
     ],
     "edgeLengths": [
@@ -149,7 +172,8 @@
       15.707963267948966,
       3.4999999999999996,
       5.0,
-      0.0
+      0.0,
+      19.376896441095102
     ],
     "tolerance": "bounds absolute 1e-9; edge length relative 1e-7",
     "edgeCounts": [
@@ -157,14 +181,16 @@
       1,
       1,
       2,
-      0
+      0,
+      1
     ],
-    "macroSha256": "b393458f1a4e2bad2c697351039bdb0b85885eea0c53dfbdc855a8d5c8237bf2",
+    "macroSha256": "1a850657feaa5bd376c133d90c8376c9e8dcd2ca237e675be0bba423e499edb4",
     "vertexCounts": [
       2,
       1,
       2,
       3,
+      1,
       1
     ]
   },
@@ -176,25 +202,28 @@
       "CIRCLE": 1,
       "LINE": 1,
       "LWPOLYLINE": 1,
-      "POINT": 1
+      "POINT": 1,
+      "ELLIPSE": 1
     },
     "unsupportedFeatures": {},
-    "validSingleEdgeShapes": 3,
+    "validSingleEdgeShapes": 4,
     "unicodeAndSpacesPath": true,
     "validShapes": {
-      "count": 5,
+      "count": 6,
       "edgeCounts": [
         1,
         1,
         1,
         2,
-        0
+        0,
+        1
       ],
       "vertexCounts": [
         2,
         1,
         2,
         3,
+        1,
         1
       ]
     }
