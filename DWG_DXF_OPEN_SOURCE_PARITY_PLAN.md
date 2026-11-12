@@ -1924,10 +1924,18 @@ created locally from scratch for the specific control.
   finalized source ledger; the adapter binds them to the same import token and
   checks the source models against the live BLOCK_RECORD/BLOCK callbacks. The
   physical-source probe passes this stronger join. It still does not compare
-  emitted display primitives or establish native rendering, and it grants no
-  output authority. Generic AC1018 callback evidence remains Unknown, and
+  source cache primitives to emitted DXF. A bounded isolated `*T1` export now
+  freshly reads back all 15 ordered members (7 MTEXT, 8 LINE) and matches the
+  selected modeled text, placement, line geometry, and visible style fields.
+  It uses libdxfrw for both writing and reading, and generated same-named
+  layer/style resources to avoid the source Layer 0 extension-dictionary
+  dependency; this is transport evidence only, not independent display
+  equivalence or native rendering. The exact source TABLE entity and complete
+  resource graph are not in that isolated output. The probe grants no output
+  authority. Generic AC1018 callback evidence remains Unknown, and
   output is still refused. See the [cache-membership
-  receipt](docs/research/p5-ac1018-table-cache-membership-candidate-2026-11-11.json).
+  receipt](docs/research/p5-ac1018-table-cache-membership-candidate-2026-11-11.json)
+  and [isolated primitive round-trip receipt](docs/research/p5-ac1018-table-cache-primitive-roundtrip-2026-11-11.json).
   The physical
   source boundaries are in the [entity wire receipt](docs/research/p5-ac1018-table-entity-xdictionary-source-wire-2026-11-11.json).
   TABLESTYLE and recursive resources, independent
