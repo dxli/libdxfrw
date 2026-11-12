@@ -6934,6 +6934,17 @@ Steps:
    callback under ASCII and Binary DXF with `ext=false` and `ext=true`. This is
    DXF transport evidence only; it does not establish sweep geometry or DWG
    semantics.
+   **S8.3.5 — Typed REVOLVEDSURFACE/SWEPTSURFACE consumer fields and payload
+   identity.** Write distinct runtime-authored AC1027 samples for both types
+   through ASCII and Binary DXF; verify the documented axis/angle/transform or
+   sweep/path transform, flags, scalar and reference fields with `ext=false`
+   and `ext=true`. For SWEPTSURFACE, verify the sweep and path group-310 byte
+   sequences by exact size and digest, separately from typed fields. Autodesk's
+   [SWEPTSURFACE DXF table](https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-55DCEC23-9286-4A32-AAFA-E1F945B10A19.htm)
+   does not list the DWG `classVersion` or group-71 `pathFlags`; exclude both
+   from this DXF support assertion and leave their mapping unqualified. This
+   local callback check does not evaluate surface geometry or qualify native
+   consumers/DWG layouts.
 5. **S8.4a — Sample-backed DWG consumer comparison (AC1024 INSERT/SPLINE).**
    The locally available `tests/samples/AC1024/visualization_-_conference_room.dwg`
    completes both the libdxfrw read and LibreDWG 0.14 `dwgread -O minJSON`

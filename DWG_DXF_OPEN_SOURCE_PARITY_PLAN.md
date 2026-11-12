@@ -1601,6 +1601,16 @@ created locally from scratch for the specific control.
   evaluation, independent interoperability, DWG semantics, or support claims
   ([receipt](docs/research/p8-3d-consumer-extrudedsurface-fields-2026-11-12.json)).
 
+- **P8/S8.3.5 generated REVOLVEDSURFACE/SWEPTSURFACE consumer fields:** the
+  probe now checks selected axis, angle, transform, scalar and Boolean fields
+  for REVOLVEDSURFACE, and selected sweep/path transforms, IDs, scalar/flag
+  fields and exact group-310 payload digests for SWEPTSURFACE, in ASCII/Binary
+  DXF under both `ext` modes. Focused CTest passes 1/1. The official Autodesk
+  SWEPTSURFACE DXF table does not list DWG `classVersion` or group-71
+  `pathFlags`; they are excluded from this support assertion and remain
+  unqualified. The test does not establish geometry evaluation, DWG semantics,
+  independent interoperability, or support claims ([receipt](docs/research/p8-3d-consumer-revolved-swept-surface-fields-2026-11-12.json)).
+
 - **P6 generated IMAGEDEF hard-owner reader profile:** the shared OBJECTS
   prologue preflight and typed `DRW_ImageDef` parser now explicitly accept the
   ODA §20.4.81 hard-owner parent code-3 emitted by this writer. Generated

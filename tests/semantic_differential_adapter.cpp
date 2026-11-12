@@ -2461,6 +2461,54 @@ void SemanticSink::writeEntities() {
         extruded.referenceVector = DRW_Coord{3.5, 4.5, 5.5};
         wrote = dxfWriter_->writeSurface(&extruded) && wrote;
 
+        DRW_RevolvedSurface revolved;
+        revolved.layer = "probe_revolved_surface";
+        revolved.modelerFormatVersion = 2;
+        revolved.uIsolines = 19;
+        revolved.vIsolines = 23;
+        revolved.id = 29;
+        revolved.axisPoint = DRW_Coord{31.0, 32.0, 33.0};
+        revolved.axisVector = DRW_Coord{0.0, 1.0, 0.0};
+        revolved.revolveAngle = 1.25;
+        revolved.startAngle = 0.375;
+        revolved.transform[5] = 12.0;
+        revolved.draftAngle = 0.125;
+        revolved.draftStartDistance = 1.5;
+        revolved.draftEndDistance = 2.75;
+        revolved.twistAngle = 0.625;
+        revolved.solid = true;
+        revolved.closeToAxis = true;
+        wrote = dxfWriter_->writeSurface(&revolved) && wrote;
+
+        DRW_SweptSurface swept;
+        swept.layer = "probe_swept_surface";
+        swept.modelerFormatVersion = 2;
+        swept.uIsolines = 29;
+        swept.vIsolines = 31;
+        swept.sweepEntityId = 37;
+        swept.sweepData = {0x41u, 0x42u};
+        swept.pathEntityId = 43;
+        swept.pathData = {0x51u, 0x52u, 0x53u};
+        swept.sweepEntityTransformed[2] = 14.0;
+        swept.pathEntityTransformed[4] = 15.0;
+        swept.sweepEntityTransform[6] = 16.0;
+        swept.pathEntityTransform[8] = 17.0;
+        swept.draftAngle = 0.25;
+        swept.draftStartDistance = 1.75;
+        swept.draftEndDistance = 2.25;
+        swept.twistAngle = 0.5;
+        swept.scaleFactor = 1.25;
+        swept.alignAngle = 0.875;
+        swept.solid = true;
+        swept.sweepAlignmentFlags = 1;
+        swept.alignStart = true;
+        swept.bank = true;
+        swept.basePointSet = true;
+        swept.sweepEntityTransformComputed = true;
+        swept.pathEntityTransformComputed = true;
+        swept.referenceVector = DRW_Coord{2.5, 3.5, 4.5};
+        wrote = dxfWriter_->writeSurface(&swept) && wrote;
+
         DRW_LWPolyline ocsPolyline;
         ocsPolyline.elevation = 5.0;
         ocsPolyline.extPoint = DRW_Coord{0.0, 1.0, 0.0};
@@ -3540,6 +3588,108 @@ bool run3DConsumerProbe(bool binary) {
     };
     if (!expectExtrudedSurface(consumer)
         || !expectExtrudedSurface(legacyConsumer))
+        return false;
+
+    const auto expectRevolvedSurface = [&](const SemanticSink& sink) {
+        const std::string layer = "probe_revolved_surface";
+        return expectEntityField(sink, "REVOLVEDSURFACE", layer,
+                                 "modelerFormatVersion", "2")
+            && expectEntityField(sink, "REVOLVEDSURFACE", layer,
+                                 "uIsolines", "19")
+            && expectEntityField(sink, "REVOLVEDSURFACE", layer,
+                                 "vIsolines", "23")
+            && expectEntityField(sink, "REVOLVEDSURFACE", layer, "id", "29")
+            && expectEntityField(sink, "REVOLVEDSURFACE", layer, "axisPoint",
+                                 "{\"x\":31,\"y\":32,\"z\":33}")
+            && expectEntityField(sink, "REVOLVEDSURFACE", layer, "axisVector",
+                                 "{\"x\":0,\"y\":1,\"z\":0}")
+            && expectEntityDouble(sink, "REVOLVEDSURFACE", layer,
+                                  "revolveAngle", 1.25)
+            && expectEntityDouble(sink, "REVOLVEDSURFACE", layer,
+                                  "startAngle", 0.375)
+            && expectEntityDouble(sink, "REVOLVEDSURFACE", layer,
+                                  "transform.5", 12.0)
+            && expectEntityDouble(sink, "REVOLVEDSURFACE", layer,
+                                  "draftAngle", 0.125)
+            && expectEntityDouble(sink, "REVOLVEDSURFACE", layer,
+                                  "draftStartDistance", 1.5)
+            && expectEntityDouble(sink, "REVOLVEDSURFACE", layer,
+                                  "draftEndDistance", 2.75)
+            && expectEntityDouble(sink, "REVOLVEDSURFACE", layer,
+                                  "twistAngle", 0.625)
+            && expectEntityField(sink, "REVOLVEDSURFACE", layer,
+                                 "solid", "true")
+            && expectEntityField(sink, "REVOLVEDSURFACE", layer,
+                                 "closeToAxis", "true");
+    };
+    if (!expectRevolvedSurface(consumer)
+        || !expectRevolvedSurface(legacyConsumer))
+        return false;
+
+    const auto expectSweptSurface = [&](const SemanticSink& sink) {
+        const std::string layer = "probe_swept_surface";
+        return expectEntityField(sink, "SWEPTSURFACE", layer,
+                                 "modelerFormatVersion", "2")
+            && expectEntityField(sink, "SWEPTSURFACE", layer,
+                                 "uIsolines", "29")
+            && expectEntityField(sink, "SWEPTSURFACE", layer,
+                                 "vIsolines", "31")
+            && expectEntityField(sink, "SWEPTSURFACE", layer,
+                                 "sweepEntityId", "37")
+            && expectEntityField(sink, "SWEPTSURFACE", layer,
+                                 "sweepDataByteCount", "2")
+            && expectEntityField(sink, "SWEPTSURFACE", layer,
+                                 "pathEntityId", "43")
+            && expectEntityField(sink, "SWEPTSURFACE", layer,
+                                 "pathDataByteCount", "3")
+            && expectEntityDouble(sink, "SWEPTSURFACE", layer,
+                                  "sweepEntityTransformed.2", 14.0)
+            && expectEntityDouble(sink, "SWEPTSURFACE", layer,
+                                  "pathEntityTransformed.4", 15.0)
+            && expectEntityDouble(sink, "SWEPTSURFACE", layer,
+                                  "sweepEntityTransform.6", 16.0)
+            && expectEntityDouble(sink, "SWEPTSURFACE", layer,
+                                  "pathEntityTransform.8", 17.0)
+            && expectEntityDouble(sink, "SWEPTSURFACE", layer,
+                                  "draftAngle", 0.25)
+            && expectEntityDouble(sink, "SWEPTSURFACE", layer,
+                                  "scaleFactor", 1.25)
+            && expectEntityDouble(sink, "SWEPTSURFACE", layer,
+                                  "alignAngle", 0.875)
+            && expectEntityField(sink, "SWEPTSURFACE", layer,
+                                 "sweepAlignmentFlags", "1")
+            && expectEntityField(sink, "SWEPTSURFACE", layer,
+                                 "solid", "true")
+            && expectEntityField(sink, "SWEPTSURFACE", layer,
+                                 "pathEntityTransformComputed", "true")
+            && expectEntityField(sink, "SWEPTSURFACE", layer,
+                                 "referenceVector",
+                                 "{\"x\":2.5,\"y\":3.5,\"z\":4.5}");
+    };
+    const std::vector<std::uint8_t> expectedSweepData{0x41u, 0x42u};
+    const std::vector<std::uint8_t> expectedPathData{0x51u, 0x52u, 0x53u};
+    const auto expectSweptCarriers = [&](const SemanticSink& sink) {
+        bool foundSweepData = false;
+        bool foundPathData = false;
+        for (const CarrierRow& carrier : sink.carriers) {
+            if (carrier.source.find("surfaceSweepData") != std::string::npos
+                && carrier.size == expectedSweepData.size()
+                && carrier.digest == sha256(expectedSweepData.data(),
+                                            expectedSweepData.size())
+                && carrier.disposition == "preserved")
+                foundSweepData = true;
+            if (carrier.source.find("surfacePathData") != std::string::npos
+                && carrier.size == expectedPathData.size()
+                && carrier.digest == sha256(expectedPathData.data(),
+                                            expectedPathData.size())
+                && carrier.disposition == "preserved")
+                foundPathData = true;
+        }
+        return foundSweepData && foundPathData;
+    };
+    if (!expectSweptSurface(consumer) || !expectSweptSurface(legacyConsumer)
+        || !expectSweptCarriers(consumer)
+        || !expectSweptCarriers(legacyConsumer))
         return false;
 
     const auto expectPolyface = [&](const SemanticSink& sink) {
