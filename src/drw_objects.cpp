@@ -12446,6 +12446,29 @@ bool DRW_DataTable::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t
 // literal: the type/name pair starts a column, its supported scalar group
 // supplies ordered row values, and group 360 handles are retained separately
 // for later graph resolution. Unknown semantic relationships are not inferred.
+bool DRW_DataTable::isDxfPayloadWritable() const noexcept {
+    if (columnCount < 0 || rowCount < 0
+        || static_cast<std::size_t>(columnCount)
+            > dwgSafety::MaxOwnedObjectCount
+        || static_cast<std::size_t>(rowCount)
+            > dwgSafety::MaxOwnedObjectCount
+        || static_cast<std::size_t>(columnCount) != columns.size()
+        || rowHandles.size() != static_cast<std::size_t>(rowCount))
+        return false;
+    for (const auto& column : columns) {
+        if ((column.type != 1 && column.type != 2 && column.type != 6)
+            || column.rows.size() != static_cast<std::size_t>(rowCount))
+            return false;
+        for (const auto& row : column.rows)
+            if (column.type == 2 && !std::isfinite(row.dataDouble))
+                return false;
+    }
+    for (const auto handle : rowHandles)
+        if (handle == 0u || handle == DRW::NoHandle)
+            return false;
+    return true;
+}
+
 bool DRW_DataTable::parseCode(int code,
                               const std::unique_ptr<dxfReader>& reader) {
     if (!reader)

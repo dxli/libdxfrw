@@ -33697,6 +33697,107 @@ bool dxfRW::writeDataLink(DRW_DataLink *ent) {
     return true;
 }
 
+bool dxfRW::writeDataTable(DRW_DataTable *ent) {
+    constexpr std::size_t maxTextBytes = 16u * 1024u * 1024u;
+    constexpr std::size_t maxTotalTextBytes = 64u * 1024u * 1024u;
+    if (version < DRW::AC1014 || !preflightTableEntry(ent)
+        || ent->handle == 0u || ent->handle == DRW::NoHandle
+        || ent->flags < std::numeric_limits<std::int16_t>::min()
+        || ent->flags > std::numeric_limits<std::int16_t>::max()
+        || ent->columns.size() > dwgSafety::MaxOwnedObjectCount
+        || !ent->isDxfPayloadWritable())
+        return failDxfWrite();
+
+    std::size_t totalTextBytes = 0u;
+    const auto safeText = [&totalTextBytes](const UTF8STRING& value) {
+        if (value.size() > maxTextBytes
+            || value.size() > maxTotalTextBytes - totalTextBytes
+            || !isSafeDxfRecordText(value))
+            return false;
+        totalTextBytes += value.size();
+        return true;
+    };
+    if (!safeText(ent->tableName))
+        return failDxfWrite();
+
+    std::vector<std::uint32_t> outputRowHandles;
+    try {
+        std::size_t cellCount = 0u;
+        for (const auto& column : ent->columns) {
+            if (!safeText(column.text)
+                || column.rows.size() > dwgSafety::MaxOwnedObjectCount
+                || column.rows.size()
+                    > dwgSafety::MaxOwnedObjectCount - cellCount)
+                return failDxfWrite();
+            cellCount += column.rows.size();
+            if (column.type == 6) {
+                for (const auto& row : column.rows)
+                    if (!safeText(row.dataString))
+                        return failDxfWrite();
+            }
+        }
+        outputRowHandles.reserve(ent->rowHandles.size());
+        std::set<std::uint32_t> uniqueTargets;
+        const std::uint32_t handle = remapObjectHandle(ent->handle);
+        for (const std::uint32_t sourceTarget : ent->rowHandles) {
+            const std::uint32_t target = remapObjectHandle(sourceTarget);
+            if (target == 0u || target == DRW::NoHandle || target == handle
+                || target == remapObjectHandle(
+                    static_cast<std::uint32_t>(ent->parentHandle))
+                || !uniqueTargets.insert(target).second)
+                return failDxfWrite();
+            outputRowHandles.push_back(target);
+        }
+    } catch (...) {
+        return failDxfWrite();
+    }
+
+    const std::uint32_t handle = remapObjectHandle(ent->handle);
+    if (handle == 0u || handle == DRW::NoHandle
+        || isDxfFixedOutputHandle(handle) || !reserveHandle(handle))
+        return failDxfWrite();
+
+    RecordStateScope state(*this, ent);
+    DxfWriterRecordScope record(*writer);
+    if (!writer->writeString(0, "DATATABLE")
+        || !writer->writeString(5, toHexStr(handle))
+        || !writeTableEntryAppData(*ent))
+        return failDxfWrite();
+    writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
+    if (writer->hasWriteError()
+        || !writer->writeString(100, "AcDbDataTable")
+        || !writer->writeInt16(70, ent->flags)
+        || !writer->writeInt32(90, ent->columnCount)
+        || !writer->writeInt32(91, ent->rowCount)
+        || !writer->writeUtf8String(1, ent->tableName))
+        return failDxfWrite();
+
+    for (const auto& column : ent->columns) {
+        if (!writer->writeInt32(92, column.type)
+            || !writer->writeUtf8String(2, column.text))
+            return failDxfWrite();
+        for (const auto& row : column.rows) {
+            const bool written = column.type == 1
+                ? writer->writeInt32(93, row.dataLong)
+                : column.type == 2
+                    ? writer->writeDouble(40, row.dataDouble)
+                    : writer->writeUtf8String(3, row.dataString);
+            if (!written)
+                return failDxfWrite();
+        }
+    }
+    for (const std::uint32_t target : outputRowHandles)
+        if (!writer->writeString(360, toHexStr(target)))
+            return failDxfWrite();
+    if ((!ent->extData.empty() && !writeExtData(ent->extData))
+        || !preflightDxfWrite()
+        || !bindDxfWriteSourceObjectHandle(ent->handle, handle)
+        || !record.commit())
+        return failDxfWrite();
+    state.commit();
+    return true;
+}
+
 bool dxfRW::writeTableContent(DRW_TableContentObject *ent) {
     static constexpr std::size_t maxTableCellAttributes = 10000u;
     const auto safeText = [](const UTF8STRING& text) {

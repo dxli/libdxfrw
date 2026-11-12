@@ -4147,16 +4147,11 @@ public:
   //! and validate targets before writing a graph.
   std::vector<std::uint32_t> rowHandles;
 
+  bool isDxfPayloadWritable() const noexcept;
+
   bool hasCompleteDxfProjection() const noexcept {
-    if (!dxfProjectionComplete || (dxfSeenFields & 0x0fu) != 0x0fu
-        || columnCount < 0 || rowCount < 0
-        || static_cast<std::size_t>(columnCount) != columns.size()
-        || rowHandles.size() != static_cast<std::size_t>(rowCount))
-      return false;
-    for (const auto& column : columns)
-      if (column.rows.size() != static_cast<std::size_t>(rowCount))
-        return false;
-    return true;
+    return dxfProjectionComplete && (dxfSeenFields & 0x0fu) == 0x0fu
+        && isDxfPayloadWritable();
   }
 
 private:

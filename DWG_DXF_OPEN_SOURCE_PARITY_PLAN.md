@@ -1844,8 +1844,18 @@ created locally from scratch for the specific control.
   retained in all cases; missing row references and unsupported column types
   suppress the typed callback without failing import. Generated scratch-only
   ASCII/Binary controls pass for scalar projection and raw-only fallback. This
-  adds no DXF writer, target resolution, graph closure, DWG source authority,
-  semantic meaning, or support promotion ([receipt](docs/research/p5-dxf-datatable-read-projection-2026-11-11.json)).
+  remains separate from graph closure and DWG source authority. **The direct
+  DXF writer slice is now implemented (2026-11-11):** `writeDataTable` admits
+  only the exact modeled type/count profile, remaps unique non-null child
+  handles, stages the record transactionally, and writes ordered cells and
+  group-360 children. Generated ASCII/Binary write/readback passes; a missing
+  child handle preserves the existing destination and the same codec succeeds
+  after correction. This is local codec evidence only: callers still must
+  emit and resolve each child XRECORD and close TABLESTYLE/TABLECONTENT/
+  TABLEGEOMETRY/DATATABLE/XRECORD dependencies before claiming graph output.
+  It establishes no native semantic meaning, DWG source replay, or support
+  promotion ([read receipt](docs/research/p5-dxf-datatable-read-projection-2026-11-11.json),
+  [writer receipt](docs/research/p5-dxf-datatable-write-projection-2026-11-11.json)).
   A separate opt-in binding now ties both TABLECONTENT and DATATABLE candidates
   and the selected XRECORD set to CRC-checked frames in one completed import;
   missing or changed members invalidate the whole bundle. The root XRECORD's
