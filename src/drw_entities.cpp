@@ -33131,6 +33131,16 @@ bool DRW_MLeader::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t b
 
 bool DRW_MLeader::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs,
                             dwgBufferW *strBuf, dwgBufferW *handleBuf) {
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [&](dwgBufferW *body, dwgBufferW *strings, dwgBufferW *handles) {
+            return encodeDwgBody(version, body, bs, strings, handles);
+        });
+}
+
+bool DRW_MLeader::encodeDwgBody(DRW::Version version, dwgBufferW *buf,
+                                std::uint32_t bs, dwgBufferW *strBuf,
+                                dwgBufferW *handleBuf) {
     (void)bs;
     if (version < DRW::AC1024)
         return false;

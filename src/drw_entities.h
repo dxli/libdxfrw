@@ -5886,6 +5886,10 @@ protected:
     virtual bool parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs=0) override;
     [[nodiscard]] virtual bool encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs=0,
                            dwgBufferW *strBuf=nullptr, dwgBufferW *handleBuf=nullptr) override;
+private:
+    [[nodiscard]] bool encodeDwgBody(DRW::Version version, dwgBufferW *buf,
+                                     std::uint32_t bs, dwgBufferW *strBuf,
+                                     dwgBufferW *handleBuf);
 
 public:
     /** Return false when a DXF CONTEXT_DATA block is still open. */

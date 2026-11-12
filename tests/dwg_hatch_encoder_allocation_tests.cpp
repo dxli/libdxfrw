@@ -41,6 +41,12 @@ public:
     std::int16_t rawType() const { return oType; }
 };
 
+class MLeaderProbe final : public DRW_MLeader {
+public:
+    using DRW_MLeader::encodeDwg;
+    std::int16_t rawType() const { return oType; }
+};
+
 struct Buffers {
     dwgBufferW body;
     dwgBufferW strings;
@@ -91,39 +97,57 @@ template <class Shape>
 Shape makeShape() {
     Shape shape;
     shape.handle = 0x40u;
-    shape.name = "ANSI31";
-    shape.solid = false;
-    shape.associative = true;
-    shape.angle = 17.0;
-    shape.scale = 0.75;
-
-    if constexpr (std::is_same_v<Shape, HatchProbe>) {
-        shape.pixelSize = 2.5;
-        shape.seedPoints = {{1.0, 2.0, 0.0}, {3.0, 4.0, 0.0}};
+    if constexpr (std::is_same_v<Shape, MLeaderProbe>) {
+        shape.styleHandle.ref = 0x50u;
+        shape.leaderLineTypeHandle.ref = 0x51u;
+        shape.arrowHeadHandle.ref = 0x52u;
+        shape.styleTextStyleHandle.ref = 0x53u;
+        DRW_MLeaderRoot root;
+        root.connectionPoint = {1.0, 2.0, 3.0};
+        root.direction = {0.0, 1.0, 0.0};
+        root.leaderIndex = 1;
+        DRW_MLeaderLeaderLine line;
+        line.points.emplace_back(4.0, 5.0, 6.0);
+        line.leaderLineIndex = 2;
+        line.lineTypeHandle.ref = 0x55u;
+        line.arrowHandle.ref = 0x56u;
+        root.leaderLines.push_back(line);
+        shape.context.roots.push_back(root);
     } else {
-        shape.fillColorAci = 42;
-        shape.xDirX = 1.0;
-        shape.xDirY = 0.0;
-        shape.degenerateLoops = 1;
+        shape.name = "ANSI31";
+        shape.solid = false;
+        shape.associative = true;
+        shape.angle = 17.0;
+        shape.scale = 0.75;
+
+        if constexpr (std::is_same_v<Shape, HatchProbe>) {
+            shape.pixelSize = 2.5;
+            shape.seedPoints = {{1.0, 2.0, 0.0}, {3.0, 4.0, 0.0}};
+        } else {
+            shape.fillColorAci = 42;
+            shape.xDirX = 1.0;
+            shape.xDirY = 0.0;
+            shape.degenerateLoops = 1;
+        }
+
+        DRW_Hatch::PatternLine pattern;
+        pattern.angle = 30.0;
+        pattern.baseX = 0.25;
+        pattern.baseY = 0.5;
+        pattern.offsetX = 0.75;
+        pattern.offsetY = 1.0;
+        pattern.dashList = {1.0, -0.25, 0.5};
+        shape.patternLines.push_back(pattern);
+
+        auto loop = std::make_shared<DRW_HatchLoop>(4);
+        auto line = std::make_shared<DRW_Line>();
+        line->basePoint = {0.0, 0.0, 0.0};
+        line->secPoint = {10.0, 0.0, 0.0};
+        loop->objlist.push_back(line);
+        loop->m_boundaryHandles = {0x60u};
+        loop->update();
+        shape.appendLoop(loop);
     }
-
-    DRW_Hatch::PatternLine pattern;
-    pattern.angle = 30.0;
-    pattern.baseX = 0.25;
-    pattern.baseY = 0.5;
-    pattern.offsetX = 0.75;
-    pattern.offsetY = 1.0;
-    pattern.dashList = {1.0, -0.25, 0.5};
-    shape.patternLines.push_back(pattern);
-
-    auto loop = std::make_shared<DRW_HatchLoop>(4);
-    auto line = std::make_shared<DRW_Line>();
-    line->basePoint = {0.0, 0.0, 0.0};
-    line->secPoint = {10.0, 0.0, 0.0};
-    loop->objlist.push_back(line);
-    loop->m_boundaryHandles = {0x60u};
-    loop->update();
-    shape.appendLoop(loop);
     return shape;
 }
 
@@ -252,16 +276,25 @@ int main() {
             totalReachedFailures += reachedFailures;
         }
     }
+    for (const DRW::Version version :
+         {DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
+        for (const auto layout : layouts) {
+            unsigned long reachedFailures = 0u;
+            if (!sweep<MLeaderProbe>(version, layout, 501, reachedFailures))
+                return 1;
+            totalReachedFailures += reachedFailures;
+        }
+    }
     if (failedAllocations.load(std::memory_order_relaxed) == 0u
         || totalReachedFailures == 0u) {
         std::cerr << "HATCH allocation injector did not fire\n";
         return 1;
     }
-    std::cout << "HATCH/MPOLYGON DWG encode allocation rollback/retry passed "
-              << "across " << sizeof(versions) / sizeof(versions[0])
-              << " versions, "
+    std::cout << "HATCH/MPOLYGON/MLEADER DWG encode allocation rollback/retry "
+              << "passed across " << sizeof(versions) / sizeof(versions[0])
+              << " common writer versions plus 3 MLEADER versions, "
               << sizeof(layouts) / sizeof(layouts[0])
-                     * sizeof(versions) / sizeof(versions[0]) * 2u
+                     * (sizeof(versions) / sizeof(versions[0]) * 2u + 3u)
               << " entity/version/layout profiles; " << totalReachedFailures
               << " allocation offsets exercised\n";
     return 0;
