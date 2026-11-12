@@ -71,6 +71,12 @@ public:
     std::int16_t rawType() const { return oType; }
 };
 
+class CameraProbe final : public DRW_Camera {
+public:
+    using DRW_Camera::encodeDwg;
+    std::int16_t rawType() const { return oType; }
+};
+
 struct Buffers {
     dwgBufferW body;
     dwgBufferW strings;
@@ -137,6 +143,8 @@ Shape makeShape(DRW::Version version) {
         line.arrowHandle.ref = 0x56u;
         root.leaderLines.push_back(line);
         shape.context.roots.push_back(root);
+    } else if constexpr (std::is_same_v<Shape, CameraProbe>) {
+        shape.m_viewHandle = 0x50u;
     } else if constexpr (std::is_same_v<Shape, GeoPositionMarkerProbe>) {
         shape.m_classVersion = 2u;
         shape.m_position = {1.0, 2.0, 3.0};
@@ -378,6 +386,15 @@ int main() {
     for (const auto version : versions) {
         for (const auto layout : layouts) {
             unsigned long reachedFailures = 0u;
+            if (!sweep<CameraProbe>(version, layout, 542,
+                                   reachedFailures))
+                return 1;
+            totalReachedFailures += reachedFailures;
+        }
+    }
+    for (const auto version : versions) {
+        for (const auto layout : layouts) {
+            unsigned long reachedFailures = 0u;
             if (!sweep<ArcAlignedTextProbe>(version, layout, 522,
                                            reachedFailures))
                 return 1;
@@ -399,15 +416,15 @@ int main() {
         return 1;
     }
     std::cout << "HATCH/MPOLYGON/MLEADER/ARCALIGNEDTEXT/LIGHT/SECTIONOBJECT/"
-              << "GEOPOSITIONMARKER "
+              << "GEOPOSITIONMARKER/CAMERA "
               << "DWG encode allocation "
               << "rollback/retry "
               << "passed across " << sizeof(versions) / sizeof(versions[0])
               << " HATCH-family/ARCALIGNEDTEXT versions, 3 MLEADER versions "
               << "and 4 LIGHT/SECTIONOBJECT versions, "
               << sizeof(layouts) / sizeof(layouts[0])
-                     * (sizeof(versions) / sizeof(versions[0]) * 3u + 3u + 8u
-                        + 2u)
+                     * (sizeof(versions) / sizeof(versions[0]) * 4u + 3u
+                        + 8u + 2u)
               << " entity/version/layout profiles; " << totalReachedFailures
               << " allocation offsets exercised\n";
     return 0;

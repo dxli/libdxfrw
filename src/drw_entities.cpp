@@ -13132,14 +13132,18 @@ bool DRW_Camera::encodeDwg(DRW::Version v, dwgBufferW *buf,
     if (v < DRW::AC1015 || buf == nullptr)
         return false;
 
-    oType = kDwgClassNum;
-    if (!encodeDwgCommon(v, buf, strBuf)
-        || !encodeDwgEntHandle(v, buf, handleBuf)) {
-        return false;
-    }
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [&](dwgBufferW *body, dwgBufferW *strings,
+            dwgBufferW *handles) {
+            oType = kDwgClassNum;
+            if (!encodeDwgCommon(v, body, strings)
+                || !encodeDwgEntHandle(v, body, handles))
+                return false;
 
-    putHardPointerHandle(handleBuf ? handleBuf : buf, m_viewHandle);
-    return true;
+            putHardPointerHandle(handles ? handles : body, m_viewHandle);
+            return true;
+        });
 }
 
 bool DRW_GeoPositionMarker::parseCode(
