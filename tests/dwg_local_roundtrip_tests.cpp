@@ -40353,6 +40353,37 @@ bool testPhysicalAc1018TableBodyWholeFileRoundTrip(
               << static_cast<unsigned>(producer.table.blockRecH.rawCode)
               << '/' << static_cast<unsigned>(producer.table.blockRecH.size)
               << '\n';
+    const std::string sentinel =
+        "preserve destination after malformed physical TABLE range\n";
+    {
+        std::ofstream previous(outputPath, std::ios::binary | std::ios::trunc);
+        previous << sentinel;
+        if (!previous)
+            return false;
+    }
+    auto& ranges = producer.table.m_content.m_subrecordRanges;
+    const std::size_t tableRangeBitSize = ranges.back().m_bitSize;
+    if (tableRangeBitSize == 0u)
+        return false;
+    ranges.back().m_bitSize = tableRangeBitSize - 1u;
+    const bool malformedRangeRefused =
+        !output.write(&producer, DRW::AC1018, true);
+    ranges.back().m_bitSize = tableRangeBitSize;
+    std::ifstream previous(outputPath, std::ios::binary);
+    const std::string preserved((std::istreambuf_iterator<char>(previous)),
+                                std::istreambuf_iterator<char>());
+    const bool rollbackAndRetryReady = malformedRangeRefused
+        && preserved == sentinel && producer.table.handle == 0xA720u
+        && producer.table.blockRecH.ref == 0u;
+    if (!rollbackAndRetryReady) {
+        std::cerr << "physical AC1018 TABLE malformed-range rollback failed"
+                  << " refused=" << malformedRangeRefused
+                  << " destinationPreserved=" << (preserved == sentinel)
+                  << " handle=0x" << std::hex << producer.table.handle
+                  << " block=0x" << producer.table.blockRecH.ref << std::dec
+                  << '\n';
+        return false;
+    }
     if (!output.write(&producer, DRW::AC1018, true) || !producer.ready) {
         const DRW_OperationDiagnostic diagnostic = output.getLastDiagnostic();
         std::cerr << "physical AC1018 TABLE body output failed code="

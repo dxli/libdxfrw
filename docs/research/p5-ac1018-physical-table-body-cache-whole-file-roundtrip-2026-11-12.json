@@ -20,6 +20,7 @@
     "outputBlockChildren": "generated bounded *T1 envelope: 8 LINE and 7 MTEXT records",
     "sourceProxyBytes": 2104,
     "sourceRetainedSubrecordRanges": 8,
+    "failureRecovery": "PASS; shortened the final physical retained-range span by one bit; output was refused without replacing a sentinel destination or mutating TABLE/block handles; restored the exact span and retried on the same adapter/writer successfully",
     "outputSha256": "9eeba03a6efd96a6b8877561f1dd876f165bd612b385982f116164c86ecb1ae2",
     "outputDisposition": "scratch-only; no DWG or DXF fixture was added to the repository"
   },
