@@ -8087,8 +8087,14 @@ not qualify mesh geometry or native behavior ([receipt](docs/research/p6-dxf-pol
   (one body/lump/shell/face record, no loops/coedges/edges/vertices); the probe
   fails its nonempty-body requirement. This is a parser-plus-lift boundary,
   not kernel geometry evidence and not a reason to normalize the source rows.
-  Do not repeat this exact profile; require a version-aware independent
-  topology reader or authoritative 21500 field map. See the [direct-lift
+  ODA's format note explicitly maps R21 to 21200 and says Autodesk formats
+  from 20800 onward are modified and cannot enter Spatial ACIS without
+  conversion; direct native-ACIS qualification therefore needs an audited
+  conversion step, while the open independent route needs a 21500-aware
+  topology reader. Do not repeat this exact profile; require a version-aware
+  independent topology reader or authoritative 21500 field map. See ODA's
+  [SAT/SAB compatibility note](https://www.opendesign.com/blog/2017/october/working-sat-and-sab-files-teigha)
+  and the [direct-lift
   receipt](docs/research/p7-ac1021-sat21200-independent-lift-boundary-2026-11-12.json).
 - Complete source placement, units/transforms, topology, trims, periodicity and
   spline geometry beyond locally verified analytic helpers. A local wireframe or

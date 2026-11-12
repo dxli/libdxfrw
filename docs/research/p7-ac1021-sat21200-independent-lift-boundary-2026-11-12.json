@@ -46,6 +46,16 @@
       "vertex": 0
     }
   },
+  "formatCompatibilityEvidence": {
+    "authority": "Open Design Alliance, Working with .sat and .sab Files in Teigha",
+    "url": "https://www.opendesign.com/blog/2017/october/working-sat-and-sab-files-teigha",
+    "findings": [
+      "ODA maps DWG R21 to SAT/SAB version 21200.",
+      "ODA says Autodesk formats from 20800 onward are modified, are not native to Spatial ACIS, and require additional conversion before entering the Spatial ACIS library.",
+      "ODA describes version 700 as the intermediate exchange profile between Teigha and Spatial ACIS."
+    ],
+    "implementationEffect": "Do not route the source payload directly to a Spatial ACIS native reader. Any future kernel comparison must record and validate an explicit version conversion, or use an independent reader that understands the Autodesk-modified 21500 profile."
+  },
   "validation": {
     "decoderUnitTests": "python3 -m unittest tools.research.test_decode_dxf_sat1: PASS 3/3",
     "sourceProjection": "PASS: selected ASCII and Binary readback; strict full-source output refused at the pre-existing IMAGEDEF owner-role gate",
