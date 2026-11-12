@@ -3064,12 +3064,12 @@ qualify other dynamic-block subclasses, source schemas, or native behavior
 
 **Dynamic-block VisibilityParameter allocation rollback (2026-11-12):** the
 same direct writer now has a generated AC1024 ASCII/Binary allocation sweep
-for a bounded VisibilityParameter with one remapped block reference and one
-state membership. All 22 ASCII and 20 Binary injected allocation failures
-preserve the caller record and remove any partial source identity; each source
-then writes and reads successfully through a fresh writer. The clean record
-readback checks record identity, owner, and both remapped reference roles. The
-existing adapter profile continues to verify the full 117-block, four-state
+for the full 117-block, four-state VisibilityParameter profile. All 379
+injected allocation failures per encoding preserve the caller record and
+remove any partial source identity; each source then writes and reads
+successfully through a fresh writer. Clean record readback checks record
+identity, owner, and all 117 flat-list and 116 state-membership remapped
+references. The existing adapter profile continues to verify the full exact
 wire sequence and typed readback. Normal and ASan focused checks pass. This
 does not inject failures through the whole-file adapter transaction or expand
 the admitted producer/schema/graph/native profile (see the

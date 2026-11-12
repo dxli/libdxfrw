@@ -74,18 +74,32 @@ DRW_DynamicBlockObject makeVisibilityParameter() {
     object.m_elementMinor = 2u;
     object.m_propertyInfoCount = 17;
     object.m_isInitialized = true;
-    object.m_visibilityName = "State A";
-    object.m_blockCount = 1;
-    object.m_blockHandles.push_back(0x100u);
-    object.m_stateCount = 1;
-    object.m_stateNames.push_back("State A");
-    object.m_stateBlockHandles.push_back({0x100u});
-    object.m_stateParameterHandles.emplace_back();
+    object.m_visibilityName = "ARCH Title Block";
+    object.m_blockCount = 117;
+    for (std::uint32_t index = 0u; index < 117u; ++index)
+        object.m_blockHandles.push_back(0x1001u + index);
+    object.m_stateCount = 4;
+    static constexpr const char* stateNames[] = {
+        "ARCH D", "ARCH C", "ARCH B", "ARCH A"};
+    for (std::size_t state = 0u; state < 4u; ++state) {
+        object.m_stateNames.emplace_back(stateNames[state]);
+        std::vector<std::uint32_t> stateBlocks;
+        for (std::uint32_t member = 0u; member < 29u; ++member)
+            stateBlocks.push_back(0x1001u
+                + static_cast<std::uint32_t>(state) * 29u + member);
+        object.m_stateBlockHandles.push_back(std::move(stateBlocks));
+        object.m_stateParameterHandles.emplace_back();
+    }
     return object;
 }
 
 std::map<std::uint32_t, std::uint32_t> visibilityRemap() {
-    return {{0x100u, 0x5100u}};
+    std::map<std::uint32_t, std::uint32_t> remap;
+    for (std::uint32_t index = 0u; index < 117u; ++index) {
+        const std::uint32_t source = 0x1001u + index;
+        remap.emplace(source, source + 0x5000u);
+    }
+    return remap;
 }
 
 bool visibilitySourceUnchanged(const DRW_DynamicBlockObject& object) {
@@ -95,15 +109,25 @@ bool visibilitySourceUnchanged(const DRW_DynamicBlockObject& object) {
             == DRW_DynamicBlockObject::Kind::VisibilityParameter
         && object.m_bodyFullyDecoded && object.m_evalExprParsed
         && object.m_elementName == "Visibility State"
-        && object.m_visibilityName == "State A"
-        && object.m_blockCount == 1
-        && object.m_blockHandles == std::vector<std::uint32_t>{0x100u}
-        && object.m_stateCount == 1
-        && object.m_stateNames == std::vector<std::string>{"State A"}
-        && object.m_stateBlockHandles
-            == std::vector<std::vector<std::uint32_t>>{{0x100u}}
-        && object.m_stateParameterHandles.size() == 1u
-        && object.m_stateParameterHandles.front().empty();
+        && object.m_visibilityName == "ARCH Title Block"
+        && object.m_blockCount == 117
+        && object.m_blockHandles.size() == 117u
+        && object.m_blockHandles.front() == 0x1001u
+        && object.m_blockHandles.back() == 0x1075u
+        && object.m_stateCount == 4
+        && object.m_stateNames.size() == 4u
+        && object.m_stateNames.front() == "ARCH D"
+        && object.m_stateNames.back() == "ARCH A"
+        && object.m_stateBlockHandles.size() == 4u
+        && std::all_of(object.m_stateBlockHandles.begin(),
+            object.m_stateBlockHandles.end(),
+            [](const auto& handles) { return handles.size() == 29u; })
+        && object.m_stateBlockHandles.front().front() == 0x1001u
+        && object.m_stateBlockHandles.back().back() == 0x1074u
+        && object.m_stateParameterHandles.size() == 4u
+        && std::all_of(object.m_stateParameterHandles.begin(),
+            object.m_stateParameterHandles.end(),
+            [](const auto& handles) { return handles.empty(); });
 }
 
 bool visibilityWireReadback(const std::string& bytes, bool binary) {
@@ -117,8 +141,9 @@ bool visibilityWireReadback(const std::string& bytes, bool binary) {
         return false;
     bool hasHandle = false;
     bool hasOwner = false;
-    bool hasFlatReference = false;
-    bool hasStateReference = false;
+    std::size_t flatReferenceCount = 0u;
+    std::size_t stateReferenceCount = 0u;
+    bool referencesInRemapRange = true;
     bool ended = false;
     while (reader->readRec(&code)) {
         if (code == 0) {
@@ -133,17 +158,27 @@ bool visibilityWireReadback(const std::string& bytes, bool binary) {
             hasOwner = reader->getHandleString() == 0xE817u;
             break;
         case 331:
-            hasFlatReference = reader->getHandleString() == 0x5100u;
+            {
+                const std::uint32_t handle = reader->getHandleString();
+                referencesInRemapRange = referencesInRemapRange
+                    && handle >= 0x6001u && handle <= 0x6075u;
+                ++flatReferenceCount;
+            }
             break;
         case 332:
-            hasStateReference = reader->getHandleString() == 0x5100u;
+            {
+                const std::uint32_t handle = reader->getHandleString();
+                referencesInRemapRange = referencesInRemapRange
+                    && handle >= 0x6001u && handle <= 0x6075u;
+                ++stateReferenceCount;
+            }
             break;
         default:
             break;
         }
     }
-    return ended && hasHandle && hasOwner && hasFlatReference
-        && hasStateReference;
+    return ended && hasHandle && hasOwner && referencesInRemapRange
+        && flatReferenceCount == 117u && stateReferenceCount == 116u;
 }
 
 bool visibilityAllocationSweep(bool binary) {
@@ -235,7 +270,8 @@ bool visibilityAllocationSweep(bool binary) {
     std::cout << (binary ? "Binary" : "ASCII")
               << " VisibilityParameter allocation offsets="
               << allocationCount
-              << "; source rollback and fresh-writer retries pass\n";
+              << "; full 117-handle/four-state source rollback and "
+              << "fresh-writer retries pass\n";
     return true;
 }
 
