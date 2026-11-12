@@ -1950,6 +1950,16 @@ created locally from scratch for the specific control.
   output is still refused. See the [cache-membership
   receipt](docs/research/p5-ac1018-table-cache-membership-candidate-2026-11-11.json)
   and [isolated primitive round-trip receipt](docs/research/p5-ac1018-table-cache-primitive-roundtrip-2026-11-11.json).
+  A follow-up attempted to retain the source Layer 0 extension chain as well:
+  Layer 0 `0x10` → hard-owned DICTIONARY `0xc7` → XRECORD `0xc8` → code-340
+  MATERIAL target `0x47` (trace identifies the target as Global). Strict graph
+  preflight correctly refused because this AC1018 MATERIAL profile is not
+  admitted for output; current source-qualified extension-MATERIAL output is
+  limited to AC1021/24/27. ODA v5.4.1 has no MATERIAL class-body prescription,
+  and this single ODA-converted source cannot qualify its semantics. Keep the
+  dependency intact and output refused until eligible AC1018 material evidence
+  exists; do not omit the XRECORD or infer support from the callback. The
+  receipt records the refusal and the exact chain.
   The physical
   source boundaries are in the [entity wire receipt](docs/research/p5-ac1018-table-entity-xdictionary-source-wire-2026-11-11.json).
   TABLESTYLE and recursive resources, independent

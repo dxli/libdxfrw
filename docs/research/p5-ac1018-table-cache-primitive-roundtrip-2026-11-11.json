@@ -26,5 +26,16 @@
     "command": "c++ -std=c++17 -Wall -Wextra -Werror -I src -I dwg2dxf tools/research/p5_ac1018_table_cache_primitive_roundtrip_probe.cpp build-gcc/tests/CMakeFiles/libdxfrw_test_adapter.dir/__/dwg2dxf/dx_iface.cpp.o build-gcc/libdxfrw.a -o /private/tmp/p5_ac1018_table_cache_primitive_roundtrip_probe && /private/tmp/p5_ac1018_table_cache_primitive_roundtrip_probe /private/tmp/p5-ac1018-oda-audited-output/acad_table_simple.dwg /private/tmp/p5-t1-cache-isolated.dxf",
     "result": "Compiled with -Wall -Wextra -Werror and completed successfully."
   },
-  "fixtures": "No DWG or DXF fixture was added to the repository; source and generated output remain in /private/tmp."
+  "fixtures": "No DWG or DXF fixture was added to the repository; source and generated output remain in /private/tmp.",
+  "source_resource_closure_probe": {
+    "physical_chain": [
+      "Layer 0 handle 0x10 points to extension DICTIONARY 0xc7.",
+      "DICTIONARY 0xc7 is hard-owned by Layer 0 and contains ACAD_XREC_ROUNDTRIP -> XRECORD 0xc8.",
+      "XRECORD 0xc8 is owned by DICTIONARY 0xc7 and has one code-340 handle target, MATERIAL 0x47 (trace identifies it as Global)."
+    ],
+    "attempt": "A second isolated export copied the source Layer 0, Standard text style, DICTIONARY 0xc7, XRECORD 0xc8, MATERIAL 0x47, and *T1 primitives into dx_data.",
+    "result": "Refused during extension-object graph preflight: XRECORD code 340 target 0x47 was not admitted as an emitted AC1018 MATERIAL record. The writer currently source-qualifies typed DWG MATERIAL extension output for AC1021/AC1024/AC1027, not AC1018. The destination was not independently compared before/after this refusal; the generated-layer/style primitive-only output is a separate earlier run.",
+    "authority_gap": "The supplied ODA v5.4.1 specification has no MATERIAL class-body prescription, and this one ODA-converted physical source is not independent producer/semantic evidence. Preserve strict refusal until an eligible AC1018 MATERIAL profile is evidenced; do not widen admission from the callback alone.",
+    "scope": "This explains why the successful primitive-only round-trip generated replacement Layer 0/style resources. It does not justify dropping the XRECORD, target material, or extension dictionary from a complete source conversion."
+  }
 }
