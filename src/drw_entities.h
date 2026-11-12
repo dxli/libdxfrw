@@ -461,7 +461,7 @@ public:
     }
 	int color24 = -1;               /*!< 24-bit color, code 420 */
     std::string colorName;     /*!< color name, code 430 */
-	int transparency = DRW::Opaque;          /*!< transparency, code 440 */
+	int transparency = DRW::Opaque;          /*!< normalized ENC alpha_raw; DXF group-440 is converted at I/O boundaries */
 	int plotStyle = DRW::DefaultPlotStyle;             /*!< hard pointer id to plot style object, code 390 */
 	DRW::ShadowMode shadow = DRW::CastAndReceieveShadows;    /*!< shadow mode, code 284 */
     std::uint32_t shadowHandle{0}; /*!< R2007+ shadow object handle when shadow mode is IgnoreShadows */

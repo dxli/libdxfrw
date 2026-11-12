@@ -37,6 +37,7 @@
 #include "intern/dxfvalue.h"
 #include "intern/dwgbuffer.h"
 #include "intern/dwgbufferw.h"
+#include "intern/dxftransparency.h"
 #include "intern/drw_textcodec.h"
 #include "intern/drw_dbg.h"
 #include "intern/drw_reserve.h"
@@ -6127,8 +6128,15 @@ bool DRW_Entity::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         plotStyle = reader->getHandleString();
         break;
     case 440:
-        transparency = reader->getInt32();
+    {
+        const std::uint32_t dxfValue =
+            static_cast<std::uint32_t>(reader->getInt32());
+        int entityValue = 0;
+        transparency = DRW_Transparency::fromDxfGroup440(dxfValue,
+                                                          entityValue)
+            ? entityValue : static_cast<int>(dxfValue);
         break;
+    }
     case 92: {
         // DXF common-entity proxy-graphics byte count (group 92): present for
         // proxy graphics in R13–R2007. DWG proxy-entity layout is ODA §20.4.90.
@@ -6629,10 +6637,10 @@ bool DRW_Entity::parseDwg(DRW::Version version, dwgBuffer *buf, dwgBuffer* strBu
     // The handle follows owner/reactors/xdictionary and precedes layer in the
     // R2004+ common entity handle data.
     hasAcDbColorH = buf->lastEnColorHadDbColorRef;
-    // libreDWG common_entity_data.spec:432-453 — ENC alpha_raw (DXF code
-    // 440) is encoded as (alpha_type<<24) | alpha. Stored verbatim; the
-    // filter (RS_FilterDXFRW::setEntityAttributes) decodes alpha_type==3
-    // into a per-entity pen alpha, otherwise inherits from layer/block.
+    // libreDWG common_entity_data.spec:432-453 — DWG ENC alpha_raw is
+    // (alpha_type<<24) | alpha. Retain this DWG representation in the public
+    // field; DXF group 440 uses type 2 for explicit alpha and is converted at
+    // the DXF parser/writer boundary.
     if (buf->lastEnColorAlphaRaw != 0) {
         transparency = static_cast<int>(buf->lastEnColorAlphaRaw);
     }
@@ -7715,9 +7723,12 @@ bool DRW_Entity::encodeDwgCommon(DRW::Version version, dwgBufferW *buf,
         encBookName = encColorName.substr(0, separator);
         encColorName.erase(0, separator + 1);
     }
+    std::uint32_t alphaRaw = 0;
+    if (!DRW_Transparency::toDwgAlphaRaw(transparency, alphaRaw))
+        return false;
     buf->putEnColor(version, static_cast<std::uint16_t>(color), color24,
                     encColorName, encBookName,
-                    static_cast<std::uint32_t>(transparency),
+                    alphaRaw,
                     version >= DRW::AC1018 && hasAcDbColorH);
 
     // ltypeScale BD.
@@ -19976,6 +19987,8 @@ static bool parseEmbeddedMTextEntityMode(DRW::Version version, dwgBuffer *buf,
             ? buf->lastEnColorName
             : (buf->lastEnColorBookName + "$" + buf->lastEnColorName);
     }
+    // Keep the same DWG ENC representation used by DRW_Entity::transparency;
+    // DXF group 440's distinct type byte is normalized by parseCode.
     if (buf->lastEnColorAlphaRaw != 0)
         mtext.transparency = static_cast<int>(buf->lastEnColorAlphaRaw);
     if (!readBoundedBitDouble(*buf, bodyEndBit, mtext.ltypeScale))
@@ -20398,9 +20411,12 @@ static bool encodeEmbeddedMTextEntityMode(DRW::Version version, dwgBufferW *buf,
         bookName = colorName.substr(0, separator);
         colorName.erase(0, separator + 1);
     }
+    std::uint32_t alphaRaw = 0;
+    if (!DRW_Transparency::toDwgAlphaRaw(mtext.transparency, alphaRaw))
+        return false;
     buf->putEnColor(version, static_cast<std::uint16_t>(mtext.color),
                     mtext.color24, colorName, bookName,
-                    static_cast<std::uint32_t>(mtext.transparency),
+                    alphaRaw,
                     mtext.hasDwgAcDbColorHandle());
     buf->putBitDouble(mtext.ltypeScale);
     std::uint8_t ltFlags = 0;

@@ -7010,6 +7010,23 @@ resources, so this proves a narrow syntax/interoperability route only. Exact
 independent field agreement, native display, full source graph and TABLE
 qualification remain open ([receipt](docs/research/p6-dxf-mtext-direction-vector-peer-compat-2026-11-11.json)).
 
+**Entity transparency format-boundary conversion (2026-11-11):** DXF group
+440 and DWG ENC `alpha_raw` use different explicit-alpha type bytes. The
+entity field continues to retain the DWG convention expected by existing
+consumers: ByLayer `0`, ByBlock `0x01000000`, and explicit alpha type `3` in
+the high byte. DXF group 440 uses `0x020000TT`; parsing normalizes it to the
+internal type-3 form, and entity/BlockBegin/BlockEnd writers convert back to
+the DXF form. DWG common-entity and embedded-MTEXT writers convert legacy
+type-2 caller values to the DWG type-3 form. ByLayer remains omitted; ByBlock
+is preserved; unknown methods fail output while DXF reads retain unknown raw
+values tolerantly. This does not alter public object layout. The new fast
+boundary selector and existing ASCII/Binary XREF round-trip selector pass.
+Broader DXF/DWG fixture executables still report unrelated finalizer,
+VIEWPORT, TABLE, and LTYPE_CONTROL failures; see the [transparency boundary
+receipt](docs/research/p6-transparency-format-boundary-roundtrip-2026-11-11.json)
+for exact results. Native inheritance/rendering and additional producer
+qualification remain open.
+
 HATCH/MPOLYGON boundary-point conversion now has a stable fallback for
 elevation-plus-boundary-Z overflow when the final rotated coordinates remain
 finite. The focused generated test covers positive and negative overflow and

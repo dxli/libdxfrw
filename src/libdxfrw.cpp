@@ -44,6 +44,7 @@
 #include "intern/dxfcode.h"
 #include "intern/dxfwriter.h"
 #include "intern/dxfmaterial.h"
+#include "intern/dxftransparency.h"
 #include "intern/dxf_ac1027_bound_layer.h"
 #include "intern/dxftablecapacity.h"
 #include "intern/dxftablecontent.h"
@@ -7044,7 +7045,12 @@ bool dxfRW::writeEntity(DRW_Entity *ent, bool captureSourceHandle,
             static_cast<std::uint32_t>(ent->plotStyle))));
     }
     if (version > DRW::AC1015 && ent->transparency != DRW::Opaque) {
-        writer->writeInt32(440, ent->transparency);
+        std::uint32_t dxfTransparency = 0;
+        if (!DRW_Transparency::toDxfGroup440(ent->transparency,
+                                              dxfTransparency))
+            return failDxfWrite();
+        if (dxfTransparency != 0u)
+            writer->writeInt32(440, static_cast<std::int32_t>(dxfTransparency));
     }
     if (const auto* light = dynamic_cast<const DRW_Light*>(ent)) {
         if (((lightPreviewContext && lightPreviewContext->approved) || (hasTypedProxyGraphics(*ent)
@@ -17497,8 +17503,14 @@ bool dxfRW::writeBlockEndCommonFields(const DRW_Block& end) {
     if (version > DRW::AC1018 && end.plotStyle != DRW::DefaultPlotStyle) {
         writer->writeUtf8String(390, toHexStr(emittedPlotStyle));
     }
-    if (version > DRW::AC1015 && end.transparency != DRW::Opaque)
-        writer->writeInt32(440, end.transparency);
+    if (version > DRW::AC1015 && end.transparency != DRW::Opaque) {
+        std::uint32_t dxfTransparency = 0;
+        if (!DRW_Transparency::toDxfGroup440(end.transparency,
+                                              dxfTransparency))
+            return failDxfWrite();
+        if (dxfTransparency != 0u)
+            writer->writeInt32(440, static_cast<std::int32_t>(dxfTransparency));
+    }
     if (version > DRW::AC1009)
         writer->writeString(100, "AcDbBlockEnd");
     if (!end.extData.empty() && !writeExtData(end.extData))
@@ -17666,8 +17678,14 @@ bool dxfRW::writeBlock(DRW_Block *bk){
     if (version > DRW::AC1014)
         writer->writeInt16(370,
                            DRW_LW_Conv::lineWidth2dxfInt(bk->lWeight));
-    if (version > DRW::AC1015 && bk->transparency != DRW::Opaque)
-        writer->writeInt32(440, bk->transparency);
+    if (version > DRW::AC1015 && bk->transparency != DRW::Opaque) {
+        std::uint32_t dxfTransparency = 0;
+        if (!DRW_Transparency::toDxfGroup440(bk->transparency,
+                                              dxfTransparency))
+            return failDxfWrite();
+        if (dxfTransparency != 0u)
+            writer->writeInt32(440, static_cast<std::int32_t>(dxfTransparency));
+    }
     if (version > DRW::AC1009) {
         writer->writeString(100, "AcDbBlockBegin");
         writer->writeUtf8String(2, bk->name);

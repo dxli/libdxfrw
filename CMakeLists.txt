@@ -1743,6 +1743,12 @@ if(LIBDXFRW_BUILD_TESTS)
     target_link_libraries(libdxfrw_dwg_object_vectors_tests PRIVATE dxfrw)
     add_test(NAME libdxfrw_dwg_object_vectors
         COMMAND libdxfrw_dwg_object_vectors_tests)
+    add_test(NAME libdxfrw_dwg_dxf_transparency_boundaries
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --transparency-format-boundaries)
+    set_tests_properties(libdxfrw_dwg_dxf_transparency_boundaries PROPERTIES
+        LABELS "fast;dwg;dxf;transparency;generated"
+        TIMEOUT 30)
     add_executable(libdxfrw_dwg_object_encoder_allocation_tests
         tests/dimassoc_dwg_encoder_allocation_tests.cpp)
     target_compile_features(libdxfrw_dwg_object_encoder_allocation_tests
@@ -2877,6 +2883,11 @@ if(LIBDXFRW_BUILD_TESTS)
     target_link_libraries(libdxfrw_dxf_fixture_tests PRIVATE dxfrw)
     add_test(NAME libdxfrw_dxf_fixtures
         COMMAND libdxfrw_dxf_fixture_tests)
+    add_test(NAME libdxfrw_dxf_transparency_xref_roundtrip
+        COMMAND libdxfrw_dxf_fixture_tests --block-xref-path-roundtrip)
+    set_tests_properties(libdxfrw_dxf_transparency_xref_roundtrip PROPERTIES
+        LABELS "fast;dxf;transparency;xref;roundtrip"
+        TIMEOUT 30)
     add_test(NAME libdxfrw_dxf_consumer_write_facade
         COMMAND libdxfrw_dxf_fixture_tests --consumer-write-facade)
     set_tests_properties(libdxfrw_dxf_consumer_write_facade PROPERTIES

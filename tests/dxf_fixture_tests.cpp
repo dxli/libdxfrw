@@ -21636,7 +21636,7 @@ void testBlockXrefPathRoundTrip(TestContext& t) {
                  && (*inputXref)->color == 3
                  && (*inputXref)->color24 == 1193046
                  && (*inputXref)->colorName == "SampleColorBook$DeepBlue"
-                 && (*inputXref)->transparency == 33554560
+                 && (*inputXref)->transparency == 50331776
                  && (*inputXref)->ltypeScale == 2.5
                  && !(*inputXref)->visible
                  && (*inputXref)->shadow == DRW::IgnoreShadows
@@ -21990,7 +21990,7 @@ void testBlockXrefPathRoundTrip(TestContext& t) {
                      && (*outputXref)->color == 3
                      && (*outputXref)->color24 == 1193046
                      && (*outputXref)->colorName == "SampleColorBook$DeepBlue"
-                     && (*outputXref)->transparency == 33554560
+                     && (*outputXref)->transparency == 50331776
                      && (*outputXref)->ltypeScale == 2.5
                      && !(*outputXref)->visible
                      && (*outputXref)->shadow == DRW::IgnoreShadows

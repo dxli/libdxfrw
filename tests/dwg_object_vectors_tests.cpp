@@ -31,6 +31,7 @@
 #include "intern/dwg_fixed_handles.h"
 #include "intern/dwgutil.h"
 #include "intern/dwgvaluekind.h"
+#include "intern/dxftransparency.h"
 #include "intern/drw_textcodec.h"
 #include "ltype_string_area_test_helpers.h"
 #include "xrecord_test_helpers.h"
@@ -6624,6 +6625,47 @@ void testCmColorForegroundProjection(TestContext& t) {
                      + " preserves method and following-field alignment");
     }
 
+}
+
+void testTransparencyFormatBoundaries(TestContext& t) {
+    using namespace DRW_Transparency;
+    std::uint32_t converted = 0;
+    int entityValue = 0;
+
+    t.expect(toDxfGroup440(static_cast<int>(0x03000080u), converted)
+                 && converted == 0x02000080u,
+             "DWG explicit alpha converts to the DXF group-440 type");
+    t.expect(fromDxfGroup440(0x02000080u, entityValue)
+                 && static_cast<std::uint32_t>(entityValue) == 0x03000080u,
+             "DXF explicit alpha normalizes to the consumer ENC type");
+    t.expect(toDwgAlphaRaw(entityValue, converted)
+                 && converted == 0x03000080u,
+             "normalized DXF alpha converts back to the DWG ENC type");
+
+    t.expect(toDxfGroup440(static_cast<int>(kByBlock), converted)
+                 && converted == kByBlock
+                 && fromDxfGroup440(kByBlock, entityValue)
+                 && static_cast<std::uint32_t>(entityValue) == kByBlock
+                 && toDwgAlphaRaw(entityValue, converted)
+                 && converted == kByBlock,
+             "ByBlock transparency survives both format boundaries");
+    t.expect(toDxfGroup440(0, converted) && converted == 0u
+                 && toDxfGroup440(static_cast<int>(0x00000080u), converted)
+                 && converted == 0u
+                 && toDwgAlphaRaw(0, converted) && converted == 0u,
+             "ByLayer transparency remains the omitted/default value");
+    t.expect(toDxfGroup440(DRW::Transparent, converted)
+                 && converted == kDxfAlphaType
+                 && toDwgAlphaRaw(DRW::Transparent, converted)
+                 && converted == kDwgAlphaType,
+             "legacy transparent sentinel maps to fully transparent alpha");
+    t.expect(!toDxfGroup440(static_cast<int>(0x04000080u), converted)
+                 && !toDwgAlphaRaw(static_cast<int>(0x04000080u), converted)
+                 && !fromDxfGroup440(0x04000080u, entityValue)
+                 && !toDxfGroup440(static_cast<int>(0x03000180u), converted)
+                 && !toDwgAlphaRaw(static_cast<int>(0x02000180u), converted)
+                 && !fromDxfGroup440(0x02000180u, entityValue),
+             "unknown transparency methods fail closed at format boundaries");
 }
 
 void testEnColorReservedFlagsRefusal(TestContext& t) {
@@ -30713,6 +30755,14 @@ int main(int argc, char** argv) {
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
+    if (argc == 2
+        && std::string(argv[1]) == "--transparency-format-boundaries") {
+        TestContext context;
+        testTransparencyFormatBoundaries(context);
+        std::cout << "DWG/DXF transparency format boundaries: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
     if (argc == 2 && std::string(argv[1]) == "--mlinestyle-cmc-retention") {
         TestContext context;
         testMLineStyleCmcRetention(context);
@@ -31566,6 +31616,7 @@ int main(int argc, char** argv) {
     testAssociativeDimensionDependencyBody(context);
     testAssociativeDependencyFields(context);
     testEnColorReservedFlagsRefusal(context);
+    testTransparencyFormatBoundaries(context);
     testDbColorUnsupportedMethodRefusal(context);
     testMLineStyleCmcRetention(context);
     testCmColorForegroundProjection(context);
