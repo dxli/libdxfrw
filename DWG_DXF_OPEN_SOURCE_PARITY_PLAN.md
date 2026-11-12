@@ -5526,6 +5526,19 @@ modified profile resolves the row and geometry fields. See the [ODA SAT/SAB
 format note](https://www.opendesign.com/blog/2017/october/working-sat-and-sab-files-teigha)
 and the [pcurve row receipt](docs/research/p7-ac1024-21500-pcurve-reference-rows-2026-11-11.json).
 
+**P7 AC1024 multi-root sample search (2026-11-12):** a targeted public-source
+search found no new AC1024 multi-root ACIS witness. Autodesk's 2010-and-later
+visualization files are the same already-screened one-root carrier corpus;
+`nextgis/dwg_samples` identifies AutoCAD 2016 output and publishes primitive
+examples; TrattoCAD's two published 3D samples are already represented by the
+AC1018 SAT-v1 work and the publisher does not identify which files it saved
+with its own application; the surfaced ACadSharp test sample is AC1032. Do not
+repeat these searches or treat test-corpus provenance as producer identity.
+This bounded search is not evidence that no candidate exists online. Keep the
+21500 third header word raw and require a version-specific schema or a
+hash-bound, independently interpreted multi-root source before using it.
+Receipt: [AC1024 multi-root sample search](docs/research/p7-ac1024-multiroot-online-sample-search-2026-11-12.json).
+
 ## P4 — original bodies and complete document closure
 
 The AC1021 children-room source's bounded selected-output census is complete:
