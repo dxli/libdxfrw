@@ -4121,6 +4121,7 @@ public:
     rowCount = 0;
     tableName.clear();
     columns.clear();
+    dxfColumnNameSeen.clear();
     rowHandles.clear();
     dxfColumn = -1;
     dxfProjectionComplete = true;
@@ -4150,14 +4151,20 @@ public:
   bool isDxfPayloadWritable() const noexcept;
 
   bool hasCompleteDxfProjection() const noexcept {
-    return dxfProjectionComplete && (dxfSeenFields & 0x0fu) == 0x0fu
-        && isDxfPayloadWritable();
+    if (!dxfProjectionComplete || (dxfSeenFields & 0x0fu) != 0x0fu
+        || dxfColumnNameSeen.size() != columns.size())
+      return false;
+    for (const bool seen : dxfColumnNameSeen)
+      if (!seen)
+        return false;
+    return isDxfPayloadWritable();
   }
 
 private:
   int dxfColumn = -1;
   bool dxfProjectionComplete = true;
   std::uint8_t dxfSeenFields = 0u;
+  std::vector<bool> dxfColumnNameSeen;
   std::size_t dxfRetainedStringBytes = 0u;
   std::size_t dxfStoredCellCount = 0u;
   std::shared_ptr<DxfReadRetainedLease> dxfRetainedStringLease;

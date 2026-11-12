@@ -1855,6 +1855,12 @@ created locally from scratch for the specific control.
   fresh readback. This closes only that locally authored row subgraph. Physical
   source identities, owner-role evidence, the remaining TABLESTYLE/TABLECONTENT/
   TABLEGEOMETRY/XRECORD dependencies, and strict source output remain open.
+  The typed DXF reader now also rejects duplicate singleton header groups and
+  missing/duplicate column-name groups from the typed projection while
+  retaining the complete raw object. Generated ASCII/Binary controls cover
+  duplicate flags, a missing first-column name, a duplicate name, and a missing
+  final-column name. This preserves ambiguous input losslessly without
+  publishing a partial `DRW_DataTable`; it adds no schema or producer claim.
   It establishes no native semantic meaning, DWG source replay, or support
   promotion ([read receipt](docs/research/p5-dxf-datatable-read-projection-2026-11-11.json),
   [writer receipt](docs/research/p5-dxf-datatable-write-projection-2026-11-11.json)).

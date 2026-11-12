@@ -62,7 +62,8 @@ struct Export final : LC3CompatCheck {
 
 bool writeInput(const std::filesystem::path& path, bool binary,
                 unsigned referenceCount = 2u,
-                bool unsupportedColumnType = false) {
+                bool unsupportedColumnType = false,
+                int malformedProjection = 0) {
     std::ofstream file(path, std::ios::binary | std::ios::trunc);
     if (!file) return false;
     if (binary) {
@@ -84,13 +85,22 @@ bool writeInput(const std::filesystem::path& path, bool binary,
         || !str(0, "SECTION") || !str(2, "OBJECTS")
         || !str(0, "DATATABLE") || !str(5, "115") || !str(330, "114")
         || !str(100, "AcDbDataTable") || !integer(70, 2)
-        || !integer(90, 4) || !integer(91, 2)
-        || !str(1, "TABLE_NAME") || !integer(92, unsupportedColumnType ? 77 : 2) || !str(2, "DOUBLE")
+        || (malformedProjection == 1 && !integer(70, 3))
+        || !integer(90, 4)
+        || (malformedProjection == 5 && !integer(90, 4))
+        || !integer(91, 2)
+        || (malformedProjection == 6 && !integer(91, 2))
+        || !str(1, "TABLE_NAME")
+        || (malformedProjection == 7 && !str(1, "TABLE_NAME_DUP"))
+        || !integer(92, unsupportedColumnType ? 77 : 2)
+        || (malformedProjection != 2 && !str(2, "DOUBLE"))
+        || (malformedProjection == 3 && !str(2, "DUPLICATE_DOUBLE"))
         || !writer->writeDouble(40, 1.25) || !writer->writeDouble(40, 2.5)
         || !integer(92, 1) || !str(2, "INTEGER")
         || !integer(93, 7) || !integer(93, 8)
         || !integer(92, 6) || !str(2, "TEXT") || !str(3, "alpha")
-        || !str(3, "beta") || !integer(92, 1) || !str(2, "INTEGER_2")
+        || !str(3, "beta") || !integer(92, 1)
+        || (malformedProjection != 4 && !str(2, "INTEGER_2"))
         || !integer(93, -3) || !integer(93, 4)
         || (referenceCount >= 1u && !str(360, "116")))
         return false;
@@ -200,6 +210,14 @@ int main() {
         if (!reader.read(&unknownColumn, false) || !unknownColumn.tables.empty()
             || unknownColumn.raw.size() != 1u)
             return 8;
+        for (const int malformed : {1, 2, 3, 4, 5, 6, 7}) {
+            if (!writeInput(path, binary, 2u, false, malformed)) return 10;
+            Reader malformedProjection;
+            if (!reader.read(&malformedProjection, false)
+                || !malformedProjection.tables.empty()
+                || malformedProjection.raw.size() != 1u)
+                return 11;
+        }
         if (!writeAndRead(path, binary)) return 9;
     }
     return 0;

@@ -12490,22 +12490,38 @@ bool DRW_DataTable::parseCode(int code,
         };
         switch (code) {
         case 70:
+            if ((dxfSeenFields & 0x01u) != 0u) {
+                dxfProjectionComplete = false;
+                return true;
+            }
             flags = reader->getInt32();
             dxfSeenFields |= 0x01u;
             return true;
         case 90:
+            if ((dxfSeenFields & 0x02u) != 0u) {
+                dxfProjectionComplete = false;
+                return true;
+            }
             columnCount = reader->getInt32();
             dxfSeenFields |= 0x02u;
             return columnCount >= 0
                 && static_cast<std::size_t>(columnCount)
                        <= dwgSafety::MaxOwnedObjectCount;
         case 91:
+            if ((dxfSeenFields & 0x04u) != 0u) {
+                dxfProjectionComplete = false;
+                return true;
+            }
             rowCount = reader->getInt32();
             dxfSeenFields |= 0x04u;
             return rowCount >= 0
                 && static_cast<std::size_t>(rowCount)
                        <= dwgSafety::MaxOwnedObjectCount;
         case 1:
+            if ((dxfSeenFields & 0x08u) != 0u) {
+                dxfProjectionComplete = false;
+                return true;
+            }
             if (!readString(tableName))
                 return false;
             dxfSeenFields |= 0x08u;
@@ -12513,20 +12529,32 @@ bool DRW_DataTable::parseCode(int code,
         case 92: {
             if (columns.size() >= dwgSafety::MaxOwnedObjectCount)
                 return false;
+            if (!dxfColumnNameSeen.empty()
+                && !dxfColumnNameSeen.back())
+                dxfProjectionComplete = false;
             Column column;
             column.type = reader->getInt32();
             if (column.type != 1 && column.type != 2 && column.type != 6)
                 dxfProjectionComplete = false;
             columns.push_back(std::move(column));
+            dxfColumnNameSeen.push_back(false);
             dxfColumn = static_cast<int>(columns.size() - 1u);
             return true;
         }
         case 2:
             if (dxfColumn < 0
-                || static_cast<std::size_t>(dxfColumn) >= columns.size())
+                || static_cast<std::size_t>(dxfColumn) >= columns.size()
+                || static_cast<std::size_t>(dxfColumn)
+                       >= dxfColumnNameSeen.size())
                 return false;
-            return readString(
-                columns[static_cast<std::size_t>(dxfColumn)].text);
+            if (dxfColumnNameSeen[static_cast<std::size_t>(dxfColumn)]) {
+                dxfProjectionComplete = false;
+                return true;
+            }
+            if (!readString(columns[static_cast<std::size_t>(dxfColumn)].text))
+                return false;
+            dxfColumnNameSeen[static_cast<std::size_t>(dxfColumn)] = true;
+            return true;
         case 40:
         case 93:
         case 3: {
