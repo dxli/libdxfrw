@@ -50,6 +50,8 @@
   "validation": {
     "build": "cmake --build build-gcc --target libdxfrw_dxf_datatable_read_tests -j4",
     "build_result": "passed",
+    "consumer_build": "cmake --build build-gcc --target dwg2dxf -j4",
+    "consumer_build_result": "passed",
     "focused_test": "ctest --test-dir build-gcc -R '^libdxfrw_dxf_datatable_read$' --output-on-failure",
     "focused_test_result": "1/1 passed; duplicate singleton/column-name and row-handle graph-integrity controls included",
     "diff_check": "git diff --check passed"

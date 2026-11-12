@@ -1863,7 +1863,8 @@ created locally from scratch for the specific control.
   publishing a partial `DRW_DataTable`. Duplicate row-child handles and
   references aliasing the table or its owner also force raw-only fallback;
   generated ASCII/Binary controls cover those cases. This adds no schema or
-  producer claim.
+  producer claim. After both DATATABLE slices, the in-tree `dwg2dxf` consumer
+  rebuilt successfully against the changed public object model.
   It establishes no native semantic meaning, DWG source replay, or support
   promotion ([read receipt](docs/research/p5-dxf-datatable-read-projection-2026-11-11.json),
   [writer receipt](docs/research/p5-dxf-datatable-write-projection-2026-11-11.json)).
