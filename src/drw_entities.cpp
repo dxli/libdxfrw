@@ -25253,55 +25253,59 @@ bool DRW_Hatch::encodeDwgBoundaryData(DRW::Version version, dwgBufferW *buf,
 
 bool DRW_Hatch::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs;
-    if (!validateDwgHatchData(*this, version))
-        return false;
-    oType = 78;  // HATCH class id — see dwgreader.cpp:1380
-    if (!encodeDwgCommon(version, buf)) return false;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [&](dwgBufferW *body, dwgBufferW *strings, dwgBufferW *handles) {
+            if (!validateDwgHatchData(*this, version))
+                return false;
+            oType = 78;  // HATCH class id — see dwgreader.cpp:1380
+            if (!encodeDwgCommon(version, body)) return false;
 
-    dwgBufferW *sb = strBuf ? strBuf : buf;
-    encodeDwgGradientData(version, buf, sb);
+            dwgBufferW *sb = strings ? strings : body;
+            encodeDwgGradientData(version, body, sb);
 
-    buf->putBitDouble(basePoint.z);            // BD: elevation
-    buf->put3BitDouble(extPoint);              // 3BD: extrusion (NOT BE-style for HATCH)
-    sb->putVariableText(version, name);        // TV: hatch pattern name
-    buf->putBit(static_cast<std::uint8_t>(solid));
-    buf->putBit(static_cast<std::uint8_t>(associative));
-    if (!encodeDwgBoundaryData(version, buf, true)) return false;
+            body->putBitDouble(basePoint.z);            // BD: elevation
+            body->put3BitDouble(extPoint);              // 3BD: extrusion (NOT BE-style for HATCH)
+            sb->putVariableText(version, name);        // TV: hatch pattern name
+            body->putBit(static_cast<std::uint8_t>(solid));
+            body->putBit(static_cast<std::uint8_t>(associative));
+            if (!encodeDwgBoundaryData(version, body, true)) return false;
 
-    buf->putBitShort(static_cast<std::uint16_t>(hstyle));
-    buf->putBitShort(static_cast<std::uint16_t>(hpattern));
+            body->putBitShort(static_cast<std::uint16_t>(hstyle));
+            body->putBitShort(static_cast<std::uint16_t>(hpattern));
 
-    if (!solid) {
-        buf->putBitDouble(angle / ARAD);
-        buf->putBitDouble(scale);
-        buf->putBit(static_cast<std::uint8_t>(doubleflag));
-        buf->putBitShort(static_cast<std::uint16_t>(patternLines.size()));
-        for (const PatternLine& patternLine : patternLines) {
-            buf->putBitDouble(patternLine.angle / ARAD);
-            buf->putBitDouble(patternLine.baseX);
-            buf->putBitDouble(patternLine.baseY);
-            buf->putBitDouble(patternLine.offsetX);
-            buf->putBitDouble(patternLine.offsetY);
-            buf->putBitShort(static_cast<std::uint16_t>(patternLine.dashList.size()));
-            for (double dash : patternLine.dashList)
-                buf->putBitDouble(dash);
-        }
-    }
+            if (!solid) {
+                body->putBitDouble(angle / ARAD);
+                body->putBitDouble(scale);
+                body->putBit(static_cast<std::uint8_t>(doubleflag));
+                body->putBitShort(static_cast<std::uint16_t>(patternLines.size()));
+                for (const PatternLine& patternLine : patternLines) {
+                    body->putBitDouble(patternLine.angle / ARAD);
+                    body->putBitDouble(patternLine.baseX);
+                    body->putBitDouble(patternLine.baseY);
+                    body->putBitDouble(patternLine.offsetX);
+                    body->putBitDouble(patternLine.offsetY);
+                    body->putBitShort(static_cast<std::uint16_t>(patternLine.dashList.size()));
+                    for (double dash : patternLine.dashList)
+                        body->putBitDouble(dash);
+                }
+            }
 
-    bool havePixelSize = false;
-    for (const auto& lp : looplist)
-        havePixelSize = havePixelSize || (lp && ((lp->type & 4) != 0));
-    if (havePixelSize)
-        buf->putBitDouble(pixelSize);
+            bool havePixelSize = false;
+            for (const auto& lp : looplist)
+                havePixelSize = havePixelSize || (lp && ((lp->type & 4) != 0));
+            if (havePixelSize)
+                body->putBitDouble(pixelSize);
 
-    buf->putBitLong(static_cast<std::int32_t>(seedPoints.size()));
-    for (const auto& sp : seedPoints) {
-        buf->putRawDouble(sp.x);
-        buf->putRawDouble(sp.y);
-    }
+            body->putBitLong(static_cast<std::int32_t>(seedPoints.size()));
+            for (const auto& sp : seedPoints) {
+                body->putRawDouble(sp.x);
+                body->putRawDouble(sp.y);
+            }
 
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
-    return writeDwgHatchBoundaryHandles(looplist, buf, handleBuf);
+            if (!encodeDwgEntHandle(version, body, handles)) return false;
+            return writeDwgHatchBoundaryHandles(looplist, body, handles);
+    });
 }
 
 bool DRW_Spline::parseCode(int code, const std::unique_ptr<dxfReader>& reader){

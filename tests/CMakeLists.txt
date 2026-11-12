@@ -311,6 +311,17 @@ add_test(NAME libdxfrw_dwg_hatch_edge_subtype COMMAND libdxfrw_dwg_hatch_edge_su
 set_tests_properties(libdxfrw_dwg_hatch_edge_subtype PROPERTIES
     LABELS "dwg;fast;hatch;transaction" TIMEOUT 30)
 
+add_executable(libdxfrw_dwg_hatch_encoder_allocation_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_hatch_encoder_allocation_tests.cpp)
+target_compile_features(libdxfrw_dwg_hatch_encoder_allocation_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_hatch_encoder_allocation_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_hatch_encoder_allocation_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dwg_hatch_encoder_allocation_tests PRIVATE dxfrw)
+add_test(NAME dwg_hatch_encoder_allocation_rollback_retry
+    COMMAND libdxfrw_dwg_hatch_encoder_allocation_tests)
+set_tests_properties(dwg_hatch_encoder_allocation_rollback_retry PROPERTIES
+    LABELS "dwg;fast;hatch;transaction;allocation" TIMEOUT 30)
+
 add_executable(libdxfrw_dwg_hatch_ellipse_edge_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/dwg_hatch_ellipse_edge_dwg_tests.cpp)
 target_compile_features(libdxfrw_dwg_hatch_ellipse_edge_tests PRIVATE cxx_std_17)
