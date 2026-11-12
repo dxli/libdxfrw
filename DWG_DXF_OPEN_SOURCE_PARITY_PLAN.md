@@ -1717,6 +1717,20 @@ created locally from scratch for the specific control.
   construction or DWG producer qualification
   ([receipt](docs/research/p8-3d-consumer-mesh-geometry-fields-2026-11-12.json)).
 
+- **P8/S8.3.19 default MESH compatibility projection (2026-11-12):** the
+  existing trailing `DRW_Interface::addMesh` default now sends each valid
+  level-0 face to legacy consumers as a closed 3D POLYLINE through their
+  established `addPolyline` callback. It preserves WCS XYZ and drawing
+  presentation attributes, skips faces with fewer than three vertices or any
+  invalid index, and does not copy MESH identity/ownership metadata. A direct
+  base-callback regression checks these rules; the 3D consumer probe passes
+  1/1 and the LibreCAD_3 compatibility target compiles. This is a lossy
+  base-cage wireframe for consumers that omit `addMesh`; subdivision, crease,
+  edge and override semantics remain available only to typed overrides and
+  are not represented by this fallback. It does not qualify native MESH
+  construction or change format support claims
+  ([receipt](docs/research/p8-3d-consumer-mesh-default-legacy-fallback-2026-11-12.json)).
+
 - **P8 native FreeCAD MESH DXF consumer check (2026-11-12):** FreeCAD 1.1.4
   Revision `20260928` launched with the host ARM64 NEON feature visible and
   successfully completed Draft's DXF import for a locally authored AC1027

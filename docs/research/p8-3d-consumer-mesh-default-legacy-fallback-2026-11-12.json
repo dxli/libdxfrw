@@ -1,0 +1,25 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "date": "2026-11-12",
+  "id": "p8-3d-consumer-mesh-default-legacy-fallback-2026-11-12",
+  "purpose": "Verify the default MESH callback projects valid face boundaries to legacy addPolyline consumers without copying source identity or admitting malformed faces.",
+  "implementation": {
+    "api": "DRW_Interface::addMesh",
+    "projection": "one closed 3D POLYLINE per face with at least three vertices and all indices in range",
+    "coordinates": "vertex XYZ copied to polyline vertex basePoint",
+    "attributes": ["layer", "lineType", "material", "color", "color24", "colorName", "transparency", "plotStyle", "shadow", "lineweight", "linetypeScale", "visibility", "space"],
+    "identity": "handle, parent handle, reactors, XDATA, and other source identity/ownership metadata are not copied",
+    "omittedSemantics": ["subdivision", "crease values", "explicit edge list", "property overrides"]
+  },
+  "validation": {
+    "build": "cmake --build build --target libdxfrw_3d_consumer_probe -j4",
+    "buildResult": "PASS",
+    "ctest": "ctest --test-dir build -R '^libdxfrw_3d_consumer_probe$' --output-on-failure",
+    "ctestResult": "PASS, 1/1",
+    "combinedBuild": "cmake --build build --target libdxfrw_3d_consumer_probe lc3_compat_check -j4",
+    "combinedBuildResult": "PASS",
+    "diffCheck": "PASS"
+  },
+  "scopeLimit": "Default legacy-consumer base-cage wireframe delivery only. Does not prove native MESH construction, subdivision-surface fidelity, independent interoperability, DWG producer semantics, or broad MESH support.",
+  "claimEffect": "No format or native-consumer support claim changes."
+}

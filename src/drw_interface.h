@@ -24,10 +24,12 @@
 # endif
 #endif
 
+#include <algorithm>
 #include <cstring>
 #include <limits>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "drw_datastorage.h"
 #include "drw_entities.h"
@@ -333,10 +335,53 @@ public:
    *  handler receive its inherited spline representation. */
   virtual void addHelix(const DRW_Helix *data) { addSpline(data); }
 
-  /** Called for every MESH (AcDbSubDMesh) subdivision-surface entity. Default
-   *  no-op so readers can deliver MESH without forcing every consumer to
-   *  implement it (trailing-virtual ABI convention, static-link only). */
-  virtual void addMesh(const DRW_Mesh &data) { (void)data; }
+  /** Called for every MESH (AcDbSubDMesh) subdivision-surface entity.
+   *  Consumers that do not override this callback receive each valid face as
+   *  a closed 3D POLYLINE through addPolyline. This is a lossy base-cage
+   *  wireframe fallback: it does not preserve subdivision, crease, edge, or
+   *  property-override semantics. Typed 3D consumers should override this
+   *  callback to receive the complete MESH. The trailing virtual slot remains
+   *  defaulted so existing adapters stay source-compatible.
+   */
+  virtual void addMesh(const DRW_Mesh &data) {
+    for (const std::vector<std::int32_t>& face : data.faces) {
+      if (face.size() < 3u)
+        continue;
+
+      const bool validFace = std::all_of(
+          face.begin(), face.end(), [&data](std::int32_t index) {
+            return index >= 0
+                && static_cast<std::size_t>(index) < data.vertices.size();
+          });
+      if (!validFace)
+        continue;
+
+      DRW_Polyline polyline;
+      polyline.flags = 1 | 8; // Closed 3D polyline.
+      polyline.layer = data.layer;
+      polyline.lineType = data.lineType;
+      polyline.material = data.material;
+      polyline.color = data.color;
+      polyline.color24 = data.color24;
+      polyline.colorName = data.colorName;
+      polyline.transparency = data.transparency;
+      polyline.plotStyle = data.plotStyle;
+      polyline.shadow = data.shadow;
+      polyline.lWeight = data.lWeight;
+      polyline.ltypeScale = data.ltypeScale;
+      polyline.visible = data.visible;
+      polyline.space = data.space;
+
+      for (std::int32_t index : face) {
+        const DRW_Coord& point = data.vertices[static_cast<std::size_t>(index)];
+        DRW_Vertex vertex(point.x, point.y, point.z, 0.0);
+        vertex.flags = 32; // 3D polyline vertex.
+        polyline.addVertex(std::move(vertex));
+      }
+
+      addPolyline(polyline);
+    }
+  }
 
   /** Called for every spline knot value */
   virtual void addKnot(const DRW_Entity &data) = 0;

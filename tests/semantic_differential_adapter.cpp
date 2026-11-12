@@ -654,6 +654,15 @@ public:
     }
     bool writeRecipeSucceeded() const { return writeRecipeSucceeded_; }
     void enable3DConsumerProbe() { threeDConsumerProbe_ = true; }
+    std::vector<DRW_Polyline> meshFallbackPolylines;
+    void exerciseDefaultMeshFallback(const DRW_Mesh& mesh) {
+        struct ResetFlag {
+            bool& flag;
+            ~ResetFlag() { flag = false; }
+        } reset{collectMeshFallbackPolylines_};
+        collectMeshFallbackPolylines_ = true;
+        DRW_Interface::addMesh(mesh);
+    }
     void enableNestedMTextAttributeProbe() {
         nestedMTextAttributeProbe_ = true;
     }
@@ -923,6 +932,8 @@ public:
     SEMANTIC_OPAQUE_VALUE(addProxyEntity, DRW_ProxyEntity, "PROXY_ENTITY")
     SEMANTIC_OPAQUE_POINTER(linkUnderlay, DRW_UnderlayDefinition, "UNDERLAYDEFINITION")
     void addPolyline(const DRW_Polyline& d) override {
+        if (collectMeshFallbackPolylines_)
+            meshFallbackPolylines.push_back(d);
         std::vector<Field> fields = entityFields(d, "POLYLINE", "POLYLINE");
         fields.push_back(pointField("basePoint", d.basePoint));
         fields.push_back(pointField("extrusion", d.extPoint));
@@ -2314,6 +2325,7 @@ private:
     dxfRW* dxfWriter_ = nullptr;
     dwgRW* dwgWriter_ = nullptr;
     bool writeRecipeSucceeded_ = true;
+    bool collectMeshFallbackPolylines_ = false;
     bool threeDConsumerProbe_ = false;
     bool nestedMTextAttributeProbe_ = false;
     bool planeSurfaceInlinePayloadProbe_ = false;
@@ -5170,6 +5182,62 @@ int selfTest() {
         || legacyTableSink.carriers.front().recordId
             != legacyTableSink.records.front().id)
         return fail(__LINE__);
+
+    // Consumers predating addMesh inherit a wireframe projection through
+    // their established addPolyline callback. Preserve WCS vertices and
+    // presentation attributes, while refusing malformed faces and avoiding
+    // copying MESH identity/ownership onto synthesized records.
+    DRW_Mesh fallbackMesh;
+    fallbackMesh.handle = 0x716u;
+    fallbackMesh.parentHandle = 0x30u;
+    fallbackMesh.layer = "MESH_FALLBACK";
+    fallbackMesh.lineType = "CONTINUOUS";
+    fallbackMesh.color = 3;
+    fallbackMesh.color24 = 0x123456;
+    fallbackMesh.colorName = "fallback-color";
+    fallbackMesh.material = 0x123u;
+    fallbackMesh.transparency = 0x5A000000;
+    fallbackMesh.plotStyle = 0x456u;
+    fallbackMesh.shadow = static_cast<DRW::ShadowMode>(3);
+    fallbackMesh.lWeight = DRW_LW_Conv::width11;
+    fallbackMesh.ltypeScale = 2.5;
+    fallbackMesh.visible = false;
+    fallbackMesh.space = DRW::PaperSpace;
+    fallbackMesh.vertices = {DRW_Coord{1.0, 2.0, 3.0},
+                             DRW_Coord{4.0, 5.0, 6.0},
+                             DRW_Coord{7.0, 8.0, 9.0}};
+    fallbackMesh.faces = {{2, 0, 1}, {0, 1}, {0, -1, 2}, {0, 1, 3}};
+    SemanticSink legacyMeshSink("DRW_Interface", "read");
+    legacyMeshSink.exerciseDefaultMeshFallback(fallbackMesh);
+    if (legacyMeshSink.meshFallbackPolylines.size() != 1u)
+        return fail(__LINE__);
+    const DRW_Polyline& fallbackPolyline =
+        legacyMeshSink.meshFallbackPolylines.front();
+    if (fallbackPolyline.flags != (1 | 8)
+        || fallbackPolyline.vertlist.size() != 3u
+        || fallbackPolyline.vertlist[0]->basePoint.x != 7.0
+        || fallbackPolyline.vertlist[0]->basePoint.y != 8.0
+        || fallbackPolyline.vertlist[0]->basePoint.z != 9.0
+        || fallbackPolyline.vertlist[1]->basePoint.x != 1.0
+        || fallbackPolyline.vertlist[2]->basePoint.z != 6.0
+        || fallbackPolyline.vertlist[0]->flags != 32
+        || fallbackPolyline.layer != fallbackMesh.layer
+        || fallbackPolyline.lineType != fallbackMesh.lineType
+        || fallbackPolyline.color != fallbackMesh.color
+        || fallbackPolyline.color24 != fallbackMesh.color24
+        || fallbackPolyline.colorName != fallbackMesh.colorName
+        || fallbackPolyline.material != fallbackMesh.material
+        || fallbackPolyline.transparency != fallbackMesh.transparency
+        || fallbackPolyline.plotStyle != fallbackMesh.plotStyle
+        || fallbackPolyline.shadow != fallbackMesh.shadow
+        || fallbackPolyline.lWeight != fallbackMesh.lWeight
+        || fallbackPolyline.ltypeScale != fallbackMesh.ltypeScale
+        || fallbackPolyline.visible != fallbackMesh.visible
+        || fallbackPolyline.space != fallbackMesh.space
+        || fallbackPolyline.handle != DRW::NoHandle
+        || fallbackPolyline.parentHandle != DRW::NoHandle)
+        return fail(__LINE__);
+
     SemanticSink dimensionSink("dxfRW", "read");
     DRW_DimAligned dimension;
     dimension.setDefPoint({-3, -4, 8});
