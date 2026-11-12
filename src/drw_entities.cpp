@@ -29419,243 +29419,248 @@ bool DRW_Surface::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t
     } else if (!validTypedPayload()) {
         return false;
     }
-    if (!encodeDwgCommon(version, buf, strBuf))
-        return false;
-
-    if (hasRawDwgBody && rawDwgBodyVersion == version) {
-        if (!putSurfaceRawBits(buf, rawAcisData, rawDwgBodyBitSize))
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [&](dwgBufferW *body, dwgBufferW *strings,
+            dwgBufferW *handles) {
+        if (!encodeDwgCommon(version, body, strings))
             return false;
-    } else {
-        // DXF ACIS/SAB bytes are not the bit-packed DWG ACTION_3DSOLID body.
-        // Do not place them directly into a DWG object. Native ACIS emission
-        // remains a separate conversion step; empty modeler bodies are valid
-        // and allow metadata-only surfaces to round-trip safely.
-        if (!acisEmpty && !rawAcisData.empty())
-            return false;
-        buf->putBit(1); // ACTION_3DSOLID: no ACIS body
 
-        const bool hasModelerFormat = surfaceHasModelerFormatVersion(eType);
-        if (hasModelerFormat) {
-            if (modelerFormatVersion < 0
-                || modelerFormatVersion > 0xFFFF
-                || (eType == DRW::LOFTEDSURFACE && modelerFormatVersion > 3))
+        if (hasRawDwgBody && rawDwgBodyVersion == version) {
+            if (!putSurfaceRawBits(body, rawAcisData, rawDwgBodyBitSize))
                 return false;
-            buf->putBitShort(static_cast<std::uint16_t>(modelerFormatVersion));
-        }
-        if (uIsolines < 0 || uIsolines > 0xFFFF
-            || vIsolines < 0 || vIsolines > 0xFFFF)
-            return false;
-        buf->putBitShort(static_cast<std::uint16_t>(uIsolines));
-        buf->putBitShort(static_cast<std::uint16_t>(vIsolines));
+        } else {
+            // DXF ACIS/SAB bytes are not the bit-packed DWG ACTION_3DSOLID body.
+            // Do not place them directly into a DWG object. Native ACIS emission
+            // remains a separate conversion step; empty modeler bodies are valid
+            // and allow metadata-only surfaces to round-trip safely.
+            if (!acisEmpty && !rawAcisData.empty())
+                return false;
+            body->putBit(1); // ACTION_3DSOLID: no ACIS body
 
-        auto putCoord = [&](const DRW_Coord& value) {
-            if (!finiteSurfaceCoord(value))
+            const bool hasModelerFormat = surfaceHasModelerFormatVersion(eType);
+            if (hasModelerFormat) {
+                if (modelerFormatVersion < 0
+                    || modelerFormatVersion > 0xFFFF
+                    || (eType == DRW::LOFTEDSURFACE && modelerFormatVersion > 3))
+                    return false;
+                body->putBitShort(static_cast<std::uint16_t>(modelerFormatVersion));
+            }
+            if (uIsolines < 0 || uIsolines > 0xFFFF
+                || vIsolines < 0 || vIsolines > 0xFFFF)
                 return false;
-            buf->put3BitDouble(value);
-            return true;
-        };
-        auto putBool = [&](bool value) { buf->putBit(value ? 1 : 0); };
-        auto putCount = [&](std::int32_t value, std::size_t limit) {
-            return value >= 0 && static_cast<std::size_t>(value) <= limit;
-        };
+            body->putBitShort(static_cast<std::uint16_t>(uIsolines));
+            body->putBitShort(static_cast<std::uint16_t>(vIsolines));
 
-        switch (eType) {
-        case DRW::EXTRUDEDSURFACE: {
-            const auto *surface = static_cast<const DRW_ExtrudedSurface *>(this);
-            if (!std::isfinite(surface->draftAngle)
-                || !std::isfinite(surface->draftStartDistance)
-                || !std::isfinite(surface->draftEndDistance)
-                || !std::isfinite(surface->twistAngle)
-                || !std::isfinite(surface->scaleFactor)
-                || !std::isfinite(surface->alignAngle)
-                || !finiteSurfaceCoord(surface->referenceVector)
-                || !finiteSurfaceCoord(surface->sweepVector)
-                || surface->sweepAlignmentFlags < 0
-                || surface->sweepAlignmentFlags > 0xFFFF
-                || surface->pathFlags < 0 || surface->pathFlags > 0xFFFF
-                || !finiteSurfaceMatrix(surface->sweepEntityTransform)
-                || !finiteSurfaceMatrix(surface->pathEntityTransform))
-                return false;
-            buf->putBitDouble(surface->draftAngle);
-            buf->putBitDouble(surface->draftStartDistance);
-            buf->putBitDouble(surface->draftEndDistance);
-            buf->putBitDouble(surface->twistAngle);
-            buf->putBitDouble(surface->scaleFactor);
-            buf->putBitDouble(surface->alignAngle);
-            // The matrices were validated above; emit them in their specified
-            // position after SweepOptions' scalar fields.
-            for (double value : surface->sweepEntityTransform)
-                buf->putBitDouble(value);
-            for (double value : surface->pathEntityTransform)
-                buf->putBitDouble(value);
-            putBool(surface->solid);
-            buf->putBitShort(static_cast<std::uint16_t>(surface->sweepAlignmentFlags));
-            buf->putBitShort(static_cast<std::uint16_t>(surface->pathFlags));
-            putBool(surface->alignStart);
-            putBool(surface->bank);
-            putBool(surface->basePointSet);
-            putBool(surface->sweepEntityTransformComputed);
-            putBool(surface->pathEntityTransformComputed);
-            if (!finiteSurfaceCoord(surface->referenceVector)
-                || !finiteSurfaceCoord(surface->sweepVector)
-                || !finiteSurfaceMatrix(surface->extrudedTransform))
-                return false;
-            putCoord(surface->referenceVector);
-            putCoord(surface->sweepVector);
-            for (double value : surface->extrudedTransform)
-                buf->putBitDouble(value);
-            break;
-        }
-        case DRW::LOFTEDSURFACE: {
-            const auto *surface = static_cast<const DRW_LoftedSurface *>(this);
-            if (!std::isfinite(surface->startDraftAngle)
-                || !std::isfinite(surface->endDraftAngle)
-                || !std::isfinite(surface->startDraftMagnitude)
-                || !std::isfinite(surface->endDraftMagnitude)
-                || !putCount(surface->numCrossSections,
-                             DRW_LoftedSurface::kMaxReferenceTokenCount)
-                || !putCount(surface->numGuideCurves,
-                             DRW_LoftedSurface::kMaxReferenceTokenCount)
-                || !finiteSurfaceMatrix(surface->loftEntityTransform))
-                return false;
-            for (double value : surface->loftEntityTransform)
-                buf->putBitDouble(value);
-            buf->putBitLong(surface->planeNormalLoftingType);
-            buf->putBitDouble(surface->startDraftAngle);
-            buf->putBitDouble(surface->endDraftAngle);
-            buf->putBitDouble(surface->startDraftMagnitude);
-            buf->putBitDouble(surface->endDraftMagnitude);
-            putBool(surface->arcLengthParameterization);
-            putBool(surface->noTwist);
-            putBool(surface->alignDirection);
-            putBool(surface->simpleSurfaces);
-            putBool(surface->closedSurfaces);
-            putBool(surface->solid);
-            putBool(surface->ruledSurface);
-            putBool(surface->virtualGuide);
-            buf->putBitShort(static_cast<std::uint16_t>(surface->numCrossSections));
-            buf->putBitShort(static_cast<std::uint16_t>(surface->numGuideCurves));
-            break;
-        }
-        case DRW::REVOLVEDSURFACE: {
-            const auto *surface = static_cast<const DRW_RevolvedSurface *>(this);
-            if (surface->classId > std::numeric_limits<std::int32_t>::max()
-                || surface->id > std::numeric_limits<std::int32_t>::max()
-                || !finiteSurfaceCoord(surface->axisPoint)
-                || !finiteSurfaceCoord(surface->axisVector)
-                || !std::isfinite(surface->revolveAngle)
-                || !std::isfinite(surface->startAngle)
-                || !std::isfinite(surface->draftAngle)
-                || !std::isfinite(surface->draftStartDistance)
-                || !std::isfinite(surface->draftEndDistance)
-                || !std::isfinite(surface->twistAngle)
-                || !finiteSurfaceMatrix(surface->transform))
-                return false;
-            buf->putBitLong(static_cast<std::int32_t>(surface->classId));
-            buf->putBitLong(static_cast<std::int32_t>(surface->id));
-            buf->put3BitDouble(surface->axisPoint);
-            buf->put3BitDouble(surface->axisVector);
-            buf->putBitDouble(surface->revolveAngle);
-            buf->putBitDouble(surface->startAngle);
-            for (double value : surface->transform)
-                buf->putBitDouble(value);
-            buf->putBitDouble(surface->draftAngle);
-            buf->putBitDouble(surface->draftStartDistance);
-            buf->putBitDouble(surface->draftEndDistance);
-            buf->putBitDouble(surface->twistAngle);
-            putBool(surface->solid);
-            putBool(surface->closeToAxis);
-            break;
-        }
-        case DRW::SWEPTSURFACE: {
-            const auto *surface = static_cast<const DRW_SweptSurface *>(this);
-            if (surface->classVersion > 10
-                || surface->sweepEntityId > std::numeric_limits<std::int32_t>::max()
-                || surface->pathEntityId > std::numeric_limits<std::int32_t>::max()
-                || surface->sweepData.size() > DRW_SweptSurface::kMaxSweepDataSize
-                || surface->pathData.size() > DRW_SweptSurface::kMaxSweepDataSize
-                || !std::isfinite(surface->draftAngle)
-                || !std::isfinite(surface->draftStartDistance)
-                || !std::isfinite(surface->draftEndDistance)
-                || !std::isfinite(surface->twistAngle)
-                || !std::isfinite(surface->scaleFactor)
-                || !std::isfinite(surface->alignAngle)
-                || !finiteSurfaceCoord(surface->referenceVector)
-                || surface->sweepAlignmentFlags < 0
-                || surface->sweepAlignmentFlags > 0xFFFF
-                || surface->pathFlags < 0 || surface->pathFlags > 0xFFFF
-                || !finiteSurfaceMatrix(surface->sweepEntityTransform)
-                || !finiteSurfaceMatrix(surface->pathEntityTransform))
-                return false;
-            buf->putBitLong(static_cast<std::int32_t>(surface->classVersion));
-            buf->putBitLong(static_cast<std::int32_t>(surface->sweepEntityId));
-            buf->putBitLong(static_cast<std::int32_t>(surface->sweepData.size()));
-            if (!surface->sweepData.empty())
-                buf->putBytes(surface->sweepData.data(), surface->sweepData.size());
-            buf->putBitLong(static_cast<std::int32_t>(surface->pathEntityId));
-            buf->putBitLong(static_cast<std::int32_t>(surface->pathData.size()));
-            if (!surface->pathData.empty())
-                buf->putBytes(surface->pathData.data(), surface->pathData.size());
-            buf->putBitDouble(surface->draftAngle);
-            buf->putBitDouble(surface->draftStartDistance);
-            buf->putBitDouble(surface->draftEndDistance);
-            buf->putBitDouble(surface->twistAngle);
-            buf->putBitDouble(surface->scaleFactor);
-            buf->putBitDouble(surface->alignAngle);
-            for (double value : surface->sweepEntityTransform)
-                buf->putBitDouble(value);
-            for (double value : surface->pathEntityTransform)
-                buf->putBitDouble(value);
-            putBool(surface->solid);
-            buf->putBitShort(static_cast<std::uint16_t>(surface->sweepAlignmentFlags));
-            buf->putBitShort(static_cast<std::uint16_t>(surface->pathFlags));
-            putBool(surface->alignStart);
-            putBool(surface->bank);
-            putBool(surface->basePointSet);
-            putBool(surface->sweepEntityTransformComputed);
-            putBool(surface->pathEntityTransformComputed);
-            if (!finiteSurfaceCoord(surface->referenceVector))
-                return false;
-            putCoord(surface->referenceVector);
-            break;
-        }
-        case DRW::NURBSURFACE: {
-            if (version < DRW::AC1027)
+            auto putCoord = [&](const DRW_Coord& value) {
+                if (!finiteSurfaceCoord(value))
+                    return false;
+                body->put3BitDouble(value);
+                return true;
+            };
+            auto putBool = [&](bool value) { body->putBit(value ? 1 : 0); };
+            auto putCount = [&](std::int32_t value, std::size_t limit) {
+                return value >= 0 && static_cast<std::size_t>(value) <= limit;
+            };
+
+            switch (eType) {
+            case DRW::EXTRUDEDSURFACE: {
+                const auto *surface = static_cast<const DRW_ExtrudedSurface *>(this);
+                if (!std::isfinite(surface->draftAngle)
+                    || !std::isfinite(surface->draftStartDistance)
+                    || !std::isfinite(surface->draftEndDistance)
+                    || !std::isfinite(surface->twistAngle)
+                    || !std::isfinite(surface->scaleFactor)
+                    || !std::isfinite(surface->alignAngle)
+                    || !finiteSurfaceCoord(surface->referenceVector)
+                    || !finiteSurfaceCoord(surface->sweepVector)
+                    || surface->sweepAlignmentFlags < 0
+                    || surface->sweepAlignmentFlags > 0xFFFF
+                    || surface->pathFlags < 0 || surface->pathFlags > 0xFFFF
+                    || !finiteSurfaceMatrix(surface->sweepEntityTransform)
+                    || !finiteSurfaceMatrix(surface->pathEntityTransform))
+                    return false;
+                body->putBitDouble(surface->draftAngle);
+                body->putBitDouble(surface->draftStartDistance);
+                body->putBitDouble(surface->draftEndDistance);
+                body->putBitDouble(surface->twistAngle);
+                body->putBitDouble(surface->scaleFactor);
+                body->putBitDouble(surface->alignAngle);
+                // The matrices were validated above; emit them in their specified
+                // position after SweepOptions' scalar fields.
+                for (double value : surface->sweepEntityTransform)
+                    body->putBitDouble(value);
+                for (double value : surface->pathEntityTransform)
+                    body->putBitDouble(value);
+                putBool(surface->solid);
+                body->putBitShort(static_cast<std::uint16_t>(surface->sweepAlignmentFlags));
+                body->putBitShort(static_cast<std::uint16_t>(surface->pathFlags));
+                putBool(surface->alignStart);
+                putBool(surface->bank);
+                putBool(surface->basePointSet);
+                putBool(surface->sweepEntityTransformComputed);
+                putBool(surface->pathEntityTransformComputed);
+                if (!finiteSurfaceCoord(surface->referenceVector)
+                    || !finiteSurfaceCoord(surface->sweepVector)
+                    || !finiteSurfaceMatrix(surface->extrudedTransform))
+                    return false;
+                putCoord(surface->referenceVector);
+                putCoord(surface->sweepVector);
+                for (double value : surface->extrudedTransform)
+                    body->putBitDouble(value);
                 break;
-            const auto *surface = static_cast<const DRW_NurbsSurface *>(this);
-            if (!finiteSurfaceCoord(surface->uvec1)
-                || !finiteSurfaceCoord(surface->vvec1)
-                || !finiteSurfaceCoord(surface->uvec2)
-                || !finiteSurfaceCoord(surface->vvec2))
+            }
+            case DRW::LOFTEDSURFACE: {
+                const auto *surface = static_cast<const DRW_LoftedSurface *>(this);
+                if (!std::isfinite(surface->startDraftAngle)
+                    || !std::isfinite(surface->endDraftAngle)
+                    || !std::isfinite(surface->startDraftMagnitude)
+                    || !std::isfinite(surface->endDraftMagnitude)
+                    || !putCount(surface->numCrossSections,
+                                 DRW_LoftedSurface::kMaxReferenceTokenCount)
+                    || !putCount(surface->numGuideCurves,
+                                 DRW_LoftedSurface::kMaxReferenceTokenCount)
+                    || !finiteSurfaceMatrix(surface->loftEntityTransform))
+                    return false;
+                for (double value : surface->loftEntityTransform)
+                    body->putBitDouble(value);
+                body->putBitLong(surface->planeNormalLoftingType);
+                body->putBitDouble(surface->startDraftAngle);
+                body->putBitDouble(surface->endDraftAngle);
+                body->putBitDouble(surface->startDraftMagnitude);
+                body->putBitDouble(surface->endDraftMagnitude);
+                putBool(surface->arcLengthParameterization);
+                putBool(surface->noTwist);
+                putBool(surface->alignDirection);
+                putBool(surface->simpleSurfaces);
+                putBool(surface->closedSurfaces);
+                putBool(surface->solid);
+                putBool(surface->ruledSurface);
+                putBool(surface->virtualGuide);
+                body->putBitShort(static_cast<std::uint16_t>(surface->numCrossSections));
+                body->putBitShort(static_cast<std::uint16_t>(surface->numGuideCurves));
+                break;
+            }
+            case DRW::REVOLVEDSURFACE: {
+                const auto *surface = static_cast<const DRW_RevolvedSurface *>(this);
+                if (surface->classId > std::numeric_limits<std::int32_t>::max()
+                    || surface->id > std::numeric_limits<std::int32_t>::max()
+                    || !finiteSurfaceCoord(surface->axisPoint)
+                    || !finiteSurfaceCoord(surface->axisVector)
+                    || !std::isfinite(surface->revolveAngle)
+                    || !std::isfinite(surface->startAngle)
+                    || !std::isfinite(surface->draftAngle)
+                    || !std::isfinite(surface->draftStartDistance)
+                    || !std::isfinite(surface->draftEndDistance)
+                    || !std::isfinite(surface->twistAngle)
+                    || !finiteSurfaceMatrix(surface->transform))
+                    return false;
+                body->putBitLong(static_cast<std::int32_t>(surface->classId));
+                body->putBitLong(static_cast<std::int32_t>(surface->id));
+                body->put3BitDouble(surface->axisPoint);
+                body->put3BitDouble(surface->axisVector);
+                body->putBitDouble(surface->revolveAngle);
+                body->putBitDouble(surface->startAngle);
+                for (double value : surface->transform)
+                    body->putBitDouble(value);
+                body->putBitDouble(surface->draftAngle);
+                body->putBitDouble(surface->draftStartDistance);
+                body->putBitDouble(surface->draftEndDistance);
+                body->putBitDouble(surface->twistAngle);
+                putBool(surface->solid);
+                putBool(surface->closeToAxis);
+                break;
+            }
+            case DRW::SWEPTSURFACE: {
+                const auto *surface = static_cast<const DRW_SweptSurface *>(this);
+                if (surface->classVersion > 10
+                    || surface->sweepEntityId > std::numeric_limits<std::int32_t>::max()
+                    || surface->pathEntityId > std::numeric_limits<std::int32_t>::max()
+                    || surface->sweepData.size() > DRW_SweptSurface::kMaxSweepDataSize
+                    || surface->pathData.size() > DRW_SweptSurface::kMaxSweepDataSize
+                    || !std::isfinite(surface->draftAngle)
+                    || !std::isfinite(surface->draftStartDistance)
+                    || !std::isfinite(surface->draftEndDistance)
+                    || !std::isfinite(surface->twistAngle)
+                    || !std::isfinite(surface->scaleFactor)
+                    || !std::isfinite(surface->alignAngle)
+                    || !finiteSurfaceCoord(surface->referenceVector)
+                    || surface->sweepAlignmentFlags < 0
+                    || surface->sweepAlignmentFlags > 0xFFFF
+                    || surface->pathFlags < 0 || surface->pathFlags > 0xFFFF
+                    || !finiteSurfaceMatrix(surface->sweepEntityTransform)
+                    || !finiteSurfaceMatrix(surface->pathEntityTransform))
+                    return false;
+                body->putBitLong(static_cast<std::int32_t>(surface->classVersion));
+                body->putBitLong(static_cast<std::int32_t>(surface->sweepEntityId));
+                body->putBitLong(static_cast<std::int32_t>(surface->sweepData.size()));
+                if (!surface->sweepData.empty())
+                    body->putBytes(surface->sweepData.data(), surface->sweepData.size());
+                body->putBitLong(static_cast<std::int32_t>(surface->pathEntityId));
+                body->putBitLong(static_cast<std::int32_t>(surface->pathData.size()));
+                if (!surface->pathData.empty())
+                    body->putBytes(surface->pathData.data(), surface->pathData.size());
+                body->putBitDouble(surface->draftAngle);
+                body->putBitDouble(surface->draftStartDistance);
+                body->putBitDouble(surface->draftEndDistance);
+                body->putBitDouble(surface->twistAngle);
+                body->putBitDouble(surface->scaleFactor);
+                body->putBitDouble(surface->alignAngle);
+                for (double value : surface->sweepEntityTransform)
+                    body->putBitDouble(value);
+                for (double value : surface->pathEntityTransform)
+                    body->putBitDouble(value);
+                putBool(surface->solid);
+                body->putBitShort(static_cast<std::uint16_t>(surface->sweepAlignmentFlags));
+                body->putBitShort(static_cast<std::uint16_t>(surface->pathFlags));
+                putBool(surface->alignStart);
+                putBool(surface->bank);
+                putBool(surface->basePointSet);
+                putBool(surface->sweepEntityTransformComputed);
+                putBool(surface->pathEntityTransformComputed);
+                if (!finiteSurfaceCoord(surface->referenceVector))
+                    return false;
+                putCoord(surface->referenceVector);
+                break;
+            }
+            case DRW::NURBSURFACE: {
+                if (version < DRW::AC1027)
+                    break;
+                const auto *surface = static_cast<const DRW_NurbsSurface *>(this);
+                if (!finiteSurfaceCoord(surface->uvec1)
+                    || !finiteSurfaceCoord(surface->vvec1)
+                    || !finiteSurfaceCoord(surface->uvec2)
+                    || !finiteSurfaceCoord(surface->vvec2))
+                    return false;
+                body->putBitShort(surface->short170);
+                putBool(surface->cvHullDisplay);
+                body->put3BitDouble(surface->uvec1);
+                body->put3BitDouble(surface->vvec1);
+                body->put3BitDouble(surface->uvec2);
+                body->put3BitDouble(surface->vvec2);
+                break;
+            }
+            case DRW::PLANESURFACE:
+                break;
+            default:
                 return false;
-            buf->putBitShort(surface->short170);
-            putBool(surface->cvHullDisplay);
-            buf->put3BitDouble(surface->uvec1);
-            buf->put3BitDouble(surface->vvec1);
-            buf->put3BitDouble(surface->uvec2);
-            buf->put3BitDouble(surface->vvec2);
-            break;
+            }
         }
-        case DRW::PLANESURFACE:
-            break;
-        default:
-            return false;
-        }
-    }
 
-    if (!encodeDwgEntHandle(version, buf, handleBuf))
-        return false;
-    if (eType == DRW::LOFTEDSURFACE) {
-        dwgBufferW *hb = handleBuf != nullptr ? handleBuf : buf;
-        for (std::uint32_t ref : crossSectionHandles)
-            putSurfaceHandle(hb, ref);
-        for (std::uint32_t ref : guideCurveHandles)
-            putSurfaceHandle(hb, ref);
-        putSurfaceHandle(hb,
-                         static_cast<const DRW_LoftedSurface *>(this)
-                             ->pathCurveHandle);
-    }
-    return true;
+        if (!encodeDwgEntHandle(version, body, handles))
+            return false;
+        if (eType == DRW::LOFTEDSURFACE) {
+            dwgBufferW *hb = handles != nullptr ? handles : body;
+            for (std::uint32_t ref : crossSectionHandles)
+                putSurfaceHandle(hb, ref);
+            for (std::uint32_t ref : guideCurveHandles)
+                putSurfaceHandle(hb, ref);
+            putSurfaceHandle(hb,
+                             static_cast<const DRW_LoftedSurface *>(this)
+                                 ->pathCurveHandle);
+        }
+        return true;
+        });
 }
 
 bool DRW_Dimension::parseCode(int code, const std::unique_ptr<dxfReader>& reader){

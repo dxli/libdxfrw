@@ -77,6 +77,12 @@ public:
     std::int16_t rawType() const { return oType; }
 };
 
+class PlaneSurfaceProbe final : public DRW_PlaneSurface {
+public:
+    using DRW_Surface::encodeDwg;
+    std::int16_t rawType() const { return oType; }
+};
+
 struct Buffers {
     dwgBufferW body;
     dwgBufferW strings;
@@ -145,6 +151,10 @@ Shape makeShape(DRW::Version version) {
         shape.context.roots.push_back(root);
     } else if constexpr (std::is_same_v<Shape, CameraProbe>) {
         shape.m_viewHandle = 0x50u;
+    } else if constexpr (std::is_same_v<Shape, PlaneSurfaceProbe>) {
+        shape.setDwgClassNum(DRW_PlaneSurface::kDwgClassNum);
+        shape.uIsolines = 4;
+        shape.vIsolines = 6;
     } else if constexpr (std::is_same_v<Shape, GeoPositionMarkerProbe>) {
         shape.m_classVersion = 2u;
         shape.m_position = {1.0, 2.0, 3.0};
@@ -359,6 +369,16 @@ int main() {
          {DRW::AC1021, DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
         for (const auto layout : layouts) {
             unsigned long reachedFailures = 0u;
+            if (!sweep<PlaneSurfaceProbe>(version, layout, 535,
+                                          reachedFailures))
+                return 1;
+            totalReachedFailures += reachedFailures;
+        }
+    }
+    for (const DRW::Version version :
+         {DRW::AC1021, DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
+        for (const auto layout : layouts) {
+            unsigned long reachedFailures = 0u;
             if (!sweep<LightProbe>(version, layout, 502, reachedFailures))
                 return 1;
             totalReachedFailures += reachedFailures;
@@ -416,7 +436,7 @@ int main() {
         return 1;
     }
     std::cout << "HATCH/MPOLYGON/MLEADER/ARCALIGNEDTEXT/LIGHT/SECTIONOBJECT/"
-              << "GEOPOSITIONMARKER/CAMERA "
+              << "GEOPOSITIONMARKER/CAMERA/PLANESURFACE "
               << "DWG encode allocation "
               << "rollback/retry "
               << "passed across " << sizeof(versions) / sizeof(versions[0])
@@ -424,7 +444,7 @@ int main() {
               << "and 4 LIGHT/SECTIONOBJECT versions, "
               << sizeof(layouts) / sizeof(layouts[0])
                      * (sizeof(versions) / sizeof(versions[0]) * 4u + 3u
-                        + 8u + 2u)
+                        + 8u + 2u + 4u)
               << " entity/version/layout profiles; " << totalReachedFailures
               << " allocation offsets exercised\n";
     return 0;
