@@ -1,5 +1,15 @@
 # DWG/DXF parity — remaining implementation plan
 
+**Latest P6 local implementation slice (2026-11-11, HATCH elevation-Z overflow):**
+HATCH/MPOLYGON boundary points now avoid overflow when the direct addition of
+the entity elevation and OCS boundary Z is non-finite but the resulting rotated
+WCS components are representable. The fallback applies a scaled, compensated
+four-term OCS dot product to the two Z contributions separately; ordinary sums
+retain the existing path. Generated positive and negative `0.6 * DBL_MAX`
+cases pass the focused HATCH/MPOLYGON OCS-to-WCS CTest (1/1). This closes only
+that arithmetic case; native rendering, external producer behavior and broad
+coordinate qualification remain open. Receipt: [HATCH elevation-Z overflow](docs/research/p6-hatch-elevation-z-overflow-fast-slice-2026-11-11.json).
+
 **Latest P6 local implementation slices (2026-11-11, scaled OCS dot products):**
 the explicit legacy-extrusion recovery API now scales finite coordinates before
 its inverse-basis dot products and uses compensated accumulation with fused
@@ -6812,6 +6822,13 @@ guard does not qualify physical legacy FIELD prevalence, source-to-output
 conversion, or native evaluation; see the [guard receipt](docs/research/p5-field-legacy-dxf-format-flag-guard-2026-11-02.json).
 
 ## P6 — residual semantic and version audit
+
+HATCH/MPOLYGON boundary-point conversion now has a stable fallback for
+elevation-plus-boundary-Z overflow when the final rotated coordinates remain
+finite. The focused generated test covers positive and negative overflow and
+keeps ordinary inputs on the original arithmetic path. This does not resolve
+native hatch semantics, producer qualification, or other coordinate paths
+([receipt](docs/research/p6-hatch-elevation-z-overflow-fast-slice-2026-11-11.json)).
 
 Explicit legacy-extrusion recovery now refuses applied OCS bases whose
 nonzero components or cross-products are lost or subnormal, reusing the

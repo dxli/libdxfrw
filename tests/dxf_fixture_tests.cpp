@@ -26845,6 +26845,38 @@ void testHatchOcsWcsCoordinateMapping(TestContext& t) {
                  && std::abs(largeWcsPoint.z / largest
                              - 0.8844190238400710) < 1e-14,
              "HATCH OCS point avoids overflowing an intermediate sum when the WCS result is finite");
+
+    const double maximum = std::numeric_limits<double>::max();
+    hatch.extPoint = DRW_Coord(1.0, 1.0, 1.0);
+    hatch.basePoint.z = 0.6 * maximum;
+    const DRW_Coord positiveElevatedOverflow =
+        hatch.boundaryPointToWcs(DRW_Coord(0.0, 0.0, 0.6 * maximum));
+    const double expectedPositive = (1.2 / std::sqrt(3.0)) * maximum;
+    t.expect(std::isfinite(positiveElevatedOverflow.x)
+                 && std::isfinite(positiveElevatedOverflow.y)
+                 && std::isfinite(positiveElevatedOverflow.z)
+                 && std::abs(positiveElevatedOverflow.x / maximum
+                             - expectedPositive / maximum) < 1e-14
+                 && std::abs(positiveElevatedOverflow.y / maximum
+                             - expectedPositive / maximum) < 1e-14
+                 && std::abs(positiveElevatedOverflow.z / maximum
+                             - expectedPositive / maximum) < 1e-14,
+             "HATCH elevation and boundary Z avoid overflowing before a finite rotated WCS result");
+
+    hatch.basePoint.z = -0.6 * maximum;
+    const DRW_Coord negativeElevatedOverflow =
+        hatch.boundaryPointToWcs(DRW_Coord(0.0, 0.0, -0.6 * maximum));
+    const double expectedNegative = (-1.2 / std::sqrt(3.0)) * maximum;
+    t.expect(std::isfinite(negativeElevatedOverflow.x)
+                 && std::isfinite(negativeElevatedOverflow.y)
+                 && std::isfinite(negativeElevatedOverflow.z)
+                 && std::abs(negativeElevatedOverflow.x / maximum
+                             - expectedNegative / maximum) < 1e-14
+                 && std::abs(negativeElevatedOverflow.y / maximum
+                             - expectedNegative / maximum) < 1e-14
+                 && std::abs(negativeElevatedOverflow.z / maximum
+                             - expectedNegative / maximum) < 1e-14,
+             "HATCH negative elevation and boundary Z avoid overflowing before a finite rotated WCS result");
 }
 
 bool writeUnderlayOcsControl(const std::filesystem::path& path,

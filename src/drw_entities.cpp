@@ -388,6 +388,53 @@ bool transformOcsCoordinateStable(const DRW_Coord& normal,
     return true;
 }
 
+bool transformOcsCoordinateWithZOffsetStable(
+    const DRW_Coord& normal, const DRW_Coord& coordinate, double zOffset,
+    DRW_Coord& result) noexcept {
+    if (!std::isfinite(coordinate.x) || !std::isfinite(coordinate.y)
+        || !std::isfinite(coordinate.z) || !std::isfinite(zOffset))
+        return false;
+    DRW_Coord axisX, axisY, axisZ;
+    if (!calculateStableOcsAxes(normal, axisX, axisY, axisZ)) return false;
+
+    const double scale = std::max(
+        std::max({std::fabs(coordinate.x), std::fabs(coordinate.y),
+                  std::fabs(coordinate.z)}), std::fabs(zOffset));
+    if (scale == 0.0) {
+        result = DRW_Coord();
+        return true;
+    }
+    const double values[] = {coordinate.x / scale, coordinate.y / scale,
+                             coordinate.z / scale, zOffset / scale};
+    const auto dot = [&values, scale](double x, double y, double z,
+                               double& output) noexcept {
+        const double coefficients[] = {x, y, z, z};
+        double sum = 0.0;
+        double correction = 0.0;
+        for (std::size_t i = 0; i < 4u; ++i) {
+            const double product = coefficients[i] * values[i];
+            const double next = sum + product;
+            if (std::fabs(sum) >= std::fabs(product))
+                correction += (sum - next) + product;
+            else
+                correction += (product - next) + sum;
+            sum = next;
+            correction += std::fma(coefficients[i], values[i], -product);
+        }
+        const double normalized = sum + correction;
+        output = normalized * scale;
+        return std::isfinite(normalized) && std::isfinite(output);
+    };
+
+    DRW_Coord candidate;
+    if (!dot(axisX.x, axisY.x, axisZ.x, candidate.x)
+        || !dot(axisX.y, axisY.y, axisZ.y, candidate.y)
+        || !dot(axisX.z, axisY.z, axisZ.z, candidate.z))
+        return false;
+    result = candidate;
+    return true;
+}
+
 DRW_Coord transformOcsCoordinate(DRW_Coord normal,
                                  const DRW_Coord& coordinate) {
     const double scale = std::max({std::fabs(coordinate.x),
@@ -19644,6 +19691,12 @@ DRW_Coord DRW_Hatch::boundaryPointToWcs(
     const DRW_Coord& ocsPoint) const {
     DRW_Coord elevatedPoint(ocsPoint.x, ocsPoint.y,
                             basePoint.z + ocsPoint.z);
+    if (!std::isfinite(elevatedPoint.z)) {
+        DRW_Coord stableResult;
+        if (transformOcsCoordinateWithZOffsetStable(
+                extPoint, ocsPoint, basePoint.z, stableResult))
+            return stableResult;
+    }
     return transformOcsCoordinate(extPoint, elevatedPoint);
 }
 
