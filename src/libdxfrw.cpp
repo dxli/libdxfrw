@@ -33640,7 +33640,9 @@ bool dxfRW::writeScale(DRW_Scale *ent) {
         m_writeError = true;
         return false;
     }
-    if (!preflightDxfWrite() || !record.commit()) {
+    if (!preflightDxfWrite()
+        || !bindDxfWriteSourceObjectHandle(ent->handle, handle)
+        || !record.commit()) {
         m_writeError = true;
         return false;
     }
@@ -35412,7 +35414,9 @@ bool dxfRW::writeDictionaryVar(DRW_DictionaryVar *ent) {
         m_writeError = true;
         return false;
     }
-    if (!preflightDxfWrite() || !record.commit()) {
+    if (!preflightDxfWrite()
+        || !bindDxfWriteSourceObjectHandle(ent->handle, handle)
+        || !record.commit()) {
         m_writeError = true;
         return false;
     }
