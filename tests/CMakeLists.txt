@@ -5854,6 +5854,15 @@ target_link_libraries(libdxfrw_dxf_datatable_read_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dxf_datatable_read COMMAND libdxfrw_dxf_datatable_read_tests)
 set_tests_properties(libdxfrw_dxf_datatable_read PROPERTIES LABELS "dxf;fast;table" TIMEOUT 30)
 
+add_executable(libdxfrw_mleaderstyle_objects_allocation_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/mleaderstyle_objects_allocation_tests.cpp)
+target_compile_features(libdxfrw_mleaderstyle_objects_allocation_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_mleaderstyle_objects_allocation_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_mleaderstyle_objects_allocation_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_mleaderstyle_objects_allocation_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_mleaderstyle_objects_allocation COMMAND libdxfrw_mleaderstyle_objects_allocation_tests)
+set_tests_properties(libdxfrw_mleaderstyle_objects_allocation PROPERTIES LABELS "dxf;fast;mleaderstyle;transaction" TIMEOUT 30)
+
 add_executable(libdxfrw_dxf_light_rgb_421_tests ${CMAKE_CURRENT_SOURCE_DIR}/dxf_light_rgb_421_tests.cpp)
 target_compile_features(libdxfrw_dxf_light_rgb_421_tests PRIVATE cxx_std_17)
 target_compile_options(libdxfrw_dxf_light_rgb_421_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})

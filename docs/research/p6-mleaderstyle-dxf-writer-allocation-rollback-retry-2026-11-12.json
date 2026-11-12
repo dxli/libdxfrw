@@ -1,0 +1,51 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "id": "p6-mleaderstyle-dxf-writer-allocation-rollback-retry-2026-11-12",
+  "date": "2026-11-12",
+  "status": "GENERATED_DXF_WRITER_TRANSACTION_PASS",
+  "supportClaimEffect": "none",
+  "implementation": {
+    "files": [
+      "tests/mleaderstyle_objects_allocation_tests.cpp",
+      "tests/CMakeLists.txt"
+    ],
+    "sourceSha256": {
+      "tests/mleaderstyle_objects_allocation_tests.cpp": "8fbc97016629d941a4fb9492b0d37ef3fb854131130e03dac8257bd5bbbabee3",
+      "tests/CMakeLists.txt": "38450638f6a435a4d27283d12ce962d003a6f514e8eca0c14bba33cac74b12d9",
+      "src/libdxfrw.cpp": "1b089077496da8f34d3c0f4a914354fd499fac4e1a09e461a6893827e8107213"
+    },
+    "behavior": "The generated whole-file DXF writer control injects each observed ordinary allocation failure while dxfRW::writeMLeaderStyle serializes one typed object. Each failure returns false, retains pre-existing destination bytes and the source object's handle, owner, text fields, and EED values; retry on the same dxfRW instance succeeds with byte-identical output and typed MLEADERSTYLE readback."
+  },
+  "generatedProfile": {
+    "version": "AC1027",
+    "encodings": {
+      "ASCII": {"allocationOffsets": 11},
+      "Binary": {"allocationOffsets": 11}
+    },
+    "fields": [
+      "handle",
+      "NOD owner",
+      "style version",
+      "description",
+      "default text",
+      "text height",
+      "two EED values including APPID"
+    ],
+    "result": "All 22 injected failures are reached; each preserves the existing destination and caller data. Same-codec retries match clean encoded file bytes and recover the expected typed record and EED values."
+  },
+  "validation": {
+    "normalBuild": "cmake --build build --target libdxfrw_mleaderstyle_objects_allocation_tests -j4",
+    "normalTest": "ctest --test-dir build -R '^libdxfrw_mleaderstyle_objects_allocation$' --output-on-failure",
+    "normalResult": "PASS (1/1)",
+    "asanConfiguration": "Debug; -fsanitize=address -fno-omit-frame-pointer; -fsanitize=address linker flag",
+    "asanBuild": "cmake --build build-asan-custom --target libdxfrw_mleaderstyle_objects_allocation_tests -j4",
+    "asanTest": "ctest --test-dir build-asan-custom -R '^libdxfrw_mleaderstyle_objects_allocation$' --output-on-failure",
+    "asanResult": "PASS (1/1)",
+    "fullSuites": "not run"
+  },
+  "limitations": [
+    "Generated AC1027 ASCII/Binary whole-file transaction evidence only; no physical producer or native consumer qualification.",
+    "Does not establish source graph closure, all MLEADERSTYLE fields, or whole-file output support.",
+    "No DWG/DXF fixture file was added and no support claim is promoted."
+  ]
+}

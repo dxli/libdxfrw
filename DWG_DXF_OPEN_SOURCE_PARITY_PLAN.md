@@ -1968,6 +1968,17 @@ created locally from scratch for the specific control.
   adds no physical graph, native semantic, or support evidence; no fixture was
   added. See the [whole-file allocation receipt](docs/research/p6-dimassoc-dxf-whole-file-allocation-rollback-2026-11-11.json).
 
+- **P6 MLEADERSTYLE whole-file allocation rollback:** the generated AC1027
+  ASCII/Binary test injects all 11 observed ordinary allocation failures in
+  each encoding while writing one typed MLEADERSTYLE with an NOD owner and two
+  EED values. Each failure preserves the pre-existing destination and caller
+  handle, owner, text, and EED state; retry on the same codec produces
+  byte-identical output, and fresh typed readback verifies the object and both
+  EED values. The focused CTest passes 1/1 in normal and ASan builds. This is
+  generated transaction evidence only; it does not qualify physical source
+  prevalence, graph closure, native semantics, or broader support. No drawing
+  fixture was added. See the [allocation rollback receipt](docs/research/p6-mleaderstyle-dxf-writer-allocation-rollback-retry-2026-11-12.json).
+
 - **P6 selected IMAGEDEF_REACTOR metadata allocation rollback:** the generated
   AC1027 ASCII/Binary NOD→IMAGE dictionary→IMAGEDEF graph now includes a
   selected source reactor with nondefault app-data metadata. The core OBJECTS
