@@ -30420,6 +30420,25 @@ bool dx_iface::hasUnchangedVerifiedTableProjectionSource(const dx_data& data,
         && hasUnchangedVerifiedTableModelSource(data,xrecords,content,table,geometry,entity,dictionary);
 }
 
+bool dx_iface::matchesVerifiedTableCacheMembershipCandidate(const dx_data& data,
+        const std::vector<std::uint32_t>& xrecords,std::uint32_t content,
+        std::uint32_t table,std::uint32_t geometry,std::uint32_t entity,
+        std::uint32_t dictionary) noexcept {
+    if (!hasUnchangedVerifiedTableProjectionSource(
+            data,xrecords,content,table,geometry,entity,dictionary))
+        return false;
+    const DRW_Table* selected = nullptr;
+    for (const auto& candidate : data.tables) {
+        if (candidate.handle != entity)
+            continue;
+        if (selected)
+            return false;
+        selected = &candidate;
+    }
+    return selected && DwgTableCacheMembershipAc1018Candidate::matches(
+        *selected,data.blockRecords,data.blocks);
+}
+
 bool dx_iface::hasUnchangedDwgTableProjection(const dx_data& data,const DRW_Table& source) noexcept {
     if(data.typedEntityCaptureFailed || !data.mBlock || data.blocks.size()>TypedEntityCaptureMaxRecords)return false;
     std::size_t remaining=TypedEntityCaptureMaxRecords;

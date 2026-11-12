@@ -32,6 +32,7 @@
 #include "intern/dwg_table_entity_xdictionary_ac1018_candidate.h"
 #include "intern/dwg_tablestyle_ac1018_candidate.h"
 #include "intern/dwg_cellstylemap_ac1018_candidate.h"
+#include "intern/dwg_table_cache_membership_ac1018_candidate.h"
 #include "intern/dwg_tablestyle_extension_dictionary_ac1018_candidate.h"
 #include "intern/dwg_tablestyle_roundtrip_xrecord_ac1018_candidate.h"
 namespace blockref_source_relation { struct Result; }
@@ -136,6 +137,13 @@ public:
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
         std::uint32_t tableEntity,std::uint32_t dictionary) noexcept;
     static bool hasUnchangedVerifiedTableProjectionSource(const dx_data&,
+        const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        std::uint32_t tableEntity,std::uint32_t dictionary) noexcept;
+    // Exact AC1018 *T1 cache membership observation layered on the verified
+    // TABLE projection query. This is not output authorization or geometry
+    // semantic evidence.
+    static bool matchesVerifiedTableCacheMembershipCandidate(const dx_data&,
         const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
         std::uint32_t tableEntity,std::uint32_t dictionary) noexcept;

@@ -1,0 +1,31 @@
+{
+  "id": "p5-ac1018-table-cache-membership-candidate-2026-11-11",
+  "scope": "Opt-in same-import callback correlation for the selected AC1018 TABLE and its *T1 cache. Not a source-authenticated BLOCK_RECORD wire proof, geometry equivalence proof, output authorization, or producer-wide support claim.",
+  "implementation": [
+    "Added a candidate predicate that first requires the existing verified TABLE projection source bundle, then checks one selected TABLE, one same-name BLOCK_RECORD, one same-name BLOCK callback, the BLOCK-to-BLOCK_RECORD parent handle, the BLOCK_RECORD entity-map count, the 15 cached members, unique child handles, each child's BLOCK_RECORD parent, and the observed seven-MTEXT/eight-LINE profile.",
+    "The check is query-only and does not affect writer admission or any DRW_Interface callback contract.",
+    "The physical callback capture confirms TABLE handle 0x9c names *T1, BLOCK_RECORD handle 0x9d names *T1, BLOCK handle 0xa6 has parent 0x9d and 15 entities, and all 15 entity parent handles equal 0x9d. The BLOCK_RECORD entity-map count is 15."
+  ],
+  "physical_source": {
+    "path": "/private/tmp/p5-ac1018-oda-audited-output/acad_table_simple.dwg",
+    "sha256": "1ba45d704ed7cc846ea4d6d08c7c78062f8090842ebc9e9a4cdefcb44ea6ab2a",
+    "result": "PASS for the bounded callback-membership candidate. This does not independently authenticate BLOCK_RECORD/BLOCK body bytes; existing unrelated HEADER integrity observation remains."
+  },
+  "mutation_controls": [
+    "Changing the selected BLOCK parent handle refuses the candidate; restoration passes.",
+    "Changing a cached child handle refuses the candidate; restoration passes.",
+    "Duplicating the *T1 BLOCK_RECORD callback refuses the candidate; removal restores the pass."
+  ],
+  "verification": {
+    "build": "cmake --build build-gcc --target libdxfrw_test_adapter libdxfrw_dwg_table_projection_ac1018_candidate_tests dwg2dxf -j4",
+    "focused_test": "ctest --test-dir build-gcc -R '^libdxfrw_dwg_table_projection_ac1018_candidate$' --output-on-failure",
+    "physical_probe": "c++ -std=c++17 -Wall -Wextra -Werror -I src -I dwg2dxf tools/research/p5_ac1018_table_projection_binding_probe.cpp build-gcc/tests/CMakeFiles/libdxfrw_test_adapter.dir/__/dwg2dxf/dx_iface.cpp.o build-gcc/libdxfrw.a -o /private/tmp/p5_ac1018_table_projection_binding_probe && /private/tmp/p5_ac1018_table_projection_binding_probe /private/tmp/p5-ac1018-oda-audited-output/acad_table_simple.dwg",
+    "result": "Adapter/test targets built; focused CTest passed 1/1; physical probe passed with the mutation controls."
+  },
+  "remaining": [
+    "Capture and verify the exact BLOCK_RECORD and BLOCK physical source frame identities/bytes in the same import before calling this source-bound membership evidence.",
+    "Compare the emitted 15 display primitives with an independent decoder or native renderer.",
+    "Keep TABLE output refused until existing graph, semantics, and transaction gates pass."
+  ],
+  "fixtures": "No DWG/DXF fixture was added to the repository; the existing local scratch source was used."
+}

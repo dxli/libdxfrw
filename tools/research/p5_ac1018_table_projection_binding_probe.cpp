@@ -22,6 +22,8 @@ namespace {
 const std::vector<std::uint32_t> selected{0xbcu,0xbeu,0xbfu,0xc0u,0xc1u,0xc2u,0xc3u,0xc4u,0xc5u,0xc6u};
 bool enable(dx_iface& r){return r.enableVerifiedTableProjectionSource(selected,0xb9u,0xbdu,0xbau,0x9cu,0xbbu);}
 bool live(const dx_data& d){return dx_iface::hasUnchangedVerifiedTableProjectionSource(d,selected,0xb9u,0xbdu,0xbau,0x9cu,0xbbu);}
+bool cacheCandidate(const dx_data& d){return dx_iface::matchesVerifiedTableCacheMembershipCandidate(
+    d,selected,0xb9u,0xbdu,0xbau,0x9cu,0xbbu);}
 class FaultProbe final:public dx_iface {
 public:bool inject=true,seen=false;
     void verifiedTableCandidate(const DwgVerifiedTableCandidateTicket& t) noexcept override {
@@ -57,7 +59,31 @@ int main(int argc,char**argv) {
     if(argc!=2)return 2;
     Probe reader;reader.path=argv[1];dx_data data;if(!enable(reader)
         || reader.enableVerifiedTableProjectionSource(selected,0xb9u,0xbdu,0xbau,0xbbu,0xbbu)
-        || !reader.fileImport(argv[1],&data,false) || !reader.hit || !reader.unknown || !live(data))return 3;
+        || !reader.fileImport(argv[1],&data,false) || !reader.hit || !reader.unknown || !live(data)
+        || !cacheCandidate(data))return 3;
+    auto selectedBlock=std::find_if(data.blocks.begin(),data.blocks.end(),[](const dx_ifaceBlock* b){
+        return b && b->name=="*T1";
+    });
+    auto selectedRecord=std::find_if(data.blockRecords.begin(),data.blockRecords.end(),[](const DRW_Block_Record& b){
+        return b.name=="*T1";
+    });
+    if(selectedBlock==data.blocks.end() || selectedRecord==data.blockRecords.end())return 59;
+    const auto recordHandle=selectedRecord->handle;
+    (*selectedBlock)->parentHandle^=1u;
+    if(cacheCandidate(data))return 60;
+    (*selectedBlock)->parentHandle=recordHandle;
+    if(!cacheCandidate(data))return 61;
+    auto firstChild=(*selectedBlock)->ent.begin();
+    if(firstChild==(*selectedBlock)->ent.end() || !*firstChild)return 62;
+    const auto childHandle=(*firstChild)->handle;
+    (*firstChild)->handle^=1u;
+    if(cacheCandidate(data))return 63;
+    (*firstChild)->handle=childHandle;
+    if(!cacheCandidate(data))return 64;
+    data.blockRecords.push_back(*selectedRecord);
+    if(cacheCandidate(data))return 65;
+    data.blockRecords.pop_back();
+    if(!cacheCandidate(data))return 66;
     Probe throwing;throwing.mode=Probe::Mode::Throw;if(!enable(throwing))return 4;dx_data failed;
     const bool read=throwing.fileImport(argv[1],&failed,false);
     if(read || !throwing.hit || live(failed) || dx_iface::hasUnchangedVerifiedXRecordSource(failed,0xbcu))return 5;
