@@ -601,18 +601,41 @@ bool runRoundtrip(const char* contentPath,const char* dataPath,const char* geome
 
     CHECK_R(dx_iface::hasUnchangedVerifiedXRecordSources(baseline,xrecords));
     CHECK_R(liveGeometry(baseline));
+    Content c;Data t;Geometry g;DwgTableRoundtripXRecordAc1018Candidate::Result root;
+    const std::array<std::uint32_t,3> mappedTargets{{0x501u,0x502u,0x503u}};
+    std::vector<DRW_Variant> projectedEntries;
+    projectedEntries.emplace_back(90,std::int32_t{77});
+    CHECK_R(dx_iface::projectVerifiedTableRoundtripReferences(baseline,xrecords,
+        contentHandle,dataHandle,geometryHandle,mappedTargets,projectedEntries,root));
+    CHECK_R(root.handle==rootHandle && root.owner==0xbbu
+        && projectedEntries.size()==13u
+        && projectedEntries[1].code()==360 && projectedEntries[1].i64_val()==0x501u
+        && projectedEntries[7].code()==361 && projectedEntries[7].i64_val()==0x502u
+        && projectedEntries[12].code()==360 && projectedEntries[12].i64_val()==0x503u);
     CHECK_R(reader.enableVerifiedTableRoundtripCandidates(xrecords,contentHandle,dataHandle,0xcau));
     dx_data missing;(void)reader.fileImport(path.string(),&missing,false);CHECK_R(!liveRoundtrip(missing));
     CHECK_R(!dx_iface::hasUnchangedVerifiedXRecordSource(missing,rootHandle));
     CHECK_R(selectedRoundtrip(reader));dx_data missingRetry;
     CHECK_R(reader.fileImport(path.string(),&missingRetry,false));CHECK_R(liveRoundtrip(missingRetry));
-    Content c;Data t;Geometry g;DwgTableRoundtripXRecordAc1018Candidate::Result root;
     CHECK_R(!dx_iface::readVerifiedTableRoundtripCandidates(oldProfile,xrecords,contentHandle,dataHandle,geometryHandle,c,t,g,root));
     const auto item=std::find_if(baseline.xRecords.begin(),baseline.xRecords.end(),[](const DRW_XRecord& x){return x.handle==rootHandle;});
     CHECK_R(item!=baseline.xRecords.end());
+    const auto projectedSnapshot=projectedEntries;
     const auto originalEntry=item->m_dataEntries[1];item->m_dataEntries[1]=DRW_Variant(360,std::uint64_t{0xcau});
     CHECK_R(!liveRoundtrip(baseline) && !dx_iface::hasUnchangedVerifiedXRecordSource(baseline,rootHandle));
+    root.handle=9u;
+    CHECK_R(!dx_iface::projectVerifiedTableRoundtripReferences(baseline,xrecords,
+        contentHandle,dataHandle,geometryHandle,mappedTargets,projectedEntries,root));
+    CHECK_R(!root.handle && projectedEntries.size()==projectedSnapshot.size()
+        && projectedEntries[1].i64_val()==projectedSnapshot[1].i64_val()
+        && projectedEntries[7].i64_val()==projectedSnapshot[7].i64_val()
+        && projectedEntries[12].i64_val()==projectedSnapshot[12].i64_val());
     item->m_dataEntries[1]=originalEntry;CHECK_R(liveRoundtrip(baseline));
+    CHECK_R(dx_iface::projectVerifiedTableRoundtripReferences(baseline,xrecords,
+        contentHandle,dataHandle,geometryHandle,mappedTargets,projectedEntries,root));
+    CHECK_R(projectedEntries[1].i64_val()==0x501u
+        && projectedEntries[7].i64_val()==0x502u
+        && projectedEntries[12].i64_val()==0x503u);
     item->m_values.emplace_back(90,std::int32_t{5});CHECK_R(!liveRoundtrip(baseline));item->m_values.pop_back();
     item->m_handleValues.emplace_back(360,0xcau);CHECK_R(!liveRoundtrip(baseline));item->m_handleValues.pop_back();
     CHECK_R(liveRoundtrip(baseline));

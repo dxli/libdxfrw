@@ -30250,6 +30250,45 @@ bool dx_iface::readVerifiedTableRoundtripCandidates(const dx_data& data,
     return true;
 }
 
+bool dx_iface::projectVerifiedTableRoundtripReferences(const dx_data& data,
+        const std::vector<std::uint32_t>& xrecords,std::uint32_t tableContent,
+        std::uint32_t dataTable,std::uint32_t tableGeometry,
+        const std::array<std::uint32_t,3>& mappedTargets,
+        std::vector<DRW_Variant>& projectedEntries,
+        DwgTableRoundtripXRecordAc1018Candidate::Result& root) noexcept {
+    root={};
+    try {
+        DwgTableContentAc1018Candidate::Result content;
+        DwgDataTableAc1018Candidate::Result table;
+        DwgTableGeometryAc1018Candidate::Result geometry;
+        DwgTableRoundtripXRecordAc1018Candidate::Result source;
+        if (!readVerifiedTableRoundtripCandidates(data,xrecords,tableContent,dataTable,
+                tableGeometry,content,table,geometry,source)) return false;
+
+        const auto& rows=data.m_verifiedXRecordSource->records;
+        const auto found=std::find_if(rows.cbegin(),rows.cend(),[&](const dx_data::VerifiedXRecordSource& row) {
+            return row.raw.m_handle==source.handle;
+        });
+        const auto* model=found==rows.cend()?nullptr:dynamic_cast<const DRW_XRecord*>(found->typedBaseline.get());
+        if (!model) return false;
+
+        std::vector<DRW_Variant> candidate;
+        DwgTableRoundtripXRecordAc1018Candidate::Result inspected;
+        if (!DwgTableRoundtripXRecordAc1018Candidate::projectReferences(
+                found->raw,*model,mappedTargets,candidate,inspected)
+            || inspected.handle!=source.handle || inspected.owner!=source.owner) return false;
+        for (std::size_t i=0;i<source.references.size();++i) {
+            if (inspected.references[i].groupCode!=source.references[i].groupCode
+                || inspected.references[i].target!=source.references[i].target
+                || inspected.references[i].startBit!=source.references[i].startBit
+                || inspected.references[i].endBit!=source.references[i].endBit) return false;
+        }
+        projectedEntries.swap(candidate);
+        root=inspected;
+        return true;
+    } catch (...) {root={};return false;}
+}
+
 bool dx_iface::readVerifiedTableRoundtripChildren(const dx_data& data,
         const std::vector<std::uint32_t>& xrecords,std::uint32_t tableContent,
         std::uint32_t dataTable,std::uint32_t tableGeometry,

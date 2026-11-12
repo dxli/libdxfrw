@@ -236,6 +236,15 @@ public:
         DwgDataTableAc1018Candidate::Result& table,
         DwgTableGeometryAc1018Candidate::Result& geometry,
         DwgTableRoundtripXRecordAc1018Candidate::Result& root) noexcept;
+    // Revalidate the complete selected import capability and project only the
+    // root's ordered payload. Mapped target roles/identities, recursive output
+    // closure, and permission to write remain the caller's responsibility.
+    static bool projectVerifiedTableRoundtripReferences(const dx_data&,
+        const std::vector<std::uint32_t>& xrecords,
+        std::uint32_t tableContent,std::uint32_t dataTable,std::uint32_t tableGeometry,
+        const std::array<std::uint32_t,3>& mappedTargets,
+        std::vector<DRW_Variant>& projectedEntries,
+        DwgTableRoundtripXRecordAc1018Candidate::Result& root) noexcept;
     static bool readVerifiedTableCandidates(const dx_data&,
         const std::vector<std::uint32_t>& xrecords,
         std::uint32_t tableContent,std::uint32_t dataTable,

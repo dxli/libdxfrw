@@ -2178,13 +2178,19 @@ created locally from scratch for the specific control.
   source capability, does not modify or authenticate raw bytes, and does not
   authorize DWG/DXF output. See the
   [reference-projection receipt](docs/research/p5-ac1018-table-xrecord-reference-projection-2026-11-11.json).
-  Next connect this projection to a separately gated writer path: revalidate
-  the sealed multi-source capability at staging and finalization, resolve each
-  mapped target to an emitted identity with exact role/type/owner and recursive
-  closure, stage the actual XRECORD bytes, and prove rollback, retry, output CRC
-  and fresh readback. Also qualify embedded references and the remaining
-  recursive object bodies. These controls do not establish a whole-import
-  allocation-failure guarantee.
+  An adapter-level `projectVerifiedTableRoundtripReferences` now revalidates the
+  complete same-import sealed source selection before retrieving its immutable
+  typed baseline and applying the projection. Stale or mutated source input
+  refuses without changing the caller's projected vector; a restored source
+  succeeds on retry. This binds projection to source evidence, but still does
+  not authenticate mapped output identities/roles or grant output permission
+  ([adapter receipt](docs/research/p5-ac1018-table-xrecord-capability-bound-projection-2026-11-11.json)).
+  Next resolve each mapped target to an emitted identity with exact
+  role/type/owner and recursive closure, stage the actual XRECORD bytes under
+  the live capability, and prove finalization revalidation, rollback, retry,
+  output CRC and fresh readback. Also qualify embedded references and the
+  remaining recursive object bodies. These controls do not establish a
+  whole-import allocation-failure guarantee.
   Keep physical subtree output refused until all three opaque descendants,
   source-bound owner/target roles, class identities and graph closure are proven.
 
