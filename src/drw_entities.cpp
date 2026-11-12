@@ -19349,47 +19349,56 @@ bool DRW_ArcAlignedText::encodeDwg(DRW::Version version, dwgBufferW *buf,
                                    std::uint32_t bs, dwgBufferW *strBuf,
                                    dwgBufferW *handleBuf) {
     (void)bs;
-    oType = kDwgClassNum;
-    if (!encodeDwgCommon(version, buf)) return false;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [&](dwgBufferW *body, dwgBufferW *strings, dwgBufferW *handles) {
+            oType = kDwgClassNum;
+            if (!encodeDwgCommon(version, body)) return false;
 
-    dwgBufferW *sb = strBuf ? strBuf : buf;
-    sb->putVariableText(version, arcAlignedStringOrDefault(
-        m_textSize, arcAlignedD2T(height > 0.0 ? height : 0.0)));
-    sb->putVariableText(version, arcAlignedStringOrDefault(
-        m_xScale, arcAlignedD2T(widthscale > 0.0 ? widthscale : 1.0)));
-    sb->putVariableText(version, arcAlignedStringOrDefault(m_charSpacing, "1"));
-    sb->putVariableText(version, style.empty() ? "Standard" : style);
-    sb->putVariableText(version, m_fontName);
-    sb->putVariableText(version, m_bigFontName);
-    sb->putVariableText(version, text);
-    sb->putVariableText(version, arcAlignedStringOrDefault(m_offsetFromArc, "0"));
-    sb->putVariableText(version, arcAlignedStringOrDefault(m_rightOffset, "0"));
-    sb->putVariableText(version, arcAlignedStringOrDefault(m_leftOffset, "0"));
+            dwgBufferW *sb = strings ? strings : body;
+            sb->putVariableText(version, arcAlignedStringOrDefault(
+                m_textSize, arcAlignedD2T(height > 0.0 ? height : 0.0)));
+            sb->putVariableText(version, arcAlignedStringOrDefault(
+                m_xScale, arcAlignedD2T(widthscale > 0.0 ? widthscale : 1.0)));
+            sb->putVariableText(version,
+                                arcAlignedStringOrDefault(m_charSpacing, "1"));
+            sb->putVariableText(version, style.empty() ? "Standard" : style);
+            sb->putVariableText(version, m_fontName);
+            sb->putVariableText(version, m_bigFontName);
+            sb->putVariableText(version, text);
+            sb->putVariableText(version,
+                                arcAlignedStringOrDefault(m_offsetFromArc, "0"));
+            sb->putVariableText(version,
+                                arcAlignedStringOrDefault(m_rightOffset, "0"));
+            sb->putVariableText(version,
+                                arcAlignedStringOrDefault(m_leftOffset, "0"));
 
-    buf->put3BitDouble(m_center);
-    buf->putBitDouble(m_radius);
-    buf->putBitDouble(m_startAngle);
-    buf->putBitDouble(m_endAngle);
-    buf->put3BitDouble(extPoint);
-    buf->putBitLong(static_cast<std::int32_t>(m_rawColor));
-    buf->putBitShort(bitShortFromInt(m_characterSet));
-    buf->putBitShort(bitShortFromInt(m_pitchAndFamily));
-    buf->putBitShort(bitShortFromInt(m_isShx));
-    buf->putBitShort(bitShortFromInt(m_isBold));
-    buf->putBitShort(bitShortFromInt(m_isItalic));
-    buf->putBitShort(bitShortFromInt(m_isUnderlined));
-    buf->putBitShort(bitShortFromInt(m_alignment));
-    buf->putBitShort(bitShortFromInt(m_isReverse));
-    buf->putBitShort(bitShortFromInt(m_wizardFlag));
-    buf->putBitShort(bitShortFromInt(m_textPosition));
-    buf->putBitShort(bitShortFromInt(m_textDirection));
+            body->put3BitDouble(m_center);
+            body->putBitDouble(m_radius);
+            body->putBitDouble(m_startAngle);
+            body->putBitDouble(m_endAngle);
+            body->put3BitDouble(extPoint);
+            body->putBitLong(static_cast<std::int32_t>(m_rawColor));
+            body->putBitShort(bitShortFromInt(m_characterSet));
+            body->putBitShort(bitShortFromInt(m_pitchAndFamily));
+            body->putBitShort(bitShortFromInt(m_isShx));
+            body->putBitShort(bitShortFromInt(m_isBold));
+            body->putBitShort(bitShortFromInt(m_isItalic));
+            body->putBitShort(bitShortFromInt(m_isUnderlined));
+            body->putBitShort(bitShortFromInt(m_alignment));
+            body->putBitShort(bitShortFromInt(m_isReverse));
+            body->putBitShort(bitShortFromInt(m_wizardFlag));
+            body->putBitShort(bitShortFromInt(m_textPosition));
+            body->putBitShort(bitShortFromInt(m_textDirection));
 
-    if (version <= DRW::AC1018)
-        putNullableHardPointerHandle(buf, m_arcHandle);
-    if (!encodeDwgEntHandle(version, buf, handleBuf)) return false;
-    if (version > DRW::AC1018)
-        putNullableHardPointerHandle(handleBuf ? handleBuf : buf, m_arcHandle);
-    return true;
+            if (version <= DRW::AC1018)
+                putNullableHardPointerHandle(body, m_arcHandle);
+            if (!encodeDwgEntHandle(version, body, handles)) return false;
+            if (version > DRW::AC1018)
+                putNullableHardPointerHandle(
+                    handles ? handles : body, m_arcHandle);
+            return true;
+        });
 }
 
 bool DRW_ArcAlignedText::parseCode(int code, const std::unique_ptr<dxfReader>& reader){

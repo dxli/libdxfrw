@@ -47,6 +47,12 @@ public:
     std::int16_t rawType() const { return oType; }
 };
 
+class ArcAlignedTextProbe final : public DRW_ArcAlignedText {
+public:
+    using DRW_ArcAlignedText::encodeDwg;
+    std::int16_t rawType() const { return oType; }
+};
+
 struct Buffers {
     dwgBufferW body;
     dwgBufferW strings;
@@ -113,6 +119,18 @@ Shape makeShape() {
         line.arrowHandle.ref = 0x56u;
         root.leaderLines.push_back(line);
         shape.context.roots.push_back(root);
+    } else if constexpr (std::is_same_v<Shape, ArcAlignedTextProbe>) {
+        shape.m_center = {1.0, 2.0, 0.0};
+        shape.m_radius = 12.5;
+        shape.m_startAngle = 0.25;
+        shape.m_endAngle = 2.5;
+        shape.m_textSize = "2.5";
+        shape.m_xScale = "0.9";
+        shape.m_charSpacing = "1.1";
+        shape.m_fontName = "txt";
+        shape.m_bigFontName = "bigfont";
+        shape.text = "ARC ALIGNED TRANSACTION";
+        shape.m_arcHandle = 0x57u;
     } else {
         shape.name = "ANSI31";
         shape.solid = false;
@@ -276,6 +294,15 @@ int main() {
             totalReachedFailures += reachedFailures;
         }
     }
+    for (const auto version : versions) {
+        for (const auto layout : layouts) {
+            unsigned long reachedFailures = 0u;
+            if (!sweep<ArcAlignedTextProbe>(version, layout, 522,
+                                           reachedFailures))
+                return 1;
+            totalReachedFailures += reachedFailures;
+        }
+    }
     for (const DRW::Version version :
          {DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
         for (const auto layout : layouts) {
@@ -290,11 +317,12 @@ int main() {
         std::cerr << "HATCH allocation injector did not fire\n";
         return 1;
     }
-    std::cout << "HATCH/MPOLYGON/MLEADER DWG encode allocation rollback/retry "
+    std::cout << "HATCH/MPOLYGON/MLEADER/ARCALIGNEDTEXT DWG encode allocation "
+              << "rollback/retry "
               << "passed across " << sizeof(versions) / sizeof(versions[0])
               << " common writer versions plus 3 MLEADER versions, "
               << sizeof(layouts) / sizeof(layouts[0])
-                     * (sizeof(versions) / sizeof(versions[0]) * 2u + 3u)
+                     * (sizeof(versions) / sizeof(versions[0]) * 3u + 3u)
               << " entity/version/layout profiles; " << totalReachedFailures
               << " allocation offsets exercised\n";
     return 0;
