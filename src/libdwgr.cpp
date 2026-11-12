@@ -4443,29 +4443,6 @@ bool dwgRW::writeTableContent(DRW_TableContentObject *object) {
         [w, object] { return w->writeTableContent(*object); });
 }
 
-bool dwgRW::registerTableGeometryObjectClass(DRW_TableGeometry *object) {
-    DwgFrameExceptionScope frameExceptionScope(writer);
-    if (object == nullptr || writer == nullptr || getVersion() != DRW::AC1021)
-        return recordWriteResult(WriteSkipKind::ClassRegistration, false);
-    if (object->handle != 0)
-        writer->reserveHandle(object->handle);
-    return recordWriteResult(
-        WriteSkipKind::ClassRegistration,
-        writer->registerTableGeometryObjectClass(object->handle));
-}
-
-bool dwgRW::writeTableGeometry(DRW_TableGeometry *object) {
-    DwgFrameExceptionScope frameExceptionScope(writer);
-    if (object == nullptr || getVersion() != DRW::AC1021)
-        return recordWriteResult(WriteSkipKind::Object, false);
-    auto *w = asWriter15(writer);
-    if (w == nullptr)
-        return recordWriteResult(WriteSkipKind::Object, false);
-    return writeObjectTransaction(
-        WriteSkipKind::Object,
-        [w, object] { return w->writeTableGeometry(*object); });
-}
-
 bool dwgRW::writeTableStyleCellStyleMapGraph(
     DRW_TableStyle *tableStyle, DRW_Dictionary *extensionDictionary,
     DRW_CellStyleMap *cellStyleMap) {

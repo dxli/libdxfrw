@@ -250,7 +250,6 @@ public:
     bool writeTableStyle(const DRW_TableStyle& style);
     bool writeCellStyleMap(const DRW_CellStyleMap& styleMap);
     bool writeTableContent(const DRW_TableContentObject& content);
-    bool writeTableGeometry(const DRW_TableGeometry& geometry);
     bool writeMaterial(const DRW_Material& material);
     bool writeLightList(const DRW_LightList& lightList);
     bool writeBackground(const DRW_Background& background);
@@ -480,10 +479,6 @@ protected:
         const std::vector<DRW_Entity::PendingHandleRef>& layerRefs);
     bool emitTableContentObject(
         std::uint32_t handle, const DRW_TableContentObject& content,
-        const std::vector<DRW_Entity::PendingHandleRef>& appIdRefs,
-        const std::vector<DRW_Entity::PendingHandleRef>& layerRefs);
-    bool emitTableGeometryObject(
-        std::uint32_t handle, const DRW_TableGeometry& geometry,
         const std::vector<DRW_Entity::PendingHandleRef>& appIdRefs,
         const std::vector<DRW_Entity::PendingHandleRef>& layerRefs);
     bool emitMaterialObject(
