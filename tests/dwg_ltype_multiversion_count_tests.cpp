@@ -12,9 +12,17 @@
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
+class LTypeParser : public DRW_LType {
+public:
+    bool parseBody(DRW::Version version, dwgBuffer *buffer) {
+        return parseDwg(version, buffer, 0u);
+    }
+};
+
 dwgHandle ref(std::uint8_t code, std::uint32_t value) {
     dwgHandle h; h.code=code; h.ref=value; h.ref64=value;
     for (auto n=value; n; n >>= 8u) ++h.size;
@@ -115,6 +123,96 @@ bool parse(const Body& b,DRW::Version version,unsigned count,
             return false;
     }
     return true;
+}
+
+bool checkAc1015InlineLtypeHandleTail() {
+    const auto makeNameOnlyBuiltin = [](const std::string& name,
+                                        std::uint32_t handle) {
+        dwgBufferW framed;
+        framed.putObjType(DRW::AC1015, DRW::DwgLTypeObjectType);
+        const std::size_t sizeFieldBit = framed.bitCount();
+        framed.putRawLong32(0u);
+        framed.putHandle(ref(DRW::DwgSoftPointer, handle));
+        framed.putBitShort(0); // EED terminator
+        framed.putBitLong(0);  // reactor count
+        framed.putVariableText(DRW::AC1015, name);
+        framed.patchRawLong32AtBit(sizeFieldBit,
+            static_cast<std::uint32_t>(framed.bitCount()));
+        framed.alignToByte();
+        return framed.data();
+    };
+    for (const auto& builtin : std::vector<std::pair<std::string, std::uint32_t>>{
+             {"BYBLOCK", 0x0Fu}, {"BYLAYER", 0x10u}, {"CONTINUOUS", 0x11u}}) {
+        auto bytes = makeNameOnlyBuiltin(builtin.first, builtin.second);
+        dwgBuffer input(bytes.data(), bytes.size());
+        LTypeParser parsed;
+        if (!parsed.parseBody(DRW::AC1015, &input) || !input.isGood()
+            || parsed.name != builtin.first || parsed.handle != builtin.second
+            || parsed.size != 0 || !parsed.path.empty()
+            || parsed.length != 0.0 || parsed.alignment != 'A'
+            || parsed.hasDwgCommonLinkTail())
+            return false;
+    }
+
+    DRW_LType source;
+    source.updateValues("GENERATED_DASH", "generated AC1015 simple pattern",
+                        2, 3.0, std::vector<double>{2.0, -1.0});
+    source.handle = 0x5A0u;
+    dwgBufferW body;
+    dwgBufferW handleStream;
+    const bool encoded = source.encodeDwg(DRW::AC1015, &body, nullptr,
+                                          &handleStream);
+    if (!encoded || body.data().empty() || handleStream.data().empty()) {
+        std::cerr << "generated AC1015 LTYPE encode=" << encoded
+                  << " body=" << body.data().size() << " handles="
+                  << handleStream.data().size() << '\n';
+        return false;
+    }
+
+    const auto makeFrame = [&](std::uint64_t omittedHandleBits) {
+        dwgBufferW framed;
+        framed.putObjType(DRW::AC1015, DRW::DwgLTypeObjectType);
+        const std::size_t sizeFieldBit = framed.bitCount();
+        framed.putRawLong32(0u);
+        framed.putHandle(ref(DRW::DwgSoftPointer, source.handle));
+        framed.putBitShort(0); // EED terminator
+        framed.putBitLong(0);  // reactor count
+        const auto appendBits = [&framed](const dwgBufferW& stream,
+                                          std::uint64_t bitCount) {
+            const auto& bytes = stream.data();
+            for (std::uint64_t bit = 0; bit < bitCount; ++bit) {
+                const std::uint8_t value = static_cast<std::uint8_t>(
+                    (bytes[static_cast<std::size_t>(bit >> 3u)]
+                     >> (7u - static_cast<unsigned>(bit & 7u))) & 1u);
+                framed.putBit(value);
+            }
+        };
+        appendBits(body, body.bitCount());
+        appendBits(handleStream, handleStream.bitCount() - omittedHandleBits);
+        framed.patchRawLong32AtBit(sizeFieldBit,
+            static_cast<std::uint32_t>(framed.bitCount()));
+        framed.alignToByte();
+        return framed.data();
+    };
+
+    const auto parseExpected = [&](const std::vector<std::uint8_t>& bytes,
+                                   LTypeParser& parsed) {
+        dwgBuffer input(const_cast<std::uint8_t*>(bytes.data()), bytes.size());
+        return parsed.parseBody(DRW::AC1015, &input) && input.isGood()
+            && parsed.name == source.name && parsed.desc == source.desc
+            && parsed.handle == source.handle && parsed.size == 2
+            && parsed.path.size() == 2u && parsed.path[0] == 2.0
+            && parsed.path[1] == -1.0 && parsed.length == 3.0
+            && !parsed.hasDwgCommonLinkTail();
+    };
+
+    LTypeParser parsed;
+    if (!parseExpected(makeFrame(0u), parsed)
+        || !parseExpected(makeFrame(8u), parsed))
+        return false;
+    if (parseExpected(makeFrame(handleStream.bitCount()), parsed))
+        return false;
+    return parseExpected(makeFrame(0u), parsed);
 }
 }
 
@@ -222,6 +320,10 @@ int main(int argc,char** argv){
         std::cout<<"physical ODA LTYPE_CONTROL PASS\n";return 0;
     }
     if(argc!=1)return 2;
+    if (!checkAc1015InlineLtypeHandleTail()) {
+        std::cerr << "AC1015 inline LTYPE handle-tail profile failed\n";
+        return 1;
+    }
     for(auto version:{DRW::AC1018,
                       DRW::AC1024,DRW::AC1027,DRW::AC1032}) {
         for(unsigned count:{255u,256u,257u}) {

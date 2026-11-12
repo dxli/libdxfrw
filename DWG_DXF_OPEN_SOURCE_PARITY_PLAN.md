@@ -1624,19 +1624,26 @@ created locally from scratch for the specific control.
   or output qualification. No fixture was added. See the [transaction
   receipt](docs/research/p6-dictionarywdefault-dwg-encoder-allocation-rollback-retry-2026-11-12.json).
 
-- **P6 AC1015 LTYPE_CONTROL legacy import profile:** an existing local
-  AC1015 sample (`simple.dwg`, SHA-256
-  `6702705ed765af035761a77170ea1486d01f513690b3fd8dc8295957ddc89e58`)
-  reaches LTYPE_CONTROL with BL count 25 and 27 child handles in the historical
-  all-soft-pointer profile. `DRW_ObjControl` now admits that exact bounded
-  profile for AC1015, including canonical-null owner/XDictionary encodings, and
-  keeps it separate from ODA/current-writer profiles. Generated count, fixed
-  built-in ordering, role-mutation, truncation and corrected-object retry
-  controls pass in the focused LTYPE selector. The reader records the observed
-  child-role mismatch as an integrity error. The same drawing's LTYPE record
-  bodies still fail typed parsing and the complete read remains unsuccessful;
-  this is a control-object compatibility fix only, not an AC1015 file-support
-  promotion. No drawing fixture was added. See the [profile receipt](docs/research/p6-ac1015-ltype-control-legacy-import-profile-2026-11-12.json).
+- **P6 AC1015 LTYPE typed import progress:** for the existing local sample
+  `simple.dwg` (SHA-256
+  `6702705ed765af035761a77170ea1486d01f513690b3fd8dc8295957ddc89e58`), the
+  reader now accepts its three name-only built-in rows and parses the 22
+  remaining LTYPE bodies with the observed AC1015 inline-handle size profile.
+  The bounded compatibility path requires the decoded body/handle tail to end
+  exactly at the declared object boundary; it tolerates only omitted terminal
+  null dash handles when every remaining segment has no shape/text resource.
+  Generated controls cover the three built-ins, full inline handles, one
+  omitted terminal null, refusal when the common handle tail is absent, and
+  same-object retry. `libdxfrw_dwg_ltype_multiversion_count` passes 1/1. A
+  fresh debug conversion reaches the next TABLES record and now fails at the
+  AC1015 LAYER parser; there are no LTYPE parse warnings. The previously
+  recorded LTYPE_CONTROL integrity diagnostic (expected 2, observed 4) remains,
+  and the complete drawing still fails with `BAD_READ_TABLES`. This is bounded
+  read compatibility for one local, unauthenticated source, not AC1015 file or
+  output qualification. LibreDWG 0.14's minJSON/debug output also reports
+  malformed LTYPE fields for this source, so it is not used as a semantic
+  oracle. No DWG/DXF fixture was committed. See the [LTYPE control receipt](docs/research/p6-ac1015-ltype-control-legacy-import-profile-2026-11-12.json)
+  and [inline-tail receipt](docs/research/p6-ac1015-ltype-inline-handle-import-2026-11-12.json).
 
 - **P5 Content Format enum combinations:** the generated TABLESTYLE fast
   control crosses all 11 ODA §20.4.99 data types, five DWG unit types, and nine

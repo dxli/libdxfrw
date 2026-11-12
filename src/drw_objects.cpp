@@ -5153,6 +5153,29 @@ bool DRW_LType::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
     if (!readText(parsed.name))
         return fail();
 
+    // The observed AC1015 legacy source stores its three built-in linetype
+    // rows as name-only table entries. Do not try to read the modern common
+    // flag/description/pattern body from beyond the declared object boundary.
+    // This bounded compatibility path does not invent a parent or handle tail.
+    if (version == DRW::AC1015
+        && currentObjectDwgBit(bodyBuf) == bodyEnd
+        && (parsed.name == "BYBLOCK" || parsed.name == "BYLAYER"
+            || parsed.name == "CONTINUOUS")) {
+        parsed.length = 0.0;
+        parsed.alignment = 'A';
+        parsed.size = 0;
+        parsed.path.clear();
+        parsed.segments.clear();
+        parsed.shapeHandles.clear();
+        parsed.pathIdx = 0;
+        parsed.synchronizedLengths.clear();
+        parsed.hasSynchronizedLengths = true;
+        if (!parsed.validatePayloadFields())
+            return fail();
+        *this = std::move(parsed);
+        return true;
+    }
+
     if (objectBodyIsEmpty(buf, version, bodyEnd)) {
         std::uint32_t parsedParentHandle = 0;
         std::vector<std::uint32_t> parsedReactors;
@@ -5243,7 +5266,6 @@ bool DRW_LType::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
                                           bodyBuf->decoder, segment.text))
             return fail();
     }
-
     const std::uint64_t bodyBitOffset =
         bodyBuf->getPosition() * 8u + bodyBuf->getBitPos();
     if (!bodyBuf->isGood() || !bodySBuf->isGood()
@@ -5252,12 +5274,22 @@ bool DRW_LType::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
         return fail();
 
     dwgBuffer hBuff = *buf;
-    dwgBuffer *hBuf = version > DRW::AC1018 ? &hBuff : buf;
+    const bool ac1015InlineHandleTail = version == DRW::AC1015
+        && bodyBitOffset < bodyEnd;
+    dwgBuffer *hBuf = version > DRW::AC1018 || ac1015InlineHandleTail
+        ? &hBuff : buf;
     std::uint64_t handleEndBit = 0;
-    if (!objectHandleStreamEndBit(*hBuf, version, parsed.objSize, bs,
-                                  handleEndBit))
-        return fail();
-    seekObjectHandleStream(version, hBuf, parsed.objSize);
+    if (ac1015InlineHandleTail) {
+        // This AC1015 profile counts the inline handle tail in its object-size
+        // field. The tail begins where the typed body parser stopped and must
+        // consume exactly the remaining declared bits.
+        handleEndBit = bodyEnd;
+    } else {
+        if (!objectHandleStreamEndBit(*hBuf, version, parsed.objSize, bs,
+                                      handleEndBit))
+            return fail();
+        seekObjectHandleStream(version, hBuf, parsed.objSize);
+    }
     std::uint32_t parsedParentHandle = 0;
     std::vector<std::uint32_t> parsedReactors;
     std::uint32_t parsedXDictHandle = 0;
@@ -5279,12 +5311,36 @@ bool DRW_LType::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
     for (std::uint8_t i = 0; i < parsedSize; ++i) {
         dwgHandle dashStyle;
         if (!readBoundedObjectHandle(*hBuf, parsed.handle, false,
-                                     dashStyle, handleEndBit))
+                                     dashStyle, handleEndBit)) {
+            const bool remainingSegmentsHaveNoResources =
+                std::all_of(parsedSegments.cbegin() + i,
+                            parsedSegments.cend(),
+                            [](const DRW_LTypeSegment& segment) {
+                                return segment.complexShapeCode == 0
+                                    && segment.shapeFlags == 0;
+                            });
+            // This AC1015 writer sometimes omits terminal null dash handles.
+            // Since the remaining segments are simple and the declared inline
+            // stream is exhausted, represent those absent null references as
+            // zero without weakening complex-shape resource requirements.
+            if (ac1015InlineHandleTail && hBuf->isGood()
+                && currentObjectDwgBit(hBuf) == bodyEnd
+                && remainingSegmentsHaveNoResources) {
+                for (std::uint8_t missing = i; missing < parsedSize; ++missing) {
+                    parsedShapeHandles.push_back(0u);
+                    parsedSegments[missing].styleHandle = dwgHandle{};
+                }
+                break;
+            }
             return fail();
+        }
         parsedShapeHandles.push_back(dashStyle.ref);
         parsedSegments[static_cast<std::size_t>(i)].styleHandle = dashStyle;
     }
     if (!hBuf->isGood())
+        return fail();
+    if (ac1015InlineHandleTail
+        && currentObjectDwgBit(hBuf) != bodyEnd)
         return fail();
 
     parsed.size = parsedSize;
