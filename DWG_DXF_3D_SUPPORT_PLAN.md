@@ -1,3 +1,16 @@
+**P7 local ACIS cylinder face-normal utility (2026-11-11; generated fast
+slice):** added `drw_evaluateAcisCylinderFaceNormal` for the narrow canonical
+cylinder profile already admitted by the local projection helpers. It checks
+an explicit caller tolerance and known face-sense, handles non-unit and
+oblique axes, and refuses axis singularities or invalid/outside points
+atomically. A near-`DBL_MAX` oblique case also verifies the scaled coordinate
+difference path when direct point-origin subtraction overflows. The focused
+`libdxfrw_graph_preservation` CTest passes 1/1. This is local untrimmed geometry
+math only; native ACIS orientation, trims, placement, units, B-rep validity,
+and consumer support remain unqualified. No fixture or support claim was
+added. See the [parity-plan implementation record](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#p7-local-cylinder-normal-slice-2026-11-11) and
+[receipt](docs/research/p7-acis-cylinder-face-normal-fast-slice-2026-11-11.json).
+
 **CAD Assistant integrity recheck (2026-11-03):** The selected official ARM64 DMG mounted read-only outside the sandbox; the mounted app passed strict deep signature verification and Gatekeeper accepted it as notarized. Earlier sandboxed signature errors do not establish an invalid artifact. A locally authored SAB appeared in the window title but the visible file browser did not establish import or geometry, so semantic and independent-kernel gates remain open. See the [recheck receipt](docs/research/p7-cad-assistant-arm64-integrity-preflight-2026-11-01.json).
 
 **Newest local S3.7c vertex-to-edge incidence identity check (2026-10-22; generated fast slice, uncommitted):** coverage now reconciles a resolved vertex ordinal-1 edge link against that edge’s retained endpoint links; null adjacency is left observable without asserting it is invalid. A generated snapshot with a structurally present but nonincident edge is rejected, while focused graph-preservation CTest and `lc3_compat_check` pass. This is parsed-identity consistency only, not manifold/B-rep validity or native ACIS semantics. No fixture or support claim changed. [Parity-plan record](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#implementation-progress-s37c-vertex-to-edge-incidence-identity-2026-10-22-generated-fast-slice-uncommitted) · [receipt](docs/research/s37c-vertex-edge-incidence-fast-slice-2026-10-22.json).
