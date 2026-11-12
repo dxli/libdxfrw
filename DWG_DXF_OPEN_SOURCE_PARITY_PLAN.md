@@ -7247,8 +7247,10 @@ the emitted subtype before staging and refuses a pre-R2010 2D ID, omitted
 coordinate-vertex widths/bulge/tangent/ID, and omitted PFACE-face values. It
 allows the canonical DXF face-role bit 128 because DWG object type 0x0E already
 encodes that role. Generated AC1021 controls verify each profile's refusal
-preserves the destination and corrected same-writer retry succeeds; the
-focused POLYLINE selector passes. No fixture was added. This closes only
+preserves the destination and corrected same-writer retry succeeds. A generated
+AC1024 2D VERTEX is also encoded and parsed with its nonzero ID intact, proving
+the version gate on the supported side. The focused POLYLINE selector passes.
+No fixture was added. This closes only
 silent loss in these bounded vertex writer profiles, not producer breadth,
 full topology or native consumer semantics. See the [VERTEX loss-guard
 receipt](docs/research/p6-dwg-vertex-omitted-field-loss-guard-2026-11-12.json).

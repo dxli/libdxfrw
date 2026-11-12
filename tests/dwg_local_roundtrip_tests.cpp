@@ -550,6 +550,52 @@ public:
         if (!expectVertexRefusal(faceVertex, "PFACE face omitted point")) return false;
         faceVertex.basePoint.x = 0.0;
         if (!expectVertexRetry(faceVertex, "PFACE face")) return false;
+
+        DRW_Header header24;
+        dwgWriter24 writer24(nullptr, &header24);
+        if (!writer24.prepareDwgClassManifest()
+            || !writer24.writeFileHeaderStub()
+            || !writer24.writeDwgHeader() || !writer24.writeDwgClasses()
+            || !writer24.writeDwgObjects())
+            { std::cerr << "AC1024 vertex writer setup failed\n"; return false; }
+        DRW_Vertex modern2dVertex;
+        modern2dVertex.setDwgSubtype(DRW_Vertex::DwgSubtype::Vertex2D);
+        modern2dVertex.identifier = 123;
+        modern2dVertex.basePoint = {1.0, 2.0, 0.0};
+        if (!writer24.encodeEntity(&modern2dVertex))
+            { std::cerr << "AC1024 2D vertex encode failed\n"; return false; }
+        CapturedObjectFrame modernVertexFrame;
+        if (!captureObjectFrame(writer24, modern2dVertex.handle,
+                                modernVertexFrame))
+            { std::cerr << "AC1024 vertex frame capture failed\n"; return false; }
+        dwgBuffer modernEnvelope(modernVertexFrame.bytes.data(),
+                                 modernVertexFrame.bytes.size());
+        const auto modernLength = modernEnvelope.getModularShort();
+        const auto modernHandleBits = modernEnvelope.getUModularChar();
+        const auto modernOffset = modernEnvelope.getPosition();
+        if (!modernEnvelope.isGood() || (modernHandleBits & 7u) != 0u
+            || modernLength <= 0
+            || modernOffset + static_cast<std::size_t>(modernLength) + 2u
+                != modernVertexFrame.bytes.size())
+            { std::cerr << "AC1024 vertex frame boundary failed\n"; return false; }
+        struct VertexProbe : DRW_Vertex { using DRW_Vertex::parseDwg; } modernProbe;
+        dwgBuffer typeProbe(modernVertexFrame.bytes.data() + modernOffset,
+                            static_cast<std::size_t>(modernLength));
+        const auto modernType = typeProbe.getObjType(DRW::AC1024);
+        dwgBuffer modernBody(modernVertexFrame.bytes.data() + modernOffset,
+                             static_cast<std::size_t>(modernLength));
+        if (!modernProbe.parseDwg(
+                DRW::AC1024, &modernBody,
+                static_cast<std::uint32_t>(modernHandleBits), 0.0)
+            || !modernBody.isGood() || modernProbe.identifier != 123
+            || modernProbe.basePoint.x != 1.0 || modernProbe.basePoint.y != 2.0)
+            { std::cerr << "AC1024 vertex ID readback failed: type=" << modernType
+                         << " identifier=" << modernProbe.identifier
+                         << " point=" << modernProbe.basePoint.x << ','
+                         << modernProbe.basePoint.y << " body-bytes="
+                         << modernLength << " handle-bits=" << modernHandleBits
+                         << " version=" << static_cast<int>(writer24.m_version)
+                         << "\n"; return false; }
         struct PolylineProbe : DRW_Polyline {
             bool common(dwgBuffer& b) { return DRW_Entity::parseDwgCommon(DRW::AC1021, &b, 0u); }
             using DRW_Polyline::parseDwg;

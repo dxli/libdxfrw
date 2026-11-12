@@ -54,6 +54,12 @@
       "corrected PFACE coordinate vertex after identifier refusal",
       "PFACE face with canonical flags 128 after point refusal"
     ],
+    "versionBoundaryReadback": {
+      "version": "AC1024",
+      "subtype": "2D VERTEX",
+      "identifier": 123,
+      "readbackMatches": true
+    },
     "failureRetry": "Each refusal preserves the seeded writer buffer; correcting the omitted field allows the same writer to encode the vertex."
   },
   "validation": {
