@@ -868,6 +868,17 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
    by ODA as needing recovery and are excluded from this comparison. See the
    [controlled ODA suffix receipt](docs/research/p6-ac1027-header-controlled-oda-suffix-2026-11-09.json)
    and [earlier local-control receipt](docs/research/p6-ac1027-header-variable-controlled-conversion-lock-2026-11-09.json).
+   A fresh current-source Cover trace separates the logical HEADER span from
+   decompressor/page capacity: section-map size is 1,575 bytes, page `uSize`
+   is 1,600 bytes, and the decoded page window is 0x7400. The validated header
+   trailer ends at byte 844, leaving 731 bytes unclaimed inside the 1,575-byte
+   section-map span; the separate 25-byte difference to page `uSize` is page
+   tail. ODA §9 (p.72) describes a contiguous header stream ending in CRC and
+   sentinel with no gaps; §11's 0x200 padding (p.89) follows the CLASSES
+   section, not HEADER. This rules out page slack and that documented padding
+   as explanations for this Cover suffix, but does not identify its contents
+   or establish the same boundary for every producer. Preserve strict refusal
+   and do not relabel the bytes as padding ([span receipt](docs/research/p6-ac1027-cover-header-suffix-logical-span-2026-11-12.json)).
    Do not repeat the unchanged resave or suffix-only mutation. Further suffix
    interpretation needs source-level field evidence; continue independent
    implementation meanwhile.
