@@ -3091,6 +3091,19 @@ BasePointParameter shape; whole-file allocation injection and broader source,
 graph, and native qualification remain open (see the
 [receipt](docs/research/p6-dynamic-block-basepoint-parameter-allocation-rollback-2026-11-12.json)).
 
+**Dynamic-block AlignmentParameter allocation rollback (2026-11-12):** the
+direct AC1024 ASCII/Binary writer now sweeps the nested two-point property
+connection profile. All 14 injected allocation failures per encoding preserve
+the caller's coordinates, four property-state values, nested code/name arrays,
+and source identity map. Each failure is followed by successful fresh-writer
+output and readback of the property counts, named connections, subclass,
+parameter location, and owner/record handles. The existing adapter profile
+continues to verify complete group order, typed semantics, and failure/retry
+behavior. Normal and ASan focused cohorts pass. This is a bounded generated
+transaction control only; it does not qualify physical producer coverage,
+graph closure, or native interpretation (see the
+[receipt](docs/research/p6-dynamic-block-alignment-parameter-allocation-rollback-2026-11-12.json)).
+
 **AC1021 3D POLYLINE DWG flag admission (2026-11-12):** writer admission now
 matches ODA v5.4.1 §20.4.17: the second raw flag byte carries closed only;
 the first represents spline type 5/6 and implies group-70 bit 4. Conflicting

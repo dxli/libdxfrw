@@ -5,6 +5,7 @@
 #include "intern/dxfwriter.h"
 
 #include <cstdlib>
+#include <array>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -464,6 +465,252 @@ bool basePointAllocationSweep(bool binary) {
     return true;
 }
 
+DRW_DynamicBlockObject makeAlignmentParameter() {
+    DRW_DynamicBlockObject object("BLOCKALIGNMENTPARAMETER");
+    object.handle = 0x1126u;
+    object.parentHandle = 0x110Fu;
+    object.m_kind = DRW_DynamicBlockObject::Kind::AlignmentParameter;
+    object.m_bodyFullyDecoded = true;
+    object.m_evalExprParsed = true;
+    object.m_parentId = std::numeric_limits<std::uint32_t>::max();
+    object.m_major = 29u;
+    object.m_minor = 2u;
+    object.m_valueCode = -9999;
+    object.m_nodeId = 54u;
+    object.m_elementParsed = true;
+    object.m_elementName = "Alignment";
+    object.m_elementMajor = 29u;
+    object.m_elementMinor = 2u;
+    object.m_showProperties = true;
+    object.m_firstPoint = DRW_Coord(1.25, -2.5, 3.75);
+    object.m_secondPoint = DRW_Coord(15.0, 4.5, -6.75);
+    object.m_twoPointPropertyCodes[0] = {55, -4};
+    object.m_twoPointPropertyNames[0] = {"Distance", "Width"};
+    object.m_twoPointPropertyCodes[1] = {92};
+    object.m_twoPointPropertyNames[1] = {"Angle"};
+    object.m_twoPointPropertyCodes[3] = {301, 0};
+    object.m_twoPointPropertyNames[3] = {"Position", "Enabled"};
+    object.m_propertyStates = {55, 0, 7, -1};
+    object.m_parameterBaseLocation = 2;
+    object.m_alignPerpendicular = true;
+    return object;
+}
+
+bool alignmentSourceUnchanged(const DRW_DynamicBlockObject& object) {
+    return object.handle == 0x1126u
+        && static_cast<std::uint32_t>(object.parentHandle) == 0x110Fu
+        && object.m_kind
+            == DRW_DynamicBlockObject::Kind::AlignmentParameter
+        && object.m_bodyFullyDecoded && object.m_evalExprParsed
+        && object.m_parentId == std::numeric_limits<std::uint32_t>::max()
+        && object.m_nodeId == 54u && object.m_elementParsed
+        && object.m_elementName == "Alignment"
+        && object.m_firstPoint.x == 1.25
+        && object.m_firstPoint.y == -2.5
+        && object.m_firstPoint.z == 3.75
+        && object.m_secondPoint.x == 15.0
+        && object.m_secondPoint.y == 4.5
+        && object.m_secondPoint.z == -6.75
+        && object.m_twoPointPropertyCodes.size() == 4u
+        && object.m_twoPointPropertyCodes[0]
+            == std::vector<std::int32_t>{55, -4}
+        && object.m_twoPointPropertyCodes[1]
+            == std::vector<std::int32_t>{92}
+        && object.m_twoPointPropertyCodes[2].empty()
+        && object.m_twoPointPropertyCodes[3]
+            == std::vector<std::int32_t>{301, 0}
+        && object.m_twoPointPropertyNames.size() == 4u
+        && object.m_twoPointPropertyNames[0]
+            == std::vector<UTF8STRING>{"Distance", "Width"}
+        && object.m_twoPointPropertyNames[1]
+            == std::vector<UTF8STRING>{"Angle"}
+        && object.m_twoPointPropertyNames[2].empty()
+        && object.m_twoPointPropertyNames[3]
+            == std::vector<UTF8STRING>{"Position", "Enabled"}
+        && object.m_propertyStates
+            == std::array<std::int32_t, 4>{{55, 0, 7, -1}}
+        && object.m_parameterBaseLocation == 2
+        && object.m_alignPerpendicular;
+}
+
+bool alignmentWireReadback(const std::string& bytes, bool binary) {
+    std::istringstream input(bytes);
+    std::unique_ptr<dxfReader> reader = binary
+        ? std::unique_ptr<dxfReader>(std::make_unique<dxfReaderBinary>(&input))
+        : std::unique_ptr<dxfReader>(std::make_unique<dxfReaderAscii>(&input));
+    int code = 0;
+    if (!reader->readRec(&code) || code != 0
+        || reader->getString() != "BLOCKALIGNMENTPARAMETER")
+        return false;
+    bool hasHandle = false;
+    bool hasOwner = false;
+    bool hasNode = false;
+    bool hasPropertyStates = false;
+    bool hasConnections = false;
+    bool hasBaseLocation = false;
+    bool hasAlignmentSubclass = false;
+    bool hasSubclass = false;
+    bool ended = false;
+    std::vector<std::int32_t> propertyStates;
+    std::vector<std::int32_t> propertyCounts;
+    std::vector<std::pair<std::int32_t, std::string>> connections;
+    bool awaitingConnectionName = false;
+    std::int32_t pendingConnectionCode = 0;
+    while (reader->readRec(&code)) {
+        if (code == 0) {
+            ended = reader->getString() == "WIRE_END";
+            break;
+        }
+        switch (code) {
+        case 5:
+            hasHandle = reader->getHandleString() == 0x1126u;
+            break;
+        case 330:
+            hasOwner = reader->getHandleString() == 0x110Fu;
+            break;
+        case 90:
+            hasNode = reader->getInt32() == 54;
+            break;
+        case 91:
+            propertyStates.push_back(reader->getInt32());
+            break;
+        case 171:
+        case 172:
+        case 173:
+        case 174:
+            propertyCounts.push_back(reader->getInt32());
+            break;
+        case 92:
+        case 93:
+        case 94:
+        case 95:
+            pendingConnectionCode = reader->getInt32();
+            awaitingConnectionName = true;
+            break;
+        case 301:
+        case 302:
+        case 303:
+        case 304:
+            if (awaitingConnectionName) {
+                connections.emplace_back(
+                    pendingConnectionCode, reader->getString());
+                awaitingConnectionName = false;
+            }
+            break;
+        case 177:
+            hasBaseLocation = reader->getInt32() == 2;
+            break;
+        case 100:
+            {
+                const std::string marker = reader->getString();
+                hasSubclass = hasSubclass || marker == "AcDbBlock2PtParameter";
+                hasAlignmentSubclass = hasAlignmentSubclass
+                    || marker == "AcDbBlockAlignmentParameter";
+            }
+            break;
+        case 280:
+            hasAlignmentSubclass = hasAlignmentSubclass || hasSubclass;
+            break;
+        default:
+            break;
+        }
+    }
+    hasPropertyStates = propertyStates
+        == std::vector<std::int32_t>{55, 0, 7, -1};
+    hasConnections = connections
+        == std::vector<std::pair<std::int32_t, std::string>>{
+            {55, "Distance"}, {-4, "Width"}, {92, "Angle"},
+            {301, "Position"}, {0, "Enabled"}};
+    return ended && hasHandle && hasOwner && hasNode && hasPropertyStates
+        && propertyCounts == std::vector<std::int32_t>{2, 1, 0, 2}
+        && hasConnections && hasBaseLocation && hasSubclass
+        && hasAlignmentSubclass;
+}
+
+bool alignmentAllocationSweep(bool binary) {
+    constexpr long calibrationLimit = 1000000;
+    std::ostringstream cleanBytes;
+    dxfRW cleanCodec("");
+    DxfDynamicBlockTestAccess::attachWriter(
+        cleanCodec, DRW::AC1024, binary, cleanBytes);
+    DRW_DynamicBlockObject cleanObject = makeAlignmentParameter();
+    long allocationCount = 0;
+    bool cleanWrite = false;
+    {
+        AllocationFailure failure(calibrationLimit);
+        cleanWrite = cleanCodec.writeDynamicBlockObject(&cleanObject);
+        allocationCount = calibrationLimit - allocationsBeforeFailure;
+    }
+    if (!cleanWrite || !alignmentSourceUnchanged(cleanObject)
+        || cleanCodec.getWritingContext()
+                ->sourceHandleToWrittenObjectMap.count(cleanObject.handle)
+            != 1u
+        || !DxfDynamicBlockTestAccess::writeEnd(cleanCodec)
+        || !alignmentWireReadback(cleanBytes.str(), binary)
+        || allocationCount <= 0) {
+        std::cerr << "clean AlignmentParameter write/readback failed "
+                  << "(binary=" << binary << ") allocations="
+                  << allocationCount << '\n';
+        return false;
+    }
+
+    for (long offset = 0; offset < allocationCount; ++offset) {
+        std::ostringstream failedBytes;
+        dxfRW failedCodec("");
+        DxfDynamicBlockTestAccess::attachWriter(
+            failedCodec, DRW::AC1024, binary, failedBytes);
+        DRW_DynamicBlockObject object = makeAlignmentParameter();
+        const std::size_t failuresBefore = failedAllocations;
+        bool wrote = false;
+        try {
+            AllocationFailure failure(offset);
+            wrote = failedCodec.writeDynamicBlockObject(&object);
+        } catch (const std::bad_alloc&) {
+            allocationsBeforeFailure = -1;
+        }
+        allocationsBeforeFailure = -1;
+        const DRW_WritingContext* context = failedCodec.getWritingContext();
+        if (wrote || failedAllocations == failuresBefore
+            || !alignmentSourceUnchanged(object) || context == nullptr
+            || context->sourceHandleToWrittenObjectMap.count(object.handle)
+                != 0u) {
+            std::cerr << "AlignmentParameter allocation rollback failed at "
+                      << (binary ? "Binary" : "ASCII")
+                      << " offset=" << offset << " wrote=" << wrote
+                      << " identityAbsent="
+                      << (context != nullptr
+                          && context->sourceHandleToWrittenObjectMap.count(
+                                 object.handle) == 0u)
+                      << '\n';
+            return false;
+        }
+
+        std::ostringstream retryBytes;
+        dxfRW retryCodec("");
+        DxfDynamicBlockTestAccess::attachWriter(
+            retryCodec, DRW::AC1024, binary, retryBytes);
+        const bool retryWrote = retryCodec.writeDynamicBlockObject(&object);
+        const DRW_WritingContext* retryContext =
+            retryCodec.getWritingContext();
+        if (!retryWrote || !alignmentSourceUnchanged(object)
+            || retryContext == nullptr
+            || retryContext->sourceHandleToWrittenObjectMap.count(
+                   object.handle) != 1u
+            || !DxfDynamicBlockTestAccess::writeEnd(retryCodec)
+            || !alignmentWireReadback(retryBytes.str(), binary)) {
+            std::cerr << "AlignmentParameter fresh-writer retry failed at "
+                      << (binary ? "Binary" : "ASCII")
+                      << " offset=" << offset << '\n';
+            return false;
+        }
+    }
+    std::cout << (binary ? "Binary" : "ASCII")
+              << " AlignmentParameter allocation offsets="
+              << allocationCount
+              << "; source rollback and fresh-writer retries pass\n";
+    return true;
+}
+
 bool wireReadback(const std::string& bytes, bool binary) {
     std::istringstream input(bytes);
     std::unique_ptr<dxfReader> reader = binary
@@ -629,5 +876,7 @@ int main() {
         && visibilityAllocationSweep(false)
         && visibilityAllocationSweep(true)
         && basePointAllocationSweep(false)
-        && basePointAllocationSweep(true) ? 0 : 1;
+        && basePointAllocationSweep(true)
+        && alignmentAllocationSweep(false)
+        && alignmentAllocationSweep(true) ? 0 : 1;
 }
