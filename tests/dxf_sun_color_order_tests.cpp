@@ -6,16 +6,60 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <iterator>
 #include <memory>
+#include <new>
 #include <string>
 #include <vector>
+
+namespace {
+long allocationsBeforeFailure = -1;
+std::size_t failedAllocations = 0u;
+struct AllocationFailure {
+ explicit AllocationFailure(long count) { allocationsBeforeFailure = count; }
+ ~AllocationFailure() { allocationsBeforeFailure = -1; }
+};
+}
+
+void* operator new(std::size_t size) {
+ if (allocationsBeforeFailure == 0) {
+  ++failedAllocations;
+  allocationsBeforeFailure = -1;
+  throw std::bad_alloc();
+ }
+ if (allocationsBeforeFailure > 0) --allocationsBeforeFailure;
+ if (void* value = std::malloc(size == 0u ? 1u : size)) return value;
+ throw std::bad_alloc();
+}
+void* operator new[](std::size_t size) { return ::operator new(size); }
+void operator delete(void* value) noexcept { std::free(value); }
+void operator delete[](void* value) noexcept { std::free(value); }
+void operator delete(void* value, std::size_t) noexcept { std::free(value); }
+void operator delete[](void* value, std::size_t) noexcept { std::free(value); }
 struct Capture final : LC3CompatCheck {
  void addSun(const DRW_Sun& v) override {if(count++==0)first=v;else second=v;}
  void addRawDxfObject(const DRW_RawDxfObject& v) override {if(v.name=="SUN"&&rawCount++==0)raw=v;}
  DRW_Sun first,second;DRW_RawDxfObject raw;int count=0,rawCount=0;
 };
-struct Export final:LC3CompatCheck {explicit Export(dxfRW& w):out(w){} void writeObjects() override {(void)out.writeSun(&sun);}dxfRW& out;DRW_Sun sun;};
+struct Export final:LC3CompatCheck {
+ explicit Export(dxfRW& w):out(w){}
+ void writeObjects() override {
+  if(failAt<0) accepted=out.writeSun(&sun);
+  else {
+   const std::size_t before=failedAllocations;
+   AllocationFailure failure(failAt);
+   try {accepted=out.writeSun(&sun);}
+   catch(const std::bad_alloc&) {
+    accepted=false;
+   }
+   reached=failedAllocations!=before?static_cast<long>(failedAllocations-before):failAt-allocationsBeforeFailure;
+  }
+  if(!accepted)(void)out.writeRawDxfObject(nullptr);
+ }
+ bool finalizeDxfWrite() override{return accepted;}
+ dxfRW& out;DRW_Sun sun;long failAt=-1,reached=0;bool accepted=false;
+};
 struct Field{int code;int value;};
 static bool input(const std::filesystem::path&p,bool binary,const std::vector<Field>& fields){
  std::ofstream f(p,std::ios::binary|std::ios::trunc);if(binary)f<<"AutoCAD Binary DXF\r\n"<<char(26)<<'\0';
@@ -31,6 +75,60 @@ static bool input(const std::filesystem::path&p,bool binary,const std::vector<Fi
 static bool read(const std::filesystem::path&p,Capture&c){dxfRW in(p.string().c_str());return in.read(&c,false);}
 static std::string file(const std::filesystem::path&p){std::ifstream f(p,std::ios::binary);return {std::istreambuf_iterator<char>(f),{}};}
 static bool rawColor(const Capture&c,int expected){int n=0;for(const auto&g:c.raw.groups)if(g.code()==421){if(g.type()!=DRW_Variant::INTEGER||g.i_val()!=expected)return false;++n;}return n==1;}
+static bool sunReadback(const std::filesystem::path& path) {
+ Capture capture;
+ if(!read(path,capture)||capture.count!=1)return false;
+ const DRW_Sun& sun=capture.first;
+ return sun.handle==0xD010u&&sun.parentHandle==0x30u
+  &&sun.m_classVersion==1u&&sun.m_isOn&&sun.m_color==7u
+  &&sun.m_intensity==1.25&&sun.m_hasShadow
+  &&sun.m_julianDay==2458123&&sun.m_milliseconds==45678
+  &&sun.m_isDaylightSavings&&sun.m_shadowType==2u
+  &&sun.m_shadowMapSize==512u&&sun.m_shadowSoftness==3u;
+}
+static bool allocationSweep(const std::filesystem::path& dir) {
+ const auto path=dir/"allocation-sun.dxf";
+ const std::string prior="prior SUN bytes\n";
+ for(bool binary:{false,true}) {
+  long allocationCount=0;std::string expected;
+  {
+   dxfRW codec(path.string().c_str());Export exporter(codec);
+   exporter.sun.handle=0xD010u;exporter.sun.parentHandle=0x30u;
+   exporter.sun.m_classVersion=1u;exporter.sun.m_isOn=true;
+   exporter.sun.m_color=7u;exporter.sun.m_intensity=1.25;
+   exporter.sun.m_hasShadow=true;exporter.sun.m_julianDay=2458123;
+   exporter.sun.m_milliseconds=45678;exporter.sun.m_isDaylightSavings=true;
+   exporter.sun.m_shadowType=2u;exporter.sun.m_shadowMapSize=512u;
+   exporter.sun.m_shadowSoftness=3u;exporter.failAt=1000000;
+   const bool written=codec.write(&exporter,DRW::AC1027,binary);
+   if(!written||!exporter.accepted||!sunReadback(path))return false;
+   allocationCount=exporter.reached;expected=file(path);
+  }
+  if(allocationCount<=0||expected.empty())return false;
+  for(long offset=0;offset<allocationCount;++offset) {
+   {std::ofstream output(path,std::ios::binary|std::ios::trunc);output<<prior;if(!output)return false;}
+   dxfRW codec(path.string().c_str());Export exporter(codec);
+   exporter.sun.handle=0xD010u;exporter.sun.parentHandle=0x30u;
+   exporter.sun.m_classVersion=1u;exporter.sun.m_isOn=true;
+   exporter.sun.m_color=7u;exporter.sun.m_intensity=1.25;
+   exporter.sun.m_hasShadow=true;exporter.sun.m_julianDay=2458123;
+   exporter.sun.m_milliseconds=45678;exporter.sun.m_isDaylightSavings=true;
+   exporter.sun.m_shadowType=2u;exporter.sun.m_shadowMapSize=512u;
+   exporter.sun.m_shadowSoftness=3u;exporter.failAt=offset;
+   const bool written=codec.write(&exporter,DRW::AC1027,binary);
+   exporter.failAt=-1;
+   if(written||exporter.accepted||exporter.reached!=1||file(path)!=prior
+      ||exporter.sun.handle!=0xD010u||exporter.sun.parentHandle!=0x30u
+      ||exporter.sun.m_intensity!=1.25||exporter.sun.m_julianDay!=2458123)
+    return false;
+   const bool retried=codec.write(&exporter,DRW::AC1027,binary);
+   if(!retried||!exporter.accepted||file(path)!=expected||!sunReadback(path))return false;
+  }
+  std::cout<<"SUN DXF "<<(binary?"Binary":"ASCII")<<": allocation offsets="
+           <<allocationCount<<", rollback/retry/readback=PASS\n";
+ }
+ return true;
+}
 int main(int argc,char**argv){
  if(argc==2){Capture c;if(!read(argv[1],c)||c.count!=1||c.rawCount!=1||c.first.handle!=0x30||c.first.m_color!=148||c.first.m_color24!=1193046||!rawColor(c,1193046))return 10;return 0;}
  if(argc!=1)return 11;
@@ -44,5 +142,6 @@ int main(int argc,char**argv){
   }
   if(!input(in,binary,{{63,7}}))return 6;Capture absent;if(!read(in,absent)||absent.count!=2||absent.first.m_color24!=-1)return 7;
  }
+ if(!allocationSweep(dir))return 8;
  return 0;
 }
