@@ -5438,7 +5438,7 @@ binary recheck confirms `operationSucceeded=true`, `legacyError=0` and no
 CLASSES CRC mismatch for all nine AC1024 DWGs currently under
 `/Users/dli/doc/dwg/`; all ten repository fixture paths also pass, with the
 `mechanical_example-imperial-alt.dwg` path duplicating an existing source hash.
-Some files still fail later strict-output gates, which are not CLASSES errors.
+Some files still fail later strict-output gates, which are not CLASSES errors. A fresh debug run against repository HEAD `300a5f4c` and `dwg2dxf` SHA-256 `36ccaf73892eba809aed7316272d5e02d1ce2f4b645c4d3057109df391f506f1` confirms all nine current files reach `dwgReader24::readDwgClasses END`, report `operationSucceeded=true` and `legacyError=0`, and have no CLASSES CRC mismatch; eight failures occur later during output qualification. See the [hash-bound trace receipt](docs/research/p6-ac1024-classes-current-corpus-trace-2026-11-12.json).
 This conflicts with the repo guidance's six-of-ten AutoCAD 2010 RTM report;
 the referenced directory currently contains only nine AC1024 paths. Keep the
 reported failure unresolved until the missing tenth input or exact failing
