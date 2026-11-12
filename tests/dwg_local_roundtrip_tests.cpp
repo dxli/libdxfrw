@@ -9846,6 +9846,20 @@ public:
         wrotePolyline_ = writer_->writeLWPolyline(&polyline)
             && polyline.handle != 0u;
 
+        DRW_Polyline spatialPolyline;
+        spatialPolyline.flags = 8; // 3D POLYLINE; its vertices are WCS points.
+        spatialPolyline.vertexcount = 4;
+        const std::array<DRW_Coord, 4> spatialPoints {{
+            {61.0, 62.0, 1.0}, {64.0, 62.0, 4.0},
+            {65.0, 66.0, 5.0}, {70.0, 68.0, 8.0}}};
+        for (const DRW_Coord& point : spatialPoints) {
+            DRW_Vertex vertex(point.x, point.y, point.z, 0.0);
+            vertex.setDwgSubtype(DRW_Vertex::DwgSubtype::Vertex3D);
+            spatialPolyline.addVertex(vertex);
+        }
+        wrote3dPolyline_ = writer_->writePolyline(&spatialPolyline)
+            && spatialPolyline.handle != 0u;
+
         DRW_Spline spline;
         spline.m_scenario = 1;
         spline.degree = 2;
@@ -9873,7 +9887,8 @@ public:
     void writeAppId() override {}
     bool finalizeDwgWrite() override {
         return wrotePoint_ && wroteLine_ && wroteCircle_ && wroteArc_
-            && wroteEllipse_ && wrotePolyline_ && wroteSpline_;
+            && wroteEllipse_ && wrotePolyline_ && wrote3dPolyline_
+            && wroteSpline_;
     }
     bool finalizeDwgWriteStructure() override { return true; }
 
@@ -9885,6 +9900,7 @@ private:
     bool wroteArc_ {false};
     bool wroteEllipse_ {false};
     bool wrotePolyline_ {false};
+    bool wrote3dPolyline_ {false};
     bool wroteSpline_ {false};
 };
 

@@ -8208,6 +8208,19 @@ profile passes both open and insert in 2.48 seconds. See the [primitive
 qualification receipt](docs/research/p8-freecad-ac1021-generated-primitives-open-insert-2026-11-12.json)
 and the [tilted-SPLINE receipt](docs/research/p8-freecad-ac1021-tilted-spline-open-insert-2026-11-12.json).
 
+**P8 classic 3D POLYLINE consumer slice (2026-11-12):** the generated
+AC1021 profile now also contains a classic `POLYLINE` with flag 8 and four
+explicit `Vertex3D` WCS vertices. FreeCAD 1.1.4's native C++ DXF importer
+opens and inserts the generated drawing through the hash-checked installed
+converter; both focused operations pass in 3.01 seconds total. The harness
+checks all eight entity counts, no unsupported-feature reports, exact ordered
+POLYLINE coordinates, bounds, 3-edge/4-vertex topology and total length.
+The generator creates the source locally at runtime; no fixture was added.
+This qualifies only the generated AC1021 classic 3D POLYLINE route on macOS
+ARM64; other POLYLINE profiles, physical producer sources, FreeCAD 1.1.3,
+Linux/Windows, native DWG and broad semantic claims remain open. See the
+[POLYLINE consumer receipt](docs/research/p8-freecad-ac1021-classic-3d-polyline-open-insert-2026-11-12.json).
+
 **FreeCAD ACIS consumer boundary (2026-11-12):** FreeCAD's current Draft DXF
 documentation says its built-in DXF importer cannot read ACIS/SAT solid blobs;
 its documented C++ entity list excludes 3DSOLID, REGION, and BODY. Its DWG
