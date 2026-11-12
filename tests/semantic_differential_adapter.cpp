@@ -1014,6 +1014,8 @@ public:
         fields.push_back(doubleField("columnSpacing", d.colspace));
         fields.push_back(doubleField("rowSpacing", d.rowspace));
         fields.push_back(uintField("attributeCount", d.attlist.size()));
+        fields.push_back(boolField("hasSequenceEnd",
+                                   static_cast<bool>(d.seqEndEntity)));
         for (std::size_t i = 0; i < d.attlist.size(); ++i) {
             const std::string prefix = "attribute." + std::to_string(i);
             if (!d.attlist[i]) {
@@ -2476,6 +2478,21 @@ void SemanticSink::writeEntities() {
         outerInsert.yscale = -1.0;
         outerInsert.zscale = 0.75;
         outerInsert.angle = -0.4;
+        auto nestedAttribute = std::make_shared<DRW_Attrib>();
+        nestedAttribute->tag = "NESTED_ID";
+        nestedAttribute->text = "ATTRIBUTE 3D";
+        nestedAttribute->basePoint = DRW_Coord{12.0, -4.0, 9.0};
+        nestedAttribute->extPoint = DRW_Coord{0.0, 0.0, 1.0};
+        nestedAttribute->height = 2.5;
+        nestedAttribute->angle = 0.6;
+        nestedAttribute->widthscale = 0.8;
+        nestedAttribute->oblique = 0.1;
+        nestedAttribute->attribFlags = 0;
+        nestedAttribute->m_fieldLength = 12;
+        nestedAttribute->lockPosition = true;
+        nestedAttribute->style = "Standard";
+        outerInsert.attlist.push_back(nestedAttribute);
+        outerInsert.seqEndEntity = std::make_shared<DRW_SeqEnd>();
         wrote = dxfWriter_->writeInsert(&outerInsert) && wrote;
 
         DRW_Spline spline;
@@ -3827,7 +3844,37 @@ bool run3DConsumerProbe(bool binary) {
             && expectEntityDouble(sink, "INSERT", outerLayer, "yScale", -1.0)
             && expectEntityDouble(sink, "INSERT", outerLayer, "zScale", 0.75)
             && expectEntityDouble(sink, "INSERT", outerLayer,
-                                  "rotationAngle", -0.4);
+                                  "rotationAngle", -0.4)
+            && expectEntityField(sink, "INSERT", outerLayer,
+                                 "attributeCount", "1")
+            && expectEntityField(sink, "INSERT", outerLayer,
+                                 "hasSequenceEnd", "true")
+            && expectEntityField(sink, "INSERT", outerLayer,
+                                 "attribute.0.tag", "\"NESTED_ID\"")
+            && expectEntityField(sink, "INSERT", outerLayer,
+                                 "attribute.0.text", "\"ATTRIBUTE 3D\"")
+            && expectEntityField(sink, "INSERT", outerLayer,
+                                 "attribute.0.insertionPoint",
+                                 "{\"x\":12,\"y\":-4,\"z\":9}")
+            && expectEntityField(sink, "INSERT", outerLayer,
+                                 "attribute.0.extrusion",
+                                 "{\"x\":0,\"y\":0,\"z\":1}")
+            && expectEntityDouble(sink, "INSERT", outerLayer,
+                                  "attribute.0.height", 2.5)
+            && expectEntityDouble(sink, "INSERT", outerLayer,
+                                  "attribute.0.rotationAngle", 0.6)
+            && expectEntityDouble(sink, "INSERT", outerLayer,
+                                  "attribute.0.widthScale", 0.8)
+            && expectEntityDouble(sink, "INSERT", outerLayer,
+                                  "attribute.0.oblique", 0.1)
+            && expectEntityField(sink, "INSERT", outerLayer,
+                                 "attribute.0.flags", "0")
+            && expectEntityField(sink, "INSERT", outerLayer,
+                                 "attribute.0.fieldLength", "12")
+            && expectEntityField(sink, "INSERT", outerLayer,
+                                 "attribute.0.lockPosition", "true")
+            && expectEntityField(sink, "INSERT", outerLayer,
+                                 "attribute.0.style", "\"Standard\"");
     };
     if (!expectNestedInsertFields(consumer, false)
         || !expectNestedInsertFields(legacyConsumer, true)

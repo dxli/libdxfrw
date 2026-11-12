@@ -1647,6 +1647,16 @@ created locally from scratch for the specific control.
   geometry; no parser, B-rep, ACDSDATA/SAB or support claim follows. The
   focused CTest passes 1/1 ([receipt](docs/research/p8-3d-consumer-sat-carrier-fields-2026-11-12.json)).
 
+- **P8/S8.3.9 generated INSERT attribute chain:** the probe now attaches a
+  runtime-authored ATTRIB with distinct tag/text, elevated insertion point,
+  height, rotation, width scale, oblique angle, field length and lock-position
+  state to the nested parent INSERT. It checks those fields and the terminating
+  SEQEND presence after AC1027 ASCII/Binary readback under `ext=false` and
+  `ext=true`; the focused CTest passes 1/1. This establishes selected
+  same-library DXF child-callback transport, not independent ATTRIB
+  interoperability, DWG ownership/handle semantics, text placement or native
+  rendering ([receipt](docs/research/p8-3d-consumer-insert-attrib-chain-2026-11-12.json)).
+
 - **P6 generated IMAGEDEF hard-owner reader profile:** the shared OBJECTS
   prologue preflight and typed `DRW_ImageDef` parser now explicitly accept the
   ODA §20.4.81 hard-owner parent code-3 emitted by this writer. Generated
