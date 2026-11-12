@@ -2584,6 +2584,7 @@ void SemanticSink::writeEntities() {
         wrote = dxfWriter_->writePolyline(&polyface) && wrote;
 
         DRW_Mesh mesh;
+        mesh.layer = "probe_mesh_geometry";
         mesh.vertices = {DRW_Coord{20.0, 21.0, 22.0},
                          DRW_Coord{23.0, 24.0, 25.0},
                          DRW_Coord{26.0, 27.0, 28.0}};
@@ -4390,16 +4391,42 @@ bool run3DConsumerProbe(bool binary) {
                         "{\"x\":10,\"y\":11,\"z\":12}"))
         return false;
 
+    const auto expectMesh = [&](const SemanticSink& sink) {
+        return expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "vertexCount", "3")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "vertex.0", "{\"x\":20,\"y\":21,\"z\":22}")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "vertex.1", "{\"x\":23,\"y\":24,\"z\":25}")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "vertex.2", "{\"x\":26,\"y\":27,\"z\":28}")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "faceCount", "1")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "face.0.vertexCount", "3")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "face.0.vertex.2", "2")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "edgeCount", "2")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "edge.1.start", "1")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "edge.1.end", "2")
+            && expectEntityField(sink, "MESH", "probe_mesh_geometry",
+                                 "creaseCount", "2")
+            && expectEntityDouble(sink, "MESH", "probe_mesh_geometry",
+                                  "crease.0", 0.25)
+            && expectEntityDouble(sink, "MESH", "probe_mesh_geometry",
+                                  "crease.1", 0.75);
+    };
+    if (!expectMesh(consumer) || !expectMesh(legacyConsumer))
+        return false;
+
     if (!fieldEquals(consumer, "3DFACE", "corner.3",
                      "{\"x\":10,\"y\":11,\"z\":12}")
         || !fieldEquals(consumer, "3DFACE", "invisibleEdgeFlags", "5")
         || !fieldEquals(consumer, "POLYLINE", "vertex.1.position",
                         "{\"x\":16,\"y\":17,\"z\":18}")
-        || !fieldEquals(consumer, "MESH", "vertex.2",
-                        "{\"x\":26,\"y\":27,\"z\":28}")
-        || !fieldEquals(consumer, "MESH", "face.0.vertex.2", "2")
-        || !fieldEquals(consumer, "MESH", "edge.1.end", "2")
-        || !fieldEquals(consumer, "MESH", "crease.1", "0.75")
         || !expectEntityField(consumer, "INSERT", "probe_insert_grid",
                               "insertionPoint", "{\"x\":30,\"y\":31,\"z\":32}")
         || !expectEntityField(consumer, "INSERT", "probe_insert_grid",

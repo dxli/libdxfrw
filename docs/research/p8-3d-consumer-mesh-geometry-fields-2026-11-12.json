@@ -1,0 +1,34 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "date": "2026-11-12",
+  "id": "p8-3d-consumer-mesh-geometry-fields-2026-11-12",
+  "purpose": "Verify generated MESH callback delivery of vertex positions, face indices, edge indices, and crease values across both extrusion modes.",
+  "authority": {
+    "source": "Autodesk AutoCAD DXF Reference",
+    "url": "https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-4B9ADA67-87C8-4673-A579-6E4C76FF7025.htm",
+    "relevantFields": "MESH group codes describe vertex positions, level-0 face lists, edge indices, and edge crease values."
+  },
+  "source": {
+    "kind": "runtime-generated-from-scratch-DXF",
+    "version": "AC1027",
+    "encodings": ["ASCII", "Binary"],
+    "trackedFixture": false
+  },
+  "profile": {
+    "layer": "probe_mesh_geometry",
+    "vertices": [[20.0, 21.0, 22.0], [23.0, 24.0, 25.0], [26.0, 27.0, 28.0]],
+    "faces": [[0, 1, 2]],
+    "edges": [[0, 1], [1, 2]],
+    "creases": [0.25, 0.75]
+  },
+  "validation": {
+    "build": "cmake --build build-gcc --target libdxfrw_3d_consumer_probe --parallel 2",
+    "result": "PASS",
+    "ctest": "ctest --test-dir build-gcc -R '^libdxfrw_3d_consumer_probe$' --output-on-failure",
+    "ctestResult": "PASS, 1/1, 0.46 seconds",
+    "extrusionModes": ["ext=false", "ext=true"],
+    "diffCheck": "PASS"
+  },
+  "scopeLimit": "Generated same-library callback transport only. Does not qualify native mesh construction, independent interoperability, DWG producer semantics, or broader MESH support.",
+  "claimEffect": "No format or consumer support claim changes."
+}
