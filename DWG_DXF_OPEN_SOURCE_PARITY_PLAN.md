@@ -92,6 +92,19 @@ native B-rep semantics, whole-source output admission, producer-wide behavior,
 or a 3D support claim. The ODA output and online SAT remain in `/tmp`; no
 drawing fixture was committed. See the [ACIS 700 receipt](docs/research/p7-ac1024-oda-acis700-zero-count-framing-2026-11-11.json).
 
+**P7 ACIS 21500 raw header-word framing regression (2026-11-12):** a fast
+generated ACIS 21500 SAB control now declares zero `numRecords`, raw third word
+`2`, and five records including the explicit terminal marker. It verifies the
+parser preserves the third word without treating it as a record limit, and
+requires full terminal framing before completion. The focused
+`acis_sat_allocation_rollback_retry` selector passes. This protects the
+current raw-only behavior; it does not resolve the 21500 field semantics. The
+ACIS 7.0 reference describes a related saved-entity-list count, while ODA
+identifies 21500 as an Autodesk-modified dialect without defining that field;
+217/218 boundary semantics are also out of version. Keep the field raw and
+require version-qualified 21500 evidence before semantic use. No fixture was
+added; see the [regression receipt](docs/research/p7-acis-21500-raw-header-word-framing-regression-2026-11-12.json).
+
 **P7 ACIS 700 native B-rep probe (2026-11-11):** the exact libdxfrw SAT 700
 output was parsed by pinned InventorLoader and built through FreeCAD 1.1.4's
 native Part API into one valid closed cube (6 faces, 12 edges, 8 vertices).

@@ -53,12 +53,14 @@ void appendRawDouble(std::vector<std::uint8_t>& bytes, double value) {
 std::vector<std::uint8_t> makeSab(std::uint32_t version = 21200u,
                                   bool addVersionedFloat = false,
                                   std::uint32_t flags = 0u,
-                                  bool addVersion700Transform = false) {
+                                  bool addVersion700Transform = false,
+                                  std::uint32_t numEntities = 1u,
+                                  std::uint32_t extraRecords = 0u) {
     std::vector<std::uint8_t> bytes{
         'A','C','I','S',' ','B','i','n','a','r','y','F','i','l','e'};
     appendU32(bytes, version);
     appendU32(bytes, 0u);
-    appendU32(bytes, 1u);
+    appendU32(bytes, numEntities);
     appendU32(bytes, flags);
     appendString(bytes, 7u, "P", 1u);
     appendString(bytes, 7u, "A", 1u);
@@ -109,6 +111,10 @@ std::vector<std::uint8_t> makeSab(std::uint32_t version = 21200u,
         bytes.push_back(DRW_SabTag::LiteralStr);
         appendU32(bytes, static_cast<std::uint32_t>(transform.size()));
         bytes.insert(bytes.end(), transform.begin(), transform.end());
+        bytes.push_back(DRW_SabTag::RecordEnd);
+    }
+    for (std::uint32_t i = 0u; i < extraRecords; ++i) {
+        appendString(bytes, DRW_SabTag::EntityType, "point", 5u);
         bytes.push_back(DRW_SabTag::RecordEnd);
     }
     bytes.insert(bytes.end(), {0x0Eu,0x03u,'E','n','d',
@@ -176,6 +182,29 @@ void operator delete(void* memory, std::size_t) noexcept { std::free(memory); }
 void operator delete[](void* memory, std::size_t) noexcept { std::free(memory); }
 
 int main() {
+    // The third word's meaning is version-specific and unresolved for 21500.
+    // Retain it as raw metadata; it must not be used as a SAB record limit.
+    const std::vector<std::uint8_t> sab21500EntityWord =
+        makeSab(21500u, false, 0x18u, false, 2u, 3u);
+    DRW_SabData parsed21500EntityWord;
+    DRW_SabParseOutcome outcome21500EntityWord;
+    if (!drw_parseSabWithOutcome(sab21500EntityWord.data(),
+                                 sab21500EntityWord.size(),
+                                 parsed21500EntityWord,
+                                 outcome21500EntityWord)
+        || !outcome21500EntityWord.complete
+        || outcome21500EntityWord.recordCountKnown
+        || !outcome21500EntityWord.terminalRecordSeen
+        || parsed21500EntityWord.header.version != 21500
+        || parsed21500EntityWord.header.numRecords != 0
+        || parsed21500EntityWord.header.numEntities != 2
+        || parsed21500EntityWord.records.size() != 5u
+        || parsed21500EntityWord.records.back().type != "End-of-ACIS-data") {
+        std::fprintf(stderr,
+                     "ACIS 21500 raw entity word altered record framing\n");
+        return 20;
+    }
+
     const std::vector<std::uint8_t> sab700 = makeSab(700u);
     DRW_SabData parsed700;
     DRW_SabParseOutcome outcome700;
