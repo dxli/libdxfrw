@@ -2076,6 +2076,10 @@ if(LIBDXFRW_BUILD_TESTS)
             --tablestyle-content-format-enum-domains)
     set_tests_properties(libdxfrw_tablestyle_content_format_enum_domains PROPERTIES
         LABELS "fast;dwg;object-vectors;tables" TIMEOUT 10)
+    add_test(NAME libdxfrw_tablestyle_handle_roles
+        COMMAND libdxfrw_dwg_object_vectors_tests --tablestyle-handle-roles)
+    set_tests_properties(libdxfrw_tablestyle_handle_roles PROPERTIES
+        LABELS "fast;dwg;object-vectors;tables" TIMEOUT 10)
     add_test(NAME libdxfrw_dbcolor_unsupported_method_refusal
         COMMAND libdxfrw_dwg_object_vectors_tests
             --dbcolor-unsupported-method-refusal)

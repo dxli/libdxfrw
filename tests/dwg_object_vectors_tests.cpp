@@ -3247,7 +3247,11 @@ bool makeTableStyleFrame(DRW::Version version, std::int32_t styleType,
                          std::int32_t valueDataType = 0,
                          std::int32_t valueUnitType = 0,
                          std::int32_t cellAlignment = 1,
-                         std::uint16_t marginOverrideFlags = 0u) {
+                         std::uint16_t marginOverrideFlags = 0u,
+                         std::uint8_t textStyleHandleCode =
+                             DRW::DwgHardPointer,
+                         std::uint8_t borderLineTypeHandleCode =
+                             DRW::DwgHardPointer) {
     DRW_TextCodec codec;
     codec.setVersion(version, false);
     dwgBufferW object(&codec), body(&codec), strings(&codec), handles(&codec);
@@ -3355,12 +3359,12 @@ bool makeTableStyleFrame(DRW::Version version, std::int32_t styleType,
     handles.putHandle(tableCellStyleOwner);
     if (dataFlag != 0u) {
         dwgHandle textStyle;
-        textStyle.code = DRW::DwgHardPointer;
+        textStyle.code = textStyleHandleCode;
         handles.putHandle(textStyle);
     }
     if (dataFlag != 0u && includeBorder && borderEdgeFlags != 0u) {
         dwgHandle lineType;
-        lineType.code = DRW::DwgHardPointer;
+        lineType.code = borderLineTypeHandleCode;
         handles.putHandle(lineType);
     }
     handles.alignToByte();
@@ -4169,7 +4173,11 @@ void testTableStyleIdentityDomains(TestContext& t) {
 
 bool makeAc1018CellStyleMapFrame(TableStyleFrame& frame,
                                  std::int32_t valueType = 4,
-                                 std::int32_t unitType = 0) {
+                                 std::int32_t unitType = 0,
+                                 std::uint8_t textStyleHandleCode =
+                                     DRW::DwgHardPointer,
+                                 std::uint8_t borderLineTypeHandleCode =
+                                     DRW::DwgHardPointer) {
     constexpr DRW::Version version = DRW::AC1018;
     DRW_TextCodec codec;
     codec.setVersion(version, false);
@@ -4225,8 +4233,8 @@ bool makeAc1018CellStyleMapFrame(TableStyleFrame& frame,
     object.patchRawLong32AtBit(sizeBit, static_cast<std::uint32_t>(object.bitCount()));
     putHandle(DRW::DwgSoftPointer, 0xA200u); // owner
     putHandle(DRW::DwgSoftPointer, 0xA210u); // reactor
-    putHandle(DRW::DwgHardPointer, 0xA300u); // content text style
-    putHandle(DRW::DwgHardPointer, 0xA400u); // border line type
+    putHandle(textStyleHandleCode, 0xA300u); // content text style
+    putHandle(borderLineTypeHandleCode, 0xA400u); // border line type
     object.alignToByte();
     if (!object.isGood()) return false;
     frame.bytes = object.data();
@@ -5124,6 +5132,101 @@ void testTableStyleContentFormatEnumDomains(TestContext& t) {
     }
     t.expect(admittedCombinations == 1485u,
              "all 1,485 ODA-listed R2010+ enum combinations parse");
+}
+
+void testTableStyleHandleRoles(TestContext& t) {
+    const auto parseAc1018 = [](CellStyleMapCodecProbe& parsed,
+                                const TableStyleFrame& frame) {
+        DRW_TextCodec codec;
+        codec.setVersion(DRW::AC1018, false);
+        dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+        return parsed.parseDwg(DRW::AC1018, &input, frame.handleBits)
+            && input.isGood();
+    };
+    for (const std::uint8_t wrongRole :
+         {DRW::DwgSoftPointer, DRW::DwgHardOwnership,
+          DRW::DwgSoftOwnership}) {
+        for (const bool borderHandle : {false, true}) {
+            TableStyleFrame valid;
+            TableStyleFrame malformed;
+            const bool built = makeAc1018CellStyleMapFrame(valid)
+                && makeAc1018CellStyleMapFrame(
+                    malformed, 4, 0,
+                    borderHandle ? DRW::DwgHardPointer : wrongRole,
+                    borderHandle ? wrongRole : DRW::DwgHardPointer);
+            t.expect(built, "AC1018 CELLSTYLEMAP role vectors build");
+            if (!built)
+                continue;
+
+            CellStyleMapCodecProbe parsed;
+            const bool validRead = parseAc1018(parsed, valid);
+            t.expect(validRead && parsed.m_cellStyles.size() == 1u,
+                     "AC1018 CELLSTYLEMAP accepts hard-pointer handle profile");
+            if (!validRead)
+                continue;
+            const bool malformedRejected = !parseAc1018(parsed, malformed);
+            t.expect(malformedRejected && parsed.handle == 0u
+                         && parsed.m_cellStyles.empty(),
+                     std::string("AC1018 CELLSTYLEMAP rejects wrong ")
+                         + (borderHandle ? "border-linetype" : "text-style")
+                         + " handle role atomically");
+            t.expect(parseAc1018(parsed, valid)
+                         && parsed.m_cellStyles.size() == 1u,
+                     "AC1018 CELLSTYLEMAP retries corrected role on same object");
+        }
+    }
+
+    const auto makeR24Frame = [](std::uint8_t textRole,
+                                 std::uint8_t lineTypeRole,
+                                 TableStyleFrame& frame) {
+        return makeTableStyleFrame(
+            DRW::AC1024, 5, 1u, frame,
+            0u, 0u, 0u, 0u, 0u, true, 1u, 0u, 1, 0, 4, 2,
+            false, 101, 1, 0, 0, 1, 0u, textRole, lineTypeRole);
+    };
+    for (const std::uint8_t wrongRole :
+         {DRW::DwgSoftPointer, DRW::DwgHardOwnership,
+          DRW::DwgSoftOwnership}) {
+        for (const bool borderHandle : {false, true}) {
+            TableStyleFrame valid;
+            TableStyleFrame malformed;
+            const bool built = makeR24Frame(DRW::DwgHardPointer,
+                                             DRW::DwgHardPointer, valid)
+                && makeR24Frame(
+                    borderHandle ? DRW::DwgHardPointer : wrongRole,
+                    borderHandle ? wrongRole : DRW::DwgHardPointer,
+                    malformed);
+            t.expect(built, "AC1024 TABLESTYLE role vectors build");
+            if (!built)
+                continue;
+
+            const auto parse = [](TableStyleCodecProbe& parsed,
+                                  const TableStyleFrame& frame) {
+                DRW_TextCodec codec;
+                codec.setVersion(DRW::AC1024, false);
+                dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+                return parsed.parseDwg(DRW::AC1024, &input,
+                                       frame.handleBits) && input.isGood();
+            };
+            TableStyleCodecProbe parsed;
+            const bool validRead = parse(parsed, valid);
+            t.expect(validRead && parsed.handle == 0xA100u
+                         && parsed.m_tableCellStyle.m_borders.size() == 1u,
+                     "AC1024 TABLESTYLE accepts hard-pointer handle profile");
+            if (!validRead)
+                continue;
+            const bool malformedRejected = !parse(parsed, malformed);
+            t.expect(malformedRejected && parsed.handle == 0u
+                         && parsed.m_name.empty()
+                         && parsed.m_tableCellStyle.m_borders.empty(),
+                     std::string("AC1024 TABLESTYLE rejects wrong ")
+                         + (borderHandle ? "border-linetype" : "text-style")
+                         + " handle role atomically");
+            t.expect(parse(parsed, valid) && parsed.handle == 0xA100u
+                         && parsed.m_tableCellStyle.m_borders.size() == 1u,
+                     "AC1024 TABLESTYLE retries corrected role on same object");
+        }
+    }
 }
 
 void testLegacyTableStyleUnitTypeDomains(TestContext& t) {
@@ -31620,6 +31723,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testTableStyleContentFormatEnumDomains(context);
         std::cout << "R2010+ TABLESTYLE content-format enum domains: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--tablestyle-handle-roles") {
+        TestContext context;
+        testTableStyleHandleRoles(context);
+        std::cout << "TABLESTYLE/CELLSTYLEMAP handle roles: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

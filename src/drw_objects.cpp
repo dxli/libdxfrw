@@ -1759,6 +1759,24 @@ bool readObjectHandleRefTransactional(dwgBuffer *hdlBuf,
     return true;
 }
 
+bool readObjectHandleRefWithRoleTransactional(
+    dwgBuffer *hdlBuf, std::uint32_t& value, std::uint8_t expectedRole,
+    std::uint64_t endBit = std::numeric_limits<std::uint64_t>::max()) {
+    if (hdlBuf == nullptr || !hdlBuf->isGood())
+        return false;
+    dwgBuffer probe = hdlBuf->forkIndependent();
+    dwgHandle parsed;
+    if (!readBoundedObjectHandle(probe, 0, false, parsed, endBit))
+        return false;
+    const bool canonicalNull = parsed.ref == 0u
+        && parsed.rawCode == DRW::DwgNullReference;
+    if (parsed.rawCode != expectedRole && !canonicalNull)
+        return false;
+    value = parsed.ref;
+    *hdlBuf = probe;
+    return true;
+}
+
 std::uint64_t proxyCurrentBit(const dwgBuffer& buffer) {
     return buffer.getPosition() * 8u + buffer.getBitPos();
 }
@@ -2335,8 +2353,9 @@ bool readTableStyleContentFormat(DRW::Version version, dwgBuffer *buf,
         return false;
     if (hdlBuf != nullptr) {
         const std::uint64_t handleStartBit = currentObjectDwgBit(hdlBuf);
-        const bool handleRead = readObjectHandleRefTransactional(
-            hdlBuf, format.m_textStyleHandle, handleEndBit);
+        const bool handleRead = readObjectHandleRefWithRoleTransactional(
+            hdlBuf, format.m_textStyleHandle, DRW::DwgHardPointer,
+            handleEndBit);
         if (ranges != nullptr) {
             ranges->push_back(makeObjectSubrecordRange(
                 "table-style-handle-text-style", handleStartBit,
@@ -2519,8 +2538,10 @@ bool readTableStyleCellStyle(DRW::Version version, dwgBuffer *buf,
             if (hdlBuf != nullptr) {
                 const std::uint64_t handleStartBit =
                     currentObjectDwgBit(hdlBuf);
-                const bool handleRead = readObjectHandleRefTransactional(
-                    hdlBuf, border.m_lineTypeHandle, handleEndBit);
+                const bool handleRead =
+                    readObjectHandleRefWithRoleTransactional(
+                        hdlBuf, border.m_lineTypeHandle,
+                        DRW::DwgHardPointer, handleEndBit);
                 if (ranges != nullptr) {
                     const UTF8STRING rangeName =
                         "table-style-handle-border-line-type["
@@ -2678,14 +2699,15 @@ bool readTableStyleCellStyleHandles(
     if (buf == nullptr || !style.m_hasData)
         return buf != nullptr && buf->isGood();
 
-    if (!readObjectHandleRefTransactional(
-            buf, style.m_contentFormat.m_textStyleHandle, handleEndBit))
+    if (!readObjectHandleRefWithRoleTransactional(
+            buf, style.m_contentFormat.m_textStyleHandle,
+            DRW::DwgHardPointer, handleEndBit))
         return false;
     for (DRW_TableStyleBorder& border : style.m_borders) {
         if (border.m_edgeFlags != 0
-            && !readObjectHandleRefTransactional(buf,
-                                                 border.m_lineTypeHandle,
-                                                 handleEndBit))
+            && !readObjectHandleRefWithRoleTransactional(
+                buf, border.m_lineTypeHandle, DRW::DwgHardPointer,
+                handleEndBit))
             return false;
     }
     return buf->isGood();
