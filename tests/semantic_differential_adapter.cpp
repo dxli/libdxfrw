@@ -2434,6 +2434,33 @@ void SemanticSink::writeEntities() {
         nurbs.vvec2 = DRW_Coord{79.0, 80.0, 81.0};
         wrote = dxfWriter_->writeSurface(&nurbs) && wrote;
 
+        DRW_ExtrudedSurface extruded;
+        extruded.layer = "probe_extruded_surface";
+        extruded.modelerFormatVersion = 2;
+        extruded.uIsolines = 13;
+        extruded.vIsolines = 17;
+        extruded.classId = 23;
+        extruded.sweepVector = DRW_Coord{0.5, 1.5, 2.5};
+        extruded.extrudedTransform[3] = 10.0;
+        extruded.sweepEntityTransform[7] = 20.0;
+        extruded.pathEntityTransform[11] = 30.0;
+        extruded.draftAngle = 0.125;
+        extruded.draftStartDistance = 1.25;
+        extruded.draftEndDistance = 2.5;
+        extruded.twistAngle = 0.75;
+        extruded.scaleFactor = 1.5;
+        extruded.alignAngle = 0.25;
+        extruded.solid = true;
+        extruded.sweepAlignmentFlags = 2;
+        extruded.pathFlags = 8;
+        extruded.alignStart = true;
+        extruded.bank = true;
+        extruded.basePointSet = true;
+        extruded.sweepEntityTransformComputed = true;
+        extruded.pathEntityTransformComputed = false;
+        extruded.referenceVector = DRW_Coord{3.5, 4.5, 5.5};
+        wrote = dxfWriter_->writeSurface(&extruded) && wrote;
+
         DRW_LWPolyline ocsPolyline;
         ocsPolyline.elevation = 5.0;
         ocsPolyline.extPoint = DRW_Coord{0.0, 1.0, 0.0};
@@ -3472,6 +3499,47 @@ bool run3DConsumerProbe(bool binary) {
                                  "{\"x\":79,\"y\":80,\"z\":81}");
     };
     if (!expectNurbsSurface(consumer) || !expectNurbsSurface(legacyConsumer))
+        return false;
+
+    const auto expectExtrudedSurface = [&](const SemanticSink& sink) {
+        const std::string layer = "probe_extruded_surface";
+        return expectEntityField(sink, "EXTRUDEDSURFACE", layer,
+                                 "modelerFormatVersion", "2")
+            && expectEntityField(sink, "EXTRUDEDSURFACE", layer,
+                                 "uIsolines", "13")
+            && expectEntityField(sink, "EXTRUDEDSURFACE", layer,
+                                 "vIsolines", "17")
+            && expectEntityField(sink, "EXTRUDEDSURFACE", layer,
+                                 "classId", "23")
+            && expectEntityField(sink, "EXTRUDEDSURFACE", layer,
+                                 "sweepVector",
+                                 "{\"x\":0.5,\"y\":1.5,\"z\":2.5}")
+            && expectEntityDouble(sink, "EXTRUDEDSURFACE", layer,
+                                  "extrudedTransform.3", 10.0)
+            && expectEntityDouble(sink, "EXTRUDEDSURFACE", layer,
+                                  "sweepEntityTransform.7", 20.0)
+            && expectEntityDouble(sink, "EXTRUDEDSURFACE", layer,
+                                  "pathEntityTransform.11", 30.0)
+            && expectEntityDouble(sink, "EXTRUDEDSURFACE", layer,
+                                  "draftAngle", 0.125)
+            && expectEntityDouble(sink, "EXTRUDEDSURFACE", layer,
+                                  "scaleFactor", 1.5)
+            && expectEntityField(sink, "EXTRUDEDSURFACE", layer,
+                                 "sweepAlignmentFlags", "2")
+            && expectEntityField(sink, "EXTRUDEDSURFACE", layer,
+                                 "pathFlags", "8")
+            && expectEntityField(sink, "EXTRUDEDSURFACE", layer,
+                                 "solid", "true")
+            && expectEntityField(sink, "EXTRUDEDSURFACE", layer,
+                                 "bank", "true")
+            && expectEntityField(sink, "EXTRUDEDSURFACE", layer,
+                                 "pathEntityTransformComputed", "false")
+            && expectEntityField(sink, "EXTRUDEDSURFACE", layer,
+                                 "referenceVector",
+                                 "{\"x\":3.5,\"y\":4.5,\"z\":5.5}");
+    };
+    if (!expectExtrudedSurface(consumer)
+        || !expectExtrudedSurface(legacyConsumer))
         return false;
 
     const auto expectPolyface = [&](const SemanticSink& sink) {

@@ -6927,6 +6927,13 @@ Steps:
    and binary DXF. Verify the same callback values with `ext=false` and
    `ext=true`. This covers DXF field transport only; it does not evaluate a
    NURBS surface, establish DWG layout, or qualify independent/native support.
+   **S8.3.4 — Typed EXTRUDEDSURFACE consumer fields.** Write an AC1027
+   EXTRUDEDSURFACE vector with distinct values in the sweep vector, extrusion,
+   sweep-entity and path-entity transforms, draft/scale parameters, alignment
+   flags, Boolean options, and reference vector. Verify those values in the
+   callback under ASCII and Binary DXF with `ext=false` and `ext=true`. This is
+   DXF transport evidence only; it does not establish sweep geometry or DWG
+   semantics.
 5. **S8.4a — Sample-backed DWG consumer comparison (AC1024 INSERT/SPLINE).**
    The locally available `tests/samples/AC1024/visualization_-_conference_room.dwg`
    completes both the libdxfrw read and LibreDWG 0.14 `dwgread -O minJSON`

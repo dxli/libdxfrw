@@ -1593,6 +1593,14 @@ created locally from scratch for the specific control.
   independent interoperability, DWG layout, or support claim follows
   ([receipt](docs/research/p8-3d-consumer-nurbssurface-fields-2026-11-12.json)).
 
+- **P8/S8.3.4 generated EXTRUDEDSURFACE consumer fields:** the probe now
+  verifies a locally authored AC1027 surface's sweep vector, three distinct
+  transform slots, selected draft/scale values, alignment flags, Boolean
+  options, and reference vector under ASCII/Binary DXF and both `ext` modes.
+  The owning CTest passes 1/1. This checks callback transport, not geometry
+  evaluation, independent interoperability, DWG semantics, or support claims
+  ([receipt](docs/research/p8-3d-consumer-extrudedsurface-fields-2026-11-12.json)).
+
 - **P6 generated IMAGEDEF hard-owner reader profile:** the shared OBJECTS
   prologue preflight and typed `DRW_ImageDef` parser now explicitly accept the
   ODA §20.4.81 hard-owner parent code-3 emitted by this writer. Generated
