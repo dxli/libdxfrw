@@ -10747,3 +10747,19 @@ independent interoperability, DWG producer behavior and native consumer
 construction remain unqualified. No support claim changes. See the
 [parity-plan checkpoint](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#current-execution-checkpoint-2026-11-12)
 and [receipt](docs/research/p8-3d-consumer-hatch-ocs-boundary-fields-2026-11-12.json).
+
+**P8/S8.3.21 MPOLYGON OCS boundary callback fields (2026-11-12):** generated
+AC1027 ASCII/Binary readback checks a locally authored version-1 MPOLYGON's
+solid/associativity flags, ACI/RGB fill colors, one closed type-2 loop,
+elevation 6, extrusion `(0,1,0)`, and all three OCS boundary vertices. The
+consumer probe separately maps each vertex through
+`DRW_Hatch::boundaryPointToWcs` and verifies the expected points in both
+`ext=false` and legacy `ext=true` callbacks. The focused CTest passes 1/1 in
+normal and AddressSanitizer builds. Autodesk's [HATCH DXF reference](https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-C6C71CED-CE0F-4184-82A5-07AD6241F15B.htm)
+documents the shared boundary/elevation/extrusion fields and the MPolygon
+version, fill and solid fields. This is generated same-library transport plus
+explicit helper mapping only; independent interoperability, DWG producer
+semantics, fill rendering, native consumer behavior and support claims remain
+unqualified. See the
+[parity-plan checkpoint](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#current-execution-checkpoint-2026-11-12)
+and [receipt](docs/research/p8-3d-consumer-mpolygon-ocs-boundary-fields-2026-11-12.json).

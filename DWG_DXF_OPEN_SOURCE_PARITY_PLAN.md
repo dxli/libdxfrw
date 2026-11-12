@@ -1750,6 +1750,20 @@ created locally from scratch for the specific control.
   evaluation, or native consumer support claims
   ([receipt](docs/research/p8-3d-consumer-hatch-ocs-boundary-fields-2026-11-12.json)).
 
+- **P8/S8.3.21 generated MPOLYGON OCS boundary callback fields (2026-11-12):**
+  the probe now writes a locally authored AC1027 MPOLYGON with one closed
+  polyline loop, elevation 6, extrusion `(0,1,0)`, and distinct ACI/RGB fill
+  colors. ASCII/Binary readback checks its versioned fill flags, loop and
+  vertex counts, closure, all three stored OCS vertices, and their
+  `boundaryPointToWcs` projections through `ext=false` and legacy `ext=true`
+  sinks. The focused CTest passes 1/1 in normal and ASan builds. Autodesk's
+  HATCH DXF reference explicitly applies the common path/elevation/extrusion
+  fields to MPolygon and defines its distinct version/solid/fill-color groups;
+  this test proves only libdxfrw-generated transport and helper mapping, not
+  independent interoperability, DWG producer semantics, fill rendering or
+  native consumer support claims
+  ([receipt](docs/research/p8-3d-consumer-mpolygon-ocs-boundary-fields-2026-11-12.json)).
+
 - **P8 native FreeCAD MESH DXF consumer check (2026-11-12):** FreeCAD 1.1.4
   Revision `20260928` launched with the host ARM64 NEON feature visible and
   successfully completed Draft's DXF import for a locally authored AC1027

@@ -1323,6 +1323,40 @@ public:
         fields.push_back(intField("fillColorRgb", d->fillColorRgb));
         fields.push_back(stringField("fillColorName", d->fillColorName));
         fields.push_back(intField("loopCount", d->loopsnum));
+        if (threeDConsumerProbe_) {
+            fields.push_back(doubleField("elevation", d->basePoint.z));
+            fields.push_back(pointField("extrusion", d->extPoint));
+            for (std::size_t i = 0; i < d->looplist.size(); ++i) {
+                const auto& loop = d->looplist[i];
+                if (!loop)
+                    continue;
+                const std::string prefix = "loop." + std::to_string(i) + ".";
+                fields.push_back(intField(prefix + "type", loop->type));
+                fields.push_back(uintField(prefix + "objectCount",
+                                           loop->objlist.size()));
+                for (const auto& boundary : loop->objlist) {
+                    const auto* polyline =
+                        dynamic_cast<const DRW_LWPolyline*>(boundary.get());
+                    if (polyline == nullptr)
+                        continue;
+                    fields.push_back(uintField(prefix + "vertexCount",
+                                               polyline->vertlist.size()));
+                    fields.push_back(boolField(prefix + "closed",
+                                               (polyline->flags & 1) != 0));
+                    for (std::size_t j = 0; j < polyline->vertlist.size(); ++j) {
+                        const auto& vertex = polyline->vertlist[j];
+                        if (!vertex)
+                            continue;
+                        const std::string vertexPrefix = prefix + "vertex."
+                            + std::to_string(j) + ".";
+                        const DRW_Coord ocs{vertex->x, vertex->y, 0.0};
+                        fields.push_back(pointField(vertexPrefix + "ocs", ocs));
+                        fields.push_back(pointField(vertexPrefix + "wcs",
+                            d->boundaryPointToWcs(ocs)));
+                    }
+                }
+            }
+        }
         addEntityRecord("addMPolygon", "MPOLYGON", fields, *d, false);
     }
     void addViewport(const DRW_Viewport& d) override { addBasicEntity("addViewport", "VIEWPORT", d); }
@@ -2882,6 +2916,28 @@ void SemanticSink::writeEntities() {
         hatchLoop->update();
         hatch.appendLoop(hatchLoop);
         wrote = dxfWriter_->writeHatch(&hatch) && wrote;
+
+        DRW_MPolygon mpolygon;
+        mpolygon.layer = "probe_mpolygon_ocs_boundary";
+        mpolygon.name = "SOLID";
+        mpolygon.solid = 1;
+        mpolygon.associative = 0;
+        mpolygon.dxfVersion = 1;
+        mpolygon.loopsnum = 1;
+        mpolygon.basePoint = DRW_Coord{0.0, 0.0, 6.0};
+        mpolygon.extPoint = DRW_Coord{0.0, 1.0, 0.0};
+        mpolygon.fillColorAci = 5;
+        mpolygon.fillColorRgb = 0x345678;
+        auto mpolygonLoop = std::make_shared<DRW_HatchLoop>(2);
+        auto mpolygonBoundary = std::make_shared<DRW_LWPolyline>();
+        mpolygonBoundary->flags = 1;
+        mpolygonBoundary->addVertex(DRW_Vertex2D{2.0, 3.0, 0.0});
+        mpolygonBoundary->addVertex(DRW_Vertex2D{5.0, 3.0, 0.0});
+        mpolygonBoundary->addVertex(DRW_Vertex2D{5.0, 7.0, 0.0});
+        mpolygonLoop->objlist.push_back(mpolygonBoundary);
+        mpolygonLoop->update();
+        mpolygon.appendLoop(mpolygonLoop);
+        wrote = dxfWriter_->writeMPolygon(&mpolygon) && wrote;
         writeRecipeSucceeded_ = wrote && writeRecipeSucceeded_;
         return;
     }
@@ -4621,6 +4677,66 @@ bool run3DConsumerProbe(bool binary) {
             || !expectEntityField(*sink, "HATCH", "probe_hatch_ocs_boundary",
                                   "loop.0.vertex.2.wcs",
                                   "{\"x\":4,\"y\":5,\"z\":7}"))
+            return false;
+    }
+
+    for (const SemanticSink* sink : {&consumer, &legacyConsumer}) {
+        if (!expectEntityField(*sink, "MPOLYGON",
+                               "probe_mpolygon_ocs_boundary", "solid", "true")
+            || !expectEntityField(*sink, "MPOLYGON",
+                                  "probe_mpolygon_ocs_boundary",
+                                  "associative", "false")
+            || !expectEntityField(*sink, "MPOLYGON",
+                                  "probe_mpolygon_ocs_boundary",
+                                  "fillColorAci", "5")
+            || !expectEntityField(*sink, "MPOLYGON",
+                                  "probe_mpolygon_ocs_boundary",
+                                  "fillColorRgb", "3430008")
+            || !expectEntityField(*sink, "MPOLYGON",
+                                  "probe_mpolygon_ocs_boundary",
+                                  "elevation", "6")
+            || !expectEntityField(*sink, "MPOLYGON",
+                                  "probe_mpolygon_ocs_boundary",
+                                  "extrusion", "{\"x\":0,\"y\":1,\"z\":0}")
+            || !expectEntityField(*sink, "MPOLYGON",
+                                  "probe_mpolygon_ocs_boundary",
+                                  "loopCount", "1")
+            || !expectEntityField(*sink, "MPOLYGON",
+                                  "probe_mpolygon_ocs_boundary",
+                                  "loop.0.type", "2")
+            || !expectEntityField(*sink, "MPOLYGON",
+                                  "probe_mpolygon_ocs_boundary",
+                                  "loop.0.objectCount", "1")
+            || !expectEntityField(*sink, "MPOLYGON",
+                                  "probe_mpolygon_ocs_boundary",
+                                  "loop.0.closed", "true")
+            || !expectEntityField(*sink, "MPOLYGON",
+                                  "probe_mpolygon_ocs_boundary",
+                                  "loop.0.vertexCount", "3")
+            || !expectEntityField(*sink, "MPOLYGON",
+                                  "probe_mpolygon_ocs_boundary",
+                                  "loop.0.vertex.0.ocs",
+                                  "{\"x\":2,\"y\":3,\"z\":0}")
+            || !expectEntityField(*sink, "MPOLYGON",
+                                  "probe_mpolygon_ocs_boundary",
+                                  "loop.0.vertex.0.wcs",
+                                  "{\"x\":-2,\"y\":6,\"z\":3}")
+            || !expectEntityField(*sink, "MPOLYGON",
+                                  "probe_mpolygon_ocs_boundary",
+                                  "loop.0.vertex.1.ocs",
+                                  "{\"x\":5,\"y\":3,\"z\":0}")
+            || !expectEntityField(*sink, "MPOLYGON",
+                                  "probe_mpolygon_ocs_boundary",
+                                  "loop.0.vertex.1.wcs",
+                                  "{\"x\":-5,\"y\":6,\"z\":3}")
+            || !expectEntityField(*sink, "MPOLYGON",
+                                  "probe_mpolygon_ocs_boundary",
+                                  "loop.0.vertex.2.ocs",
+                                  "{\"x\":5,\"y\":7,\"z\":0}")
+            || !expectEntityField(*sink, "MPOLYGON",
+                                  "probe_mpolygon_ocs_boundary",
+                                  "loop.0.vertex.2.wcs",
+                                  "{\"x\":-5,\"y\":6,\"z\":7}"))
             return false;
     }
 
