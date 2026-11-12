@@ -654,6 +654,9 @@ public:
     }
     bool writeRecipeSucceeded() const { return writeRecipeSucceeded_; }
     void enable3DConsumerProbe() { threeDConsumerProbe_ = true; }
+    void exerciseDefaultMPolygonFallback(const DRW_MPolygon& polygon) {
+        DRW_Interface::addMPolygon(&polygon);
+    }
     std::vector<DRW_Polyline> meshFallbackPolylines;
     std::vector<DRW_Line> meshFallbackLines;
     void exerciseDefaultMeshFallback(const DRW_Mesh& mesh) {
@@ -4739,6 +4742,44 @@ bool run3DConsumerProbe(bool binary) {
                                   "{\"x\":-5,\"y\":6,\"z\":7}"))
             return false;
     }
+
+    // A pre-MPOLYGON consumer implements only addHatch. Exercise the actual
+    // DRW_Interface default bridge and confirm the derived polygon reaches
+    // that callback with its boundary model intact.
+    SemanticSink legacyMpolygonConsumer("legacy-2d-consumer", "read");
+    legacyMpolygonConsumer.enable3DConsumerProbe();
+    DRW_MPolygon legacyMpolygon;
+    legacyMpolygon.layer = "probe_mpolygon_legacy_hatch_fallback";
+    legacyMpolygon.basePoint = DRW_Coord{0.0, 0.0, 6.0};
+    legacyMpolygon.extPoint = DRW_Coord{0.0, 1.0, 0.0};
+    auto legacyLoop = std::make_shared<DRW_HatchLoop>(2);
+    auto legacyBoundary = std::make_shared<DRW_LWPolyline>();
+    legacyBoundary->flags = 1;
+    legacyBoundary->addVertex(DRW_Vertex2D{2.0, 3.0, 0.0});
+    legacyBoundary->addVertex(DRW_Vertex2D{5.0, 3.0, 0.0});
+    legacyBoundary->addVertex(DRW_Vertex2D{5.0, 7.0, 0.0});
+    legacyLoop->objlist.push_back(legacyBoundary);
+    legacyLoop->update();
+    legacyMpolygon.appendLoop(legacyLoop);
+    legacyMpolygonConsumer.exerciseDefaultMPolygonFallback(legacyMpolygon);
+    if (findEntityRecordByLayer(legacyMpolygonConsumer, "HATCH",
+                                "probe_mpolygon_legacy_hatch_fallback") == nullptr
+        || std::any_of(legacyMpolygonConsumer.records.begin(),
+                       legacyMpolygonConsumer.records.end(),
+                       [](const RecordRow& row) {
+                           return row.entity == "MPOLYGON";
+                       })
+        || !fieldEqualsForLayer(legacyMpolygonConsumer, "HATCH",
+                                "probe_mpolygon_legacy_hatch_fallback",
+                                "loopCount", "1")
+        || !fieldEqualsForLayer(legacyMpolygonConsumer, "HATCH",
+                                "probe_mpolygon_legacy_hatch_fallback",
+                                "loop.0.closed", "true")
+        || !fieldEqualsForLayer(legacyMpolygonConsumer, "HATCH",
+                                "probe_mpolygon_legacy_hatch_fallback",
+                                "loop.0.vertex.2.ocs",
+                                "{\"x\":5,\"y\":7,\"z\":0}"))
+        return false;
 
     bool foundBinaryReference = false;
     const std::vector<std::uint8_t> expectedBytes{0x12u, 0x34u, 0x56u};

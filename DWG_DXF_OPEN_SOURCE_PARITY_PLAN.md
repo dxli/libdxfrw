@@ -1764,6 +1764,18 @@ created locally from scratch for the specific control.
   native consumer support claims
   ([receipt](docs/research/p8-3d-consumer-mpolygon-ocs-boundary-fields-2026-11-12.json)).
 
+- **P8/S8.3.22 MPOLYGON legacy-consumer callback bridge (2026-11-12):**
+  the 3D consumer test now invokes the actual default
+  `DRW_Interface::addMPolygon` implementation on a locally authored polygon
+  using a sink that only receives its default `addHatch` callback. It verifies
+  the callback is classified as HATCH, retains the closed boundary loop and
+  vertices, and does not publish a typed MPOLYGON callback. The focused CTest
+  passes 1/1 in normal and ASan builds. This checks the source-compatible 2D
+  callback fallback already provided by the public interface; it does not
+  establish LibreCAD rendering, independent interoperability, or native
+  consumer support claims
+  ([receipt](docs/research/p8-mpolygon-legacy-hatch-callback-compat-2026-11-12.json)).
+
 - **P8 native FreeCAD MESH DXF consumer check (2026-11-12):** FreeCAD 1.1.4
   Revision `20260928` launched with the host ARM64 NEON feature visible and
   successfully completed Draft's DXF import for a locally authored AC1027

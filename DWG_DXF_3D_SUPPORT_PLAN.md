@@ -10763,3 +10763,15 @@ semantics, fill rendering, native consumer behavior and support claims remain
 unqualified. See the
 [parity-plan checkpoint](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#current-execution-checkpoint-2026-11-12)
 and [receipt](docs/research/p8-3d-consumer-mpolygon-ocs-boundary-fields-2026-11-12.json).
+
+**P8/S8.3.22 legacy MPOLYGON callback fallback (2026-11-12):** a generated
+test directly calls the public `DRW_Interface::addMPolygon` default with an
+MPOLYGON carrying one closed type-2 boundary loop. A consumer sink implementing
+the legacy `addHatch` callback receives one HATCH-class record with that loop
+and its vertices; no typed MPOLYGON record is emitted. The owning focused
+CTest passes 1/1 in normal and AddressSanitizer builds. This protects the
+source-compatible 2D fallback, but does not qualify LibreCAD rendering,
+independent interoperability, native applications, or MPOLYGON support claims.
+See the
+[parity-plan checkpoint](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#current-execution-checkpoint-2026-11-12)
+and [receipt](docs/research/p8-mpolygon-legacy-hatch-callback-compat-2026-11-12.json).
