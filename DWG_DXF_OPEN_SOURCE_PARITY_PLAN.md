@@ -5569,6 +5569,19 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
   temporary directory and deleted; no fixture was added. See the [allocation
   rollback receipt](docs/research/p6-sortents-objects-dxf-allocation-rollback-retry-2026-11-12.json).
 
+- **P6 MLINESTYLE DXF OBJECTS writer transaction safety:** a generated
+  full-file ASCII/Binary AC1027 sweep now exercises the public
+  `writeMLineStyle` path with two parallel elements, built-in BYLAYER/BYBLOCK
+  linetype-index resolution, colors, description, angles, and EED. All 21
+  ASCII and 19 Binary reached allocation failures preserve the seeded
+  destination and source object; same-writer retry reproduces clean output
+  and typed readback. The focused CTest passes in normal and ASan builds.
+  This is local transaction/readback evidence only; no producer, graph,
+  native-consumer, or broad MLINESTYLE support claim is established. The
+  generated files are deleted from a temporary directory; no fixture was
+  added. See the [allocation rollback
+  receipt](docs/research/p6-mline-style-objects-dxf-allocation-rollback-retry-2026-11-12.json).
+
 After every slice: run its focused fast checks; update this queue and the
 relevant receipt; commit code, plan and receipt together; report the commit and
 next eligible slice, then continue. Keep fixtures out of commits unless already

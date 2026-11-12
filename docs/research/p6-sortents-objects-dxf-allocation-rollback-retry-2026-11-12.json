@@ -8,8 +8,16 @@
     "profile": "NOD parent, model-space block owner, four entity/sort-handle pairs, and two EED values"
   },
   "generated_profiles": [
-    {"encoding": "ASCII DXF", "version": "AC1027", "reached_allocation_failures": 19},
-    {"encoding": "Binary DXF", "version": "AC1027", "reached_allocation_failures": 18}
+    {
+      "encoding": "ASCII DXF",
+      "version": "AC1027",
+      "reached_allocation_failures": 19
+    },
+    {
+      "encoding": "Binary DXF",
+      "version": "AC1027",
+      "reached_allocation_failures": 18
+    }
   ],
   "assertions": [
     "Each injected allocation failure returns a failed write and preserves pre-existing destination bytes.",
@@ -33,7 +41,7 @@
   ],
   "artifact_sha256": {
     "tests/sortents_objects_allocation_tests.cpp": "c4a37e425fcd7adf76a077f0c29e9be9cc484709b39f856f8c29e98eac996b76",
-    "tests/CMakeLists.txt": "006bfb0154b214faf2dd78cf7edb29ac8b62e192aa31e497e445b158a84d85ab",
-    "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "4f62039be641b7e027494ebc43e1caf8588599b1e1365eba695bf26b48046aac"
+    "tests/CMakeLists.txt": "f76f52c2cd2100890e78f7a88f91b0e6b53f2c07d753b6a191dbb2ffd8db878a",
+    "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "7ca3fb894d742cbe26bf618957df2963299bb58e03f1d82f912201baacf04c70"
   }
 }
