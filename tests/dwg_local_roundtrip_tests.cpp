@@ -9824,6 +9824,14 @@ public:
         arc.staangle = 0.25;
         arc.endangle = 1.25;
         wroteArc_ = writer_->writeArc(&arc) && arc.handle != 0u;
+
+        DRW_LWPolyline polyline;
+        polyline.vertexnum = 3;
+        polyline.addVertex(DRW_Vertex2D(16.0, 17.0, 0.0));
+        polyline.addVertex(DRW_Vertex2D(18.0, 17.0, 0.0));
+        polyline.addVertex(DRW_Vertex2D(18.0, 20.0, 0.0));
+        wrotePolyline_ = writer_->writeLWPolyline(&polyline)
+            && polyline.handle != 0u;
     }
     void writeObjects() override {}
     void writeLTypes() override {}
@@ -9835,7 +9843,7 @@ public:
     void writeUCSs() override {}
     void writeAppId() override {}
     bool finalizeDwgWrite() override {
-        return wroteLine_ && wroteCircle_ && wroteArc_;
+        return wroteLine_ && wroteCircle_ && wroteArc_ && wrotePolyline_;
     }
     bool finalizeDwgWriteStructure() override { return true; }
 
@@ -9844,6 +9852,7 @@ private:
     bool wroteLine_ {false};
     bool wroteCircle_ {false};
     bool wroteArc_ {false};
+    bool wrotePolyline_ {false};
 };
 
 class Dwg3DFaceFlagWriter final : public dx_iface {

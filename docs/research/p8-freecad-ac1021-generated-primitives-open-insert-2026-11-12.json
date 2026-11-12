@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "date": "2026-11-12",
-  "title": "Generated AC1021 LINE/CIRCLE/ARC FreeCAD open and insert qualification",
-  "scope": "One from-scratch AC1021 DWG with one nonzero-Z LINE, one elevated CIRCLE, and one elevated ARC, converted by the installed libdxfrw dwg2dxf and consumed through FreeCAD's C++ DXF importer.",
+  "title": "Generated AC1021 LINE/CIRCLE/ARC/LWPOLYLINE FreeCAD open and insert qualification",
+  "scope": "One from-scratch AC1021 DWG with one nonzero-Z LINE, one elevated CIRCLE, one elevated ARC, and one three-vertex LWPOLYLINE, converted by the installed libdxfrw dwg2dxf and consumed through FreeCAD's C++ DXF importer.",
   "platform": {
     "os": "macOS 27.2.1",
     "architecture": "arm64",
@@ -14,13 +14,14 @@
   },
   "source": {
     "generator": "tests/dwg_local_roundtrip_tests.cpp --generate-freecad-primitives-source",
-    "generatorExecutableSha256": "3efe9f9baaebb6e03711528a0a57b1e01967690f0259c13e59c8083e42d7108a",
+    "generatorExecutableSha256": "9240349244c4d1762aa99be7c398298ec33258c0a8a9e3e904d9e53f72001cf6",
     "magic": "AC1021",
-    "sha256": "36d04cad956a5fff0a947c741fe1d465ed7beda8859c008db1e2eb0af182bdd4",
+    "sha256": "31639a89b81e542fd10b44d002bd0803fe3b8476211a48469da8865d80766958",
     "entities": {
       "LINE": 1,
       "CIRCLE": 1,
-      "ARC": 1
+      "ARC": 1,
+      "LWPOLYLINE": 1
     },
     "committedFixture": false
   },
@@ -31,34 +32,109 @@
     "sameBytesAsBuild": true
   },
   "convertedDxf": {
-    "sha256": "1438e54b31fc1c37817b99967aa48c4f487ca0850d7c6b2d1487ae9d5d5bb4f3",
+    "sha256": "9e503c9153ba40225967c0bf2a0d5dd39903cf7404a997683d30ce11cc24642c",
     "committedFixture": false
   },
   "expectedGeometry": [
     {
       "entity": "LINE",
-      "bounds": [1, 2, 3, 4, 5, 6],
+      "bounds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
       "edgeLength": 5.196152422706632
     },
     {
       "entity": "CIRCLE",
-      "bounds": [7.5, 8.5, 12, 12.5, 13.5, 12],
+      "bounds": [
+        7.5,
+        8.5,
+        12,
+        12.5,
+        13.5,
+        12
+      ],
       "edgeLength": 15.707963267948966
     },
     {
       "entity": "ARC",
-      "bounds": [14.10362826838344, 14.86591385739083, 15, 16.391193475987258, 17.32144616774455, 15],
+      "bounds": [
+        14.10362826838344,
+        14.86591385739083,
+        15,
+        16.391193475987258,
+        17.32144616774455,
+        15
+      ],
       "edgeLength": 3.5
+    },
+    {
+      "entity": "LWPOLYLINE",
+      "bounds": [
+        16,
+        17,
+        0,
+        18,
+        20,
+        0
+      ],
+      "edgeCount": 2,
+      "edgeLengthSum": 5
     }
   ],
   "observedGeometry": {
     "bounds": [
-      [1.0, 2.0, 3.0, 4.000000000000001, 5.000000000000001, 6.000000000000001],
-      [7.5, 8.5, 12.0, 12.5, 13.5, 12.0],
-      [14.103628268383442, 14.865913857390831, 15.0, 16.391193475987258, 17.321446167744554, 15.0]
+      [
+        1.0,
+        2.0,
+        3.0,
+        4.000000000000001,
+        5.000000000000001,
+        6.000000000000001
+      ],
+      [
+        7.5,
+        8.5,
+        12.0,
+        12.5,
+        13.5,
+        12.0
+      ],
+      [
+        14.103628268383442,
+        14.865913857390831,
+        15.0,
+        16.391193475987258,
+        17.321446167744554,
+        15.0
+      ],
+      [
+        16.0,
+        17.0,
+        0.0,
+        18.0,
+        20.0,
+        0.0
+      ]
     ],
-    "edgeLengths": [5.196152422706632, 15.707963267948966, 3.4999999999999996],
-    "tolerance": "bounds absolute 1e-9; edge length relative 1e-7"
+    "edgeLengths": [
+      5.196152422706632,
+      15.707963267948966,
+      3.4999999999999996,
+      5.0
+    ],
+    "tolerance": "bounds absolute 1e-9; edge length relative 1e-7",
+    "edgeCounts": [
+      1,
+      1,
+      1,
+      2
+    ],
+    "macroSha256": "f62e04e205595a5f7df801cf11b0c320759201f2a2f93cf05a4085815cb10528"
   },
   "operations": {
     "open": "PASS",
@@ -66,11 +142,21 @@
     "entityCounts": {
       "ARC": 1,
       "CIRCLE": 1,
-      "LINE": 1
+      "LINE": 1,
+      "LWPOLYLINE": 1
     },
     "unsupportedFeatures": {},
     "validSingleEdgeShapes": 3,
-    "unicodeAndSpacesPath": true
+    "unicodeAndSpacesPath": true,
+    "validShapes": {
+      "count": 4,
+      "edgeCounts": [
+        1,
+        1,
+        1,
+        2
+      ]
+    }
   },
   "validation": {
     "focusedCtest": "dwg2dxf_freecad_generated_ac1021_primitives_open/insert: PASS 2/2",
