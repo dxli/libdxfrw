@@ -655,6 +655,7 @@ public:
     bool writeRecipeSucceeded() const { return writeRecipeSucceeded_; }
     void enable3DConsumerProbe() { threeDConsumerProbe_ = true; }
     std::vector<DRW_Polyline> meshFallbackPolylines;
+    std::vector<DRW_Line> meshFallbackLines;
     void exerciseDefaultMeshFallback(const DRW_Mesh& mesh) {
         struct ResetFlag {
             bool& flag;
@@ -856,6 +857,8 @@ public:
         addEntityRecord("addPoint", "POINT", fields, d, false);
     }
     void addLine(const DRW_Line& d) override {
+        if (collectMeshFallbackPolylines_)
+            meshFallbackLines.push_back(d);
         std::vector<Field> fields = entityFields(d, "LINE", "LINE");
         fields.push_back(pointField("start", d.basePoint));
         fields.push_back(pointField("end", d.secPoint));
@@ -5212,8 +5215,9 @@ int selfTest() {
         return fail(__LINE__);
 
     // Consumers predating addMesh inherit a wireframe projection through
-    // their established addPolyline callback. Preserve WCS vertices and
-    // presentation attributes, while refusing malformed faces and avoiding
+    // their established addPolyline/addLine callbacks. Preserve WCS
+    // coordinates and presentation attributes, deduplicate explicit edges
+    // already drawn by face boundaries, skip malformed topology, and avoid
     // copying MESH identity/ownership onto synthesized records.
     DRW_Mesh fallbackMesh;
     fallbackMesh.handle = 0x716u;
@@ -5233,11 +5237,15 @@ int selfTest() {
     fallbackMesh.space = DRW::PaperSpace;
     fallbackMesh.vertices = {DRW_Coord{1.0, 2.0, 3.0},
                              DRW_Coord{4.0, 5.0, 6.0},
-                             DRW_Coord{7.0, 8.0, 9.0}};
-    fallbackMesh.faces = {{2, 0, 1}, {0, 1}, {0, -1, 2}, {0, 1, 3}};
+                             DRW_Coord{7.0, 8.0, 9.0},
+                             DRW_Coord{10.0, 11.0, 12.0}};
+    fallbackMesh.faces = {{2, 0, 1}, {0, 1}, {0, -1, 2}, {0, 1, 4}};
+    fallbackMesh.edges = {{0, 1}, {1, 2}, {0, 3}, {3, 0},
+                          {-1, 0}, {0, 9}, {0, 0}};
     SemanticSink legacyMeshSink("DRW_Interface", "read");
     legacyMeshSink.exerciseDefaultMeshFallback(fallbackMesh);
-    if (legacyMeshSink.meshFallbackPolylines.size() != 1u)
+    if (legacyMeshSink.meshFallbackPolylines.size() != 1u
+        || legacyMeshSink.meshFallbackLines.size() != 1u)
         return fail(__LINE__);
     const DRW_Polyline& fallbackPolyline =
         legacyMeshSink.meshFallbackPolylines.front();
@@ -5264,6 +5272,22 @@ int selfTest() {
         || fallbackPolyline.space != fallbackMesh.space
         || fallbackPolyline.handle != DRW::NoHandle
         || fallbackPolyline.parentHandle != DRW::NoHandle)
+        return fail(__LINE__);
+    const DRW_Line& fallbackLine = legacyMeshSink.meshFallbackLines.front();
+    if (fallbackLine.basePoint.x != 1.0
+        || fallbackLine.basePoint.y != 2.0
+        || fallbackLine.basePoint.z != 3.0
+        || fallbackLine.secPoint.x != 10.0
+        || fallbackLine.secPoint.y != 11.0
+        || fallbackLine.secPoint.z != 12.0
+        || fallbackLine.layer != fallbackMesh.layer
+        || fallbackLine.color != fallbackMesh.color
+        || fallbackLine.material != fallbackMesh.material
+        || fallbackLine.transparency != fallbackMesh.transparency
+        || fallbackLine.plotStyle != fallbackMesh.plotStyle
+        || fallbackLine.shadow != fallbackMesh.shadow
+        || fallbackLine.handle != DRW::NoHandle
+        || fallbackLine.parentHandle != DRW::NoHandle)
         return fail(__LINE__);
 
     SemanticSink dimensionSink("dxfRW", "read");

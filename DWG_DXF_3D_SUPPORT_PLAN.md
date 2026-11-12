@@ -10717,15 +10717,17 @@ open. See the [implementation checkpoint](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#cur
 and [receipt](docs/research/p8-3d-consumer-mesh-geometry-fields-2026-11-12.json).
 
 **P8/S8.3.19 legacy MESH callback fallback (2026-11-12):** the default
-`DRW_Interface::addMesh` implementation now projects valid level-0 faces to
-closed 3D POLYLINE callbacks, preserving WCS coordinates and presentation
-attributes for existing consumers that do not implement the typed MESH
-callback. Degenerate faces and any face with an invalid vertex index are
-skipped; synthesized polylines do not inherit source identity/ownership.
-Direct base-default regression coverage and the focused consumer CTest pass
-1/1 in both normal and AddressSanitizer builds; the LibreCAD_3 compatibility
-compile target also passes. This lossy fallback does
-not represent subdivision, crease, edge or property-override semantics and
+`DRW_Interface::addMesh` implementation projects valid level-0 faces to closed
+3D POLYLINE callbacks and valid explicit edges outside those faces to 3D LINE
+callbacks, preserving WCS coordinates and presentation attributes for
+consumers that do not implement the typed MESH callback. Face boundaries are
+deduplicated against explicit edges, duplicate undirected standalone edges are
+suppressed, and malformed/degenerate topology is skipped; synthesized records
+do not inherit source identity/ownership. Direct base-default regression
+coverage and the focused consumer CTest pass 1/1 in both normal and
+AddressSanitizer builds; the LibreCAD_3 compatibility compile target also
+passes. This lossy fallback does not represent subdivision, crease or
+property-override semantics and
 does not qualify native MESH construction or broaden support claims. See the
 [implementation checkpoint](DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md#current-execution-checkpoint-2026-11-12)
 and [receipt](docs/research/p8-3d-consumer-mesh-default-legacy-fallback-2026-11-12.json).

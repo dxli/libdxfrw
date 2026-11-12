@@ -29,6 +29,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <utility>
 
 #include "drw_datastorage.h"
@@ -337,13 +338,38 @@ public:
 
   /** Called for every MESH (AcDbSubDMesh) subdivision-surface entity.
    *  Consumers that do not override this callback receive each valid face as
-   *  a closed 3D POLYLINE through addPolyline. This is a lossy base-cage
-   *  wireframe fallback: it does not preserve subdivision, crease, edge, or
-   *  property-override semantics. Typed 3D consumers should override this
-   *  callback to receive the complete MESH. The trailing virtual slot remains
-   *  defaulted so existing adapters stay source-compatible.
+   *  a closed 3D POLYLINE through addPolyline and valid standalone level-0
+   *  edges through addLine. Edges already drawn by face boundaries are not
+   *  duplicated. This is a lossy base-cage wireframe fallback: subdivision,
+   *  crease, and property-override semantics are not represented. Typed 3D
+   *  consumers should override this callback to receive the complete MESH.
+   *  The trailing virtual slot remains defaulted so existing adapters stay
+   *  source-compatible.
    */
   virtual void addMesh(const DRW_Mesh &data) {
+    const auto edgeKey = [](std::int32_t first, std::int32_t second) {
+      const std::uint32_t low = static_cast<std::uint32_t>(
+          (std::min)(first, second));
+      const std::uint32_t high = static_cast<std::uint32_t>(
+          (std::max)(first, second));
+      return (static_cast<std::uint64_t>(low) << 32u) | high;
+    };
+    const auto copyPresentation = [&data](DRW_Entity& target) {
+      target.layer = data.layer;
+      target.lineType = data.lineType;
+      target.material = data.material;
+      target.color = data.color;
+      target.color24 = data.color24;
+      target.colorName = data.colorName;
+      target.transparency = data.transparency;
+      target.plotStyle = data.plotStyle;
+      target.shadow = data.shadow;
+      target.lWeight = data.lWeight;
+      target.ltypeScale = data.ltypeScale;
+      target.visible = data.visible;
+      target.space = data.space;
+    };
+    std::unordered_set<std::uint64_t> faceEdges;
     for (const std::vector<std::int32_t>& face : data.faces) {
       if (face.size() < 3u)
         continue;
@@ -356,21 +382,12 @@ public:
       if (!validFace)
         continue;
 
+      for (std::size_t i = 0; i < face.size(); ++i)
+        faceEdges.insert(edgeKey(face[i], face[(i + 1u) % face.size()]));
+
       DRW_Polyline polyline;
       polyline.flags = 1 | 8; // Closed 3D polyline.
-      polyline.layer = data.layer;
-      polyline.lineType = data.lineType;
-      polyline.material = data.material;
-      polyline.color = data.color;
-      polyline.color24 = data.color24;
-      polyline.colorName = data.colorName;
-      polyline.transparency = data.transparency;
-      polyline.plotStyle = data.plotStyle;
-      polyline.shadow = data.shadow;
-      polyline.lWeight = data.lWeight;
-      polyline.ltypeScale = data.ltypeScale;
-      polyline.visible = data.visible;
-      polyline.space = data.space;
+      copyPresentation(polyline);
 
       for (std::int32_t index : face) {
         const DRW_Coord& point = data.vertices[static_cast<std::size_t>(index)];
@@ -380,6 +397,28 @@ public:
       }
 
       addPolyline(polyline);
+    }
+
+    std::unordered_set<std::uint64_t> emittedStandaloneEdges;
+    for (const auto& edge : data.edges) {
+      const std::int32_t first = edge.first;
+      const std::int32_t second = edge.second;
+      if (first < 0 || second < 0 || first == second
+          || static_cast<std::size_t>(first) >= data.vertices.size()
+          || static_cast<std::size_t>(second) >= data.vertices.size())
+        continue;
+      const std::uint64_t key = edgeKey(first, second);
+      if (faceEdges.count(key) != 0u
+          || !emittedStandaloneEdges.insert(key).second)
+        continue;
+
+      DRW_Line line;
+      const DRW_Coord& start = data.vertices[static_cast<std::size_t>(first)];
+      const DRW_Coord& end = data.vertices[static_cast<std::size_t>(second)];
+      line.basePoint = start;
+      line.secPoint = end;
+      copyPresentation(line);
+      addLine(line);
     }
   }
 

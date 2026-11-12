@@ -1720,12 +1720,13 @@ created locally from scratch for the specific control.
 - **P8/S8.3.19 default MESH compatibility projection (2026-11-12):** the
   existing trailing `DRW_Interface::addMesh` default now sends each valid
   level-0 face to legacy consumers as a closed 3D POLYLINE through their
-  established `addPolyline` callback. It preserves WCS XYZ and drawing
-  presentation attributes, skips faces with fewer than three vertices or any
-  invalid index, and does not copy MESH identity/ownership metadata. A direct
-  base-callback regression checks these rules; the 3D consumer probe passes
-  1/1 in normal and AddressSanitizer builds, and the LibreCAD_3 compatibility
-  target compiles. This is a lossy
+  established `addPolyline` callback and emits valid explicit level-0 edges
+  outside those face boundaries through `addLine`, suppressing duplicate
+  undirected edges. It preserves WCS XYZ and drawing presentation attributes,
+  skips degenerate/malformed faces and malformed edges, and does not copy MESH
+  identity/ownership metadata. A direct base-callback regression checks these
+  rules; the 3D consumer probe passes 1/1 in normal and AddressSanitizer
+  builds, and the LibreCAD_3 compatibility target compiles. This is a lossy
   base-cage wireframe for consumers that omit `addMesh`; subdivision, crease,
   edge and override semantics remain available only to typed overrides and
   are not represented by this fallback. It does not qualify native MESH
