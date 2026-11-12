@@ -2491,6 +2491,7 @@ void SemanticSink::writeEntities() {
         wrote = dxfWriter_->writeEllipse(&tiltedEllipse) && wrote;
 
         DRW_3Dface face;
+        face.layer = "probe_3dface_wcs";
         face.basePoint = DRW_Coord{1.0, 2.0, 3.0};
         face.secPoint = DRW_Coord{4.0, 5.0, 6.0};
         face.thirdPoint = DRW_Coord{7.0, 8.0, 9.0};
@@ -3759,6 +3760,20 @@ bool run3DConsumerProbe(bool binary) {
     };
     if (!expect3DLine(consumer))
         return false;
+    const auto expect3DFace = [&](const SemanticSink& sink) {
+        return expectEntityField(sink, "3DFACE", "probe_3dface_wcs", "corner.0",
+                                 pointJson(DRW_Coord{1.0, 2.0, 3.0}))
+            && expectEntityField(sink, "3DFACE", "probe_3dface_wcs", "corner.1",
+                                 pointJson(DRW_Coord{4.0, 5.0, 6.0}))
+            && expectEntityField(sink, "3DFACE", "probe_3dface_wcs", "corner.2",
+                                 pointJson(DRW_Coord{7.0, 8.0, 9.0}))
+            && expectEntityField(sink, "3DFACE", "probe_3dface_wcs", "corner.3",
+                                 pointJson(DRW_Coord{10.0, 11.0, 12.0}))
+            && expectEntityField(sink, "3DFACE", "probe_3dface_wcs",
+                                 "invisibleEdgeFlags", "5");
+    };
+    if (!expect3DFace(consumer))
+        return false;
 
     if (!expectEntityField(legacyConsumer, "CIRCLE", defaultCircleLayer, "center",
                            "{\"x\":6,\"y\":-3,\"z\":1.5}")
@@ -3802,6 +3817,8 @@ bool run3DConsumerProbe(bool binary) {
     if (!expectPoint(legacyConsumer))
         return false;
     if (!expect3DLine(legacyConsumer))
+        return false;
+    if (!expect3DFace(legacyConsumer))
         return false;
 
     // DXF ELLIPSE stores its center and major-axis vector in WCS. Unlike ARC

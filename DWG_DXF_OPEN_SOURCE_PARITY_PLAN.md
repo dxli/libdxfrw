@@ -1700,6 +1700,14 @@ created locally from scratch for the specific control.
   not a standard-DXF interoperability or native-consumer qualification and
   does not add DWG producer evidence ([receipt](docs/research/p8-3d-consumer-3dline-fields-2026-11-12.json)).
 
+- **P8/S8.3.17 generated 3DFACE WCS callback fields:** the existing generated
+  face now has a distinct layer and its four nonzero-Z corners plus invisible-
+  edge mask are asserted after ASCII/Binary readback under both extrusion
+  modes. The focused CTest passes 1/1. Autodesk documents all four corners in
+  WCS and the group-70 edge mask; this verifies callback transport only, not
+  DWG producer behavior or FreeCAD rendering (which is separately observed as
+  unsupported) ([receipt](docs/research/p8-3d-consumer-3dface-wcs-fields-2026-11-12.json)).
+
 - **P6 generated IMAGEDEF hard-owner reader profile:** the shared OBJECTS
   prologue preflight and typed `DRW_ImageDef` parser now explicitly accept the
   ODA §20.4.81 hard-owner parent code-3 emitted by this writer. Generated
