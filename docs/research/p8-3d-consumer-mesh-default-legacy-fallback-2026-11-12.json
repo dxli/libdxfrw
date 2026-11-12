@@ -16,6 +16,10 @@
     "buildResult": "PASS",
     "ctest": "ctest --test-dir build -R '^libdxfrw_3d_consumer_probe$' --output-on-failure",
     "ctestResult": "PASS, 1/1",
+    "asanBuild": "cmake --build build-asan-custom --target libdxfrw_3d_consumer_probe -j4",
+    "asanBuildResult": "PASS; CMAKE_CXX_FLAGS includes -fsanitize=address -fno-omit-frame-pointer",
+    "asanCtest": "ctest --test-dir build-asan-custom -R '^libdxfrw_3d_consumer_probe$' --output-on-failure",
+    "asanCtestResult": "PASS, 1/1",
     "combinedBuild": "cmake --build build --target libdxfrw_3d_consumer_probe lc3_compat_check -j4",
     "combinedBuildResult": "PASS",
     "diffCheck": "PASS"

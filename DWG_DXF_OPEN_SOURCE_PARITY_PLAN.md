@@ -1724,7 +1724,8 @@ created locally from scratch for the specific control.
   presentation attributes, skips faces with fewer than three vertices or any
   invalid index, and does not copy MESH identity/ownership metadata. A direct
   base-callback regression checks these rules; the 3D consumer probe passes
-  1/1 and the LibreCAD_3 compatibility target compiles. This is a lossy
+  1/1 in normal and AddressSanitizer builds, and the LibreCAD_3 compatibility
+  target compiles. This is a lossy
   base-cage wireframe for consumers that omit `addMesh`; subdivision, crease,
   edge and override semantics remain available only to typed overrides and
   are not represented by this fallback. It does not qualify native MESH
