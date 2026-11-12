@@ -7957,6 +7957,17 @@ it does not qualify those entity types, semantic preservation, producer-wide
 support, native DWG opening, or Linux/Windows behavior. The source was not
 added to the repository. See the [FreeCAD import observation receipt](docs/research/p8-freecad-ac1021-tablet-import-observation-2026-11-10.json).
 
+**FreeCAD ACIS consumer boundary (2026-11-12):** FreeCAD's current Draft DXF
+documentation says its built-in DXF importer cannot read ACIS/SAT solid blobs;
+its documented C++ entity list excludes 3DSOLID, REGION, and BODY. Its DWG
+route converts to DXF and then uses that importer, so it cannot qualify this
+plan's ACIS semantic or native-solid gate. Keep FreeCAD's 2D open/insert and
+ordinary DXF entity qualification. Keep the distinct FreeCAD Part construction
+from SAT as a kernel check only; it uses the research InventorLoader parser and
+does not demonstrate native DWG/DXF import. Continue 3D consumer qualification
+through a consumer whose import route actually reads the carrier. See the
+[boundary receipt](docs/research/p8-freecad-acis-dxf-consumer-boundary-2026-11-12.json).
+
 The SAB minimum-header helper is included in the canonical CMake and generated
 source-release inventories; the inventory check and refusal self-tests pass.
 Native source-release builds and platform qualification remain open.
