@@ -1,0 +1,38 @@
+{
+  "title": "Generated EVALUATIONGRAPH DXF OBJECTS allocation rollback and retry",
+  "date": "2026-11-12",
+  "scope": "One locally authored AC1027 EVALUATIONGRAPH with two nodes, one edge, and null expression handles, written through the public OBJECTS callback in ASCII and Binary DXF.",
+  "source": {
+    "kind": "generated-from-scratch-in-test",
+    "fixtureCommitted": false,
+    "temporaryOutputRemoved": true,
+    "testSource": "tests/evaluation_graph_objects_allocation_tests.cpp",
+    "testSourceSha256": "8f35ad5c666d96dd744220f52eecd7abeb7bb612c00cf53348be6691d456f7d5",
+    "cmakeSource": "tests/CMakeLists.txt",
+    "cmakeSourceSha256": "b470f347031b3c46fdbfa88524f5620fed3824db731259343320a29fbb46b6e0"
+  },
+  "checks": {
+    "asciiAllocationFailureOffsets": 10,
+    "binaryAllocationFailureOffsets": 9,
+    "eachFailurePreservesPreexistingDestination": true,
+    "eachFailurePreservesCallerGraph": true,
+    "sameCodecRetryAfterEachFailure": true,
+    "retryBytesMatchCleanCalibrationExactly": true,
+    "freshTypedReadbackChecksGraphHeaderNodesAndEdge": true,
+    "onlyGeneratedScratchFilesUsed": true
+  },
+  "validation": {
+    "configure": "cmake -S . -B build-gcc -DCMAKE_POLICY_VERSION_MINIMUM=3.5",
+    "build": "cmake --build build-gcc --target libdxfrw_evaluation_graph_objects_allocation_tests -j4",
+    "test": "ctest --test-dir build-gcc -R '^libdxfrw_evaluation_graph_objects_allocation$' --output-on-failure",
+    "testResult": "passed 1/1",
+    "directSelectorResult": "ASCII passed all 10 and Binary all 9 allocation-failure offsets, rollback, retry, and typed readback",
+    "diffCheck": "git diff --check passed",
+    "testExecutableSha256": "00d0a3f5033a7223fcfafd45f0b64826d6b953bd00fb78fa6f5b3dd1aacd226c"
+  },
+  "limitations": [
+    "Generated transaction evidence only; no physical producer or independent semantic evidence.",
+    "Null expression handles avoid target-closure assertions; expression semantics and non-null target closure remain unqualified.",
+    "Does not establish whole-source output, native behavior, or EVALUATIONGRAPH feature support."
+  ]
+}
