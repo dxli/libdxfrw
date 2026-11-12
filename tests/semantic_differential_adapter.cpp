@@ -654,6 +654,7 @@ public:
     }
     bool writeRecipeSucceeded() const { return writeRecipeSucceeded_; }
     void enable3DConsumerProbe() { threeDConsumerProbe_ = true; }
+    void enableModelerCarrierProbe() { modelerCarrierProbe_ = true; }
     void enablePartialDwgReadbackControl() {
         partialDwgReadbackControl_ = true;
     }
@@ -2282,6 +2283,7 @@ private:
     dwgRW* dwgWriter_ = nullptr;
     bool writeRecipeSucceeded_ = true;
     bool threeDConsumerProbe_ = false;
+    bool modelerCarrierProbe_ = false;
     bool partialDwgReadbackControl_ = false;
     bool opaqueDwgReadbackControl_ = false;
     DRW_UnsupportedObject opaqueDwgReadbackObject_;
@@ -2323,6 +2325,36 @@ void SemanticSink::writeEntities() {
         return;
     }
 #ifdef LIBDXFRW_SEMANTIC_3D_CONSUMER_PROBE
+    if (modelerCarrierProbe_) {
+        if (dxfWriter_ == nullptr) {
+            writeRecipeSucceeded_ = false;
+            return;
+        }
+        const auto writeModelerCarrier = [&](DRW::ETYPE type,
+                                              const std::string& layer,
+                                              const std::string& body) {
+            DRW_ModelerGeometry modeler(type);
+            modeler.layer = layer;
+            const std::string firstLine = "ACIS 7.0";
+            modeler.m_rawBytes.assign(firstLine.begin(), firstLine.end());
+            modeler.m_rawBytes.push_back('\n');
+            modeler.m_rawBytes.insert(modeler.m_rawBytes.end(),
+                                      body.begin(), body.end());
+            modeler.m_dxfPayloadChunks.emplace_back(1, 0,
+                                                     firstLine.size());
+            modeler.m_dxfPayloadChunks.emplace_back(
+                1, firstLine.size() + 1, body.size());
+            return dxfWriter_->writeModelerGeometry(&modeler);
+        };
+        bool wrote = writeModelerCarrier(
+            DRW::E3DSOLID, "probe_carrier_3dsolid", "solid-body");
+        wrote = writeModelerCarrier(
+            DRW::REGION, "probe_carrier_region", "region-body") && wrote;
+        wrote = writeModelerCarrier(
+            DRW::BODY, "probe_carrier_body", "body-body") && wrote;
+        writeRecipeSucceeded_ = wrote && writeRecipeSucceeded_;
+        return;
+    }
     if (threeDConsumerProbe_) {
         if (dxfWriter_ == nullptr) {
             writeRecipeSucceeded_ = false;
@@ -4079,6 +4111,145 @@ bool run3DConsumerProbe(bool binary) {
     }
     return foundBinaryReference;
 }
+
+bool runModelerCarrierProbe(bool binary) {
+    std::error_code error;
+    const std::filesystem::path temporaryRoot =
+        std::filesystem::temp_directory_path(error);
+    if (error)
+        return false;
+    std::filesystem::path directory;
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    for (unsigned attempt = 0; attempt < 32; ++attempt) {
+        directory = temporaryRoot / ("libdxfrw-modeler-carrier-probe-"
+            + std::to_string(stamp) + "-" + std::to_string(attempt));
+        error.clear();
+        if (std::filesystem::create_directory(directory, error))
+            break;
+        if (error && error != std::errc::file_exists)
+            return false;
+        directory.clear();
+    }
+    if (directory.empty())
+        return false;
+
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code cleanupError;
+            std::filesystem::remove_all(path, cleanupError);
+        }
+    } cleanup{directory};
+
+    const std::filesystem::path output = directory
+        / (binary ? "modeler-carriers-binary.dxf"
+                  : "modeler-carriers-ascii.dxf");
+    const std::string outputName = output.string();
+    SemanticSink producer("dxfRW", "write");
+    producer.enableModelerCarrierProbe();
+    dxfRW writer(outputName.c_str());
+    producer.configureWrite(&writer);
+    const bool writeSucceeded = writer.write(&producer, DRW::AC1024, binary);
+    if (!writeSucceeded || !producer.writeRecipeSucceeded()) {
+        std::cerr << "modeler carrier probe write failed: binary=" << binary
+                  << ", writer=" << writeSucceeded
+                  << ", recipe=" << producer.writeRecipeSucceeded()
+                  << ", error=" << static_cast<int>(writer.getError()) << '\n';
+        return false;
+    }
+
+    const auto validate = [&](bool legacyExt) {
+        SemanticSink consumer("dxfRW", "read");
+        dxfRW reader(outputName.c_str());
+        const bool readSucceeded = reader.read(&consumer, legacyExt);
+        if (!readSucceeded || !consumer.diagnostics.empty()) {
+            std::cerr << "modeler carrier probe read failed: binary=" << binary
+                      << ", ext=" << legacyExt
+                      << ", reader=" << readSucceeded
+                      << ", error=" << static_cast<int>(reader.getError())
+                      << ", diagnostics=" << consumer.diagnostics.size() << '\n';
+            return false;
+        }
+
+        const struct Expected {
+            const char* layer;
+            DRW::ETYPE type;
+            const char* body;
+        } expected[] = {
+            {"probe_carrier_3dsolid", DRW::E3DSOLID, "solid-body"},
+            {"probe_carrier_region", DRW::REGION, "region-body"},
+            {"probe_carrier_body", DRW::BODY, "body-body"}};
+        for (const Expected& item : expected) {
+            const RecordRow* record = findEntityRecordByLayer(
+                consumer, "MODELER_GEOMETRY", item.layer);
+            const std::string payload = std::string("ACIS 7.0\n")
+                + item.body + '\n';
+            const std::size_t bodyLength = std::strlen(item.body);
+            if (record == nullptr
+                || !fieldEqualsForLayer(consumer, "MODELER_GEOMETRY",
+                    item.layer, "entityType",
+                    std::to_string(static_cast<int>(item.type)))
+                || !fieldEqualsForLayer(consumer, "MODELER_GEOMETRY",
+                    item.layer, "rawByteCount",
+                    std::to_string(payload.size()))
+                || !fieldEqualsForLayer(consumer, "MODELER_GEOMETRY",
+                    item.layer, "dxfPayloadChunk.count", "2")
+                || !fieldEqualsForLayer(consumer, "MODELER_GEOMETRY",
+                    item.layer, "dxfPayloadChunk.0.groupCode", "1")
+                || !fieldEqualsForLayer(consumer, "MODELER_GEOMETRY",
+                    item.layer, "dxfPayloadChunk.0.length", "8")
+                || !fieldEqualsForLayer(consumer, "MODELER_GEOMETRY",
+                    item.layer, "dxfPayloadChunk.1.groupCode", "1")
+                || !fieldEqualsForLayer(consumer, "MODELER_GEOMETRY",
+                    item.layer, "dxfPayloadChunk.1.offset", "9")
+                || !fieldEqualsForLayer(consumer, "MODELER_GEOMETRY",
+                    item.layer, "dxfPayloadChunk.1.length",
+                    std::to_string(bodyLength))
+                || !fieldEqualsForLayer(consumer, "MODELER_GEOMETRY",
+                    item.layer, "hasDwgInlineAcisPayload", "false")
+                || !fieldEqualsForLayer(consumer, "MODELER_GEOMETRY",
+                    item.layer, "hasDataStorageRecord", "false"))
+            {
+                std::cerr << "modeler carrier callback mismatch: layer="
+                          << item.layer << ", record=" << (record != nullptr)
+                          << ", records=" << consumer.records.size()
+                          << ", carriers=" << consumer.carriers.size() << '\n';
+                return false;
+            }
+
+            std::size_t matchingCarriers = 0;
+            for (const CarrierRow& carrier : consumer.carriers) {
+                if (carrier.recordId == record->id
+                    && carrier.source.find("dxfModelerEntityInlinePayload")
+                        != std::string::npos
+                    && carrier.size == payload.size()
+                    && carrier.digest == sha256(payload.data(), payload.size())
+                    && carrier.disposition == "preserved")
+                    ++matchingCarriers;
+            }
+            if (matchingCarriers != 1) {
+                std::cerr << "modeler carrier identity mismatch: layer="
+                          << item.layer << ", matches=" << matchingCarriers
+                          << ", payloadBytes=" << payload.size() << '\n';
+                return false;
+            }
+        }
+        if (consumer.carriers.size() != 3) {
+            std::cerr << "modeler carrier probe count mismatch: records="
+                      << consumer.records.size() << ", carriers="
+                      << consumer.carriers.size() << '\n';
+            return false;
+        }
+        return true;
+    };
+    const bool currentModePasses = validate(false);
+    if (!currentModePasses)
+        std::cerr << "modeler carrier probe failed in ext=false mode\n";
+    const bool legacyModePasses = validate(true);
+    if (!legacyModePasses)
+        std::cerr << "modeler carrier probe failed in ext=true mode\n";
+    return currentModePasses && legacyModePasses;
+}
 #endif
 
 template <typename Reader>
@@ -4553,7 +4724,8 @@ int selfTest() {
         return fail(__LINE__);
 
 #ifdef LIBDXFRW_SEMANTIC_3D_CONSUMER_PROBE
-    if (!run3DConsumerProbe(false) || !run3DConsumerProbe(true))
+    if (!run3DConsumerProbe(false) || !run3DConsumerProbe(true)
+        || !runModelerCarrierProbe(false) || !runModelerCarrierProbe(true))
         return fail(__LINE__);
 #endif
 

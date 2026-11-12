@@ -1636,6 +1636,17 @@ created locally from scratch for the specific control.
   expansion or qualify DXF interoperability, DWG layouts, or support claims
   ([receipt](docs/research/p8-3d-consumer-minsert-grid-transform-2026-11-12.json)).
 
+- **P8/S8.3.8 generated SAT carrier and entity-family callback:** the
+  headless consumer probe now writes 3DSOLID, REGION and BODY with separate
+  AC1024 inline group-1 text carriers, then verifies each callback's entity
+  type, two bounded payload chunks and exact carrier size/digest after ASCII
+  and Binary readback with `ext=false` and `ext=true`. AC1027 was deliberately
+  excluded: the writer's R2013+ route requires its separate ACDSDATA/SAB
+  profile, and correctly refuses this raw inline-text carrier there. The
+  locally authored carrier strings are opaque test bytes, not valid ACIS
+  geometry; no parser, B-rep, ACDSDATA/SAB or support claim follows. The
+  focused CTest passes 1/1 ([receipt](docs/research/p8-3d-consumer-sat-carrier-fields-2026-11-12.json)).
+
 - **P6 generated IMAGEDEF hard-owner reader profile:** the shared OBJECTS
   prologue preflight and typed `DRW_ImageDef` parser now explicitly accept the
   ODA §20.4.81 hard-owner parent code-3 emitted by this writer. Generated
