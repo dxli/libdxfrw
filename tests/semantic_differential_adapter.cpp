@@ -2423,6 +2423,17 @@ void SemanticSink::writeEntities() {
         helix.constraintType = 2;
         wrote = dxfWriter_->writeHelix(&helix) && wrote;
 
+        DRW_NurbsSurface nurbs;
+        nurbs.layer = "probe_nurbs_surface";
+        nurbs.modelerFormatVersion = 2;
+        nurbs.short170 = 7;
+        nurbs.cvHullDisplay = true;
+        nurbs.uvec1 = DRW_Coord{70.0, 71.0, 72.0};
+        nurbs.vvec1 = DRW_Coord{73.0, 74.0, 75.0};
+        nurbs.uvec2 = DRW_Coord{76.0, 77.0, 78.0};
+        nurbs.vvec2 = DRW_Coord{79.0, 80.0, 81.0};
+        wrote = dxfWriter_->writeSurface(&nurbs) && wrote;
+
         DRW_LWPolyline ocsPolyline;
         ocsPolyline.elevation = 5.0;
         ocsPolyline.extPoint = DRW_Coord{0.0, 1.0, 0.0};
@@ -3442,6 +3453,25 @@ bool run3DConsumerProbe(bool binary) {
             && expectEntityField(sink, "HELIX", layer, "constraintType", "2");
     };
     if (!expectHelix(consumer) || !expectHelix(legacyConsumer))
+        return false;
+
+    const auto expectNurbsSurface = [&](const SemanticSink& sink) {
+        const std::string layer = "probe_nurbs_surface";
+        return expectEntityField(sink, "NURBSURFACE", layer,
+                                 "modelerFormatVersion", "2")
+            && expectEntityField(sink, "NURBSURFACE", layer, "short170", "7")
+            && expectEntityField(sink, "NURBSURFACE", layer,
+                                 "cvHullDisplay", "true")
+            && expectEntityField(sink, "NURBSURFACE", layer, "uvec1",
+                                 "{\"x\":70,\"y\":71,\"z\":72}")
+            && expectEntityField(sink, "NURBSURFACE", layer, "vvec1",
+                                 "{\"x\":73,\"y\":74,\"z\":75}")
+            && expectEntityField(sink, "NURBSURFACE", layer, "uvec2",
+                                 "{\"x\":76,\"y\":77,\"z\":78}")
+            && expectEntityField(sink, "NURBSURFACE", layer, "vvec2",
+                                 "{\"x\":79,\"y\":80,\"z\":81}");
+    };
+    if (!expectNurbsSurface(consumer) || !expectNurbsSurface(legacyConsumer))
         return false;
 
     const auto expectPolyface = [&](const SemanticSink& sink) {

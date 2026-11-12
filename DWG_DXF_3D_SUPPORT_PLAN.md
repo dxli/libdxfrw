@@ -6921,6 +6921,12 @@ Steps:
    verifies callback delivery and that the legacy 2D extrusion mode does not
    rewrite HELIX's WCS/control/trailer data; it does not qualify independent
    interoperability, DWG layout, or downstream HELIX construction.
+   **S8.3.3 — Typed NURBSURFACE consumer fields.** Write a locally authored
+   AC1027 NURBSURFACE with all four complete WCS vector groups, a non-default
+   group-170 scalar, and enabled control-hull display through generated ASCII
+   and binary DXF. Verify the same callback values with `ext=false` and
+   `ext=true`. This covers DXF field transport only; it does not evaluate a
+   NURBS surface, establish DWG layout, or qualify independent/native support.
 5. **S8.4a — Sample-backed DWG consumer comparison (AC1024 INSERT/SPLINE).**
    The locally available `tests/samples/AC1024/visualization_-_conference_room.dwg`
    completes both the libdxfrw read and LibreDWG 0.14 `dwgread -O minJSON`

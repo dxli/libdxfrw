@@ -1585,6 +1585,14 @@ created locally from scratch for the specific control.
   interoperability, DWG HELIX layout, native construction and support claims
   remain open ([receipt](docs/research/p8-3d-consumer-helix-fields-2026-11-12.json)).
 
+- **P8/S8.3.3 generated NURBSURFACE consumer fields:** the same probe now
+  writes a locally authored AC1027 NURBSURFACE with all four complete vector
+  groups and checks group-170/control-hull fields plus WCS vectors in ASCII and
+  Binary DXF under `ext=false` and `ext=true`. The focused CTest passes 1/1.
+  This proves generated callback transport only; no surface evaluation,
+  independent interoperability, DWG layout, or support claim follows
+  ([receipt](docs/research/p8-3d-consumer-nurbssurface-fields-2026-11-12.json)).
+
 - **P6 generated IMAGEDEF hard-owner reader profile:** the shared OBJECTS
   prologue preflight and typed `DRW_ImageDef` parser now explicitly accept the
   ODA §20.4.81 hard-owner parent code-3 emitted by this writer. Generated
