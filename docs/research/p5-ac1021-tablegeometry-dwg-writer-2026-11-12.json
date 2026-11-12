@@ -60,25 +60,13 @@
     ],
     "neighborRegression": "libdxfrw_table_content_dwg_object_roundtrip passed 1/1"
   },
-  "independentPeerReadback": {
-    "tool": "LibreDWG dwgread 0.14",
-    "command": "dwgread -O JSON <generated AC1021 DWG>",
-    "result": "SUCCESS; JSON parsed",
-    "generatedDwgSha256": "204e23912e58601d62444342c7455d75931363c2f9687508e823d66912748a47",
-    "jsonSha256": "b20481c3913451783889f7b03f4b0d16784bce492e533d16be43281a46cb77a9",
-    "checks": [
-      "LibreDWG recognizes TABLEGEOMETRY class metadata and the standalone object.",
-      "Peer output reports 2 rows, 2 columns, four cells, source flags/dimensions, exact generated 3BD and BD content values, final unknown value 0, and null cell soft pointers."
-    ],
-    "limits": "Generated-file parser interoperability only; no producer/native semantics or support claim is established."
-  },
   "validation": {
     "build": "cmake --build build --target libdxfrw_dwg_local_roundtrip -j4",
     "focusedTests": [
       "ctest --test-dir build -R '^(libdxfrw_tablegeometry_dwg_object_roundtrip|libdxfrw_table_content_dwg_object_roundtrip)$' --output-on-failure",
       "ctest --test-dir build -R '^libdxfrw_tablegeometry_dwg_bd_tail$' --output-on-failure"
     ],
-    "result": "PASS (3/3); optional-output selector passed and LibreDWG 0.14 parsed the scratch DWG; git diff --check passed"
+    "result": "PASS (3/3); git diff --check passed"
   },
   "limits": [
     "Generated writer/parser consistency only; no independent peer or native AutoCAD/ODA acceptance was run.",
