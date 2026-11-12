@@ -53336,6 +53336,32 @@ bool physicalSortEntsOwnerScopeQualification(
                 dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,
                 dx_dwgReadCompletenessPolicy::AllowPartial))
             return fail("physical owner-scope partial output failed");
+        dx_data emitted;
+        dx_iface emittedReader;
+        if (!emittedReader.fileImport(outputPath.string(), &emitted, false)
+            || emitted.sortEntsTables.size() != 1u
+            || emitted.sortEntsTables.front().handle != eligibleTable)
+            return fail("physical owner-scope output contains an ineligible table");
+        for (const DRW_Block_Record& block : emitted.blockRecords) {
+            if (block.xDictHandle == 0u)
+                continue;
+            const auto dictionary = std::find_if(emitted.dictionaries.begin(),
+                emitted.dictionaries.end(), [&block](
+                    const DRW_Dictionary& candidate) {
+                        return candidate.handle == block.xDictHandle;
+                    });
+            if (dictionary == emitted.dictionaries.end())
+                return fail("owner-scope omission left a dangling BLOCK_RECORD extension-dictionary handle");
+            for (const DRW_Dictionary::Entry& entry : dictionary->m_entries)
+                if (entry.m_name == "ACAD_SORTENTS"
+                    && entry.m_handle != eligibleTable
+                    && std::none_of(emitted.sortEntsTables.begin(),
+                        emitted.sortEntsTables.end(), [&entry](
+                            const DRW_SortEntsTable& table) {
+                                return table.handle == entry.m_handle;
+                            }))
+                    return fail("owner-scope omission left an orphaned SORTENTSTABLE dictionary entry");
+        }
         for (const std::uint32_t expectedTable : expectedTables) {
             const bool qualified =
                 DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualified(
@@ -83497,58 +83523,15 @@ bool sortEntsAdapter(const std::filesystem::path& prefix) {
         source.sortEntsTables.push_back(table);
         source.rawSortEntsTables.push_back(makeRaw(table));
 
-        const auto expectRejectedWithoutReplacing = [&]() {
-            {
-                std::ofstream sentinel(output,
-                    std::ios::binary | std::ios::trunc);
-                sentinel << "existing destination";
-            }
-            if (converter.fileExport(output.string(), DRW::AC1027, binary,
-                                     &source, false))
-                return false;
-            std::ifstream preserved(output, std::ios::binary);
-            const std::string contents{
-                std::istreambuf_iterator<char>(preserved),
-                std::istreambuf_iterator<char>()};
-            return contents == "existing destination";
-        };
-        if (!expectRejectedWithoutReplacing())
-            return fail("cross-block SORTENTSTABLE target was not rejected safely");
-
-        source.sortEntsTables.front().m_entityHandles = {0x101u};
-        source.rawSortEntsTables.front() = makeRaw(source.sortEntsTables.front());
-        source.dictionaries.front().parentHandle = 0x500u;
-        if (!expectRejectedWithoutReplacing())
-            return fail("wrong extension-dictionary owner was not rejected safely");
-
-        source.dictionaries.front().parentHandle = 0x600u;
-        source.sortEntsTables.front().m_entityHandles = {0x102u};
-        source.rawSortEntsTables.front() = makeRaw(source.sortEntsTables.front());
-        if (!expectRejectedWithoutReplacing())
-            return fail("non-graphical SORTENTSTABLE target was not rejected safely");
-
-        source.sortEntsTables.front().m_entityHandles = {0x999u};
-        source.rawSortEntsTables.front() = makeRaw(source.sortEntsTables.front());
-        if (!expectRejectedWithoutReplacing())
-            return fail("missing SORTENTSTABLE target was not rejected safely");
-
-        source.sortEntsTables.front().m_entityHandles = {DRW::NoHandle};
-        source.rawSortEntsTables.front() = makeRaw(source.sortEntsTables.front());
-        if (!expectRejectedWithoutReplacing())
-            return fail("null SORTENTSTABLE target was not rejected atomically");
-
-        source.sortEntsTables.front().m_entityHandles = {0x101u};
-        source.rawSortEntsTables.front() = makeRaw(source.sortEntsTables.front());
         if (!converter.fileExport(output.string(), DRW::AC1027, binary,
                                   &source, false))
-            return fail("corrected named-block SORTENTSTABLE graph did not retry");
+            return fail("unsupported named-block SORTENTSTABLE prevented partial output");
 
         dx_data readback;
         dx_iface reader;
         if (!reader.fileImport(output.string(), &readback, false)
-            || readback.sortEntsTables.size() != 1u)
-            return fail("named-block SORTENTSTABLE output did not re-import");
-        const DRW_SortEntsTable& written = readback.sortEntsTables.front();
+            || !readback.sortEntsTables.empty())
+            return fail("named-block SORTENTSTABLE was projected into DXF");
         const auto blockRecord = std::find_if(readback.blockRecords.begin(),
             readback.blockRecords.end(), [](const DRW_Block_Record& record) {
                 return record.name == "Part";
@@ -83557,21 +83540,74 @@ bool sortEntsAdapter(const std::filesystem::path& prefix) {
             readback.blocks.end(), [](const dx_ifaceBlock* item) {
                 return item != nullptr && item->name == "Part";
             });
-        const auto dictionary = std::find_if(readback.dictionaries.begin(),
-            readback.dictionaries.end(), [&written](const DRW_Dictionary& item) {
-                return item.handle == written.parentHandle;
-            });
         if (blockRecord == readback.blockRecords.end()
             || block == readback.blocks.end()
-            || (*block)->ent.size() != 1u
-            || dictionary == readback.dictionaries.end()
-            || written.m_blockOwnerHandle != blockRecord->handle
-            || written.m_entityHandles.front() != (*block)->ent.front()->handle
-            || blockRecord->xDictHandle != dictionary->handle
-            || dictionary->parentHandle != blockRecord->handle
-            || dictionary->m_entries.size() != 1u
-            || dictionary->m_entries.front().m_handle != written.handle)
-            return fail("named-block SORTENTSTABLE graph changed across output");
+            || (*block)->ent.size() != 1u)
+            return fail("omitted named-block SORTENTSTABLE damaged its block");
+        if (blockRecord->xDictHandle != 0u
+            || std::any_of(readback.dictionaries.begin(),
+                           readback.dictionaries.end(), [](
+                               const DRW_Dictionary& dictionary) {
+                               return std::any_of(
+                                   dictionary.m_entries.begin(),
+                                   dictionary.m_entries.end(), [](
+                                       const DRW_Dictionary::Entry& entry) {
+                                           return entry.m_name
+                                               == "ACAD_SORTENTS";
+                                       });
+                           }))
+            return fail("omitted named-block SORTENTSTABLE retained its extension-dictionary entry");
+
+        // Keep target-closure refusal covered on the admitted owner domain:
+        // a Model Space table may not reorder an entity in the Part block.
+        source.blockRecords[0].xDictHandle = 0x203u;
+        source.blockRecords[1].xDictHandle = 0u;
+        source.dictionaries.front().handle = 0x203u;
+        source.dictionaries.front().parentHandle = 0x500u;
+        source.sortEntsTables.front().parentHandle = 0x203u;
+        source.sortEntsTables.front().m_blockOwnerHandle = 0x500u;
+        source.sortEntsTables.front().m_entityHandles = {0x101u};
+        source.rawSortEntsTables.front() = makeRaw(
+            source.sortEntsTables.front());
+        {
+            std::ofstream sentinel(output,
+                std::ios::binary | std::ios::trunc);
+            sentinel << "existing destination";
+        }
+        if (converter.fileExport(output.string(), DRW::AC1027, binary,
+                                 &source, false))
+            return fail("cross-block Model Space SORTENTSTABLE target was admitted");
+        {
+            std::ifstream preserved(output, std::ios::binary);
+            const std::string contents{
+                std::istreambuf_iterator<char>(preserved),
+                std::istreambuf_iterator<char>()};
+            if (contents != "existing destination")
+                return fail("cross-block SORTENTSTABLE refusal replaced destination");
+        }
+        source.sortEntsTables.front().m_entityHandles = {0x100u};
+        source.rawSortEntsTables.front() = makeRaw(
+            source.sortEntsTables.front());
+        if (!converter.fileExport(output.string(), DRW::AC1027, binary,
+                                  &source, false))
+            return fail("corrected Model Space SORTENTSTABLE retry failed");
+        dx_data corrected;
+        dx_iface correctedReader;
+        if (!correctedReader.fileImport(output.string(), &corrected, false)
+            || corrected.sortEntsTables.size() != 1u
+            || corrected.sortEntsTables.front().m_blockOwnerHandle
+                != DRW::DxfModelSpaceBlockRecordHandle
+            || corrected.sortEntsTables.front().m_entityHandles.size() != 1u
+            || corrected.mBlock == nullptr
+            || std::none_of(corrected.mBlock->ent.begin(),
+                corrected.mBlock->ent.end(), [&corrected](
+                    const DRW_Entity* entity) {
+                        return entity != nullptr
+                            && entity->handle
+                                == corrected.sortEntsTables.front()
+                                    .m_entityHandles.front();
+                    }))
+            return fail("corrected Model Space SORTENTSTABLE retry readback failed");
     }
 
     for (const bool binary : {false, true}) {

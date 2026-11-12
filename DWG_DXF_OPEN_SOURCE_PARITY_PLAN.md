@@ -5564,9 +5564,24 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
   generated file contains four real model-space LINE targets, and readback
   verifies each remapped group-331 handle resolves to its LINE and that
   group 330 names the model-space BLOCK_RECORD. EED values are also checked.
-  The focused CTest passes in normal and ASan builds. This proves generated
-  graph closure and local rollback/retry only. Non-model and paper-space
-  owner profiles remain refused, and no source graph,
+  The production writer now rejects group-330 owners outside the two
+  documented space BLOCK_RECORDs; generated ASCII/Binary controls verify
+  invalid-owner refusal preserves the destination and same-writer retry,
+  while model-space and paper-space owner outputs both read back correctly.
+  A physical AC1024 adapter recheck first exposed that named-block tables
+  still reached the low-level writer. The adapter now retains those source
+  records for diagnostics but excludes their tables and removes their
+  `ACAD_SORTENTS` dictionary entries from output. It clears an owner
+  BLOCK_RECORD's extension-dictionary link when the projected dictionary is
+  empty, and preserves other dictionary entries through a sanitized copy.
+  Source/output snapshot validation now counts only the eligible emitted
+  subset. The focused physical selector passes ASCII and
+  Binary and verifies only the Model/Paper Space table is qualified. The
+  generated owner/allocation control passes in the normal build; the earlier
+  ASan run covers the same low-level owner guard and transaction test. This proves generated
+  graph closure, the documented owner domain, and local rollback/retry only.
+  The physical selector is one source-bound adapter result, not producer-wide
+  qualification. Named-block owner profiles remain unqualified, and no source graph,
   producer, native-consumer, or broader SORTENTSTABLE support claim is
   established. The files are generated in memory/from scratch under a
   temporary directory and deleted; no fixture was added. See the [allocation
@@ -5854,6 +5869,19 @@ Autodesk group-330 rule was rechecked; current strict conversion remains refused
 at 484/490 with no DXF published. Treat that result as evidence that internal
 codec consistency is insufficient, not as an output profile
 ([recheck receipt](docs/research/p4-ac1024-architectural-named-block-sortents-spec-boundary-2026-11-07.json)).
+The low-level `writeSortEntsTable` path now independently rejects any remapped
+group-330 owner other than the DXF model-space or paper-space BLOCK_RECORD.
+Generated ASCII/Binary refusal, destination-preservation, corrected retry, and
+positive readback controls cover the writer boundary. The adapter also filters
+out named-block SORTENTSTABLEs and their `ACAD_SORTENTS` dictionary edges
+before output projection, while retaining their source snapshots and other
+extension-dictionary entries. It drops the owner's extension-dictionary link
+when the sanitized dictionary becomes empty. The hash-bound AC1024
+architectural owner-scope selector now passes in ASCII and Binary: only its
+`*Model_Space` table is qualified; its `*U6`, `*U3` and named title-block
+tables are not projected. This closes the adapter regression for that source
+profile only; named-block records remain unsupported and the result does not
+establish producer-wide behavior. See the [physical adapter receipt](docs/research/p6-ac1024-sortents-owner-scope-adapter-filter-2026-11-12.json).
 
 **Open external semantic gate — native dynamic-block evaluation.**
 The AC1024 source has `EvalExpr.parentId=0xFFFFFFFF` for `BLOCKLINEARGRIP`

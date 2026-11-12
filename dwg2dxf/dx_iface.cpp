@@ -53311,7 +53311,8 @@ bool dx_iface::hasUnchangedDwgSortEntsOutputSources() const noexcept {
             && cData->sourceVersion != DRW::AC1024)
         || !cData->dwgReadOutcome.attempted
         || cData->sortEntsCaptureFailed
-        || cData->sortEntsTables.size() != m_sortEmissionTables.size()
+        || m_sortEmissionTables.size()
+            != m_dwgSortEntsOutputSources.size()
         || cData->sortEntsTables.size()
             != cData->dwgSortEntsMemberships.size()
         || m_dwgSortEntsOutputSources.size()
@@ -72634,6 +72635,7 @@ bool dx_iface::validateSortEntsGraph(const dx_data& data, bool debug) {
     static constexpr std::size_t kMaxRawGroups = 4000000u;
     m_sortDictionaryHandles.clear();
     m_sortOwnerHandles.clear();
+    m_sortDictionaryOutputs.clear();
     m_sortEmissionTables.clear();
     m_dwgSortEntsOutputSources.clear();
     m_dwgSortEntsOutputSourceOwner = nullptr;
@@ -72646,6 +72648,7 @@ bool dx_iface::validateSortEntsGraph(const dx_data& data, bool debug) {
                       << validationStage << '\n';
         m_sortDictionaryHandles.clear();
         m_sortOwnerHandles.clear();
+        m_sortDictionaryOutputs.clear();
         m_sortEmissionTables.clear();
         m_dwgSortEntsOutputSources.clear();
         m_dwgSortEntsOutputSourceOwner = nullptr;
@@ -73152,10 +73155,48 @@ bool dx_iface::validateSortEntsGraph(const dx_data& data, bool debug) {
 
             validationStage = "SORTENTSTABLE BLOCK_RECORD/DICTIONARY resolution";
             const auto owner = owners.find(table.m_blockOwnerHandle);
-            const auto dictionary = dictionaries.find(table.parentHandle);
-            if (owner == owners.end() || dictionary == dictionaries.end())
+            if (owner == owners.end())
                 return reject();
             const DRW_Block_Record& record = *owner->second;
+            const std::string ownerName = layoutSymbolKey(record.name);
+            if (ownerName != "*MODEL_SPACE" && ownerName != "*PAPER_SPACE") {
+                // Autodesk's SORTENTSTABLE group-330 owner domain is limited
+                // to the two paper/model-space BLOCK_RECORDs. Retain the
+                // source record for diagnostics, but remove its table entry
+                // from the emitted extension dictionary so output has no
+                // dangling reference to an intentionally omitted table.
+                const auto dictionary = dictionaries.find(table.parentHandle);
+                if (record.xDictHandle != table.parentHandle
+                    || dictionary == dictionaries.end()
+                    || dictionary->second->parentHandle != record.handle)
+                    return reject();
+                auto projected = m_sortDictionaryOutputs.find(
+                    table.parentHandle);
+                if (projected == m_sortDictionaryOutputs.end()) {
+                    const auto inserted = m_sortDictionaryOutputs.emplace(
+                        table.parentHandle, *dictionary->second);
+                    if (!inserted.second)
+                        return reject();
+                    projected = inserted.first;
+                }
+                const std::size_t oldEntryCount =
+                    projected->second.m_entries.size();
+                projected->second.m_entries.erase(std::remove_if(
+                    projected->second.m_entries.begin(),
+                    projected->second.m_entries.end(), [](
+                        const DRW_Dictionary::Entry& entry) {
+                            return layoutSymbolKey(entry.m_name)
+                                == "ACAD_SORTENTS";
+                    }), projected->second.m_entries.end());
+                if (oldEntryCount == projected->second.m_entries.size())
+                    return reject();
+                if (!projected->second.m_entries.empty())
+                    m_sortDictionaryHandles.push_back(table.parentHandle);
+                continue;
+            }
+            const auto dictionary = dictionaries.find(table.parentHandle);
+            if (dictionary == dictionaries.end())
+                return reject();
             const DRW_Dictionary* extensionModel = dictionary->second;
             if (m_selectedDwgAssociativeSource == &data) {
                 const auto projection =
@@ -73415,7 +73456,6 @@ bool dx_iface::validateSortEntsGraph(const dx_data& data, bool debug) {
             m_sortDictionaryHandles.push_back(extension.handle);
             m_sortOwnerHandles.push_back(record.handle);
 
-            const std::string ownerName = layoutSymbolKey(record.name);
             validationStage = "SORTENTSTABLE named BLOCK owner container";
             if (ownerName != "*MODEL_SPACE" && ownerName != "*PAPER_SPACE") {
                 const auto block = std::find_if(data.blocks.begin(),
@@ -83221,6 +83261,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     m_ac1027DefaultLayerInspected = false;
     m_sortDictionaryHandles.clear();
     m_sortOwnerHandles.clear();
+    m_sortDictionaryOutputs.clear();
     m_sortEmissionTables.clear();
     m_dwgSortEntsOutputSources.clear();
     m_dwgSortEntsOutputSourceOwner = nullptr;
@@ -86535,6 +86576,16 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     };
     std::vector<DRW_Block_Record> sourceBlockRecords;
     sourceBlockRecords.reserve(cData->blockRecords.size());
+    for (const DRW_Block_Record& record : cData->blockRecords) {
+        const auto projection =
+            m_sortDictionaryOutputs.find(record.xDictHandle);
+        if (projection == m_sortDictionaryOutputs.end())
+            continue;
+        if (projection->second.m_entries.empty())
+            selectedBlockRecordXdicts.erase(record.handle);
+        else
+            selectedBlockRecordXdicts[record.handle] = record.xDictHandle;
+    }
     for (const auto& selected : selectedBlockRecordXdicts) {
         const DRW_Block_Record* sourceRecord = nullptr;
         std::size_t matches = 0u;

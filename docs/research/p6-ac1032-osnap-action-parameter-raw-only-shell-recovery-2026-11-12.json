@@ -36,7 +36,7 @@
     "src/intern/dwgreader.cpp": "19647b50136bda357382b51aaed60ab947d6bce4d6ad5a4966ef8007d4af899d",
     "tests/dwg_reader_matrix_tests.cpp": "77a53864267c502e78a9baece238e91820535aeeda0967ad7592bcfe3387a29a",
     "build/dwg2dxf/dwg2dxf": "a977e79b7718320cbf1bb7fcfbbf15a4183b00d7a330266085ea7cd4c2a68498",
-    "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "b698aeae679d2eb4ae029bf23b900a01959be6674e4cab9b957da3cd12d81e1a",
+    "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "ba424b1fa1b542403818238a0a16cb0c81142868a93e7ed92d7da7b88efb8851",
     "/Users/dli/dev/libredwg/test/test-data/example_2018.dwg": "7bc7721224003062b237845842b7a976e46771c37eba6833b9ed3712e7a5a65a"
   }
 }

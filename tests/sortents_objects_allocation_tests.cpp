@@ -24,11 +24,12 @@ struct AllocationFailure {
     ~AllocationFailure() { allocationsBeforeFailure = -1; }
 };
 
-DRW_SortEntsTable makeSortTable() {
+DRW_SortEntsTable makeSortTable(
+    std::uint32_t owner = DRW::DxfModelSpaceBlockRecordHandle) {
     DRW_SortEntsTable table;
     table.handle = 0xD720u;
     table.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
-    table.m_blockOwnerHandle = DRW::DxfModelSpaceBlockRecordHandle;
+    table.m_blockOwnerHandle = owner;
     table.m_entityHandles = {0xD731u, 0xD732u, 0xD733u, 0xD734u};
     table.m_sortHandles = {0xA101u, 0xA202u, 0xA303u, 0xA404u};
     table.extData.push_back(new DRW_Variant(1001, std::string("ACAD")));
@@ -64,7 +65,10 @@ public:
         for (std::size_t i = 0; i < table.m_entityHandles.size(); ++i) {
             DRW_Line line;
             line.handle = table.m_entityHandles[i];
-            line.parentHandle = DRW::DxfModelSpaceBlockRecordHandle;
+            line.parentHandle = table.m_blockOwnerHandle;
+            line.space = table.m_blockOwnerHandle
+                    == DRW::DxfPaperSpaceBlockRecordHandle
+                ? DRW::PaperSpace : DRW::ModelSpace;
             line.basePoint = DRW_Coord(static_cast<double>(i), 1.0, 0.0);
             line.secPoint = DRW_Coord(static_cast<double>(i) + 1.0, 2.0, 0.0);
             if (!writer.writeLine(&line))
@@ -83,13 +87,18 @@ public:
 
 class Reader final : public LC3CompatCheck {
 public:
+    struct LineOwner {
+        std::uint32_t handle;
+        std::uint32_t owner;
+        DRW::Space space;
+    };
     void addLine(const DRW_Line& line) override {
-        lines.emplace_back(line.handle, line.parentHandle);
+        lines.push_back({line.handle, line.parentHandle, line.space});
     }
     void addSortEntsTable(const DRW_SortEntsTable& table) override {
         tables.push_back(table);
     }
-    std::vector<std::pair<std::uint32_t, std::uint32_t>> lines;
+    std::vector<LineOwner> lines;
     std::vector<DRW_SortEntsTable> tables;
 };
 
@@ -102,7 +111,9 @@ bool readBytes(const std::filesystem::path& path, std::string& bytes) {
     return !input.bad();
 }
 
-bool readbackMatches(const std::filesystem::path& path) {
+bool readbackMatches(
+    const std::filesystem::path& path,
+    std::uint32_t owner = DRW::DxfModelSpaceBlockRecordHandle) {
     dxfRW readerCodec(path.string().c_str());
     Reader reader;
     const bool read = readerCodec.read(&reader, false);
@@ -113,10 +124,10 @@ bool readbackMatches(const std::filesystem::path& path) {
         return false;
     }
     const DRW_SortEntsTable& table = reader.tables.front();
-    const DRW_SortEntsTable expected = makeSortTable();
+    const DRW_SortEntsTable expected = makeSortTable(owner);
     if (table.handle != expected.handle
         || table.parentHandle != expected.parentHandle
-        || table.m_blockOwnerHandle != DRW::DxfModelSpaceBlockRecordHandle
+        || table.m_blockOwnerHandle != owner
         || table.m_entityHandles.size() != expected.m_entityHandles.size()
         || table.m_sortHandles != expected.m_sortHandles
         || table.extData.size() != expected.extData.size()) {
@@ -136,12 +147,16 @@ bool readbackMatches(const std::filesystem::path& path) {
         return false;
     }
     for (std::size_t i = 0; i < expected.m_entityHandles.size(); ++i) {
-        if (table.m_entityHandles[i] != reader.lines[i].first
-            || reader.lines[i].second != DRW::DxfModelSpaceBlockRecordHandle) {
+        const DRW::Space expectedSpace =
+            owner == DRW::DxfPaperSpaceBlockRecordHandle
+                ? DRW::PaperSpace : DRW::ModelSpace;
+        if (table.m_entityHandles[i] != reader.lines[i].handle
+            || reader.lines[i].owner != owner
+            || reader.lines[i].space != expectedSpace) {
             std::cerr << "SORTENTSTABLE target line mismatch at " << i
-                      << ": handle=" << reader.lines[i].first
+                      << ": handle=" << reader.lines[i].handle
                       << " tableTarget=" << table.m_entityHandles[i]
-                      << " owner=" << reader.lines[i].second << '\n';
+                      << " owner=" << reader.lines[i].owner << '\n';
             return false;
         }
     }
@@ -230,6 +245,43 @@ bool allocationSweep(const std::filesystem::path& directory) {
     }
     return true;
 }
+
+bool ownerScopeControls(const std::filesystem::path& directory) {
+    const auto path = directory / "sortents-owner-scope.dxf";
+    const std::string prior = "prior SORTENTSTABLE owner-scope destination\n";
+    for (const bool binary : {false, true}) {
+        {
+            std::ofstream output(path, std::ios::binary | std::ios::trunc);
+            output << prior;
+            if (!output)
+                return false;
+        }
+        dxfRW writer(path.string().c_str());
+        Export exporter(writer);
+        exporter.table.m_blockOwnerHandle = 0x600u;
+        const bool invalidWrite = writer.write(&exporter, DRW::AC1027, binary);
+        std::string unchanged;
+        if (invalidWrite || exporter.accepted
+            || exporter.table.m_blockOwnerHandle != 0x600u
+            || !readBytes(path, unchanged) || unchanged != prior)
+            return false;
+
+        exporter.table.m_blockOwnerHandle =
+            DRW::DxfModelSpaceBlockRecordHandle;
+        const bool modelRetry = writer.write(&exporter, DRW::AC1027, binary);
+        if (!modelRetry || !exporter.accepted
+            || !readbackMatches(path, DRW::DxfModelSpaceBlockRecordHandle))
+            return false;
+
+        exporter.table.m_blockOwnerHandle =
+            DRW::DxfPaperSpaceBlockRecordHandle;
+        const bool paperRetry = writer.write(&exporter, DRW::AC1027, binary);
+        if (!paperRetry || !exporter.accepted
+            || !readbackMatches(path, DRW::DxfPaperSpaceBlockRecordHandle))
+            return false;
+    }
+    return true;
+}
 } // namespace
 
 void* operator new(std::size_t size) {
@@ -267,5 +319,5 @@ int main() {
             std::filesystem::remove_all(path, error);
         }
     } cleanup{directory};
-    return allocationSweep(directory) ? 0 : 2;
+    return allocationSweep(directory) && ownerScopeControls(directory) ? 0 : 2;
 }

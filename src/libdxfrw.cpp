@@ -36022,6 +36022,15 @@ bool dxfRW::writeSortEntsTable(DRW_SortEntsTable *ent) {
         ? block->second : remapObjectHandle(ent->m_blockOwnerHandle);
     if (self == 0 || owner == 0)
         return failDxfWrite();
+    if (owner != DRW::DxfModelSpaceBlockRecordHandle
+        && owner != DRW::DxfPaperSpaceBlockRecordHandle) {
+        recordOperationDiagnostic(DRW::OperationPhase::Objects,
+            DRW::OperationCause::ValidationFailure,
+            "sortents-owner-space",
+            "SORTENTSTABLE owner is not a Model/Paper Space BLOCK_RECORD",
+            0, false, static_cast<std::uint32_t>(ent->m_blockOwnerHandle), true);
+        return failDxfWrite();
+    }
 
     DxfWriterRecordScope record(*writer);
     writer->writeString(0, "SORTENTSTABLE");

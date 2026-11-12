@@ -2175,6 +2175,13 @@ public:
             for (DRW_Dictionary& dictionary : cData->dictionaries) {
                 if (dictionary.handle != handle)
                     continue;
+                const auto sortProjection =
+                    m_sortDictionaryOutputs.find(handle);
+                if (sortProjection != m_sortDictionaryOutputs.end()) {
+                    if (!dxfW->writeDictionary(&sortProjection->second))
+                        return;
+                    break;
+                }
                 if (m_selectedDwgAssociativeSource == cData) {
                     const auto projection =
                         m_selectedDwgAssociativeDictionaryOutputs.find(handle);
@@ -2562,8 +2569,14 @@ public:
         for (DRW_Dictionary& dictionary : cData->dictionaries) {
             if (sortDictionaries.erase(dictionary.handle) == 0)
                 continue;
-            if (emittedDictionaryHandles.insert(dictionary.handle).second
-                && !dxfW->writeDictionary(&dictionary))
+            if (!emittedDictionaryHandles.insert(dictionary.handle).second)
+                continue;
+            const auto projection =
+                m_sortDictionaryOutputs.find(dictionary.handle);
+            DRW_Dictionary* output = projection
+                    == m_sortDictionaryOutputs.end()
+                ? &dictionary : &projection->second;
+            if (!dxfW->writeDictionary(output))
                 return;
         }
         if (!sortDictionaries.empty()) {
@@ -4902,6 +4915,8 @@ private:
     std::vector<std::uint32_t> m_liveSectionHandlesToWrite;
     std::vector<std::uint32_t> m_sortDictionaryHandles;
     std::vector<std::uint32_t> m_sortOwnerHandles;
+    std::unordered_map<std::uint32_t, DRW_Dictionary>
+        m_sortDictionaryOutputs;
     std::vector<DRW_SortEntsTable> m_sortEmissionTables;
     struct DwgSortEntsOutputSource {
         DRW_SortEntsTable table;
