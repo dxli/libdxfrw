@@ -16699,6 +16699,131 @@ void testLayoutStyleNumericWireKinds(TestContext& t) {
         });
 }
 
+void testCellStyleMapIdentityBinding(TestContext& t) {
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW owner("");
+        owner.version = DRW::AC1027;
+        owner.binFile = binary;
+        owner.setHandleRemap({{0xA709u, 0xB709u}});
+        owner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&output));
+        owner.writer->setRecordInventoryEnabled(true, 8u);
+        DRW_CellStyleMap map;
+        map.handle = 0xA709u;
+        map.parentHandle = 0xCu;
+        const bool wrote = owner.writeCellStyleMap(&map);
+        const auto identity = owner.m_writingContext
+            .sourceHandleToWrittenObjectMap.find(0xA709u);
+        const bool identityBound = wrote
+            && identity != owner.m_writingContext
+                               .sourceHandleToWrittenObjectMap.end()
+            && identity->second == 0xB709u
+            && owner.writer->recordHandleCount(0xB709u) == 1u
+            && owner.writer->recordHandleHasIdentity(
+                0xB709u, "CELLSTYLEMAP", "");
+        const std::string committedBytes = output.str();
+
+        owner.setHandleRemap({{0xA709u, 0xB70Au}});
+        DRW_CellStyleMap duplicate;
+        duplicate.handle = 0xA709u;
+        duplicate.parentHandle = 0xCu;
+        const bool duplicateRolledBack = !owner.writeCellStyleMap(&duplicate)
+            && output.str() == committedBytes
+            && owner.m_writingContext.sourceHandleToWrittenObjectMap.at(
+                   0xA709u) == 0xB709u
+            && owner.writer->recordHandleCount(0xB70Au) == 0u;
+
+        std::ostringstream retryOutput;
+        dxfRW retryOwner("");
+        retryOwner.version = DRW::AC1027;
+        retryOwner.binFile = binary;
+        retryOwner.setHandleRemap({{0xA70Bu, 0xB70Bu}});
+        retryOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&retryOutput));
+        retryOwner.writer->setRecordInventoryEnabled(true, 4u);
+        DRW_CellStyleMap corrected;
+        corrected.handle = 0xA70Bu;
+        corrected.parentHandle = 0xCu;
+        const bool retried = retryOwner.writeCellStyleMap(&corrected)
+            && retryOwner.m_writingContext.sourceHandleToWrittenObjectMap.at(
+                   0xA70Bu) == 0xB70Bu
+            && retryOwner.writer->recordHandleCount(0xB70Bu) == 1u;
+
+        std::ostringstream promotionOutput;
+        dxfRW promotionOwner("");
+        promotionOwner.version = DRW::AC1027;
+        promotionOwner.binFile = binary;
+        promotionOwner.setHandleRemap({{0xA70Cu, 0xB70Cu}});
+        promotionOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&promotionOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&promotionOutput));
+        promotionOwner.writer->setRecordInventoryEnabled(true, 4u);
+        promotionOwner.m_writingContext.sourceHandleToMintedMap.emplace(
+            0xA70Cu, 0xB70Cu);
+        promotionOwner.m_writingContext.sourceHandleToWrittenObjectMap.emplace(
+            0xA70Cu, 0xB70Cu);
+        DRW_CellStyleMap conflictedPromotion;
+        conflictedPromotion.handle = 0xA70Cu;
+        conflictedPromotion.parentHandle = 0xCu;
+        const bool promotionRollback =
+            !promotionOwner.writeCellStyleMap(&conflictedPromotion)
+            && promotionOutput.str().empty()
+            && promotionOwner.m_writingContext.sourceHandleToMintedMap.at(
+                   0xA70Cu) == 0xB70Cu
+            && promotionOwner.m_writingContext.sourceHandleToWrittenObjectMap
+                   .at(0xA70Cu) == 0xB70Cu
+            && promotionOwner.writer->recordHandleCount(0xB70Cu) == 0u;
+
+        std::ostringstream promotedOutput;
+        dxfRW promotedOwner("");
+        promotedOwner.version = DRW::AC1027;
+        promotedOwner.binFile = binary;
+        promotedOwner.setHandleRemap({{0xA70Du, 0xB70Du}});
+        promotedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&promotedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&promotedOutput));
+        promotedOwner.writer->setRecordInventoryEnabled(true, 4u);
+        promotedOwner.m_writingContext.sourceHandleToMintedMap.emplace(
+            0xA70Du, 0xB70Du);
+        DRW_CellStyleMap promoted;
+        promoted.handle = 0xA70Du;
+        promoted.parentHandle = 0xCu;
+        const bool promotionSucceeded = promotedOwner.writeCellStyleMap(&promoted)
+            && promotedOwner.m_writingContext.sourceHandleToMintedMap.count(
+                   0xA70Du) == 0u
+            && promotedOwner.m_writingContext.sourceHandleToWrittenObjectMap
+                   .at(0xA70Du) == 0xB70Du
+            && promotedOwner.writer->recordHandleCount(0xB70Du) == 1u;
+        const std::string encoding = binary ? "binary" : "ASCII";
+        t.expect(identityBound,
+                 (encoding + " CELLSTYLEMAP binds its remapped identity")
+                     .c_str());
+        t.expect(duplicateRolledBack,
+                 (encoding + " CELLSTYLEMAP duplicate binding rolls back")
+                     .c_str());
+        t.expect(retried,
+                 (encoding + " CELLSTYLEMAP corrected retry succeeds")
+                     .c_str());
+        t.expect(promotionRollback,
+                 (encoding + " CELLSTYLEMAP failed promotion restores minted identity")
+                     .c_str());
+        t.expect(promotionSucceeded,
+                 (encoding + " CELLSTYLEMAP promotes emitted identity")
+                     .c_str());
+    }
+}
+
 void testEntityNumericWireKinds(TestContext& t) {
     expectTypedNumericWire(t, [](dxfRW& writer) {
         DRW_SectionObject section;
@@ -24071,6 +24196,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testLayoutStyleNumericWireKinds(focused);
         std::cout << "LAYOUT source identity: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--cellstylemap-source-identity") {
+        TestContext focused;
+        testCellStyleMapIdentityBinding(focused);
+        std::cout << "CELLSTYLEMAP source identity: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

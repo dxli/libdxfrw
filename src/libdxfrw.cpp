@@ -13983,7 +13983,27 @@ bool dxfRW::writeCellStyleMap(DRW_CellStyleMap *ent) {
             return failDxfWrite();
     }
     if ((!ent->extData.empty() && !writeExtData(ent->extData))
-        || writer->hasWriteError() || !preflightDxfWrite() || !record.commit())
+        || writer->hasWriteError() || !preflightDxfWrite())
+        return failDxfWrite();
+    const auto mintedIdentity =
+        m_writingContext.sourceHandleToMintedMap.find(ent->handle);
+    if (mintedIdentity != m_writingContext.sourceHandleToMintedMap.end()) {
+        if (mintedIdentity->second != handle)
+            return reject("CELLSTYLEMAP minted identity disagrees with record handle");
+        try {
+            if (m_recordStateScopeDepth != 0u) {
+                m_dxfWriteMutations.push_back({
+                    DxfWriteMutationKind::SourceHandleErase, {}, ent->handle,
+                    mintedIdentity->second, true});
+            }
+        } catch (...) {
+            return reject("CELLSTYLEMAP identity promotion staging failed");
+        }
+        m_writingContext.sourceHandleToMintedMap.erase(mintedIdentity);
+    }
+    if (!bindDxfWriteSourceObjectHandle(ent->handle, handle))
+        return reject("CELLSTYLEMAP source identity binding failed");
+    if (!record.commit())
         return failDxfWrite();
     state.commit();
     return true;
