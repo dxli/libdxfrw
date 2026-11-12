@@ -8197,7 +8197,6 @@ bool DRW_View::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
                                         &parsedAmbientColorRawIndex))
             return fail();
     }
-
     if (!readBitWithinBody(bodyBuf, version, bodyEnd, parsedBit))
         return fail();
     if (parsedBit)
@@ -8233,7 +8232,6 @@ bool DRW_View::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
                                parsedCameraPlottable))
             return fail();
     }
-
     const std::uint64_t bodyBitOffset =
         bodyBuf->getPosition() * 8u + bodyBuf->getBitPos();
     if (!bodyBuf->isGood() || !bodySBuf->isGood()
@@ -8312,14 +8310,12 @@ bool DRW_View::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
         && !readViewHandle("xdict", false, DRW::DwgHardOwnership,
                            parsedXDictHandle))
         return fail();
-
     // COMMON_TABLE_FLAGS carries the external-reference block handle for all
     // R13+ table records, including views that have no associated UCS.
     dwgHandle parsedXrefBlockHandle;
     if (!readViewHandle("xrefBlock", false, DRW::DwgHardPointer,
                         parsedXrefBlockHandle))
         return fail();
-
     dwgHandle parsedBackgroundHandle;
     dwgHandle parsedVisualStyleHandle;
     dwgHandle parsedSunHandle;
@@ -8332,14 +8328,14 @@ bool DRW_View::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
                                parsedSunHandle))
             return fail();
     }
-
     dwgHandle parsedBaseUcsHandle;
     dwgHandle parsedNamedUcsHandle;
-    if (version > DRW::AC1014) { //2000+; refs exist even when HasUCS is false
+    if (version > DRW::AC1014 && parsedHasUCS) { // R2000+ associated UCS
         if (!readViewHandle("baseUcs", false, DRW::DwgHardPointer,
-                            parsedBaseUcsHandle)
-            || !readViewHandle("namedUcs", false,
-                               DRW::DwgHardPointer, parsedNamedUcsHandle))
+                            parsedBaseUcsHandle))
+            return fail();
+        if (!readViewHandle("namedUcs", false,
+                            DRW::DwgHardPointer, parsedNamedUcsHandle))
             return fail();
     }
 
@@ -8349,7 +8345,6 @@ bool DRW_View::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
                             parsedLiveSectionHandle))
             return fail();
     }
-
     if (!buf->isGood() || !bodySBuf->isGood() || !hBuf->isGood())
         return fail();
 
@@ -10572,7 +10567,9 @@ bool DRW_ContextDataManager::parseDwg(DRW::Version version,
 bool DRW_View::encodeDwg(DRW::Version version, dwgBufferW *buf,
                           dwgBufferW *strBuf, dwgBufferW *hdlBuf) const {
     if (buf == nullptr || !validatePayloadFields()
-        || !drwHasEncodableDwgViewTwist(*this))
+        || !drwHasEncodableDwgViewTwist(*this)
+        || (version > DRW::AC1014 && !hasUCS
+            && (baseUCS_ID != 0u || namedUCS_ID != 0u)))
         return false;
     std::uint8_t ambientMethod = 0u;
     std::uint8_t ambientFlags = 0u;
@@ -10672,7 +10669,7 @@ bool DRW_View::encodeDwg(DRW::Version version, dwgBufferW *buf,
             hb->putHandle(makeRefW(m_visualStyleHandle, DRW::DwgHardPointer));
             hb->putHandle(makeRefW(m_sunHandle, DRW::DwgHardOwnership));
         }
-        if (version > DRW::AC1014) {
+        if (version > DRW::AC1014 && hasUCS) {
             hb->putHandle(makeRefW(baseUCS_ID, DRW::DwgHardPointer));
             hb->putHandle(makeRefW(namedUCS_ID, DRW::DwgHardPointer));
         }

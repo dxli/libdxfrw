@@ -5956,7 +5956,7 @@ std::vector<VportHandleField> viewHandleFieldsFor(
         fields.push_back({"sun", DRW::DwgHardOwnership,
                           source.m_sunHandle});
     }
-    if (version > DRW::AC1014) {
+    if (version > DRW::AC1014 && source.hasUCS) {
         fields.push_back({"baseUcs", DRW::DwgHardPointer,
                           source.baseUCS_ID});
         fields.push_back({"namedUcs", DRW::DwgHardPointer,
@@ -20287,6 +20287,7 @@ void testAc1012PlusViewHandleRoles(TestContext& t) {
         case DRW::AC1021: return "AC1021";
         case DRW::AC1024: return "AC1024";
         case DRW::AC1027: return "AC1027";
+        case DRW::AC1032: return "AC1032";
         default: return "unexpected-version";
         }
     };
@@ -20315,7 +20316,7 @@ void testAc1012PlusViewHandleRoles(TestContext& t) {
     for (const DRW::Version version : {DRW::AC1012, DRW::AC1014,
                                        DRW::AC1015, DRW::AC1018,
                                        DRW::AC1021, DRW::AC1024,
-                                       DRW::AC1027}) {
+                                       DRW::AC1027, DRW::AC1032}) {
         const std::vector<bool> hasUcsCases = version > DRW::AC1014
             ? std::vector<bool>{false, true} : std::vector<bool>{false};
         for (const bool hasUcs : hasUcsCases) {
@@ -20328,13 +20329,42 @@ void testAc1012PlusViewHandleRoles(TestContext& t) {
             source.setDwgCommonObjectState(1, 0u, false);
             source.name = "generated-view";
             source.hasUCS = hasUcs;
-            source.baseUCS_ID = source.handle + 0x14u;
-            source.namedUCS_ID = source.handle + 0x15u;
+            if (hasUcs) {
+                source.baseUCS_ID = source.handle + 0x14u;
+                source.namedUCS_ID = source.handle + 0x15u;
+            }
             if (version > DRW::AC1018) {
                 source.m_backgroundHandle = source.handle + 0x16u;
                 source.m_visualStyleHandle = source.handle + 0x17u;
                 source.m_sunHandle = source.handle + 0x18u;
                 source.m_liveSectionHandle = source.handle + 0x19u;
+            }
+            if (version > DRW::AC1014 && !hasUcs) {
+                ViewCodecProbe invalid = source;
+                DRW_TextCodec invalidCodec;
+                invalidCodec.setVersion(version, false);
+                dwgBufferW body(&invalidCodec), strings(&invalidCodec),
+                    handles(&invalidCodec);
+                body.putBit(1u);
+                strings.putBit(1u);
+                handles.putBit(1u);
+                const auto bodyBefore = body.data();
+                const auto stringsBefore = strings.data();
+                const auto handlesBefore = handles.data();
+                const auto bodyBitsBefore = body.bitCount();
+                const auto stringsBitsBefore = strings.bitCount();
+                const auto handlesBitsBefore = handles.bitCount();
+                invalid.baseUCS_ID = source.handle + 0x20u;
+                const bool refused = !invalid.encodeDwg(
+                    version, &body, &strings, &handles);
+                t.expect(refused && body.data() == bodyBefore
+                             && strings.data() == stringsBefore
+                             && handles.data() == handlesBefore
+                             && body.bitCount() == bodyBitsBefore
+                             && strings.bitCount() == stringsBitsBefore
+                             && handles.bitCount() == handlesBitsBefore,
+                         std::string("VIEW refuses non-null UCS refs when HasUCS=0 without mutation in ")
+                             + versionName(version));
             }
             const auto fields = viewHandleFieldsFor(version, source);
             VportHandleFrame validFrame;
@@ -20345,9 +20375,9 @@ void testAc1012PlusViewHandleRoles(TestContext& t) {
             if (!built)
                 continue;
 
-            // The production encoder must emit R2000+ base/named UCS handles
-            // even when the optional associated-UCS body is absent. Check its
-            // full handle sequence independently of the parser vector below.
+            // R2000+ UCS references are present only with the associated-UCS
+            // body. Check the production writer's exact sequence independently
+            // of the parser vector below.
             bool encoderSequence = false;
             if (version > DRW::AC1014) {
                 DRW_TextCodec codec;
@@ -20375,12 +20405,12 @@ void testAc1012PlusViewHandleRoles(TestContext& t) {
             const bool read = parse(version, parsed, validFrame);
             t.expect(read && parsed.handle == source.handle
                          && parsed.hasUCS == hasUcs
-                         && (version <= DRW::AC1014
+                         && (version <= DRW::AC1014 || !hasUcs
                              || (parsed.baseUCS_ID == source.baseUCS_ID
                                  && parsed.namedUCS_ID == source.namedUCS_ID))
                          && parsed.m_liveSectionHandle
                              == source.m_liveSectionHandle,
-                     std::string("VIEW reads base/named UCS and following refs when HasUCS=")
+                     std::string("VIEW reads conditional UCS and following refs when HasUCS=")
                          + (hasUcs ? "1 in " : "0 in ") + versionName(version));
             if (!read)
                 continue;
@@ -20451,7 +20481,7 @@ void testAc1012PlusViewHandleRoles(TestContext& t) {
             t.expect(nullProfile, std::string("VIEW ") + versionName(version)
                          + " accepts canonical null field roles");
 
-            if (version > DRW::AC1014) {
+            if (version > DRW::AC1014 && hasUcs) {
                 const auto baseUcs = std::find_if(
                     fields.begin(), fields.end(),
                     [](const VportHandleField& field) {

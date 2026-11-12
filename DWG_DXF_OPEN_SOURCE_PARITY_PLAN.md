@@ -1590,6 +1590,27 @@ created locally from scratch for the specific control.
   No DWG/DXF fixture was committed. See the [generated hard-owner reader
   receipt](docs/research/p6-generated-imagedef-hard-owner-reader-profile-2026-11-12.json).
 
+- **P6 VIEW associated-UCS handle sequence (2026-11-12):** a hash-bound
+  AutoCAD AC1024 conference-room source exposed that `Camera1` has
+  `associated_ucs=0` and exactly a `liveSection` typed-null soft pointer after
+  the visual handles; it has no Base/Named UCS handle fields. LibreDWG 0.14
+  minJSON on the same bytes reports that exact object shape, and current
+  LibreDWG `src/dwg.spec` places Base/Named UCS handles inside the
+  `associated_ucs` conditional before the R2007+ live-section handle. The
+  reader and writer now follow that sequence. Generated controls cover false
+  and true associated-UCS layouts through AC1032, exact field spans, wrong
+  role/truncation reset and retry, and refusal without buffer mutation when
+  output would otherwise discard non-null UCS references while the flag is
+  false. The focused VIEW selector passes. The sample now passes TABLES and
+  completes the DWG read with 607/607 frames published and zero entity parse
+  failures; three unrelated object failures and the existing HEADER envelope
+  discrepancy (expected 816, observed 820 bytes) still prevent strict output.
+  ODA v5.4.1 §20.4.60 lists both handles under R2000+ without stating this
+  conditionality, so the profile follows the source-bound AutoCAD behavior
+  and independent current-reader schema for the evidenced case; it does not
+  settle every producer/version. No drawing fixture was added. See the
+  [VIEW associated-UCS receipt](docs/research/p6-view-associated-ucs-handle-sequence-2026-11-12.json).
+
 - **P6 AC1015 LTYPE_CONTROL legacy import profile:** an existing local
   AC1015 sample (`simple.dwg`, SHA-256
   `6702705ed765af035761a77170ea1486d01f513690b3fd8dc8295957ddc89e58`)
@@ -1701,20 +1722,13 @@ created locally from scratch for the specific control.
   The focused HATCH/MPOLYGON selector passes. General exactness and CAD
   qualification remain open. See the [receipt](docs/research/p6-ocs-subnormal-scaled-term-precision-2026-11-11.json).
 
-- **P6 VIEW typed-null handle roles:** `DRW_View::parseDwg` now accepts a
-  zero-valued, zero-payload absolute typed-null handle (codes 2–5) in an
-  optional field while continuing to require the specified role for every
-  non-null reference. This fixes the observed AC1024 `Camera1` base-UCS
-  code-4 mismatch. Generated AC1015/AC1018/AC1021/AC1024/AC1027 controls
-  verify code-4 null publication and raw span retention after a wrong-role
-  failure, then corrected-input retry on the same parser; the focused test
-  passes. On physical recheck, the parser accepts the typed-null `baseUcs`
-  field, then exhausts the bounded handle stream while trying to read the
-  following `namedUcs` field. ODA §20.4.60 specifies both fields for R2000+;
-  do not synthesize the absent handle or weaken frame bounds. The sample also
-  carries a separate HEADER envelope discrepancy (expected 816 bytes, observed
-  820). Keep physical sample qualification open; no fixture was added. See
-  the [typed-null receipt](docs/research/p6-view-typed-null-handle-role-validation-2026-11-11.json).
+- **P6 VIEW typed-null handle roles — superseded by the source-bound sequence
+  correction above:** the 2026-11-11 diagnostic correctly found a zero-valued
+  code-4 handle but misidentified it as `baseUcs`. The 2026-11-12 trace and
+  independent same-source LibreDWG projection identify it as `liveSection`
+  because the associated-UCS flag is false. The earlier parser control remains
+  useful for typed-null role validation; its physical field attribution and
+  “missing namedUcs” diagnosis are superseded by the new receipt.
 
 - **P6 DIMASSOC whole-file allocation rollback:** the generated AC1024 ASCII
   and Binary DXF control now injects failure at all 21 reached allocations
