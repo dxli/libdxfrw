@@ -88749,7 +88749,167 @@ bool sunStudyDxfGraph(const std::string& source) {
     return true;
 }
 
+static bool physicalAc1018SatV1Projection(const std::string& sourcePath) {
+    const auto fail = [](const char* reason) {
+        std::cerr << "AC1018 physical SAT-v1 projection: " << reason << '\n';
+        return false;
+    };
+    dx_data source;
+    dx_iface importer;
+    if (!importer.fileImport(sourcePath, &source, false)
+        || source.sourceFormat != dx_source_format::DWG
+        || source.sourceVersion != DRW::AC1018)
+        return fail("could not import the AC1018 source");
+
+    const DRW_ModelerGeometry* selected = nullptr;
+    const dx_ifaceBlock* selectedBlock = nullptr;
+    const auto findInBlock = [&selected, &selectedBlock](
+            const dx_ifaceBlock* block) {
+        if (block == nullptr) return;
+        for (const DRW_Entity* entity : block->ent) {
+            const auto* modeler = dynamic_cast<const DRW_ModelerGeometry*>(entity);
+            if (modeler == nullptr || modeler->eType != DRW::E3DSOLID
+                || modeler->m_modelerVersion != 1u
+                || modeler->m_dwgSourceVersion != DRW::AC1018
+                || modeler->m_dwgAcisPayload.empty())
+                continue;
+            selected = modeler;
+            selectedBlock = block;
+            return;
+        }
+    };
+    findInBlock(source.mBlock);
+    for (const dx_ifaceBlock* block : source.blocks) {
+        if (selected != nullptr) break;
+        findInBlock(block);
+    }
+    if (selected == nullptr || selectedBlock == nullptr)
+        return fail("no parsed AC1018 3DSOLID SAT-v1 carrier was available");
+
+    dx_data projection;
+    projection.sourceVersion = DRW::AC1018;
+    projection.sourceFormat = dx_source_format::DWG;
+    // Copy only the DRW_Block metadata. dx_ifaceBlock's implicit assignment
+    // also copies its owned `ent` pointers, which would duplicate source
+    // entities here and double-delete them when the projection is destroyed.
+    static_cast<DRW_Block&>(*projection.mBlock)
+        = static_cast<const DRW_Block&>(*selectedBlock);
+    projection.layers = source.layers;
+    projection.appIds = source.appIds;
+    projection.blockRecords = source.blockRecords;
+    try {
+        auto projectedSolid = std::make_unique<DRW_ModelerGeometry>(*selected);
+        projection.mBlock->ent.push_back(projectedSolid.get());
+        projectedSolid.release();
+    } catch (...) {
+        return fail("could not copy the selected modeler record");
+    }
+
+    const auto directory = std::filesystem::temp_directory_path()
+        / "libdxfrw-ac1018-sat-v1-physical-projection";
+    std::error_code error;
+    std::filesystem::create_directories(directory, error);
+    if (error) return fail("could not create scratch output directory");
+    dx_iface exporter;
+    unsigned readbacks = 0u;
+    std::uint32_t readbackHandle = 0u;
+    for (const bool binary : {false, true}) {
+        const auto output = directory / (binary ? "solid-binary.dxf"
+                                                 : "solid-ascii.dxf");
+        if (!exporter.fileExport(output.string(), DRW::AC1018, binary,
+                                 &projection, false, false))
+            return fail("selected same-version ASCII/Binary output was refused");
+        dx_data readback;
+        dx_iface reader;
+        if (!reader.fileImport(output.string(), &readback, false))
+            return fail("fresh DXF readback failed");
+        const DRW_ModelerGeometry* actual = nullptr;
+        for (const DRW_Entity* entity : readback.mBlock->ent) {
+            const auto* modeler = dynamic_cast<const DRW_ModelerGeometry*>(entity);
+            if (modeler != nullptr && modeler->eType == DRW::E3DSOLID) {
+                if (actual != nullptr)
+                    return fail("readback contains multiple 3DSOLID records");
+                actual = modeler;
+            }
+        }
+        if (actual == nullptr || actual->m_dxfPayloadChunks.empty()
+            || actual->m_rawBytes.empty())
+            return fail("readback did not retain the selected ACIS text chunks");
+        if (actual->handle == 0u || actual->layer != selected->layer
+            || actual->extData.size() != selected->extData.size()) {
+            return fail("readback changed the selected handle, layer, or EED field count");
+        }
+        if (readbackHandle != 0u && readbackHandle != actual->handle)
+            return fail("ASCII and Binary outputs assigned different solid identities");
+        readbackHandle = actual->handle;
+        for (std::size_t i = 0u; i < selected->extData.size(); ++i) {
+            const auto& expectedEed = selected->extData[i];
+            const auto& actualEed = actual->extData[i];
+            if (!expectedEed || !actualEed
+                || actualEed->code() != expectedEed->code()
+                || actualEed->type() != expectedEed->type())
+                return fail("readback changed the selected EED field shape");
+            if (expectedEed->type() == DRW_Variant::STRING
+                && (!expectedEed->c_str() || !actualEed->c_str()
+                    || std::string_view(expectedEed->c_str())
+                        != std::string_view(actualEed->c_str())))
+                return fail("readback changed a selected EED string dependency");
+        }
+        std::string expected;
+        const std::string_view sat(
+            reinterpret_cast<const char*>(selected->m_dwgAcisPayload.data()),
+            selected->m_dwgAcisPayload.size());
+        std::size_t lineStart = 0u;
+        while (lineStart < sat.size()) {
+            std::size_t lineEnd = sat.find('\n', lineStart);
+            if (lineEnd == std::string_view::npos) lineEnd = sat.size();
+            std::size_t contentEnd = lineEnd;
+            if (contentEnd > lineStart && sat[contentEnd - 1u] == '\r')
+                --contentEnd;
+            if (contentEnd > lineStart) {
+                if (!expected.empty()) expected.push_back('\n');
+                expected.append(sat.data() + lineStart, contentEnd - lineStart);
+            }
+            if (lineEnd == sat.size()) break;
+            lineStart = lineEnd + 1u;
+        }
+        if (!expected.empty()) expected.push_back('\n');
+        std::vector<std::uint8_t> decoded = actual->m_rawBytes;
+        for (std::uint8_t& byte : decoded) {
+            const auto value = byte;
+            if (value > 0x20u)
+                byte = static_cast<std::uint8_t>(0x9Fu - value);
+        }
+        const auto differs = std::mismatch(decoded.begin(), decoded.end(),
+            expected.begin(), expected.end(),
+            [](std::uint8_t actualByte, char expectedByte) {
+                return actualByte == static_cast<std::uint8_t>(expectedByte);
+            });
+        if (decoded.size() != expected.size() || differs.first != decoded.end()) {
+            std::cerr << "SAT payload sizes: expected=" << expected.size()
+                      << " decoded=" << decoded.size();
+            if (differs.first != decoded.end())
+                std::cerr << " first-difference="
+                          << std::distance(decoded.begin(), differs.first)
+                          << " expected-byte="
+                          << static_cast<unsigned>(static_cast<std::uint8_t>(*differs.second))
+                          << " decoded-byte=" << static_cast<unsigned>(*differs.first);
+            std::cerr << '\n';
+            return fail("readback SAT text differs from the selected DWG payload");
+        }
+        ++readbacks;
+    }
+    std::cout << "AC1018 physical SAT-v1 projection: source handle 0x"
+              << std::hex << selected->handle << " -> 0x" << readbackHandle
+              << std::dec << ", "
+              << readbacks << " ASCII/Binary readbacks\n";
+    return true;
+}
+
 int main(int argc, char** argv) {
+    if (argc == 3
+        && std::string(argv[1]) == "--modeler-ac1018-physical-sat-v1-projection")
+        return physicalAc1018SatV1Projection(argv[2]) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--table-scalar-override-output")
         return tableScalarOverrideOutput(false)

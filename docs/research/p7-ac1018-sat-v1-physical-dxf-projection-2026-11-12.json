@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "date": "2026-11-12",
+  "title": "Selected physical AC1018 SAT-v1 source to same-version DXF projection",
+  "scope": "Project one bounded physical AC1018 3DSOLID SAT-v1 carrier through same-version ASCII and Binary DXF, then prove exact decoded SAT text and selected entity metadata on fresh import.",
+  "source": {
+    "receipt": "p7-ac1018-sat-v1-bounded-extraction-2026-11-11.json",
+    "local_path": "/private/tmp/p7-trattocad-pulley.dwg",
+    "sha256": "6002b39780e7c1c3980c885f319c1b03721aa8ae216ca3c16d3a619ebaa11ad6",
+    "dwg_version": "AC1018",
+    "producer_provenance": "unverified; the publisher advertises a 3D pulley DWG sample"
+  },
+  "selected_record": {
+    "source_handle": "0x27",
+    "entity": "3DSOLID",
+    "dwg_type": 38,
+    "modeler_version": 1,
+    "decoded_sat_bytes": 14581,
+    "layer": "3D-STAFFA",
+    "eed_fields": 0,
+    "projection_scope": "Selected solid only, with source symbol tables and block-record metadata; unrelated entities, layouts, and graph members are excluded."
+  },
+  "implementation": {
+    "file": "tests/dwg2dxf_adapter_tests.cpp",
+    "selector": "--modeler-ac1018-physical-sat-v1-projection <source.dwg>",
+    "behavior": "The selector imports the physical DWG, isolates source handle 0x27, writes same-version AC1018 ASCII and Binary DXF, freshly imports each output, reverses the SAT-v1 text transform, and compares the normalized payload byte-for-byte. It also checks unique 3DSOLID readback, consistent nonzero output identity, layer preservation, EED field shape, and ownership-safe block projection construction."
+  },
+  "validation": {
+    "build": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j4",
+    "build_result": "passed with -Werror",
+    "focused_run": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --modeler-ac1018-physical-sat-v1-projection /private/tmp/p7-trattocad-pulley.dwg",
+    "focused_result": "PASS; source handle 0x27 maps to output handle 0x40; ASCII and Binary fresh-import SAT payloads both exactly match the normalized 14,581-byte source payload",
+    "ascii_output_sha256": "40e1556e59f54dca54f6f1a4d5855d327ee903f812d4b40f79c886085cc61654",
+    "binary_output_sha256": "0229e1d668be3eb46373b7c47b439e6a64801a56c1a1d33cf8f94c9d8686f186",
+    "git_diff_check": "passed"
+  },
+  "nonclaims": [
+    "The source producer is not independently authenticated.",
+    "This source contains no EED fields on the selected solid, so it provides no EED APPID or layer-reference dependency evidence.",
+    "The projection is selected-record transport evidence; it does not prove SAT topology, geometry semantics, native CAD acceptance, producer breadth, or whole-document closure.",
+    "The other six SAT-v1 records and the remaining 18 opaque records in the source are not included in this projection.",
+    "No DWG or DXF fixture was added to the repository."
+  ]
+}
