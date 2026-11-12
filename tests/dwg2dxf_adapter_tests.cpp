@@ -88869,13 +88869,18 @@ static bool physicalAc1018SatV1Projection(const std::string& sourcePath,
     projection.layers = source.layers;
     projection.appIds = source.appIds;
     projection.blockRecords = source.blockRecords;
+    DRW_ModelerGeometry* projectedModeler = nullptr;
     try {
         auto projectedSolid = std::make_unique<DRW_ModelerGeometry>(*selected);
+        projectedModeler = projectedSolid.get();
         projection.mBlock->ent.push_back(projectedSolid.get());
         projectedSolid.release();
     } catch (...) {
         return fail("could not copy the selected modeler record");
     }
+    if (projectedModeler == nullptr
+        || projectedModeler->m_payloadRanges.empty())
+        return fail("selected modeler payload range is unavailable");
 
     const auto directory = std::filesystem::temp_directory_path()
         / "libdxfrw-ac1018-sat-v1-physical-projection";
@@ -88888,9 +88893,25 @@ static bool physicalAc1018SatV1Projection(const std::string& sourcePath,
     for (const bool binary : {false, true}) {
         const auto output = directory / (binary ? "solid-binary.dxf"
                                                  : "solid-ascii.dxf");
+        {
+            std::ofstream prior(output, std::ios::binary);
+            prior << "prior destination";
+            if (!prior) return fail("could not seed the output destination");
+        }
+        DRW_ModelerPayloadRange& range =
+            projectedModeler->m_payloadRanges.front();
+        const std::size_t originalDeclaredByteSize = range.m_declaredByteSize;
+        ++range.m_declaredByteSize;
+        const bool rejected = !exporter.fileExport(
+            output.string(), DRW::AC1018, binary, &projection, false, false);
+        range.m_declaredByteSize = originalDeclaredByteSize;
+        std::ifstream prior(output, std::ios::binary);
+        const std::string priorBytes((std::istreambuf_iterator<char>(prior)), {});
+        if (!rejected || priorBytes != "prior destination")
+            return fail("invalid physical SAT range changed the destination");
         if (!exporter.fileExport(output.string(), DRW::AC1018, binary,
                                  &projection, false, false))
-            return fail("selected same-version ASCII/Binary output was refused");
+            return fail("corrected physical SAT range retry was refused");
         dx_data readback;
         dx_iface reader;
         if (!reader.fileImport(output.string(), &readback, false))

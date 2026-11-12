@@ -1718,12 +1718,18 @@
     "inventorySelector": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --modeler-ac1018-physical-sat-v1-inventory /private/tmp/trattocad-sample-3d-house.dwg",
     "inventoryResult": "PASS: 48 unique typed AC1018 3DSOLID SAT-v1 carriers, handles 0x2a\u20130x59, 227591 total SAT bytes.",
     "projectionSelector": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --modeler-ac1018-physical-sat-v1-projection <source.dwg> <source-handle>",
-    "projectionResult": "PASS: all 48 exact handles independently pass same-version ASCII/Binary projection, fresh readback, byte-exact normalized SAT comparison, remapped handle consistency, and layer/EED checks.",
+    "projectionResult": "PASS: all 48 exact handles pass same-version ASCII/Binary projection, fresh readback, byte-exact normalized SAT comparison, remapped handle consistency, and layer/EED checks. For each encoding and handle, a deliberately incorrect declared-size field is refused while preserving a seeded destination; correcting the field and retrying through the same adapter succeeds.",
     "kernelCommand": "For each extracted /private/tmp/trattocad-house-<handle>.sat, set LIBDXFRW_SAT_PATH and run cargo test -q --manifest-path /private/tmp/opencadstudio-p7/Cargo.toml -p ocs_acis --test libdxfrw_ac1018_sat1_probe -- --nocapture with CARGO_TARGET_DIR=/private/tmp/opencad-p7-target.",
     "kernelResult": "PASS: 48/48 SAT 4.0 payloads parsed and lifted to one body each; zero surface/curve/reference loss and zero OpenCADKernel validation flaws.",
     "artifacts": "DWG, extracted SAT payloads and DXFs remain under /private/tmp and the system temp directory. No DWG/DXF/SAT fixture was added to libdxfrw.",
     "pairedDxfResult": "PASS: the official paired AC1018 DXF contains exactly matching normalized SAT-v1 payloads for all 48 selected source handles; both files and all extracted payloads remain in /private/tmp.",
-    "geometryResult": "PASS: all 48 lifted bodies have finite kernel bounds and kernel mass properties; conservative AABBs, adaptive mesh-integrated volumes/centroids, and fixed-tolerance tessellated areas are recorded. Handle 0x2d spans exactly 10000 x 8000 mm in X/Y, matching the publisher stated 10 x 8 m dimensions and the paired DXF $INSUNITS=4 declaration. All metrics remain uncorroborated except this bounded dimensional agreement."
+    "geometryResult": "PASS: all 48 lifted bodies have finite kernel bounds and kernel mass properties; conservative AABBs, adaptive mesh-integrated volumes/centroids, and fixed-tolerance tessellated areas are recorded. Handle 0x2d spans exactly 10000 x 8000 mm in X/Y, matching the publisher stated 10 x 8 m dimensions and the paired DXF $INSUNITS=4 declaration. All metrics remain uncorroborated except this bounded dimensional agreement.",
+    "transactionControl": {
+      "fault": "Increment the first selected SAT payload range declaredByteSize without changing payload bytes.",
+      "expected": "Writer refuses; pre-existing destination remains byte-identical.",
+      "retry": "Restore the original range and call fileExport again on the same dx_iface adapter; same-version export and fresh readback pass.",
+      "coverage": "48 source handles \u00d7 ASCII/Binary = 96 injected refusal and same-adapter retry pairs."
+    }
   },
   "limitations": [
     "This is a second source-distinct AC1018 drawing from the same public publisher as the pulley sample, not an independently authenticated second producer/toolchain.",
@@ -1733,7 +1739,7 @@
     "The paired DWG and DXF are both published by TrattoCAD and do not constitute independent producer implementations or native semantic validation.",
     "The 10 m \u00d7 8 m comparison uses the publisher description and its own paired DXF unit declaration; per-body mass properties and mesh areas are independent kernel calculations but do not yet have external per-object expected values or native source measurements."
   ],
-  "claimEffect": "Adds exact cross-format SAT identity, independent topology/kernel lifting for 48 carriers, and one bounded X/Y dimension agreement with the publisher description. It does not qualify an independent producer, exact per-body mass/area semantics, native 3D acceptance, whole-document closure, or general DWG/DXF/ACIS support.",
+  "claimEffect": "Adds selected source-distinct AC1018 SAT-v1 transport, per-carrier rollback/retry, independent parser/kernel lift for 48 carriers, and one bounded X/Y dimension agreement with the publisher description. It does not qualify an independent producer, exact per-body mass/area semantics, native 3D acceptance, whole-document closure, or general DWG/DXF/ACIS support.",
   "pairedDxfBinding": {
     "dxfUrl": "https://trattocad.com/samples/trattocad-sample-3d-house.dxf",
     "dxfPath": "/private/tmp/trattocad-sample-3d-house.dxf",

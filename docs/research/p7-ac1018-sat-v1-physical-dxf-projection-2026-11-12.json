@@ -11,13 +11,62 @@
     "producer_provenance": "unverified; the publisher advertises a 3D pulley DWG sample"
   },
   "selected_records": [
-    {"source_handle": "0x27", "entity": "3DSOLID", "dwg_type": 38, "modeler_version": 1, "decoded_sat_bytes": 14581, "output_handle": "0x40"},
-    {"source_handle": "0x28", "entity": "3DSOLID", "dwg_type": 38, "modeler_version": 1, "decoded_sat_bytes": 1289, "output_handle": "0x40"},
-    {"source_handle": "0x29", "entity": "3DSOLID", "dwg_type": 38, "modeler_version": 1, "decoded_sat_bytes": 9986, "output_handle": "0x40"},
-    {"source_handle": "0x2a", "entity": "3DSOLID", "dwg_type": 38, "modeler_version": 1, "decoded_sat_bytes": 2417, "output_handle": "0x40"},
-    {"source_handle": "0x2b", "entity": "3DSOLID", "dwg_type": 38, "modeler_version": 1, "decoded_sat_bytes": 2430, "output_handle": "0x40"},
-    {"source_handle": "0x2c", "entity": "3DSOLID", "dwg_type": 38, "modeler_version": 1, "decoded_sat_bytes": 233110, "output_handle": "0x40"},
-    {"source_handle": "0x2d", "entity": "3DSOLID", "dwg_type": 38, "modeler_version": 1, "decoded_sat_bytes": 234503, "output_handle": "0x40"}
+    {
+      "source_handle": "0x27",
+      "entity": "3DSOLID",
+      "dwg_type": 38,
+      "modeler_version": 1,
+      "decoded_sat_bytes": 14581,
+      "output_handle": "0x40"
+    },
+    {
+      "source_handle": "0x28",
+      "entity": "3DSOLID",
+      "dwg_type": 38,
+      "modeler_version": 1,
+      "decoded_sat_bytes": 1289,
+      "output_handle": "0x40"
+    },
+    {
+      "source_handle": "0x29",
+      "entity": "3DSOLID",
+      "dwg_type": 38,
+      "modeler_version": 1,
+      "decoded_sat_bytes": 9986,
+      "output_handle": "0x40"
+    },
+    {
+      "source_handle": "0x2a",
+      "entity": "3DSOLID",
+      "dwg_type": 38,
+      "modeler_version": 1,
+      "decoded_sat_bytes": 2417,
+      "output_handle": "0x40"
+    },
+    {
+      "source_handle": "0x2b",
+      "entity": "3DSOLID",
+      "dwg_type": 38,
+      "modeler_version": 1,
+      "decoded_sat_bytes": 2430,
+      "output_handle": "0x40"
+    },
+    {
+      "source_handle": "0x2c",
+      "entity": "3DSOLID",
+      "dwg_type": 38,
+      "modeler_version": 1,
+      "decoded_sat_bytes": 233110,
+      "output_handle": "0x40"
+    },
+    {
+      "source_handle": "0x2d",
+      "entity": "3DSOLID",
+      "dwg_type": 38,
+      "modeler_version": 1,
+      "decoded_sat_bytes": 234503,
+      "output_handle": "0x40"
+    }
   ],
   "projection_scope": "Each selected solid is exported alone with source symbol tables and block-record metadata; unrelated entities, layouts, and graph members are excluded.",
   "implementation": {
@@ -29,13 +78,14 @@
     "build": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j4",
     "build_result": "passed with -Werror",
     "focused_run": "for h in 0x27 0x28 0x29 0x2a 0x2b 0x2c 0x2d; do build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --modeler-ac1018-physical-sat-v1-projection /private/tmp/p7-trattocad-pulley.dwg $h; done",
-    "focused_result": "PASS for all seven source handles 0x27–0x2d; each maps to output handle 0x40 and both ASCII/Binary fresh-import SAT payloads exactly match its normalized source payload (sizes 1,289–234,503 bytes)",
+    "focused_result": "PASS for all seven source handles 0x27\u20130x2d; each maps to output handle 0x40 and both ASCII/Binary fresh-import SAT payloads exactly match its normalized source payload (sizes 1,289\u2013234,503 bytes)",
     "asan_build": "cmake --build build-asan-custom --target libdxfrw_dwg2dxf_adapter_tests -j4",
     "asan_run": "for h in 0x27 0x28 0x29 0x2a 0x2b 0x2c 0x2d; do ASAN_OPTIONS=halt_on_error=1 build-asan-custom/tests/libdxfrw_dwg2dxf_adapter_tests --modeler-ac1018-physical-sat-v1-projection /private/tmp/p7-trattocad-pulley.dwg $h; done",
     "asan_result": "PASS for all seven source handles; address sanitizer reported no errors. LeakSanitizer is unsupported by this platform's runtime, so detect_leaks was not enabled.",
     "last_ascii_output_sha256_handle_0x2d": "9bc70c57104f5f126ed5158288c862d582be9e2f6492ed8e8795bfd3dcf06529",
     "last_binary_output_sha256_handle_0x2d": "21512834e27f7ac8652601d8f5043d03c5560cb423337c414b6d1389f96cd883",
-    "git_diff_check": "passed"
+    "git_diff_check": "passed",
+    "transaction_result": "PASS: for all seven handles and both output encodings, incrementing the selected SAT range declaredByteSize is refused without changing the seeded destination; restoring the field and retrying with the same dx_iface exporter succeeds before exact readback."
   },
   "nonclaims": [
     "The source producer is not independently authenticated.",
