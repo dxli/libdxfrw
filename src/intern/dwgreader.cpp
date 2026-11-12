@@ -14935,8 +14935,8 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                    || version == DRW::AC1032)
                   && rn == "ACDBPERSSUBENTMANAGER"
                   && cit->second->className == "AcDbPersSubentManager";
-              const bool ac1027OsnapActionParamRawOnlyProfile =
-                  version == DRW::AC1027
+              const bool osnapActionParamRawOnlyProfile =
+                  (version == DRW::AC1027 || version == DRW::AC1032)
                   && rn == "ACDBASSOCOSNAPPOINTREFACTIONPARAM"
                   && cit->second->className
                       == "AcDbAssocOsnapPointRefActionParam";
@@ -14977,7 +14977,7 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                         version, &persistentManagerShellProbe, bs)
                     && persistentManagerShellProbe.isGood();
                 const bool osnapActionParamShellValid =
-                    ac1027OsnapActionParamRawOnlyProfile
+                    osnapActionParamRawOnlyProfile
                     && RawObjectShell().parseDwg(
                         version, &persistentManagerShellProbe, bs)
                     && persistentManagerShellProbe.isGood();

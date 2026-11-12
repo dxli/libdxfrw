@@ -43,6 +43,6 @@
   "artifact_sha256": {
     "tests/sortents_objects_allocation_tests.cpp": "c151105a00fcfec5100737f97b783108a3c5ad502c14072b527e102ca99b0cdb",
     "tests/CMakeLists.txt": "f76f52c2cd2100890e78f7a88f91b0e6b53f2c07d753b6a191dbb2ffd8db878a",
-    "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "6f50bfdea2b5ede2daf593dff82d83e06668ecd356c4797bd849e78b7481c47e"
+    "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "b698aeae679d2eb4ae029bf23b900a01959be6674e4cab9b957da3cd12d81e1a"
   }
 }

@@ -16763,6 +16763,94 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
         }
     }
 
+    Options ac1032RawOsnap = ac1027RawOsnap;
+    ac1032RawOsnap.version = DRW::AC1032;
+    Options ac1032RawOsnapNext = ac1032RawOsnap;
+    ac1032RawOsnapNext.handle = 0xD64u;
+    Frame ac1032RawOsnapObject, ac1032RawOsnapNextObject;
+    std::vector<std::uint8_t> ac1032RawOsnapFrame;
+    std::vector<std::uint8_t> ac1032RawOsnapNextFrame;
+    const bool ac1032RawOsnapBuilt =
+        makeFrame(ac1032RawOsnap, ac1032RawOsnapObject)
+        && wrapFrame(ac1032RawOsnap, ac1032RawOsnapObject,
+                     ac1032RawOsnapFrame)
+        && makeFrame(ac1032RawOsnapNext, ac1032RawOsnapNextObject)
+        && wrapFrame(ac1032RawOsnapNext, ac1032RawOsnapNextObject,
+                     ac1032RawOsnapNextFrame);
+    t.expect(ac1032RawOsnapBuilt,
+             "AC1032 osnap action-parameter raw-only shell control is generated in memory");
+    if (ac1032RawOsnapBuilt) {
+        const auto nextOffset = static_cast<std::uint32_t>(
+            ac1032RawOsnapFrame.size());
+        std::vector<std::uint8_t> bytes = ac1032RawOsnapFrame;
+        bytes.insert(bytes.end(), ac1032RawOsnapNextFrame.begin(),
+                     ac1032RawOsnapNextFrame.end());
+        PersistentManagerDispatchReader reader(bytes, DRW::AC1032, 601u);
+        reader.addClass(ac1032RawOsnap.classNumber,
+            "ACDBASSOCOSNAPPOINTREFACTIONPARAM",
+            "AcDbAssocOsnapPointRefActionParam");
+        PersistentManagerDispatchSink sink;
+        const bool read = reader.readObjects(
+            bytes, ac1032RawOsnap.handle, nextOffset,
+            ac1032RawOsnapNext.handle, sink);
+        const auto rawFirst = std::find_if(
+            sink.raw.begin(), sink.raw.end(),
+            [&ac1032RawOsnap](const DRW_UnsupportedObject& object) {
+                return object.m_handle == ac1032RawOsnap.handle;
+            });
+        const auto rawNext = std::find_if(
+            sink.raw.begin(), sink.raw.end(),
+            [&ac1032RawOsnapNext](const DRW_UnsupportedObject& object) {
+                return object.m_handle == ac1032RawOsnapNext.handle;
+            });
+        const auto firstPublication = std::find_if(
+            sink.publications.begin(), sink.publications.end(),
+            [&ac1032RawOsnap](const DRW_DwgFramePublication& publication) {
+                return publication.m_handle == ac1032RawOsnap.handle;
+            });
+        const auto nextPublication = std::find_if(
+            sink.publications.begin(), sink.publications.end(),
+            [&ac1032RawOsnapNext](
+                const DRW_DwgFramePublication& publication) {
+                return publication.m_handle == ac1032RawOsnapNext.handle;
+            });
+        const bool rawOnlyAc1032Osnap = read
+            && reader.objectFailures() == 0u
+            && sink.typed.empty() && sink.raw.size() == 2u
+            && rawFirst != sink.raw.end()
+            && rawFirst->m_rawBytes == ac1032RawOsnapObject.payload
+            && rawFirst->m_version == DRW::AC1032
+            && rawFirst->m_objectType == ac1032RawOsnap.classNumber
+            && rawFirst->m_recordName
+                == "ACDBASSOCOSNAPPOINTREFACTIONPARAM"
+            && rawFirst->m_className == "AcDbAssocOsnapPointRefActionParam"
+            && !rawFirst->m_typedPayloadValidated
+            && rawFirst->m_commonLinkEvidence
+                == DRW_DwgCommonLinkEvidence::Validated
+            && rawFirst->m_parentHandle == 0xCu
+            && rawFirst->m_reactorHandles
+                == std::vector<std::uint32_t>{0xCu}
+            && rawNext != sink.raw.end()
+            && rawNext->m_rawBytes == ac1032RawOsnapNextObject.payload
+            && firstPublication != sink.publications.end()
+            && firstPublication->m_carrier
+                == DRW_DwgFramePublication::Carrier::Raw
+            && nextPublication != sink.publications.end()
+            && nextPublication->m_carrier
+                == DRW_DwgFramePublication::Carrier::Raw
+            && sink.publications.size() == 2u;
+        t.expect(rawOnlyAc1032Osnap,
+                 "AC1032 osnap action-parameter frames publish raw-only after shell validation and retain the following frame");
+        if (!rawOnlyAc1032Osnap) {
+            std::cerr << "AC1032 osnap action-parameter raw-only recovery: read="
+                      << read << " failures=" << reader.objectFailures()
+                      << " typed=" << sink.typed.size()
+                      << " raw=" << sink.raw.size()
+                      << " publications=" << sink.publications.size()
+                      << '\n';
+        }
+    }
+
     Options ac1027TableContent;
     ac1027TableContent.version = DRW::AC1027;
     ac1027TableContent.classNumber = 700u;

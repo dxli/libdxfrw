@@ -42,6 +42,6 @@
   "artifact_sha256": {
     "tests/mline_style_objects_allocation_tests.cpp": "d6e2480729a37164bbc342ce8f15d5c756fc304590263f0879f7c1b75804b47b",
     "tests/CMakeLists.txt": "f76f52c2cd2100890e78f7a88f91b0e6b53f2c07d753b6a191dbb2ffd8db878a",
-    "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "6f50bfdea2b5ede2daf593dff82d83e06668ecd356c4797bd849e78b7481c47e"
+    "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "b698aeae679d2eb4ae029bf23b900a01959be6674e4cab9b957da3cd12d81e1a"
   }
 }

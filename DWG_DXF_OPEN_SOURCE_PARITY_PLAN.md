@@ -5572,6 +5572,19 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
   temporary directory and deleted; no fixture was added. See the [allocation
   rollback receipt](docs/research/p6-sortents-objects-dxf-allocation-rollback-retry-2026-11-12.json).
 
+- **P6 AC1032 associative osnap action-parameter raw-shell recovery:** the
+  exact `AcDbAssocOsnapPointRefActionParam` source frame now follows the same
+  narrow raw-only recovery already used for AC1027, but only after the
+  independent common OBJECTS shell validates. A generated AC1032 control
+  verifies the full opaque frame, validated common links, zero object parse
+  failures, and following-frame publication. On LibreDWG's existing
+  AC1032 `example_2018.dwg` (frame handle `0x393`), reader totals improve to
+  474/474 published frames and zero entity/object parse failures. The CLI
+  still refuses strict DXF output because the class body remains unvalidated;
+  this is frame recovery only, not typed schema or semantic support. No
+  fixture was added. See the [raw-shell recovery
+  receipt](docs/research/p6-ac1032-osnap-action-parameter-raw-only-shell-recovery-2026-11-12.json).
+
 - **P6 MLINESTYLE DXF OBJECTS writer transaction safety:** a generated
   full-file ASCII/Binary AC1027 sweep now exercises the public
   `writeMLineStyle` path with two parallel elements, built-in BYLAYER/BYBLOCK
