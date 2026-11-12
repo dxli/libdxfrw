@@ -1,0 +1,40 @@
+{
+  "title": "VIEWPORT DWG handle-role validation",
+  "date": "2026-11-11",
+  "scope": "Generated in-memory VIEWPORT parser controls for modeled DWG handle roles; no producer, graph-closure, or support claim.",
+  "authority": {
+    "document": "Open Design Specification for .dwg files, version 5.4.1",
+    "publisher": "Open Design Alliance",
+    "url": "https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf",
+    "sections": {
+      "2.13": "Handle type codes 3, 4, and 5 mean hard ownership, soft pointer, and hard pointer. Relative codes 6, 8, A, and C represent soft-pointer references.",
+      "20.4.38": "VIEWPORT handle-field role and version ordering."
+    }
+  },
+  "implementation": {
+    "file": "src/drw_entities.cpp",
+    "method": "DRW_Viewport::parseDwg",
+    "behavior": [
+      "Validate each parsed VIEWPORT handle against its ODA-defined field role, including version-specific frozen-layer roles.",
+      "Admit relative handle codes only for soft-pointer fields and resolve them against the containing VIEWPORT handle.",
+      "Reject resolved references that exceed the current public 32-bit handle representation.",
+      "Keep parsing transactional: any malformed role invalidates input and resets all partially parsed VIEWPORT state."
+    ]
+  },
+  "generated_controls": [
+    "AC1018 wrong-role frozen-layer, clip-boundary, named-UCS, and base-UCS handles each fail closed.",
+    "Each wrong-role case verifies state reset and corrected-input retry on the same parser instance.",
+    "A relative soft-pointer frozen-layer control verifies resolution against the containing VIEWPORT handle."
+  ],
+  "validation": {
+    "build": "cmake --build build --target libdxfrw_dwg_viewport_angle_units_tests -j4",
+    "focused_ctest": "ctest --test-dir build -R '^libdxfrw_dwg_viewport_angle_units$' --output-on-failure",
+    "focused_ctest_result": "PASS (1/1)",
+    "git_diff_check": "PASS"
+  },
+  "limitations": [
+    "Generated controls do not establish physical producer conformance or target existence/graph closure.",
+    "VIEWPORT group-91 semantics, layer-override activation/rendering, and native consumer behavior remain unresolved.",
+    "No DWG or DXF fixture was added."
+  ]
+}

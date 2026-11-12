@@ -1480,6 +1480,21 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-11)
 
+- **P6 VIEWPORT DWG handle-role validation:** `DRW_Viewport::parseDwg` now
+  validates the ODA §20.4.38 role for each modeled handle field: R13–R14 and
+  R2000 viewport-header links, R2000 frozen layers, R2004+ frozen layers,
+  clipping, named/base UCS, R2007+ background, visual style, shadeplot, and
+  sun. Relative offset codes are admitted only for soft-pointer fields and
+  resolved against the VIEWPORT handle; resolved values outside the public
+  32-bit handle model fail closed. Generated AC1018 controls reject wrong
+  frozen-layer, clip, named-UCS, and base-UCS roles, reset all parsed state,
+  then accept corrected input on the same instance. A relative soft-pointer
+  control verifies base-handle resolution. The focused viewport test passes
+  1/1. This is generated field-role/parser evidence only: it does not establish
+  target existence, graph closure, group-91 semantics, producer coverage, or
+  native override/rendering behavior. No DWG/DXF fixture was added. See the
+  [role-validation receipt](docs/research/p6-viewport-dwg-handle-role-validation-2026-11-11.json).
+
 - **P6 DIMASSOC whole-file allocation rollback:** the generated AC1024 ASCII
   and Binary DXF control now injects failure at all 21 reached allocations
   inside the DIMASSOC record callback. Every failed `dxfRW::write()` preserves

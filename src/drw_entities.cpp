@@ -1593,6 +1593,62 @@ bool isDwgSoftPointerHandleCode(std::uint8_t code) {
         || code == 0x0Au || code == 0x0Cu;
 }
 
+bool isDwgHardPointerHandleCode(std::uint8_t code) {
+    // ODA §2.13: only code 5 is a hard pointer. Relative handle codes
+    // (6, 8, A, C) are soft-pointer references.
+    return code == 0x05u;
+}
+
+bool isDwgHardOwnerHandleCode(std::uint8_t code) {
+    // ODA §2.13: code 3 denotes hard ownership.
+    return code == 0x03u;
+}
+
+enum class DwgHandleReferenceRole {
+    SoftPointer,
+    HardPointer,
+    HardOwner
+};
+
+bool readBoundedDwgHandleWithRole(dwgBuffer& buffer,
+                                  std::uint64_t endBit,
+                                  std::uint32_t baseHandle,
+                                  DwgHandleReferenceRole role,
+                                  dwgHandle& value) {
+    if (!buffer.isGood() || currentDwgBit(&buffer) > endBit)
+        return false;
+
+    dwgBuffer rawProbe = buffer.forkIndependent();
+    const dwgHandle raw = rawProbe.getHandle();
+    if (!rawProbe.isGood() || currentDwgBit(&rawProbe) > endBit)
+        return false;
+
+    // Null references use code zero regardless of the field's non-null role.
+    const bool validRole = raw.ref64 == 0
+        ? raw.code == 0
+        : role == DwgHandleReferenceRole::SoftPointer
+            ? isDwgSoftPointerHandleCode(raw.code)
+            : role == DwgHandleReferenceRole::HardPointer
+                ? isDwgHardPointerHandleCode(raw.code)
+                : isDwgHardOwnerHandleCode(raw.code);
+    if (!validRole)
+        return false;
+
+    // ODA §2.13 relative handle encodings are soft pointers. Resolve them
+    // against the owning object while retaining the encoded role check above.
+    const bool resolveOffset =
+        role == DwgHandleReferenceRole::SoftPointer;
+    dwgBuffer resolvedProbe = buffer.forkIndependent();
+    dwgHandle resolved;
+    if (!readBoundedDwgHandle(resolvedProbe, endBit, baseHandle,
+                              resolveOffset, resolved)
+        || resolved.ref64 > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    buffer = resolvedProbe;
+    value = resolved;
+    return true;
+}
+
 bool readBoundedDwgSoftPointer(dwgBuffer& buffer, std::uint64_t endBit,
                                std::uint32_t baseHandle,
                                std::uint32_t& reference) {
@@ -33621,44 +33677,61 @@ bool DRW_Viewport::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
         return fail();
 
     dwgBuffer handleProbe = buf->forkIndependent();
-    auto readHandleRef = [&handleProbe, handleEndBit](std::uint32_t& target) {
+    auto readHandleRef = [&handleProbe, handleEndBit, this](
+                             std::uint32_t& target,
+                             DwgHandleReferenceRole role) {
         dwgHandle parsed;
-        if (!readBoundedDwgHandle(handleProbe, handleEndBit, 0, false,
-                                  parsed)) {
+        if (!readBoundedDwgHandleWithRole(handleProbe, handleEndBit, handle,
+                                          role, parsed)) {
             return false;
         }
         target = parsed.ref;
         return true;
     };
     if (version < DRW::AC1015) {//R13 & R14 only
-        if (!readHandleRef(vpHeaderHandle))
+        if (!readHandleRef(vpHeaderHandle,
+                           DwgHandleReferenceRole::HardPointer))
             return fail();
     }
     if (version > DRW::AC1014) {//2000+
         if (!DRW::reserve(frozenLayerHandles, static_cast<int>(frozenLyCount)))
             return fail();
+        const DwgHandleReferenceRole frozenLayerRole =
+            version == DRW::AC1015
+                ? DwgHandleReferenceRole::HardPointer
+                : DwgHandleReferenceRole::SoftPointer;
         for (std::uint32_t i = 0; i < frozenLyCount; ++i) {
             std::uint32_t ref = 0;
-            if (!readHandleRef(ref))
+            if (!readHandleRef(ref, frozenLayerRole))
                 return fail();
             frozenLayerHandles.push_back(ref);
         }
-        if (!readHandleRef(clipBoundaryHandle))
+        if (!readHandleRef(clipBoundaryHandle,
+                           DwgHandleReferenceRole::SoftPointer))
             return fail();
         if (version == DRW::AC1015) {//2000 only
-            if (!readHandleRef(vpHeaderHandle))
+            if (!readHandleRef(vpHeaderHandle,
+                               DwgHandleReferenceRole::HardPointer))
                 return fail();
         }
-        if (!readHandleRef(namedUcsHandle) || !readHandleRef(baseUcsHandle))
+        if (!readHandleRef(namedUcsHandle,
+                           DwgHandleReferenceRole::HardPointer)
+            || !readHandleRef(baseUcsHandle,
+                              DwgHandleReferenceRole::HardPointer))
             return fail();
     }
     if (version > DRW::AC1018) {//2007+
-        if (!readHandleRef(backgroundHandle)
-            || !readHandleRef(visualStyleHandle)
-            || !readHandleRef(shadePlotHandle))
+        if (!readHandleRef(backgroundHandle,
+                           DwgHandleReferenceRole::SoftPointer)
+            || !readHandleRef(visualStyleHandle,
+                              DwgHandleReferenceRole::HardPointer)
+            || !readHandleRef(shadePlotHandle,
+                              DwgHandleReferenceRole::SoftPointer))
             return fail();
     }
-    if (version > DRW::AC1018 && !readHandleRef(m_sunHandle))
+    if (version > DRW::AC1018
+        && !readHandleRef(m_sunHandle,
+                          DwgHandleReferenceRole::HardOwner))
         return fail();
     if (!handleProbe.isGood() || !sBuf->isGood())
         return fail();
