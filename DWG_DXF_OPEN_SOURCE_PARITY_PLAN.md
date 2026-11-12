@@ -142,10 +142,14 @@ ACDBASSOCCONSTRAINTGROUP. Strict output stops on an unrelated AcDb:Header
 envelope discrepancy and the unqualified VISUALSTYLE carrier. These simple
 point controls therefore do not establish the R2010 version-2 constraint-group
 layout. Autodesk's [AutoCAD LT sample catalog](https://www.autodesk.com/support/technical/article/caas/tsarticles/ts/01em4r6LLJgnQQVBlk5GqD.html)
-lists `air_suspension.dwg` and says its collection applies to LT 2010 and later,
-but gives no per-file saved version or constraint inventory; it remains the
-next candidate to acquire and inspect. No sample was added to the repository
-and no support claim changes. See the
+lists `air_suspension.dwg`, but a same-name, same-listed-size QCAD forum
+attachment copy has header AC1021 and unverified provenance, so it is excluded
+as an AC1024 witness. A mirrored AutoCAD 2010 parametric tutorial identifies
+`PD_Deck1.dwg` through `PD_Deck4.dwg` and `PD_Areas.dwg` as constrained samples
+from Autodesk's `parametric_drawing.zip`; the archive was not recovered. The
+public `gasket1.dwg` candidate link also returned HTML/403 instead of DWG bytes.
+The tutorial archive is the next concrete sample lead. No sample was added to
+the repository and no support claim changes. See the
 [sample-screen receipt](docs/research/p4-ac1024-public-sample-screen-2026-11-11.json).
 
 **P5 AC1021 FIELD candidate current-reader recheck (2026-11-11):** the rebuilt
