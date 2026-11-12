@@ -6899,11 +6899,12 @@ Steps:
    tags, normals, face indices/edge flags, transforms, and opaque-carrier
    identity separately. Exercise generated ASCII and binary DXF vectors from
    S5/S6, including nonzero Z, OCS normals, nested INSERT/MINSERT transforms,
-   polyface/MESH topology, spline/surface parameters, and SAT/SAB/ACDSDATA
-   carrier distinctions. Assert the consumer sees native values before any
-   projection; for overlapping vectors, pair this with the S8.2a legacy-mode
-   assertion. Keep the probe independent of DWG so DXF work continues while a
-   DWG dependency is blocked; runtime-generated fixtures only.
+   polyface/MESH topology, spline/HELIX/surface parameters, and
+   SAT/SAB/ACDSDATA carrier distinctions. Assert the consumer sees native
+   values before any projection; for overlapping vectors, pair this with the
+   S8.2a legacy-mode assertion. Keep the probe independent of DWG so DXF work
+   continues while a DWG dependency is blocked; runtime-generated fixtures
+   only.
    **S8.3.1 — Typed ELLIPSE consumer fields.** Serialize center, WCS
    major-axis vector, ratio, start/end parameters, and extrusion normal in the
    neutral semantic record. The fast probe writes default-plane full and
@@ -6912,6 +6913,14 @@ Steps:
    and curve parameters distinct from the extrusion normal; this proves
    callback data delivery and the established 2D-mode invariant only, not
    FreeCAD shape construction or DWG-version support.
+   **S8.3.2 — Typed HELIX consumer fields.** Write a locally authored rational
+   3D HELIX through generated ASCII and binary DXF, then assert its SPLINE
+   degree/flags, knot and weight samples, control-point XYZ, AcDbHelix version,
+   axis/base/start points, radius, turns, turn height, handedness, and
+   constraint type through both `ext=false` and `ext=true` callbacks. This
+   verifies callback delivery and that the legacy 2D extrusion mode does not
+   rewrite HELIX's WCS/control/trailer data; it does not qualify independent
+   interoperability, DWG layout, or downstream HELIX construction.
 5. **S8.4a — Sample-backed DWG consumer comparison (AC1024 INSERT/SPLINE).**
    The locally available `tests/samples/AC1024/visualization_-_conference_room.dwg`
    completes both the libdxfrw read and LibreDWG 0.14 `dwgread -O minJSON`

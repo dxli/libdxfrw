@@ -1577,6 +1577,14 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-12)
 
+- **P8/S8.3.2 generated HELIX consumer fields:** the headless 3D consumer
+  probe now emits a locally authored rational HELIX and checks selected spline
+  body and AcDbHelix trailer values in generated AC1027 ASCII and Binary DXF,
+  both with `ext=false` and legacy `ext=true`. The owning focused CTest passes
+  1/1. This closes only the local callback-delivery gap; independent DXF
+  interoperability, DWG HELIX layout, native construction and support claims
+  remain open ([receipt](docs/research/p8-3d-consumer-helix-fields-2026-11-12.json)).
+
 - **P6 generated IMAGEDEF hard-owner reader profile:** the shared OBJECTS
   prologue preflight and typed `DRW_ImageDef` parser now explicitly accept the
   ODA §20.4.81 hard-owner parent code-3 emitted by this writer. Generated

@@ -2401,6 +2401,28 @@ void SemanticSink::writeEntities() {
             std::make_shared<DRW_Coord>(46.0, 47.0, 48.0)};
         wrote = dxfWriter_->writeSpline(&spline) && wrote;
 
+        DRW_Helix helix;
+        helix.layer = "probe_helix";
+        helix.degree = 2;
+        helix.flags = 4;
+        helix.knotslist = {0.0, 0.0, 0.0, 1.0, 1.0, 1.0};
+        helix.weightlist = {1.0, 0.75, 1.5};
+        helix.controllist = {
+            std::make_shared<DRW_Coord>(50.0, 51.0, 52.0),
+            std::make_shared<DRW_Coord>(53.0, 54.0, 55.0),
+            std::make_shared<DRW_Coord>(56.0, 57.0, 58.0)};
+        helix.m_majorVersion = 1;
+        helix.m_maintVersion = 2;
+        helix.axisBasePt = DRW_Coord{60.0, 61.0, 62.0};
+        helix.startPt = DRW_Coord{63.0, 64.0, 65.0};
+        helix.axisVector = DRW_Coord{0.0, 0.0, 1.0};
+        helix.radius = 2.5;
+        helix.turns = 3.25;
+        helix.turnHeight = 4.5;
+        helix.handedness = true;
+        helix.constraintType = 2;
+        wrote = dxfWriter_->writeHelix(&helix) && wrote;
+
         DRW_LWPolyline ocsPolyline;
         ocsPolyline.elevation = 5.0;
         ocsPolyline.extPoint = DRW_Coord{0.0, 1.0, 0.0};
@@ -3390,6 +3412,36 @@ bool run3DConsumerProbe(bool binary) {
                    "endParameter", 1.75);
     };
     if (!expectEllipses(consumer) || !expectEllipses(legacyConsumer))
+        return false;
+
+    const auto expectHelix = [&](const SemanticSink& sink) {
+        const std::string layer = "probe_helix";
+        return expectEntityField(sink, "HELIX", layer, "degree", "2")
+            && expectEntityField(sink, "HELIX", layer, "flags", "4")
+            && expectEntityField(sink, "HELIX", layer, "knotCount", "6")
+            && expectEntityDouble(sink, "HELIX", layer, "knot.3", 1.0)
+            && expectEntityField(sink, "HELIX", layer, "weightCount", "3")
+            && expectEntityDouble(sink, "HELIX", layer, "weight.1", 0.75)
+            && expectEntityField(sink, "HELIX", layer,
+                                 "controlPoint.2.position",
+                                 "{\"x\":56,\"y\":57,\"z\":58}")
+            && expectEntityField(sink, "HELIX", layer,
+                                 "helixMajorVersion", "1")
+            && expectEntityField(sink, "HELIX", layer,
+                                 "helixMaintenanceVersion", "2")
+            && expectEntityField(sink, "HELIX", layer, "axisBasePoint",
+                                 "{\"x\":60,\"y\":61,\"z\":62}")
+            && expectEntityField(sink, "HELIX", layer, "startPoint",
+                                 "{\"x\":63,\"y\":64,\"z\":65}")
+            && expectEntityField(sink, "HELIX", layer, "axisVector",
+                                 "{\"x\":0,\"y\":0,\"z\":1}")
+            && expectEntityDouble(sink, "HELIX", layer, "radius", 2.5)
+            && expectEntityDouble(sink, "HELIX", layer, "turns", 3.25)
+            && expectEntityDouble(sink, "HELIX", layer, "turnHeight", 4.5)
+            && expectEntityField(sink, "HELIX", layer, "handedness", "true")
+            && expectEntityField(sink, "HELIX", layer, "constraintType", "2");
+    };
+    if (!expectHelix(consumer) || !expectHelix(legacyConsumer))
         return false;
 
     const auto expectPolyface = [&](const SemanticSink& sink) {
