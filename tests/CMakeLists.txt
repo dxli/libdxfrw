@@ -4158,6 +4158,16 @@ set_tests_properties(dwg_ellipse_wcs_extrusion PROPERTIES
     LABELS "fast;dwg;ellipse;extrusion" TIMEOUT 30)
 
 add_test(
+    NAME dwg_r2007_polyline3d_closed_flag_roundtrip
+    COMMAND $<TARGET_FILE:libdxfrw_dwg_local_roundtrip>
+            --r2007-polyline3d-footer
+)
+set_tests_properties(dwg_r2007_polyline3d_closed_flag_roundtrip PROPERTIES
+    LABELS "fast;dwg;polyline;AC1021;wire-readback"
+    TIMEOUT 30
+)
+
+add_test(
     NAME dxf_mpolygon_metadata_boundary_roundtrip
     COMMAND $<TARGET_FILE:libdxfrw_dwg_local_roundtrip> --mpolygon-metadata
 )

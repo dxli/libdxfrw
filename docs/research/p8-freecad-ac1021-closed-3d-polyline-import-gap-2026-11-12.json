@@ -39,6 +39,7 @@
   "validation": {
     "focusedCtest": "dwg2dxf_freecad_generated_ac1021_primitives_open and _insert both reach native import, then fail the expected four-edge closed shape assertion (observed 3 edges).",
     "strictPreflight": "Installed converter succeeds and preserves the documented group-70 flags and all four VERTEX records.",
+    "libdxfrwGeneratedWireTest": "dwg_r2007_polyline3d_closed_flag_roundtrip PASS; the generated AC1021 writer emits first 3D POLYLINE flag byte 0 and second byte 1, and the reader restores group-70 flags 9. Truncation refusal and corrected-buffer retry also pass.",
     "fixturePolicy": "The DWG/DXF were generated and retained only under the system temporary directory."
   },
   "interpretation": "The DXF writer emitted group 70 value 9 (closed bit plus 3D bit), consistent with Autodesk's documented POLYLINE flags. The selected FreeCAD route creates an open three-edge shape for this closed entity. Do not alter correctly emitted group-70 data or promote closed 3D POLYLINE consumer support on this evidence.",

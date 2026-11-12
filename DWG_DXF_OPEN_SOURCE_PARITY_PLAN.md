@@ -8230,7 +8230,11 @@ The emitted header flags match Autodesk's [POLYLINE DXF definition](https://help
 Treat this as a downstream importer gap for this route; do not change correct
 group-70 output or claim closed 3D POLYLINE preservation. Seek consumer-side
 resolution or another eligible native consumer before qualifying this profile.
-See the [closed 3D POLYLINE gap receipt](docs/research/p8-freecad-ac1021-closed-3d-polyline-import-gap-2026-11-12.json).
+The focused libdxfrw AC1021 writer/parser selector now separately verifies that
+closed 3D flag 9 emits the expected second raw flag byte, reads back as 9, and
+survives truncation refusal followed by corrected retry; thus the observed
+closure loss is after conversion, at the tested FreeCAD importer boundary. See
+the [closed 3D POLYLINE gap receipt](docs/research/p8-freecad-ac1021-closed-3d-polyline-import-gap-2026-11-12.json).
 
 **P8 closed classic 2D POLYLINE qualification (2026-11-12):** the same
 scratch-generated AC1021 profile now includes a closed classic 2D `POLYLINE`
