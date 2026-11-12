@@ -1,0 +1,50 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "date": "2026-11-12",
+  "id": "p8-freecad-ac1021-tilted-spline-semantic-mismatch-2026-11-12",
+  "purpose": "Screen whether FreeCAD's native C++ DXF importer preserves a generated tilted planar AC1021 control-point SPLINE through dwg2dxf.",
+  "source": {
+    "provenance": "Generated locally from scratch by a temporary extension to tests/dwg_local_roundtrip_tests.cpp; the DWG was kept under the system temporary directory and is not a repository fixture.",
+    "generatorExecutableSha256": "eff2243b60636cdec4cff5ce3837f43a003ece0f3923bcbc8afde1894482daea",
+    "version": "AC1021",
+    "sha256": "edfc5778a5ea70b7312bffb163e7de3071b4c31c2dd56a4af7edba24aa86221b",
+    "spline": {
+      "degree": 2,
+      "knots": [0, 0, 0, 1, 1, 1],
+      "controlPointsWcs": [[31, 32, 33], [33, 37, 35], [35, 32, 37]],
+      "expectedPlanarNormalWcs": [0.7071067811865476, 0, -0.7071067811865476]
+    }
+  },
+  "converter": {
+    "buildPath": "build-gcc/dwg2dxf/dwg2dxf",
+    "installedPath": "/private/tmp/libdxfrw-freecad-current-install/bin/dwg2dxf",
+    "sha256": "36ccaf73892eba809aed7316272d5e02d1ce2f4b645c4d3057109df391f506f1",
+    "buildAndInstalledBytesMatch": true
+  },
+  "dxf": {
+    "path": "/var/folders/dk/82sygs213tx480lrhplhmmmm0000gp/T/libdxfrw-freecad-installed-line-b291121ee00f with spaces/runtime/strict preflight.dxf",
+    "sha256": "246623f7b6dc7525a0836e9a53f5af66494a5a551fc8709dbce41bc20b5eb4d8",
+    "inspection": "The SPLINE record retains degree 2, six knots, three group-10 WCS control points exactly as authored, and the calculated group-210 plane normal."
+  },
+  "consumer": {
+    "application": "FreeCAD 1.1.4",
+    "revision": "4fd3bf320d9566a27e60069fc8387448aaa3a094",
+    "platform": "macOS 27.2.1 arm64",
+    "route": "LibreDWG-only dwg2dxf conversion followed by FreeCAD Draft C++ DXF importer",
+    "entityCounts": {"SPLINE": 1},
+    "unsupportedFeatures": {},
+    "open": "FAILED_GEOMETRY_ASSERTION",
+    "insert": "FAILED_GEOMETRY_ASSERTION",
+    "observedBoundsWcs": [31, 32, 33, 35, 35.4375, 37],
+    "expectedBoundsWcs": [31, 32, 33, 35, 34.5, 37],
+    "expectedMaximumYDerivation": "For a clamped degree-2 spline with these three poles and knots, y(t)=32+10t(1-t), whose maximum is 34.5 at t=0.5."
+  },
+  "result": "The DWG-to-DXF converter completed and emitted the authored WCS control-point values, but FreeCAD's imported shape bounds disagreed with the exact quadratic curve. This is a consumer semantic mismatch for this generated profile; it does not establish a libdxfrw parser/writer defect or qualify SPLINE support.",
+  "validation": {
+    "experimentalFreecadOpenInsert": "FAIL: both operations imported one SPLINE with no unsupported-feature report, but the imported geometry maximum Y was 35.4375 instead of 34.5.",
+    "restoredPrimitiveProfile": "PASS: existing POINT/LINE/CIRCLE/ARC/ELLIPSE/LWPOLYLINE open and insert selectors passed 2/2 after removing SPLINE from the profile.",
+    "fixturePolicy": "No DWG or DXF fixture was committed."
+  },
+  "nextAction": "Keep tilted SPLINE out of the passing FreeCAD support profile. Resolve the WCS/control-point interpretation with an independent CAD consumer or native producer/consumer witness before deciding whether any libdxfrw change is warranted. Preserve the original six-entity profile meanwhile.",
+  "supportClaimEffect": "None; this receipt records a failing consumer qualification and does not promote or withdraw a general support claim."
+}

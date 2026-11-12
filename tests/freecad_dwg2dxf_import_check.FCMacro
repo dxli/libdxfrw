@@ -189,7 +189,10 @@ def assert_primitive_geometry(document, stats, expected_counts, expected_shapes)
             wanted_bounds, wanted_edges, wanted_vertices, wanted_length) in zip(
             observed, expected):
         if not coordinates_match(actual_bounds, wanted_bounds):
-            raise AssertionError("imported primitive bounds differ from authored values")
+            raise AssertionError(
+                "imported primitive bounds differ from authored values: "
+                "observed %r, expected %r"
+                % (actual_bounds, wanted_bounds))
         if actual_edges != wanted_edges:
             raise AssertionError("imported primitive edge count differs from authored value")
         if actual_vertices != wanted_vertices:

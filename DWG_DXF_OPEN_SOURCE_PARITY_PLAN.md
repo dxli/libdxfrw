@@ -8196,6 +8196,21 @@ hosted Linux/Windows runs, other entity/version profiles, native application
 semantics and broad support claims remain open. See the [primitive
 qualification receipt](docs/research/p8-freecad-ac1021-generated-primitives-open-insert-2026-11-12.json).
 
+**P8 generated tilted-SPLINE consumer screen (2026-11-12):** a temporary,
+from-scratch AC1021 control added a degree-2 planar spline with three WCS
+control points to the same installed-converter/FreeCAD route. `dwg2dxf`
+completed and its DXF retained all three authored group-10 WCS points and the
+calculated plane normal. FreeCAD 1.1.4's C++ importer reported one SPLINE and
+no unsupported features, but the resulting shape's maximum Y was 35.4375;
+the exact clamped quadratic from those control points has maximum Y 34.5.
+Both open and insert therefore fail semantic geometry qualification despite
+successful conversion/import. The six-entity POINT/LINE/CIRCLE/ARC/ELLIPSE/
+LWPOLYLINE profile was restored and passes 2/2. Do not alter libdxfrw output
+from this single consumer observation or count entity acceptance as geometric
+support. Keep tilted SPLINE unqualified until an independent CAD consumer or
+native producer/consumer witness resolves the interpretation. No fixture was
+committed. See the [consumer mismatch receipt](docs/research/p8-freecad-ac1021-tilted-spline-semantic-mismatch-2026-11-12.json).
+
 **FreeCAD ACIS consumer boundary (2026-11-12):** FreeCAD's current Draft DXF
 documentation says its built-in DXF importer cannot read ACIS/SAT solid blobs;
 its documented C++ entity list excludes 3DSOLID, REGION, and BODY. Its DWG
