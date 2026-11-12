@@ -23062,6 +23062,12 @@ void testLtypeTextAreaVectors(TestContext& t) {
             t.expect(encoded && ltype_area_test::matches(
                          ltype_area_test::inspect(version, body.data()), version, expected),
                      std::string(label) + " literal offsets/area" + suffix);
+            const auto wire = ltype_area_test::inspect(version, body.data());
+            t.expect(wire.valid
+                         && wire.flags == std::vector<std::uint16_t>(texts.size(), 4u),
+                     std::string(label)
+                         + " maps DXF text bit 2 to DWG string-area bit 4"
+                         + suffix);
             for (std::size_t i = 0; i < texts.size(); ++i)
                 t.expect(copied.segments[i].text == texts[i]
                              && object.segments[i].text == texts[i],
@@ -23181,8 +23187,10 @@ void testLtypeTextAreaVectors(TestContext& t) {
             "shape-only LTYPE does not plan an unused text payload" + suffix);
         const auto wire = ltype_area_test::inspect(version, shapeBody.data());
         t.expect(wire.valid && wire.offsets == std::vector<std::uint16_t>{17} &&
+                     wire.flags == std::vector<std::uint16_t>{2u} &&
                      (unicode ? wire.bytes.empty() : wire.bytes.size() == 256u),
-                 "shape-only LTYPE preserves code and versioned area presence" +
+                 "shape-only LTYPE maps DXF shape bit 4 to DWG shape bit 2 "
+                     "and preserves code/area presence" +
                      suffix);
     }
 }

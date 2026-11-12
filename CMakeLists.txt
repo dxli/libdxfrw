@@ -1212,6 +1212,10 @@ if(LIBDXFRW_BUILD_TESTS)
     target_link_libraries(libdxfrw_dwg_local_roundtrip PRIVATE dxfrw)
     add_test(NAME libdxfrw_dwg_local_roundtrip
         COMMAND libdxfrw_dwg_local_roundtrip)
+    add_test(NAME libdxfrw_dwg_ltype_text_area_contract
+        COMMAND libdxfrw_dwg_local_roundtrip --dwg-ltype-text-area-contract)
+    set_tests_properties(libdxfrw_dwg_ltype_text_area_contract PROPERTIES
+        LABELS "fast;dwg;ltype;generated" TIMEOUT 30)
     add_test(NAME libdxfrw_surface_viewport_roundtrip
         COMMAND libdxfrw_dwg_local_roundtrip --surface-viewport-roundtrip)
     set_tests_properties(libdxfrw_surface_viewport_roundtrip PROPERTIES

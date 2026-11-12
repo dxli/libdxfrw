@@ -96,6 +96,7 @@ private:
 struct WireArea {
     bool valid = false;
     std::vector<std::uint16_t> offsets;
+    std::vector<std::uint16_t> flags;
     std::vector<std::uint8_t> bytes;
 };
 
@@ -127,7 +128,10 @@ inline WireArea inspect(DRW::Version version,
             || !input.bitDouble() || !input.bitDouble() || !input.bitShort(flags))
             return result;
         result.offsets.push_back(offset);
-        areaPresent = areaPresent || (flags & 2u) != 0;
+        result.flags.push_back(flags);
+        // In DWG's binary Shapeflag, bit 4 indicates the string-area
+        // reference. This differs from DXF group 74's text bit 2.
+        areaPresent = areaPresent || (flags & 4u) != 0;
     }
     if (areaPresent) {
         result.bytes.resize(version >= DRW::AC1021 ? 512u : 256u);

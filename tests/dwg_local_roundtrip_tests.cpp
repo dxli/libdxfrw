@@ -32070,6 +32070,27 @@ bool runDwgLtypeTextAreaContract(const std::filesystem::path& directory,
                           << " text count " << texts.size() << '\n';
             valid = result && valid;
         }
+        {
+            dwgRW writer(path.string().c_str());
+            LtypeAreaInterface source(&writer);
+            source.lineType = ltype_area_test::make({"unused text"});
+            source.lineType.segments[0].shapeFlags = 4;
+            source.lineType.segments[0].complexShapeCode = 17;
+            const bool wrote = writer.write(&source, version, true)
+                && source.registered && source.wroteLine;
+            dwgRW reader(path.string().c_str());
+            LtypeAreaInterface sink;
+            const bool read = reader.read(&sink, false)
+                && sink.captured.size() == 1u
+                && sink.captured.front().segments.size() == 1u
+                && sink.captured.front().segments[0].shapeFlags == 4
+                && sink.captured.front().segments[0].complexShapeCode == 17
+                && sink.captured.front().segments[0].text.empty();
+            if (!wrote || !read)
+                std::cerr << "LTYPE shape-flag file roundtrip failed version "
+                          << version << '\n';
+            valid = wrote && read && valid;
+        }
         for (const std::vector<std::string>& texts : {
                  std::vector<std::string>{"A", std::string(254, 'B')},
                  {std::string(256, 'B')}, {std::string("A\0B", 3u)}}) {
@@ -40765,10 +40786,17 @@ int main(int argc, char** argv) {
     } else if (argc == 2
         && std::string(argv[1]) == "--local-dwg-roundtrip-only") {
         localDwgRoundTripOnly = true;
+    } else if (argc == 2
+        && std::string(argv[1]) == "--dwg-ltype-text-area-contract") {
+        const bool passed = runDwgLtypeTextAreaContract(directory, false);
+        std::cout << "DWG LTYPE string-area flags and text readback: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
     } else if (argc != 1) {
         std::cerr << "usage: " << argv[0]
                   << " [--keep-dir DIRECTORY]"
                      " [--local-dwg-roundtrip-only]"
+                     " [--dwg-ltype-text-area-contract]"
                      " [--header-date-time-publication]"
                      " [--layout-plot-dpi-read-controls]"
                      " [--dwg-eed-size-boundaries]"

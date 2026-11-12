@@ -4768,6 +4768,18 @@ bool DRW_Dimstyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
 *  Class to handle line type symbol table entries
 *  @author Rallaz
 */
+namespace {
+// DRW_LTypeSegment::shapeFlags follows Autodesk's DXF group-74 meanings:
+// bit 2 is embedded text and bit 4 is an embedded shape. The DWG LTYPE
+// Shapeflag uses the inverse meanings for those two bits (ODA §20.4.58).
+// Keep the conversion at the DWG codec boundary so DXF callbacks and models
+// continue to use the documented group-74 representation.
+int mapDwgLtypeShapeFlagsToDxf(int flags) noexcept {
+    return (flags & ~0x06) | ((flags & 0x02) << 1)
+        | ((flags & 0x04) >> 1);
+}
+}
+
 bool DRW_LType::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     switch (code) {
     case 3:
@@ -5192,8 +5204,8 @@ bool DRW_LType::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
         segment.yOffset = offsetY;
         segment.scale = scale;
         segment.rotation = rotation;
-        segment.shapeFlags = dashFlags;
-        haveStrArea |= (dashFlags & 2) != 0;
+        segment.shapeFlags = mapDwgLtypeShapeFlagsToDxf(dashFlags);
+        haveStrArea |= (dashFlags & 0x04) != 0;
         parsedPath.push_back(dashLength);
         parsedSegments.push_back(std::move(segment));
     }
@@ -8612,7 +8624,7 @@ bool DRW_LType::encodeDwgResolved(DRW::Version version, dwgBufferW *buf,
         std::vector<std::uint8_t> stringArea;
         bool haveStrArea = false;
         for (const auto &segment : segments)
-            haveStrArea |= (segment.shapeFlags & 0x02) != 0;
+        haveStrArea |= (segment.shapeFlags & 0x02) != 0;
         const bool unicodeStringArea = version >= DRW::AC1021;
         const std::size_t stringAreaSize = unicodeStringArea ? 512u : 256u;
         if (version < DRW::AC1021 || haveStrArea) {
@@ -8687,7 +8699,8 @@ bool DRW_LType::encodeDwgResolved(DRW::Version version, dwgBufferW *buf,
             buf->putRawDouble(segment.yOffset);
             buf->putBitDouble(segment.scale);
             buf->putBitDouble(segment.rotation);
-            buf->putBitShort(static_cast<std::uint16_t>(segment.shapeFlags));
+            buf->putBitShort(static_cast<std::uint16_t>(
+                mapDwgLtypeShapeFlagsToDxf(segment.shapeFlags)));
         }
 
         if (!stringArea.empty())
