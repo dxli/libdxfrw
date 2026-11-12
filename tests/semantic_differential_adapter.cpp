@@ -654,6 +654,9 @@ public:
     }
     bool writeRecipeSucceeded() const { return writeRecipeSucceeded_; }
     void enable3DConsumerProbe() { threeDConsumerProbe_ = true; }
+    void enableNestedMTextAttributeProbe() {
+        nestedMTextAttributeProbe_ = true;
+    }
     void enableModelerCarrierProbe() { modelerCarrierProbe_ = true; }
     void enablePartialDwgReadbackControl() {
         partialDwgReadbackControl_ = true;
@@ -1052,6 +1055,10 @@ public:
                                              d.attlist[i]->mtext->text));
                 fields.push_back(doubleField(prefix + ".mtext.height",
                                              d.attlist[i]->mtext->height));
+                fields.push_back(pointField(prefix + ".mtext.insertionPoint",
+                                            d.attlist[i]->mtext->basePoint));
+                fields.push_back(doubleField(prefix + ".mtext.rotationAngle",
+                                             d.attlist[i]->mtext->angle));
             }
         }
         addEntityRecord("addInsert", "INSERT", fields, d, false);
@@ -2285,6 +2292,7 @@ private:
     dwgRW* dwgWriter_ = nullptr;
     bool writeRecipeSucceeded_ = true;
     bool threeDConsumerProbe_ = false;
+    bool nestedMTextAttributeProbe_ = false;
     bool modelerCarrierProbe_ = false;
     bool partialDwgReadbackControl_ = false;
     bool opaqueDwgReadbackControl_ = false;
@@ -2327,6 +2335,40 @@ void SemanticSink::writeEntities() {
         return;
     }
 #ifdef LIBDXFRW_SEMANTIC_3D_CONSUMER_PROBE
+    if (nestedMTextAttributeProbe_) {
+        if (dxfWriter_ == nullptr) {
+            writeRecipeSucceeded_ = false;
+            return;
+        }
+        DRW_Insert insert;
+        insert.layer = "probe_nested_mtext_attribute";
+        insert.name = "PROBE_MTEXT_ATTRIBUTE_PARENT";
+        insert.basePoint = DRW_Coord{7.0, -3.0, 11.0};
+        insert.extPoint = DRW_Coord{0.0, 1.0, 0.0};
+        insert.xscale = 1.5;
+        insert.yscale = -0.75;
+        insert.zscale = 2.0;
+        insert.angle = 0.375;
+        auto attribute = std::make_shared<DRW_Attrib>();
+        attribute->tag = "MTEXT_TAG";
+        attribute->text = "single-line fallback";
+        attribute->basePoint = DRW_Coord{13.0, 17.0, 19.0};
+        attribute->secPoint = DRW_Coord{23.0, 29.0, 31.0};
+        attribute->extPoint = DRW_Coord{0.0, 0.0, 1.0};
+        attribute->height = 2.25;
+        attribute->attVersion = 1;
+        attribute->m_attributeType = 2;
+        attribute->mtext = std::make_unique<DRW_MText>();
+        attribute->mtext->text = "first line\\Psecond line";
+        attribute->mtext->basePoint = DRW_Coord{37.0, 41.0, 43.0};
+        attribute->mtext->height = 1.75;
+        attribute->mtext->angle = 0.625;
+        insert.attlist.push_back(std::move(attribute));
+        insert.seqEndEntity = std::make_shared<DRW_SeqEnd>();
+        writeRecipeSucceeded_ = dxfWriter_->writeInsert(&insert)
+            && writeRecipeSucceeded_;
+        return;
+    }
     if (modelerCarrierProbe_) {
         if (dxfWriter_ == nullptr) {
             writeRecipeSucceeded_ = false;
@@ -4190,6 +4232,89 @@ bool run3DConsumerProbe(bool binary) {
     return foundBinaryReference;
 }
 
+bool runNestedMTextAttributeProbe(bool binary) {
+    std::error_code error;
+    const auto root = std::filesystem::temp_directory_path(error);
+    if (error)
+        return false;
+    const auto stamp = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto directory = root / ("libdxfrw-nested-mtext-attribute-"
+        + std::to_string(stamp) + (binary ? "-bin" : "-ascii"));
+    if (!std::filesystem::create_directory(directory, error) || error)
+        return false;
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    } cleanup{directory};
+
+    const auto output = directory / "nested-mtext-attribute.dxf";
+    const std::string outputName = output.string();
+    SemanticSink producer("dxfRW", "write");
+    producer.enableNestedMTextAttributeProbe();
+    dxfRW writer(outputName.c_str());
+    producer.configureWrite(&writer);
+    if (!writer.write(&producer, DRW::AC1032, binary)
+        || !producer.writeRecipeSucceeded()) {
+        std::cerr << "nested MTEXT ATTRIB write failed: binary=" << binary
+                  << ", error=" << static_cast<int>(writer.getError()) << '\n';
+        return false;
+    }
+
+    SemanticSink consumer("dxfRW", "read");
+    dxfRW reader(outputName.c_str());
+    if (!reader.read(&consumer, false) || !consumer.diagnostics.empty()) {
+        std::cerr << "nested MTEXT ATTRIB read failed: binary=" << binary
+                  << ", error=" << static_cast<int>(reader.getError())
+                  << ", diagnostics=" << consumer.diagnostics.size() << '\n';
+        return false;
+    }
+    const std::string layer = "probe_nested_mtext_attribute";
+    if (!fieldEqualsForLayer(consumer, "INSERT", layer, "attributeCount", "1")
+        || !fieldEqualsForLayer(consumer, "INSERT", layer, "hasSequenceEnd", "true")
+        || !fieldEqualsForLayer(consumer, "INSERT", layer, "attribute.0.tag",
+                                "\"MTEXT_TAG\"")
+        || !fieldEqualsForLayer(consumer, "INSERT", layer,
+                                "attribute.0.text",
+                                "\"single-line fallback\"")
+        || !fieldEqualsForLayer(consumer, "INSERT", layer,
+                                "attribute.0.insertionPoint",
+                                "{\"x\":13,\"y\":17,\"z\":19}")
+        || !fieldEqualsForLayer(consumer, "INSERT", layer,
+                                "attribute.0.attributeVersion", "1")
+        || !fieldEqualsForLayer(consumer, "INSERT", layer,
+                                "attribute.0.attributeType", "2")
+        || !fieldEqualsForLayer(consumer, "INSERT", layer,
+                                "attribute.0.hasMText", "true")
+        || !fieldEqualsForLayer(consumer, "INSERT", layer,
+                                "attribute.0.mtext.text",
+                                "\"first line\\\\Psecond line\"")
+        || !doubleFieldEqualsForLayer(consumer, "INSERT", layer,
+                                      "attribute.0.mtext.height", 1.75)
+        || !fieldEqualsForLayer(consumer, "INSERT", layer,
+                                "attribute.0.mtext.insertionPoint",
+                                "{\"x\":37,\"y\":41,\"z\":43}")
+        || !doubleFieldEqualsForLayer(consumer, "INSERT", layer,
+                                      "attribute.0.mtext.rotationAngle", 0.625))
+        return false;
+
+    SemanticSink legacyConsumer("dxfRW", "read");
+    dxfRW legacyReader(outputName.c_str());
+    if (!legacyReader.read(&legacyConsumer, true)
+        || !legacyConsumer.diagnostics.empty()
+        || !fieldEqualsForLayer(legacyConsumer, "INSERT", layer,
+                                "attribute.0.mtext.text",
+                                "\"first line\\\\Psecond line\"")
+        || !fieldEqualsForLayer(legacyConsumer, "INSERT", layer,
+                                "attribute.0.mtext.insertionPoint",
+                                "{\"x\":37,\"y\":41,\"z\":43}"))
+        return false;
+    return true;
+}
+
 bool runModelerCarrierProbe(bool binary) {
     std::error_code error;
     const std::filesystem::path temporaryRoot =
@@ -4803,6 +4928,8 @@ int selfTest() {
 
 #ifdef LIBDXFRW_SEMANTIC_3D_CONSUMER_PROBE
     if (!run3DConsumerProbe(false) || !run3DConsumerProbe(true)
+        || !runNestedMTextAttributeProbe(false)
+        || !runNestedMTextAttributeProbe(true)
         || !runModelerCarrierProbe(false) || !runModelerCarrierProbe(true))
         return fail(__LINE__);
 #endif
