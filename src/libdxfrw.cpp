@@ -32990,6 +32990,10 @@ bool dxfRW::writeLayout(DRW_Layout *ent) {
         m_writeError = true;
         return false;
     }
+    if (ent->handle != 0u
+        && !bindDxfWriteSourceObjectHandle(
+            static_cast<std::uint32_t>(ent->handle), handle))
+        return false;
     if (!record.commit()) {
         m_writeError = true;
         return false;

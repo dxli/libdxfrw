@@ -2997,6 +2997,11 @@ add_test(NAME libdxfrw_layout_objects_allocation_retry
 set_tests_properties(libdxfrw_layout_objects_allocation_retry PROPERTIES
     LABELS "fast;dxf;adapter;layout;render-settings;allocation;transaction;generated"
     TIMEOUT 60)
+add_test(NAME libdxfrw_layout_source_identity
+    COMMAND libdxfrw_wave1_tests --layout-source-identity)
+set_tests_properties(libdxfrw_layout_source_identity PROPERTIES
+    LABELS "fast;dxf;writer;layout;identity;transaction;generated"
+    TIMEOUT 30)
 add_test(NAME libdxfrw_layer_viewport_override_xrecord_transport
     COMMAND libdxfrw_dxf_fixture_tests --layer-viewport-overrides)
 set_tests_properties(libdxfrw_layer_viewport_override_xrecord_transport PROPERTIES

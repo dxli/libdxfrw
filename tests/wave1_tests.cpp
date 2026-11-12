@@ -16568,6 +16568,75 @@ void testCustomTextNumericWireKinds(TestContext& t) {
 }
 
 void testLayoutStyleNumericWireKinds(TestContext& t) {
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW owner("");
+        owner.version = DRW::AC1032;
+        owner.binFile = binary;
+        owner.setHandleRemap({{0xA706u, 0xB706u}});
+        owner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&output));
+        owner.writer->setRecordInventoryEnabled(true, 8u);
+        DRW_Layout layout;
+        layout.handle = 0xA706u;
+        layout.name = "LAYOUT_SOURCE_IDENTITY";
+        layout.orthoViewType = 1;
+        const bool wrote = owner.writeLayout(&layout);
+        const auto identity = owner.m_writingContext
+            .sourceHandleToWrittenObjectMap.find(0xA706u);
+        bool identityBound = wrote
+            && identity != owner.m_writingContext
+                               .sourceHandleToWrittenObjectMap.end()
+            && identity->second == 0xB706u
+            && owner.writer->recordHandleCount(0xB706u) == 1u
+            && owner.writer->recordHandleHasIdentity(
+                0xB706u, "LAYOUT", "");
+        const std::string committedBytes = output.str();
+        owner.setHandleRemap({{0xA706u, 0xB707u}});
+        DRW_Layout duplicate;
+        duplicate.handle = 0xA706u;
+        duplicate.name = "DUPLICATE_LAYOUT_SOURCE_IDENTITY";
+        duplicate.orthoViewType = 1;
+        const bool duplicateRolledBack = !owner.writeLayout(&duplicate)
+            && output.str() == committedBytes
+            && owner.m_writingContext.sourceHandleToWrittenObjectMap.at(
+                   0xA706u) == 0xB706u
+            && owner.writer->recordHandleCount(0xB707u) == 0u;
+
+        std::ostringstream retryOutput;
+        dxfRW retryOwner("");
+        retryOwner.version = DRW::AC1032;
+        retryOwner.binFile = binary;
+        retryOwner.setHandleRemap({{0xA708u, 0xB708u}});
+        retryOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&retryOutput));
+        retryOwner.writer->setRecordInventoryEnabled(true, 4u);
+        DRW_Layout corrected;
+        corrected.handle = 0xA708u;
+        corrected.name = "LAYOUT_CORRECTED_RETRY";
+        corrected.orthoViewType = 1;
+        const bool retried = retryOwner.writeLayout(&corrected)
+            && retryOwner.m_writingContext.sourceHandleToWrittenObjectMap.at(
+                   0xA708u) == 0xB708u
+            && retryOwner.writer->recordHandleCount(0xB708u) == 1u;
+        const std::string encoding = binary ? "binary" : "ASCII";
+        t.expect(identityBound,
+                 (encoding + " LAYOUT binds its remapped source identity")
+                     .c_str());
+        t.expect(duplicateRolledBack,
+                 (encoding + " LAYOUT duplicate binding rolls back")
+                     .c_str());
+        t.expect(retried,
+                 (encoding + " LAYOUT retries after duplicate binding")
+                     .c_str());
+    }
+
     expectTypedNumericWire(t, [](dxfRW& writer) {
         writer.setHandleRemap({{0xA700u, 0xB700u},
                                {0xA701u, 0xB701u},
@@ -23994,6 +24063,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testRenderSettingsIdentityRemapping(focused);
         std::cout << "RENDERSETTINGS identity remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--layout-source-identity") {
+        TestContext focused;
+        testLayoutStyleNumericWireKinds(focused);
+        std::cout << "LAYOUT source identity: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

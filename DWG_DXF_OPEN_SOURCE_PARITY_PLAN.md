@@ -2,19 +2,22 @@
 
 ## Progress estimate (2026-11-12)
 
-The countable remaining plan items are the six phase exit gates: **0 complete,
-6 remaining, for 0% gate completion (0 / (0 + 6))**. P4–P8 are OPEN and P9 is
-DEFERRED_EXTERNAL. This is a conservative completion estimate for the stated
-DWG/DXF parity objective; it is not a measure of implementation effort or the
-many bounded code and test slices already delivered inside those open gates.
+Since the current execution queue was last reset, **9 implementation slices
+are complete and 6 phase exit gates remain open**, giving a rough item-count
+progress estimate of **60% (9 / (9 + 6))**. Eight completed slices are
+represented by commits `787d65c6`, `e1c1cfe3`, `3feb4e6f`, `c9a64797`,
+`26e76b8c`, `9ebf0b78`, `dae9d0bd` and `d25b13b5`; the LAYOUT identity slice
+is recorded in its receipt under `docs/research/`. This estimate treats a
+small implementation slice and a broad phase gate as equal items, so it
+indicates queue progress, not effort-weighted completion of DWG/DXF parity.
 
-Completed actions are removed from the execution queue. Their commits and
-research receipts remain the evidence record. An earlier 145-entry checkpoint
-mixed completed slices, open follow-ups and repeated evidence, so it cannot
-provide a reliable completed-item denominator. Do not count those entries as
-145 completed tasks. The six open phase gates are the only consistent current
-item count; each is broad and remains open until all of its required evidence
-passes.
+**Gate completion remains 0 of 6 (0%)**: P4–P8 are OPEN and P9 is
+DEFERRED_EXTERNAL. No phase gate has met its full evidence requirements.
+Completed implementation actions have been removed from the execution queue;
+their commits and receipts remain the evidence record. Do not count historical
+evidence notes or the earlier 145-entry mixed checkpoint as extra completed
+items. The six current open phase gates are the remaining plan items, and each
+stays open until all its required evidence passes.
 
 ## Authority and completion gates
 
@@ -1113,7 +1116,7 @@ integration/release checkpoints.
 | --- | --- | --- | --- |
 | P4 | OPEN — source and graph closure | Qualify a new source-backed OBJECTS subgraph end to end: exact source/frame identities, handle roles, recursive dependencies, emitted records and fresh readback. Resolve the AC1032 associative-network class-version-2 schema and the AC1027 Sweep suffix/embedded-entity profile before admitting those routes. Keep strict whole-source output refused until all frames, references and omitted-frame dependencies close. | Resume only on a distinct eligible producer/source witness. Keep known null-member, orphan-owner, unsupported-frame, named-block SORTENTSTABLE and unresolved HEADER cases refused. |
 | P5 | OPEN — FIELD, TABLE and native semantics | Obtain a FIELD/FIELDLIST graph with a visible root and complete membership. Qualify TABLE producer profiles, retained subrecords, R24 TABLECONTENT, native acceptance/rendering, Content Format/CELLSTYLEMAP semantics, layer overrides and dynamic constraint evaluation. Resolve the VIEWPORT group-91 type only with native ASCII and Binary evidence. | Source spans and graph roles for the exact candidate, then focused readback; native consumer evidence for semantics. Do not repeat screened corpora or codec controls. |
-| P6 | OPEN — version, schema and no-loss audit | Resolve the IMAGEDEF parent-role conflict before output; qualify PERSUBENTMGR/TABLECONTENT/DATATABLE semantics and graph/output routes; finish remaining per-version field, geometry/no-loss, HEADER suffix, CLI disposition and caller-state audits. Keep partial/raw-only records explicit and strict output refused where closure is missing. | ODA v5.4.1 plus source-bound traces/independent peers for exact gaps. Reuse passed generated transaction controls; do not reopen them without a new failure. |
+| P6 | OPEN — version, schema and no-loss audit | Resolve the IMAGEDEF parent-role conflict before output; qualify PERSUBENTMGR/TABLECONTENT/DATATABLE semantics and graph/output routes; audit source-to-output identity binding for the remaining TABLESTYLE, CELLSTYLEMAP and TABLECONTENT OBJECTS writers; finish remaining per-version field, geometry/no-loss, HEADER suffix, CLI disposition and caller-state audits. Keep partial/raw-only records explicit and strict output refused where closure is missing. | ODA v5.4.1 plus source-bound traces/independent peers for exact gaps. Reuse passed generated transaction controls; do not reopen them without a new failure. |
 | P7 | OPEN — ACIS/ACDS and independent 3D meaning | Complete entity→owner/key→AcDs→SAT/SAB association, versioned framing/index/suffix/prototype assembly and exact DXF binding. Resolve ACIS 21500 header/entity semantics; qualify topology, transforms, units, trims, periodicity and spline meaning with an independent kernel. Preserve refusal for unrepresented wireframe and unqualified shell fields. | P4 graph closure plus eligible source/producer and independent semantic evidence; native modeler acceptance remains a separate gate. |
 | P8 | OPEN — consumers, platforms, packaging and release | Preserve LibreCAD and LibreCAD_3 2D behavior; qualify required 3D consumers; complete native Linux/Windows FreeCAD open/insert checks; close clean-consumer reproducibility, ABI, hosted package CI and supported-platform release decisions. | Exact candidate/build/module/platform receipts. Same-library generated transport does not qualify native behavior. |
 | P9 | DEFERRED_EXTERNAL — six non-promoting items | Resolve J256, J260, J268, J284, J293 and J295 using their successor registry and eligible independent evidence. Preserve claim lineage; none can promote support claims by itself. | `metadata/external-evidence-resolution-v1.json`; all external/platform admission criteria remain in force. |
