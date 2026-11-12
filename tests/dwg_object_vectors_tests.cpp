@@ -299,8 +299,15 @@ public:
         return DRW_Background::encodeDwg(version, buf, strBuf, handleBuf);
     }
     std::uint16_t dwgType() const {
-        return m_kind == Ibl ? kDwgClassNumIbl
-             : m_kind == Skylight ? kDwgClassNumSkylight : 0u;
+        switch (m_kind) {
+        case Solid: return kDwgClassNumSolid;
+        case Gradient: return kDwgClassNumGradient;
+        case GroundPlane: return kDwgClassNumGroundPlane;
+        case Image: return kDwgClassNumImage;
+        case Ibl: return kDwgClassNumIbl;
+        case Skylight: return kDwgClassNumSkylight;
+        }
+        return 0u;
     }
 };
 
@@ -26961,22 +26968,73 @@ void checkEntityDwgEncodeAllocationRollback(TestContext &t, Probe source,
 }
 
 void testBackgroundDwgEncodeAllocationRollback(TestContext& t) {
-  BackgroundCodecProbe background;
-  background.m_kind = DRW_Background::Ibl;
-  background.handle = 0xBA10u;
-  background.parentHandle = 0xBA20u;
-  background.reactorHandles = {0xBA30u};
-  background.xDictHandle = 0xBA40u;
-  background.setDwgCommonObjectState(1, 1, false);
-  background.m_classVersion = 1;
-  background.m_iblName = "BACKGROUND_ALLOCATION_RETRY";
-  background.m_enabled = true;
-  background.m_displayImage = false;
-  background.m_rotation = 0.375;
-  background.m_secondaryBackgroundHandle = 0xBA50u;
-  checkEntityDwgEncodeAllocationRollback(
-      t, background, DRW::AC1024, DRW_Background::kDwgClassNumIbl,
-      "AC1024 IBL_BACKGROUND");
+  const auto checkKind = [&](DRW_Background::Kind kind,
+                             std::uint16_t encodedType,
+                             const std::string& label) {
+    BackgroundCodecProbe background;
+    background.m_kind = kind;
+    background.handle = 0xBA10u;
+    background.parentHandle = 0xBA20u;
+    background.reactorHandles = {0xBA30u};
+    background.xDictHandle = 0xBA40u;
+    background.setDwgCommonObjectState(1, 1, false);
+    background.m_classVersion = 1;
+    switch (kind) {
+    case DRW_Background::Solid:
+      background.m_solidColor = 17;
+      break;
+    case DRW_Background::Gradient:
+      background.m_colorTop = 1;
+      background.m_colorMiddle = 2;
+      background.m_colorBottom = 3;
+      background.m_horizon = 0.25;
+      background.m_height = 0.5;
+      background.m_rotation = 0.75;
+      break;
+    case DRW_Background::GroundPlane:
+      background.m_colorSkyZenith = 1;
+      background.m_colorSkyHorizon = 2;
+      background.m_colorUndergroundHorizon = 3;
+      background.m_colorUndergroundAzimuth = 4;
+      background.m_colorNear = 5;
+      background.m_colorFar = 6;
+      break;
+    case DRW_Background::Image:
+      background.m_fileName = "BACKGROUND_IMAGE_ALLOCATION_RETRY";
+      background.m_fitToScreen = true;
+      background.m_maintainAspect = true;
+      background.m_useTiling = false;
+      background.m_offset = DRW_Coord(1.25, 2.5, 0.0);
+      background.m_scale = DRW_Coord(3.0, 4.0, 0.0);
+      break;
+    case DRW_Background::Ibl:
+      background.m_iblName = "BACKGROUND_IBL_ALLOCATION_RETRY";
+      background.m_enabled = true;
+      background.m_displayImage = false;
+      background.m_rotation = 0.375;
+      background.m_secondaryBackgroundHandle = 0xBA50u;
+      break;
+    case DRW_Background::Skylight:
+      background.m_sunHandle = 0xBA60u;
+      break;
+    }
+    checkEntityDwgEncodeAllocationRollback(
+        t, background, DRW::AC1024, encodedType, label);
+  };
+  checkKind(DRW_Background::Solid, DRW_Background::kDwgClassNumSolid,
+            "AC1024 SOLID_BACKGROUND");
+  checkKind(DRW_Background::Gradient, DRW_Background::kDwgClassNumGradient,
+            "AC1024 GRADIENT_BACKGROUND");
+  checkKind(DRW_Background::GroundPlane,
+            DRW_Background::kDwgClassNumGroundPlane,
+            "AC1024 GROUND_PLANE_BACKGROUND");
+  checkKind(DRW_Background::Image, DRW_Background::kDwgClassNumImage,
+            "AC1024 IMAGE_BACKGROUND");
+  checkKind(DRW_Background::Ibl, DRW_Background::kDwgClassNumIbl,
+            "AC1024 IBL_BACKGROUND");
+  checkKind(DRW_Background::Skylight,
+            DRW_Background::kDwgClassNumSkylight,
+            "AC1024 SKYLIGHT_BACKGROUND");
 }
 
 void testArcEllipseDwgEncodeAllocationRollback(TestContext &t) {
