@@ -4767,6 +4767,56 @@ void testCellStyleMapDwgEncodeRoundTrip(TestContext& t) {
         }
     }
 
+    // Exercise the complete common value-type/unit/alignment product through
+    // the separately serialized AC1021 CELLSTYLEMAP object, including its
+    // detached strings and hard-pointer handles.
+    std::size_t admittedCombinations = 0u;
+    for (const std::int32_t dataType :
+         {0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512}) {
+        for (const std::int32_t unitType : {0, 1, 2, 4, 8}) {
+            for (std::int32_t alignment = 1; alignment <= 9; ++alignment) {
+                CellStyleMapCodecProbe combination = source;
+                DRW_TableStyleContentFormat& format =
+                    combination.m_cellStyles[1].m_contentFormat;
+                format.m_valueDataType = dataType;
+                format.m_valueUnitType = unitType;
+                format.m_cellAlignment = alignment;
+                TableStyleFrame combinationFrame;
+                if (!makeEncodedTableObjectFrame(
+                        version, combination, combinationFrame)) {
+                    t.expect(false,
+                        "generated CELLSTYLEMAP enum combination encodes");
+                    continue;
+                }
+                DRW_TextCodec combinationCodec;
+                combinationCodec.setVersion(version, false);
+                dwgBuffer input(combinationFrame.bytes.data(),
+                                combinationFrame.bytes.size(),
+                                &combinationCodec);
+                CellStyleMapCodecProbe parsed;
+                if (!parsed.parseDwg(version, &input,
+                                     combinationFrame.handleBits)) {
+                    t.expect(false,
+                        "generated CELLSTYLEMAP enum combination parses");
+                    continue;
+                }
+                const DRW_TableStyleContentFormat& decoded =
+                    parsed.m_cellStyles[1].m_contentFormat;
+                t.expect(input.isGood() && decoded.m_valueDataType == dataType
+                             && decoded.m_valueUnitType == unitType
+                             && decoded.m_cellAlignment == alignment
+                             && decoded.m_valueFormatString
+                                 == format.m_valueFormatString
+                             && decoded.m_textStyleHandle
+                                 == format.m_textStyleHandle,
+                         "CELLSTYLEMAP enum combination survives object readback");
+                ++admittedCombinations;
+            }
+        }
+    }
+    t.expect(admittedCombinations == 495u,
+             "all 495 ODA-listed AC1021 CELLSTYLEMAP enum combinations round-trip");
+
     CellStyleMapCodecProbe invalid = source;
     invalid.m_cellStyles[1].m_contentFormat.m_valueUnitType = 0x10;
     dwgBufferW body(&codec), strings(&codec), handles(&codec);
