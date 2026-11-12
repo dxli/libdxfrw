@@ -53,6 +53,12 @@ public:
     std::int16_t rawType() const { return oType; }
 };
 
+class LightProbe final : public DRW_Light {
+public:
+    using DRW_Light::encodeDwg;
+    std::int16_t rawType() const { return oType; }
+};
+
 struct Buffers {
     dwgBufferW body;
     dwgBufferW strings;
@@ -131,6 +137,18 @@ Shape makeShape() {
         shape.m_bigFontName = "bigfont";
         shape.text = "ARC ALIGNED TRANSACTION";
         shape.m_arcHandle = 0x57u;
+    } else if constexpr (std::is_same_v<Shape, LightProbe>) {
+        shape.m_classVersion = 2u;
+        shape.m_name = "AllocationRetryLight";
+        shape.m_type = 1u;
+        shape.m_status = true;
+        shape.m_color = 256u;
+        shape.m_colorMethod = 0xC0u;
+        shape.m_colorDwgMetadataPresent = true;
+        shape.m_plotGlyph = true;
+        shape.m_intensity = 1.75;
+        shape.m_position = {1.0, 2.0, 3.0};
+        shape.m_target = {4.0, 5.0, 6.0};
     } else {
         shape.name = "ANSI31";
         shape.solid = false;
@@ -294,6 +312,15 @@ int main() {
             totalReachedFailures += reachedFailures;
         }
     }
+    for (const DRW::Version version :
+         {DRW::AC1021, DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
+        for (const auto layout : layouts) {
+            unsigned long reachedFailures = 0u;
+            if (!sweep<LightProbe>(version, layout, 502, reachedFailures))
+                return 1;
+            totalReachedFailures += reachedFailures;
+        }
+    }
     for (const auto version : versions) {
         for (const auto layout : layouts) {
             unsigned long reachedFailures = 0u;
@@ -317,12 +344,13 @@ int main() {
         std::cerr << "HATCH allocation injector did not fire\n";
         return 1;
     }
-    std::cout << "HATCH/MPOLYGON/MLEADER/ARCALIGNEDTEXT DWG encode allocation "
+    std::cout << "HATCH/MPOLYGON/MLEADER/ARCALIGNEDTEXT/LIGHT DWG encode allocation "
               << "rollback/retry "
               << "passed across " << sizeof(versions) / sizeof(versions[0])
-              << " common writer versions plus 3 MLEADER versions, "
+              << " HATCH-family/ARCALIGNEDTEXT versions, 3 MLEADER versions "
+              << "and 4 LIGHT versions, "
               << sizeof(layouts) / sizeof(layouts[0])
-                     * (sizeof(versions) / sizeof(versions[0]) * 3u + 3u)
+                     * (sizeof(versions) / sizeof(versions[0]) * 3u + 3u + 4u)
               << " entity/version/layout profiles; " << totalReachedFailures
               << " allocation offsets exercised\n";
     return 0;

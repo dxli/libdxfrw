@@ -13441,58 +13441,62 @@ bool DRW_Light::encodeDwg(DRW::Version v, dwgBufferW *buf, std::uint32_t bs,
             || !std::isfinite(m_extendedLightRadius)))
         return false;
 
-    oType = kDwgClassNum;
-    if (!encodeDwgCommon(v, buf, strBuf))
-        return false;
+    return encodeEntityDwgTransaction(
+        oType, buf, strBuf, handleBuf,
+        [&](dwgBufferW *body, dwgBufferW *strings, dwgBufferW *handles) {
+            oType = kDwgClassNum;
+            if (!encodeDwgCommon(v, body, strings))
+                return false;
 
-    dwgBufferW *sb = strBuf ? strBuf : buf;
-    buf->putBitLong(m_classVersion);
-    sb->putVariableText(v, m_name);
-    buf->putBitLong(m_type);
-    buf->putBit(m_status ? 1 : 0);
-    const std::uint16_t colorIndex = colorMethod == 0xC2u
-        ? 0u : static_cast<std::uint16_t>(m_color);
-    if (m_colorDwgMetadataPresent) {
-        buf->putCmColorWithFlags(v, colorMethod, colorIndex, m_colorRgb,
-                                 m_colorName, m_colorBookName,
-                                 m_colorDwgFlags, sb);
-    } else {
-        buf->putCmColor(v, colorMethod, colorIndex, m_colorRgb,
-                        m_colorName, m_colorBookName, strBuf);
-    }
-    buf->putBit(m_plotGlyph ? 1 : 0);
-    buf->putBitDouble(m_intensity);
-    buf->put3BitDouble(m_position);
-    buf->put3BitDouble(m_target);
-    buf->putBitLong(m_attenuationType);
-    buf->putBit(m_useAttenuationLimits ? 1 : 0);
-    buf->putBitDouble(m_attenuationStartLimit);
-    buf->putBitDouble(m_attenuationEndLimit);
-    buf->putBitDouble(m_hotspotAngle);
-    buf->putBitDouble(m_falloffAngle);
-    buf->putBit(m_castShadows ? 1 : 0);
-    buf->putBitLong(m_shadowType);
-    buf->putBitShort(m_shadowMapSize);
-    buf->putRawChar8(m_shadowMapSoftness);
+            dwgBufferW *sb = strings ? strings : body;
+            body->putBitLong(m_classVersion);
+            sb->putVariableText(v, m_name);
+            body->putBitLong(m_type);
+            body->putBit(m_status ? 1 : 0);
+            const std::uint16_t colorIndex = colorMethod == 0xC2u
+                ? 0u : static_cast<std::uint16_t>(m_color);
+            if (m_colorDwgMetadataPresent) {
+                body->putCmColorWithFlags(
+                    v, colorMethod, colorIndex, m_colorRgb,
+                    m_colorName, m_colorBookName, m_colorDwgFlags, sb);
+            } else {
+                body->putCmColor(v, colorMethod, colorIndex, m_colorRgb,
+                                 m_colorName, m_colorBookName, strings);
+            }
+            body->putBit(m_plotGlyph ? 1 : 0);
+            body->putBitDouble(m_intensity);
+            body->put3BitDouble(m_position);
+            body->put3BitDouble(m_target);
+            body->putBitLong(m_attenuationType);
+            body->putBit(m_useAttenuationLimits ? 1 : 0);
+            body->putBitDouble(m_attenuationStartLimit);
+            body->putBitDouble(m_attenuationEndLimit);
+            body->putBitDouble(m_hotspotAngle);
+            body->putBitDouble(m_falloffAngle);
+            body->putBit(m_castShadows ? 1 : 0);
+            body->putBitLong(m_shadowType);
+            body->putBitShort(m_shadowMapSize);
+            body->putRawChar8(m_shadowMapSoftness);
 
-    buf->putBit(m_hasPhotometricData ? 1 : 0);
-    if (m_hasPhotometricData) {
-        buf->putBit(m_hasWebFile ? 1 : 0);
-        sb->putVariableText(v, m_webFile);
-        buf->putBitShort(m_physicalIntensityMethod);
-        buf->putBitDouble(m_physicalIntensity);
-        buf->putBitDouble(m_illuminanceDistance);
-        buf->putBitShort(m_lampColorType);
-        buf->putBitDouble(m_lampColorTemperature);
-        buf->putBitShort(m_lampColorPreset);
-        buf->put3BitDouble(m_webRotation);
-        buf->putBitShort(m_extendedLightShape);
-        buf->putBitDouble(m_extendedLightLength);
-        buf->putBitDouble(m_extendedLightWidth);
-        buf->putBitDouble(m_extendedLightRadius);
-    }
+            body->putBit(m_hasPhotometricData ? 1 : 0);
+            if (m_hasPhotometricData) {
+                body->putBit(m_hasWebFile ? 1 : 0);
+                sb->putVariableText(v, m_webFile);
+                body->putBitShort(m_physicalIntensityMethod);
+                body->putBitDouble(m_physicalIntensity);
+                body->putBitDouble(m_illuminanceDistance);
+                body->putBitShort(m_lampColorType);
+                body->putBitDouble(m_lampColorTemperature);
+                body->putBitShort(m_lampColorPreset);
+                body->put3BitDouble(m_webRotation);
+                body->putBitShort(m_extendedLightShape);
+                body->putBitDouble(m_extendedLightLength);
+                body->putBitDouble(m_extendedLightWidth);
+                body->putBitDouble(m_extendedLightRadius);
+            }
 
-    return encodeDwgEntHandle(v, buf, handleBuf);
+            return encodeDwgEntHandle(v, body, handles);
+        });
 }
 
 bool DRW_SectionObject::parseCode(
