@@ -718,7 +718,8 @@ bool readObjectCommonHandles(dwgBuffer *buf, DRW::Version version,
                              std::uint32_t *xDictHandle = nullptr,
                              std::uint64_t handleEndBit =
                                  std::numeric_limits<std::uint64_t>::max(),
-                             bool validateLegacyDictionaryGroupRoles = false) {
+                             bool validateLegacyDictionaryGroupRoles = false,
+                             bool imageDefParentHardOwner = false) {
     if (buf == nullptr || !buf->isGood()
         || !dwgSafety::validReactorCount(numReactors)) {
         if (buf != nullptr)
@@ -754,7 +755,15 @@ bool readObjectCommonHandles(dwgBuffer *buf, DRW::Version version,
     // soft-pointer fields when the field is offset-resolved.
     const bool validateRoles = version >= DRW::AC1018
         || validateLegacyDictionaryGroupRoles;
-    if (validateRoles
+    // ODA §20.1 gives the shared object parent a soft-pointer role, but its
+    // IMAGEDEF override in §20.4.81 specifies a hard owner. Some AutoCAD
+    // SAVEAS sources use an offset soft-pointer code for this field; the raster
+    // wire observer retains that conflicting profile and strict DXF output
+    // remains gated. Accept the normative hard-owner encoding so local writer
+    // output can be read back without widening that external source profile.
+    const bool imageDefHardOwner = imageDefParentHardOwner
+        && parentH.rawCode == DRW::DwgHardOwnership;
+    if (validateRoles && !imageDefHardOwner
         && !hasRole(parentH, DRW::DwgSoftPointer, true)) {
         DRW_DBG("Common object parent role mismatch: raw code ");
         DRW_DBG(static_cast<unsigned int>(parentH.rawCode));
@@ -3774,7 +3783,8 @@ DRW_DBG("\n***************************** parsing table entry *******************
 }
 
 bool DRW_TableEntry::parseDwgCommonHandleData(
-    DRW::Version version, dwgBuffer *buf, bool includeLegacyObjectSize) {
+    DRW::Version version, dwgBuffer *buf, bool includeLegacyObjectSize,
+    bool imageDefParentHardOwner) {
     if (buf == nullptr || !buf->isGood())
         return false;
 
@@ -3788,7 +3798,8 @@ bool DRW_TableEntry::parseDwgCommonHandleData(
         || !this->readDwgObjectCommonHandles(version, &handleBuffer,
                                        &parsedParentHandle,
                                        &parsedReactors,
-                                       &parsedXDictHandle)) {
+                                       &parsedXDictHandle,
+                                       imageDefParentHardOwner)) {
         return false;
     }
 
@@ -3804,7 +3815,8 @@ bool DRW_TableEntry::parseDwgCommonHandleData(
 bool DRW_TableEntry::readDwgObjectCommonHandles(
     DRW::Version version, dwgBuffer *buf, std::uint32_t *parentHandle,
     std::vector<std::uint32_t> *reactorHandles,
-    std::uint32_t *xDictHandle) const {
+    std::uint32_t *xDictHandle,
+    bool imageDefParentHardOwner) const {
     if (buf == nullptr)
         return false;
     std::uint64_t endBit = 0;
@@ -3817,7 +3829,8 @@ bool DRW_TableEntry::readDwgObjectCommonHandles(
     return readObjectCommonHandles(buf, version, handle, numReactors, xDictFlag,
                                    parentHandle, reactorHandles, xDictHandle,
                                    endBit,
-                                   validateLegacyDictionaryGroupRoles);
+                                   validateLegacyDictionaryGroupRoles,
+                                   imageDefParentHardOwner);
 }
 
 bool DRW_TableEntry::getDwgHandleEndBit(
@@ -7033,7 +7046,7 @@ bool DRW_ImageDef::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
     if (!handleBuf->isGood()
         || !parsed.readDwgObjectCommonHandles(
             version, handleBuf, &parsedParentHandle, &parsedReactors,
-            &parsedXDictHandle)
+            &parsedXDictHandle, true)
         || !buf->isGood() || !handleBuf->isGood())
         return fail();
 

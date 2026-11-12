@@ -13822,7 +13822,8 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
     }
     if (version > DRW::AC1018 &&
         !commonObject.DRW_TableEntry::parseDwgCommonHandleData(version,
-                                                               &commonBuffer)) {
+            &commonBuffer, false,
+            oType == dwgObjType::IMAGEDEF)) {
       recordObjectFrameFailure(obj, offsetSpace);
       DRW_DBG(" Warning: readDwgObject, invalid common handle tail\n");
       return failStructural();

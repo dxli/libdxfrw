@@ -6046,12 +6046,15 @@ bool imageReactorCaptureControls() {
     return true;
 }
 
-bool rasterDwgSourceProfileEed(bool historyOnly = false, bool rootedOnly = false, bool entryClosureOnly = false) {
+bool rasterDwgSourceProfileEed(bool historyOnly = false, bool rootedOnly = false,
+                               bool entryClosureOnly = false,
+                               bool commonHandleImportOnly = false) {
     using Access = DxIfaceStandardDwgCaptureTestAccess;
     if (!Access::rasterClassContextControls()) return fail("raster active class-read context mismatch was softened to unknown");
     const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     std::filesystem::path directory;
-    const auto prefix = entryClosureOnly ? "libdxfrw-rooted-imagedef-entry-closure-"
+    const auto prefix = commonHandleImportOnly ? "libdxfrw-imagedef-common-import-"
+        : entryClosureOnly ? "libdxfrw-rooted-imagedef-entry-closure-"
         : rootedOnly ? "libdxfrw-rooted-custom-imagedef-"
         : historyOnly ? "libdxfrw-raster-class-history-" : "libdxfrw-raster-eed-";
     for (unsigned attempt = 0u; attempt < 64u; ++attempt) {
@@ -6265,6 +6268,8 @@ bool rasterDwgSourceProfileEed(bool historyOnly = false, bool rootedOnly = false
             && Access::rasterOutputPublished(exporter, 2u, 1u);
     };
     for (auto version : {DRW::AC1015,DRW::AC1018,DRW::AC1021,DRW::AC1024,DRW::AC1027,DRW::AC1032}) {
+        if (commonHandleImportOnly && version < DRW::AC1021)
+            continue;
         dwgRW output(native.string().c_str()); Author author(output, true, 0u, entryClosureOnly);
         dx_data data; dx_iface reader;
         const bool authored = output.write(&author, version, true);
@@ -6277,6 +6282,33 @@ bool rasterDwgSourceProfileEed(bool historyOnly = false, bool rootedOnly = false
                 + " tables=" + std::to_string(author.tables) + " objects=" + std::to_string(author.wrote)
                 + " image=" + std::to_string(author.definitionHandle) + " code=" + output.getLastDiagnostic().code);
         if (!Access::rasterClassBindingControls(data, reader)) return fail("raster class ownership/metadata/retry controls failed");
+        if (commonHandleImportOnly) {
+            if (data.images.size() != 1u || data.imageDefinitions.size() != 1u
+                || data.imageDefinitionReactors.empty())
+                return fail("generated IMAGEDEF common hard-owner import cardinality mismatch: "
+                    + std::to_string(version) + " images=" + std::to_string(data.images.size())
+                    + " definitions=" + std::to_string(data.imageDefinitions.size())
+                    + " reactors=" + std::to_string(data.imageDefinitionReactors.size()));
+            const auto& image = *data.images.front();
+            const auto definitionIt = data.imageDefinitions.find(
+                {data.importGeneration, image.ref});
+            const auto reactorIt = data.imageDefinitionReactors.find(
+                {data.importGeneration, image.m_imageDefReactorHandle});
+            if (definitionIt == data.imageDefinitions.end()
+                || reactorIt == data.imageDefinitionReactors.end())
+                return fail("generated IMAGEDEF common hard-owner identity lookup failed: "
+                            + std::to_string(version));
+            const auto& definition = definitionIt->second;
+            const auto& reactor = reactorIt->second;
+            if (image.ref != definition.handle
+                || image.m_imageDefReactorHandle != reactor.handle
+                || definition.parentHandle != 0xD101u
+                || definition.reactorHandles != std::vector<std::uint32_t>{reactor.handle}
+                || reactor.parentHandle != image.handle)
+                return fail("generated IMAGEDEF common hard-owner import graph mismatch: "
+                            + std::to_string(version));
+            continue;
+        }
         if (entryClosureOnly) {
             // A dictionary-reachable definition is not an unreachable object
             // merely because no IMAGE entity references it (ODA ch20 p103).
@@ -6869,6 +6901,11 @@ bool rasterDwgSourceProfileEed(bool historyOnly = false, bool rootedOnly = false
     if (entryClosureOnly) {
         if (entryClosureCells != 12u) return fail("entry-closure matrix skipped a revision/encoding");
         std::cout << "Rooted mixed IMAGEDEF entry closure projections=" << entryClosureCells << "; semantic admission unchanged\n";
+        return true;
+    }
+    if (commonHandleImportOnly) {
+        std::cout << "Generated IMAGEDEF hard-owner source import profiles="
+                  << "AC1021/AC1024/AC1027/AC1032; typed image/dictionary/reactor identities matched\n";
         return true;
     }
     if (rootedOnly) {
@@ -89791,6 +89828,10 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--generated-image-dictionary-source-identity")
         return imageCommonHandleRoleControls() && imageReactorCaptureControls() && generatedImageDictionarySourceIdentity()
             && generatedImageDefinitionExtensions() ? 0 : 1;
+    if (argc == 2 && std::string(argv[1]) == "--image-common-handle-role-controls")
+        return imageCommonHandleRoleControls() ? 0 : 1;
+    if (argc == 2 && std::string(argv[1]) == "--imagedef-common-hard-owner-import")
+        return rasterDwgSourceProfileEed(false, false, false, true) ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--underlay-definition-graph")
         return underlayDefinitionGraphRoundTrip() ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--generated-dimassoc-graph")

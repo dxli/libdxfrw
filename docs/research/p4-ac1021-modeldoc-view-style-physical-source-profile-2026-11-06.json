@@ -39,7 +39,35 @@
     "Selected graph evidence does not qualify whole-drawing conversion, other producer/version profiles, native consumer semantics, or general ModelDocViewStyle support.",
     "Source XRECORD DWG-only extensionDictionaryFlag is not asserted as a DXF-preserved field; no fixture or derivative is committed."
   ],
-  "nextAction": "Continue P4 by tracing the IMAGEDEF extension/reactor graph from the generated strict AC1021 DXF and source profile, then add bounded full-output readback plus atomic refusal/retry coverage. Do not commit the generated drawing or output; preserve the separate successful strict-generation and selected style-readback scopes.",
+  "nextAction": "The earlier IMAGEDEF-root re-export failure is stale for this exact source/output pair. Continue IMAGEDEF work on a nonempty, independently qualified IMAGEDEF/reactor source profile; this source has no IMAGE or IMAGEDEF records, so its empty ACAD_IMAGE_DICT does not close that gap. Keep strict refusal for the physical code-0xC source profile and do not commit generated drawings or outputs.",
+  "currentRecheck": {
+    "date": "2026-11-12",
+    "sourceSha256": "cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce",
+    "format": "AC1021 / AutoCAD 2007 DXF target",
+    "operations": [
+      {
+        "command": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/doc/dwg/children-room-decoration.dwg -y -v2007 /private/tmp/children-room-current.dxf",
+        "result": "PASS",
+        "outputSha256": "4ecad789413087b3714d356a488e934179366f2e46583d55f725158ed2d6ada5"
+      },
+      {
+        "command": "build-gcc/dwg2dxf/dwg2dxf /private/tmp/children-room-current.dxf -y -v2007 /private/tmp/children-room-current-roundtrip.dxf",
+        "result": "PASS",
+        "outputSha256": "5a814782b93a6a0eda93349498754d2bd957975191828d2fb1213246b702b9f6"
+      },
+      {
+        "command": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/doc/dwg/children-room-decoration.dwg -y -b -v2007 /private/tmp/children-room-current-bin.dxf",
+        "result": "PASS",
+        "outputSha256": "4b7e7095d845288d45e5cf8ac4486bc6f7b803efb06c1466e5d84bc774e96c30"
+      },
+      {
+        "command": "build-gcc/dwg2dxf/dwg2dxf /private/tmp/children-room-current-bin.dxf -y -b -v2007 /private/tmp/children-room-current-bin-roundtrip.dxf",
+        "result": "PASS",
+        "outputSha256": "5a3bd6960d89bba654bfbc9be356f69b2409cf1025f0a5a65925b969d3983a37"
+      }
+    ],
+    "scopeLimit": "The source has an empty ACAD_IMAGE_DICT and no IMAGE, IMAGEDEF, or IMAGEDEF_REACTOR frames. These conversions supersede the historical failure for this particular source but do not validate a nonempty image graph or the disputed physical owner profile. Outputs remain under /private/tmp and are not committed."
+  },
   "projection": {
     "records": "Two rooted style dictionaries, four typed style records, four extension dictionaries, and four XRECORDs; required text-style and linetype targets are retained.",
     "colorMapping": "The source SECTIONVIEWSTYLE hatch-background CMC uses method 0xC8 (NONE) with scalar 256. It is projected to DXF group-62 sentinel 257, consistent with this codebase\u2019s existing TABLESTYLE serializer convention. ODA \u00a72.11 documents CMC wire structure; this receipt does not claim independent ODA documentation of the method-to-sentinel semantics."

@@ -366,14 +366,16 @@ protected:
   // reactor count, and xdictionary flag are available.
   [[nodiscard]] bool
   parseDwgCommonHandleData(DRW::Version version, dwgBuffer *buf,
-                           bool includeLegacyObjectSize = false);
+                           bool includeLegacyObjectSize = false,
+                           bool imageDefParentHardOwner = false);
   // Bound the shared OBJECTS handle tail to the frame declared by the
   // R2010+ handle-bit prefix. Older frames are already isolated buffers.
   [[nodiscard]] bool readDwgObjectCommonHandles(
       DRW::Version version, dwgBuffer *buf,
       std::uint32_t *parentHandle = nullptr,
       std::vector<std::uint32_t> *reactorHandles = nullptr,
-      std::uint32_t *xDictHandle = nullptr) const;
+      std::uint32_t *xDictHandle = nullptr,
+      bool imageDefParentHardOwner = false) const;
   [[nodiscard]] bool getDwgHandleEndBit(DRW::Version version,
                                         const dwgBuffer &buf,
                                         std::uint64_t &endBit) const;

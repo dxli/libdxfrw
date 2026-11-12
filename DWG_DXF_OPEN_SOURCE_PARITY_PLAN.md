@@ -1577,6 +1577,19 @@ created locally from scratch for the specific control.
 
 ### Current execution checkpoint (2026-11-12)
 
+- **P6 generated IMAGEDEF hard-owner reader profile:** the shared OBJECTS
+  prologue preflight and typed `DRW_ImageDef` parser now explicitly accept the
+  ODA §20.4.81 hard-owner parent code-3 emitted by this writer. Generated
+  AC1021/AC1024/AC1027/AC1032 image/dictionary/reactor imports pass; literal
+  writer-role controls pass across eight versions, and the existing IMAGEDEF
+  transaction rollback/retry selector passes. This does not qualify the
+  physical AutoCAD code-0xC offset-soft-pointer profile or image output; those
+  sources remain unqualified and strict output stays refused. Two broader
+  source/output selectors still stop at a separate generated AC1027 HEADER
+  integrity mismatch (expected 496, observed 500). Their refusal is retained.
+  No DWG/DXF fixture was committed. See the [generated hard-owner reader
+  receipt](docs/research/p6-generated-imagedef-hard-owner-reader-profile-2026-11-12.json).
+
 - **P6 AC1015 LTYPE_CONTROL legacy import profile:** an existing local
   AC1015 sample (`simple.dwg`, SHA-256
   `6702705ed765af035761a77170ea1486d01f513690b3fd8dc8295957ddc89e58`)
@@ -2902,8 +2915,10 @@ created locally from scratch for the specific control.
   AC1024 separate-stream offsets and seven AC1024 body-aliased offsets; every
   injected failure preserves caller state and same-record retry matches clean
   output. The focused allocation, object-vector and DIMASSOC readback tests
-  pass. This does not resolve the IMAGEDEF parent-role conflict or qualify
-  output. No DWG/DXF fixture was added. See the [allocation rollback
+  pass. This does not resolve the physical IMAGEDEF parent-role conflict or
+  qualify output. The generated code-3 hard-owner reader profile is covered
+  separately; physical code-0xC sources remain unqualified. No DWG/DXF fixture
+  was added. See the [allocation rollback
   receipt](docs/research/p6-imagedef-reactor-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
 - **IMAGEDEF DWG compound-writer transaction safety:**
@@ -2914,7 +2929,9 @@ created locally from scratch for the specific control.
   version/alias cases; failures preserve caller streams and corrected same-
   object retries match clean output. The image compound transaction, object
   vector, allocation retry and DIMASSOC readback tests pass 4/4. This does not
-  resolve the IMAGEDEF parent-role conflict or authorize image output. No
+  resolve the physical IMAGEDEF parent-role conflict or authorize image output.
+  The generated code-3 hard-owner reader profile is covered separately;
+  physical code-0xC sources remain unqualified. No
   DWG/DXF fixture was added. See the [allocation rollback receipt](docs/research/p6-imagedef-dwg-encoder-allocation-rollback-retry-2026-11-10.json).
 
 - **PLOTSETTINGS DWG encoder transaction safety:**
@@ -4118,10 +4135,12 @@ do not repeat this TABLESTYLE codec work.
    selected-output escape hatch or weaken whole-source refusal. The P6
    IMAGEDEF cross-version source capture is complete: its parent code `0xC`
    and dictionary group-350 edge match in AutoCAD AC1021/24/27/32 DWG/DXF
-   pairs. Do not repeat that capture. Keep output refused because ODA §20.4.81
-   still calls the parent a hard owner; the next change requires independent
-   owner-semantics or native rewrite evidence. See the [cross-version role
-   receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json).
+   pairs. A separate generated code-3 writer profile now passes literal role
+   and AC1021/24/27/32 typed-import controls, with no support promotion. Do
+   not repeat either scan. Keep physical code-0xC output refused until eligible
+   owner-semantic or native-rewrite evidence resolves its conflict with ODA
+   §20.4.81. See the [cross-version role receipt](docs/research/p6-imagedef-cross-version-soft-role-evidence-2026-11-07.json)
+   and [generated reader receipt](docs/research/p6-generated-imagedef-hard-owner-reader-profile-2026-11-12.json).
    The AC1021 `Pool_Detail.dwg` MLEADERSTYLE projection now passes in ASCII and
    Binary through a narrowly scoped dependency proof: NOD `0x7784C` → style
    `0x7784D` → hard-pointer LTYPE `0x12` (`BYBLOCK`), plus its required APPID and

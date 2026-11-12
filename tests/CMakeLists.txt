@@ -3417,6 +3417,14 @@ set_tests_properties(dwg2dxf_generated_image_dictionary_source_identity PROPERTI
     # Includes108 wire-fault refusal/retries plus native readback; allow ASan
     # headroom under concurrent CTest load without removing any controls.
     LABELS "fast;dwg;dxf;image;adapter;objects;generated" TIMEOUT 30)
+add_test(NAME dwg2dxf_imagedef_common_hard_owner_import
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --imagedef-common-hard-owner-import)
+set_tests_properties(dwg2dxf_imagedef_common_hard_owner_import PROPERTIES
+    LABELS "fast;dwg;image;adapter;objects;generated" TIMEOUT 30)
+add_test(NAME dwg2dxf_image_common_handle_role_controls
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --image-common-handle-role-controls)
+set_tests_properties(dwg2dxf_image_common_handle_role_controls PROPERTIES
+    LABELS "fast;dwg;image;objects;generated" TIMEOUT 10)
 add_test(NAME dwg2dxf_raster_dwg_source_profile_eed
     COMMAND libdxfrw_dwg2dxf_adapter_tests --raster-dwg-source-profile-eed)
 set_tests_properties(dwg2dxf_raster_dwg_source_profile_eed PROPERTIES
