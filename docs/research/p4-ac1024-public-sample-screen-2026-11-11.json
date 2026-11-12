@@ -9,13 +9,13 @@
       "AC1024 DWG sample repository 3D solid AutoCAD 2010 GitHub",
       "AutoCAD LT 2010 sample DWG parametric constraints"
     ],
-    "result": "No newly identified file has a verified hash, exact AC1024 header, and reported version-2 constraint-group contents."
+    "result": "A public GitHub corpus supplied two newly hashed AC1024 point controls. The tested 3D-point file reads all 180 source frames with zero entity/object parse failures, but its class table has no ACDBASSOCCONSTRAINTGROUP row. It does not unblock the version-2 constraint-group profile."
   },
   "candidates": [
     {
       "url": "https://github.com/nextgis/dwg_samples",
       "sourceClaim": "Repository README says samples were produced with trial AutoCAD 2016 M.49.0.0 and lists 2010 DWG/DXF pairs, including point3d_2010.dwg.",
-      "qualification": "Candidate catalog only. The listed point sample is not constraint-group evidence; this search did not fetch or hash a new file."
+      "qualification": "The repository README identifies AutoCAD 2016 M.49.0.0 as the producer. Files were fetched from the public master branch for temporary screening only. point3d_2010.dwg is 51,834 bytes, SHA-256 9819e04c3ae5e75fb4aa0c6265e77421faa833acec0ebbb60feb34f019259b19, and begins AC1024. The current reader completes all 180 frames with zero entity/object parse failures; strict export stops on a 4-byte AcDb:Header envelope discrepancy and the unqualified VISUALSTYLE carrier. Its class trace contains ten custom classes and no ACDBASSOCCONSTRAINTGROUP. point2d_2010.dwg is 51,482 bytes, SHA-256 31415ccca677798b89815904174edbd70ff5e8f778ffee07c11e6f28ba5363c1, and begins AC1024; it also completes 180/180 frames with zero entity/object parse failures before strict export refusal. These point-only controls are not the target associative-constraint witness. Neither DWG nor DXF was added to the repository."
     },
     {
       "url": "https://www.autodesk.com/support/technical/article/caas/tsarticles/ts/01em4r6LLJgnQQVBlk5GqD.html",
@@ -28,7 +28,7 @@
       "qualification": "Those sample sources are already represented in the local AC1024 corpus and prior receipts; this is not a new witness."
     }
   ],
-  "nextAction": "Acquire an unexamined candidate file, record its exact bytes and six-byte version header, then inventory its ACDBASSOCCONSTRAINTGROUP class versions, bounded body spans, node classes, and graph targets. Do not promote the generated version-2 parser profile without that physical evidence.",
+  "nextAction": "Acquire a non-point AutoCAD/AutoCAD LT sample with actual parametric constraints, record its exact bytes and six-byte version header, then inventory its ACDBASSOCCONSTRAINTGROUP class versions, bounded body spans, node classes, and graph targets. The NextGIS point controls are screened and exhausted for this question. Do not promote the generated version-2 parser profile without that physical evidence.",
   "fixturePolicy": "No downloaded or generated DWG/DXF fixture was added to the repository.",
   "claimEffect": "Research inventory only. The generated AC1024 version-2 constraint-group parser profile remains unqualified by a physical producer witness; output and support claims remain unchanged."
 }

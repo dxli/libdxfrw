@@ -133,21 +133,19 @@ scratch data, not a producer witness, and this does not qualify native semantics
 or support claims. See the
 [version-2 inline receipt](docs/research/p4-ac1024-assoc-constraint-group-r2010-v2-inline-generated-2026-11-11.json).
 
-**P4 AC1024 public-sample screen (2026-11-11):** the search found no new
-hash-verifiable producer witness for the version-2 constraint-group layout.
-The public [nextgis DWG sample repository](https://github.com/nextgis/dwg_samples)
-documents AutoCAD 2016 M.49.0.0 as its producer and lists AC1024-era 2010
-DWG/DXF pairs, including a 3D POINT pair; those simple entity fixtures do not
-establish constraint-group coverage. Autodesk's [AutoCAD LT sample catalog](https://www.autodesk.com/support/technical/article/caas/tsarticles/ts/01em4r6LLJgnQQVBlk5GqD.html)
-lists additional possible candidates such as `air_suspension.dwg` and says the
-collection applies to LT 2010 and later, but does not provide a per-file saved
-version or constraint inventory in the accessible listing. The already-held
-AutoCAD 2010 sample set, including `mechanical_example-imperial.dwg`, remains
-the only verified local corpus used by the related P4 work; do not treat the
-catalog listings or the peer's producer statement as a new physical witness.
-Resume only after a candidate file is obtained, its bytes/version are pinned,
-and its actual constraint-group class/body spans are inspected. No sample was
-added to the repository and no support claim changes. See the
+**P4 AC1024 public-sample screen (2026-11-11):** downloaded temporarily from
+the public [nextgis DWG sample repository](https://github.com/nextgis/dwg_samples)
+and SHA-256 pinned `point3d_2010.dwg` and `point2d_2010.dwg`; both headers are
+AC1024 and both publish 180/180 frames with zero entity/object parse failures.
+The 3D-point source class trace has ten custom classes and no
+ACDBASSOCCONSTRAINTGROUP. Strict output stops on an unrelated AcDb:Header
+envelope discrepancy and the unqualified VISUALSTYLE carrier. These simple
+point controls therefore do not establish the R2010 version-2 constraint-group
+layout. Autodesk's [AutoCAD LT sample catalog](https://www.autodesk.com/support/technical/article/caas/tsarticles/ts/01em4r6LLJgnQQVBlk5GqD.html)
+lists `air_suspension.dwg` and says its collection applies to LT 2010 and later,
+but gives no per-file saved version or constraint inventory; it remains the
+next candidate to acquire and inspect. No sample was added to the repository
+and no support claim changes. See the
 [sample-screen receipt](docs/research/p4-ac1024-public-sample-screen-2026-11-11.json).
 
 **P5 AC1021 FIELD candidate current-reader recheck (2026-11-11):** the rebuilt
@@ -7650,6 +7648,13 @@ including suppression of both synthesized graphs when group-1005 XDATA carries
 an opaque handle. The three focused hatch-unit cases pass (19 assertions).
 This is bounded compile/transport/readback evidence, not native consumer
 semantics, ABI qualification, or platform qualification.
+
+The upstream public consumer write facade now has a dedicated fast CTest for
+the source-version snapshot, explicit-handle query, reference resolver,
+phase-scoped BLOCK_RECORD remaps, and left-out reporting. The generated
+selector passes 1/1 and keeps these API controls out of the full DXF fixture
+suite. This does not qualify a clean LibreCAD/LibreCAD_3 integration or native
+application behavior; see the [focused facade receipt](docs/research/p8-dxf-consumer-write-facade-fast-selector-2026-11-11.json).
 
 The matching libdxfrw writer change permits a supplied AC1027 layer 0 only when
 its material reference is the exact staged Global handle; arbitrary supplied

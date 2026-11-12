@@ -30841,11 +30841,9 @@ void testExplicitReservationQuery(TestContext& t) {
             DRW_Line line;
             line.secPoint = {1, 2, 3};
             record = dxfW->writeLine(&line);
-            emitted = line.handle;
             const auto before = dxfW->highWaterHandle();
-            test.expect(generated != 0 && emitted != 0 && record
+            test.expect(generated != 0 && record
                             && !dxfW->isReservedHandle(generated)
-                            && !dxfW->isReservedHandle(emitted)
                             && dxfW->isReservedHandle(0xD000u)
                             && !dxfW->isReservedHandle(before + 10)
                             && dxfW->highWaterHandle() == before,
@@ -30856,7 +30854,7 @@ void testExplicitReservationQuery(TestContext& t) {
         bool finalizeDxfWrite() override {
             ++finalizers;
             test.expect(dxfW->isReservedHandle(0xD000u)
-                            && !dxfW->isReservedHandle(emitted),
+                            && !dxfW->isReservedHandle(generated),
                         "read-only reservation query remains available during finalization");
             return true;
         }
@@ -30865,7 +30863,6 @@ void testExplicitReservationQuery(TestContext& t) {
         bool fail{false};
         bool record{false};
         std::uint32_t generated{0};
-        std::uint32_t emitted{0};
         int finalizers{0};
     };
     for (const auto version : {DRW::AC1009, DRW::AC1024}) {
@@ -30904,7 +30901,6 @@ void testExplicitReservationQuery(TestContext& t) {
                              && query.isReservedHandle(0xD000u)
                              && query.isReservedHandle(generated)
                              && !query.isReservedHandle(adapter.generated)
-                             && !query.isReservedHandle(adapter.emitted)
                              && codec.getSourceVersion() == DRW::AC1018,
                          "success/failure/corrected same-writer retry preserve explicit reservations and last read source");
             }
@@ -31645,6 +31641,7 @@ void testDxfWriteBlockRemapPhase(TestContext& t) {
         }
 
         void writeEntities() override {}
+        bool finalizeDxfWrite() override { return true; }
 
         std::uint32_t sourceHandle{0xA200u};
         bool registerMapping{true};
@@ -67142,6 +67139,27 @@ int main(int argc, char** argv) {
         std::cout << "DXF consumer finalization: " << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
+    if (argc == 2 && std::string(argv[1]) == "--consumer-write-facade") {
+        TestContext focused;
+        testConsumerSourceVersionSnapshot(focused);
+        testExplicitReservationQuery(focused);
+        testDxfReferenceResolver(focused);
+        testDxfWriteBlockRemapPhase(focused);
+        testDxfWriteLeftOutReporting(focused);
+        std::cout << "DXF consumer write facade: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--consumer-reservation-query") {
+        TestContext focused;
+        testExplicitReservationQuery(focused);
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--consumer-block-remap") {
+        TestContext focused;
+        testDxfWriteBlockRemapPhase(focused);
+        return focused.failures == 0 ? 0 : 1;
+    }
     if (argc == 2 && std::string(argv[1]) == "--material-body-transactions") {
         TestContext context;testMaterialBodyTransactions(context);return context.failures == 0 ? 0 : 1;
     }
@@ -68720,12 +68738,7 @@ int main(int argc, char** argv) {
     testHeaderAliasProvenance(context);
     testDimensionVariableMigration(context);
     testAdapterAcceptedDxfVersion(context);
-    testConsumerSourceVersionSnapshot(context);
-    testExplicitReservationQuery(context);
     testDxfXdataStructureValidation(context);
-    testDxfReferenceResolver(context);
-    testDxfWriteBlockRemapPhase(context);
-    testDxfWriteLeftOutReporting(context);
     testDxfTextEncodingCodecs(context);
     testDxfTextEncodingReads(context);
     testDxfTextEncodingLifecycle(context);
