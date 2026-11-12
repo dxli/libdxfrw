@@ -19,6 +19,7 @@
     "covered_paths": [
       "AC1018 inline CELLSTYLEMAP handle parsing",
       "AC1021 CELLSTYLEMAP detached handle stream parsing",
+      "AC1021 legacy TABLESTYLE row-style text-style handle stream parsing",
       "AC1024 TABLESTYLE detached handle stream parsing",
       "AC1027 TABLESTYLE detached handle stream parsing",
       "AC1032 TABLESTYLE detached handle stream parsing"
@@ -27,7 +28,8 @@
   "generated_controls": {
     "fields": [
       "content-format text-style handle",
-      "cell-style border linetype handle"
+      "cell-style border linetype handle",
+      "legacy TABLESTYLE row-style text-style handle"
     ],
     "wrong_roles": [
       "DwgSoftPointer",
@@ -47,10 +49,11 @@
     "build_result": "passed",
     "tests": [
       "ctest --test-dir build-gcc -R '^libdxfrw_tablestyle_handle_roles$' --output-on-failure",
-      "ctest --test-dir build-gcc -R '^libdxfrw_cellstylemap_dwg_encode_roundtrip$' --output-on-failure"
+      "ctest --test-dir build-gcc -R '^libdxfrw_cellstylemap_dwg_encode_roundtrip$' --output-on-failure",
+      "ctest --test-dir build-gcc -R '^libdxfrw_tablestyle_legacy_row_handle_role$' --output-on-failure"
     ],
     "test_result": "passed",
-    "tests_passed": 2,
+    "tests_passed": 3,
     "tests_failed": 0,
     "git_diff_check": "passed"
   },

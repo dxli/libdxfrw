@@ -1964,6 +1964,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_tablestyle_legacy_unit_type_domains PROPERTIES
         LABELS "fast;dwg;object-vectors;tablestyle;generated"
         TIMEOUT 10)
+    add_test(NAME libdxfrw_tablestyle_legacy_row_handle_role
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --tablestyle-legacy-row-handle-role)
+    set_tests_properties(libdxfrw_tablestyle_legacy_row_handle_role PROPERTIES
+        LABELS "fast;dwg;object-vectors;tablestyle;generated" TIMEOUT 10)
     add_test(NAME libdxfrw_table_cell_general_value_format_flag
         COMMAND libdxfrw_dwg_object_vectors_tests
             --table-cell-general-value-format-flag)

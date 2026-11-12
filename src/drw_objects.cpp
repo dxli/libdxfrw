@@ -1759,6 +1759,13 @@ bool readObjectHandleRefTransactional(dwgBuffer *hdlBuf,
     return true;
 }
 
+bool hasDwgHandleReferenceRole(const dwgHandle& handle,
+                              std::uint8_t expectedRole) noexcept {
+    return handle.rawCode == expectedRole
+        || (handle.ref == 0u
+            && handle.rawCode == DRW::DwgNullReference);
+}
+
 bool readObjectHandleRefWithRoleTransactional(
     dwgBuffer *hdlBuf, std::uint32_t& value, std::uint8_t expectedRole,
     std::uint64_t endBit = std::numeric_limits<std::uint64_t>::max()) {
@@ -1768,9 +1775,7 @@ bool readObjectHandleRefWithRoleTransactional(
     dwgHandle parsed;
     if (!readBoundedObjectHandle(probe, 0, false, parsed, endBit))
         return false;
-    const bool canonicalNull = parsed.ref == 0u
-        && parsed.rawCode == DRW::DwgNullReference;
-    if (parsed.rawCode != expectedRole && !canonicalNull)
+    if (!hasDwgHandleReferenceRole(parsed, expectedRole))
         return false;
     value = parsed.ref;
     *hdlBuf = probe;
@@ -2641,9 +2646,9 @@ bool readLegacyTableStyleRowStyle(DRW::Version version, dwgBuffer *buf,
         return true;
     };
     if (hdlBuf != nullptr
-        && !readObjectHandleRefTransactional(hdlBuf,
-                                             rowStyle.m_textStyleHandle,
-                                             handleEndBit))
+        && !readObjectHandleRefWithRoleTransactional(
+            hdlBuf, rowStyle.m_textStyleHandle, DRW::DwgHardPointer,
+            handleEndBit))
         return false;
     if (!readDouble(rowStyle.m_textHeight)
         || !readShort(rowStyle.m_textAlignment)
@@ -19797,6 +19802,11 @@ bool DRW_TableStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_
                 dwgHandle textStyleHandle;
                 if (!readDwgObjectHandleWithinFrame(version, *bodyBuf, false, textStyleHandle))
                     return fail();
+                if (!hasDwgHandleReferenceRole(
+                        textStyleHandle, DRW::DwgHardPointer)) {
+                    DRW_DBG("TABLESTYLE inline row text-style handle role mismatch\n");
+                    return fail();
+                }
                 rowStyle.m_textStyleHandle = textStyleHandle.ref;
             }
         }
