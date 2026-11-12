@@ -1722,7 +1722,7 @@
     "kernelCommand": "For each extracted /private/tmp/trattocad-house-<handle>.sat, set LIBDXFRW_SAT_PATH and run cargo test -q --manifest-path /private/tmp/opencadstudio-p7/Cargo.toml -p ocs_acis --test libdxfrw_ac1018_sat1_probe -- --nocapture with CARGO_TARGET_DIR=/private/tmp/opencad-p7-target.",
     "kernelResult": "PASS: 48/48 SAT 4.0 payloads parsed and lifted to one body each; zero surface/curve/reference loss and zero OpenCADKernel validation flaws.",
     "artifacts": "DWG, extracted SAT payloads and DXFs remain under /private/tmp and the system temp directory. No DWG/DXF/SAT fixture was added to libdxfrw.",
-    "pairedDxfResult": "PASS: the official paired AC1018 DXF contains exactly matching normalized SAT-v1 payloads for all 48 selected source handles; both files and all extracted payloads remain in /private/tmp.",
+    "pairedDxfResult": "PASS: the official paired AC1024 (AutoCAD 2010) ASCII DXF contains exactly matching normalized SAT-v1 payloads for all 48 selected source handles; both files and all extracted payloads remain in /private/tmp.",
     "geometryResult": "PASS: all 48 lifted bodies have finite kernel bounds and kernel mass properties; conservative AABBs, adaptive mesh-integrated volumes/centroids, and fixed-tolerance tessellated areas are recorded. Handle 0x2d spans exactly 10000 x 8000 mm in X/Y, matching the publisher stated 10 x 8 m dimensions and the paired DXF $INSUNITS=4 declaration. All metrics remain uncorroborated except this bounded dimensional agreement.",
     "transactionControl": {
       "fault": "Increment the first selected SAT payload range declaredByteSize without changing payload bytes.",
@@ -1745,7 +1745,7 @@
     "dxfPath": "/private/tmp/trattocad-sample-3d-house.dxf",
     "dxfBytes": 334575,
     "dxfSha256": "703ec49ec6a26773ceb835fc062a7d942c6d0e36d031118572d59474599b7ff7",
-    "format": "AC1018 ASCII DXF",
+    "format": "AC1024 ASCII DXF (ACADVER=AC1024)",
     "result": "All 48 source-handle 3DSOLID SAT-v1 payloads at handles 0x2a\u20130x59 decode byte-for-byte equal to the SAT extracted from the paired DWG. The published pair and output of the libdxfrw selector therefore agree on each exact normalized SAT body.",
     "method": "tools/research/decode_dxf_sat1.py selected each unique exact handle and reversed the group 1/3 SAT-v1 transform; cmp compared each extracted file against the corresponding hash-bound DWG SAT extracted for the kernel checks."
   },

@@ -88668,7 +88668,6 @@ static bool inventoryPhysicalAc1018SatV1(const std::string& sourcePath) {
         || source.sourceFormat != dx_source_format::DWG
         || source.sourceVersion != DRW::AC1018)
         return fail("could not import the AC1018 source");
-
     std::set<std::uint32_t> handles;
     std::size_t count = 0u;
     std::size_t totalBytes = 0u;
@@ -88715,6 +88714,19 @@ static bool inventoryPhysicalAc1018SatV1(const std::string& sourcePath) {
     return true;
 }
 
+static bool readHeaderInteger(const DRW_Header& header, const char* name,
+                              int expectedCode, int& value) {
+    auto found = header.vars.find(name);
+    if (found == header.vars.end() && name[0] == '$')
+        found = header.vars.find(name + 1);
+    if (found == header.vars.end() || found->second == nullptr
+        || found->second->type() != DRW_Variant::INTEGER
+        || found->second->code() != expectedCode)
+        return false;
+    value = found->second->i_val();
+    return true;
+}
+
 static bool physicalAc1018SatV1Projection(const std::string& sourcePath,
                                           std::uint32_t requestedHandle) {
     const auto fail = [](const char* reason) {
@@ -88727,6 +88739,23 @@ static bool physicalAc1018SatV1Projection(const std::string& sourcePath,
         || source.sourceFormat != dx_source_format::DWG
         || source.sourceVersion != DRW::AC1018)
         return fail("could not import the AC1018 source");
+    int sourceUnits = -1;
+    if (!readHeaderInteger(source.headerC, "$INSUNITS", 70, sourceUnits)) {
+        const auto found = source.headerC.vars.find("$INSUNITS");
+        const auto unprefixed = source.headerC.vars.find("INSUNITS");
+        const auto actual = found != source.headerC.vars.end()
+            ? found : unprefixed;
+        std::cerr << "source INSUNITS entry="
+                  << (actual == source.headerC.vars.end() ? "missing"
+                      : actual->second == nullptr ? "null"
+                      : ("code=" + std::to_string(actual->second->code())
+                         + " type=" + std::to_string(actual->second->type())
+                         + " value=" + std::to_string(actual->second->i_val())))
+                  << '\n';
+        return fail("source DWG did not retain a typed INSUNITS value");
+    }
+    if (sourceUnits != 4)
+        return fail("source DWG unit value is not millimeters");
 
     const DRW_ModelerGeometry* selected = nullptr;
     const dx_ifaceBlock* selectedBlock = nullptr;
@@ -88769,6 +88798,7 @@ static bool physicalAc1018SatV1Projection(const std::string& sourcePath,
     dx_data projection;
     projection.sourceVersion = DRW::AC1018;
     projection.sourceFormat = dx_source_format::DWG;
+    projection.headerC = source.headerC;
     // Copy only the DRW_Block metadata. dx_ifaceBlock's implicit assignment
     // also copies its owned `ent` pointers, which would duplicate source
     // entities here and double-delete them when the projection is destroyed.
@@ -88824,6 +88854,11 @@ static bool physicalAc1018SatV1Projection(const std::string& sourcePath,
         dx_iface reader;
         if (!reader.fileImport(output.string(), &readback, false))
             return fail("fresh DXF readback failed");
+        int readbackUnits = -1;
+        if (!readHeaderInteger(readback.headerC, "$INSUNITS", 70,
+                               readbackUnits)
+            || readbackUnits != sourceUnits)
+            return fail("selected SAT projection changed source $INSUNITS");
         const DRW_ModelerGeometry* actual = nullptr;
         for (const DRW_Entity* entity : readback.mBlock->ent) {
             const auto* modeler = dynamic_cast<const DRW_ModelerGeometry*>(entity);
