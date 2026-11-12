@@ -1611,6 +1611,19 @@ created locally from scratch for the specific control.
   unqualified. The test does not establish geometry evaluation, DWG semantics,
   independent interoperability, or support claims ([receipt](docs/research/p8-3d-consumer-revolved-swept-surface-fields-2026-11-12.json)).
 
+- **P8/S8.3.6 generated nested INSERT/MINSERT transforms:** the probe now
+  writes a nested child/parent block pair with nonzero block base points,
+  nonuniform and mirrored scales, rotations, an oblique outer OCS normal, and
+  a 2x2 inner MINSERT. It checks the distinct callback layers and selected
+  insertion, scale, OCS, array and child-geometry fields in generated AC1027
+  ASCII/Binary DXF under `ext=false` and legacy `ext=true`. A separate 4x4
+  matrix oracle composes child and parent transforms and checks the expected
+  nested WCS endpoints, including equivalent output for native OCS and legacy
+  WCS insertion-point modes. The focused CTest passes 1/1. This is generated
+  same-library callback and transform-model evidence only; it does not prove
+  independent DXF interoperability, DWG transform layouts, downstream MINSERT
+  array expansion, or native consumer semantics ([receipt](docs/research/p8-3d-consumer-nested-insert-matrix-2026-11-12.json)).
+
 - **P6 generated IMAGEDEF hard-owner reader profile:** the shared OBJECTS
   prologue preflight and typed `DRW_ImageDef` parser now explicitly accept the
   ODA §20.4.81 hard-owner parent code-3 emitted by this writer. Generated

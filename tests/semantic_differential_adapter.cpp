@@ -1411,8 +1411,52 @@ public:
         }
     }
     void collectDwgAppIds() override { addCallback("collectDwgAppIds"); }
-    void writeBlocks() override { addCallback("writeBlocks"); }
-    void writeBlockRecords() override { addCallback("writeBlockRecords"); }
+    void writeBlocks() override {
+        addCallback("writeBlocks");
+        if (!threeDConsumerProbe_ || dxfWriter_ == nullptr)
+            return;
+
+        DRW_Block childBlock;
+        childBlock.name = "PROBE_NESTED_CHILD";
+        childBlock.basePoint = DRW_Coord{1.0, -2.0, 0.5};
+        bool wrote = dxfWriter_->writeBlock(&childBlock);
+
+        DRW_Line childGeometry;
+        childGeometry.layer = "probe_nested_geometry";
+        childGeometry.basePoint = DRW_Coord{1.0, 2.0, 3.0};
+        childGeometry.secPoint = DRW_Coord{4.0, -1.0, 2.0};
+        wrote = dxfWriter_->writeLine(&childGeometry) && wrote;
+
+        DRW_Block parentBlock;
+        parentBlock.name = "PROBE_NESTED_PARENT";
+        parentBlock.basePoint = DRW_Coord{-3.0, 2.0, 1.0};
+        wrote = dxfWriter_->writeBlock(&parentBlock) && wrote;
+
+        DRW_Insert nestedArray;
+        nestedArray.layer = "probe_nested_inner_insert";
+        nestedArray.name = "PROBE_NESTED_CHILD";
+        nestedArray.basePoint = DRW_Coord{4.0, 5.0, 6.0};
+        nestedArray.extPoint = DRW_Coord{0.0, 0.0, 1.0};
+        nestedArray.xscale = 1.5;
+        nestedArray.yscale = 0.5;
+        nestedArray.zscale = 2.0;
+        nestedArray.angle = 0.3;
+        nestedArray.colcount = 2;
+        nestedArray.rowcount = 2;
+        nestedArray.colspace = 7.0;
+        nestedArray.rowspace = 11.0;
+        wrote = dxfWriter_->writeInsert(&nestedArray) && wrote;
+        writeRecipeSucceeded_ = wrote && writeRecipeSucceeded_;
+    }
+    void writeBlockRecords() override {
+        addCallback("writeBlockRecords");
+        if (!threeDConsumerProbe_ || dxfWriter_ == nullptr)
+            return;
+        bool wrote = dxfWriter_->writeBlockRecord("PROBE_NESTED_CHILD", 0);
+        wrote = dxfWriter_->writeBlockRecord("PROBE_NESTED_PARENT", 0)
+            && wrote;
+        writeRecipeSucceeded_ = wrote && writeRecipeSucceeded_;
+    }
     void writeEntities() override;
     void writeLTypes() override { addCallback("writeLTypes"); }
     void writeLayers() override { addCallback("writeLayers"); }
@@ -2377,6 +2421,7 @@ void SemanticSink::writeEntities() {
         wrote = dxfWriter_->writeMesh(&mesh) && wrote;
 
         DRW_Insert insert;
+        insert.layer = "probe_insert_grid";
         insert.name = "PROBE_BLOCK";
         insert.basePoint = DRW_Coord{30.0, 31.0, 32.0};
         insert.extPoint = DRW_Coord{0.0, 1.0, 0.0};
@@ -2389,6 +2434,17 @@ void SemanticSink::writeEntities() {
         insert.colspace = 7.0;
         insert.rowspace = 8.0;
         wrote = dxfWriter_->writeInsert(&insert) && wrote;
+
+        DRW_Insert outerInsert;
+        outerInsert.layer = "probe_nested_outer_insert";
+        outerInsert.name = "PROBE_NESTED_PARENT";
+        outerInsert.basePoint = DRW_Coord{20.0, -5.0, 3.0};
+        outerInsert.extPoint = DRW_Coord{0.0, 1.0, 0.0};
+        outerInsert.xscale = 2.0;
+        outerInsert.yscale = -1.0;
+        outerInsert.zscale = 0.75;
+        outerInsert.angle = -0.4;
+        wrote = dxfWriter_->writeInsert(&outerInsert) && wrote;
 
         DRW_Spline spline;
         spline.degree = 2;
@@ -3344,14 +3400,25 @@ bool run3DConsumerProbe(bool binary) {
     producer.enable3DConsumerProbe();
     dxfRW writer(outputName.c_str());
     producer.configureWrite(&writer);
-    if (!writer.write(&producer, DRW::AC1027, binary)
-        || !producer.writeRecipeSucceeded())
+    const bool writeSucceeded = writer.write(&producer, DRW::AC1027, binary);
+    if (!writeSucceeded || !producer.writeRecipeSucceeded()) {
+        std::cerr << "3D consumer probe write failed: binary=" << binary
+                  << ", writer=" << writeSucceeded
+                  << ", recipe=" << producer.writeRecipeSucceeded()
+                  << ", error=" << static_cast<int>(writer.getError()) << '\n';
         return false;
+    }
 
     SemanticSink consumer("dxfRW", "read");
     dxfRW reader(outputName.c_str());
-    if (!reader.read(&consumer, false) || !consumer.diagnostics.empty())
+    const bool readSucceeded = reader.read(&consumer, false);
+    if (!readSucceeded || !consumer.diagnostics.empty()) {
+        std::cerr << "3D consumer probe read failed: binary=" << binary
+                  << ", reader=" << readSucceeded
+                  << ", error=" << static_cast<int>(reader.getError())
+                  << ", diagnostics=" << consumer.diagnostics.size() << '\n';
         return false;
+    }
 
     // Preserve the established 2D extrusion option independently of the
     // unprojected callback values checked below. For this LWPOLYLINE,
@@ -3360,9 +3427,14 @@ bool run3DConsumerProbe(bool binary) {
     // (2,3,5) -> (-2,5,3) and (4,5,5) -> (-4,5,5).
     SemanticSink legacyConsumer("dxfRW", "read");
     dxfRW legacyReader(outputName.c_str());
-    if (!legacyReader.read(&legacyConsumer, true)
-        || !legacyConsumer.diagnostics.empty())
+    const bool legacyReadSucceeded = legacyReader.read(&legacyConsumer, true);
+    if (!legacyReadSucceeded || !legacyConsumer.diagnostics.empty()) {
+        std::cerr << "3D consumer legacy read failed: binary=" << binary
+                  << ", reader=" << legacyReadSucceeded
+                  << ", error=" << static_cast<int>(legacyReader.getError())
+                  << ", diagnostics=" << legacyConsumer.diagnostics.size() << '\n';
         return false;
+    }
     const auto expectEntityField = [&](const SemanticSink& sink,
                                        const std::string& entity,
                                        const std::string& layer,
@@ -3692,6 +3764,193 @@ bool run3DConsumerProbe(bool binary) {
         || !expectSweptCarriers(legacyConsumer))
         return false;
 
+    const auto expectNestedInsertFields = [&](const SemanticSink& sink,
+                                              bool legacy) {
+        const std::string innerLayer = "probe_nested_inner_insert";
+        const std::string outerLayer = "probe_nested_outer_insert";
+        return expectEntityField(sink, "INSERT", innerLayer, "blockName",
+                                 "\"PROBE_NESTED_CHILD\"")
+            && expectEntityField(sink, "INSERT", innerLayer, "insertionPoint",
+                                 "{\"x\":4,\"y\":5,\"z\":6}")
+            && expectEntityField(sink, "INSERT", innerLayer, "extrusion",
+                                 "{\"x\":0,\"y\":0,\"z\":1}")
+            && expectEntityDouble(sink, "INSERT", innerLayer, "xScale", 1.5)
+            && expectEntityDouble(sink, "INSERT", innerLayer, "yScale", 0.5)
+            && expectEntityDouble(sink, "INSERT", innerLayer, "zScale", 2.0)
+            && expectEntityDouble(sink, "INSERT", innerLayer,
+                                  "rotationAngle", 0.3)
+            && expectEntityField(sink, "INSERT", innerLayer, "columnCount", "2")
+            && expectEntityField(sink, "INSERT", innerLayer, "rowCount", "2")
+            && expectEntityDouble(sink, "INSERT", innerLayer,
+                                  "columnSpacing", 7.0)
+            && expectEntityDouble(sink, "INSERT", innerLayer, "rowSpacing", 11.0)
+            && expectEntityField(sink, "INSERT", outerLayer, "blockName",
+                                 "\"PROBE_NESTED_PARENT\"")
+            && expectEntityField(sink, "INSERT", outerLayer, "insertionPoint",
+                                 legacy ? "{\"x\":-20,\"y\":3,\"z\":-5}"
+                                        : "{\"x\":20,\"y\":-5,\"z\":3}")
+            && expectEntityField(sink, "INSERT", outerLayer, "extrusion",
+                                 "{\"x\":0,\"y\":1,\"z\":0}")
+            && expectEntityDouble(sink, "INSERT", outerLayer, "xScale", 2.0)
+            && expectEntityDouble(sink, "INSERT", outerLayer, "yScale", -1.0)
+            && expectEntityDouble(sink, "INSERT", outerLayer, "zScale", 0.75)
+            && expectEntityDouble(sink, "INSERT", outerLayer,
+                                  "rotationAngle", -0.4);
+    };
+    if (!expectNestedInsertFields(consumer, false)
+        || !expectNestedInsertFields(legacyConsumer, true)
+        || !expectEntityField(consumer, "LINE", "probe_nested_geometry", "start",
+                              "{\"x\":1,\"y\":2,\"z\":3}")
+        || !expectEntityField(consumer, "LINE", "probe_nested_geometry", "end",
+                              "{\"x\":4,\"y\":-1,\"z\":2}"))
+        return false;
+
+    // Independent homogeneous-matrix oracle for the nested INSERT path:
+    // child-local point -> MINSERT in the parent block -> oblique INSERT in
+    // model space. This deliberately does not call libdxfrw's OCS helpers.
+    using Matrix4 = std::array<double, 16>;
+    const auto identityMatrix = [] {
+        Matrix4 matrix{};
+        for (std::size_t i = 0; i < 4; ++i)
+            matrix[i * 4 + i] = 1.0;
+        return matrix;
+    };
+    const auto multiplyMatrix = [](const Matrix4& lhs, const Matrix4& rhs) {
+        Matrix4 result{};
+        for (std::size_t row = 0; row < 4; ++row) {
+            for (std::size_t column = 0; column < 4; ++column) {
+                for (std::size_t k = 0; k < 4; ++k)
+                    result[row * 4 + column] +=
+                        lhs[row * 4 + k] * rhs[k * 4 + column];
+            }
+        }
+        return result;
+    };
+    const auto translationMatrix = [&](const DRW_Coord& point) {
+        Matrix4 matrix = identityMatrix();
+        matrix[3] = point.x;
+        matrix[7] = point.y;
+        matrix[11] = point.z;
+        return matrix;
+    };
+    const auto scaleMatrix = [&](double x, double y, double z) {
+        Matrix4 matrix = identityMatrix();
+        matrix[0] = x;
+        matrix[5] = y;
+        matrix[10] = z;
+        return matrix;
+    };
+    const auto rotationZMatrix = [&](double angle) {
+        Matrix4 matrix = identityMatrix();
+        matrix[0] = std::cos(angle);
+        matrix[1] = -std::sin(angle);
+        matrix[4] = std::sin(angle);
+        matrix[5] = std::cos(angle);
+        return matrix;
+    };
+    const auto ocsMatrix = [&](DRW_Coord normal) {
+        const double normalLength = std::sqrt(normal.x * normal.x
+            + normal.y * normal.y + normal.z * normal.z);
+        normal.x /= normalLength;
+        normal.y /= normalLength;
+        normal.z /= normalLength;
+        DRW_Coord axisX;
+        if (std::fabs(normal.x) < 0.015625
+            && std::fabs(normal.y) < 0.015625) {
+            axisX = DRW_Coord{normal.z, 0.0, -normal.x};
+        } else {
+            axisX = DRW_Coord{-normal.y, normal.x, 0.0};
+        }
+        const double axisLength = std::sqrt(axisX.x * axisX.x
+            + axisX.y * axisX.y + axisX.z * axisX.z);
+        axisX.x /= axisLength;
+        axisX.y /= axisLength;
+        axisX.z /= axisLength;
+        const DRW_Coord axisY{
+            normal.y * axisX.z - axisX.y * normal.z,
+            normal.z * axisX.x - axisX.z * normal.x,
+            normal.x * axisX.y - axisX.x * normal.y};
+        Matrix4 matrix = identityMatrix();
+        matrix[0] = axisX.x; matrix[1] = axisY.x; matrix[2] = normal.x;
+        matrix[4] = axisX.y; matrix[5] = axisY.y; matrix[6] = normal.y;
+        matrix[8] = axisX.z; matrix[9] = axisY.z; matrix[10] = normal.z;
+        return matrix;
+    };
+    const auto makeInsertMatrix = [&](const DRW_Coord& insertion,
+                                      const DRW_Coord& normal,
+                                      double xScale, double yScale,
+                                      double zScale, double rotation,
+                                      const DRW_Coord& blockBase,
+                                      bool insertionIsWcs) {
+        const Matrix4 ocs = ocsMatrix(normal);
+        Matrix4 result = insertionIsWcs
+            ? translationMatrix(insertion)
+            : multiplyMatrix(ocs, translationMatrix(insertion));
+        if (insertionIsWcs)
+            result = multiplyMatrix(result, ocs);
+        result = multiplyMatrix(result, rotationZMatrix(rotation));
+        result = multiplyMatrix(result,
+                                scaleMatrix(xScale, yScale, zScale));
+        result = multiplyMatrix(result, translationMatrix(
+            DRW_Coord{-blockBase.x, -blockBase.y, -blockBase.z}));
+        return result;
+    };
+    const auto transformPoint = [](const Matrix4& matrix,
+                                   const DRW_Coord& point) {
+        const double input[] = {point.x, point.y, point.z, 1.0};
+        DRW_Coord output;
+        double values[] = {0.0, 0.0, 0.0};
+        for (std::size_t row = 0; row < 3; ++row) {
+            for (std::size_t column = 0; column < 4; ++column)
+                values[row] += matrix[row * 4 + column] * input[column];
+        }
+        output.x = values[0];
+        output.y = values[1];
+        output.z = values[2];
+        return output;
+    };
+    const Matrix4 innerNative = makeInsertMatrix(
+        DRW_Coord{4.0, 5.0, 6.0}, DRW_Coord{0.0, 0.0, 1.0},
+        1.5, 0.5, 2.0, 0.3, DRW_Coord{1.0, -2.0, 0.5}, false);
+    const Matrix4 outerNative = makeInsertMatrix(
+        DRW_Coord{20.0, -5.0, 3.0}, DRW_Coord{0.0, 1.0, 0.0},
+        2.0, -1.0, 0.75, -0.4, DRW_Coord{-3.0, 2.0, 1.0}, false);
+    const Matrix4 outerLegacy = makeInsertMatrix(
+        DRW_Coord{-20.0, 3.0, -5.0}, DRW_Coord{0.0, 1.0, 0.0},
+        2.0, -1.0, 0.75, -0.4, DRW_Coord{-3.0, 2.0, 1.0}, true);
+    const DRW_Coord expectedNativeStart = transformPoint(
+        multiplyMatrix(outerNative, innerNative), DRW_Coord{1.0, 2.0, 3.0});
+    const DRW_Coord expectedNativeEnd = transformPoint(
+        multiplyMatrix(outerNative, innerNative), DRW_Coord{4.0, -1.0, 2.0});
+    const DRW_Coord expectedLegacyStart = transformPoint(
+        multiplyMatrix(outerLegacy, innerNative), DRW_Coord{1.0, 2.0, 3.0});
+    const DRW_Coord expectedLegacyEnd = transformPoint(
+        multiplyMatrix(outerLegacy, innerNative), DRW_Coord{4.0, -1.0, 2.0});
+    const auto closePoint = [](const DRW_Coord& actual,
+                               const DRW_Coord& expected) {
+        return std::fabs(actual.x - expected.x) < 1.0e-11
+            && std::fabs(actual.y - expected.y) < 1.0e-11
+            && std::fabs(actual.z - expected.z) < 1.0e-11;
+    };
+    if (!closePoint(expectedNativeStart, DRW_Coord{-29.8937792440482,
+                                                   10.5, -14.5145621709052})
+        || !closePoint(expectedNativeEnd, DRW_Coord{-38.6698381138937,
+                                                    9.0, -18.1130149497834})
+        || !closePoint(expectedLegacyStart, expectedNativeStart)
+        || !closePoint(expectedLegacyEnd, expectedNativeEnd)) {
+        std::cerr << "nested INSERT matrix oracle mismatch: nativeStart={"
+                  << number(expectedNativeStart.x) << ','
+                  << number(expectedNativeStart.y) << ','
+                  << number(expectedNativeStart.z) << "}, nativeEnd={"
+                  << number(expectedNativeEnd.x) << ','
+                  << number(expectedNativeEnd.y) << ','
+                  << number(expectedNativeEnd.z) << "}, legacyStart={"
+                  << number(expectedLegacyStart.x) << ','
+                  << number(expectedLegacyStart.y) << ','
+                  << number(expectedLegacyStart.z) << "}\n";
+        return false;
+    }
+
     const auto expectPolyface = [&](const SemanticSink& sink) {
         const std::string entity = "POLYLINE";
         const std::string layer = "probe_pface";
@@ -3746,14 +4005,18 @@ bool run3DConsumerProbe(bool binary) {
         || !fieldEquals(consumer, "MESH", "face.0.vertex.2", "2")
         || !fieldEquals(consumer, "MESH", "edge.1.end", "2")
         || !fieldEquals(consumer, "MESH", "crease.1", "0.75")
-        || !fieldEquals(consumer, "INSERT", "insertionPoint",
-                        "{\"x\":30,\"y\":31,\"z\":32}")
-        || !fieldEquals(consumer, "INSERT", "extrusion",
-                        "{\"x\":0,\"y\":1,\"z\":0}")
-        || !fieldEquals(consumer, "INSERT", "xScale", "-2")
-        || !fieldEquals(consumer, "INSERT", "zScale", "4")
-        || !fieldEquals(consumer, "INSERT", "columnCount", "2")
-        || !fieldEquals(consumer, "INSERT", "rowCount", "3")
+        || !expectEntityField(consumer, "INSERT", "probe_insert_grid",
+                              "insertionPoint", "{\"x\":30,\"y\":31,\"z\":32}")
+        || !expectEntityField(consumer, "INSERT", "probe_insert_grid",
+                              "extrusion", "{\"x\":0,\"y\":1,\"z\":0}")
+        || !expectEntityField(consumer, "INSERT", "probe_insert_grid",
+                              "xScale", "-2")
+        || !expectEntityField(consumer, "INSERT", "probe_insert_grid",
+                              "zScale", "4")
+        || !expectEntityField(consumer, "INSERT", "probe_insert_grid",
+                              "columnCount", "2")
+        || !expectEntityField(consumer, "INSERT", "probe_insert_grid",
+                              "rowCount", "3")
         || !fieldEquals(consumer, "SPLINE", "controlPoint.2.position",
                         "{\"x\":46,\"y\":47,\"z\":48}")
         || !fieldEquals(consumer, "SPLINE", "knotCount", "6")
