@@ -1717,6 +1717,23 @@ created locally from scratch for the specific control.
   construction or DWG producer qualification
   ([receipt](docs/research/p8-3d-consumer-mesh-geometry-fields-2026-11-12.json)).
 
+- **P8 native FreeCAD MESH DXF consumer check (2026-11-12):** FreeCAD 1.1.4
+  Revision `20260928` launched with the host ARM64 NEON feature visible and
+  successfully completed Draft's DXF import for a locally authored AC1027
+  MESH containing three vertices, one triangular face, three indexed edges,
+  and three distinct crease values. The imported document contained only
+  Draft layer/container objects and no mesh or shape object. The tested Draft
+  importer therefore did not construct native MESH geometry for this input;
+  this is a consumer limitation observation, not evidence of malformed DXF or
+  a libdxfrw writer defect. The importer initially lacked its four optional
+  DXF-library modules; the documented download preference was enabled for the
+  run and restored afterward; the four helper files created solely by the run
+  were removed, restoring the prior app-data state. The generated drawing and
+  macro are temporary and are not repository fixtures. Keep native MESH
+  consumer support open and require a pinned importer revision or another
+  native consumer for repeatable qualification. See the [native
+  observation receipt](docs/research/p8-freecad-114-mesh-dxf-consumer-2026-11-12.json).
+
 - **P6 generated IMAGEDEF hard-owner reader profile:** the shared OBJECTS
   prologue preflight and typed `DRW_ImageDef` parser now explicitly accept the
   ODA §20.4.81 hard-owner parent code-3 emitted by this writer. Generated
