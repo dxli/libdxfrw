@@ -1636,14 +1636,22 @@ created locally from scratch for the specific control.
   omitted terminal null, refusal when the common handle tail is absent, and
   same-object retry. `libdxfrw_dwg_ltype_multiversion_count` passes 1/1. A
   fresh debug conversion reaches the next TABLES record and now fails at the
-  AC1015 LAYER parser; there are no LTYPE parse warnings. The previously
-  recorded LTYPE_CONTROL integrity diagnostic (expected 2, observed 4) remains,
+  AC1015 LAYER parser; there are no LTYPE parse warnings. The LAYER frame
+  declares an 80-bit body; parsing its name (`0`) consumes the entire boundary,
+  leaving no room for the required flags, color, and remaining ODA §20.4.54
+  fields, so the current bounded parser correctly refuses it. LibreDWG 0.14
+  also projects this frame with an empty name and empty layer fields, which is
+  not independent semantic evidence. Treat this source row as malformed or
+  unresolved, not as a basis for a name-only LAYER compatibility rule. The
+  previously recorded LTYPE_CONTROL integrity diagnostic (expected 2, observed 4) remains,
   and the complete drawing still fails with `BAD_READ_TABLES`. This is bounded
   read compatibility for one local, unauthenticated source, not AC1015 file or
   output qualification. LibreDWG 0.14's minJSON/debug output also reports
   malformed LTYPE fields for this source, so it is not used as a semantic
-  oracle. No DWG/DXF fixture was committed. See the [LTYPE control receipt](docs/research/p6-ac1015-ltype-control-legacy-import-profile-2026-11-12.json)
-  and [inline-tail receipt](docs/research/p6-ac1015-ltype-inline-handle-import-2026-11-12.json).
+  oracle. No DWG/DXF fixture was committed. See the [LTYPE control
+  receipt](docs/research/p6-ac1015-ltype-control-legacy-import-profile-2026-11-12.json),
+  [inline-tail receipt](docs/research/p6-ac1015-ltype-inline-handle-import-2026-11-12.json),
+  and [LAYER boundary refusal receipt](docs/research/p6-ac1015-simple-layer-boundary-refusal-2026-11-12.json).
 
 - **P5 Content Format enum combinations:** the generated TABLESTYLE fast
   control crosses all 11 ODA §20.4.99 data types, five DWG unit types, and nine
