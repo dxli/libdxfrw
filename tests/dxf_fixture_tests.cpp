@@ -26834,6 +26834,17 @@ void testHatchOcsWcsCoordinateMapping(TestContext& t) {
                  && std::abs(largeWcsVector.z / largest
                              - 0.8844190238400710) < 1e-14,
              "HATCH OCS vector avoids overflowing an intermediate sum when the WCS result is finite");
+    const DRW_Coord largeWcsPoint = hatch.boundaryPointToWcs(largeOcsVector);
+    t.expect(std::isfinite(largeWcsPoint.x)
+                 && std::isfinite(largeWcsPoint.y)
+                 && std::isfinite(largeWcsPoint.z)
+                 && std::abs(largeWcsPoint.x / largest
+                             - (-0.31568660864772236)) < 1e-14
+                 && std::abs(largeWcsPoint.y / largest
+                             - 0.9289141273359566) < 1e-14
+                 && std::abs(largeWcsPoint.z / largest
+                             - 0.8844190238400710) < 1e-14,
+             "HATCH OCS point avoids overflowing an intermediate sum when the WCS result is finite");
 }
 
 bool writeUnderlayOcsControl(const std::filesystem::path& path,
