@@ -2163,8 +2163,9 @@ public:
   std::unordered_map<std::uint32_t, DRW_Layer *> layermap;
   /// Layer names in declared LAYER_CONTROL slot order, retaining null slots;
   /// source proxy ATTRIBUTE_LAYER indices address this space. Linetype order
-  /// remains the existing compact control-handle order until a physical source
-  /// proves its null-slot indexing semantics. See
+  /// remains the existing compact non-null control-handle order because the
+  /// effect of legal null LTYPE_CONTROL slots on proxy indices is unqualified.
+  /// See
   /// DRW_ProxyGraphicDecoder::decode.
   std::vector<std::string> m_layerNameOrder;
   std::vector<std::string> m_ltypeNameOrder;

@@ -909,13 +909,22 @@ void dwgReader::recordLtypeControlMemberRoleError(
         index < countedEntries ? DRW::DwgSoftOwnership
                                : DRW::DwgHardOwnership);
     if (member == 0u) {
+      const bool countedEntry = index < countedEntries;
       recordIntegrityDiagnostic(
-          DwgIntegritySeverity::Error, offsetSpace,
+          countedEntry ? DwgIntegritySeverity::Warning
+                       : DwgIntegritySeverity::Error,
+          offsetSpace,
           DwgIntegrityPhase::SectionParser,
           DwgIntegrityCheckKind::TableControlNullMember, secEnum::OBJECTS,
           -1, "LTYPE_CONTROL", 0u, false, source.loc, true, source.handle,
           source.handle != DRW::NoHandle, expected, roles[index], true);
-      return;
+      if (!countedEntry)
+        return;
+      // ODA §20.4.57 explicitly lists NULL soft-pointer values among the
+      // counted LTYPE_CONTROL references. Their table/proxy ordinal mapping
+      // is not established, so keep output membership fail-closed elsewhere.
+      if (roles[index] == expected)
+        continue;
     }
     if (roles[index] == expected)
       continue;

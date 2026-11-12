@@ -7754,10 +7754,12 @@ void testLtypeControlMemberRoleDiagnostics(TestContext& t) {
                     == DwgIntegrityCheckKind::TableControlNullMember;
             });
         const std::size_t missingIndex = missingCase.first == 7 ? 0u : 2u;
+        const DwgIntegritySeverity expectedSeverity = missingIndex == 0u
+            ? DwgIntegritySeverity::Warning : DwgIntegritySeverity::Error;
         t.expect(parsedMissing && missing.orderedHandleSlots.size() == 3u
                      && missing.orderedHandleSlots[missingIndex] == 0u
                      && nullMember != missingDiagnostics.end()
-                     && nullMember->severity == DwgIntegritySeverity::Error
+                     && nullMember->severity == expectedSeverity
                      && nullMember->phase == DwgIntegrityPhase::SectionParser
                      && nullMember->logicalHandle == source.handle
                      && nullMember->hasLogicalHandle
@@ -7766,7 +7768,7 @@ void testLtypeControlMemberRoleDiagnostics(TestContext& t) {
                      && nullMember->expected == missingCase.second
                      && nullMember->observed == missingCase.second
                      && nullMember->hasExpected && nullMember->hasObserved,
-                 "null counted or phantom LTYPE_CONTROL slot is source-anchored and strict-fatal");
+                 "ODA null counted LTYPE slot warns; required phantom remains strict-fatal");
     }
 
     auto wrongRoleBody = makeAc1015LtypeCountBody(1u, false, 6);
