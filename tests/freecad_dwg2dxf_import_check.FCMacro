@@ -130,6 +130,60 @@ def line_pass_json(result):
     return json.dumps(result, sort_keys=True, default=str, allow_nan=False)
 
 
+def assert_primitive_geometry(document, stats, expected_counts, expected_shapes):
+    """Check an authored LINE/CIRCLE/ARC drawing after native DXF import."""
+    counts = stats.get("entityCounts", {})
+    for entity, expected in expected_counts.items():
+        actual = counts.get(entity, 0)
+        if type(actual) is not int or actual != expected:
+            raise AssertionError(
+                "expected %d imported %s records, observed %r"
+                % (expected, entity, actual)
+            )
+    features = [obj for obj in document.Objects
+                if getattr(obj, "Shape", None) is not None
+                and not obj.Shape.isNull()]
+    if len(features) != len(expected_shapes):
+        raise AssertionError(
+            "expected %d shaped primitive imports, observed %d"
+            % (len(expected_shapes), len(features))
+        )
+    observed = []
+    for obj in features:
+        shape = obj.Shape
+        if shape.isValid() is not True or len(shape.Edges) != 1:
+            raise AssertionError("each imported primitive must be one valid edge")
+        box = shape.BoundBox
+        bounds = finite_values(
+            (box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax),
+            6, "observed primitive bounds")
+        length = float(shape.Edges[0].Length)
+        if not math.isfinite(length):
+            raise AssertionError("imported primitive edge length must be finite")
+        observed.append((bounds, length))
+
+    expected = []
+    for profile in expected_shapes:
+        if not isinstance(profile, dict) or set(profile) != {"bounds", "length"}:
+            raise AssertionError("each primitive expectation needs bounds and length")
+        bounds = finite_values(profile["bounds"], 6, "expected primitive bounds")
+        length = float(profile["length"])
+        if not math.isfinite(length) or length <= 0.0:
+            raise AssertionError("expected primitive length must be positive and finite")
+        expected.append((bounds, length))
+
+    observed.sort()
+    expected.sort()
+    for (actual_bounds, actual_length), (wanted_bounds, wanted_length) in zip(
+            observed, expected):
+        if not coordinates_match(actual_bounds, wanted_bounds):
+            raise AssertionError("imported primitive bounds differ from authored values")
+        if abs(actual_length - wanted_length) > 1e-7 * max(1.0, wanted_length):
+            raise AssertionError("imported primitive edge length differs from authored value")
+    return {"shape_bounds": [item[0] for item in observed],
+            "edge_lengths": [item[1] for item in observed]}
+
+
 def line_predicate_self_test():
     """Dependency-free controls of the actual predicate; no CAD kernel executes."""
     from copy import deepcopy
@@ -722,6 +776,31 @@ def modeler_document_inventory(document):
 
 
 expected_bounds_json = os.environ.get("LIBDXFRW_FREECAD_EXPECT_LINE_BOUNDS")
+expected_primitives = None
+expected_primitive_counts = os.environ.get(
+    "LIBDXFRW_FREECAD_EXPECT_PRIMITIVE_COUNTS")
+expected_primitive_shapes = os.environ.get(
+    "LIBDXFRW_FREECAD_EXPECT_PRIMITIVE_SHAPES")
+if expected_primitive_counts or expected_primitive_shapes:
+    try:
+        if not expected_primitive_counts or not expected_primitive_shapes:
+            raise ValueError("both primitive count and shape expectations are required")
+        expected_counts = {}
+        for item in expected_primitive_counts.split(","):
+            entity, count = item.split(":", 1)
+            expected_counts[entity] = int(count)
+        expected_shapes = []
+        for item in expected_primitive_shapes.split("|"):
+            values = [float(value) for value in item.split(",")]
+            if len(values) != 7:
+                raise ValueError("each shape expectation needs six bounds and one length")
+            expected_shapes.append({"bounds": values[:6], "length": values[6]})
+        if not expected_counts or not expected_shapes:
+            raise ValueError("expected nonempty counts and shape profiles")
+        expected_primitives = {"counts": expected_counts, "shapes": expected_shapes}
+    except Exception as error:
+        raise RuntimeError(
+            "invalid FreeCAD primitive expectations: %s" % error)
 if expected_bounds_json:
     try:
         expected_bounds_data = json.loads(expected_bounds_json)
@@ -916,6 +995,20 @@ try:
                 "freecad_3dface_outcome": face_outcome,
             }
         )
+    elif expected_primitives is not None:
+        geometry = assert_primitive_geometry(
+            doc, stats, expected_primitives["counts"],
+            expected_primitives["shapes"])
+        if unsupported:
+            raise AssertionError(
+                "FreeCAD reported unsupported features: %r" % unsupported
+            )
+        result = dict(common_result)
+        result.update({
+            "expected_entity_counts": expected_primitives["counts"],
+            "expected_primitive_shapes": expected_primitives["shapes"],
+            "primitive_geometry": geometry,
+        })
     else:
         import Part
 

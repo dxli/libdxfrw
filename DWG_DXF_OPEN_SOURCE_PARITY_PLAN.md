@@ -8178,6 +8178,21 @@ the pinned 1.1.3, Linux, or Windows gates. It qualifies one generated LINE
 route only, not physical producers, broader entities, ACIS solids, or native
 DWG support. No fixture was added. See the [macOS 1.1.4 receipt](docs/research/p8-macos-freecad-114-generated-ac1021-line-qualification-2026-11-12.json).
 
+**P8 generated AC1021 primitive open/insert qualification (2026-11-12):** the
+optional native-consumer workflow now generates a fresh AC1021 drawing with
+one nonzero-Z LINE, one elevated CIRCLE, and one elevated ARC. Through the
+hash-checked installed `dwg2dxf`, FreeCAD 1.1.4's C++ DXF importer successfully
+opened and inserted the drawing at a Unicode path. Both operations reported
+exactly one record of each expected type, no unsupported features, three
+valid one-edge shapes, and authored bounds and edge lengths within the stated
+tolerance. The locally installed converter was byte-identical to this build;
+the generated DWG/DXF remained in temporary directories and no fixture was
+added. This qualifies only the generated AC1021 primitive transport and
+FreeCAD 1.1.4 macOS ARM64 route. The repository workflow pins FreeCAD 1.1.3;
+hosted Linux/Windows runs, other entity/version profiles, native application
+semantics and broad support claims remain open. See the [primitive
+qualification receipt](docs/research/p8-freecad-ac1021-generated-primitives-open-insert-2026-11-12.json).
+
 **FreeCAD ACIS consumer boundary (2026-11-12):** FreeCAD's current Draft DXF
 documentation says its built-in DXF importer cannot read ACIS/SAT solid blobs;
 its documented C++ entity list excludes 3DSOLID, REGION, and BODY. Its DWG

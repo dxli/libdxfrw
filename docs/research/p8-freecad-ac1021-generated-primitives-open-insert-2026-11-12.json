@@ -1,0 +1,86 @@
+{
+  "schema": 1,
+  "date": "2026-11-12",
+  "title": "Generated AC1021 LINE/CIRCLE/ARC FreeCAD open and insert qualification",
+  "scope": "One from-scratch AC1021 DWG with one nonzero-Z LINE, one elevated CIRCLE, and one elevated ARC, converted by the installed libdxfrw dwg2dxf and consumed through FreeCAD's C++ DXF importer.",
+  "platform": {
+    "os": "macOS 27.2.1",
+    "architecture": "arm64",
+    "freecadVersion": "1.1.4",
+    "freecadRevision": "4fd3bf320d9566a27e60069fc8387448aaa3a094",
+    "importer": "C++ Import backend",
+    "importMode": 2,
+    "conversionMode": "LibreDWG-only"
+  },
+  "source": {
+    "generator": "tests/dwg_local_roundtrip_tests.cpp --generate-freecad-primitives-source",
+    "generatorExecutableSha256": "3efe9f9baaebb6e03711528a0a57b1e01967690f0259c13e59c8083e42d7108a",
+    "magic": "AC1021",
+    "sha256": "36d04cad956a5fff0a947c741fe1d465ed7beda8859c008db1e2eb0af182bdd4",
+    "entities": {
+      "LINE": 1,
+      "CIRCLE": 1,
+      "ARC": 1
+    },
+    "committedFixture": false
+  },
+  "converter": {
+    "path": "/tmp/libdxfrw-freecad-current-install/bin/dwg2dxf",
+    "buildExecutableSha256": "36ccaf73892eba809aed7316272d5e02d1ce2f4b645c4d3057109df391f506f1",
+    "installedExecutableSha256": "36ccaf73892eba809aed7316272d5e02d1ce2f4b645c4d3057109df391f506f1",
+    "sameBytesAsBuild": true
+  },
+  "convertedDxf": {
+    "sha256": "1438e54b31fc1c37817b99967aa48c4f487ca0850d7c6b2d1487ae9d5d5bb4f3",
+    "committedFixture": false
+  },
+  "expectedGeometry": [
+    {
+      "entity": "LINE",
+      "bounds": [1, 2, 3, 4, 5, 6],
+      "edgeLength": 5.196152422706632
+    },
+    {
+      "entity": "CIRCLE",
+      "bounds": [7.5, 8.5, 12, 12.5, 13.5, 12],
+      "edgeLength": 15.707963267948966
+    },
+    {
+      "entity": "ARC",
+      "bounds": [14.10362826838344, 14.86591385739083, 15, 16.391193475987258, 17.32144616774455, 15],
+      "edgeLength": 3.5
+    }
+  ],
+  "observedGeometry": {
+    "bounds": [
+      [1.0, 2.0, 3.0, 4.000000000000001, 5.000000000000001, 6.000000000000001],
+      [7.5, 8.5, 12.0, 12.5, 13.5, 12.0],
+      [14.103628268383442, 14.865913857390831, 15.0, 16.391193475987258, 17.321446167744554, 15.0]
+    ],
+    "edgeLengths": [5.196152422706632, 15.707963267948966, 3.4999999999999996],
+    "tolerance": "bounds absolute 1e-9; edge length relative 1e-7"
+  },
+  "operations": {
+    "open": "PASS",
+    "insert": "PASS",
+    "entityCounts": {
+      "ARC": 1,
+      "CIRCLE": 1,
+      "LINE": 1
+    },
+    "unsupportedFeatures": {},
+    "validSingleEdgeShapes": 3,
+    "unicodeAndSpacesPath": true
+  },
+  "validation": {
+    "focusedCtest": "dwg2dxf_freecad_generated_ac1021_primitives_open/insert: PASS 2/2",
+    "macroPredicateSelfTest": "PASS (32 mocked checks; no native runtime)",
+    "workflow": ".github/workflows/freecad-platform-qualification.yml now includes this generated profile for its manual Linux and Windows FreeCAD jobs",
+    "fixturePolicy": "DWG and DXF were generated in isolated temporary directories; no fixture was added to the repository."
+  },
+  "limitations": [
+    "This is one generated AC1021 transport profile, not a physical-producer or broad format-support claim.",
+    "Local qualification used FreeCAD 1.1.4. Hosted Linux/Windows jobs use the separately pinned FreeCAD 1.1.3 revision and remain pending.",
+    "No entities beyond LINE, CIRCLE, and ARC, no other DWG target revision, and no native display/edit semantic was qualified."
+  ]
+}

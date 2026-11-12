@@ -4868,6 +4868,9 @@ endif()
 # and is intended for manual platform qualification, not every fast CI run.
 option(LIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_LINE_CONTROL
     "Enable pinned FreeCAD checks using the generated AC1021 3D LINE control" OFF)
+set(LIBDXFRW_FREECAD_EXPECTED_REVISION
+    "145529fe741292ff0b3977a01195bf0247425794" CACHE STRING
+    "Expected FreeCAD source revision for native integration checks")
 if(LIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_LINE_CONTROL)
     libdxfrw_require_test_cli(LIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_LINE_CONTROL)
     if(NOT EXISTS "${LIBDXFRW_FREECADCMD_EXECUTABLE}")
@@ -4890,7 +4893,7 @@ if(LIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_LINE_CONTROL)
                 "-DIMPORT_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_import_check.FCMacro"
                 "-DOPERATION=${_operation}"
                 -DINPUT_PATH_UNICODE=ON
-                -DEXPECTED_FREECAD_REVISION=145529fe741292ff0b3977a01195bf0247425794
+                "-DEXPECTED_FREECAD_REVISION=${LIBDXFRW_FREECAD_EXPECTED_REVISION}"
                 -DEXPECTED_LINE_BOUNDS=[[1,2,3,4,5,6]]
                 -DEXPECTED_LINE_ENDPOINTS=[[[1,2,3],[4,5,6]]]
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_installed_3d_line_test.cmake
@@ -4898,6 +4901,44 @@ if(LIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_LINE_CONTROL)
         set_tests_properties(dwg2dxf_freecad_generated_ac1021_line_${_operation}
             PROPERTIES
                 LABELS "freecad;installed;generated;integration;AC1021;platform"
+                TIMEOUT 180)
+    endforeach()
+endif()
+
+# A locally generated mixed 2D/3D primitive source broadens the native
+# consumer check beyond a single LINE while keeping exact geometry assertions.
+option(LIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_PRIMITIVE_CONTROL
+    "Enable FreeCAD open/insert checks for generated AC1021 LINE/CIRCLE/ARC" OFF)
+if(LIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_PRIMITIVE_CONTROL)
+    libdxfrw_require_test_cli(LIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_PRIMITIVE_CONTROL)
+    if(NOT EXISTS "${LIBDXFRW_FREECADCMD_EXECUTABLE}")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_FREECADCMD_EXECUTABLE to FreeCAD's FreeCADCmd/freecadcmd")
+    endif()
+    if(NOT EXISTS "${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE to the installed dwg2dxf")
+    endif()
+    foreach(_operation IN ITEMS open insert)
+        add_test(
+            NAME dwg2dxf_freecad_generated_ac1021_primitives_${_operation}
+            COMMAND ${CMAKE_COMMAND}
+                "-DFREECADCMD=${LIBDXFRW_FREECADCMD_EXECUTABLE}"
+                "-DDWG2DXF=${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}"
+                "-DBUILD_DWG2DXF=$<TARGET_FILE:dwg2dxf>"
+                "-DDWG_SOURCE_GENERATOR=$<TARGET_FILE:libdxfrw_dwg_local_roundtrip>"
+                -DEXPECTED_MAGIC_HEX=414331303231
+                "-DEXPECTED_FREECAD_REVISION=${LIBDXFRW_FREECAD_EXPECTED_REVISION}"
+                "-DEXPECTED_PRIMITIVE_COUNTS=LINE:1,CIRCLE:1,ARC:1"
+                "-DEXPECTED_PRIMITIVE_SHAPES=1,2,3,4,5,6,5.196152422706632|7.5,8.5,12,12.5,13.5,12,15.707963267948966|14.10362826838344,14.86591385739083,15,16.391193475987258,17.32144616774455,15,3.5"
+                "-DIMPORT_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_import_check.FCMacro"
+                "-DOPERATION=${_operation}"
+                -DINPUT_PATH_UNICODE=ON
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_installed_3d_line_test.cmake
+        )
+        set_tests_properties(dwg2dxf_freecad_generated_ac1021_primitives_${_operation}
+            PROPERTIES
+                LABELS "freecad;installed;generated;integration;AC1021;platform;primitives"
                 TIMEOUT 180)
     endforeach()
 endif()

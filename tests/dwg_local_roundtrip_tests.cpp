@@ -9796,6 +9796,56 @@ private:
     bool wroteLine_ {false};
 };
 
+class CliPrimitiveDwgSource final : public dx_iface {
+public:
+    explicit CliPrimitiveDwgSource(dwgRW* writer) : writer_(writer) {}
+
+    void writeHeader(DRW_Header& header) override { header.vars.clear(); }
+    void writeDwgClasses() override {}
+    void collectDwgAppIds() override {}
+    void writeBlocks() override {}
+    void writeBlockRecords() override {}
+    void writeEntities() override {
+        if (writer_ == nullptr)
+            return;
+        DRW_Line line;
+        line.basePoint = {1.0, 2.0, 3.0};
+        line.secPoint = {4.0, 5.0, 6.0};
+        wroteLine_ = writer_->writeLine(&line) && line.handle != 0u;
+
+        DRW_Circle circle;
+        circle.basePoint = {10.0, 11.0, 12.0};
+        circle.radious = 2.5;
+        wroteCircle_ = writer_->writeCircle(&circle) && circle.handle != 0u;
+
+        DRW_Arc arc;
+        arc.basePoint = {13.0, 14.0, 15.0};
+        arc.radious = 3.5;
+        arc.staangle = 0.25;
+        arc.endangle = 1.25;
+        wroteArc_ = writer_->writeArc(&arc) && arc.handle != 0u;
+    }
+    void writeObjects() override {}
+    void writeLTypes() override {}
+    void writeLayers() override {}
+    void writeTextstyles() override {}
+    void writeVports() override {}
+    void writeDimstyles() override {}
+    void writeViews() override {}
+    void writeUCSs() override {}
+    void writeAppId() override {}
+    bool finalizeDwgWrite() override {
+        return wroteLine_ && wroteCircle_ && wroteArc_;
+    }
+    bool finalizeDwgWriteStructure() override { return true; }
+
+private:
+    dwgRW* writer_ {nullptr};
+    bool wroteLine_ {false};
+    bool wroteCircle_ {false};
+    bool wroteArc_ {false};
+};
+
 class Dwg3DFaceFlagWriter final : public dx_iface {
 public:
     explicit Dwg3DFaceFlagWriter(dwgRW& writer, int firstFaceFlags)
@@ -40088,6 +40138,26 @@ int main(int argc, char** argv) {
         if (!written || !source.wroteLine()) {
             const DRW_OperationDiagnostic diagnostic = writer.getLastDiagnostic();
             std::cerr << "Could not generate CLI batch DWG source: "
+                      << diagnostic.code << " — " << diagnostic.message << '\n';
+            return 1;
+        }
+        return 0;
+    }
+    if ((argc == 3 || argc == 4)
+        && std::string(argv[1]) == "--generate-freecad-primitives-source") {
+        if (argc == 4 && std::string(argv[3]) != "AC1021") {
+            std::cerr << "FreeCAD primitive source requires AC1021\n";
+            return 1;
+        }
+        if (std::filesystem::exists(argv[2])) {
+            std::cerr << "Refusing to replace an existing FreeCAD geometry source\n";
+            return 1;
+        }
+        dwgRW writer(argv[2]);
+        CliPrimitiveDwgSource source(&writer);
+        if (!writer.write(&source, DRW::AC1021, true)) {
+            const DRW_OperationDiagnostic diagnostic = writer.getLastDiagnostic();
+            std::cerr << "Could not generate FreeCAD geometry source: "
                       << diagnostic.code << " — " << diagnostic.message << '\n';
             return 1;
         }

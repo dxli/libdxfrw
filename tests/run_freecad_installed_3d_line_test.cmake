@@ -152,9 +152,16 @@ if(DEFINED SAMPLE)
             "Evidence retained at ${_temp_parent}\n${_copy_stdout}\n${_copy_stderr}")
     endif()
 elseif(DEFINED DWG_SOURCE_GENERATOR)
-    set(_generated_source "${_test_root}/generated AC1021 3D LINE.dwg")
+if(DEFINED EXPECTED_PRIMITIVE_COUNTS
+        AND DEFINED EXPECTED_PRIMITIVE_SHAPES)
+        set(_generated_source "${_test_root}/generated AC1021 primitives.dwg")
+        set(_generator_option "--generate-freecad-primitives-source")
+    else()
+        set(_generated_source "${_test_root}/generated AC1021 3D LINE.dwg")
+        set(_generator_option "--generate-cli-batch-source")
+    endif()
     execute_process(
-        COMMAND "${DWG_SOURCE_GENERATOR}" --generate-cli-batch-source
+        COMMAND "${DWG_SOURCE_GENERATOR}" "${_generator_option}"
             "${_generated_source}" AC1021
         RESULT_VARIABLE _generate_result
         OUTPUT_VARIABLE _generate_stdout
@@ -164,7 +171,7 @@ elseif(DEFINED DWG_SOURCE_GENERATOR)
     if(NOT "${_generate_result}" STREQUAL "0"
             OR NOT EXISTS "${_generated_source}")
         message(FATAL_ERROR
-            "Could not generate the local AC1021 LINE control (${_generate_result}).\n"
+            "Could not generate the local AC1021 control (${_generate_result}).\n"
             "Evidence retained at ${_temp_parent}\n"
             "${_generate_stdout}\n${_generate_stderr}")
     endif()
@@ -276,6 +283,15 @@ if(DEFINED EXPECTED_LINE_ENDPOINTS)
     list(APPEND _environment
         "LIBDXFRW_FREECAD_EXPECT_LINE_ENDPOINTS=${EXPECTED_LINE_ENDPOINTS}")
 endif()
+if(DEFINED EXPECTED_PRIMITIVE_COUNTS
+        AND DEFINED EXPECTED_PRIMITIVE_SHAPES)
+    list(REMOVE_ITEM _environment
+        "LIBDXFRW_FREECAD_EXPECT_LINE_BOUNDS=[[1,2,3,4,6,9]]"
+        "LIBDXFRW_FREECAD_EXPECT_LINE_ENDPOINTS=[[[1,2,3],[4,6,9]]]" )
+    list(APPEND _environment
+        "LIBDXFRW_FREECAD_EXPECT_PRIMITIVE_COUNTS=${EXPECTED_PRIMITIVE_COUNTS}"
+        "LIBDXFRW_FREECAD_EXPECT_PRIMITIVE_SHAPES=${EXPECTED_PRIMITIVE_SHAPES}")
+endif()
 if(DEFINED EXPECTED_FREECAD_REVISION)
     list(APPEND _environment
         "LIBDXFRW_FREECAD_EXPECT_REVISION=${EXPECTED_FREECAD_REVISION}")
@@ -296,6 +312,12 @@ if(NOT "${_freecad_result}" STREQUAL "0")
         "stdout:\n${_freecad_stdout}\nstderr:\n${_freecad_stderr}")
 endif()
 
+if(DEFINED EXPECTED_PRIMITIVE_COUNTS
+        AND DEFINED EXPECTED_PRIMITIVE_SHAPES)
+    set(_geometry_assertion_key "\"expected_entity_counts\"")
+else()
+    set(_geometry_assertion_key "\"expected_line_bounds\"")
+endif()
 foreach(_expected IN ITEMS
         "FREECAD_DWG_IMPORT_ASSERTIONS_PASS="
         "${_installed_converter}"
@@ -303,7 +325,7 @@ foreach(_expected IN ITEMS
         "\"operation\": \"${OPERATION}\""
         "\"discovery\": \"path\""
         "\"dwg_conversion\": ${DWG_CONVERSION_MODE}"
-        "\"expected_line_bounds\"")
+        "${_geometry_assertion_key}")
     string(FIND "${_freecad_stdout}" "${_expected}" _found)
     if(_found EQUAL -1)
         message(FATAL_ERROR
