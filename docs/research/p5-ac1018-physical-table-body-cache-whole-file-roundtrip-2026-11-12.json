@@ -27,7 +27,7 @@
   "checks": {
     "sourceImport": "AC1018; one complete typed TABLE; 3 rows x 3 columns; seven nonempty text cells; 2104 proxy bytes; eight retained ranges",
     "serialization": "whole-file AC1018 output succeeded after remapping only the selected table/style/block handles and layer-0 reference; the selected TABLE proxy bytes were supplied unchanged",
-    "freshLibdxfrwReadback": "PASS; exact 2104-byte proxy string, count, 3x3 typed cell content/merge roles, column widths, row heights, value flag, retained-range count, style reference, block reference, and omitted extension dictionary verified",
+    "freshLibdxfrwReadback": "PASS; exact 2104-byte proxy string, count, 3x3 typed cell content/merge roles, column widths, row heights, value flag, and each ordered retained range's name, bit size, version, count, handle role and completeness verified, along with style/block references and omitted extension dictionary",
     "independentLibreDWG": {
       "version": "LibreDWG 0.14",
       "sourceJsonSha256": "6a02ce1d91201535ce092d6d9af01209b9bb9768184cbeff93cb9ecc0074b0fd",

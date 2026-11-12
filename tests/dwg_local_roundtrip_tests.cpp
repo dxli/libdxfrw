@@ -40405,8 +40405,22 @@ bool testPhysicalAc1018TableBodyWholeFileRoundTrip(
                                 const DRW_Table& rhs) {
         if (lhs.m_content.m_rows.size() != rhs.m_content.m_rows.size()
             || lhs.m_content.m_columns.size()
-                != rhs.m_content.m_columns.size())
+                != rhs.m_content.m_columns.size()
+            || lhs.m_content.m_subrecordRanges.size()
+                != rhs.m_content.m_subrecordRanges.size())
             return false;
+        for (std::size_t i = 0u;
+             i < lhs.m_content.m_subrecordRanges.size(); ++i) {
+            const DRW_DwgSubrecordRange& a =
+                lhs.m_content.m_subrecordRanges[i];
+            const DRW_DwgSubrecordRange& b =
+                rhs.m_content.m_subrecordRanges[i];
+            if (a.m_name != b.m_name || a.m_bitSize != b.m_bitSize
+                || a.m_version != b.m_version || a.m_count != b.m_count
+                || a.m_rawHandleCode != b.m_rawHandleCode
+                || a.m_parseComplete != b.m_parseComplete)
+                return false;
+        }
         for (std::size_t i = 0u; i < lhs.m_content.m_columns.size(); ++i) {
             if (lhs.m_content.m_columns[i].m_width
                 != rhs.m_content.m_columns[i].m_width)
