@@ -80,10 +80,86 @@ bool matches(const Result& r) {
         &&r.references[1].groupCode==361&&r.references[1].target==0xbau&&r.references[1].startBit==841u&&r.references[1].endBit==921u
         &&r.references[2].groupCode==360&&r.references[2].target==0xbdu&&r.references[2].startBit==1577u&&r.references[2].endBit==1657u;
 }
+bool projected(const Fixture& f,const std::array<std::uint32_t,3>& targets,
+               const std::vector<DRW_Variant>& entries) {
+    if(entries.size()!=f.typed.m_dataEntries.size())return false;
+    constexpr std::array<std::size_t,3> indexes{{1u,7u,12u}};
+    for(std::size_t i=0;i<entries.size();++i) {
+        bool reference=false;
+        for(std::size_t j=0;j<indexes.size();++j) {
+            if(i!=indexes[j])continue;
+            reference=true;
+            if(entries[i].code()!=f.typed.m_dataEntries[i].code()
+                ||entries[i].type()!=DRW_Variant::INTEGER64
+                ||entries[i].i64_val()!=targets[j])return false;
+        }
+        if(!reference && (entries[i].code()!=f.typed.m_dataEntries[i].code()
+            ||entries[i].type()!=f.typed.m_dataEntries[i].type()))return false;
+    }
+    return entries[0].stringEquals("ACAD_ROUNDTRIP_2008_TABLE_ENTITY")
+        &&entries[8].stringEquals("ACAD_ROUNDTRIP_PRE2007_TABLE")
+        &&entries[11].stringEquals("ACAD_ROUNDTRIP_PRE2007_TABLECELL");
+}
+bool referenceProjection() {
+    auto f=build();const auto originalRaw=f.raw.m_rawBytes;
+    const std::array<std::uint32_t,3> targets{{0x501u,0x502u,0x503u}};
+    std::vector<DRW_Variant> entries;
+    entries.emplace_back(90,std::int32_t{77});
+    Result source;source.handle=1u;
+    if(!DwgTableRoundtripXRecordAc1018Candidate::projectReferences(
+           f.raw,f.typed,targets,entries,source)
+        ||!matches(source)||!projected(f,targets,entries)
+        ||f.raw.m_rawBytes!=originalRaw
+        ||f.typed.m_dataEntries[1].i64_val()!=0xb9u
+        ||f.typed.m_dataEntries[7].i64_val()!=0xbau
+        ||f.typed.m_dataEntries[12].i64_val()!=0xbdu)return false;
+
+    const auto outputSnapshot=entries;
+    const std::array<std::array<std::uint32_t,3>,5> invalid{{
+        {{0u,0x502u,0x503u}},{{0xbcu,0x502u,0x503u}},
+        {{0xbbu,0x502u,0x503u}},{{0x501u,0x501u,0x503u}},
+        {{0x501u,0x502u,0x502u}}
+    }};
+    for(const auto& bad:invalid) {
+        source.handle=1u;
+        if(DwgTableRoundtripXRecordAc1018Candidate::projectReferences(
+               f.raw,f.typed,bad,entries,source)
+            ||!clear(source)||entries.size()!=outputSnapshot.size()
+            ||entries[1].i64_val()!=outputSnapshot[1].i64_val()
+            ||entries[7].i64_val()!=outputSnapshot[7].i64_val()
+            ||entries[12].i64_val()!=outputSnapshot[12].i64_val())return false;
+    }
+    auto malformed=build();malformed.typed.m_dataEntries[7]=DRW_Variant(361,std::uint64_t{0x999u});
+    source.handle=1u;
+    if(DwgTableRoundtripXRecordAc1018Candidate::projectReferences(
+           malformed.raw,malformed.typed,targets,entries,source)
+        ||!clear(source)||entries[1].i64_val()!=outputSnapshot[1].i64_val())return false;
+
+    fault::count=0;fault::active=true;
+    const bool accepted=DwgTableRoundtripXRecordAc1018Candidate::projectReferences(
+        f.raw,f.typed,targets,entries,source);
+    fault::active=false;const auto count=fault::count;
+    if(!accepted||!matches(source)||!projected(f,targets,entries)||count==0u||count>32u)return false;
+    for(std::size_t i=0;i<count;++i) {
+        entries=outputSnapshot;source.handle=1u;fault::remaining=static_cast<long>(i);
+        const bool faultAccepted=DwgTableRoundtripXRecordAc1018Candidate::projectReferences(
+            f.raw,f.typed,targets,entries,source);
+        fault::remaining=-1;
+        if(faultAccepted||!clear(source)||entries[1].i64_val()!=outputSnapshot[1].i64_val()
+            ||entries[7].i64_val()!=outputSnapshot[7].i64_val()
+            ||entries[12].i64_val()!=outputSnapshot[12].i64_val())return false;
+        if(!DwgTableRoundtripXRecordAc1018Candidate::projectReferences(
+               f.raw,f.typed,targets,entries,source)
+            ||!matches(source)||!projected(f,targets,entries))return false;
+    }
+    std::cout<<"reference projection controls passed; allocation faults="<<count<<'\n';
+    return true;
+}
 bool refused(const Fixture& f){Result r;r.handle=7u;r.references[2].target=2u;return !DwgTableRoundtripXRecordAc1018Candidate::inspect(f.raw,f.typed,r)&&clear(r);}
 bool generated() {
     auto f=build();const auto original=f.raw.m_rawBytes;Result r;
     if(!DwgTableRoundtripXRecordAc1018Candidate::inspect(f.raw,f.typed,r)||!matches(r))return false;
+    if(!referenceProjection())return false;
     for(std::size_t n=0;n<original.size();++n){
         f.raw.m_rawBytes.assign(original.begin(),original.begin()+n);f.raw.m_objectSize=static_cast<std::uint32_t>(n);
         if(!refused(f))return false;

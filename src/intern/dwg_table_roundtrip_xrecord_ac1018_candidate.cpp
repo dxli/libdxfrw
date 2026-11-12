@@ -140,4 +140,37 @@ bool inspect(const DRW_UnsupportedObject& raw, const DRW_XRecord& typed,
         return true;
     } catch (...) {result=Result{};return false;}
 }
+
+bool projectReferences(const DRW_UnsupportedObject& raw,
+                       const DRW_XRecord& typed,
+                       const std::array<std::uint32_t, 3>& mappedTargets,
+                       std::vector<DRW_Variant>& projectedEntries,
+                       Result& source) noexcept {
+    source=Result{};
+    try {
+        Result inspected;
+        if (!inspect(raw,typed,inspected)) return false;
+        for (std::size_t i=0;i<mappedTargets.size();++i) {
+            const auto target=mappedTargets[i];
+            if (target==0u || target==DRW::NoHandle || target==inspected.handle
+                || target==inspected.owner) return false;
+            for (std::size_t j=0;j<i;++j)
+                if (target==mappedTargets[j]) return false;
+        }
+
+        std::vector<DRW_Variant> candidate=typed.m_dataEntries;
+        for (std::size_t i=0;i<mappedTargets.size();++i) {
+            const auto entryIndex=i==0u ? 1u : (i==1u ? 7u : 12u);
+            candidate[entryIndex]=DRW_Variant(
+                inspected.references[i].groupCode,
+                static_cast<std::uint64_t>(mappedTargets[i]));
+            if (candidate[entryIndex].code()!=inspected.references[i].groupCode
+                || candidate[entryIndex].type()!=DRW_Variant::INTEGER64
+                || candidate[entryIndex].i64_val()!=mappedTargets[i]) return false;
+        }
+        projectedEntries.swap(candidate);
+        source=inspected;
+        return true;
+    } catch (...) {source=Result{};return false;}
+}
 }

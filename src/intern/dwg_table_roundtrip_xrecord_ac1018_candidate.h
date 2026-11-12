@@ -8,6 +8,7 @@
 #include "drw_objects.h"
 #include <array>
 #include <cstdint>
+#include <vector>
 
 namespace DwgTableRoundtripXRecordAc1018Candidate {
 struct Reference {
@@ -32,5 +33,16 @@ struct Result {
 // Invalid input clears result and leaves both input objects unchanged.
 bool inspect(const DRW_UnsupportedObject& raw, const DRW_XRecord& typed,
              Result& result) noexcept;
+
+// Build the exact ordered XRECORD payload with only its three observed
+// group-360/361 values replaced. This is a mechanical projection helper; it
+// does not authorize source replay or drawing output. The caller must hold
+// the sealed source capability and prove target identities/roles separately.
+// On failure, projectedEntries is unchanged and source is cleared.
+bool projectReferences(const DRW_UnsupportedObject& raw,
+                       const DRW_XRecord& typed,
+                       const std::array<std::uint32_t, 3>& mappedTargets,
+                       std::vector<DRW_Variant>& projectedEntries,
+                       Result& source) noexcept;
 }
 #endif

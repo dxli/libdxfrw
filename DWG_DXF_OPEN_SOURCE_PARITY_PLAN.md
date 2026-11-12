@@ -2169,10 +2169,22 @@ created locally from scratch for the specific control.
   generation; a changed or missing member invalidates the entire selection.
   Generated controls exercise missing, corrupted and mutated members, allocation
   failures, quotas and retry ([multi-source receipt](docs/research/p5-ac1018-table-xrecord-multisource-capability-2026-11-11.json)).
-  Next qualify embedded references and the remaining recursive object bodies,
-  then design the opt-in write path with capability revalidation at staging and
-  finalization, transactional rollback and recomputed output CRC. These controls
-  do not establish a whole-import allocation-failure guarantee.
+  A bounded `projectReferences` helper now clones only the ordered typed payload
+  after the raw AC1018 profile matches, replacing exactly its 360/361/360 data
+  targets while preserving group codes, all other entries, and the caller's
+  source objects. It rejects null, self, owner, and duplicate mapped targets;
+  generated controls inject every measured projection allocation failure and
+  verify output-vector preservation and corrected retry. This helper is not a
+  source capability, does not modify or authenticate raw bytes, and does not
+  authorize DWG/DXF output. See the
+  [reference-projection receipt](docs/research/p5-ac1018-table-xrecord-reference-projection-2026-11-11.json).
+  Next connect this projection to a separately gated writer path: revalidate
+  the sealed multi-source capability at staging and finalization, resolve each
+  mapped target to an emitted identity with exact role/type/owner and recursive
+  closure, stage the actual XRECORD bytes, and prove rollback, retry, output CRC
+  and fresh readback. Also qualify embedded references and the remaining
+  recursive object bodies. These controls do not establish a whole-import
+  allocation-failure guarantee.
   Keep physical subtree output refused until all three opaque descendants,
   source-bound owner/target roles, class identities and graph closure are proven.
 
