@@ -646,6 +646,27 @@ public:
         polyface.thickness = 0.0;
         if (!writer.encodeEntity(&polyface)) return false;
 
+        const auto roundTripTopology = [&writer, &probe](
+            const DRW_Polyline& source, int expectedFlags) {
+            CapturedObjectFrame encoded;
+            if (!captureObjectFrame(writer, source.handle, encoded))
+                return false;
+            dwgBuffer envelope(encoded.bytes.data(), encoded.bytes.size());
+            const auto length = envelope.getModularShort();
+            const auto offset = envelope.getPosition();
+            if (!envelope.isGood() || length <= 0
+                || offset + static_cast<std::size_t>(length) + 2u
+                    != encoded.bytes.size())
+                return false;
+            dwgBuffer body(encoded.bytes.data() + offset,
+                           static_cast<std::size_t>(length));
+            return probe.parseDwg(DRW::AC1021, &body, 0u)
+                && body.isGood() && probe.flags == expectedFlags
+                && probe.vertexcount == source.vertexcount
+                && probe.facecount == source.facecount;
+        };
+        if (!roundTripTopology(polyface, 64)) return false;
+
         DRW_Polyline mesh;
         mesh.flags = 16;
         mesh.thickness = 0.5; // mesh body has no thickness field
@@ -664,7 +685,8 @@ public:
         mesh.defendwidth = 0.5;
         if (!rejectMesh()) return false;
         mesh.defendwidth = 0.0;
-        return writer.encodeEntity(&mesh);
+        return writer.encodeEntity(&mesh)
+            && roundTripTopology(mesh, 16);
     }
 
     static bool checkR2007LwPolylineFooter() {

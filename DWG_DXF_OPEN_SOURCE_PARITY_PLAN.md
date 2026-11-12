@@ -7229,8 +7229,11 @@ density and handles, but no thickness, base point, extrusion or widths. The
 writer now refuses PFACE values outside its represented profile and refuses
 nondefault omitted point/width/thickness fields for PFACE and MESH before
 publishing staged bytes. Generated controls check seeded-buffer preservation
-for each tested loss and successful same-writer correction/retry. The focused
-POLYLINE cohort passes 23/23; no fixture was added. This closes only these
+for each tested loss and successful same-writer correction/retry; valid empty
+PFACE and MESH profiles also parse back from the generated object frames with
+their flags and vertex/face counts intact. The focused POLYLINE cohort passes
+23/23; the owning wire-roundtrip selector passes 1/1 after readback was added;
+no fixture was added. This closes only these
 bounded DWG serialization-loss paths; complete PFACE/MESH semantic and native
 consumer qualification remains open. See the [loss-guard receipt](docs/research/p6-pface-mesh-dwg-loss-guard-2026-11-12.json).
 

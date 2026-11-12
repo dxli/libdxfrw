@@ -39,10 +39,16 @@
       "nondefault extrusion",
       "nondefault end width"
     ],
+    "validProfileReadback": {
+      "pface": {"readbackFlags": 64, "vertexCount": 0, "faceCount": 0},
+      "mesh": {"readbackFlags": 16, "vertexCount": 0, "faceCount": 0},
+      "selector": "dwg_r2007_polyline3d_closed_flag_roundtrip PASS"
+    },
     "failureRetry": "Each tested refusal preserves the writer buffer; after restoring the omitted values to their default profile, the same writer successfully encodes PFACE and MESH."
   },
   "validation": {
     "build": "cmake --build build-gcc --target libdxfrw_dwg_local_roundtrip -j4: PASS",
+    "readbackSelector": "ctest --test-dir build-gcc -R '^dwg_r2007_polyline3d_closed_flag_roundtrip$' --output-on-failure: PASS 1/1",
     "affectedFastCohort": "ctest --test-dir build-gcc -R 'polyline' --output-on-failure: PASS 23/23 in 3.35 seconds",
     "fixturePolicy": "Controls are generated in memory; no DWG/DXF fixture was added."
   },
