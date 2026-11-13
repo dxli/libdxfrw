@@ -1567,6 +1567,170 @@ bool flipParameterAllocationSweep(bool binary) {
         flipParameterSourceUnchanged, flipParameterWireReadback, {});
 }
 
+DRW_DynamicBlockObject makeLinearParameter() {
+    DRW_DynamicBlockObject object("BLOCKLINEARPARAMETER");
+    object.handle = 0x1135u;
+    object.parentHandle = 0x110Fu;
+    object.m_kind = DRW_DynamicBlockObject::Kind::LinearParameter;
+    object.m_bodyFullyDecoded = true;
+    object.m_evalExprParsed = true;
+    object.m_parentId = std::numeric_limits<std::uint32_t>::max();
+    object.m_major = object.m_elementMajor = 29u;
+    object.m_minor = object.m_elementMinor = 2u;
+    object.m_valueCode = -9999;
+    object.m_nodeId = 54u;
+    object.m_elementParsed = true;
+    object.m_elementName = "Door Size";
+    object.m_showProperties = true;
+    object.m_firstPoint = DRW_Coord(1.25, -2.5, 3.75);
+    object.m_secondPoint = DRW_Coord(15.0, 4.5, -6.75);
+    object.m_propertyStates = {55, 0, 7, -1};
+    object.m_twoPointPropertyCodes[0] = {55, -4};
+    object.m_twoPointPropertyNames[0] = {"Distance", "Width"};
+    object.m_twoPointPropertyCodes[1] = {92};
+    object.m_twoPointPropertyNames[1] = {"Angle"};
+    object.m_twoPointPropertyCodes[3] = {301, 0};
+    object.m_twoPointPropertyNames[3] = {"Position", "Enabled"};
+    object.m_parameterBaseLocation = 2;
+    object.m_linearDistanceName = "Door Width";
+    object.m_linearDistanceDescription = "Opening width";
+    object.m_linearDistance = 36.0;
+    object.m_parameterValueDescription = "Distance value";
+    object.m_linearValue96 = 8;
+    object.m_linearValue141 = 24.0;
+    object.m_linearValue142 = 48.0;
+    object.m_linearValue143 = 2.0;
+    object.m_linearValues = {24.0, 36.0, 48.0};
+    object.m_linearDeclaredValueCount = 3;
+    return object;
+}
+
+bool linearParameterSourceUnchanged(const DRW_DynamicBlockObject& object) {
+    return object.handle == 0x1135u
+        && static_cast<std::uint32_t>(object.parentHandle) == 0x110Fu
+        && object.m_kind == DRW_DynamicBlockObject::Kind::LinearParameter
+        && object.m_bodyFullyDecoded && object.m_evalExprParsed
+        && object.m_parentId == std::numeric_limits<std::uint32_t>::max()
+        && object.m_major == 29u && object.m_minor == 2u
+        && object.m_valueCode == -9999 && object.m_nodeId == 54u
+        && object.m_elementParsed && object.m_elementName == "Door Size"
+        && object.m_showProperties && !object.m_chainActions
+        && object.m_firstPoint.x == 1.25 && object.m_firstPoint.y == -2.5
+        && object.m_firstPoint.z == 3.75
+        && object.m_secondPoint.x == 15.0 && object.m_secondPoint.y == 4.5
+        && object.m_secondPoint.z == -6.75
+        && object.m_propertyStates == std::array<std::int32_t, 4>{55, 0, 7, -1}
+        && object.m_twoPointPropertyCodes[0]
+            == std::vector<std::int32_t>{55, -4}
+        && object.m_twoPointPropertyNames[0]
+            == std::vector<UTF8STRING>{"Distance", "Width"}
+        && object.m_twoPointPropertyCodes[1]
+            == std::vector<std::int32_t>{92}
+        && object.m_twoPointPropertyNames[1]
+            == std::vector<UTF8STRING>{"Angle"}
+        && object.m_twoPointPropertyCodes[3]
+            == std::vector<std::int32_t>{301, 0}
+        && object.m_twoPointPropertyNames[3]
+            == std::vector<UTF8STRING>{"Position", "Enabled"}
+        && object.m_parameterBaseLocation == 2
+        && object.m_linearDistanceName == "Door Width"
+        && object.m_linearDistanceDescription == "Opening width"
+        && object.m_linearDistance == 36.0
+        && object.m_parameterValueDescription == "Distance value"
+        && object.m_linearValue96 == 8 && object.m_linearValue141 == 24.0
+        && object.m_linearValue142 == 48.0 && object.m_linearValue143 == 2.0
+        && object.m_linearValues == std::vector<double>{24.0, 36.0, 48.0}
+        && object.m_linearDeclaredValueCount == 3;
+}
+
+bool linearParameterWireReadback(const std::string& bytes, bool binary) {
+    std::istringstream input(bytes);
+    std::unique_ptr<dxfReader> reader = binary
+        ? std::unique_ptr<dxfReader>(std::make_unique<dxfReaderBinary>(&input))
+        : std::unique_ptr<dxfReader>(std::make_unique<dxfReaderAscii>(&input));
+    int code = 0;
+    if (!reader->readRec(&code) || code != 0
+        || reader->getString() != "BLOCKLINEARPARAMETER")
+        return false;
+    bool ended = false;
+    bool hasHandle = false;
+    bool hasNode = false;
+    bool hasElement = false;
+    bool hasShow = false;
+    bool hasChain = false;
+    bool hasPropertyCount = false;
+    bool hasSubclass = false;
+    bool hasDistanceName = false;
+    bool hasDistanceDescription = false;
+    bool hasDistance = false;
+    bool hasParameterValueDescription = false;
+    bool hasValue96 = false;
+    bool hasCount = false;
+    std::uint32_t owner = 0u;
+    std::vector<std::int32_t> propertyStates;
+    std::vector<std::int32_t> propertyCounts;
+    std::vector<std::int32_t> propertyCodes;
+    std::vector<std::string> propertyNames;
+    std::vector<double> points;
+    std::vector<double> values;
+    while (reader->readRec(&code)) {
+        if (code == 0) {
+            ended = reader->getString() == "WIRE_END";
+            break;
+        }
+        switch (code) {
+        case 5: hasHandle = reader->getHandleString() == 0x1135u; break;
+        case 330: owner = reader->getHandleString(); break;
+        case 90: hasNode = reader->getInt32() == 54; break;
+        case 300: hasElement = reader->getString() == "Door Size"; break;
+        case 170: hasPropertyCount = reader->getInt32() == 4; break;
+        case 171: case 172: case 173: case 174:
+            propertyCounts.push_back(reader->getInt32()); break;
+        case 91: propertyStates.push_back(reader->getInt32()); break;
+        case 92: case 93: case 94: case 95:
+            propertyCodes.push_back(reader->getInt32()); break;
+        case 1010: case 1020: case 1030: case 1011: case 1021: case 1031:
+            points.push_back(reader->getDouble()); break;
+        case 140: hasDistance = reader->getDouble() == 36.0; break;
+        case 141: values.push_back(reader->getDouble()); break;
+        case 142: values.push_back(reader->getDouble()); break;
+        case 143: values.push_back(reader->getDouble()); break;
+        case 144: values.push_back(reader->getDouble()); break;
+        case 175: hasCount = reader->getInt32() == 3; break;
+        case 96: hasValue96 = reader->getInt32() == 8; break;
+        case 280: hasShow = reader->getInt32() == 1; break;
+        case 281: hasChain = reader->getInt32() == 0; break;
+        case 100:
+            hasSubclass = hasSubclass
+                || reader->getString() == "AcDbBlockLinearParameter";
+            break;
+        case 301: case 302: case 303: case 304:
+            propertyNames.push_back(reader->getString()); break;
+        case 305: hasDistanceName = reader->getString() == "Door Width"; break;
+        case 306: hasDistanceDescription = reader->getString() == "Opening width"; break;
+        case 307: hasParameterValueDescription = reader->getString() == "Distance value"; break;
+        default: break;
+        }
+    }
+    return ended && hasHandle && owner == 0x110Fu && hasNode && hasElement
+        && hasShow && hasChain && hasPropertyCount && hasSubclass
+        && hasDistanceName && hasDistanceDescription && hasDistance
+        && hasParameterValueDescription && hasValue96 && hasCount
+        && propertyStates == std::vector<std::int32_t>{55, 0, 7, -1}
+        && propertyCounts == std::vector<std::int32_t>{2, 1, 0, 2}
+        && propertyCodes == std::vector<std::int32_t>{55, -4, 92, 301, 0}
+        && propertyNames == std::vector<std::string>{
+            "Distance", "Width", "Angle", "Position", "Enabled"}
+        && points == std::vector<double>{1.25, -2.5, 3.75, 15.0, 4.5, -6.75}
+        && values == std::vector<double>{24.0, 48.0, 2.0, 24.0, 36.0, 48.0};
+}
+
+bool linearParameterAllocationSweep(bool binary) {
+    return dynamicBlockAllocationSweep(
+        "LinearParameter", binary, makeLinearParameter,
+        linearParameterSourceUnchanged, linearParameterWireReadback, {});
+}
+
 bool alignmentAllocationSweep(bool binary) {
     return dynamicBlockAllocationSweep(
         "AlignmentParameter", binary, makeAlignmentParameter,
@@ -1752,5 +1916,7 @@ int main() {
         && stretchActionAllocationSweep(false)
         && stretchActionAllocationSweep(true)
         && flipParameterAllocationSweep(false)
-        && flipParameterAllocationSweep(true) ? 0 : 1;
+        && flipParameterAllocationSweep(true)
+        && linearParameterAllocationSweep(false)
+        && linearParameterAllocationSweep(true) ? 0 : 1;
 }
