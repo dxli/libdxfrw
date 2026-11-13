@@ -1065,6 +1065,174 @@ bool flipActionAllocationSweep(bool binary) {
         flipActionRemap());
 }
 
+DRW_DynamicBlockObject makeLookupAction() {
+    DRW_DynamicBlockObject object("BLOCKLOOKUPACTION");
+    object.handle = 0xE351u;
+    object.parentHandle = 0xE352u;
+    object.m_kind = DRW_DynamicBlockObject::Kind::LookupAction;
+    object.m_bodyFullyDecoded = true;
+    object.m_evalExprParsed = true;
+    object.m_parentId = std::numeric_limits<std::uint32_t>::max();
+    object.m_major = 29u;
+    object.m_minor = 2u;
+    object.m_valueCode = -9999;
+    object.m_nodeId = 0xE353u;
+    object.m_elementParsed = true;
+    object.m_elementName = "LookupTable";
+    object.m_elementMajor = 29u;
+    object.m_elementMinor = 2u;
+    object.m_eed1071 = 7;
+    object.m_actionCount = 2;
+    object.m_actionIndexes = {4, 9};
+    object.m_dependencyCount = 2;
+    object.m_dependencyHandles = {0xE360u, 0xE361u};
+    object.m_displayLocation = DRW_Coord(8.5, -3.25, 0.0);
+    object.m_lookupRowCount = 2;
+    object.m_lookupColumnCount = 2;
+    object.m_lookupExpressions = {"A=1", "B=2", "A=3", "B=4"};
+    object.m_lookupConnectionCodes = {{1, 2, 3}, {4, 5, 6}};
+    object.m_lookupConnectionNames = {
+        {"UnmatchedA", "ConnectionA"},
+        {"UnmatchedB", "ConnectionB"}};
+    object.m_lookupEntryFlags282 = {true, false};
+    object.m_lookupEntryFlags281 = {false, true};
+    object.m_lookupFlag280 = true;
+    return object;
+}
+
+std::map<std::uint32_t, std::uint32_t> lookupActionRemap() {
+    return {{0xE360u, 0x6E60u}, {0xE361u, 0x6E61u}};
+}
+
+bool lookupActionSourceUnchanged(const DRW_DynamicBlockObject& object) {
+    return object.handle == 0xE351u
+        && static_cast<std::uint32_t>(object.parentHandle) == 0xE352u
+        && object.m_kind == DRW_DynamicBlockObject::Kind::LookupAction
+        && object.m_bodyFullyDecoded && object.m_evalExprParsed
+        && object.m_parentId == std::numeric_limits<std::uint32_t>::max()
+        && object.m_nodeId == 0xE353u && object.m_elementParsed
+        && object.m_elementName == "LookupTable"
+        && object.m_actionCount == 2
+        && object.m_actionIndexes == std::vector<std::int32_t>{4, 9}
+        && object.m_dependencyCount == 2
+        && object.m_dependencyHandles
+            == std::vector<std::uint32_t>{0xE360u, 0xE361u}
+        && object.m_lookupRowCount == 2 && object.m_lookupColumnCount == 2
+        && object.m_lookupExpressions
+            == std::vector<UTF8STRING>{"A=1", "B=2", "A=3", "B=4"}
+        && object.m_lookupConnectionCodes
+            == std::vector<std::vector<std::int32_t>>{{1, 2, 3}, {4, 5, 6}}
+        && object.m_lookupConnectionNames
+            == std::vector<std::vector<UTF8STRING>>{
+                {"UnmatchedA", "ConnectionA"},
+                {"UnmatchedB", "ConnectionB"}}
+        && object.m_lookupEntryFlags282 == std::vector<bool>{true, false}
+        && object.m_lookupEntryFlags281 == std::vector<bool>{false, true}
+        && object.m_lookupFlag280;
+}
+
+bool lookupActionWireReadback(const std::string& bytes, bool binary) {
+    std::istringstream input(bytes);
+    std::unique_ptr<dxfReader> reader = binary
+        ? std::unique_ptr<dxfReader>(std::make_unique<dxfReaderBinary>(&input))
+        : std::unique_ptr<dxfReader>(std::make_unique<dxfReaderAscii>(&input));
+    int code = 0;
+    if (!reader->readRec(&code) || code != 0
+        || reader->getString() != "BLOCKLOOKUPACTION")
+        return false;
+    bool ended = false;
+    bool hasHandle = false;
+    bool hasRowCount = false;
+    bool hasColumnCount = false;
+    bool hasActionCount = false;
+    bool hasDependencyCount = false;
+    bool hasLookupFlag = false;
+    bool hasSubclass = false;
+    std::vector<std::uint32_t> ownerAndDependencies;
+    std::vector<std::int32_t> actionIndexes;
+    std::vector<std::string> expressions;
+    std::vector<std::int32_t> connectionCodes;
+    std::vector<std::string> connectionNames;
+    std::vector<std::int32_t> flags282;
+    std::vector<std::int32_t> flags281;
+    while (reader->readRec(&code)) {
+        if (code == 0) {
+            ended = reader->getString() == "WIRE_END";
+            break;
+        }
+        switch (code) {
+        case 5:
+            hasHandle = reader->getHandleString() == 0xE351u;
+            break;
+        case 330:
+            ownerAndDependencies.push_back(reader->getHandleString());
+            break;
+        case 70:
+            hasActionCount = reader->getInt32() == 2;
+            break;
+        case 71:
+            hasDependencyCount = reader->getInt32() == 2;
+            break;
+        case 90:
+            break;
+        case 91:
+            actionIndexes.push_back(reader->getInt32());
+            break;
+        case 92:
+            hasRowCount = reader->getInt32() == 2;
+            break;
+        case 93:
+            hasColumnCount = reader->getInt32() == 2;
+            break;
+        case 94:
+        case 95:
+        case 96:
+            connectionCodes.push_back(reader->getInt32());
+            break;
+        case 280:
+            hasLookupFlag = reader->getInt32() == 1;
+            break;
+        case 281:
+            flags281.push_back(reader->getInt32());
+            break;
+        case 282:
+            flags282.push_back(reader->getInt32());
+            break;
+        case 100:
+            hasSubclass = hasSubclass
+                || reader->getString() == "AcDbBlockLookupAction";
+            break;
+        case 302:
+            expressions.push_back(reader->getString());
+            break;
+        case 304:
+        case 305:
+            connectionNames.push_back(reader->getString());
+            break;
+        default:
+            break;
+        }
+    }
+    return ended && hasHandle && hasRowCount && hasColumnCount
+        && hasActionCount && hasDependencyCount && hasLookupFlag && hasSubclass
+        && ownerAndDependencies
+            == std::vector<std::uint32_t>{0xE352u, 0x6E60u, 0x6E61u}
+        && actionIndexes == std::vector<std::int32_t>{4, 9}
+        && expressions == std::vector<std::string>{"A=1", "B=2", "A=3", "B=4"}
+        && connectionCodes == std::vector<std::int32_t>{1, 2, 3, 4, 5, 6}
+        && connectionNames == std::vector<std::string>{
+            "UnmatchedA", "ConnectionA", "UnmatchedB", "ConnectionB"}
+        && flags282 == std::vector<std::int32_t>{1, 0}
+        && flags281 == std::vector<std::int32_t>{0, 1};
+}
+
+bool lookupActionAllocationSweep(bool binary) {
+    return dynamicBlockAllocationSweep(
+        "LookupAction", binary, makeLookupAction,
+        lookupActionSourceUnchanged, lookupActionWireReadback,
+        lookupActionRemap());
+}
+
 std::map<std::uint32_t, std::uint32_t> stretchActionRemap() {
     return {{0x1127u, 0x6127u}, {0x1143u, 0x6143u},
             {0x1144u, 0x6144u}};
@@ -1419,6 +1587,8 @@ int main() {
         && scaleActionAllocationSweep(true)
         && flipActionAllocationSweep(false)
         && flipActionAllocationSweep(true)
+        && lookupActionAllocationSweep(false)
+        && lookupActionAllocationSweep(true)
         && stretchActionAllocationSweep(false)
         && stretchActionAllocationSweep(true) ? 0 : 1;
 }
