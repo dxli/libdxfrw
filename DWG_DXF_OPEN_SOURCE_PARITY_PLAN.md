@@ -1122,40 +1122,6 @@ repeat the corpus census or alter the aggregate strict guard from this audit.
 
 Completed P6 encoder-allocation rollback/retry and raw-shell recovery slices have been removed from this queue; their implementation and focused validation receipts remain under `docs/research/` and in Git history. Reopen one only if new evidence exposes a regression.
 
-The generated AC1024 `BLOCKMOVEACTION` direct-writer allocation sweep is
-complete: all 12 ASCII and 12 Binary allocation offsets preserve caller fields
-and roll back source identity; fresh-writer retries reproduce clean output
-with remapped owner/dependency roles and exact typed action fields. The fast
-adapter profile still passes alongside this direct callback test. This closes
-only the selected generated transaction path; physical producer coverage,
-graph closure, and native action semantics remain open ([receipt](docs/research/p6-dynamic-block-move-action-allocation-rollback-2026-11-12.json)).
-
-The adjacent generated AC1024 `BLOCKSCALEACTION` direct-writer allocation
-sweep is complete: all 14 ASCII and 14 Binary allocation offsets preserve
-caller fields and roll back source identity; fresh-writer retries reproduce
-clean output with four remapped dependencies, base/scale connection metadata,
-the dependent flag, and exact geometry readback. Normal and ASan focused
-adapter/allocation tests pass. This closes only the generated transaction
-path; producer breadth, graph closure, and native scale semantics remain open
-([receipt](docs/research/p6-dynamic-block-scale-action-allocation-rollback-2026-11-12.json)).
-
-The generated AC1024 `BLOCKFLIPACTION` direct-writer allocation sweep passes:
-all 14 ASCII and 14 Binary allocation offsets preserve caller fields and
-remove the partial source identity; a fresh writer reproduces output with 27
-remapped dependencies, 11 ordered action indexes, four connection properties,
-and the exact emitted handle. Normal and ASan focused adapter/allocation tests
-pass. This does not qualify physical graph closure or native action meaning
-([receipt](docs/research/p6-dynamic-block-flip-action-allocation-rollback-2026-11-12.json)).
-
-The generated AC1024 `BLOCKLOOKUPACTION` direct-writer allocation sweep passes:
-all 14 ASCII and 12 Binary allocation offsets preserve caller fields and roll
-back source identity; fresh-writer retries read back the remapped dependencies,
-2×2 expression grid, ordered action indexes, per-column connection codes and
-names, both Boolean flag vectors, and lookup flag. Normal and ASan focused
-adapter/allocation tests pass. This remains generated transaction evidence;
-physical producer breadth and native lookup evaluation are still gated
-([receipt](docs/research/p6-dynamic-block-lookup-action-allocation-rollback-2026-11-12.json)).
-
 After every slice: run its focused fast checks; update this queue and the
 relevant receipt; commit code, plan and receipt together; report the commit and
 next eligible slice, then continue. Keep fixtures out of commits unless already
