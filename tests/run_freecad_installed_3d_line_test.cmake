@@ -22,6 +22,14 @@ elseif(DEFINED DWG_SOURCE_GENERATOR)
     if(NOT DEFINED EXPECTED_MAGIC_HEX)
         message(FATAL_ERROR "EXPECTED_MAGIC_HEX is required with DWG_SOURCE_GENERATOR")
     endif()
+    if(NOT DEFINED DWG_SOURCE_VERSION)
+        set(DWG_SOURCE_VERSION AC1021)
+    endif()
+    if(NOT DWG_SOURCE_VERSION STREQUAL "AC1021"
+            AND NOT DWG_SOURCE_VERSION STREQUAL "AC1024")
+        message(FATAL_ERROR
+            "DWG_SOURCE_VERSION must be AC1021 or AC1024 for generated controls")
+    endif()
     if(NOT EXISTS "${DWG_SOURCE_GENERATOR}")
         message(FATAL_ERROR "DWG_SOURCE_GENERATOR does not exist: ${DWG_SOURCE_GENERATOR}")
     endif()
@@ -114,7 +122,7 @@ endif()
 if(DEFINED SAMPLE)
     set(_input "${_input_dir}/AC1027 tracked 3D LINE.dwg")
 elseif(DEFINED DWG_SOURCE_GENERATOR)
-    set(_input "${_input_dir}/AC1021 generated 3D LINE.dwg")
+    set(_input "${_input_dir}/${DWG_SOURCE_VERSION} generated 3D LINE.dwg")
 else()
     set(_input "${_input_dir}/AC1015 generated 3D LINE.dwg")
 endif()
@@ -154,15 +162,15 @@ if(DEFINED SAMPLE)
 elseif(DEFINED DWG_SOURCE_GENERATOR)
 if(DEFINED EXPECTED_PRIMITIVE_COUNTS
         AND DEFINED EXPECTED_PRIMITIVE_SHAPES)
-        set(_generated_source "${_test_root}/generated AC1021 primitives.dwg")
+        set(_generated_source "${_test_root}/generated ${DWG_SOURCE_VERSION} primitives.dwg")
         set(_generator_option "--generate-freecad-primitives-source")
     else()
-        set(_generated_source "${_test_root}/generated AC1021 3D LINE.dwg")
+        set(_generated_source "${_test_root}/generated ${DWG_SOURCE_VERSION} 3D LINE.dwg")
         set(_generator_option "--generate-cli-batch-source")
     endif()
     execute_process(
         COMMAND "${DWG_SOURCE_GENERATOR}" "${_generator_option}"
-            "${_generated_source}" AC1021
+            "${_generated_source}" "${DWG_SOURCE_VERSION}"
         RESULT_VARIABLE _generate_result
         OUTPUT_VARIABLE _generate_stdout
         ERROR_VARIABLE _generate_stderr
@@ -171,7 +179,7 @@ if(DEFINED EXPECTED_PRIMITIVE_COUNTS
     if(NOT "${_generate_result}" STREQUAL "0"
             OR NOT EXISTS "${_generated_source}")
         message(FATAL_ERROR
-            "Could not generate the local AC1021 control (${_generate_result}).\n"
+            "Could not generate the local ${DWG_SOURCE_VERSION} control (${_generate_result}).\n"
             "Evidence retained at ${_temp_parent}\n"
             "${_generate_stdout}\n${_generate_stderr}")
     endif()
@@ -184,7 +192,7 @@ if(DEFINED EXPECTED_PRIMITIVE_COUNTS
     )
     if(NOT "${_copy_result}" STREQUAL "0" OR NOT EXISTS "${_input}")
         message(FATAL_ERROR
-            "Could not stage the generated AC1021 LINE control (${_copy_result}).\n"
+            "Could not stage the generated ${DWG_SOURCE_VERSION} LINE control (${_copy_result}).\n"
             "Evidence retained at ${_temp_parent}\n${_copy_stdout}\n${_copy_stderr}")
     endif()
 else()

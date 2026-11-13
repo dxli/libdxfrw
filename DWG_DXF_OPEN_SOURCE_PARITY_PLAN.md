@@ -2,9 +2,9 @@
 
 ## Progress estimate (2026-11-12)
 
-Since the current execution queue was last reset, **27 implementation slices
+Since the current execution queue was last reset, **28 implementation slices
 are complete and 6 phase exit gates remain open**, giving a rough item-count
-progress estimate of **81.8% (27 / (27 + 6))**. The completed slices are
+progress estimate of **82.4% (28 / (28 + 6))**. The completed slices are
 represented by commits `787d65c6`, `e1c1cfe3`, `3feb4e6f`, `c9a64797`,
 `26e76b8c`, `9ebf0b78`, `dae9d0bd`, `d25b13b5`, `d9beb8f5`, `66883da5`,
 `dd2a0f4d`, `f35540b9`, `86ed0fd2`, `e96cc6ed`, `1f151ad3`, `27a7126c`,
@@ -4124,11 +4124,16 @@ nonzero-Z coordinate is preserved as a one-vertex shape with zero edge length.
 The locally installed converter was byte-identical to this build;
 the generated DWG/DXF remained in temporary directories and no fixture was
 added. This qualifies only the generated AC1021 primitive transport and
-FreeCAD 1.1.4 macOS ARM64 route. The repository workflow pins FreeCAD 1.1.3;
-hosted Linux/Windows runs, other entity/version profiles, native application
-semantics and broad support claims remain open. The full seven-entity local
-profile passes both open and insert in 2.48 seconds. See the [primitive
-qualification receipt](docs/research/p8-freecad-ac1021-generated-primitives-open-insert-2026-11-12.json)
+FreeCAD 1.1.4 macOS ARM64 route. The optional installed-converter test profile
+now generates the same geometry at AC1024 as well; FreeCAD 1.1.4 opened and
+inserted all nine expected objects, with exact shape/count checks and no
+unsupported-feature reports. AC1021 open/insert regression checks still pass.
+The Linux and Windows workflow selectors now include the lowercase AC1024
+tests; hosted runs are still pending. See the [AC1024 consumer receipt](docs/research/p8-freecad-ac1024-generated-primitives-open-insert-2026-11-12.json).
+The repository workflow pins FreeCAD 1.1.3; hosted Linux/Windows runs, other
+entity/version profiles, native application semantics and broad support claims
+remain open. The full seven-entity local AC1021 profile passes both open and
+insert in 2.48 seconds. See the [AC1021 primitive qualification receipt](docs/research/p8-freecad-ac1021-generated-primitives-open-insert-2026-11-12.json)
 and the [tilted-SPLINE receipt](docs/research/p8-freecad-ac1021-tilted-spline-open-insert-2026-11-12.json).
 
 **P8 classic 3D POLYLINE consumer slice (2026-11-12):** the generated

@@ -4950,7 +4950,7 @@ endif()
 # A locally generated mixed 2D/3D primitive source broadens the native
 # consumer check beyond a single LINE while keeping exact geometry assertions.
 option(LIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_PRIMITIVE_CONTROL
-    "Enable FreeCAD open/insert checks for generated AC1021 2D/3D primitives" OFF)
+    "Enable FreeCAD open/insert checks for generated AC1021 and AC1024 2D/3D primitives" OFF)
 if(LIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_PRIMITIVE_CONTROL)
     libdxfrw_require_test_cli(LIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_PRIMITIVE_CONTROL)
     if(NOT EXISTS "${LIBDXFRW_FREECADCMD_EXECUTABLE}")
@@ -4961,30 +4961,39 @@ if(LIBDXFRW_ENABLE_FREECAD_GENERATED_AC1021_PRIMITIVE_CONTROL)
         message(FATAL_ERROR
             "Set LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE to the installed dwg2dxf")
     endif()
-    foreach(_operation IN ITEMS open insert)
-        add_test(
-            NAME dwg2dxf_freecad_generated_ac1021_primitives_${_operation}
-            COMMAND ${CMAKE_COMMAND}
-                "-DFREECADCMD=${LIBDXFRW_FREECADCMD_EXECUTABLE}"
-                "-DDWG2DXF=${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}"
-                "-DBUILD_DWG2DXF=$<TARGET_FILE:dwg2dxf>"
-                "-DDWG_SOURCE_GENERATOR=$<TARGET_FILE:libdxfrw_dwg_local_roundtrip>"
-                -DEXPECTED_MAGIC_HEX=414331303231
-                "-DEXPECTED_FREECAD_REVISION=${LIBDXFRW_FREECAD_EXPECTED_REVISION}"
-                "-DEXPECTED_PRIMITIVE_COUNTS=POINT:1,LINE:1,CIRCLE:1,ARC:1,ELLIPSE:1,LWPOLYLINE:1,POLYLINE:2,SPLINE:1"
-                "-DEXPECTED_PRIMITIVE_SHAPES=1,2,3,4,5,6,1,2,5.196152422706632,0|7.5,8.5,12,12.5,13.5,12,1,1,15.707963267948966,0|14.10362826838344,14.86591385739083,15,16.391193475987258,17.32144616774455,15,1,2,3.5,0|22,25,28,30,29,28,1,1,19.37689644109535,0|16,17,0,18,20,0,2,3,5,0|21,22,23,21,22,23,0,1,0,0|61,62,1,70,68,8,3,4,14.649695377207546,0|91,92,0,95,96,0,4,4,16,0|0,0,0,0,0,0,1,2,7.880049135263712,1"
-                "-DEXPECTED_SPLINE_SAMPLES=[[0,31,32,33],[0.5,33,34.5,35],[1,35,32,37]]"
-                "-DEXPECTED_POLYLINE_POINTS=[[61,62,1],[64,62,4],[65,66,5],[70,68,8]]"
-                "-DEXPECTED_CLOSED_2D_POLYLINE_POINTS=[[91,92,0],[95,92,0],[95,96,0],[91,96,0]]"
-                "-DIMPORT_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_import_check.FCMacro"
-                "-DOPERATION=${_operation}"
-                -DINPUT_PATH_UNICODE=ON
-                -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_installed_3d_line_test.cmake
-        )
-        set_tests_properties(dwg2dxf_freecad_generated_ac1021_primitives_${_operation}
-            PROPERTIES
-                LABELS "freecad;installed;generated;integration;AC1021;platform;primitives"
-                TIMEOUT 180)
+    foreach(_version IN ITEMS AC1021 AC1024)
+        if(_version STREQUAL "AC1021")
+            set(_magic_hex 414331303231)
+        else()
+            set(_magic_hex 414331303234)
+        endif()
+        string(TOLOWER "${_version}" _version_lc)
+        foreach(_operation IN ITEMS open insert)
+            add_test(
+                NAME dwg2dxf_freecad_generated_${_version_lc}_primitives_${_operation}
+                COMMAND ${CMAKE_COMMAND}
+                    "-DFREECADCMD=${LIBDXFRW_FREECADCMD_EXECUTABLE}"
+                    "-DDWG2DXF=${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}"
+                    "-DBUILD_DWG2DXF=$<TARGET_FILE:dwg2dxf>"
+                    "-DDWG_SOURCE_GENERATOR=$<TARGET_FILE:libdxfrw_dwg_local_roundtrip>"
+                    "-DDWG_SOURCE_VERSION=${_version}"
+                    "-DEXPECTED_MAGIC_HEX=${_magic_hex}"
+                    "-DEXPECTED_FREECAD_REVISION=${LIBDXFRW_FREECAD_EXPECTED_REVISION}"
+                    "-DEXPECTED_PRIMITIVE_COUNTS=POINT:1,LINE:1,CIRCLE:1,ARC:1,ELLIPSE:1,LWPOLYLINE:1,POLYLINE:2,SPLINE:1"
+                    "-DEXPECTED_PRIMITIVE_SHAPES=1,2,3,4,5,6,1,2,5.196152422706632,0|7.5,8.5,12,12.5,13.5,12,1,1,15.707963267948966,0|14.10362826838344,14.86591385739083,15,16.391193475987258,17.32144616774455,15,1,2,3.5,0|22,25,28,30,29,28,1,1,19.37689644109535,0|16,17,0,18,20,0,2,3,5,0|21,22,23,21,22,23,0,1,0,0|61,62,1,70,68,8,3,4,14.649695377207546,0|91,92,0,95,96,0,4,4,16,0|0,0,0,0,0,0,1,2,7.880049135263712,1"
+                    "-DEXPECTED_SPLINE_SAMPLES=[[0,31,32,33],[0.5,33,34.5,35],[1,35,32,37]]"
+                    "-DEXPECTED_POLYLINE_POINTS=[[61,62,1],[64,62,4],[65,66,5],[70,68,8]]"
+                    "-DEXPECTED_CLOSED_2D_POLYLINE_POINTS=[[91,92,0],[95,92,0],[95,96,0],[91,96,0]]"
+                    "-DIMPORT_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_import_check.FCMacro"
+                    "-DOPERATION=${_operation}"
+                    -DINPUT_PATH_UNICODE=ON
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_installed_3d_line_test.cmake
+            )
+            set_tests_properties(dwg2dxf_freecad_generated_${_version_lc}_primitives_${_operation}
+                PROPERTIES
+                    LABELS "freecad;installed;generated;integration;${_version};platform;primitives"
+                    TIMEOUT 180)
+        endforeach()
     endforeach()
 endif()
 

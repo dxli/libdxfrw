@@ -40793,9 +40793,15 @@ int main(int argc, char** argv) {
     }
     if ((argc == 3 || argc == 4)
         && std::string(argv[1]) == "--generate-freecad-primitives-source") {
-        if (argc == 4 && std::string(argv[3]) != "AC1021") {
-            std::cerr << "FreeCAD primitive source requires AC1021\n";
-            return 1;
+        DRW::Version version = DRW::AC1021;
+        if (argc == 4) {
+            const std::string token = argv[3];
+            if (token == "AC1021") version = DRW::AC1021;
+            else if (token == "AC1024") version = DRW::AC1024;
+            else {
+                std::cerr << "FreeCAD primitive source supports AC1021 or AC1024\n";
+                return 1;
+            }
         }
         if (std::filesystem::exists(argv[2])) {
             std::cerr << "Refusing to replace an existing FreeCAD geometry source\n";
@@ -40803,7 +40809,7 @@ int main(int argc, char** argv) {
         }
         dwgRW writer(argv[2]);
         CliPrimitiveDwgSource source(&writer);
-        if (!writer.write(&source, DRW::AC1021, true)) {
+        if (!writer.write(&source, version, true)) {
             const DRW_OperationDiagnostic diagnostic = writer.getLastDiagnostic();
             std::cerr << "Could not generate FreeCAD geometry source: "
                       << diagnostic.code << " — " << diagnostic.message << '\n';
