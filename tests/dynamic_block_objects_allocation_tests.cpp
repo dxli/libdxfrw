@@ -899,6 +899,172 @@ bool scaleActionAllocationSweep(bool binary) {
         scaleActionRemap());
 }
 
+DRW_DynamicBlockObject makeFlipAction() {
+    DRW_DynamicBlockObject object("BLOCKFLIPACTION");
+    object.handle = 0x1133u;
+    object.parentHandle = 0x110Fu;
+    object.m_kind = DRW_DynamicBlockObject::Kind::FlipAction;
+    object.m_bodyFullyDecoded = true;
+    object.m_evalExprParsed = true;
+    object.m_parentId = std::numeric_limits<std::uint32_t>::max();
+    object.m_major = 29u;
+    object.m_minor = 2u;
+    object.m_valueCode = -9999;
+    object.m_nodeId = 76u;
+    object.m_elementParsed = true;
+    object.m_elementName = "FlipHinge";
+    object.m_elementMajor = 29u;
+    object.m_elementMinor = 2u;
+    object.m_eed1071 = 0;
+    object.m_actionCount = 11;
+    object.m_actionIndexes = {79, 65, 66, 67, 68, 69, 1, 8, 31, 46, 54};
+    object.m_dependencyCount = 27;
+    for (std::uint32_t index = 0u; index < 27u; ++index)
+        object.m_dependencyHandles.push_back(0x1127u + index);
+    object.m_displayLocation = DRW_Coord(35.0, -15.0, 0.0);
+    object.m_connectionCodes = {26, 26, 26, 26};
+    object.m_connectionNames = {
+        "Flip", "UpdatedFlip", "UpdatedBase", "UpdatedEnd"};
+    return object;
+}
+
+std::map<std::uint32_t, std::uint32_t> flipActionRemap() {
+    std::map<std::uint32_t, std::uint32_t> remap;
+    for (std::uint32_t index = 0u; index < 27u; ++index)
+        remap.emplace(0x1127u + index, 0x6127u + index);
+    return remap;
+}
+
+bool flipActionSourceUnchanged(const DRW_DynamicBlockObject& object) {
+    std::vector<std::uint32_t> dependencies;
+    for (std::uint32_t index = 0u; index < 27u; ++index)
+        dependencies.push_back(0x1127u + index);
+    return object.handle == 0x1133u
+        && static_cast<std::uint32_t>(object.parentHandle) == 0x110Fu
+        && object.m_kind == DRW_DynamicBlockObject::Kind::FlipAction
+        && object.m_bodyFullyDecoded && object.m_evalExprParsed
+        && object.m_parentId == std::numeric_limits<std::uint32_t>::max()
+        && object.m_nodeId == 76u && object.m_elementParsed
+        && object.m_elementName == "FlipHinge"
+        && object.m_actionCount == 11
+        && object.m_actionIndexes == std::vector<std::int32_t>{
+            79, 65, 66, 67, 68, 69, 1, 8, 31, 46, 54}
+        && object.m_dependencyCount == 27
+        && object.m_dependencyHandles == dependencies
+        && object.m_displayLocation.x == 35.0
+        && object.m_displayLocation.y == -15.0
+        && object.m_displayLocation.z == 0.0
+        && object.m_connectionCodes
+            == std::vector<std::int32_t>{26, 26, 26, 26}
+        && object.m_connectionNames == std::vector<UTF8STRING>{
+            "Flip", "UpdatedFlip", "UpdatedBase", "UpdatedEnd"};
+}
+
+bool flipActionWireReadback(const std::string& bytes, bool binary) {
+    std::istringstream input(bytes);
+    std::unique_ptr<dxfReader> reader = binary
+        ? std::unique_ptr<dxfReader>(std::make_unique<dxfReaderBinary>(&input))
+        : std::unique_ptr<dxfReader>(std::make_unique<dxfReaderAscii>(&input));
+    int code = 0;
+    if (!reader->readRec(&code) || code != 0
+        || reader->getString() != "BLOCKFLIPACTION")
+        return false;
+    bool ended = false;
+    bool hasHandle = false;
+    bool hasNode = false;
+    bool hasActionCount = false;
+    bool hasDependencyCount = false;
+    bool hasSubclass = false;
+    std::uint32_t outputHandle = 0u;
+    std::vector<std::uint32_t> ownerAndDependencies;
+    std::vector<std::int32_t> actionIndexes;
+    std::vector<std::int32_t> connectionCodes;
+    std::vector<std::string> connectionNames;
+    std::vector<double> location;
+    while (reader->readRec(&code)) {
+        if (code == 0) {
+            ended = reader->getString() == "WIRE_END";
+            break;
+        }
+        switch (code) {
+        case 5:
+            outputHandle = reader->getHandleString();
+            hasHandle = outputHandle == 0x6133u;
+            break;
+        case 330:
+            ownerAndDependencies.push_back(reader->getHandleString());
+            break;
+        case 70:
+            hasActionCount = reader->getInt32() == 11;
+            break;
+        case 71:
+            hasDependencyCount = reader->getInt32() == 27;
+            break;
+        case 90:
+            hasNode = reader->getInt32() == 76;
+            break;
+        case 91:
+            actionIndexes.push_back(reader->getInt32());
+            break;
+        case 92:
+        case 93:
+        case 94:
+        case 95:
+            connectionCodes.push_back(reader->getInt32());
+            break;
+        case 1010:
+        case 1020:
+        case 1030:
+            location.push_back(reader->getDouble());
+            break;
+        case 100:
+            hasSubclass = hasSubclass
+                || reader->getString() == "AcDbBlockFlipAction";
+            break;
+        case 301:
+        case 302:
+        case 303:
+        case 304:
+            connectionNames.push_back(reader->getString());
+            break;
+        default:
+            break;
+        }
+    }
+    std::vector<std::uint32_t> expectedHandles{0x110Fu};
+    for (std::uint32_t index = 0u; index < 27u; ++index)
+        expectedHandles.push_back(0x6127u + index);
+    const bool matches = ended && hasHandle && hasNode && hasActionCount
+        && hasDependencyCount && hasSubclass
+        && ownerAndDependencies == expectedHandles
+        && actionIndexes == std::vector<std::int32_t>{
+            79, 65, 66, 67, 68, 69, 1, 8, 31, 46, 54}
+        && connectionCodes == std::vector<std::int32_t>{26, 26, 26, 26}
+        && connectionNames == std::vector<std::string>{
+            "Flip", "UpdatedFlip", "UpdatedBase", "UpdatedEnd"}
+        && location == std::vector<double>{35.0, -15.0, 0.0};
+    if (!matches)
+        std::cerr << "FlipAction readback mismatch: ended=" << ended
+                  << " handle=" << hasHandle << " node=" << hasNode
+                  << " outputHandle=" << outputHandle
+                  << " actionCount=" << hasActionCount
+                  << " dependencyCount=" << hasDependencyCount
+                  << " subclass=" << hasSubclass
+                  << " owner/dependencies=" << ownerAndDependencies.size()
+                  << " actionIndexes=" << actionIndexes.size()
+                  << " connectionCodes=" << connectionCodes.size()
+                  << " connectionNames=" << connectionNames.size()
+                  << " location=" << location.size() << '\n';
+    return matches;
+}
+
+bool flipActionAllocationSweep(bool binary) {
+    return dynamicBlockAllocationSweep(
+        "FlipAction", binary, makeFlipAction,
+        flipActionSourceUnchanged, flipActionWireReadback,
+        flipActionRemap());
+}
+
 std::map<std::uint32_t, std::uint32_t> stretchActionRemap() {
     return {{0x1127u, 0x6127u}, {0x1143u, 0x6143u},
             {0x1144u, 0x6144u}};
@@ -1251,6 +1417,8 @@ int main() {
         && moveActionAllocationSweep(true)
         && scaleActionAllocationSweep(false)
         && scaleActionAllocationSweep(true)
+        && flipActionAllocationSweep(false)
+        && flipActionAllocationSweep(true)
         && stretchActionAllocationSweep(false)
         && stretchActionAllocationSweep(true) ? 0 : 1;
 }
