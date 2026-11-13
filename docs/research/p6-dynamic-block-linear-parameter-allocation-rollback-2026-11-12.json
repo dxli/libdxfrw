@@ -12,7 +12,7 @@
       "src/libdxfrw.h": "e5d8427cce8cbdc4785bc4241928cfa941e423f65d36ac9e69ff210f3a21268a",
       "tests/dynamic_block_objects_allocation_tests.cpp": "91290dcf68b601f66ca388040de034bfb7c095fe9ed41bc901b6443c3302ece9",
       "tests/CMakeLists.txt": "7a6d869bd778a362a1552bb5c8c48c6a0b8d5b7e0fac8bc7aa24a9fd5b171469",
-      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "6ae34a44a0e2391e5f8bfac3763333e4fd6e91c5a4632954c54abd110db88958"
+      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "b865a6632c899365c427626983fdd51f93e49ed443e7fc349651a264337ec500"
     },
     "artifactSha256": {
       "build/tests/libdxfrw_dynamic_block_objects_allocation_tests": "e7eefe06a60330f0a88b0c58e697a3e1b2f5a921a91eca6da89bdc685fef3026",

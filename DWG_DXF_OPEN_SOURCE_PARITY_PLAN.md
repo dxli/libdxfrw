@@ -9,7 +9,7 @@ represented by commits `787d65c6`, `e1c1cfe3`, `3feb4e6f`, `c9a64797`,
 `26e76b8c`, `9ebf0b78`, `dae9d0bd`, `d25b13b5`, `d9beb8f5`, `66883da5`,
 `dd2a0f4d`, `f35540b9`, `86ed0fd2`, `e96cc6ed`, `1f151ad3`, `27a7126c`,
 `524dfa02`, `4dcf6779`, `27e67de9`, `7089be6c`, `16aabb94`, `94a86b8e` and
-`ddd06b7a`, `f5035e32`, `aa0ece02`, `fce8a3e0` and `LINEAR_COMMIT`. Commits
+`ddd06b7a`, `f5035e32`, `aa0ece02`, `fce8a3e0` and `97a0ec04`. Commits
 `27a7126c` and
 `524dfa02` complete and then strengthen one transaction slice; `4dcf6779` and
 `27e67de9` implement and finalize the next slice's receipt. This estimate
