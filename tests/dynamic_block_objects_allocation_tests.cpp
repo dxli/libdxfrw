@@ -1731,6 +1731,210 @@ bool linearParameterAllocationSweep(bool binary) {
         linearParameterSourceUnchanged, linearParameterWireReadback, {});
 }
 
+DRW_DynamicBlockObject makeConstraintParameter(
+        DRW_DynamicBlockObject::Kind kind) {
+    const bool horizontal = kind
+        == DRW_DynamicBlockObject::Kind::HorizontalConstraintParameter;
+    DRW_DynamicBlockObject object(horizontal
+        ? "BLOCKHORIZONTALCONSTRAINTPARAMETER"
+        : "BLOCKVERTICALCONSTRAINTPARAMETER");
+    object.handle = 0x1135u;
+    object.parentHandle = 0x110Fu;
+    object.m_kind = kind;
+    object.m_bodyFullyDecoded = true;
+    object.m_evalExprParsed = true;
+    object.m_parentId = std::numeric_limits<std::uint32_t>::max();
+    object.m_major = object.m_elementMajor = 29u;
+    object.m_minor = object.m_elementMinor = 2u;
+    object.m_valueCode = -9999;
+    object.m_nodeId = 54u;
+    object.m_elementParsed = true;
+    object.m_elementName = "Door Size";
+    object.m_showProperties = true;
+    object.m_firstPoint = DRW_Coord(1.25, -2.5, 3.75);
+    object.m_secondPoint = DRW_Coord(15.0, 4.5, -6.75);
+    object.m_propertyStates = {55, 0, 7, -1};
+    object.m_twoPointPropertyCodes[0] = {55, -4};
+    object.m_twoPointPropertyNames[0] = {"Distance", "Width"};
+    object.m_twoPointPropertyCodes[1] = {92};
+    object.m_twoPointPropertyNames[1] = {"Angle"};
+    object.m_twoPointPropertyCodes[3] = {301, 0};
+    object.m_twoPointPropertyNames[3] = {"Position", "Enabled"};
+    object.m_parameterBaseLocation = 2;
+    object.m_constraintDependencyHandle = 0x114Bu;
+    object.m_constraintExpressionName = horizontal ? "W" : "H";
+    object.m_constraintExpressionDescription = "constraint value";
+    object.m_constraintValue = -15.25;
+    object.m_parameterValueDescription = "constraint description";
+    object.m_constraintValueSetFlags = 8;
+    object.m_constraintMinimum = 4.0;
+    object.m_constraintMaximum = 6.0;
+    object.m_constraintIncrement = 1.0;
+    object.m_constraintValues = {4.0, 5.0, 6.0};
+    object.m_constraintDeclaredValueCount = 3;
+    return object;
+}
+
+bool constraintParameterSourceUnchanged(
+        const DRW_DynamicBlockObject& object,
+        DRW_DynamicBlockObject::Kind kind) {
+    const bool horizontal = kind
+        == DRW_DynamicBlockObject::Kind::HorizontalConstraintParameter;
+    return object.handle == 0x1135u
+        && static_cast<std::uint32_t>(object.parentHandle) == 0x110Fu
+        && object.m_kind == kind && object.m_bodyFullyDecoded
+        && object.m_evalExprParsed
+        && object.m_parentId == std::numeric_limits<std::uint32_t>::max()
+        && object.m_major == 29u && object.m_minor == 2u
+        && object.m_valueCode == -9999 && object.m_nodeId == 54u
+        && object.m_elementParsed && object.m_elementName == "Door Size"
+        && object.m_showProperties && !object.m_chainActions
+        && object.m_firstPoint.x == 1.25 && object.m_firstPoint.y == -2.5
+        && object.m_firstPoint.z == 3.75
+        && object.m_secondPoint.x == 15.0 && object.m_secondPoint.y == 4.5
+        && object.m_secondPoint.z == -6.75
+        && object.m_propertyStates == std::array<std::int32_t, 4>{55, 0, 7, -1}
+        && object.m_twoPointPropertyCodes[0]
+            == std::vector<std::int32_t>{55, -4}
+        && object.m_twoPointPropertyNames[0]
+            == std::vector<UTF8STRING>{"Distance", "Width"}
+        && object.m_twoPointPropertyCodes[1]
+            == std::vector<std::int32_t>{92}
+        && object.m_twoPointPropertyNames[1]
+            == std::vector<UTF8STRING>{"Angle"}
+        && object.m_twoPointPropertyCodes[3]
+            == std::vector<std::int32_t>{301, 0}
+        && object.m_twoPointPropertyNames[3]
+            == std::vector<UTF8STRING>{"Position", "Enabled"}
+        && object.m_parameterBaseLocation == 2
+        && object.m_constraintDependencyHandle == 0x114Bu
+        && object.m_constraintExpressionName == (horizontal ? "W" : "H")
+        && object.m_constraintExpressionDescription == "constraint value"
+        && object.m_constraintValue == -15.25
+        && object.m_parameterValueDescription == "constraint description"
+        && object.m_constraintValueSetFlags == 8
+        && object.m_constraintMinimum == 4.0
+        && object.m_constraintMaximum == 6.0
+        && object.m_constraintIncrement == 1.0
+        && object.m_constraintValues == std::vector<double>{4.0, 5.0, 6.0}
+        && object.m_constraintDeclaredValueCount == 3;
+}
+
+bool constraintParameterWireReadback(const std::string& bytes, bool binary,
+                                     DRW_DynamicBlockObject::Kind kind) {
+    const bool horizontal = kind
+        == DRW_DynamicBlockObject::Kind::HorizontalConstraintParameter;
+    const std::string recordName = horizontal
+        ? "BLOCKHORIZONTALCONSTRAINTPARAMETER"
+        : "BLOCKVERTICALCONSTRAINTPARAMETER";
+    const std::string finalSubclass = horizontal
+        ? "AcDbBlockHorizontalConstraintParameter"
+        : "AcDbBlockVerticalConstraintParameter";
+    std::istringstream input(bytes);
+    std::unique_ptr<dxfReader> reader = binary
+        ? std::unique_ptr<dxfReader>(std::make_unique<dxfReaderBinary>(&input))
+        : std::unique_ptr<dxfReader>(std::make_unique<dxfReaderAscii>(&input));
+    int code = 0;
+    if (!reader->readRec(&code) || code != 0
+        || reader->getString() != recordName)
+        return false;
+    bool ended = false;
+    bool hasHandle = false;
+    bool hasNode = false;
+    bool hasElement = false;
+    bool hasShow = false;
+    bool hasChain = false;
+    bool hasPropertyCount = false;
+    bool hasExpression = false;
+    bool hasExpressionDescription = false;
+    bool hasValue = false;
+    bool hasParameterDescription = false;
+    bool hasFlags = false;
+    bool hasCount = false;
+    bool hasFinalSubclass = false;
+    std::vector<std::uint32_t> handles;
+    std::vector<std::int32_t> propertyStates;
+    std::vector<std::int32_t> propertyCounts;
+    std::vector<std::int32_t> propertyCodes;
+    std::vector<std::string> propertyNames;
+    std::vector<double> points;
+    std::vector<double> constraintValues;
+    while (reader->readRec(&code)) {
+        if (code == 0) {
+            ended = reader->getString() == "WIRE_END";
+            break;
+        }
+        switch (code) {
+        case 5: hasHandle = reader->getHandleString() == 0x1135u; break;
+        case 330: handles.push_back(reader->getHandleString()); break;
+        case 90: hasNode = reader->getInt32() == 54; break;
+        case 300: hasElement = reader->getString() == "Door Size"; break;
+        case 170: hasPropertyCount = reader->getInt32() == 4; break;
+        case 171: case 172: case 173: case 174:
+            propertyCounts.push_back(reader->getInt32()); break;
+        case 91: propertyStates.push_back(reader->getInt32()); break;
+        case 92: case 93: case 94: case 95:
+            propertyCodes.push_back(reader->getInt32()); break;
+        case 1010: case 1020: case 1030: case 1011: case 1021: case 1031:
+            points.push_back(reader->getDouble()); break;
+        case 140: hasValue = reader->getDouble() == -15.25; break;
+        case 96: hasFlags = reader->getInt32() == 8; break;
+        case 128: constraintValues.push_back(reader->getDouble()); break;
+        case 129: constraintValues.push_back(reader->getDouble()); break;
+        case 130: constraintValues.push_back(reader->getDouble()); break;
+        case 131: constraintValues.push_back(reader->getDouble()); break;
+        case 175: hasCount = reader->getInt32() == 3; break;
+        case 100:
+            {
+                const std::string subclass = reader->getString();
+                hasFinalSubclass = hasFinalSubclass
+                    || subclass == finalSubclass;
+            }
+            break;
+        case 280: hasShow = reader->getInt32() == 1; break;
+        case 281: hasChain = reader->getInt32() == 0; break;
+        case 301: case 302: case 303: case 304:
+            propertyNames.push_back(reader->getString()); break;
+        case 305: hasExpression = reader->getString()
+            == (horizontal ? "W" : "H"); break;
+        case 306: hasExpressionDescription = reader->getString()
+            == "constraint value"; break;
+        case 307: hasParameterDescription = reader->getString()
+            == "constraint description"; break;
+        default: break;
+        }
+    }
+    return ended && hasHandle && handles
+            == std::vector<std::uint32_t>{0x110Fu, 0x614Bu}
+        && hasNode && hasElement && hasShow && hasChain && hasPropertyCount
+        && hasExpression && hasExpressionDescription && hasValue
+        && hasParameterDescription && hasFlags && hasCount && hasFinalSubclass
+        && propertyStates == std::vector<std::int32_t>{55, 0, 7, -1}
+        && propertyCounts == std::vector<std::int32_t>{2, 1, 0, 2}
+        && propertyCodes == std::vector<std::int32_t>{55, -4, 92, 301, 0}
+        && propertyNames == std::vector<std::string>{
+            "Distance", "Width", "Angle", "Position", "Enabled"}
+        && points == std::vector<double>{1.25, -2.5, 3.75, 15.0, 4.5, -6.75}
+        && constraintValues == std::vector<double>{4.0, 6.0, 1.0, 4.0, 5.0, 6.0};
+}
+
+bool constraintParameterAllocationSweep(
+        DRW_DynamicBlockObject::Kind kind, bool binary) {
+    const bool horizontal = kind
+        == DRW_DynamicBlockObject::Kind::HorizontalConstraintParameter;
+    const auto make = [kind]() { return makeConstraintParameter(kind); };
+    const auto sourceCheck = [kind](const DRW_DynamicBlockObject& object) {
+        return constraintParameterSourceUnchanged(object, kind);
+    };
+    const auto wireCheck = [kind](const std::string& bytes, bool isBinary) {
+        return constraintParameterWireReadback(bytes, isBinary, kind);
+    };
+    return dynamicBlockAllocationSweep(
+        horizontal ? "HorizontalConstraintParameter"
+                   : "VerticalConstraintParameter",
+        binary, make, sourceCheck, wireCheck, {{0x114Bu, 0x614Bu}});
+}
+
 bool alignmentAllocationSweep(bool binary) {
     return dynamicBlockAllocationSweep(
         "AlignmentParameter", binary, makeAlignmentParameter,
@@ -1918,5 +2122,14 @@ int main() {
         && flipParameterAllocationSweep(false)
         && flipParameterAllocationSweep(true)
         && linearParameterAllocationSweep(false)
-        && linearParameterAllocationSweep(true) ? 0 : 1;
+        && linearParameterAllocationSweep(true)
+        && constraintParameterAllocationSweep(
+            DRW_DynamicBlockObject::Kind::HorizontalConstraintParameter, false)
+        && constraintParameterAllocationSweep(
+            DRW_DynamicBlockObject::Kind::HorizontalConstraintParameter, true)
+        && constraintParameterAllocationSweep(
+            DRW_DynamicBlockObject::Kind::VerticalConstraintParameter, false)
+        && constraintParameterAllocationSweep(
+            DRW_DynamicBlockObject::Kind::VerticalConstraintParameter, true)
+            ? 0 : 1;
 }
