@@ -2,9 +2,9 @@
 
 ## Progress estimate (2026-11-12)
 
-The current queue has **28 completed implementation slices** and **6 remaining
-phase exit gates**, so the item-count progression is **82.4%**:
-`28 / (28 + 6)`. This is a queue-count estimate: a small implementation slice
+The current queue has **29 completed implementation slices** and **6 remaining
+phase exit gates**, so the item-count progression is **82.9%**:
+`29 / (29 + 6)`. This is a queue-count estimate: a small implementation slice
 and a broad phase gate each count as one item, so it is not effort-weighted
 completion of DWG/DXF parity. Completed actions have been removed from this
 plan; their implementation and evidence remain in Git history and
@@ -4094,9 +4094,10 @@ from scratch, verified exact endpoints and bounds after FreeCAD's C++ DXF
 importer, and asserted the installed converter path/hash (matching the current
 build) and temporary Unicode/spaces paths. The sandboxed run stopped before
 import because Qt could not detect ARM NEON; the unsandboxed direct harness
-runs passed. The pinned CI workflow targets FreeCAD 1.1.3, so its test correctly
-refused the locally installed 1.1.4 revision; this local result does not close
-the pinned 1.1.3, Linux, or Windows gates. It qualifies one generated LINE
+runs passed. At the time, the CI workflow pinned FreeCAD 1.1.3, so its test
+correctly refused the locally installed 1.1.4 revision. The platform workflow
+is now pinned to 1.1.4; this local result still does not close Linux or Windows.
+It qualifies one generated LINE
 route only, not physical producers, broader entities, ACIS solids, or native
 DWG support. No fixture was added. See the [macOS 1.1.4 receipt](docs/research/p8-macos-freecad-114-generated-ac1021-line-qualification-2026-11-12.json).
 
@@ -4123,11 +4124,24 @@ inserted all nine expected objects, with exact shape/count checks and no
 unsupported-feature reports. AC1021 open/insert regression checks still pass.
 The Linux and Windows workflow selectors now include the lowercase AC1024
 tests; hosted runs are still pending. See the [AC1024 consumer receipt](docs/research/p8-freecad-ac1024-generated-primitives-open-insert-2026-11-12.json).
-The repository workflow pins FreeCAD 1.1.3; hosted Linux/Windows runs, other
+The repository workflow now pins FreeCAD 1.1.4; hosted Linux/Windows runs, other
 entity/version profiles, native application semantics and broad support claims
 remain open. The full seven-entity local AC1021 profile passes both open and
 insert in 2.48 seconds. See the [AC1021 primitive qualification receipt](docs/research/p8-freecad-ac1021-generated-primitives-open-insert-2026-11-12.json)
 and the [tilted-SPLINE receipt](docs/research/p8-freecad-ac1021-tilted-spline-open-insert-2026-11-12.json).
+
+**P8 native platform workflow pin refresh (2026-11-12):** the dispatch workflow
+and generated-consumer expected revision now target the official FreeCAD 1.1.4
+release, commit `4fd3bf320d9566a27e60069fc8387448aaa3a094`. GitHub release
+metadata provides the Linux AppImage digest
+`f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434` and
+Windows 7z digest `4828741fc91ee37fafcdb97a1abacb18b04ba451ac4372d9ff7a7349b36f4d6d`;
+the workflow verifies both before running tests. On the installed macOS 1.1.4
+consumer, the two CLI compatibility controls and four AC1021/AC1024 primitive
+open/insert controls pass. The sandboxed native invocations abort in Qt's ARM
+NEON startup check before import; rerunning those same four tests outside the
+sandbox passes. Hosted Linux/Windows qualification remains pending, so P8 stays
+OPEN. See the [release-bound pin and local recheck receipt](docs/research/p8-freecad-platform-workflow-114-pin-2026-11-12.json).
 
 **P8 classic 3D POLYLINE consumer slice (2026-11-12):** the generated
 AC1021 profile now also contains a classic `POLYLINE` with flag 8 and four
@@ -4138,8 +4152,8 @@ checks all eight entity counts, no unsupported-feature reports, exact ordered
 POLYLINE coordinates, bounds, 3-edge/4-vertex topology and total length.
 The generator creates the source locally at runtime; no fixture was added.
 This qualifies only the generated AC1021 classic 3D POLYLINE route on macOS
-ARM64; other POLYLINE profiles, physical producer sources, FreeCAD 1.1.3,
-Linux/Windows, native DWG and broad semantic claims remain open. See the
+ARM64; other POLYLINE profiles, physical producer sources, FreeCAD Linux/Windows,
+native DWG and broad semantic claims remain open. See the
 [POLYLINE consumer receipt](docs/research/p8-freecad-ac1021-classic-3d-polyline-open-insert-2026-11-12.json).
 
 **P8 closed classic 3D POLYLINE boundary (2026-11-12):** an additional
@@ -4599,8 +4613,8 @@ memory and no DWG/DXF fixture was added. See the [fallback proxy receipt](docs/r
   added. On this macOS ARM64 host, the optional GUI CTest passed both desktop
   operations with FreeCAD 1.1.4; the matching installed `FreeCADCmd` open and
   insert controls also passed. The current local result qualifies this
-  generated writer-to-converter-to-FreeCAD path only; hosted Linux 1.1.3 and
-  Windows 1.1.3 workflow runs remain pending
+  generated writer-to-converter-to-FreeCAD path only; hosted Linux 1.1.4 and
+  Windows 1.1.4 workflow runs remain pending
   ([implementation receipt](docs/research/p8-freecad-desktop-generated-ac1021-open-insert-2026-11-07.json)).
 - The old tracked-sample binding receipt remains historical registration
   evidence only ([receipt](docs/research/p8-freecad-tracked-sample-binding-2026-11-02.json)).
