@@ -2,20 +2,13 @@
 
 ## Progress estimate (2026-11-12)
 
-Since the current execution queue was last reset, **28 implementation slices
-are complete and 6 phase exit gates remain open**, giving a rough item-count
-progress estimate of **82.4% (28 / (28 + 6))**. The completed slices are
-represented by commits `787d65c6`, `e1c1cfe3`, `3feb4e6f`, `c9a64797`,
-`26e76b8c`, `9ebf0b78`, `dae9d0bd`, `d25b13b5`, `d9beb8f5`, `66883da5`,
-`dd2a0f4d`, `f35540b9`, `86ed0fd2`, `e96cc6ed`, `1f151ad3`, `27a7126c`,
-`524dfa02`, `4dcf6779`, `27e67de9`, `7089be6c`, `16aabb94`, `94a86b8e` and
-`ddd06b7a`, `f5035e32`, `aa0ece02`, `fce8a3e0`, `97a0ec04` and
-`46a57624`, `e5e1a9ab`, `e3df2133`. Commits
-`27a7126c` and
-`524dfa02` complete and then strengthen one transaction slice; `4dcf6779` and
-`27e67de9` implement and finalize the next slice's receipt. This estimate
-treats a small implementation slice and a broad phase gate as equal items, so
-it indicates queue progress, not effort-weighted completion of DWG/DXF parity.
+The current queue has **28 completed implementation slices** and **6 remaining
+phase exit gates**, so the item-count progression is **82.4%**:
+`28 / (28 + 6)`. This is a queue-count estimate: a small implementation slice
+and a broad phase gate each count as one item, so it is not effort-weighted
+completion of DWG/DXF parity. Completed actions have been removed from this
+plan; their implementation and evidence remain in Git history and
+`docs/research/`.
 
 **Gate completion remains 0 of 6 (0%)**: P4–P8 are OPEN and P9 is
 DEFERRED_EXTERNAL. No phase gate has met its full evidence requirements.
