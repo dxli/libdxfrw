@@ -734,6 +734,171 @@ bool moveActionAllocationSweep(bool binary) {
         moveActionRemap());
 }
 
+DRW_DynamicBlockObject makeScaleAction() {
+    DRW_DynamicBlockObject object("BLOCKSCALEACTION");
+    object.handle = 0x1135u;
+    object.parentHandle = 0x110Fu;
+    object.m_kind = DRW_DynamicBlockObject::Kind::ScaleAction;
+    object.m_bodyFullyDecoded = true;
+    object.m_evalExprParsed = true;
+    object.m_parentId = std::numeric_limits<std::uint32_t>::max();
+    object.m_major = 29u;
+    object.m_minor = 2u;
+    object.m_valueCode = -9999;
+    object.m_nodeId = 81u
+        + static_cast<std::uint32_t>(object.m_kind);
+    object.m_elementParsed = true;
+    object.m_elementName = "ScaleArc";
+    object.m_elementMajor = 29u;
+    object.m_elementMinor = 2u;
+    object.m_actionCount = 0;
+    object.m_dependencyCount = 4;
+    object.m_dependencyHandles = {0x1127u, 0x1128u, 0x1129u, 0x112Au};
+    object.m_displayLocation = DRW_Coord(45.0, -15.0, 0.0);
+    object.m_baseConnectionCodes = {1, 1};
+    object.m_baseConnectionNames = {"Scale", "XScale"};
+    object.m_scaleOffset = DRW_Coord(0.0, 0.0, 0.0);
+    object.m_scaleDependent = true;
+    object.m_scaleBasePoint = DRW_Coord(1.0, 2.0, 0.0);
+    object.m_scaleConnectionCodes = {1, 1, 1};
+    object.m_scaleConnectionNames = {"Scale", "XScale", "YScale"};
+    return object;
+}
+
+std::map<std::uint32_t, std::uint32_t> scaleActionRemap() {
+    return {{0x1127u, 0x6127u}, {0x1128u, 0x6128u},
+            {0x1129u, 0x6129u}, {0x112Au, 0x612Au}};
+}
+
+bool scaleActionSourceUnchanged(const DRW_DynamicBlockObject& object) {
+    return object.handle == 0x1135u
+        && static_cast<std::uint32_t>(object.parentHandle) == 0x110Fu
+        && object.m_kind == DRW_DynamicBlockObject::Kind::ScaleAction
+        && object.m_bodyFullyDecoded && object.m_evalExprParsed
+        && object.m_parentId == std::numeric_limits<std::uint32_t>::max()
+        && object.m_nodeId == 81u
+            + static_cast<std::uint32_t>(object.m_kind)
+        && object.m_elementParsed && object.m_elementName == "ScaleArc"
+        && object.m_actionCount == 0 && object.m_actionIndexes.empty()
+        && object.m_dependencyCount == 4
+        && object.m_dependencyHandles
+            == std::vector<std::uint32_t>{0x1127u, 0x1128u, 0x1129u, 0x112Au}
+        && object.m_baseConnectionCodes
+            == std::vector<std::int32_t>{1, 1}
+        && object.m_baseConnectionNames
+            == std::vector<UTF8STRING>{"Scale", "XScale"}
+        && object.m_scaleOffset.x == 0.0 && object.m_scaleOffset.y == 0.0
+        && object.m_scaleOffset.z == 0.0 && object.m_scaleDependent
+        && object.m_scaleBasePoint.x == 1.0
+        && object.m_scaleBasePoint.y == 2.0
+        && object.m_scaleBasePoint.z == 0.0
+        && object.m_scaleConnectionCodes
+            == std::vector<std::int32_t>{1, 1, 1}
+        && object.m_scaleConnectionNames
+            == std::vector<UTF8STRING>{"Scale", "XScale", "YScale"};
+}
+
+bool scaleActionWireReadback(const std::string& bytes, bool binary) {
+    std::istringstream input(bytes);
+    std::unique_ptr<dxfReader> reader = binary
+        ? std::unique_ptr<dxfReader>(std::make_unique<dxfReaderBinary>(&input))
+        : std::unique_ptr<dxfReader>(std::make_unique<dxfReaderAscii>(&input));
+    int code = 0;
+    if (!reader->readRec(&code) || code != 0
+        || reader->getString() != "BLOCKSCALEACTION")
+        return false;
+    bool ended = false;
+    bool hasHandle = false;
+    bool hasNode = false;
+    bool hasActionCount = false;
+    bool hasDependencyCount = false;
+    bool hasDependent = false;
+    bool hasScaleSubclass = false;
+    std::vector<std::uint32_t> ownerAndDependencies;
+    std::vector<std::int32_t> baseCodes;
+    std::vector<std::string> baseNames;
+    std::vector<std::int32_t> scaleCodes;
+    std::vector<std::string> scaleNames;
+    std::vector<double> scaleGeometry;
+    while (reader->readRec(&code)) {
+        if (code == 0) {
+            ended = reader->getString() == "WIRE_END";
+            break;
+        }
+        switch (code) {
+        case 5:
+            hasHandle = reader->getHandleString() == 0x1135u;
+            break;
+        case 330:
+            ownerAndDependencies.push_back(reader->getHandleString());
+            break;
+        case 90:
+            hasNode = reader->getInt32() == 81
+                + static_cast<std::int32_t>(
+                    DRW_DynamicBlockObject::Kind::ScaleAction);
+            break;
+        case 70:
+            hasActionCount = reader->getInt32() == 0;
+            break;
+        case 71:
+            hasDependencyCount = reader->getInt32() == 4;
+            break;
+        case 92:
+        case 93:
+            baseCodes.push_back(reader->getInt32());
+            break;
+        case 94:
+        case 95:
+        case 96:
+            scaleCodes.push_back(reader->getInt32());
+            break;
+        case 1011:
+        case 1021:
+        case 1031:
+        case 1012:
+        case 1022:
+        case 1032:
+            scaleGeometry.push_back(reader->getDouble());
+            break;
+        case 280:
+            hasDependent = reader->getInt32() == 1;
+            break;
+        case 100:
+            hasScaleSubclass = hasScaleSubclass
+                || reader->getString() == "AcDbBlockScaleAction";
+            break;
+        case 301:
+        case 302:
+            baseNames.push_back(reader->getString());
+            break;
+        case 303:
+        case 304:
+        case 305:
+            scaleNames.push_back(reader->getString());
+            break;
+        default:
+            break;
+        }
+    }
+    return ended && hasHandle && hasNode && hasActionCount
+        && hasDependencyCount && hasDependent && hasScaleSubclass
+        && ownerAndDependencies == std::vector<std::uint32_t>{
+            0x110Fu, 0x6127u, 0x6128u, 0x6129u, 0x612Au}
+        && baseCodes == std::vector<std::int32_t>{1, 1}
+        && baseNames == std::vector<std::string>{"Scale", "XScale"}
+        && scaleCodes == std::vector<std::int32_t>{1, 1, 1}
+        && scaleNames
+            == std::vector<std::string>{"Scale", "XScale", "YScale"}
+        && scaleGeometry == std::vector<double>{0.0, 0.0, 0.0, 1.0, 2.0, 0.0};
+}
+
+bool scaleActionAllocationSweep(bool binary) {
+    return dynamicBlockAllocationSweep(
+        "ScaleAction", binary, makeScaleAction,
+        scaleActionSourceUnchanged, scaleActionWireReadback,
+        scaleActionRemap());
+}
+
 std::map<std::uint32_t, std::uint32_t> stretchActionRemap() {
     return {{0x1127u, 0x6127u}, {0x1143u, 0x6143u},
             {0x1144u, 0x6144u}};
@@ -1084,6 +1249,8 @@ int main() {
         && alignmentAllocationSweep(true)
         && moveActionAllocationSweep(false)
         && moveActionAllocationSweep(true)
+        && scaleActionAllocationSweep(false)
+        && scaleActionAllocationSweep(true)
         && stretchActionAllocationSweep(false)
         && stretchActionAllocationSweep(true) ? 0 : 1;
 }
