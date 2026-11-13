@@ -1407,6 +1407,166 @@ bool stretchActionAllocationSweep(bool binary) {
         stretchActionRemap());
 }
 
+DRW_DynamicBlockObject makeFlipParameter() {
+    DRW_DynamicBlockObject object("BLOCKFLIPPARAMETER");
+    object.handle = 0x1135u;
+    object.parentHandle = 0x110Fu;
+    object.m_kind = DRW_DynamicBlockObject::Kind::FlipParameter;
+    object.m_bodyFullyDecoded = true;
+    object.m_evalExprParsed = true;
+    object.m_parentId = std::numeric_limits<std::uint32_t>::max();
+    object.m_major = object.m_elementMajor = 29u;
+    object.m_minor = object.m_elementMinor = 2u;
+    object.m_valueCode = -9999;
+    object.m_nodeId = 54u;
+    object.m_elementParsed = true;
+    object.m_elementName = "Door Size";
+    object.m_showProperties = true;
+    object.m_firstPoint = DRW_Coord(1.25, -2.5, 3.75);
+    object.m_secondPoint = DRW_Coord(15.0, 4.5, -6.75);
+    object.m_propertyStates = {55, 0, 7, -1};
+    object.m_twoPointPropertyCodes[0] = {55, -4};
+    object.m_twoPointPropertyNames[0] = {"Distance", "Width"};
+    object.m_twoPointPropertyCodes[1] = {92};
+    object.m_twoPointPropertyNames[1] = {"Angle"};
+    object.m_twoPointPropertyCodes[3] = {301, 0};
+    object.m_twoPointPropertyNames[3] = {"Position", "Enabled"};
+    object.m_parameterBaseLocation = 2;
+    object.m_flipCaption = "Flip";
+    object.m_flipDescription = "Flip the door";
+    object.m_flipBaseStateName = "Base";
+    object.m_flipFlippedStateName = "Flipped";
+    object.m_flipCaptionLocation = DRW_Coord(2.0, 3.0, 4.0);
+    object.m_flipValue96 = 1;
+    object.m_flipTooltip = "Toggle door handing";
+    return object;
+}
+
+bool flipParameterSourceUnchanged(const DRW_DynamicBlockObject& object) {
+    return object.handle == 0x1135u
+        && static_cast<std::uint32_t>(object.parentHandle) == 0x110Fu
+        && object.m_kind == DRW_DynamicBlockObject::Kind::FlipParameter
+        && object.m_bodyFullyDecoded && object.m_evalExprParsed
+        && object.m_parentId == std::numeric_limits<std::uint32_t>::max()
+        && object.m_major == 29u && object.m_minor == 2u
+        && object.m_valueCode == -9999 && object.m_nodeId == 54u
+        && object.m_elementParsed && object.m_elementName == "Door Size"
+        && object.m_showProperties && !object.m_chainActions
+        && object.m_firstPoint.x == 1.25 && object.m_firstPoint.y == -2.5
+        && object.m_firstPoint.z == 3.75
+        && object.m_secondPoint.x == 15.0 && object.m_secondPoint.y == 4.5
+        && object.m_secondPoint.z == -6.75
+        && object.m_propertyStates == std::array<std::int32_t, 4>{55, 0, 7, -1}
+        && object.m_twoPointPropertyCodes[0]
+            == std::vector<std::int32_t>{55, -4}
+        && object.m_twoPointPropertyNames[0]
+            == std::vector<UTF8STRING>{"Distance", "Width"}
+        && object.m_twoPointPropertyCodes[1]
+            == std::vector<std::int32_t>{92}
+        && object.m_twoPointPropertyNames[1]
+            == std::vector<UTF8STRING>{"Angle"}
+        && object.m_twoPointPropertyCodes[3]
+            == std::vector<std::int32_t>{301, 0}
+        && object.m_twoPointPropertyNames[3]
+            == std::vector<UTF8STRING>{"Position", "Enabled"}
+        && object.m_parameterBaseLocation == 2
+        && object.m_flipCaption == "Flip"
+        && object.m_flipDescription == "Flip the door"
+        && object.m_flipBaseStateName == "Base"
+        && object.m_flipFlippedStateName == "Flipped"
+        && object.m_flipCaptionLocation.x == 2.0
+        && object.m_flipCaptionLocation.y == 3.0
+        && object.m_flipCaptionLocation.z == 4.0
+        && object.m_flipValue96 == 1
+        && object.m_flipTooltip == "Toggle door handing";
+}
+
+bool flipParameterWireReadback(const std::string& bytes, bool binary) {
+    std::istringstream input(bytes);
+    std::unique_ptr<dxfReader> reader = binary
+        ? std::unique_ptr<dxfReader>(std::make_unique<dxfReaderBinary>(&input))
+        : std::unique_ptr<dxfReader>(std::make_unique<dxfReaderAscii>(&input));
+    int code = 0;
+    if (!reader->readRec(&code) || code != 0
+        || reader->getString() != "BLOCKFLIPPARAMETER")
+        return false;
+    bool ended = false;
+    bool hasHandle = false;
+    bool hasNode = false;
+    bool hasElement = false;
+    bool hasShow = false;
+    bool hasChain = false;
+    bool hasPropertyCount = false;
+    bool hasCaption = false;
+    bool hasDescription = false;
+    bool hasBaseState = false;
+    bool hasFlippedState = false;
+    bool hasCaptionValue = false;
+    bool hasTooltip = false;
+    bool hasSubclass = false;
+    std::uint32_t owner = 0u;
+    std::vector<std::int32_t> propertyStates;
+    std::vector<std::int32_t> propertyCounts;
+    std::vector<std::int32_t> propertyCodes;
+    std::vector<std::string> propertyNames;
+    std::vector<double> points;
+    std::vector<double> captionLocation;
+    while (reader->readRec(&code)) {
+        if (code == 0) {
+            ended = reader->getString() == "WIRE_END";
+            break;
+        }
+        switch (code) {
+        case 5: hasHandle = reader->getHandleString() == 0x1135u; break;
+        case 330: owner = reader->getHandleString(); break;
+        case 90: hasNode = reader->getInt32() == 54; break;
+        case 300: hasElement = reader->getString() == "Door Size"; break;
+        case 170: hasPropertyCount = reader->getInt32() == 4; break;
+        case 171: case 172: case 173: case 174:
+            propertyCounts.push_back(reader->getInt32()); break;
+        case 91: propertyStates.push_back(reader->getInt32()); break;
+        case 92: case 93: case 94: case 95:
+            propertyCodes.push_back(reader->getInt32()); break;
+        case 1010: case 1020: case 1030: case 1011: case 1021: case 1031:
+            points.push_back(reader->getDouble()); break;
+        case 1012: case 1022: case 1032:
+            captionLocation.push_back(reader->getDouble()); break;
+        case 280: hasShow = reader->getInt32() == 1; break;
+        case 281: hasChain = reader->getInt32() == 0; break;
+        case 305: hasCaption = reader->getString() == "Flip"; break;
+        case 306: hasDescription = reader->getString() == "Flip the door"; break;
+        case 307: hasBaseState = reader->getString() == "Base"; break;
+        case 308: hasFlippedState = reader->getString() == "Flipped"; break;
+        case 309: hasTooltip = reader->getString() == "Toggle door handing"; break;
+        case 96: hasCaptionValue = reader->getInt32() == 1; break;
+        case 100:
+            hasSubclass = hasSubclass
+                || reader->getString() == "AcDbBlockFlipParameter";
+            break;
+        case 301: case 302: case 303: case 304:
+            propertyNames.push_back(reader->getString()); break;
+        default: break;
+        }
+    }
+    return ended && hasHandle && owner == 0x110Fu && hasNode && hasElement
+        && hasShow && hasChain && hasPropertyCount && hasCaption
+        && hasDescription && hasBaseState && hasFlippedState
+        && hasCaptionValue && hasTooltip && hasSubclass
+        && propertyStates == std::vector<std::int32_t>{55, 0, 7, -1}
+        && propertyCounts == std::vector<std::int32_t>{2, 1, 0, 2}
+        && propertyCodes == std::vector<std::int32_t>{55, -4, 92, 301, 0}
+        && propertyNames == std::vector<std::string>{
+            "Distance", "Width", "Angle", "Position", "Enabled"}
+        && points == std::vector<double>{1.25, -2.5, 3.75, 15.0, 4.5, -6.75}
+        && captionLocation == std::vector<double>{2.0, 3.0, 4.0};
+}
+
+bool flipParameterAllocationSweep(bool binary) {
+    return dynamicBlockAllocationSweep(
+        "FlipParameter", binary, makeFlipParameter,
+        flipParameterSourceUnchanged, flipParameterWireReadback, {});
+}
+
 bool alignmentAllocationSweep(bool binary) {
     return dynamicBlockAllocationSweep(
         "AlignmentParameter", binary, makeAlignmentParameter,
@@ -1590,5 +1750,7 @@ int main() {
         && lookupActionAllocationSweep(false)
         && lookupActionAllocationSweep(true)
         && stretchActionAllocationSweep(false)
-        && stretchActionAllocationSweep(true) ? 0 : 1;
+        && stretchActionAllocationSweep(true)
+        && flipParameterAllocationSweep(false)
+        && flipParameterAllocationSweep(true) ? 0 : 1;
 }
