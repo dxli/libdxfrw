@@ -129,9 +129,9 @@ inline WireArea inspect(DRW::Version version,
             return result;
         result.offsets.push_back(offset);
         result.flags.push_back(flags);
-        // In DWG's binary Shapeflag, bit 4 indicates the string-area
-        // reference. This differs from DXF group 74's text bit 2.
-        areaPresent = areaPresent || (flags & 4u) != 0;
+        // ODA §20.4.58: DWG and DXF group 74 both use bit 2 for embedded
+        // text; bit 4 indicates an embedded shape and does not add a text area.
+        areaPresent = areaPresent || (flags & 2u) != 0;
     }
     if (areaPresent) {
         result.bytes.resize(version >= DRW::AC1021 ? 512u : 256u);

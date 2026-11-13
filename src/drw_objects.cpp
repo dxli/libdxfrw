@@ -4782,14 +4782,11 @@ bool DRW_Dimstyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
 *  @author Rallaz
 */
 namespace {
-// DRW_LTypeSegment::shapeFlags follows Autodesk's DXF group-74 meanings:
-// bit 2 is embedded text and bit 4 is an embedded shape. The DWG LTYPE
-// Shapeflag uses the inverse meanings for those two bits (ODA §20.4.58).
-// Keep the conversion at the DWG codec boundary so DXF callbacks and models
-// continue to use the documented group-74 representation.
+// ODA §20.4.58 gives the same bit meanings for DWG Shapeflag and DXF group 74:
+// bit 2 is embedded text and bit 4 is an embedded shape. Keep the identity
+// mapping explicit at the codec boundary so the wire contract is easy to audit.
 int mapDwgLtypeShapeFlagsToDxf(int flags) noexcept {
-    return (flags & ~0x06) | ((flags & 0x02) << 1)
-        | ((flags & 0x04) >> 1);
+    return flags;
 }
 }
 
@@ -5241,7 +5238,10 @@ bool DRW_LType::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
         segment.scale = scale;
         segment.rotation = rotation;
         segment.shapeFlags = mapDwgLtypeShapeFlagsToDxf(dashFlags);
-        haveStrArea |= (dashFlags & 0x04) != 0;
+        // ODA §20.4.58: R2007+ carries the 512-byte text area only when the
+        // embedded-text bit (0x02) is present. Shape-only records use bit 0x04
+        // and have no text area in this body.
+        haveStrArea |= (dashFlags & 0x02) != 0;
         parsedPath.push_back(dashLength);
         parsedSegments.push_back(std::move(segment));
     }

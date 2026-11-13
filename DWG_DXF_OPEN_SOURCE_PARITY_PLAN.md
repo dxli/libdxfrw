@@ -2,9 +2,9 @@
 
 ## Progress estimate (2026-11-12)
 
-Since the current execution queue was last reset, **26 implementation slices
+Since the current execution queue was last reset, **27 implementation slices
 are complete and 6 phase exit gates remain open**, giving a rough item-count
-progress estimate of **81.3% (26 / (26 + 6))**. The completed slices are
+progress estimate of **81.8% (27 / (27 + 6))**. The completed slices are
 represented by commits `787d65c6`, `e1c1cfe3`, `3feb4e6f`, `c9a64797`,
 `26e76b8c`, `9ebf0b78`, `dae9d0bd`, `d25b13b5`, `d9beb8f5`, `66883da5`,
 `dd2a0f4d`, `f35540b9`, `86ed0fd2`, `e96cc6ed`, `1f151ad3`, `27a7126c`,
@@ -3044,6 +3044,22 @@ guard does not qualify physical legacy FIELD prevalence, source-to-output
 conversion, or native evaluation; see the [guard receipt](docs/research/p5-field-legacy-dxf-format-flag-guard-2026-11-02.json).
 
 ## P6 — residual semantic and version audit
+
+**AC1024 LTYPE shape/text flags (2026-11-12):** ODA v5.4.1 §20.4.58 p. 166
+and Autodesk's DXF LTYPE reference agree that group-74 bit 2 (`0x02`) denotes
+embedded text and bit 4 (`0x04`) denotes an embedded shape. The DWG parser had
+swapped these bits and incorrectly required a 512-byte text area for shape-only
+records. It now retains the documented flag meanings and reads the R2007+ text
+area only when bit `0x02` is set. On a new external AC1024 sample from
+ACadSharp, the pre-change reader emitted three LTYPE parse failures at handles
+`0x6bf`, `0x6cc`, and `0x6d9`; after the fix all 923 source frames publish with
+zero entity/object parse failures. LibreDWG 0.14 independently reads the same
+three shape records and a text-bearing `GAS_LINE`. ACadSharp's bundled
+AutoLISP requests `SAVEAS 2010`, but does not record the host executable/release
+or execution receipt; this does not qualify the reported AutoCAD 2010 RTM
+CLASSES issue. Strict DXF output still refuses at unsupported TABLECONTENT
+replay. No downloaded DWG was committed. The [receipt](docs/research/p6-ac1024-ltype-shapeflag-semantics-2026-11-12.json)
+records source identity, independent fields, reproduction and focused checks.
 
 **DIMASSOC DXF source identity (2026-11-12):** `writeDimensionAssociation`
 now registers each nonzero source handle against the emitted DIMASSOC record
