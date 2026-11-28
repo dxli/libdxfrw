@@ -1,0 +1,104 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p6-legacy-two-xrecord-oda-ownership-2026-11-28",
+  "supportClaimEffect": "none",
+  "scope": "Locally generated ACadRust R13/R14 two-XRECORD layout graphs converted to R2000 DXF by ODA File Converter; each resulting DXF was converted back to its corresponding R13/R14 DWG and then to R2000 DXF for independent inspection.",
+  "oda": {
+    "version": "27.1.0.0",
+    "binarySha256": "21a8f029e7d41af64088f65492404d97ffec0d2f7886703b3b725f5ac4a55783",
+    "arguments": "INPUT_DIR OUTPUT_DIR ACAD2000|ACAD13|ACAD14 DXF|DWG 0 1 INPUT_GLOB"
+  },
+  "sourceDwgSha256": {
+    "r13": "6c73f1df9b4419802263542b1362702685b3dac6a148006157a547faf14a7bf6",
+    "r14": "3c8c1aab68a233dc70237b6d07da72dc6fa58e31b672a12b894a94e9cda5c685"
+  },
+  "odaResavedDwgSha256": {
+    "r13": "aa1af5a614b06d12b5165aee8f646f269d433b6e7fc6cc14aadb31bc2f92e45a",
+    "r14": "6910ff7edde591d80a31b4fa3d1431cac0f0610fd39e7f8d93fbac3a43ba08e5"
+  },
+  "firstConversion": {
+    "schema": 1,
+    "ezdxf": "1.4.5",
+    "outputs": [
+      {
+        "name": "r13.dxf",
+        "sha256": "b68703b03dac912b677dbfb2f2a56e2277cb3efeda392b6fae9462ffdd28f3fc",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      },
+      {
+        "name": "r14.dxf",
+        "sha256": "7ac53df2fc575201d4b125ee500a07dfaa4193645b3dd42322dacc063fd25dd7",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      }
+    ],
+    "supportClaimEffect": "none"
+  },
+  "reopenedConversion": {
+    "schema": 1,
+    "ezdxf": "1.4.5",
+    "outputs": [
+      {
+        "name": "input.dxf",
+        "sha256": "1d1bec209f375a456d7d762198d1e12e86829de4a2c777c528877dd1c38d7e14",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      },
+      {
+        "name": "input.dxf",
+        "sha256": "d1876897c33df39ed83e44e248213aa273345c2c542e33e767837ff53b7fe54f",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      }
+    ],
+    "supportClaimEffect": "none"
+  },
+  "physicalDictionaryObservations": {
+    "r13": {
+      "frameSha256": "2eb6349e4fd94d992d2c2f7a4d467df52a8e642252a4816b014a589ad34ece40",
+      "crcValid": true,
+      "entryCount": 2,
+      "owner": 47,
+      "appId": 28,
+      "appIdName": "ACAD",
+      "eedBytesHex": "000d002d54524541545f41535f48415244460100",
+      "peerMeaning": [
+        "TREAT_AS_HARD",
+        1
+      ]
+    },
+    "r14": {
+      "frameSha256": "c29aefb6f4a2c0bab8512347de0ab0aa911705104ad191592a5f6ef494104904",
+      "crcValid": true,
+      "entryCount": 2,
+      "owner": 47,
+      "eed": [],
+      "r14BodyByte": 1
+    }
+  },
+  "checks": [
+    "Independent LibreDWG discovery and physical dictionary frame/CRC walkers observe the distinct ownership encodings. The prior no-EED/soft-owner observer refuses these source profiles.",
+    "Both ODA-resaved DWGs are refused by the production adapter without changing destination in ASCII and binary. ezdxf 1.4.5 verifies both children, values, ownership, reactor and geometry with zero audit errors/fixes in each ODA conversion."
+  ],
+  "limits": [
+    "ODA is an independent converter, not an AutoCAD/ObjectARX native cloning witness. The R13 marker and R14 hard-owner byte cannot by themselves qualify clone semantics or production export.",
+    "Source input is an ACadRust-generated diagnostic profile; the ODA outputs are derived from it, not source-distinct producer-authored CAD drawings. No DWG/DXF files are committed."
+  ]
+}
