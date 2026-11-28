@@ -32933,7 +32933,8 @@ bool dx_iface::hasBoundLegacyLayoutSources() const noexcept {
         std::set<std::uint32_t> offsets;
         std::set<std::uint64_t> ordinals;
         std::set<std::string> names;
-        std::set<std::uint32_t> extensions;
+        std::set<std::uint32_t> extensions, extensionXrecords;
+        std::uint32_t xrecordClass = 0u;
         for (const auto& record : cData->blockRecords) {
             const auto source = cData->m_legacyBlockRecordSources.find(record.handle);
             if (!records.emplace(record.handle, &record).second
@@ -32967,9 +32968,48 @@ bool dx_iface::hasBoundLegacyLayoutSources() const noexcept {
                 }
                 if (extension == nullptr || !extensions.insert(extension->handle).second
                     || extension->parentHandle != layout.handle
-                    || !extension->m_entries.empty() || !extension->extData.empty()
+                    || extension->m_entries.size() > 1u || !extension->extData.empty()
                     || !wire(*extension)) return false;
+                for (const auto& entry : extension->m_entries) {
+                    const DRW_XRecord* record = nullptr;
+                    for (const auto& candidate : cData->xRecords) {
+                        if (candidate.handle != entry.m_handle) continue;
+                        if (record != nullptr) return false;
+                        record = &candidate;
+                    }
+                    const auto recordKey = dx_data::StandardDwgFrameKey{cData->importGeneration, entry.m_handle};
+                    const auto raw = cData->m_opaqueDwgSourceFrames.find(recordKey);
+                    if (record == nullptr || !extensionXrecords.insert(record->handle).second
+                        || record->parentHandle != extension->handle
+                        || !cData->hasCompleteDwgDictionaryEntry(extension->handle,
+                                                                 entry.m_name.c_str(), record->handle)
+                        || raw == cData->m_opaqueDwgSourceFrames.end()
+                        || cData->m_opaqueDwgSourceFrameIdentities.count(recordKey) != 1u
+                        || raw->second.m_version != cData->sourceVersion
+                        || !dx_legacy_dwg_wire::xrecordTextShort(raw->second, *record)) return false;
+                    const auto number = static_cast<std::uint32_t>(raw->second.m_objectType);
+                    if (xrecordClass != 0u && xrecordClass != number) return false;
+                    xrecordClass = number;
+                }
             }
+        }
+        if (!extensionXrecords.empty()) {
+            const DRW_DwgClassCoverageEntry* selectedClass = nullptr;
+            for (const auto& row : cData->dwgClassCoverage.m_entries) {
+                if (row.m_recordName != "XRECORD" && row.m_className != "AcDbXrecord"
+                    && row.m_classNumber != xrecordClass) continue;
+                if (selectedClass != nullptr) return false;
+                selectedClass = &row;
+            }
+            std::size_t frames = 0u;
+            if (selectedClass == nullptr || selectedClass->m_classNumber != xrecordClass
+                || selectedClass->m_recordName != "XRECORD" || selectedClass->m_className != "AcDbXrecord"
+                || selectedClass->m_state != DRW_DwgClassCoverageState::Published
+                || selectedClass->m_reason != DRW_DwgClassCoverageReason::None
+                || selectedClass->m_entityFlag != 0 || selectedClass->m_wasAProxyFlag != 0
+                || !cData->legacyClassFrameCount(static_cast<std::uint16_t>(xrecordClass), frames)
+                || frames != extensionXrecords.size() || cData->xRecords.size() != frames)
+                return false;
         }
         std::set<std::uint32_t> members;
         std::set<std::string> memberNames;
@@ -43439,6 +43479,7 @@ bool dx_iface::inspectLegacyLayoutBodies(
         std::map<std::uint32_t, const DRW_Layout*> expectedByHandle;
         std::map<std::uint32_t, std::uint32_t> blocksByLayout;
         std::map<std::uint32_t, const DRW_Dictionary*> expectedExtensions;
+        std::map<std::uint32_t, const DRW_XRecord*> expectedXrecords;
         for (std::size_t i = 0u; i < links.size(); ++i) {
             std::uint32_t mapped = 0u;
             const DRW_Layout& source = cData->layouts[i];
@@ -43456,16 +43497,35 @@ bool dx_iface::inspectLegacyLayoutBodies(
                 if (extension == cData->dictionaries.end() || !mapHandle(source.xDictHandle, emitted)
                     || !expectedExtensions.emplace(emitted, &*extension).second)
                     return false;
+                for (const auto& entry : extension->m_entries) {
+                    const auto record = std::find_if(cData->xRecords.begin(), cData->xRecords.end(),
+                        [&entry](const DRW_XRecord& row) { return row.handle == entry.m_handle; });
+                    std::uint32_t target = 0u;
+                    if (record == cData->xRecords.end() || !mapHandle(entry.m_handle, target)
+                        || !dxfW->dxfWriteRecordHasIdentity(target, "XRECORD", "OBJECTS")
+                        || !dxfW->dxfWriteRecordHasOwner(target, emitted)
+                        || !expectedXrecords.emplace(target, &*record).second) return false;
+                }
             }
         }
-        std::set<std::uint32_t> seen, seenExtensions;
+        std::set<std::uint32_t> seen, seenExtensions, seenXrecords;
         std::string_view selectedName;
         dx_standard_output::Decoder decoder(view);
         const bool inspected = decoder.good() && dx_standard_output::inspectSelected(view,
-            [&expectedByHandle, &expectedExtensions, &selectedName](std::string_view name, std::uint32_t handle) {
+            [&expectedByHandle, &expectedExtensions, &expectedXrecords, &selectedName](std::string_view name, std::uint32_t handle) {
                 selectedName = name;
-                return expectedByHandle.count(handle) != 0u || expectedExtensions.count(handle) != 0u;
+                return expectedByHandle.count(handle) != 0u || expectedExtensions.count(handle) != 0u
+                    || expectedXrecords.count(handle) != 0u;
             }, [&](const auto& shape, std::string_view body) {
+                const auto xrecord = expectedXrecords.find(shape.handle);
+                if (xrecord != expectedXrecords.end()) {
+                    if (selectedName != "XRECORD" || !seenXrecords.insert(shape.handle).second)
+                        return false;
+                    return decoder.decodeRecord<DRW_XRecord>(body, [&](const DRW_XRecord& actual) {
+                        std::vector<std::uint32_t> references;
+                        return dx_standard_output::equal(*xrecord->second, actual, mapHandle, references);
+                    });
+                }
                 const auto extension = expectedExtensions.find(shape.handle);
                 if (extension != expectedExtensions.end()) {
                     if (selectedName != "DICTIONARY" || !seenExtensions.insert(shape.handle).second)
@@ -43553,7 +43613,8 @@ bool dx_iface::inspectLegacyLayoutBodies(
                 });
             });
         const bool complete = inspected && seen.size() == expectedByHandle.size()
-            && seenExtensions.size() == expectedExtensions.size();
+            && seenExtensions.size() == expectedExtensions.size()
+            && seenXrecords.size() == expectedXrecords.size();
         if (!complete && debug)
             std::cerr << "legacy LAYOUT body output proof failed\n";
         return complete;

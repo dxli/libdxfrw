@@ -1,0 +1,25 @@
+{
+  "checks": [
+    "The locally generated and producer-reopened R14 control passes the bound source graph. Altered XRECORD class, typed value, parent, raw frame or dictionary entry is refused with the unchanged source succeeding on retry. The prior empty dictionary source remains accepted.",
+    "A scratch-only guard-bypassed build refuses injected XRECORD or dictionary body mismatches, preserves existing destinations and succeeds on the same adapter after the fault clears. TABLES, OBJECTS, layout identity and layout body mismatch controls also pass for both encodings.",
+    "Independent physical tags and ezdxf 1.4.5 verify dictionary role/owner, XRECORD identity/owner and both values, zero audit errors/fixes, and expected LINE endpoints on twelve corrected outputs. Mutated physical group-70 values are rejected in ASCII and binary; originals pass again.",
+    "The normal production adapter still refuses the source atomically in both encodings.",
+    "Seven focused CTests and the macOS ARM64 AddressSanitizer source graph/mutation/retry control pass; leak detection is unavailable on this platform."
+  ],
+  "diagnosticSourceSha256": "e9253986cc979ee603fc55dd4a8df28d3a766d4b63e05547c6063163eba9a4a8",
+  "id": "p6-legacy-layout-xrecord-binding-2026-11-28",
+  "implementation": "Bind the selected one-entry legacy layout extension dictionary to its source generation, unique typed XRECORD, physical frame, complete published class coverage and generation-bound class-frame census. Inspect the emitted dictionary and XRECORD identities, ownership, and full modeled bodies using shared staged-object comparison. The production legacy export refusal remains active.",
+  "limits": [
+    "XRECORD and dictionary output fault injection alters the expected model; actual-byte mutation is checked by the independent observer.",
+    "This is limited to one entry per extension, selected group-1 ASCII/group-70 payload, no EED/reactors/other object references, and complete source class census. It does not establish dictionary clone semantics or native consumer behavior.",
+    "Successful exports used explicit scratch-only legacy and selected empty-class guard bypasses; no general or production support is enabled."
+  ],
+  "schema": "libdxfrw.research-receipt.v1",
+  "sourceSha256": "b46f59e514229c755fe32046a157c8fde9aca14ca613f943f82e14a4e0be89b0",
+  "sourceWireEvidence": "docs/research/p6-legacy-layout-xrecord-wire-2026-11-28.json",
+  "supportClaimEffect": "none",
+  "xrecordFaultRetryOutputs": {
+    "ascii": "a89722733072cc6d6b300bc1bbb32eb3229825a812921ae4095a6525b260e225",
+    "binary": "66e119be7e6a06c61508c82fe61fad6c5f7177877d3952d0a2477bd2efcd4bfb"
+  }
+}

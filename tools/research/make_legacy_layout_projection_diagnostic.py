@@ -34,6 +34,8 @@ def main():
                         help='add an environment-controlled paper viewport role mismatch')
     parser.add_argument('--inject-xdictionary-body-failure', action='store_true',
                         help='add an environment-controlled extension dictionary field mismatch')
+    parser.add_argument('--inject-xrecord-body-failure', action='store_true',
+                        help='add an environment-controlled XRECORD body mismatch')
     args = parser.parse_args()
     source = args.source.resolve(strict=True)
     output = args.output.resolve()
@@ -74,7 +76,7 @@ def main():
     if (args.inject_table_proof_failure or args.inject_objects_proof_failure
             or args.inject_body_proof_failure or args.inject_role_proof_failure
             or args.inject_ucs_role_failure or args.inject_viewport_role_failure
-            or args.inject_xdictionary_body_failure):
+            or args.inject_xdictionary_body_failure or args.inject_xrecord_body_failure):
         if text.count('#include <iostream>\n') != 1:
             raise ValueError('adapter include anchor changed or is ambiguous')
         text = text.replace('#include <iostream>\n', '#include <iostream>\n#include <cstdlib>\n', 1)
@@ -137,6 +139,15 @@ def main():
             '                        // UNSAFE SCRATCH DIAGNOSTIC: force an extension body mismatch.\n'
             '                        DRW_Dictionary expected = *extension->second;\n'
             '                        if (std::getenv("LIBDXFRW_DIAGNOSTIC_BAD_XDICTIONARY")) expected.cloning ^= 1;\n'
+            '                        return dx_standard_output::equal(expected, actual, mapHandle, references);\n', 1)
+    if args.inject_xrecord_body_failure:
+        anchor = '                        return dx_standard_output::equal(*xrecord->second, actual, mapHandle, references);\n'
+        if text.count(anchor) != 1:
+            raise ValueError('legacy XRECORD body proof changed or is ambiguous')
+        text = text.replace(anchor,
+            '                        // UNSAFE SCRATCH DIAGNOSTIC: force an XRECORD body mismatch.\n'
+            '                        DRW_XRecord expected = *xrecord->second;\n'
+            '                        if (std::getenv("LIBDXFRW_DIAGNOSTIC_BAD_XRECORD")) expected.m_cloning ^= 1;\n'
             '                        return dx_standard_output::equal(expected, actual, mapHandle, references);\n', 1)
     result = text.encode('utf-8')
     with output.open('xb') as stream:

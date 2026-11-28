@@ -37,8 +37,9 @@ int main(int argc, char** argv) {
                       && std::string(argv[3]) != "diagnostic-role-fault"
                       && std::string(argv[3]) != "diagnostic-ucs-fault"
                       && std::string(argv[3]) != "diagnostic-viewport-fault"
-                      && std::string(argv[3]) != "diagnostic-xdictionary-fault")) {
-        std::cerr << "usage: probe INPUT NEW_SCRATCH_DIRECTORY production-refusal|diagnostic-only|diagnostic-table-fault|diagnostic-object-fault|diagnostic-body-fault|diagnostic-role-fault|diagnostic-ucs-fault|diagnostic-viewport-fault|diagnostic-xdictionary-fault\n";
+                      && std::string(argv[3]) != "diagnostic-xdictionary-fault"
+                      && std::string(argv[3]) != "diagnostic-xrecord-fault")) {
+        std::cerr << "usage: probe INPUT NEW_SCRATCH_DIRECTORY production-refusal|diagnostic-only|diagnostic-table-fault|diagnostic-object-fault|diagnostic-body-fault|diagnostic-role-fault|diagnostic-ucs-fault|diagnostic-viewport-fault|diagnostic-xdictionary-fault|diagnostic-xrecord-fault\n";
         return 2;
     }
     const bool diagnostic = std::string(argv[3]) != "production-refusal";
@@ -49,7 +50,9 @@ int main(int argc, char** argv) {
     const bool ucsFault = std::string(argv[3]) == "diagnostic-ucs-fault";
     const bool viewportFault = std::string(argv[3]) == "diagnostic-viewport-fault";
     const bool xdictionaryFault = std::string(argv[3]) == "diagnostic-xdictionary-fault";
-    const char* faultName = xdictionaryFault ? "LIBDXFRW_DIAGNOSTIC_BAD_XDICTIONARY"
+    const bool xrecordFault = std::string(argv[3]) == "diagnostic-xrecord-fault";
+    const char* faultName = xrecordFault ? "LIBDXFRW_DIAGNOSTIC_BAD_XRECORD"
+        : xdictionaryFault ? "LIBDXFRW_DIAGNOSTIC_BAD_XDICTIONARY"
         : viewportFault ? "LIBDXFRW_DIAGNOSTIC_BAD_VIEWPORT"
         : ucsFault ? "LIBDXFRW_DIAGNOSTIC_BAD_UCS"
         : roleFault ? "LIBDXFRW_DIAGNOSTIC_BAD_ROLE"
@@ -70,14 +73,14 @@ int main(int argc, char** argv) {
             if (write(adapter, source, out.string(), binary) || bytes(out) != sentinel) return 4;
             continue;
         }
-        if (tableFault || objectFault || bodyFault || roleFault || ucsFault || viewportFault || xdictionaryFault) {
+        if (tableFault || objectFault || bodyFault || roleFault || ucsFault || viewportFault || xdictionaryFault || xrecordFault) {
             if (!setFault(faultName, true)) return 2;
         } else {
             source.layouts.front().name += "_changed";
         }
-        const bool refused = !write(adapter, source, out.string(), binary, tableFault || objectFault || bodyFault || roleFault || ucsFault || viewportFault || xdictionaryFault)
+        const bool refused = !write(adapter, source, out.string(), binary, tableFault || objectFault || bodyFault || roleFault || ucsFault || viewportFault || xdictionaryFault || xrecordFault)
             && bytes(out) == sentinel;
-        if (tableFault || objectFault || bodyFault || roleFault || ucsFault || viewportFault || xdictionaryFault) {
+        if (tableFault || objectFault || bodyFault || roleFault || ucsFault || viewportFault || xdictionaryFault || xrecordFault) {
             if (!setFault(faultName, false)) return 2;
         } else {
             source.layouts.front().name = originalName;
