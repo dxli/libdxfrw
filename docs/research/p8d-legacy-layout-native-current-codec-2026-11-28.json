@@ -1,0 +1,23 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p8d-legacy-layout-native-current-codec-2026-11-28",
+  "supportClaimEffect": "selected diagnostic only; no advertised support",
+  "scope": "Path-selected macOS ARM64 LibreCAD PR #3289 candidate opened and saved the locally generated R13-to-R2000 diagnostic DXF at its original AC1015 version. The production legacy layout guard was bypassed only in the scratch source generator.",
+  "consumerCommit": "7d175ccf5c611bbaa07e5e45b1b5303bcbbf582d",
+  "codecCommit": "3d864de9b",
+  "buildMethod": "Copied the earlier clean consumer application, changed only its bundle identity and linked-library load path, and ad-hoc signed its binary. Compared public headers: the intervening changes add a non-data nested profile type and method only. The running selected process mapped the current shared codec. A separate clean full rebuild was started for final candidate qualification.",
+  "sha256": {
+    "sourceDxf": "a68fb6a5b9ad2501b4f9d719f03d5fafec1a184b96b31e0bc96f0bbbe3d7158a",
+    "savedDxf": "45f0c8521a5b139ffa96813354149efdde29dcac4486641df1b104b8d9222ecb",
+    "consumerBinary": "002898de6e5f1ea228893af7fc679b65e4659fbe67a26da19994dd6ce5b8b7d9",
+    "sharedCodec": "b8df75b0a8faa0449bf0e5ee937510867260af06801bdbd5d7ebc538f7d16b66"
+  },
+  "observations": [
+    "Native same-version save completed without an omission dialog. Fresh libdxfrw readback retains both layout reactor groups and the paper layout extension dictionary reference.",
+    "Independent ezdxf 1.4.5 confirms AC1015, Model and Layout1, line endpoints (1,2,0) and (4,5,0), layout 0x2F owner 0x23, its reactor 0x23, extension dictionary 0x33 owned by 0x2F, and RESEARCH entry to XRECORD 0x34 owned by 0x33; audit reports zero errors and zero fixes."
+  ],
+  "limits": [
+    "This is a single generated diagnostic graph, one consumer and platform, with an ABI-compatible relink rather than the final clean consumer rebuild.",
+    "It does not establish native dictionary cloning, modified or missing targets, wider graph support, or release interoperability. No drawing fixture was committed."
+  ]
+}
