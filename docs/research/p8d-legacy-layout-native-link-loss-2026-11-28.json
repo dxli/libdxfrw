@@ -1,0 +1,24 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p8d-legacy-layout-native-link-loss-2026-11-28",
+  "supportClaimEffect": "none; native compatibility gate remains open",
+  "scope": "A locally generated R13 source was projected to an R2000 DXF with a scratch-only bypass of the production legacy layout refusal. A macOS LibreCAD candidate opened it and saved a separate copy at the same DXF version.",
+  "inputs": {
+    "consumerCommit": "7d175ccf5c611bbaa07e5e45b1b5303bcbbf582d",
+    "codecCommit": "1e8cd41fc",
+    "consumerBinarySha256": "8b3feb1703bf1f99c27d80dac42a02c6a7b66a244ea51a6040800475bbac2fe7",
+    "codecBinarySha256": "af4e1c1f040c11be32fe8ae449d77d4d77098c82acf7b2f80870f9b4118bfe7c",
+    "sourceDxfSha256": "a68fb6a5b9ad2501b4f9d719f03d5fafec1a184b96b31e0bc96f0bbbe3d7158a",
+    "savedDxfSha256": "25011e4aea4b650ba8dab35a5679bee0f44d1ca546943d4a0a2b22be7ffa3677"
+  },
+  "observations": [
+    "The native application opened and displayed the drawing and saved a copied drawing as AC1015 without an omission warning.",
+    "Independent readback found the original line geometry and both layout names, with no reported audit errors or fixes. The paper layout no longer has its ACAD_XDICTIONARY link; its dictionary and child XRECORD remain physically present but are no longer linked by that layout. Both layout ACAD_REACTORS groups are absent in the saved file.",
+    "A current-head libdxfrw import probe independently retained the original paper layout xdictionary handle 0x33 and both layouts' reactor groups. This isolates neither the consumer save path nor the older codec; an exact-current consumer and codec native reproduction remains required."
+  ],
+  "limits": [
+    "This diagnostic source uses a scratch-only guard bypass; it does not establish production DWG export or a general support claim.",
+    "The observed loss must be reproduced against the final consumer and codec, traced, fixed and rechecked with preserved source, changed and missing targets, atomic failure and corrected retry as applicable.",
+    "Native dictionary cloning, other layout graphs, releases and platforms remain unqualified. No drawing fixture was committed."
+  ]
+}
