@@ -2030,6 +2030,10 @@ set(LIBDXFRW_AC1012_LAYOUT_WIRE_SAMPLE "" CACHE FILEPATH
     "Optional external AC1012 two-LAYOUT source for physical wire controls")
 set(LIBDXFRW_AC1014_LAYOUT_WIRE_SAMPLE "" CACHE FILEPATH
     "Optional external AC1014 two-LAYOUT source for physical wire controls")
+set(LIBDXFRW_AC1012_LAYOUT_LIMIT_ACCEPTED "" CACHE FILEPATH
+    "Optional generated AC1012 32-child split-layout control")
+set(LIBDXFRW_AC1012_LAYOUT_LIMIT_REJECTED "" CACHE FILEPATH
+    "Optional generated AC1012 33-child split-layout control")
 set(LIBDXFRW_AC1012_BLOCK_PAIR_SOURCE "" CACHE FILEPATH
     "Optional generated AC1012 collision-pair source for BLOCK_HEADER wire control")
 set(LIBDXFRW_AC1012_BLOCK_PAIR_DESTINATION "" CACHE FILEPATH
@@ -2073,6 +2077,7 @@ if(LIBDXFRW_AC1014_TABLE_SAMPLE OR LIBDXFRW_AC1012_TABLE_SAMPLE)
 endif()
 if(LIBDXFRW_AC1014_EXTERNAL_PROFILE OR LIBDXFRW_ENABLE_AC1012_PARTIAL_DWGADD_CONTROL
    OR LIBDXFRW_AC1012_LAYOUT_WIRE_SAMPLE OR LIBDXFRW_AC1014_LAYOUT_WIRE_SAMPLE
+   OR LIBDXFRW_AC1012_LAYOUT_LIMIT_ACCEPTED OR LIBDXFRW_AC1012_LAYOUT_LIMIT_REJECTED
    OR LIBDXFRW_AC1012_BLOCK_PAIR_SOURCE OR LIBDXFRW_AC1012_BLOCK_PAIR_DESTINATION)
     if(LIBDXFRW_AC1014_EXTERNAL_PROFILE AND NOT EXISTS "${LIBDXFRW_AC1014_EXTERNAL_PROFILE}")
         message(FATAL_ERROR "LIBDXFRW_AC1014_EXTERNAL_PROFILE does not exist")
@@ -2124,6 +2129,17 @@ if(LIBDXFRW_AC1014_EXTERNAL_PROFILE OR LIBDXFRW_ENABLE_AC1012_PARTIAL_DWGADD_CON
                 TIMEOUT 30)
         endif()
     endforeach()
+    if(LIBDXFRW_AC1012_LAYOUT_LIMIT_ACCEPTED OR LIBDXFRW_AC1012_LAYOUT_LIMIT_REJECTED)
+        if(NOT EXISTS "${LIBDXFRW_AC1012_LAYOUT_LIMIT_ACCEPTED}"
+           OR NOT EXISTS "${LIBDXFRW_AC1012_LAYOUT_LIMIT_REJECTED}")
+            message(FATAL_ERROR "Both AC1012 layout aggregate-limit samples must exist")
+        endif()
+        add_test(NAME libdxfrw_AC1012_layout_aggregate_limit
+            COMMAND libdxfrw_dwg_ac1014_output_external_tests --legacy-layout-aggregate-limit
+                "${LIBDXFRW_AC1012_LAYOUT_LIMIT_REJECTED}" "${LIBDXFRW_AC1012_LAYOUT_LIMIT_ACCEPTED}")
+        set_tests_properties(libdxfrw_AC1012_layout_aggregate_limit
+            PROPERTIES LABELS "dwg;layout;graph;transaction;external;AC1012" TIMEOUT 30)
+    endif()
     if(LIBDXFRW_AC1014_EXTERNAL_PROFILE)
         add_test(NAME libdxfrw_dwg_ac1014_output_external
             COMMAND libdxfrw_dwg_ac1014_output_external_tests

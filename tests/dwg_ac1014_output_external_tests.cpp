@@ -1692,13 +1692,17 @@ bool checkLegacyLayoutGraph(const std::string& input) {
         if (!ok || layout.xDictHandle == 0u) continue;
         auto extension = std::find_if(data.dictionaries.begin(), data.dictionaries.end(),
             [&layout](const DRW_Dictionary& item) { return item.handle == layout.xDictHandle; });
-        if (extension == data.dictionaries.end() || extension->m_entries.size() > 2u) return false;
+        if (extension == data.dictionaries.end() || extension->m_entries.size() > 32u) return false;
         auto& extensionBytes = DxIfaceStandardDwgCaptureTestAccess::dictionaryBytes(data, extension->handle);
         if (extensionBytes.empty()) return false;
         ok = check([&]() { extension->parentHandle ^= 1u; })
             && check([&]() { extensionBytes.front() ^= 0x80u; });
         for (auto& entry : extension->m_entries) {
             if (!ok) break;
+            // At larger sizes the first and last records cover both ends of
+            // the bounded collection without repeating every export 32 times.
+            if (&entry != &extension->m_entries.front()
+                && &entry != &extension->m_entries.back()) continue;
             const auto handle = entry.m_handle;
             auto record = std::find_if(data.xRecords.begin(), data.xRecords.end(),
                 [handle](const DRW_XRecord& item) { return item.handle == handle; });
@@ -1719,9 +1723,9 @@ bool checkLegacyLayoutGraph(const std::string& input) {
                 && check([&]() { entry.m_handle ^= 1u; })
                 && check([&]() { xrecordClass->m_classNumber ^= 1u; });
         }
-        if (ok && extension->m_entries.size() == 2u) {
+        if (ok && extension->m_entries.size() >= 2u) {
             auto expanded = extension->m_entries;
-            expanded.push_back(expanded.front());
+            while (expanded.size() <= 32u) expanded.push_back(expanded.front());
             auto duplicateName = extension->m_entries.front().m_name;
             auto duplicateTarget = extension->m_entries.front().m_handle;
             ok = check([&]() { std::swap(extension->m_entries, expanded); })
@@ -1757,6 +1761,34 @@ bool checkLegacyLayoutGraph(const std::string& input) {
         && DxIfaceStandardDwgCaptureTestAccess::boundLegacyLayout(trusted);
     std::filesystem::remove_all(scratch, error);
     return trustedRetry && !error;
+}
+
+bool checkLegacyLayoutAggregateLimit(const std::string& rejectedInput,
+                                     const std::string& acceptedInput) {
+    using Access = DxIfaceStandardDwgCaptureTestAccess;
+    dx_iface adapter;
+    dx_data rejected;
+    if (!adapter.fileImport(rejectedInput, &rejected, false)
+        || rejected.xRecords.size() != 33u || Access::boundLegacyLayout(adapter))
+        return false;
+    std::error_code error;
+    const auto scratch = libdxfrw_test::reserveTestScratch(
+        std::filesystem::temp_directory_path(), "libdxfrw-legacy-layout-limit", error);
+    if (error || scratch.empty()) return false;
+    const auto output = scratch / "out.dxf";
+    const std::string sentinel = "aggregate limit preserves destination\n";
+    bool ok = true;
+    for (const bool binary : {false, true}) {
+        { std::ofstream out(output, std::ios::binary | std::ios::trunc); out << sentinel; }
+        if (write(adapter, rejected, output.string(), binary, DRW::AC1015,
+                  dx_dwgReadCompletenessPolicy::AllowPartial) || bytes(output) != sentinel)
+            ok = false;
+    }
+    dx_data accepted;
+    ok = ok && adapter.fileImport(acceptedInput, &accepted, false)
+        && accepted.xRecords.size() == 32u && Access::boundLegacyLayout(adapter);
+    std::filesystem::remove_all(scratch, error);
+    return ok && !error;
 }
 
 bool checkLegacyViewportProjection(const std::string& input) {
@@ -2151,6 +2183,8 @@ int main(int argc, char** argv) {
                 ? checkLegacyXRecordWire(argv[2])
             : argc == 3 && std::string(argv[1]) == "--legacy-viewport-projection"
                 ? checkLegacyViewportProjection(argv[2])
+            : argc == 4 && std::string(argv[1]) == "--legacy-layout-aggregate-limit"
+                ? checkLegacyLayoutAggregateLimit(argv[2], argv[3])
             : argc == 3 && std::string(argv[1]) == "--legacy-class-frame-census"
                 ? legacyClassFrameCensus(argv[2])
             : argc == 3 && std::string(argv[1]) == "--legacy-block-pair-wire"

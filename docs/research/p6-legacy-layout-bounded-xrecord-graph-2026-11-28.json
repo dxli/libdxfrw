@@ -1,0 +1,189 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p6-legacy-layout-bounded-xrecord-graph-2026-11-28",
+  "supportClaimEffect": "none",
+  "implementation": "Allow at most 32 source-bound legacy layout extension XRECORD children in total across all layouts. Every child remains subject to existing source-frame, parent, membership, complete class census and staged-output checks. The production legacy-output guard remains closed.",
+  "sourceAudits": [
+    {
+      "version": "r13",
+      "sourceSha256": "b4b596982743e6757f9daec79829c88fe2a32f1fde979918533443c28c57973c",
+      "dictionaryFrameSha256": "32f7218334c36baa8464f793c670f9aef2620cd17d5fb1c06fad23599699dd45",
+      "children": 32,
+      "allFramesCrcValid": true,
+      "peerAuditSha256": "0a5154ba3dabd8ad752c7ef1253947a442adb7a144e687c797116838e84a8c83"
+    },
+    {
+      "version": "r14",
+      "sourceSha256": "8fce23bd4adcc6904f64bd9d9e43992dfb3cf3a07a475693baaae868aa7e7a95",
+      "dictionaryFrameSha256": "025dee3fe00391e7f7cdc6c8e5f5750b5167b48cf603ae644f035eb5c3a5b734",
+      "children": 32,
+      "allFramesCrcValid": true,
+      "peerAuditSha256": "599ca323215953b132e87b26120667719af0e1f88390796cb61412ea1304ad5f"
+    }
+  ],
+  "producerManifests": [
+    {
+      "profile": "ac1012-rooted-many-xrecords",
+      "schema": "libdxfrw.ac1012-acadrust-rooted-line.v1",
+      "ok": true,
+      "producerCommit": "d7c71f5032fc2d8844142ad7df7a6f0ee5ac535f",
+      "generatorSha256": "5e00521ffab9cbdbb93f659cd4900807ca972bc2a044a137f95f2e656e68379e",
+      "cargoLockSha256": "76b17a86b44fb75aea3748ee119286139e17abc462554c19059610c83f01f959",
+      "cargoVersion": "cargo 1.100.0 (3acc79c0c 2026-11-05) (Homebrew)",
+      "rustVersion": "rustc 1.100.0 (0ef1bc386 2026-11-09) (Homebrew)",
+      "samples": {
+        "r13-line.dwg": {
+          "sha256": "426686ca5fd65169e6d4ed007c106b0a2271a47d9461a7f5fc0f2942c5a1b41a",
+          "bytes": 5083
+        },
+        "r13-line-rooted-resaved.dwg": {
+          "sha256": "b4b596982743e6757f9daec79829c88fe2a32f1fde979918533443c28c57973c",
+          "bytes": 6525
+        }
+      },
+      "producerOutput": "",
+      "supportClaimEffect": "none"
+    },
+    {
+      "profile": "ac1014-rooted-many-xrecords",
+      "schema": "libdxfrw.ac1014-acadrust-rooted-line.v1",
+      "ok": true,
+      "producerCommit": "d7c71f5032fc2d8844142ad7df7a6f0ee5ac535f",
+      "generatorSha256": "5e00521ffab9cbdbb93f659cd4900807ca972bc2a044a137f95f2e656e68379e",
+      "cargoLockSha256": "76b17a86b44fb75aea3748ee119286139e17abc462554c19059610c83f01f959",
+      "cargoVersion": "cargo 1.100.0 (3acc79c0c 2026-11-05) (Homebrew)",
+      "rustVersion": "rustc 1.100.0 (0ef1bc386 2026-11-09) (Homebrew)",
+      "samples": {
+        "r14-line.dwg": {
+          "sha256": "e164e012d5ea5e1a62d99e6038d2f514bdeba902fc3bbf453e44d22f72a855a1",
+          "bytes": 5101
+        },
+        "r14-line-rooted-resaved.dwg": {
+          "sha256": "8fce23bd4adcc6904f64bd9d9e43992dfb3cf3a07a475693baaae868aa7e7a95",
+          "bytes": 6544
+        }
+      },
+      "producerOutput": "",
+      "supportClaimEffect": "none"
+    },
+    {
+      "profile": "ac1012-split-xrecords",
+      "schema": "libdxfrw.ac1012-acadrust-rooted-line.v1",
+      "ok": true,
+      "producerCommit": "d7c71f5032fc2d8844142ad7df7a6f0ee5ac535f",
+      "generatorSha256": "d86acffe4f4fe499714d6c18a0d2f413f2d2c9e6d82d29568fbabb967681e12c",
+      "cargoLockSha256": "76b17a86b44fb75aea3748ee119286139e17abc462554c19059610c83f01f959",
+      "cargoVersion": "cargo 1.100.0 (3acc79c0c 2026-11-05) (Homebrew)",
+      "rustVersion": "rustc 1.100.0 (0ef1bc386 2026-11-09) (Homebrew)",
+      "samples": {
+        "r13-line.dwg": {
+          "sha256": "426686ca5fd65169e6d4ed007c106b0a2271a47d9461a7f5fc0f2942c5a1b41a",
+          "bytes": 5083
+        },
+        "r13-line-rooted-resaved.dwg": {
+          "sha256": "8b40204ed48a3257b72cb54d9be7ae461b44d823afcad5de149a685602991a73",
+          "bytes": 6546
+        }
+      },
+      "producerOutput": "",
+      "supportClaimEffect": "none"
+    },
+    {
+      "profile": "ac1012-split-over-limit",
+      "schema": "libdxfrw.ac1012-acadrust-rooted-line.v1",
+      "ok": true,
+      "producerCommit": "d7c71f5032fc2d8844142ad7df7a6f0ee5ac535f",
+      "generatorSha256": "d86acffe4f4fe499714d6c18a0d2f413f2d2c9e6d82d29568fbabb967681e12c",
+      "cargoLockSha256": "76b17a86b44fb75aea3748ee119286139e17abc462554c19059610c83f01f959",
+      "cargoVersion": "cargo 1.100.0 (3acc79c0c 2026-11-05) (Homebrew)",
+      "rustVersion": "rustc 1.100.0 (0ef1bc386 2026-11-09) (Homebrew)",
+      "samples": {
+        "r13-line.dwg": {
+          "sha256": "426686ca5fd65169e6d4ed007c106b0a2271a47d9461a7f5fc0f2942c5a1b41a",
+          "bytes": 5083
+        },
+        "r13-line-rooted-resaved.dwg": {
+          "sha256": "e75badc577180b4d8a4283e7d66e98132585cb2049e5fcb699aa06f3f0d9ce92",
+          "bytes": 6593
+        }
+      },
+      "producerOutput": "",
+      "supportClaimEffect": "none"
+    }
+  ],
+  "stagedOutputs": [
+    {
+      "sha256": "10dcdb7ab348e90b1e2ed7ab1a4cf38e71e5d0ef5970b2137be0fa5a9ea7122a",
+      "children": 32
+    },
+    {
+      "sha256": "857310633c818d2b6f10aebf5e45c5aef9fed7e9c78ceb988265b556bfefaf40",
+      "children": 32
+    },
+    {
+      "sha256": "10dcdb7ab348e90b1e2ed7ab1a4cf38e71e5d0ef5970b2137be0fa5a9ea7122a",
+      "children": 32
+    },
+    {
+      "sha256": "857310633c818d2b6f10aebf5e45c5aef9fed7e9c78ceb988265b556bfefaf40",
+      "children": 32
+    },
+    {
+      "sha256": "10dcdb7ab348e90b1e2ed7ab1a4cf38e71e5d0ef5970b2137be0fa5a9ea7122a",
+      "children": 32
+    },
+    {
+      "sha256": "857310633c818d2b6f10aebf5e45c5aef9fed7e9c78ceb988265b556bfefaf40",
+      "children": 32
+    },
+    {
+      "sha256": "10dcdb7ab348e90b1e2ed7ab1a4cf38e71e5d0ef5970b2137be0fa5a9ea7122a",
+      "children": 32
+    },
+    {
+      "sha256": "857310633c818d2b6f10aebf5e45c5aef9fed7e9c78ceb988265b556bfefaf40",
+      "children": 32
+    },
+    {
+      "sha256": "10dcdb7ab348e90b1e2ed7ab1a4cf38e71e5d0ef5970b2137be0fa5a9ea7122a",
+      "children": 32
+    },
+    {
+      "sha256": "857310633c818d2b6f10aebf5e45c5aef9fed7e9c78ceb988265b556bfefaf40",
+      "children": 32
+    },
+    {
+      "sha256": "10dcdb7ab348e90b1e2ed7ab1a4cf38e71e5d0ef5970b2137be0fa5a9ea7122a",
+      "children": 32
+    },
+    {
+      "sha256": "857310633c818d2b6f10aebf5e45c5aef9fed7e9c78ceb988265b556bfefaf40",
+      "children": 32
+    }
+  ],
+  "splitBoundary": {
+    "acceptedSourceSha256": "8b40204ed48a3257b72cb54d9be7ae461b44d823afcad5de149a685602991a73",
+    "acceptedCounts": [
+      16,
+      16
+    ],
+    "rejectedSourceSha256": "e75badc577180b4d8a4283e7d66e98132585cb2049e5fcb699aa06f3f0d9ce92",
+    "rejectedCounts": [
+      16,
+      17
+    ],
+    "asciiOutputSha256": "0a84be99fea09ff70593dd2cc0e44c5ad7396f408c1c67f03ea2fcca6e301372",
+    "binaryOutputSha256": "09e006c5700c6453bfd494d23e9c4aad72704eb1f12ac2b04640d43681c3b8dc"
+  },
+  "checks": [
+    "Independent LibreDWG discovery and physical field/frame/CRC walks bind all 32 distinct child sources in both R13 and R14, including corrupted counted-length refusal and original retry for each record.",
+    "The adapter accepts generated 32-child controls, rejects first/last child source mutation, alias and oversized graph mutations with preserved destinations, and retries the same adapter. Prior two-child control remains accepted.",
+    "The opt-in libdxfrw_AC1012_layout_aggregate_limit CTest rejects the distinct 33-child split source without changing ASCII/binary destinations, then imports and accepts the 32-child split on the same adapter. Producer and LibreDWG verify the two independent source counts.",
+    "Scratch-only guard-bypassed staged dictionary, target-role and final-child XRECORD mismatches preserve destinations and permit corrected same-adapter retry for R13 and R14. Independent ezdxf 1.4.5 validates the resulting 12 ASCII/binary 32-child graphs and both split-graph outputs with zero audit errors or fixes.",
+    "Six focused fast CTests and the aggregate-limit CTest pass. The pinned generator exactly reproduces both 32-child sources and the R13 split and over-limit sources."
+  ],
+  "limits": [
+    "The selected XRECORD payload is ASCII group 1 followed by group 70, with no child EED, reactor, extension or object references. Hard-owner source profiles, larger graphs and other payloads remain refused.",
+    "The scratch bypass is diagnostic only; whole-file closure and native AutoCAD clone behavior are not qualified. No DWG or DXF files are committed."
+  ]
+}

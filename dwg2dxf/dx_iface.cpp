@@ -32934,6 +32934,8 @@ bool dx_iface::hasBoundLegacyLayoutSources() const noexcept {
         std::set<std::uint64_t> ordinals;
         std::set<std::string> names;
         std::set<std::uint32_t> extensions, extensionXrecords;
+        // Bound the total work across all layouts, not just one dictionary.
+        constexpr std::size_t maxExtensionXrecords = 32u;
         std::uint32_t xrecordClass = 0u;
         for (const auto& record : cData->blockRecords) {
             const auto source = cData->m_legacyBlockRecordSources.find(record.handle);
@@ -32968,7 +32970,7 @@ bool dx_iface::hasBoundLegacyLayoutSources() const noexcept {
                 }
                 if (extension == nullptr || !extensions.insert(extension->handle).second
                     || extension->parentHandle != layout.handle
-                    || extension->m_entries.size() > 2u || !extension->extData.empty()
+                    || extension->m_entries.size() > maxExtensionXrecords || !extension->extData.empty()
                     || !wire(*extension)) return false;
                 for (const auto& entry : extension->m_entries) {
                     const DRW_XRecord* record = nullptr;
@@ -32979,7 +32981,8 @@ bool dx_iface::hasBoundLegacyLayoutSources() const noexcept {
                     }
                     const auto recordKey = dx_data::StandardDwgFrameKey{cData->importGeneration, entry.m_handle};
                     const auto raw = cData->m_opaqueDwgSourceFrames.find(recordKey);
-                    if (record == nullptr || !extensionXrecords.insert(record->handle).second
+                    if (record == nullptr || extensionXrecords.size() >= maxExtensionXrecords
+                        || !extensionXrecords.insert(record->handle).second
                         || record->parentHandle != extension->handle
                         || !cData->hasCompleteDwgDictionaryEntry(extension->handle,
                                                                  entry.m_name.c_str(), record->handle)

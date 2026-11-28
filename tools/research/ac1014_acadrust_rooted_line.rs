@@ -44,6 +44,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 value.entries.push(XRecordEntry::int16(70, 73));
             }
         }
+        if std::env::var_os("AC1012_WITNESS_LAYOUT_MANY_XRECORDS").is_some() {
+            let model_owner = if std::env::var_os("AC1012_WITNESS_LAYOUT_SPLIT_XRECORDS").is_some() {
+                Some(reopened.objects.iter().find_map(|(handle, object)| {
+                    if let ObjectType::Layout(layout) = object {
+                        if layout.name == "Model" { Some(*handle) } else { None }
+                    } else { None }
+                }).ok_or("missing model layout")?)
+            } else { None };
+            for i in 0..30 {
+                let name = format!("CHILD{i:02}");
+                let text = format!("VAL{i:02}");
+                let target = if i >= 14 { model_owner.unwrap_or(owner) } else { owner };
+                let child = reopened.ensure_xrecord(target, &name);
+                let target_dictionary = reopened.extension_dictionary_handle(target).ok_or("missing extension")?;
+                if let Some(ObjectType::Layout(layout)) = reopened.objects.get_mut(&target) {
+                    layout.xdictionary_handle = Some(target_dictionary);
+                }
+                if let Some(ObjectType::XRecord(value)) = reopened.objects.get_mut(&child) {
+                    value.entries.push(XRecordEntry::string(1, &text));
+                    value.entries.push(XRecordEntry::int16(70, 100 + i));
+                }
+            }
+            if std::env::var_os("AC1012_WITNESS_LAYOUT_OVER_LIMIT").is_some() {
+                let target = model_owner.ok_or("over-limit profile requires split")?;
+                let child = reopened.ensure_xrecord(target, "OVER_LIMIT");
+                if let Some(ObjectType::XRecord(value)) = reopened.objects.get_mut(&child) {
+                    value.entries.push(XRecordEntry::string(1, "EXTRA"));
+                    value.entries.push(XRecordEntry::int16(70, 999));
+                }
+            }
+        }
         Some((owner, dictionary, record))
     } else { None };
     let paper_xdictionary = if std::env::var_os("AC1012_WITNESS_LAYOUT_XDICTIONARY").is_some() {
@@ -134,6 +165,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             assert_eq!(value.entries, vec![XRecordEntry::string(1, "OTHER"), XRecordEntry::int16(70, 73)]);
                         }
                         _ => return Err("missing second XRECORD body".into()),
+                    }
+                }
+                if std::env::var_os("AC1012_WITNESS_LAYOUT_MANY_XRECORDS").is_some() {
+                    for i in 0..30 {
+                        let name = format!("CHILD{i:02}");
+                        let text = format!("VAL{i:02}");
+                        let split = std::env::var_os("AC1012_WITNESS_LAYOUT_SPLIT_XRECORDS").is_some();
+                        let selected_dictionary = if split && i >= 14 {
+                            let model = readback.objects.iter().find_map(|(_, object)| {
+                                if let ObjectType::Layout(layout) = object {
+                                    if layout.name == "Model" { Some(layout) } else { None }
+                                } else { None }
+                            }).ok_or("missing model layout")?;
+                            model.xdictionary_handle.ok_or("missing model dictionary")?
+                        } else { dictionary };
+                        let selected = match readback.objects.get(&selected_dictionary) {
+                            Some(ObjectType::Dictionary(value)) => value,
+                            _ => return Err("missing selected dictionary".into()),
+                        };
+                        let child = selected.get(&name).ok_or("missing XRECORD")?;
+                        match readback.objects.get(&child) {
+                            Some(ObjectType::XRecord(value)) => {
+                                assert_eq!(value.owner, selected_dictionary);
+                                assert_eq!(value.entries, vec![XRecordEntry::string(1, &text), XRecordEntry::int16(70, 100 + i)]);
+                            }
+                            _ => return Err("missing XRECORD body".into()),
+                        }
                     }
                 }
                 assert_eq!(value.owner, dictionary);

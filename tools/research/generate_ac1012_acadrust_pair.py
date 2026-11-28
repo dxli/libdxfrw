@@ -28,7 +28,7 @@ def run(args, **kwargs):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile", choices=("ac1012-pair", "ac1014-rooted-line", "ac1014-rooted-ucs", "ac1014-rooted-viewport", "ac1014-rooted-xdictionary", "ac1014-rooted-xrecord", "ac1012-rooted-xrecord", "ac1012-rooted-two-xrecords", "ac1014-rooted-two-xrecords"),
+    parser.add_argument("--profile", choices=("ac1012-pair", "ac1014-rooted-line", "ac1014-rooted-ucs", "ac1014-rooted-viewport", "ac1014-rooted-xdictionary", "ac1014-rooted-xrecord", "ac1012-rooted-xrecord", "ac1012-rooted-two-xrecords", "ac1014-rooted-two-xrecords", "ac1012-rooted-many-xrecords", "ac1014-rooted-many-xrecords", "ac1012-split-xrecords", "ac1012-split-over-limit"),
                         default="ac1012-pair")
     parser.add_argument("--acadrust-root", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -50,7 +50,7 @@ def main():
     if any(output.iterdir()):
         raise ValueError("output directory must be empty")
     rooted = args.profile != "ac1012-pair"
-    r13 = args.profile in ("ac1012-rooted-xrecord", "ac1012-rooted-two-xrecords")
+    r13 = args.profile in ("ac1012-rooted-xrecord", "ac1012-rooted-two-xrecords", "ac1012-rooted-many-xrecords", "ac1012-split-xrecords", "ac1012-split-over-limit")
     generator = Path(__file__).with_name(
         "ac1014_acadrust_rooted_line.rs" if rooted else "ac1012_acadrust_pair.rs")
     with tempfile.TemporaryDirectory(prefix="ac1012-acadrust-build-") as directory:
@@ -70,8 +70,11 @@ def main():
             "AC1012_WITNESS_NAMED_UCS": args.profile == "ac1014-rooted-ucs",
             "AC1012_WITNESS_PAPER_VIEWPORT": args.profile == "ac1014-rooted-viewport",
             "AC1012_WITNESS_LAYOUT_XDICTIONARY": args.profile == "ac1014-rooted-xdictionary",
-            "AC1012_WITNESS_LAYOUT_XRECORD": args.profile in ("ac1012-rooted-xrecord", "ac1014-rooted-xrecord", "ac1012-rooted-two-xrecords", "ac1014-rooted-two-xrecords"),
-            "AC1012_WITNESS_LAYOUT_TWO_XRECORDS": args.profile in ("ac1012-rooted-two-xrecords", "ac1014-rooted-two-xrecords"),
+            "AC1012_WITNESS_LAYOUT_XRECORD": args.profile in ("ac1012-rooted-xrecord", "ac1014-rooted-xrecord", "ac1012-rooted-two-xrecords", "ac1014-rooted-two-xrecords", "ac1012-rooted-many-xrecords", "ac1014-rooted-many-xrecords", "ac1012-split-xrecords", "ac1012-split-over-limit"),
+            "AC1012_WITNESS_LAYOUT_TWO_XRECORDS": args.profile in ("ac1012-rooted-two-xrecords", "ac1014-rooted-two-xrecords", "ac1012-rooted-many-xrecords", "ac1014-rooted-many-xrecords", "ac1012-split-xrecords", "ac1012-split-over-limit"),
+            "AC1012_WITNESS_LAYOUT_MANY_XRECORDS": args.profile in ("ac1012-rooted-many-xrecords", "ac1014-rooted-many-xrecords", "ac1012-split-xrecords", "ac1012-split-over-limit"),
+            "AC1012_WITNESS_LAYOUT_SPLIT_XRECORDS": args.profile in ("ac1012-split-xrecords", "ac1012-split-over-limit"),
+            "AC1012_WITNESS_LAYOUT_OVER_LIMIT": args.profile == "ac1012-split-over-limit",
         }
         for name, enabled in switches.items():
             if enabled:
