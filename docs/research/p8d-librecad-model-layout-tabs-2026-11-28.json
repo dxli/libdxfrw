@@ -1,0 +1,23 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p8d-librecad-model-layout-tabs-2026-11-28",
+  "supportClaimEffect": "selected UI profile only",
+  "consumerCommit": "3ae13642",
+  "consumerPullRequest": "https://github.com/LibreCAD/LibreCAD/pull/3289",
+  "scope": "Resolve duplicate Model tabs when a uniquely identified imported model LAYOUT is backed by the *Model_Space BLOCK_RECORD, preserving the source record and its real activation handle.",
+  "checks": [
+    "A focused offscreen GUI test passes 15 assertions with both bundled and shared codecs, including case-insensitive role lookup, paper switching, unresolved role and ambiguous model roles.",
+    "A macOS ARM64 native build with test-only isolated settings displayed one Model and one Layout1 tab. Pointer clicks switched from model to paper and back; same-version save completed. Independent ezdxf 1.4.5 verified the selected two-child extension dictionary graph, both values, line geometry and zero audit errors or fixes.",
+    "The test-only build changes only the settings organization name outside the committed consumer change and maps the shared codec listed below; its isolated settings avoid changing user preferences."
+  ],
+  "sha256": {
+    "testApplication": "6cfd9b484d17522057946bdfacda966e49420897a8fcd7113431aff56b11bb4e",
+    "sharedCodec": "b8df75b0a8faa0449bf0e5ee937510867260af06801bdbd5d7ebc538f7d16b66",
+    "inputDxf": "677382ec90bf12ddf384b16c24a9112f8b7dc920cfb35ee4bd06aec3d67b24cd",
+    "savedDxf": "22c3547c81f80e90358f42da7becb2fab389b9df8dec976c3095bad6959deeda"
+  },
+  "limits": [
+    "Native sample is generated via a scratch-only legacy export guard bypass; this does not qualify production legacy output or dictionary cloning.",
+    "The tab bar changes active layout metadata; layout-specific rendering remains separate work. Other producers and platforms remain unqualified. No drawing fixture was committed."
+  ]
+}
