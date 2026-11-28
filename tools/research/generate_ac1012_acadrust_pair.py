@@ -36,7 +36,13 @@ def main():
     parser.add_argument("--cargo-lock", type=Path,
                         help="reuse an earlier generated Cargo.lock without updating dependencies")
     parser.add_argument("--offline", action="store_true")
+    parser.add_argument("--xrecord-short", type=int, default=37,
+                        help="signed group-70 value in the selected layout XRECORD")
     args = parser.parse_args()
+    if not -32768 <= args.xrecord_short <= 32767:
+        parser.error("--xrecord-short must fit a signed 16-bit integer")
+    if args.xrecord_short != 37 and "xrecord" not in args.profile:
+        parser.error("--xrecord-short requires an XRECORD profile")
     source = args.acadrust_root.resolve(strict=True)
     output = args.output_dir.resolve()
     repo = Path(__file__).resolve().parents[2]
@@ -65,6 +71,7 @@ def main():
             (project / "Cargo.lock").write_bytes(args.cargo_lock.resolve(strict=True).read_bytes())
         environment = os.environ.copy()
         environment["AC1012_WITNESS_OUTPUT"] = str(output)
+        environment["AC1012_WITNESS_XRECORD_SHORT"] = str(args.xrecord_short)
         switches = {
             "AC1012_WITNESS_R13": r13,
             "AC1012_WITNESS_NAMED_UCS": args.profile == "ac1014-rooted-ucs",
@@ -100,7 +107,7 @@ def main():
         if not path.is_file() or path.read_bytes()[:6] != magic:
             raise ValueError("writer did not produce the expected " + magic.decode() + " sample: " + name)
         samples[name] = {"sha256": sha(path), "bytes": path.stat().st_size}
-    receipt = {"profile": args.profile, "schema": ("libdxfrw.ac1012-acadrust-rooted-line.v1" if r13
+    receipt = {"profile": args.profile, "xrecordShort": args.xrecord_short, "schema": ("libdxfrw.ac1012-acadrust-rooted-line.v1" if r13
                           else "libdxfrw.ac1014-acadrust-rooted-line.v1" if rooted
                           else "libdxfrw.ac1012-acadrust-pair.v1"), "ok": True,
                "producerCommit": PINNED, "generatorSha256": sha(generator),

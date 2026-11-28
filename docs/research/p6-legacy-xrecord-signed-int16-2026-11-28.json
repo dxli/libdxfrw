@@ -1,0 +1,271 @@
+{
+  "authority": [
+    "Open Design Specification for .dwg files v5.4.1 section 20.4.104",
+    "https://help.autodesk.com/cloudhelp/2027/ENU/OARX-RefGuide/files/OARX-RefGuide-DXF_Group_Codes.html"
+  ],
+  "change": "Decode the existing XRECORD Int16 group ranges as signed two-byte values. Extend the bounded legacy XRECORD source observer to compare signed values against their exact 16-bit wire representation. The public typed value now exposes the signed result.",
+  "checks": [
+    "A generated frame tests values -32768, -123, -1, 0 and 32767 across 13 representative Int16 group codes in R13/R14 and generated R2004/R2007 controls. R13/R14 truncation resets and corrected retries pass; group-70 source proof binds signed values to the raw bits.",
+    "Nine focused normal-build XRECORD, compatibility, codepage, source and legacy CTests pass; the legacy test also passes AddressSanitizer on macOS ARM64 with leak detection unavailable.",
+    "An independent LibreDWG wire observer verifies class, identities, payload boundary, handle roles and corrupted-length refusal/retry for both producer-reopened files.",
+    "A scratch-only guard-bypassed diagnostic tests both ASCII and binary outputs for each source; an injected staged XRECORD mismatch preserves the destination and permits same-adapter retry. Physical tags and ezdxf independently read -123 and the selected owner graph with zero audit errors or fixes.",
+    "The unmodified production policy refuses both source files atomically in both encodings; default generator and observer values still pass."
+  ],
+  "finding": "XRECORD integer groups except 370-379 were decoded as unsigned. In two generated source files the producer and LibreDWG independently read group 70 bytes 0xff85 as -123, while the prior libdxfrw reader reported 65413.",
+  "id": "p6-legacy-xrecord-signed-int16-2026-11-28",
+  "limitations": [
+    "The R13/R14 drawings are generated locally with acadrust, not independent native AutoCAD producers.",
+    "Scratch-only guard bypass is not production output qualification; native dictionary cloning and complete whole-file semantics remain open.",
+    "Generated R2004/R2007 parser vectors prove decoding only, not independent producer qualification for those versions."
+  ],
+  "schema": "libdxfrw.research-receipt.v1",
+  "supportClaimEffect": "none",
+  "versions": {
+    "r13": {
+      "diagnosticInjectedXrecordMismatchRefusalDestinationPreservedAndRetry": true,
+      "diagnosticOutputSha256": {
+        "ascii": "9967096f3d112224d7c979da3f6207f1b4e3e845e67512fca874ea7917422c39",
+        "binary": "e6e3390dcb51b24bd093bd0847c671c0c949812292c77de2b52d0d4da0a31f6d"
+      },
+      "independentWire": {
+        "class": {
+          "classCount": 38,
+          "crcValid": true,
+          "sectionOffset": 497,
+          "sectionSha256": "ee017d293ad45daf8fd11607d0444e05143eeb1950c282681604267ce1fdd74a",
+          "sectionSize": 2134,
+          "selected": {
+            "app": "ObjectDBX Classes",
+            "cpp": "AcDbXrecord",
+            "dxf": "XRECORD",
+            "flags": 0,
+            "itemClassId": 499,
+            "number": 521,
+            "physicalDxfValueStartBit": 13251,
+            "physicalEndBit": 13326,
+            "physicalStartBit": 12977,
+            "zombie": 0
+          }
+        },
+        "dictionary": {
+          "bodyEndBit": 146,
+          "crcValid": true,
+          "eed": [],
+          "entryCount": 1,
+          "extension": {
+            "length": 0,
+            "role": 3,
+            "value": 0
+          },
+          "frameOffset": 4855,
+          "frameSha256": "526e10958041731b35e2472f297784e00700a1c4fa01b0f0cc43d71200a02c4b",
+          "frameSize": 24,
+          "handle": 51,
+          "nextFrame": {
+            "crcValid": true,
+            "offset": 4883,
+            "size": 27,
+            "type": 521
+          },
+          "owner": 47,
+          "r14Byte": null,
+          "reactors": []
+        },
+        "layout": 47,
+        "negativeLengthRefusedAndOriginalRetryPassed": true,
+        "schema": 1,
+        "scope": "source-only local producer control; no native semantics or output admission",
+        "sourceSha256": "7e26b55933239e7372d18f2e3c36ce596e3d1bd4a761a26f8a1104bcbe060d86",
+        "version": "r13",
+        "xrecord": {
+          "bodyEndBit": 192,
+          "codepage": 30,
+          "crcValid": true,
+          "extension": {
+            "length": 0,
+            "role": 3,
+            "value": 0
+          },
+          "following": {
+            "crcValid": true,
+            "offset": 4914,
+            "size": 11,
+            "type": 42
+          },
+          "followingGroup70": 65413,
+          "frameSha256": "d477591e202bb1f7961b42341d90eb61ef594e2569a82e0acca2c34254e94412",
+          "handle": 52,
+          "length": 5,
+          "lengthBit": 96,
+          "offset": 4883,
+          "owner": {
+            "length": 1,
+            "role": 4,
+            "value": 51
+          },
+          "payloadStartBit": 80,
+          "size": 27
+        }
+      },
+      "libdxfrwAfter": -123,
+      "libdxfrwBefore": 65413,
+      "libredwgXdata": [
+        [
+          1,
+          "CHECK"
+        ],
+        [
+          70,
+          -123
+        ]
+      ],
+      "producerManifest": {
+        "cargoLockSha256": "76b17a86b44fb75aea3748ee119286139e17abc462554c19059610c83f01f959",
+        "cargoVersion": "cargo 1.100.0 (3acc79c0c 2026-11-05) (Homebrew)",
+        "generatorSha256": "8ced3982263106102f50e0733fa0a68f33ff69df41e290f9cd832c6649f67893",
+        "ok": true,
+        "producerCommit": "d7c71f5032fc2d8844142ad7df7a6f0ee5ac535f",
+        "producerOutput": "",
+        "profile": "ac1012-rooted-xrecord",
+        "rustVersion": "rustc 1.100.0 (0ef1bc386 2026-11-09) (Homebrew)",
+        "samples": {
+          "r13-line-rooted-resaved.dwg": {
+            "bytes": 5185,
+            "sha256": "7e26b55933239e7372d18f2e3c36ce596e3d1bd4a761a26f8a1104bcbe060d86"
+          },
+          "r13-line.dwg": {
+            "bytes": 5083,
+            "sha256": "426686ca5fd65169e6d4ed007c106b0a2271a47d9461a7f5fc0f2942c5a1b41a"
+          }
+        },
+        "schema": "libdxfrw.ac1012-acadrust-rooted-line.v1",
+        "supportClaimEffect": "none",
+        "xrecordShort": -123
+      },
+      "productionRefusalBothEncodings": true
+    },
+    "r14": {
+      "diagnosticInjectedXrecordMismatchRefusalDestinationPreservedAndRetry": true,
+      "diagnosticOutputSha256": {
+        "ascii": "9967096f3d112224d7c979da3f6207f1b4e3e845e67512fca874ea7917422c39",
+        "binary": "e6e3390dcb51b24bd093bd0847c671c0c949812292c77de2b52d0d4da0a31f6d"
+      },
+      "independentWire": {
+        "class": {
+          "classCount": 38,
+          "crcValid": true,
+          "sectionOffset": 506,
+          "sectionSha256": "ee017d293ad45daf8fd11607d0444e05143eeb1950c282681604267ce1fdd74a",
+          "sectionSize": 2134,
+          "selected": {
+            "app": "ObjectDBX Classes",
+            "cpp": "AcDbXrecord",
+            "dxf": "XRECORD",
+            "flags": 0,
+            "itemClassId": 499,
+            "number": 521,
+            "physicalDxfValueStartBit": 13323,
+            "physicalEndBit": 13398,
+            "physicalStartBit": 13049,
+            "zombie": 0
+          }
+        },
+        "dictionary": {
+          "bodyEndBit": 154,
+          "crcValid": true,
+          "eed": [],
+          "entryCount": 1,
+          "extension": {
+            "length": 0,
+            "role": 3,
+            "value": 0
+          },
+          "frameOffset": 4869,
+          "frameSha256": "fd3e746bf0c6bda7989b5fbddb80ec73647038c06d92ca317b08090230b5d7da",
+          "frameSize": 25,
+          "handle": 51,
+          "nextFrame": {
+            "crcValid": true,
+            "offset": 4898,
+            "size": 27,
+            "type": 521
+          },
+          "owner": 47,
+          "r14Byte": 0,
+          "reactors": []
+        },
+        "layout": 47,
+        "negativeLengthRefusedAndOriginalRetryPassed": true,
+        "schema": 1,
+        "scope": "source-only local producer control; no native semantics or output admission",
+        "sourceSha256": "6cabd9176a9232d8ea392da675de394d6baf4e7fb7469cbe02a67e5502c03834",
+        "version": "r14",
+        "xrecord": {
+          "bodyEndBit": 192,
+          "codepage": 30,
+          "crcValid": true,
+          "extension": {
+            "length": 0,
+            "role": 3,
+            "value": 0
+          },
+          "following": {
+            "crcValid": true,
+            "offset": 4929,
+            "size": 12,
+            "type": 42
+          },
+          "followingGroup70": 65413,
+          "frameSha256": "d477591e202bb1f7961b42341d90eb61ef594e2569a82e0acca2c34254e94412",
+          "handle": 52,
+          "length": 5,
+          "lengthBit": 96,
+          "offset": 4898,
+          "owner": {
+            "length": 1,
+            "role": 4,
+            "value": 51
+          },
+          "payloadStartBit": 80,
+          "size": 27
+        }
+      },
+      "libdxfrwAfter": -123,
+      "libdxfrwBefore": 65413,
+      "libredwgXdata": [
+        [
+          1,
+          "CHECK"
+        ],
+        [
+          70,
+          -123
+        ]
+      ],
+      "producerManifest": {
+        "cargoLockSha256": "76b17a86b44fb75aea3748ee119286139e17abc462554c19059610c83f01f959",
+        "cargoVersion": "cargo 1.100.0 (3acc79c0c 2026-11-05) (Homebrew)",
+        "generatorSha256": "8ced3982263106102f50e0733fa0a68f33ff69df41e290f9cd832c6649f67893",
+        "ok": true,
+        "producerCommit": "d7c71f5032fc2d8844142ad7df7a6f0ee5ac535f",
+        "producerOutput": "",
+        "profile": "ac1014-rooted-xrecord",
+        "rustVersion": "rustc 1.100.0 (0ef1bc386 2026-11-09) (Homebrew)",
+        "samples": {
+          "r14-line-rooted-resaved.dwg": {
+            "bytes": 5204,
+            "sha256": "6cabd9176a9232d8ea392da675de394d6baf4e7fb7469cbe02a67e5502c03834"
+          },
+          "r14-line.dwg": {
+            "bytes": 5101,
+            "sha256": "e164e012d5ea5e1a62d99e6038d2f514bdeba902fc3bbf453e44d22f72a855a1"
+          }
+        },
+        "schema": "libdxfrw.ac1014-acadrust-rooted-line.v1",
+        "supportClaimEffect": "none",
+        "xrecordShort": -123
+      },
+      "productionRefusalBothEncodings": true
+    }
+  }
+}

@@ -51,7 +51,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--dwgread', required=True)
+    parser.add_argument('--short', type=int, default=37, help='signed expected group-70 value')
     args = parser.parse_args()
+    if not -32768 <= args.short <= 32767:
+        parser.error('--short must fit a signed 16-bit integer')
     source = args.source.resolve(strict=True)
     magic = source.read_bytes()[:6]
     require(magic in (b'AC1012', b'AC1014'), 'source is not R13/R14')
@@ -74,7 +77,7 @@ def main():
     child = dictionary['items']['RESEARCH'][-1]
     xrecords = [row for row in objects if row.get('object') == 'XRECORD' and row['handle'][-1] == child]
     require(len(xrecords) == 1 and xrecords[0]['ownerhandle'][-1] == ext
-            and xrecords[0]['xdata'] == [[1, 'CHECK'], [70, 37]], 'peer XRECORD mismatch')
+            and xrecords[0]['xdata'] == [[1, 'CHECK'], [70, args.short]], 'peer XRECORD mismatch')
     xrecord = xrecords[0]
     dictionary_proof = dictionary_frame(args.dwgread, source, version, dictionary, None, None)
     require(not dictionary_proof['eed'] and dictionary_proof['entryCount'] == 1
@@ -84,17 +87,17 @@ def main():
     require(selected_class['selected']['dxf'] == 'XRECORD'
             and selected_class['selected']['cpp'] == 'AcDbXrecord', 'XRECORD class mismatch')
     frame, offset, following = traced_frame(args.dwgread, source, child, xrecord['type'])
-    proof = read_record(frame, xrecord['type'], child, ext)
+    proof = read_record(frame, xrecord['type'], child, ext, short=args.short & 0xffff)
     damaged = bytearray(frame)
     bit = proof['lengthBit']
     damaged[bit // 8] ^= 0x80 >> (bit % 8)
     try:
-        read_record(damaged, xrecord['type'], child, ext)
+        read_record(damaged, xrecord['type'], child, ext, short=args.short & 0xffff)
     except ValueError:
         pass
     else:
         raise ValueError('corrupted physical XRECORD was accepted')
-    require(read_record(frame, xrecord['type'], child, ext) == proof, 'original retry failed')
+    require(read_record(frame, xrecord['type'], child, ext, short=args.short & 0xffff) == proof, 'original retry failed')
     print(json.dumps({'schema': 1, 'sourceSha256': hashlib.sha256(source.read_bytes()).hexdigest(),
                       'version': version, 'layout': layout['handle'][-1], 'dictionary': dictionary_proof,
                       'class': selected_class, 'xrecord': {'handle': child, 'offset': offset,

@@ -5,6 +5,7 @@
 #include "drw_entities.h"
 #include "intern/dwgbuffer.h"
 #include "intern/dwgbufferw.h"
+#include "xrecord_test_helpers.h"
 
 #include <array>
 #include <cstdint>
@@ -33,6 +34,68 @@ class DictionaryWithDefault final : public DRW_DictionaryWithDefault {
 public:
     using DRW_DictionaryWithDefault::parseDwg;
 };
+
+class XRecord final : public DRW_XRecord {
+public:
+    using DRW_XRecord::parseDwg;
+};
+
+// A locally generated acadrust R13/R14 frame; LibreDWG independently reads
+// the source group 70 value 0xff85 as -123. Mutations test the full signed
+// range and the other DXF Int16 group ranges without committing a DWG fixture.
+bool legacySignedXRecordControl() {
+    const std::vector<std::uint8_t> source{0x02, 0x40, 0x80, 0x4d, 0x2c, 0x00, 0x00,
+        0x00, 0x09, 0x0e, 0x01, 0x00, 0x05, 0x00, 0x1e, 0x43, 0x48, 0x45,
+        0x43, 0x4b, 0x46, 0x00, 0x85, 0xff, 0x41, 0x33, 0x30};
+    for (const auto version : {DRW::AC1012, DRW::AC1014}) {
+        XRecord model;
+        const auto read = [&](const std::vector<std::uint8_t>& bytes) {
+            dwgBuffer input(bytes.data(), bytes.size(), nullptr);
+            return model.parseDwg(version, &input, 0u) && input.isGood();
+        };
+        for (const int code : {60, 70, 79, 170, 179, 270, 279, 370, 389, 400, 409, 1060, 1070}) {
+            for (const int value : {-32768, -123, -1, 0, 32767}) {
+                auto bytes = source;
+                const auto wireValue = static_cast<std::uint16_t>(value);
+                bytes[20] = static_cast<std::uint8_t>(code & 0xff);
+                bytes[21] = static_cast<std::uint8_t>(code >> 8);
+                bytes[22] = static_cast<std::uint8_t>(wireValue & 0xff);
+                bytes[23] = static_cast<std::uint8_t>(wireValue >> 8);
+                if (!read(bytes) || model.m_values.size() != 2u || model.m_dataEntries.size() != 2u
+                    || model.m_values[1].code() != code || model.m_values[1].i_val() != value
+                    || model.m_dataEntries[1].i_val() != value) return false;
+                if (code == 70) {
+                    DRW_UnsupportedObject raw;
+                    raw.m_version = version; raw.m_objectType = 521; raw.m_handle = 52;
+                    raw.m_isCustomClass = true; raw.m_hasClassDefinition = true;
+                    raw.m_recordName = "XRECORD"; raw.m_className = "AcDbXrecord";
+                    raw.m_objectSize = static_cast<std::uint32_t>(bytes.size()); raw.m_rawBytes = bytes;
+                    if (!dx_legacy_dwg_wire::xrecordTextShort(raw, model)) return false;
+                }
+                auto truncated = bytes;
+                truncated.resize(23u);
+                if (read(truncated) || !model.m_values.empty() || !read(bytes)
+                    || model.m_values[1].i_val() != value) return false;
+            }
+        }
+    }
+    for (const auto version : {DRW::AC1018, DRW::AC1021}) {
+        for (const int code : {60, 70, 79, 170, 179, 270, 279, 370, 389, 400, 409, 1060, 1070}) {
+            for (const int value : {-32768, -123, -1, 0, 32767}) {
+                dwgBufferW payload;
+                payload.putRawShort16(static_cast<std::uint16_t>(code));
+                payload.putRawShort16(static_cast<std::uint16_t>(value));
+                const auto bytes = xrecord_test::frameWithData(version, payload.data());
+                dwgBuffer input(bytes.data(), bytes.size(), nullptr);
+                XRecord model;
+                if (!model.parseDwg(version, &input, 0u) || !input.isGood()
+                    || model.m_values.size() != 1u || model.m_values[0].code() != code
+                    || model.m_values[0].i_val() != value) return false;
+            }
+        }
+    }
+    return true;
+}
 
 bool sharedLegacyFrameControl() {
     using namespace dx_legacy_dwg_wire;
@@ -1143,7 +1206,7 @@ bool ac1012DictionaryVarControl() {
 }
 
 bool run() {
-    if (!sharedLegacyFrameControl() || !eedLayerWriteOrderControl() || !legacyDictionaryWithDefaultControl() || !r13DictionaryEedControl() || !r13DictionaryEedControl(true) || !r13DictionaryEedControl(false, true) || !r13DictionaryEedControl(false, false, true) || !r13DictionaryEedControl(false, false, false, true) || !r13DictionaryEedControl(false, false, false, false, true) || !r13DictionaryEedControl(false, false, false, false, false, true) || !r13DictionaryEedControl(false, false, false, false, false, false, true)
+    if (!legacySignedXRecordControl() || !sharedLegacyFrameControl() || !eedLayerWriteOrderControl() || !legacyDictionaryWithDefaultControl() || !r13DictionaryEedControl() || !r13DictionaryEedControl(true) || !r13DictionaryEedControl(false, true) || !r13DictionaryEedControl(false, false, true) || !r13DictionaryEedControl(false, false, false, true) || !r13DictionaryEedControl(false, false, false, false, true) || !r13DictionaryEedControl(false, false, false, false, false, true) || !r13DictionaryEedControl(false, false, false, false, false, false, true)
         || !r13EedChunkGroupBoundary(false) || !r13EedChunkGroupBoundary(true) || !terminatedDictionaryControl(DRW::AC1012)
         || !terminatedDictionaryControl(DRW::AC1014) || !dictionaryWireControl(true, false)
         || !dictionaryWireControl(false, false)

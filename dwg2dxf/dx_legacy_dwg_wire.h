@@ -337,7 +337,7 @@ inline bool xrecordTextShort(const DRW_UnsupportedObject& raw,
             && std::all_of(values[0].content.s->begin(), values[0].content.s->end(),
                 [](unsigned char c) { return c > 0u && c < 128u; })
             && values[1].code() == 70 && values[1].type() == DRW_Variant::INTEGER
-            && values[1].i_val() >= 0 && values[1].i_val() <= 65535;
+            && values[1].i_val() >= -32768 && values[1].i_val() <= 32767;
     };
     if (!matches(model.m_values) || !matches(model.m_dataEntries)
         || *model.m_values[0].content.s != *model.m_dataEntries[0].content.s
@@ -358,7 +358,7 @@ inline bool xrecordTextShort(const DRW_UnsupportedObject& raw,
     for (const unsigned char c : textValue)
         if (bits.take(8u) != c) return false;
     if (bits.little(2u) != 70u
-        || bits.little(2u) != static_cast<std::uint32_t>(model.m_values[1].i_val())
+        || bits.little(2u) != static_cast<std::uint16_t>(model.m_values[1].i_val())
         || !bits.good || bits.pos != bodyEnd || bits.pos - start != dataBytes * 8u)
         return false;
     return commonTail(bits, model.handle, model.parentHandle, model.reactorHandles, 0u)

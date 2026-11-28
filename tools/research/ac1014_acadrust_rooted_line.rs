@@ -12,6 +12,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output = PathBuf::from(std::env::var_os("AC1012_WITNESS_OUTPUT")
         .ok_or("AC1012_WITNESS_OUTPUT is required")?);
     let r13 = std::env::var_os("AC1012_WITNESS_R13").is_some();
+    let xrecord_short: i16 = std::env::var("AC1012_WITNESS_XRECORD_SHORT")
+        .unwrap_or_else(|_| "37".to_owned()).parse()?;
     let version = if r13 { DxfVersion::AC1012 } else { DxfVersion::AC1014 };
     let prefix = if r13 { "r13" } else { "r14" };
     let mut doc = CadDocument::with_version(version);
@@ -35,7 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         if let Some(ObjectType::XRecord(value)) = reopened.objects.get_mut(&record) {
             value.entries.push(XRecordEntry::string(1, "CHECK"));
-            value.entries.push(XRecordEntry::int16(70, 37));
+            value.entries.push(XRecordEntry::int16(70, xrecord_short));
         }
         if std::env::var_os("AC1012_WITNESS_LAYOUT_TWO_XRECORDS").is_some() {
             let second = reopened.ensure_xrecord(owner, "SECOND");
@@ -197,7 +199,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 assert_eq!(value.owner, dictionary);
                 assert_eq!(value.entries.len(), 2);
                 assert_eq!(value.entries[0], XRecordEntry::string(1, "CHECK"));
-                assert_eq!(value.entries[1], XRecordEntry::int16(70, 37));
+                assert_eq!(value.entries[1], XRecordEntry::int16(70, xrecord_short));
             }
             _ => return Err("missing layout XRECORD graph".into()),
         }
