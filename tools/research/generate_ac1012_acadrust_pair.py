@@ -28,7 +28,7 @@ def run(args, **kwargs):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile", choices=("ac1012-pair", "ac1014-rooted-line", "ac1014-rooted-ucs", "ac1014-rooted-viewport", "ac1014-rooted-xdictionary"),
+    parser.add_argument("--profile", choices=("ac1012-pair", "ac1014-rooted-line", "ac1014-rooted-ucs", "ac1014-rooted-viewport", "ac1014-rooted-xdictionary", "ac1014-rooted-xrecord"),
                         default="ac1012-pair")
     parser.add_argument("--acadrust-root", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -49,7 +49,7 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     if any(output.iterdir()):
         raise ValueError("output directory must be empty")
-    r14 = args.profile in ("ac1014-rooted-line", "ac1014-rooted-ucs", "ac1014-rooted-viewport", "ac1014-rooted-xdictionary")
+    r14 = args.profile in ("ac1014-rooted-line", "ac1014-rooted-ucs", "ac1014-rooted-viewport", "ac1014-rooted-xdictionary", "ac1014-rooted-xrecord")
     generator = Path(__file__).with_name(
         "ac1014_acadrust_rooted_line.rs" if r14 else "ac1012_acadrust_pair.rs")
     with tempfile.TemporaryDirectory(prefix="ac1012-acadrust-build-") as directory:
@@ -76,6 +76,10 @@ def main():
             environment["AC1012_WITNESS_LAYOUT_XDICTIONARY"] = "1"
         else:
             environment.pop("AC1012_WITNESS_LAYOUT_XDICTIONARY", None)
+        if args.profile == "ac1014-rooted-xrecord":
+            environment["AC1012_WITNESS_LAYOUT_XRECORD"] = "1"
+        else:
+            environment.pop("AC1012_WITNESS_LAYOUT_XRECORD", None)
         if args.cargo_target_dir:
             environment["CARGO_TARGET_DIR"] = str(args.cargo_target_dir.resolve())
         command = ["cargo", "run", "--manifest-path", str(project / "Cargo.toml")]

@@ -3,7 +3,7 @@
 // reconstructs LAYOUT on reopen; this is not native AutoCAD evidence.
 use acadrust::{CadDocument, DwgReader, DwgWriter};
 use acadrust::entities::{EntityType, Line, Viewport};
-use acadrust::objects::ObjectType;
+use acadrust::objects::{ObjectType, XRecordEntry};
 use acadrust::tables::Ucs;
 use acadrust::types::{DxfVersion, Handle};
 use std::path::PathBuf;
@@ -19,6 +19,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut reopened = DwgReader::from_file(&original)?.read()?;
     reopened.named_objects_dictionary_mut().ok_or("missing root")?
         .insert("ACAD_PLOTSTYLENAME", plotstyle);
+    let paper_xrecord = if std::env::var_os("AC1012_WITNESS_LAYOUT_XRECORD").is_some() {
+        let owner = reopened.objects.iter().find_map(|(handle, object)| {
+            if let ObjectType::Layout(layout) = object {
+                if layout.name == "Layout1" { Some(*handle) } else { None }
+            } else { None }
+        }).ok_or("missing paper layout")?;
+        let record = reopened.ensure_xrecord(owner, "RESEARCH");
+        let dictionary = reopened.extension_dictionary_handle(owner).ok_or("missing extension")?;
+        if let Some(ObjectType::Layout(layout)) = reopened.objects.get_mut(&owner) {
+            layout.xdictionary_handle = Some(dictionary);
+        }
+        if let Some(ObjectType::XRecord(value)) = reopened.objects.get_mut(&record) {
+            value.entries.push(XRecordEntry::string(1, "CHECK"));
+            value.entries.push(XRecordEntry::int16(70, 37));
+        }
+        Some((owner, dictionary, record))
+    } else { None };
     let paper_xdictionary = if std::env::var_os("AC1012_WITNESS_LAYOUT_XDICTIONARY").is_some() {
         let owner = reopened.objects.iter().find_map(|(handle, object)| {
             if let ObjectType::Layout(layout) = object {
@@ -90,6 +107,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 assert!(extension.entries.is_empty());
             }
             _ => return Err("missing layout extension graph".into()),
+        }
+    }
+    if let Some((owner, dictionary, record)) = paper_xrecord {
+        let readback = DwgReader::from_file(&result)?.read()?;
+        match (readback.objects.get(&owner), readback.objects.get(&dictionary), readback.objects.get(&record)) {
+            (Some(ObjectType::Layout(layout)), Some(ObjectType::Dictionary(extension)), Some(ObjectType::XRecord(value))) => {
+                assert_eq!(layout.xdictionary_handle, Some(dictionary));
+                assert_eq!(extension.owner, owner);
+                assert_eq!(extension.get("RESEARCH"), Some(record));
+                assert_eq!(value.owner, dictionary);
+                assert_eq!(value.entries.len(), 2);
+                assert_eq!(value.entries[0], XRecordEntry::string(1, "CHECK"));
+                assert_eq!(value.entries[1], XRecordEntry::int16(70, 37));
+            }
+            _ => return Err("missing layout XRECORD graph".into()),
         }
     }
     Ok(())

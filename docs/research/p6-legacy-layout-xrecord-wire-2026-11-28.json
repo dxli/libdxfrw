@@ -1,0 +1,124 @@
+{
+  "checks": [
+    "LibreDWG discovers the layout, its owned extension dictionary, child XRECORD, values and class; the independent observer checks class and frame CRCs, dictionary and XRECORD fields, roles, body boundaries and adjacent following frames. A changed physical string length is rejected and the original passes again.",
+    "The shared C++ observer accepts the generated R14 raw frame and typed model, rejecting changed owner, changed typed value, inconsistent ordered entries, a damaged frame and truncation, with the unchanged source passing again.",
+    "The prior empty extension dictionary source graph remains accepted by the existing graph test. Production refuses the nonempty extension in both encodings.",
+    "A separate scratch-only build also bypassed the nonempty-extension guard to locate subsequent output: ezdxf reads the selected dictionary/XRECORD graph and values in both encodings with no audit errors or fixes. This diagnostic does not prove source-to-output binding.",
+    "AddressSanitizer passes the wire observer and malformed/model-mutation controls on macOS ARM64; leak detection is unavailable on this platform."
+  ],
+  "id": "p6-legacy-layout-xrecord-wire-2026-11-28",
+  "implementation": "Add a bounded shared R13/R14 custom XRECORD wire observer for an ASCII group-1 value followed by a group-70 short, no EED, reactors, object-id tail or extension. The helper checks the typed values against the raw frame and common handles; it is not yet connected to output admission.",
+  "independentWireObservation": {
+    "class": {
+      "classCount": 38,
+      "crcValid": true,
+      "sectionOffset": 506,
+      "sectionSha256": "ee017d293ad45daf8fd11607d0444e05143eeb1950c282681604267ce1fdd74a",
+      "sectionSize": 2134,
+      "selected": {
+        "app": "ObjectDBX Classes",
+        "cpp": "AcDbXrecord",
+        "dxf": "XRECORD",
+        "flags": 0,
+        "itemClassId": 499,
+        "number": 521,
+        "physicalDxfValueStartBit": 13323,
+        "physicalEndBit": 13398,
+        "physicalStartBit": 13049,
+        "zombie": 0
+      }
+    },
+    "dictionary": {
+      "bodyEndBit": 154,
+      "crcValid": true,
+      "eed": [],
+      "entryCount": 1,
+      "extension": {
+        "length": 0,
+        "role": 3,
+        "value": 0
+      },
+      "frameOffset": 4869,
+      "frameSha256": "fd3e746bf0c6bda7989b5fbddb80ec73647038c06d92ca317b08090230b5d7da",
+      "frameSize": 25,
+      "handle": 51,
+      "nextFrame": {
+        "crcValid": true,
+        "offset": 4898,
+        "size": 27,
+        "type": 521
+      },
+      "owner": 47,
+      "r14Byte": 0,
+      "reactors": []
+    },
+    "layout": 47,
+    "negativeLengthRefusedAndOriginalRetryPassed": true,
+    "schema": 1,
+    "scope": "source-only local producer control; no native semantics or output admission",
+    "sourceSha256": "b46f59e514229c755fe32046a157c8fde9aca14ca613f943f82e14a4e0be89b0",
+    "xrecord": {
+      "bodyEndBit": 192,
+      "codepage": 30,
+      "crcValid": true,
+      "extension": {
+        "length": 0,
+        "role": 3,
+        "value": 0
+      },
+      "following": {
+        "crcValid": true,
+        "offset": 4929,
+        "size": 12,
+        "type": 42
+      },
+      "followingGroup70": 37,
+      "frameSha256": "d12e321c218f1ee55ffddd3b38e38e90b7f08be1c6b68fbe8dde9e602b1edbce",
+      "handle": 52,
+      "length": 5,
+      "lengthBit": 96,
+      "offset": 4898,
+      "owner": {
+        "length": 1,
+        "role": 4,
+        "value": 51
+      },
+      "payloadStartBit": 80,
+      "size": 27
+    }
+  },
+  "limits": [
+    "The helper does not bind class coverage, generation/census, dictionary entry role, typed callback provenance, staged XRECORD output, child graph closure or native semantics.",
+    "No nonempty extension profile is admitted and all legacy output guards remain active. Generated sample and derived files stay outside the repository."
+  ],
+  "producerManifest": {
+    "cargoLockSha256": "76b17a86b44fb75aea3748ee119286139e17abc462554c19059610c83f01f959",
+    "cargoVersion": "cargo 1.100.0 (3acc79c0c 2026-11-05) (Homebrew)",
+    "generatorSha256": "590d4f72e0162080e7425771e51cb3fe8e3a7107e69525af081068c672777240",
+    "ok": true,
+    "producerCommit": "d7c71f5032fc2d8844142ad7df7a6f0ee5ac535f",
+    "producerOutput": "",
+    "profile": "ac1014-rooted-xrecord",
+    "rustVersion": "rustc 1.100.0 (0ef1bc386 2026-11-09) (Homebrew)",
+    "samples": {
+      "r14-line-rooted-resaved.dwg": {
+        "bytes": 5204,
+        "sha256": "b46f59e514229c755fe32046a157c8fde9aca14ca613f943f82e14a4e0be89b0"
+      },
+      "r14-line.dwg": {
+        "bytes": 5101,
+        "sha256": "e164e012d5ea5e1a62d99e6038d2f514bdeba902fc3bbf453e44d22f72a855a1"
+      }
+    },
+    "schema": "libdxfrw.ac1014-acadrust-rooted-line.v1",
+    "supportClaimEffect": "none"
+  },
+  "schema": "libdxfrw.research-receipt.v1",
+  "specification": {
+    "lengthConflict": "The specification describes an RC legacy string length; the selected ACadRust control and previously documented ODA producer controls use an RS length. The helper is explicitly bounded to those observed codepage-30/45 producer-shaped ASCII forms.",
+    "path": "OpenDesign_Specification_for_.dwg_files (1).pdf",
+    "section": "20.4.104",
+    "sha256": "1ed2e02722862188120da606e4b6a816fa4014c96de68da2f84a2ecda09461e7"
+  },
+  "supportClaimEffect": "none"
+}

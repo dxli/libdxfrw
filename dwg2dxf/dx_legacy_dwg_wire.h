@@ -304,5 +304,65 @@ inline bool dictionary(const DRW_UnsupportedObject& raw,
         [](std::uint16_t, std::uint16_t) noexcept { return false; }, mlineOwner);
 }
 
+// Bounded R13/R14 custom XRECORD source profile: one ASCII group-1 value
+// followed by one group-70 short, with no EED, reactors, object-id tail or
+// extension dictionary. ODA v5.4.1 section 20.4.104 describes an RC string
+// length; the RS length below is limited to the independently observed ODA and
+// ACadRust producer profiles. Caller must bind the class, generation, graph,
+// source-frame census and output separately.
+inline bool xrecordTextShort(const DRW_UnsupportedObject& raw,
+                             const DRW_XRecord& model) noexcept {
+    const auto size = raw.m_rawBytes.size();
+    if (!supported(raw.m_version) || raw.m_isEntity || !raw.m_isCustomClass
+        || !raw.m_hasClassDefinition || raw.m_recordName != "XRECORD"
+        || raw.m_className != "AcDbXrecord" || raw.m_objectType < 500
+        || raw.m_objectType > std::numeric_limits<std::uint16_t>::max()
+        || raw.m_handle != model.handle || raw.m_handle == 0u
+        || raw.m_objectSize != size || size > 4096u || raw.m_bodyBitSize != 0u
+        || raw.m_hasDataStorage || model.tType != DRW::XRECORD || model.parentHandle == 0u
+        || model.parentHandle == DRW::NoHandle || model.xDictHandle != 0u
+        || model.reactorCount() != 0 || !model.reactorHandles.empty()
+        || !model.extData.empty() || !model.appData.empty() || !model.name.empty()
+        || model.flags != 0u || model.hasDataStorageBinaryData()
+        || !model.pendingAppIdResolutions.empty() || !model.pendingLayerRefResolutions.empty()
+        || model.hasDwgCommonLinkTail() || model.m_cloning != 0 || model.m_rawDataValid
+        || model.hasDwgRawDataSourceRecord() || !model.m_handleValues.empty()
+        || model.m_values.size() != 2u || model.m_dataEntries.size() != 2u) return false;
+    const auto matches = [](const std::vector<DRW_Variant>& values) {
+        for (const auto& value : values)
+            if (value.isLayerRef() || value.rawDwgLayerReference() || value.dwgCmColorValue())
+                return false;
+        return values[0].code() == 1 && values[0].type() == DRW_Variant::STRING
+            && values[0].content.s != nullptr && values[0].content.s->size() <= 255u
+            && std::all_of(values[0].content.s->begin(), values[0].content.s->end(),
+                [](unsigned char c) { return c > 0u && c < 128u; })
+            && values[1].code() == 70 && values[1].type() == DRW_Variant::INTEGER
+            && values[1].i_val() >= 0 && values[1].i_val() <= 65535;
+    };
+    if (!matches(model.m_values) || !matches(model.m_dataEntries)
+        || *model.m_values[0].content.s != *model.m_dataEntries[0].content.s
+        || model.m_values[1].i_val() != model.m_dataEntries[1].i_val()) return false;
+    Bits bits{raw.m_rawBytes.data(), 0u, static_cast<std::uint32_t>(size * 8u)};
+    std::uint32_t bodyEnd = 0u;
+    if (!frameStart(bits, raw.m_version, static_cast<std::uint32_t>(raw.m_objectType),
+            model.handle, 0u, [](Bits& source) noexcept {
+                return source.shortValue() == 0u && source.good;
+            }, bodyEnd)) return false;
+    const auto dataBytes = bits.longValue();
+    const auto start = bits.pos;
+    const auto& textValue = *model.m_values[0].content.s;
+    if (dataBytes != textValue.size() + 9u || bits.little(2u) != 1u
+        || bits.little(2u) != textValue.size()) return false;
+    const auto codepage = bits.take(8u);
+    if (codepage != 30u && codepage != 45u) return false;
+    for (const unsigned char c : textValue)
+        if (bits.take(8u) != c) return false;
+    if (bits.little(2u) != 70u
+        || bits.little(2u) != static_cast<std::uint32_t>(model.m_values[1].i_val())
+        || !bits.good || bits.pos != bodyEnd || bits.pos - start != dataBytes * 8u)
+        return false;
+    return commonTail(bits, model.handle, model.parentHandle, model.reactorHandles, 0u)
+        && padding(bits);
+}
 } // namespace dx_legacy_dwg_wire
 #endif

@@ -131,6 +131,12 @@ public:
         return data.m_legacyBlockRecordSources.empty()
             && data.m_legacyBlockRecordSourceBytes == 0u;
     }
+    static const DRW_UnsupportedObject* opaqueFrame(const dx_data& data, std::uint32_t handle) {
+        const auto key = dx_data::StandardDwgFrameKey{data.importGeneration, handle};
+        const auto frame = data.m_opaqueDwgSourceFrames.find(key);
+        return frame != data.m_opaqueDwgSourceFrames.end()
+            && data.m_opaqueDwgSourceFrameIdentities.count(key) == 1u ? &frame->second : nullptr;
+    }
     static std::vector<std::uint8_t>& layoutBytes(dx_data& data, std::uint32_t handle) {
         return data.m_opaqueDwgSourceFrames.at({data.importGeneration, handle}).m_rawBytes;
     }
@@ -1667,6 +1673,34 @@ bool checkLegacyViewportProjection(const std::string& input) {
         && DxIfaceStandardDwgCaptureTestAccess::boundLegacyLayout(adapter);
 }
 
+bool checkLegacyXRecordWire(const std::string& input) {
+    dx_iface adapter;
+    dx_data data;
+    if (!adapter.fileImport(input, &data, false) || data.sourceVersion != DRW::AC1014
+        || data.xRecords.size() != 1u) return false;
+    const DRW_XRecord& record = data.xRecords.front();
+    const auto* source = DxIfaceStandardDwgCaptureTestAccess::opaqueFrame(data, record.handle);
+    if (source == nullptr || !dx_legacy_dwg_wire::xrecordTextShort(*source, record)) return false;
+    DRW_XRecord changed = record;
+    changed.parentHandle ^= 1u;
+    if (dx_legacy_dwg_wire::xrecordTextShort(*source, changed)) return false;
+    changed = record;
+    changed.m_values[1] = DRW_Variant(70, std::int32_t{38});
+    if (dx_legacy_dwg_wire::xrecordTextShort(*source, changed)) return false;
+    changed = record;
+    changed.m_dataEntries[0] = DRW_Variant(1, UTF8STRING("CHANGED"));
+    if (dx_legacy_dwg_wire::xrecordTextShort(*source, changed)) return false;
+    DRW_UnsupportedObject damaged = *source;
+    if (damaged.m_rawBytes.empty()) return false;
+    damaged.m_rawBytes.front() ^= 0x80u;
+    if (dx_legacy_dwg_wire::xrecordTextShort(damaged, record)) return false;
+    damaged = *source;
+    damaged.m_rawBytes.pop_back();
+    damaged.m_objectSize = static_cast<std::uint32_t>(damaged.m_rawBytes.size());
+    if (dx_legacy_dwg_wire::xrecordTextShort(damaged, record)) return false;
+    return dx_legacy_dwg_wire::xrecordTextShort(*source, record);
+}
+
 bool strictOutputRefuses(dx_iface& reader, dx_data& data) {
     std::error_code error;
     const auto scratch = libdxfrw_test::reserveTestScratch(
@@ -1978,7 +2012,9 @@ bool legacyClassFrameCensus(const std::string& source) {
 }
 
 int main(int argc, char** argv) {
-    const bool ok = argc == 3 && std::string(argv[1]) == "--legacy-viewport-projection"
+    const bool ok = argc == 3 && std::string(argv[1]) == "--legacy-xrecord-wire"
+                ? checkLegacyXRecordWire(argv[2])
+            : argc == 3 && std::string(argv[1]) == "--legacy-viewport-projection"
                 ? checkLegacyViewportProjection(argv[2])
             : argc == 3 && std::string(argv[1]) == "--legacy-class-frame-census"
                 ? legacyClassFrameCensus(argv[2])
