@@ -59,6 +59,13 @@ class DiagnosticControls(unittest.TestCase):
                                  '--inject-objects-proof-failure').returncode, 0)
             self.assertIn(b'LIBDXFRW_DIAGNOSTIC_BAD_OBJECT', both.read_bytes())
             self.assertEqual(both.read_bytes().count(b'UNSAFE SCRATCH DIAGNOSTIC'), 6)
+            all_faults = root / 'all-faults.cpp'
+            self.assertEqual(run(SOURCE, sha(original), all_faults,
+                                 '--inject-table-proof-failure',
+                                 '--inject-objects-proof-failure',
+                                 '--inject-body-proof-failure').returncode, 0)
+            self.assertIn(b'LIBDXFRW_DIAGNOSTIC_BAD_BODY', all_faults.read_bytes())
+            self.assertEqual(all_faults.read_bytes().count(b'UNSAFE SCRATCH DIAGNOSTIC'), 7)
             self.assertEqual(SOURCE.read_bytes(), original)
 
 

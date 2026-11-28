@@ -4559,7 +4559,9 @@ private:
                                      bool debug) noexcept;
     bool legacyLayoutOutputLinks(std::vector<dxfRW::DxfLayoutOutputLinks>&) const noexcept;
     bool inspectLegacyLayoutBlockRecords(const dxfRW::DxfTablesWriteView&) noexcept;
-    bool inspectLegacyLayoutObjects(const dxfRW::DxfObjectsWriteView&) const noexcept;
+    bool inspectLegacyLayoutObjects(const dxfRW::DxfObjectsWriteView&, bool debug) const noexcept;
+    bool inspectLegacyLayoutBodies(const dxfRW::DxfObjectsWriteView&,
+        const std::vector<dxfRW::DxfLayoutOutputLinks>&, bool debug) const noexcept;
     struct DwgLayerStateOutputSource {
         std::uint32_t layerControlHandle{0u};
         DRW_Dictionary extensionDictionary;

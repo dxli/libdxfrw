@@ -43354,7 +43354,7 @@ bool dx_iface::inspectLegacyLayoutBlockRecords(
 }
 
 bool dx_iface::inspectLegacyLayoutObjects(
-        const dxfRW::DxfObjectsWriteView& view) const noexcept {
+        const dxfRW::DxfObjectsWriteView& view, bool debug) const noexcept {
     if (view.version != DRW::AC1015 || !m_legacyLayoutBlocksInspected)
         return false;
     try {
@@ -43387,7 +43387,119 @@ bool dx_iface::inspectLegacyLayoutObjects(
             profile.entries.push_back({member.m_name, dxfW->remapHandle(member.m_handle),
                                        role(member, dictionary->hardOwner)});
         return dxfW->inspectDxfSourceLayoutObjects(view, profile, links)
+            && inspectLegacyLayoutBodies(view, links, debug)
             && hasBoundLegacyLayoutSources();
+    } catch (...) {
+        return false;
+    }
+}
+
+bool dx_iface::inspectLegacyLayoutBodies(
+        const dxfRW::DxfObjectsWriteView& view,
+        const std::vector<dxfRW::DxfLayoutOutputLinks>& links, bool debug) const noexcept {
+    if (dxfW == nullptr || cData == nullptr || links.size() != cData->layouts.size())
+        return false;
+    try {
+        const DRW_WritingContext* context = dxfW->getWritingContext();
+        if (context == nullptr)
+            return false;
+        const auto mapHandle = [this, context](std::uint32_t source, std::uint32_t& output) {
+            output = 0u;
+            if (source == 0u)
+                return true;
+            if (context->ambiguousSourceHandles.count(source) != 0u)
+                return false;
+            output = dxfW->remapHandle(source);
+            bool bound = output != source;
+            for (const auto* aliases : {&context->sourceHandleToWrittenTableMap,
+                                        &context->sourceHandleToWrittenObjectMap,
+                                        &context->sourceHandleToMintedMap}) {
+                const auto found = aliases->find(source);
+                if (found == aliases->end()) continue;
+                if (bound && output != found->second) return false;
+                output = found->second;
+                bound = true;
+            }
+            return output != 0u;
+        };
+        std::map<std::uint32_t, const DRW_Layout*> expectedByHandle;
+        for (std::size_t i = 0u; i < links.size(); ++i) {
+            std::uint32_t mapped = 0u;
+            const DRW_Layout& source = cData->layouts[i];
+            if (source.name != links[i].name || !mapHandle(source.handle, mapped)
+                || mapped != links[i].layout
+                || !expectedByHandle.emplace(mapped, &source).second)
+                return false;
+        }
+        std::set<std::uint32_t> seen;
+        std::string_view selectedName;
+        dx_standard_output::Decoder decoder(view);
+        const bool inspected = decoder.good() && dx_standard_output::inspectSelected(view,
+            [&expectedByHandle, &selectedName](std::string_view name, std::uint32_t handle) {
+                selectedName = name;
+                return expectedByHandle.count(handle) != 0u;
+            }, [&](const auto& shape, std::string_view body) {
+                const auto found = expectedByHandle.find(shape.handle);
+                if (selectedName != "LAYOUT" || found == expectedByHandle.end()
+                    || !seen.insert(shape.handle).second)
+                    return false;
+                return decoder.decodeRecord<DRW_Layout>(body, [&](const DRW_Layout& actual) {
+                    const DRW_Layout& source = *found->second;
+                    DRW_Layout expected = source;
+                    std::uint32_t owner = 0u, dictionary = 0u;
+                    if (!mapHandle(static_cast<std::uint32_t>(source.parentHandle), owner)
+                        || !mapHandle(source.xDictHandle, dictionary)
+                        || actual.handle != shape.handle || actual.parentHandle != owner
+                        || actual.xDictHandle != dictionary || !actual.extData.empty()
+                        || source.viewportCount != 0 || !source.viewportHandles.empty()
+                        || actual.viewportCount != 0 || !actual.viewportHandles.empty())
+                        return false;
+                    std::vector<std::uint32_t> reactors;
+                    for (const auto handle : source.reactorHandles) {
+                        std::uint32_t mapped = 0u;
+                        if (!mapHandle(handle, mapped)) return false;
+                        reactors.push_back(mapped);
+                    }
+                    if (actual.reactorHandles != reactors) return false;
+                    unsigned reactorGroups = 0u, dictionaryGroups = 0u;
+                    for (const auto& group : actual.appData) {
+                        const auto name = dx_standard_output::appName(group);
+                        if (name == "ACAD_REACTORS") {
+                            if (++reactorGroups != 1u
+                                || !dx_standard_output::reservedGroupExact(group, actual, true)) return false;
+                        } else if (name == "ACAD_XDICTIONARY") {
+                            if (++dictionaryGroups != 1u
+                                || !dx_standard_output::reservedGroupExact(group, actual, false)) return false;
+                        } else return false;
+                    }
+                    if (reactorGroups != (reactors.empty() ? 0u : 1u)
+                        || dictionaryGroups != (dictionary == 0u ? 0u : 1u)) return false;
+                    const auto normalize = [&mapHandle](const dwgHandle& input,
+                                                       const dwgHandle& output,
+                                                       dwgHandle& target) {
+                        std::uint32_t mapped = 0u;
+                        if (input.ref64 != input.ref || !mapHandle(input.ref, mapped)
+                            || output.ref != mapped) return false;
+                        target = output;
+                        return true;
+                    };
+                    if (!normalize(source.plotViewHandle, actual.plotViewHandle, expected.plotViewHandle)
+                        || !normalize(source.shadePlotHandle, actual.shadePlotHandle, expected.shadePlotHandle)
+                        || !normalize(source.lastActiveViewportHandle, actual.lastActiveViewportHandle, expected.lastActiveViewportHandle)
+                        || !normalize(source.baseUcsHandle, actual.baseUcsHandle, expected.baseUcsHandle)
+                        || !normalize(source.namedUcsHandle, actual.namedUcsHandle, expected.namedUcsHandle))
+                        return false;
+                    expected.paperSpaceBlockRecordHandle = actual.paperSpaceBlockRecordHandle;
+                    expected.viewportCount = actual.viewportCount;
+                    expected.viewportHandles = actual.viewportHandles;
+                    return dxfLayout::Decoder::sameModel(expected, actual,
+                        [](const DRW_TableEntry&, const DRW_TableEntry&) { return true; });
+                });
+            });
+        const bool complete = inspected && seen.size() == expectedByHandle.size();
+        if (!complete && debug)
+            std::cerr << "legacy LAYOUT body output proof failed\n";
+        return complete;
     } catch (...) {
         return false;
     }
@@ -95208,7 +95320,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 && !inspectDwgLayouts(
                     view, debug || requireResolvedOwners))
                 return reject("LAYOUT DWG physical source/output binding");
-            if (needsLegacyLayoutOutput && !inspectLegacyLayoutObjects(view))
+            if (needsLegacyLayoutOutput && !inspectLegacyLayoutObjects(view, debug || requireResolvedOwners))
                 return reject("legacy LAYOUT OBJECTS output proof");
             if (needsDwgLayerStateOutput
                 && !inspectDwgLayerStateOutput(

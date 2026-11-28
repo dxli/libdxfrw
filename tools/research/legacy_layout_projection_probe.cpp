@@ -32,15 +32,17 @@ int main(int argc, char** argv) {
     if (argc != 4 || (std::string(argv[3]) != "production-refusal"
                       && std::string(argv[3]) != "diagnostic-only"
                       && std::string(argv[3]) != "diagnostic-table-fault"
-                      && std::string(argv[3]) != "diagnostic-object-fault")) {
-        std::cerr << "usage: probe INPUT NEW_SCRATCH_DIRECTORY production-refusal|diagnostic-only|diagnostic-table-fault|diagnostic-object-fault\n";
+                      && std::string(argv[3]) != "diagnostic-object-fault"
+                      && std::string(argv[3]) != "diagnostic-body-fault")) {
+        std::cerr << "usage: probe INPUT NEW_SCRATCH_DIRECTORY production-refusal|diagnostic-only|diagnostic-table-fault|diagnostic-object-fault|diagnostic-body-fault\n";
         return 2;
     }
     const bool diagnostic = std::string(argv[3]) != "production-refusal";
     const bool tableFault = std::string(argv[3]) == "diagnostic-table-fault";
     const bool objectFault = std::string(argv[3]) == "diagnostic-object-fault";
+    const bool bodyFault = std::string(argv[3]) == "diagnostic-body-fault";
     const char* faultName = tableFault ? "LIBDXFRW_DIAGNOSTIC_BAD_LAYOUT"
-                                      : "LIBDXFRW_DIAGNOSTIC_BAD_OBJECT";
+        : objectFault ? "LIBDXFRW_DIAGNOSTIC_BAD_OBJECT" : "LIBDXFRW_DIAGNOSTIC_BAD_BODY";
     const auto outputDir = std::filesystem::absolute(argv[2]);
     if (std::filesystem::exists(outputDir) || !std::filesystem::create_directories(outputDir)) return 2;
     dx_iface adapter;
@@ -56,14 +58,14 @@ int main(int argc, char** argv) {
             if (write(adapter, source, out.string(), binary) || bytes(out) != sentinel) return 4;
             continue;
         }
-        if (tableFault || objectFault) {
+        if (tableFault || objectFault || bodyFault) {
             if (!setFault(faultName, true)) return 2;
         } else {
             source.layouts.front().name += "_changed";
         }
-        const bool refused = !write(adapter, source, out.string(), binary, tableFault || objectFault)
+        const bool refused = !write(adapter, source, out.string(), binary, tableFault || objectFault || bodyFault)
             && bytes(out) == sentinel;
-        if (tableFault || objectFault) {
+        if (tableFault || objectFault || bodyFault) {
             if (!setFault(faultName, false)) return 2;
         } else {
             source.layouts.front().name = originalName;
