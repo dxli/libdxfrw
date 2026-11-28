@@ -1,0 +1,46 @@
+{
+  "checks": [
+    "A pinned, locally generated and producer-reopened R14 sample contains a paper VIEWPORT whose owner and last-active layout reference agree. The bound source proof and direct preflight succeed; a wrong owner, duplicated block association, fabricated backlink and R2000 without reciprocal links are each refused, followed by a corrected retry.",
+    "A generated in-tree control exercises R13 and R14 with multiple paper viewports and confirms the R2000 reciprocal-link requirement in both DXF encodings. Five focused CTests and the existing DWG viewport projection selector pass.",
+    "A scratch-only guard-bypassed build rejects a wrong expected paper VIEWPORT type, preserves the destination, and retries successfully on the same adapter in ASCII and binary. Body, layout-identity, table and object fault/retry controls also pass. Production refuses the sample in both encodings.",
+    "Independent physical tags and ezdxf 1.4.5 verify paper VIEWPORT identity/owner, layout group 331, entity status, layout graph, and zero audit errors/fixes across ten corrected outputs. Physical group 331 mutation is rejected in both encodings; originals pass on retry.",
+    "The earlier named/base UCS generator profile still reproduces its exact prior SHA-256. Source-release inventory and self-test pass after adding both research observers.",
+    "AddressSanitizer passes the R14 direct preflight and negative/retry controls on macOS ARM64; leak detection is unavailable on this platform."
+  ],
+  "diagnosticSourceSha256": "59b9d59ffa64acdaf5b58240b7ec8515ea25befd153c229a4bdf1911e5325b01",
+  "id": "p6-legacy-paper-viewport-association-2026-11-28",
+  "implementation": "DWG viewport preflight uses the shared forward-only layout association resolver for R13/R14 rather than requiring absent BLOCK_RECORD backlinks. Newer DWG versions continue to require reciprocal backlinks. Source models are not modified and the existing production legacy export refusal remains active.",
+  "limits": [
+    "Viewport wrong-role injection changes the expected staged record type; physical group-331 mutation tests the independent observer rather than production output.",
+    "The generated sample and peer readback do not establish native viewport appearance or complete drawing graph. Extension dictionary, reactor semantics, proxy classes and native cloning remain open.",
+    "The successful exports used scratch-only guard bypasses; no DWG/DXF fixture is committed and no production support is enabled."
+  ],
+  "producerManifest": {
+    "cargoLockSha256": "76b17a86b44fb75aea3748ee119286139e17abc462554c19059610c83f01f959",
+    "cargoVersion": "cargo 1.100.0 (3acc79c0c 2026-11-05) (Homebrew)",
+    "generatorSha256": "ba210c9d6dd3c4e24b1dab9d430fcd64f4318a39bf1ec8d9180ac7ddef2cd4f0",
+    "ok": true,
+    "producerCommit": "d7c71f5032fc2d8844142ad7df7a6f0ee5ac535f",
+    "producerOutput": "",
+    "profile": "ac1014-rooted-viewport",
+    "rustVersion": "rustc 1.100.0 (0ef1bc386 2026-11-09) (Homebrew)",
+    "samples": {
+      "r14-line-rooted-resaved.dwg": {
+        "bytes": 5461,
+        "sha256": "fc16340c5ce3ba01171def72faa2d6191b10d2b0eebc46d6f9efbd32db004371"
+      },
+      "r14-line.dwg": {
+        "bytes": 5101,
+        "sha256": "e164e012d5ea5e1a62d99e6038d2f514bdeba902fc3bbf453e44d22f72a855a1"
+      }
+    },
+    "schema": "libdxfrw.ac1014-acadrust-rooted-line.v1",
+    "supportClaimEffect": "none"
+  },
+  "roleFaultRetryOutputs": {
+    "ascii": "00f09d2b7b1d58ca729fd5e7cd8027a12d1852e26babe92dd9873d9e60b42948",
+    "binary": "dd0c0282be9af2a500b5f5af929b1e4ebce46a762ede803978f1c9b22afb13b8"
+  },
+  "schema": "libdxfrw.research-receipt.v1",
+  "supportClaimEffect": "none"
+}

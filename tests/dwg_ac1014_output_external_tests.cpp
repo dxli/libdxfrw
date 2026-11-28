@@ -56,6 +56,12 @@ public:
         std::string failure;
         return adapter.projectLegacyOutputBlockLayouts(version, identities, failure);
     }
+    static bool projectLegacyViewport(dx_iface& adapter, std::size_t& count) {
+        std::string failure;
+        const bool ok = adapter.prepareDwgViewportProjection(failure);
+        count = adapter.m_dwgViewportProjections.size();
+        return ok;
+    }
     static bool legacyBlockFrames(const dx_data& data, const std::string& input) {
         if (data.m_legacyBlockRecordSourceFailed || data.blockRecords.empty()
             || data.m_legacyBlockRecordSources.size() != data.blockRecords.size()) return false;
@@ -1602,6 +1608,55 @@ bool checkLegacyLayoutGraph(const std::string& input) {
     return trustedRetry && !error;
 }
 
+bool checkLegacyViewportProjection(const std::string& input) {
+    dx_iface adapter;
+    dx_data data;
+    if (!adapter.fileImport(input, &data, false) || data.sourceVersion != DRW::AC1014
+        || !DxIfaceStandardDwgCaptureTestAccess::boundLegacyLayout(adapter)) return false;
+    DRW_Entity* viewport = nullptr;
+    const auto findViewport = [&viewport](dx_ifaceBlock* block) {
+        if (block == nullptr) return;
+        for (DRW_Entity* entity : block->ent)
+            if (entity != nullptr && entity->eType == DRW::VIEWPORT
+                && entity->space == DRW::PaperSpace) viewport = entity;
+    };
+    findViewport(data.mBlock);
+    for (dx_ifaceBlock* block : data.blocks) findViewport(block);
+    const auto paper = std::find_if(data.layouts.begin(), data.layouts.end(),
+        [](const DRW_Layout& layout) { return layout.name == "Layout1"; });
+    const auto model = std::find_if(data.layouts.begin(), data.layouts.end(),
+        [](const DRW_Layout& layout) { return layout.name == "Model"; });
+    if (viewport == nullptr || paper == data.layouts.end() || model == data.layouts.end()
+        || viewport->handle != paper->lastActiveViewportHandle.ref) return false;
+    auto record = std::find_if(data.blockRecords.begin(), data.blockRecords.end(),
+        [&paper](const DRW_Block_Record& row) { return row.handle == paper->paperSpaceBlockRecordHandle.ref; });
+    if (record == data.blockRecords.end() || record->layoutHandle != 0u) return false;
+    std::size_t count = 0u;
+    const auto success = [&]() {
+        return DxIfaceStandardDwgCaptureTestAccess::projectLegacyViewport(adapter, count) && count == 1u;
+    };
+    if (!success()) return false;
+    const auto originalOwner = viewport->parentHandle;
+    viewport->parentHandle = model->paperSpaceBlockRecordHandle.ref;
+    const bool wrongOwner = !DxIfaceStandardDwgCaptureTestAccess::projectLegacyViewport(adapter, count);
+    viewport->parentHandle = originalOwner;
+    if (!wrongOwner || !success()) return false;
+    const auto originalBlock = paper->paperSpaceBlockRecordHandle.ref;
+    paper->paperSpaceBlockRecordHandle.ref = model->paperSpaceBlockRecordHandle.ref;
+    const bool duplicateBlock = !DxIfaceStandardDwgCaptureTestAccess::projectLegacyViewport(adapter, count);
+    paper->paperSpaceBlockRecordHandle.ref = originalBlock;
+    if (!duplicateBlock || !success()) return false;
+    record->layoutHandle = paper->handle;
+    const bool fabricatedBacklink = !DxIfaceStandardDwgCaptureTestAccess::projectLegacyViewport(adapter, count);
+    record->layoutHandle = 0u;
+    if (!fabricatedBacklink || !success()) return false;
+    data.sourceVersion = DRW::AC1015;
+    const bool reciprocalStillRequired = !DxIfaceStandardDwgCaptureTestAccess::projectLegacyViewport(adapter, count);
+    data.sourceVersion = DRW::AC1014;
+    return reciprocalStillRequired && success()
+        && DxIfaceStandardDwgCaptureTestAccess::boundLegacyLayout(adapter);
+}
+
 bool strictOutputRefuses(dx_iface& reader, dx_data& data) {
     std::error_code error;
     const auto scratch = libdxfrw_test::reserveTestScratch(
@@ -1913,7 +1968,9 @@ bool legacyClassFrameCensus(const std::string& source) {
 }
 
 int main(int argc, char** argv) {
-    const bool ok = argc == 3 && std::string(argv[1]) == "--legacy-class-frame-census"
+    const bool ok = argc == 3 && std::string(argv[1]) == "--legacy-viewport-projection"
+                ? checkLegacyViewportProjection(argv[2])
+            : argc == 3 && std::string(argv[1]) == "--legacy-class-frame-census"
                 ? legacyClassFrameCensus(argv[2])
             : argc == 3 && std::string(argv[1]) == "--legacy-block-pair-wire"
         ? checkLegacyBlockPairWire(argv[2])

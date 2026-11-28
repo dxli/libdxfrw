@@ -264,6 +264,15 @@ void operator delete(void* value,std::size_t)noexcept{std::free(value);}
 void operator delete[](void* value,std::size_t)noexcept{std::free(value);}
 class DxIfaceMaterialReferenceTestAccess {
 public:
+    static bool viewportProjection(dx_iface& adapter, dx_data& source, std::size_t& count) {
+        auto* previous = adapter.cData;
+        adapter.cData = &source;
+        std::string failure;
+        const bool result = adapter.prepareDwgViewportProjection(failure);
+        count = adapter.m_dwgViewportProjections.size();
+        adapter.cData = previous;
+        return result;
+    }
     static bool prepareBody(dx_iface& value,long offset,bool binary){
         value.m_dxfMaterialWriteSources.clear();value.m_dxfMaterialWriteDictionaries.clear();
         value.m_dxfMaterialWriteInspected=false;value.m_dxfMaterialWriteRequired=false;
@@ -3974,6 +3983,39 @@ void testDwgViewportProjection(TestContext& t) {
         if (sheetALayout == source.layouts.end()
             || sheetBLayout == source.layouts.end())
             continue;
+        // Exercise forward-only R13/R14 associations without relying on a
+        // producer fixture; the external control separately binds real wire.
+        const auto savedVersion = source.sourceVersion;
+        std::vector<std::uint32_t> savedBacklinks;
+        for (DRW_Block_Record& record : source.blockRecords) {
+            savedBacklinks.push_back(record.layoutHandle);
+            record.layoutHandle = 0u;
+        }
+        std::vector<std::pair<std::int32_t, std::vector<std::uint32_t>>> savedLists;
+        for (DRW_Layout& layout : source.layouts) {
+            savedLists.emplace_back(layout.viewportCount, layout.viewportHandles);
+            layout.viewportCount = 0;
+            layout.viewportHandles.clear();
+        }
+        dx_iface legacyProjection;
+        std::size_t projectedCount = 0u;
+        for (const auto version : {DRW::AC1012, DRW::AC1014}) {
+            source.sourceVersion = version;
+            t.expect(DxIfaceMaterialReferenceTestAccess::viewportProjection(
+                         legacyProjection, source, projectedCount) && projectedCount == 4u,
+                     "legacy DWG paper viewports use forward-only layout associations");
+        }
+        source.sourceVersion = DRW::AC1015;
+        t.expect(!DxIfaceMaterialReferenceTestAccess::viewportProjection(
+                     legacyProjection, source, projectedCount),
+                 "R2000 DWG paper viewports still require reciprocal backlinks");
+        source.sourceVersion = savedVersion;
+        for (std::size_t i = 0; i < source.blockRecords.size(); ++i)
+            source.blockRecords[i].layoutHandle = savedBacklinks[i];
+        for (std::size_t i = 0; i < source.layouts.size(); ++i) {
+            source.layouts[i].viewportCount = savedLists[i].first;
+            source.layouts[i].viewportHandles = std::move(savedLists[i].second);
+        }
         dx_iface exporter;
         if (sourceA != nullptr && !sourceA->layerOverrideReferences.empty()) {
             const auto savedReferences = sourceA->layerOverrideReferences;

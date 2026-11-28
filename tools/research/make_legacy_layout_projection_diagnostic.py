@@ -30,6 +30,8 @@ def main():
                         help='add an environment-controlled emitted-record role mismatch')
     parser.add_argument('--inject-ucs-role-failure', action='store_true',
                         help='add an environment-controlled UCS role mismatch')
+    parser.add_argument('--inject-viewport-role-failure', action='store_true',
+                        help='add an environment-controlled paper viewport role mismatch')
     args = parser.parse_args()
     source = args.source.resolve(strict=True)
     output = args.output.resolve()
@@ -69,7 +71,7 @@ def main():
         text = text[:begin] + section.replace(anchor, inject + anchor) + text[end:]
     if (args.inject_table_proof_failure or args.inject_objects_proof_failure
             or args.inject_body_proof_failure or args.inject_role_proof_failure
-            or args.inject_ucs_role_failure):
+            or args.inject_ucs_role_failure or args.inject_viewport_role_failure):
         if text.count('#include <iostream>\n') != 1:
             raise ValueError('adapter include anchor changed or is ambiguous')
         text = text.replace('#include <iostream>\n', '#include <iostream>\n#include <cstdlib>\n', 1)
@@ -113,6 +115,17 @@ def main():
             '                        // UNSAFE SCRATCH DIAGNOSTIC: force a UCS role mismatch.\n'
             '                        return handle == 0u || dxfW->dxfWriteRecordHasIdentity(handle,\n'
             '                            std::getenv("LIBDXFRW_DIAGNOSTIC_BAD_UCS") ? "LAYER" : "UCS", "TABLES");\n', 1)
+    if args.inject_viewport_role_failure:
+        begin = text.index('bool dx_iface::inspectLegacyLayoutBodies(')
+        end = text.index('bool dx_iface::inspectDwgLayoutBlockRecords(', begin)
+        section = text[begin:end]
+        for place in ('BLOCKS', 'ENTITIES'):
+            anchor = 'viewport, "VIEWPORT", "' + place + '"'
+            if section.count(anchor) != 1:
+                raise ValueError('legacy paper VIEWPORT role proof changed or is ambiguous')
+            section = section.replace(anchor,
+                'viewport, std::getenv("LIBDXFRW_DIAGNOSTIC_BAD_VIEWPORT") ? "VPORT" : "VIEWPORT", "' + place + '"', 1)
+        text = text[:begin] + section + text[end:]
     result = text.encode('utf-8')
     with output.open('xb') as stream:
         stream.write(result)

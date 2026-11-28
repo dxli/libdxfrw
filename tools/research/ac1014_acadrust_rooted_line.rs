@@ -2,7 +2,7 @@
 // Scratch-only generated R14 LINE and rooted plot-style control. The producer
 // reconstructs LAYOUT on reopen; this is not native AutoCAD evidence.
 use acadrust::{CadDocument, DwgReader, DwgWriter};
-use acadrust::entities::{EntityType, Line};
+use acadrust::entities::{EntityType, Line, Viewport};
 use acadrust::objects::ObjectType;
 use acadrust::tables::Ucs;
 use acadrust::types::{DxfVersion, Handle};
@@ -19,6 +19,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut reopened = DwgReader::from_file(&original)?.read()?;
     reopened.named_objects_dictionary_mut().ok_or("missing root")?
         .insert("ACAD_PLOTSTYLENAME", plotstyle);
+    let paper_viewport = if std::env::var_os("AC1012_WITNESS_PAPER_VIEWPORT").is_some() {
+        let mut viewport = Viewport::new();
+        viewport.id = 1;
+        Some(reopened.add_entity_to_layout(EntityType::Viewport(Box::new(viewport)), "Layout1")?)
+    } else { None };
     if std::env::var_os("AC1012_WITNESS_NAMED_UCS").is_some() {
         let named = Handle::new(0x9000);
         let base = Handle::new(0x9001);
@@ -54,6 +59,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             assert_eq!(layout.base_ucs, Handle::new(0x9001));
             assert_eq!(layout.ucs_ortho_type, 1);
         }
+    }
+    if let Some(handle) = paper_viewport {
+        let readback = DwgReader::from_file(&result)?.read()?;
+        let layout = readback.objects.values().find_map(|object| {
+            if let ObjectType::Layout(layout) = object {
+                if layout.name == "Layout1" { Some(layout) } else { None }
+            } else { None }
+        }).ok_or("missing paper layout")?;
+        assert_eq!(layout.viewport, handle);
     }
     Ok(())
 }

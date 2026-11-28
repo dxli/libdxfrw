@@ -83879,6 +83879,28 @@ bool dx_iface::prepareDwgViewportProjection(std::string& failure) {
                 return reject("DWG LAYOUT viewport handle is listed more than once");
         }
 
+        std::map<std::uint32_t, std::uint32_t> legacyAssociations;
+        const bool legacyForward = dx_layout_associations::sourceMode(
+            true, cData->sourceVersion) == dx_layout_associations::Mode::LegacyDwgForwardOnly;
+        if (legacyForward && !cData->layouts.empty()) {
+            if (!ambiguousHandles.empty() || layoutsByHandle.size() != cData->layouts.size()
+                || !dx_layout_associations::resolve(layoutsByHandle, recordsByHandle,
+                    dx_layout_associations::Mode::LegacyDwgForwardOnly,
+                    legacyAssociations, failure))
+                return false;
+            for (const auto& association : legacyAssociations) {
+                const auto record = recordsByHandle.find(association.first);
+                if (record == recordsByHandle.end()
+                    || !layoutOwners.emplace(association.second, record->second).second)
+                    return reject("legacy paper-space LAYOUT association is ambiguous");
+            }
+        }
+        const auto layoutHandleForOwner = [&](const DRW_Block_Record& record) {
+            if (!legacyForward) return record.layoutHandle;
+            const auto association = legacyAssociations.find(record.handle);
+            return association == legacyAssociations.end() ? std::uint32_t{0} : association->second;
+        };
+
         const auto recordByHandle = [&](std::uint32_t handle)
                 -> const DRW_Block_Record* {
             if (handle == 0 || handle == DRW::NoHandle
@@ -83937,7 +83959,7 @@ bool dx_iface::prepareDwgViewportProjection(std::string& failure) {
                         owner = recordByHandle(
                             layout->second->paperSpaceBlockRecordHandle.ref);
                         if (owner == nullptr
-                            || owner->layoutHandle != layout->second->handle)
+                            || layoutHandleForOwner(*owner) != layout->second->handle)
                             return reject("DWG LAYOUT-listed VIEWPORT has no reciprocal paper-space BLOCK_RECORD owner");
                     } else {
                         owner = recordByName("*PAPER_SPACE");
@@ -83966,20 +83988,20 @@ bool dx_iface::prepareDwgViewportProjection(std::string& failure) {
                 const std::string ownerName = layoutSymbolKey(owner->name);
                 if (ownerName == "*MODEL_SPACE")
                     return reject("paper-space VIEWPORT is owned by model space");
-                if (owner->layoutHandle == 0
-                    || owner->layoutHandle == DRW::NoHandle) {
+                const std::uint32_t ownerLayout = layoutHandleForOwner(*owner);
+                if (ownerLayout == 0 || ownerLayout == DRW::NoHandle) {
                     if (mainContainer)
                         return reject("current paper-space VIEWPORT owner has no LAYOUT backlink");
                     // A VIEWPORT stored in an ordinary named block is not a
                     // paper-layout viewport; leave its literal fields alone.
                     continue;
                 }
-                if (ambiguousLayoutHandles.count(owner->layoutHandle) != 0
-                    || layoutOwners.find(owner->layoutHandle) == layoutOwners.end()
-                    || layoutOwners.at(owner->layoutHandle) != owner)
+                if (ambiguousLayoutHandles.count(ownerLayout) != 0
+                    || layoutOwners.find(ownerLayout) == layoutOwners.end()
+                    || layoutOwners.at(ownerLayout) != owner)
                     return reject("paper-space LAYOUT backlink is shared or ambiguous");
                 if (!cData->layouts.empty()) {
-                    const auto layout = layoutsByHandle.find(owner->layoutHandle);
+                    const auto layout = layoutsByHandle.find(ownerLayout);
                     if (layout == layoutsByHandle.end()
                         || layout->second->paperSpaceBlockRecordHandle.ref
                             != owner->handle
@@ -83988,13 +84010,13 @@ bool dx_iface::prepareDwgViewportProjection(std::string& failure) {
                     if (entity->handle == 0 || entity->handle == DRW::NoHandle)
                         return reject("emitted paper-space VIEWPORT has an invalid identity");
                     if (hasDeclaredLayout) {
-                        if (declaredViewport->second != owner->layoutHandle)
+                        if (declaredViewport->second != ownerLayout)
                             return reject("DWG LAYOUT viewport-list target resolves to a different paper-space LAYOUT");
                         emittedListedViewports.insert(entity->handle);
                     }
                 }
 
-                int& next = nextViewportByLayout[owner->layoutHandle];
+                int& next = nextViewportByLayout[ownerLayout];
                 if (next >= DRW_Layout::kMaxViewportCount)
                     return reject("paper-space VIEWPORT count exceeds the bounded per-layout limit");
                 ++next;
