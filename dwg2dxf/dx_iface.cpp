@@ -33041,6 +33041,103 @@ bool dx_iface::hasBoundLegacyLayoutSources() const noexcept {
     }
 }
 
+// An R13/R14 CLASS row has no trustworthy on-wire instance count. Preserve
+// a zero-instance row only when the complete current-generation frame census
+// and retained-family observations both prove absence. This is not output or
+// native semantic qualification; the legacy layout export guard remains.
+bool dx_iface::hasBoundLegacyEmptyClass(const DRW_DwgClassCoverageEntry& row) const noexcept {
+    if (cData == nullptr || !hasBoundLegacyLayoutSources()
+        || row.m_state != DRW_DwgClassCoverageState::Published
+        || row.m_reason != DRW_DwgClassCoverageReason::None
+        || row.m_classNumber < 500u || row.m_entityFlag != 0
+        || (row.m_wasAProxyFlag != 0 && row.m_wasAProxyFlag != 1)
+        || row.m_proxyFlag < 0 || row.m_appName.empty() || row.m_appName.size() > 255u)
+        return false;
+    const auto printable = [](const std::string& value) {
+        return !value.empty() && value.size() <= 255u
+            && std::all_of(value.begin(), value.end(),
+                [](unsigned char c) { return c >= 32u && c < 127u; });
+    };
+    if (!printable(row.m_recordName) || !printable(row.m_className) || !printable(row.m_appName))
+        return false;
+    const bool geo = asciiIdentifierEquals(row.m_recordName, "GEODATA")
+        && asciiIdentifierEquals(row.m_className, "ACDBGEODATA");
+    const bool raster = asciiIdentifierEquals(row.m_recordName, "RASTERVARIABLES")
+        && asciiIdentifierEquals(row.m_className, "ACDBRASTERVARIABLES");
+    const bool wipeout = asciiIdentifierEquals(row.m_recordName, "WIPEOUTVARIABLES")
+        && asciiIdentifierEquals(row.m_className, "ACDBWIPEOUTVARIABLES");
+    if (!geo && !raster && !wipeout) return false;
+    const auto generation = cData->importGeneration;
+    const auto countCurrent = [generation](const auto& records) {
+        std::size_t count = 0u;
+        for (auto item = records.lower_bound({generation, 0u});
+             item != records.end() && item->first.first == generation; ++item) ++count;
+        return count;
+    };
+    if ((geo && (cData->geoDataCaptureFailed || countCurrent(cData->geoDataObjects) != 0u))
+        || (raster && (cData->rasterVariablesCaptureFailed || countCurrent(cData->dwgRasterVariables) != 0u))
+        || (wipeout && (cData->wipeoutVariablesCaptureFailed || countCurrent(cData->dwgWipeoutVariables) != 0u)))
+        return false;
+    const auto matches = [geo, raster, wipeout](const std::string& className,
+                                                const std::string& recordName) {
+        return (geo && (asciiIdentifierEquals(className, "ACDBGEODATA")
+                        || asciiIdentifierEquals(recordName, "GEODATA")
+                        || asciiIdentifierEquals(recordName, "ACDBGEODATA")))
+            || (raster && (asciiIdentifierEquals(className, "ACDBRASTERVARIABLES")
+                           || asciiIdentifierEquals(recordName, "RASTERVARIABLES")
+                           || asciiIdentifierEquals(recordName, "ACDBRASTERVARIABLES")))
+            || (wipeout && (asciiIdentifierEquals(className, "ACDBWIPEOUTVARIABLES")
+                            || asciiIdentifierEquals(recordName, "WIPEOUTVARIABLES")
+                            || asciiIdentifierEquals(recordName, "ACDBWIPEOUTVARIABLES")));
+    };
+    std::size_t frames = 0u;
+    return cData->legacyClassFrameCount(row.m_classNumber, frames) && frames == 0u
+        && countDwgClassFamilyFrames(cData->m_opaqueDwgSourceFrames, generation, &row, matches) == 0u;
+}
+
+// Append only: DXF proxy class IDs depend on their preceding class ordinals.
+// A conflict or missing zero-instance proof leaves the caller's list intact.
+bool dx_iface::appendLegacyEmptyClasses(std::vector<DRW_Class>& classes) const noexcept {
+    if (cData == nullptr || cData->sourceFormat != dx_source_format::DWG
+        || !dx_legacy_dwg_wire::supported(cData->sourceVersion) || cData->layouts.empty())
+        return true;
+    try {
+        if (!hasBoundLegacyLayoutSources()) return false;
+        auto staged = classes;
+        for (const auto& row : cData->dwgClassCoverage.m_entries) {
+            const bool family = asciiIdentifierEquals(row.m_recordName, "GEODATA")
+                || asciiIdentifierEquals(row.m_recordName, "RASTERVARIABLES")
+                || asciiIdentifierEquals(row.m_recordName, "WIPEOUTVARIABLES")
+                || asciiIdentifierEquals(row.m_className, "ACDBGEODATA")
+                || asciiIdentifierEquals(row.m_className, "ACDBRASTERVARIABLES")
+                || asciiIdentifierEquals(row.m_className, "ACDBWIPEOUTVARIABLES");
+            if (!family) continue;
+            if (!hasBoundLegacyEmptyClass(row)) return false;
+            DRW_Class expected;
+            expected.recName = row.m_recordName;
+            expected.className = row.m_className;
+            expected.appName = row.m_appName;
+            expected.proxyFlag = row.m_proxyFlag;
+            expected.wasaProxyFlag = row.m_wasAProxyFlag;
+            expected.entityFlag = row.m_entityFlag;
+            expected.instanceCount = 0;
+            bool found = false;
+            for (const auto& existing : staged) {
+                if (!sameAsciiName(existing.recName, expected.recName)
+                    && !sameAsciiName(existing.className, expected.className)) continue;
+                if (found || existing.recName != expected.recName
+                    || existing.className != expected.className || existing.appName != expected.appName
+                    || existing.proxyFlag != expected.proxyFlag || existing.wasaProxyFlag != expected.wasaProxyFlag
+                    || existing.entityFlag != expected.entityFlag || existing.instanceCount != 0) return false;
+                found = true;
+            }
+            if (!found) staged.push_back(std::move(expected));
+        }
+        classes.swap(staged);
+        return true;
+    } catch (...) { return false; }
+}
+
 void dx_iface::resetStandardDwgOutputProofs() noexcept {
     std::vector<GeneratedRootOutputProof>().swap(m_generatedRootOutputProofs);
     m_generatedRootOutputBytes = 0u;
@@ -87460,6 +87557,7 @@ bool dx_iface::prepareDwgGeoDataOutput(bool debug) {
         return typedCount == 0u && sourceFrameCount == 0u
             ? true : fail("typed or source frames lack a matching CLASS row");
     }
+    if (hasBoundLegacyEmptyClass(*sourceClass)) return true;
     if (sourceClass->m_state != DRW_DwgClassCoverageState::Published
         || sourceClass->m_reason != DRW_DwgClassCoverageReason::None
         || sourceClass->m_instanceCount < 0
@@ -89034,6 +89132,7 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
         return typedCount == 0u && sourceFrameCount == 0u
             ? true : fail("typed or source frames lack a matching CLASS row");
     }
+    if (hasBoundLegacyEmptyClass(*sourceClass)) return true;
     if (sourceClass->m_state != DRW_DwgClassCoverageState::Published
         || sourceClass->m_reason != DRW_DwgClassCoverageReason::None
         || sourceClass->m_instanceCount < 0
@@ -89364,6 +89463,7 @@ bool dx_iface::prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
         return typedCount == 0u && sourceFrameCount == 0u
             ? true : fail("typed or source frames lack a matching CLASS row");
     }
+    if (hasBoundLegacyEmptyClass(*sourceClass)) return true;
     if (sourceClass->m_state != DRW_DwgClassCoverageState::Published
         || sourceClass->m_reason != DRW_DwgClassCoverageReason::None
         || sourceClass->m_instanceCount < 0
@@ -94443,6 +94543,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 "ACAD_PROXY_ENTITY source class ordinals or instances");
         if (!registerLayoutClass(classes))
             return rejectClassRegistration("LAYOUT CLASS metadata");
+        if (!appendLegacyEmptyClasses(classes))
+            return rejectClassRegistration("legacy empty CLASS source metadata");
         dxfW->setDxfClasses(std::move(classes));
     }
     if (appendedAcdsDataSection)
@@ -95210,7 +95312,9 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         || cData->m_verifiedStyleResourceSource != nullptr
         || cData->dwgProxyEntityPresent
         || !m_dwgAssociativeDimensionDependencies.empty());
-    if ((!m_dxfMLineStyles.empty() || needsDxfMLineConsumerInspection())
+    if ((!m_dxfMLineStyles.empty() || needsDxfMLineConsumerInspection()
+         || (cData->sourceFormat == dx_source_format::DWG
+             && dx_legacy_dwg_wire::supported(cData->sourceVersion) && !cData->layouts.empty()))
         && !dxfW->setDxfStagedOutputAuthentication(true)) {
         delete dxfW;
         dxfW = nullptr;

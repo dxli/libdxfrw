@@ -2,7 +2,7 @@
 """Create an explicitly unsafe scratch adapter for legacy projection research.
 
 The generated file bypasses the legacy target refusal and three empty-family
-CLASS guards only for source-bound zero-count evidence. It must never be used
+CLASS guards only for source-bound zero-count evidence unless explicitly kept. It must never be used
 for releases or support claims. The input source is not modified.
 """
 import argparse
@@ -36,6 +36,8 @@ def main():
                         help='add an environment-controlled extension dictionary field mismatch')
     parser.add_argument('--inject-xrecord-body-failure', action='store_true',
                         help='add an environment-controlled XRECORD body mismatch')
+    parser.add_argument('--preserve-empty-class-guards', action='store_true',
+                        help='bypass only the legacy layout refusal')
     args = parser.parse_args()
     source = args.source.resolve(strict=True)
     output = args.output.resolve()
@@ -72,7 +74,8 @@ def main():
         section = text[begin:end]
         if section.count(anchor) != 1:
             raise ValueError(name + ' CLASS guard changed or is ambiguous')
-        text = text[:begin] + section.replace(anchor, inject + anchor) + text[end:]
+        if not args.preserve_empty_class_guards:
+            text = text[:begin] + section.replace(anchor, inject + anchor) + text[end:]
     if (args.inject_table_proof_failure or args.inject_objects_proof_failure
             or args.inject_body_proof_failure or args.inject_role_proof_failure
             or args.inject_ucs_role_failure or args.inject_viewport_role_failure

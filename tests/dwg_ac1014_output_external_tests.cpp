@@ -39,6 +39,36 @@ public:
         capture.seal(data.sourceVersion, true, report);
         return capture;
     }
+    static dx_legacy_frame_census::Capture censusWithUnexpectedFamily(
+            const dx_data& data, std::uint16_t family) {
+        dx_legacy_frame_census::Capture capture;
+        capture.begin(data.importGeneration, data.m_classEvidenceAttempt);
+        std::vector<int> types;
+        for (const auto& row : data.dwgClassCoverage.m_entries) {
+            if (row.m_recordName == "LAYOUT")
+                types.insert(types.end(), data.layouts.size(), row.m_classNumber);
+            if (row.m_recordName == "XRECORD")
+                types.insert(types.end(), data.xRecords.size(), row.m_classNumber);
+        }
+        types.push_back(family);
+        for (std::size_t index = 0; index < types.size(); ++index) {
+            DRW_DwgFramePublication row;
+            row.m_version = data.sourceVersion;
+            row.m_handle = static_cast<std::uint32_t>(index + 1u);
+            row.m_encodedType = types[index];
+            row.m_hasSourceLocation = true;
+            row.m_sourceOffset = static_cast<std::uint32_t>(100u + index);
+            row.m_sourceMapOrdinal = index;
+            row.m_sourceOffsetSpace = DRW_DwgFrameOffsetSpace::PhysicalFile;
+            capture.observe(row, data.importGeneration, data.m_classEvidenceAttempt);
+        }
+        DwgReadFrameObservations report;
+        report.status = DRW_DwgFrameCoverageStatus::FinalizedComplete;
+        report.sourceFrames = types.size();
+        report.dispositions[static_cast<std::size_t>(DRW_DwgFrameDisposition::Published)] = types.size();
+        capture.seal(data.sourceVersion, true, report);
+        return capture;
+    }
     static bool legacyClassCount(const dx_data& data, std::uint16_t number,
                                  std::size_t& count) {
         return data.legacyClassFrameCount(number, count);
@@ -55,6 +85,23 @@ public:
                                     std::vector<DRW_Block_Record>& identities) {
         std::string failure;
         return adapter.projectLegacyOutputBlockLayouts(version, identities, failure);
+    }
+    static void insertAliasFrame(dx_data& data, bool insert) {
+        const dx_data::StandardDwgFrameKey key{data.importGeneration, 0xFEEEu};
+        if (!insert) { data.m_opaqueDwgSourceFrames.erase(key); return; }
+        DRW_UnsupportedObject raw;
+        raw.m_handle = key.second;
+        raw.m_objectType = 777;
+        raw.m_recordName = "ACDBGEODATA";
+        data.m_opaqueDwgSourceFrames.emplace(key, std::move(raw));
+    }
+    static bool appendEmptyLegacyClasses(dx_iface& adapter, std::vector<DRW_Class>& rows) {
+        return adapter.appendLegacyEmptyClasses(rows);
+    }
+    static bool prepareEmptyLegacyClasses(dx_iface& adapter) {
+        return adapter.prepareDwgGeoDataOutput(false)
+            && adapter.prepareDwgRasterVariablesOutput(DRW::AC1015, false)
+            && adapter.prepareDwgWipeoutVariablesOutput(DRW::AC1015, false);
     }
     static bool projectLegacyViewport(dx_iface& adapter, std::size_t& count) {
         std::string failure;
@@ -1405,6 +1452,63 @@ bool checkLegacyLayoutGraph(const std::string& input) {
     if (!adapter.fileImport(input, &data, false)
         || !DxIfaceStandardDwgCaptureTestAccess::boundLegacyLayout(adapter)
         || adapter.wantsLegacyBlockRecordSource(DRW::AC1015)) return false;
+    DRW_Class existing;
+    existing.recName = "PROXY_KEEP";
+    existing.className = "AcDbProxyKeep";
+    existing.appName = "Test";
+    std::vector<DRW_Class> classRows{existing};
+    if (!DxIfaceStandardDwgCaptureTestAccess::prepareEmptyLegacyClasses(adapter)
+        || !DxIfaceStandardDwgCaptureTestAccess::appendEmptyLegacyClasses(adapter, classRows)
+        || classRows.empty() || classRows.front().recName != existing.recName) return false;
+    std::size_t expectedClasses = 0u;
+    for (const auto& row : data.dwgClassCoverage.m_entries) {
+        if (row.m_recordName != "GEODATA" && row.m_recordName != "RASTERVARIABLES"
+            && row.m_recordName != "WIPEOUTVARIABLES") continue;
+        ++expectedClasses;
+        const auto found = std::find_if(classRows.begin() + 1, classRows.end(),
+            [&row](const DRW_Class& value) { return value.recName == row.m_recordName; });
+        if (found == classRows.end() || found->className != row.m_className
+            || found->appName != row.m_appName || found->proxyFlag != row.m_proxyFlag
+            || found->wasaProxyFlag != row.m_wasAProxyFlag || found->entityFlag != row.m_entityFlag
+            || found->instanceCount != 0) return false;
+    }
+    if (classRows.size() != expectedClasses + 1u) return false;
+    if (expectedClasses != 0u) {
+        DRW_Class conflict = classRows.back();
+        conflict.appName += "_changed";
+        std::vector<DRW_Class> bad{existing, conflict};
+        if (DxIfaceStandardDwgCaptureTestAccess::appendEmptyLegacyClasses(adapter, bad)
+            || bad.size() != 2u || bad[0].recName != existing.recName
+            || bad[1].appName != conflict.appName) return false;
+        ++data.importGeneration;
+        auto stale = std::vector<DRW_Class>{existing};
+        const bool staleRejected = !DxIfaceStandardDwgCaptureTestAccess::appendEmptyLegacyClasses(adapter, stale)
+            && stale.size() == 1u && stale.front().recName == existing.recName;
+        --data.importGeneration;
+        if (!staleRejected || !DxIfaceStandardDwgCaptureTestAccess::appendEmptyLegacyClasses(adapter, stale)
+            || stale.size() != expectedClasses + 1u) return false;
+        DxIfaceStandardDwgCaptureTestAccess::insertAliasFrame(data, true);
+        auto aliasRows = std::vector<DRW_Class>{existing};
+        const bool aliasRejected = !DxIfaceStandardDwgCaptureTestAccess::appendEmptyLegacyClasses(adapter, aliasRows)
+            && aliasRows.size() == 1u;
+        DxIfaceStandardDwgCaptureTestAccess::insertAliasFrame(data, false);
+        if (!aliasRejected || !DxIfaceStandardDwgCaptureTestAccess::appendEmptyLegacyClasses(adapter, aliasRows)
+            || aliasRows.size() != expectedClasses + 1u) return false;
+        for (const auto& family : data.dwgClassCoverage.m_entries) {
+            if (family.m_recordName != "GEODATA" && family.m_recordName != "RASTERVARIABLES"
+                && family.m_recordName != "WIPEOUTVARIABLES") continue;
+            auto unexpected = DxIfaceStandardDwgCaptureTestAccess::censusWithUnexpectedFamily(data, family.m_classNumber);
+            std::swap(DxIfaceStandardDwgCaptureTestAccess::legacyCensus(data), unexpected);
+            auto shouldRefuse = std::vector<DRW_Class>{existing};
+            const bool refused = !DxIfaceStandardDwgCaptureTestAccess::appendEmptyLegacyClasses(adapter, shouldRefuse)
+                && !DxIfaceStandardDwgCaptureTestAccess::prepareEmptyLegacyClasses(adapter)
+                && shouldRefuse.size() == 1u && shouldRefuse.front().recName == existing.recName;
+            std::swap(DxIfaceStandardDwgCaptureTestAccess::legacyCensus(data), unexpected);
+            if (!refused || !DxIfaceStandardDwgCaptureTestAccess::prepareEmptyLegacyClasses(adapter)
+                || !DxIfaceStandardDwgCaptureTestAccess::appendEmptyLegacyClasses(adapter, shouldRefuse)
+                || shouldRefuse.size() != expectedClasses + 1u) return false;
+        }
+    }
     const auto modelLayout = std::find_if(data.layouts.begin(), data.layouts.end(),
         [](const DRW_Layout& layout) { return layout.name == "Model"; });
     if (modelLayout == data.layouts.end() || data.VPorts.empty()) return false;

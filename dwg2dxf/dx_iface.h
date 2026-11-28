@@ -4050,6 +4050,8 @@ private:
                                        const DRW_Dictionary& dictionary) const noexcept;
     bool hasUnchangedStandardDwgObjectSources() const noexcept;
     bool hasBoundLegacyLayoutSources() const noexcept;
+    bool hasBoundLegacyEmptyClass(const DRW_DwgClassCoverageEntry&) const noexcept;
+    bool appendLegacyEmptyClasses(std::vector<DRW_Class>&) const noexcept;
     const std::vector<DRW_Group>* m_standardDwgBorrowedGroups{nullptr};
     struct StandardDwgOutputProof {
         std::uint64_t generation{0};

@@ -48,6 +48,11 @@ class DiagnosticControls(unittest.TestCase):
             second = root / 'retry.cpp'
             self.assertEqual(run(SOURCE, sha(original), second).returncode, 0)
             self.assertEqual(second.read_bytes(), generated)
+            class_guards = root / 'class-guards.cpp'
+            self.assertEqual(run(SOURCE, sha(original), class_guards,
+                                 '--preserve-empty-class-guards').returncode, 0)
+            self.assertEqual(class_guards.read_bytes().count(b'UNSAFE SCRATCH DIAGNOSTIC'), 1)
+            self.assertNotIn(b'diagnosticCount', class_guards.read_bytes())
             injected = root / 'fault.cpp'
             self.assertEqual(run(SOURCE, sha(original), injected,
                                  '--inject-table-proof-failure').returncode, 0)
