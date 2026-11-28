@@ -33,15 +33,18 @@ int main(int argc, char** argv) {
                       && std::string(argv[3]) != "diagnostic-only"
                       && std::string(argv[3]) != "diagnostic-table-fault"
                       && std::string(argv[3]) != "diagnostic-object-fault"
-                      && std::string(argv[3]) != "diagnostic-body-fault")) {
-        std::cerr << "usage: probe INPUT NEW_SCRATCH_DIRECTORY production-refusal|diagnostic-only|diagnostic-table-fault|diagnostic-object-fault|diagnostic-body-fault\n";
+                      && std::string(argv[3]) != "diagnostic-body-fault"
+                      && std::string(argv[3]) != "diagnostic-role-fault")) {
+        std::cerr << "usage: probe INPUT NEW_SCRATCH_DIRECTORY production-refusal|diagnostic-only|diagnostic-table-fault|diagnostic-object-fault|diagnostic-body-fault|diagnostic-role-fault\n";
         return 2;
     }
     const bool diagnostic = std::string(argv[3]) != "production-refusal";
     const bool tableFault = std::string(argv[3]) == "diagnostic-table-fault";
     const bool objectFault = std::string(argv[3]) == "diagnostic-object-fault";
     const bool bodyFault = std::string(argv[3]) == "diagnostic-body-fault";
-    const char* faultName = tableFault ? "LIBDXFRW_DIAGNOSTIC_BAD_LAYOUT"
+    const bool roleFault = std::string(argv[3]) == "diagnostic-role-fault";
+    const char* faultName = roleFault ? "LIBDXFRW_DIAGNOSTIC_BAD_ROLE"
+        : tableFault ? "LIBDXFRW_DIAGNOSTIC_BAD_LAYOUT"
         : objectFault ? "LIBDXFRW_DIAGNOSTIC_BAD_OBJECT" : "LIBDXFRW_DIAGNOSTIC_BAD_BODY";
     const auto outputDir = std::filesystem::absolute(argv[2]);
     if (std::filesystem::exists(outputDir) || !std::filesystem::create_directories(outputDir)) return 2;
@@ -58,14 +61,14 @@ int main(int argc, char** argv) {
             if (write(adapter, source, out.string(), binary) || bytes(out) != sentinel) return 4;
             continue;
         }
-        if (tableFault || objectFault || bodyFault) {
+        if (tableFault || objectFault || bodyFault || roleFault) {
             if (!setFault(faultName, true)) return 2;
         } else {
             source.layouts.front().name += "_changed";
         }
-        const bool refused = !write(adapter, source, out.string(), binary, tableFault || objectFault || bodyFault)
+        const bool refused = !write(adapter, source, out.string(), binary, tableFault || objectFault || bodyFault || roleFault)
             && bytes(out) == sentinel;
-        if (tableFault || objectFault || bodyFault) {
+        if (tableFault || objectFault || bodyFault || roleFault) {
             if (!setFault(faultName, false)) return 2;
         } else {
             source.layouts.front().name = originalName;

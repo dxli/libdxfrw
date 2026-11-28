@@ -43407,7 +43407,8 @@ bool dx_iface::inspectLegacyLayoutBodies(
             output = 0u;
             if (source == 0u)
                 return true;
-            if (context->ambiguousSourceHandles.count(source) != 0u)
+            if (source == DRW::NoHandle
+                || context->ambiguousSourceHandles.count(source) != 0u)
                 return false;
             output = dxfW->remapHandle(source);
             bool bound = output != source;
@@ -43420,14 +43421,18 @@ bool dx_iface::inspectLegacyLayoutBodies(
                 output = found->second;
                 bound = true;
             }
-            return output != 0u;
+            return output != 0u && output != DRW::NoHandle;
         };
         std::map<std::uint32_t, const DRW_Layout*> expectedByHandle;
+        std::map<std::uint32_t, std::uint32_t> blocksByLayout;
         for (std::size_t i = 0u; i < links.size(); ++i) {
             std::uint32_t mapped = 0u;
             const DRW_Layout& source = cData->layouts[i];
             if (source.name != links[i].name || !mapHandle(source.handle, mapped)
                 || mapped != links[i].layout
+                || !dxfW->dxfWriteRecordHasIdentity(mapped, "LAYOUT", "OBJECTS")
+                || !dxfW->dxfWriteRecordHasIdentity(links[i].blockRecord, "BLOCK_RECORD", "TABLES")
+                || !blocksByLayout.emplace(mapped, links[i].blockRecord).second
                 || !expectedByHandle.emplace(mapped, &source).second)
                 return false;
         }
@@ -43451,13 +43456,19 @@ bool dx_iface::inspectLegacyLayoutBodies(
                         || !mapHandle(source.xDictHandle, dictionary)
                         || actual.handle != shape.handle || actual.parentHandle != owner
                         || actual.xDictHandle != dictionary || !actual.extData.empty()
+                        || !dxfW->dxfWriteRecordHasIdentity(owner, "DICTIONARY", "OBJECTS")
+                        || !dxfW->dxfWriteRecordHasOwner(shape.handle, owner)
+                        || (dictionary != 0u
+                            && (!dxfW->dxfWriteRecordHasIdentity(dictionary, "DICTIONARY", "OBJECTS")
+                                || !dxfW->dxfWriteRecordHasOwner(dictionary, shape.handle)))
                         || source.viewportCount != 0 || !source.viewportHandles.empty()
                         || actual.viewportCount != 0 || !actual.viewportHandles.empty())
                         return false;
                     std::vector<std::uint32_t> reactors;
                     for (const auto handle : source.reactorHandles) {
                         std::uint32_t mapped = 0u;
-                        if (!mapHandle(handle, mapped)) return false;
+                        if (!mapHandle(handle, mapped) || mapped == 0u
+                            || dxfW->dxfWriteRecordHandleCount(mapped) != 1u) return false;
                         reactors.push_back(mapped);
                     }
                     if (actual.reactorHandles != reactors) return false;
@@ -43489,6 +43500,20 @@ bool dx_iface::inspectLegacyLayoutBodies(
                         || !normalize(source.baseUcsHandle, actual.baseUcsHandle, expected.baseUcsHandle)
                         || !normalize(source.namedUcsHandle, actual.namedUcsHandle, expected.namedUcsHandle))
                         return false;
+                    const auto checkUcs = [this](std::uint32_t handle) {
+                        return handle == 0u || dxfW->dxfWriteRecordHasIdentity(handle, "UCS", "TABLES");
+                    };
+                    if (!checkUcs(actual.baseUcsHandle.ref) || !checkUcs(actual.namedUcsHandle.ref))
+                        return false;
+                    const std::uint32_t viewport = actual.lastActiveViewportHandle.ref;
+                    if (viewport != 0u) {
+                        const bool model = source.name == "Model";
+                        if (model ? !dxfW->dxfWriteRecordHasIdentity(viewport, "VPORT", "TABLES")
+                                  : ((!dxfW->dxfWriteRecordHasIdentity(viewport, "VIEWPORT", "BLOCKS")
+                                      && !dxfW->dxfWriteRecordHasIdentity(viewport, "VIEWPORT", "ENTITIES"))
+                                     || !dxfW->dxfWriteRecordHasOwner(viewport, blocksByLayout.at(shape.handle))))
+                            return false;
+                    }
                     expected.paperSpaceBlockRecordHandle = actual.paperSpaceBlockRecordHandle;
                     expected.viewportCount = actual.viewportCount;
                     expected.viewportHandles = actual.viewportHandles;
