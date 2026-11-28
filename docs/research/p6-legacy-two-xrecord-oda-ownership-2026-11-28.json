@@ -110,6 +110,7 @@
   "physicalDxFChecks": [
     "The independent DXF audit checks the actual 280 hard-owner and 281 cloning groups plus every physical 350/360 dictionary entry edge, for ASCII and binary outputs.",
     "All twelve guarded scratch 32-child outputs and the native LibreCAD 32-child save pass the soft-owner profile. The ODA outputs pass only the explicit hard-owner/cloning-1/group-360 profile; they fail the soft-owner audit.",
-    "Generated ASCII and binary mutations independently change hard-owner, cloning and entry role; each is refused and each original passes again. The reusable mutation harness is tools/research/check_legacy_layout_dictionary_roles.py."
+    "Generated ASCII and binary mutations independently change hard-owner, cloning and entry role; each is refused and each original passes again. The reusable mutation harness is tools/research/check_legacy_layout_dictionary_roles.py.",
+    "The audit uses explicit validation rather than Python assertions; all six negative controls and original retries pass with PYTHONOPTIMIZE=1."
   ]
 }

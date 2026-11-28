@@ -10,6 +10,11 @@ import ezdxf
 from ezdxf.lldxf.tagger import ascii_tags_loader, binary_tags_loader
 
 
+def require(condition, message):
+    if not condition:
+        raise ValueError(message)
+
+
 def physical_dictionary(path, handle, expected_entries, hard_owner, cloning, edge_code):
     raw = path.read_bytes()
     if raw.startswith(b'AutoCAD Binary DXF\r\n\x1a\x00'):
@@ -26,15 +31,15 @@ def physical_dictionary(path, handle, expected_entries, hard_owner, cloning, edg
         record = tags[index:end]
         if any(field.code == 5 and str(field.value).upper() == handle.upper() for field in record):
             records.append(record)
-    assert len(records) == 1
+    require(len(records) == 1, 'dictionary identity is missing or ambiguous')
     record = records[0]
-    assert [str(tag.value).strip() for tag in record if tag.code == 280] == [str(hard_owner)]
-    assert [str(tag.value).strip() for tag in record if tag.code == 281] == [str(cloning)]
+    require([str(tag.value).strip() for tag in record if tag.code == 280] == [str(hard_owner)], 'physical hard-owner mismatch')
+    require([str(tag.value).strip() for tag in record if tag.code == 281] == [str(cloning)], 'physical cloning mismatch')
     edges = [(record[i].value, record[i + 1].code, str(record[i + 1].value).upper())
              for i in range(len(record) - 1) if record[i].code == 3]
-    assert len(edges) == len(expected_entries)
-    assert {(name, code, target) for name, code, target in edges} == {
-        (name, edge_code, target.upper()) for name, target in expected_entries.items()}
+    require(len(edges) == len(expected_entries), 'physical dictionary entry count mismatch')
+    require({(name, code, target) for name, code, target in edges} == {
+        (name, edge_code, target.upper()) for name, target in expected_entries.items()}, 'physical dictionary edge mismatch')
 
 
 def main():
@@ -48,33 +53,33 @@ def main():
     outputs = []
     for path in args.files:
         document = ezdxf.readfile(path)
-        assert document.dxfversion == 'AC1015'
-        assert set(document.layout_names()) == {'Model', 'Layout1'}
+        require(document.dxfversion == 'AC1015', 'wrong DXF version')
+        require(set(document.layout_names()) == {'Model', 'Layout1'}, 'layout names differ')
         layout = document.layouts.get('Layout1').dxf_layout
-        assert layout.has_extension_dict
+        require(layout.has_extension_dict, 'missing extension dictionary')
         extension = layout.get_extension_dict().dictionary
-        assert extension.dxf.owner == layout.dxf.handle
+        require(extension.dxf.owner == layout.dxf.handle, 'extension owner mismatch')
         expected = [('RESEARCH', 'CHECK', 37), ('SECOND', 'OTHER', 73)]
         if args.many:
             expected += [(f'CHILD{i:02}', f'VAL{i:02}', 100 + i) for i in range(30)]
-        assert set(extension.keys()) == {name for name, _, _ in expected}
-        assert layout.get_reactors() == [layout.dxf.owner]
+        require(set(extension.keys()) == {name for name, _, _ in expected}, 'extension entries differ')
+        require(layout.get_reactors() == [layout.dxf.owner], 'layout reactor mismatch')
         children = []
         for name, text, number in expected:
             child = extension[name]
-            assert child.dxftype() == 'XRECORD' and child.dxf.owner == extension.dxf.handle
-            assert [(tag.code, tag.value) for tag in child.tags] == [(1, text), (70, number)]
+            require(child.dxftype() == 'XRECORD' and child.dxf.owner == extension.dxf.handle, 'XRECORD owner or type mismatch')
+            require([(tag.code, tag.value) for tag in child.tags] == [(1, text), (70, number)], 'XRECORD values differ')
             children.append(child.dxf.handle)
-        assert len(set(children)) == len(expected)
-        assert extension.dxf.hard_owned == args.hard_owner and extension.dxf.cloning == args.cloning
+        require(len(set(children)) == len(expected), 'XRECORD identities are aliased')
+        require(extension.dxf.hard_owned == args.hard_owner and extension.dxf.cloning == args.cloning, 'dictionary ownership or cloning mismatch')
         physical_dictionary(path, extension.dxf.handle,
                             {name: extension[name].dxf.handle for name, _, _ in expected},
                             args.hard_owner, args.cloning, args.edge_code)
         lines = list(document.modelspace().query('LINE'))
-        assert len(lines) == 1 and tuple(lines[0].dxf.start) == (1.0, 2.0, 0.0)
-        assert tuple(lines[0].dxf.end) == (4.0, 5.0, 0.0)
+        require(len(lines) == 1 and tuple(lines[0].dxf.start) == (1.0, 2.0, 0.0), 'line start differs')
+        require(tuple(lines[0].dxf.end) == (4.0, 5.0, 0.0), 'line end differs')
         audit = document.audit()
-        assert not audit.errors and not audit.fixes
+        require(not audit.errors and not audit.fixes, 'DXF audit errors or fixes')
         outputs.append({'name': path.name, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
                         'layout': layout.dxf.handle, 'dictionary': extension.dxf.handle,
                         'children': children})
