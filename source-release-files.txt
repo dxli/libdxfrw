@@ -78,6 +78,7 @@ docs/patches/freecad-p8-lwpolyline-ocs-2026-11-28.patch
 docs/patches/freecad-p8-mesh-bylayer-display-2026-11-27.patch
 docs/patches/freecad-p8-minsert-inch-negative-control-2026-11-28.patch
 docs/patches/freecad-p8-minsert-ocs-overflow-2026-11-28.patch
+docs/patches/freecad-p8-nested-3dface-units-2026-11-28.patch
 docs/patches/freecad-p8-nested-insert-layer-report-2026-11-28.patch
 docs/patches/freecad-p8-off-layer-no-group-diagnostic-2026-11-16.patch
 docs/patches/freecad-p8-original-layer-persistence-2026-11-28.patch
@@ -1460,6 +1461,7 @@ tools/research/verify_ac1027_mlinestyle_peer_spans.py
 tools/research/verify_cover_dictionary_edges.py
 tools/research/verify_cover_tablestyle_raw_spans.py
 tools/research/verify_dwg_eed_layer_writer.py
+tools/research/verify_freecad_nested_3dface_oracle.py
 tools/research/verify_legacy_dictionary_layer_output.py
 tools/research/verify_legacy_table_grid_wire.py
 tools/research/verify_libredwg_tablestyle_peer_tail.py

@@ -91,6 +91,7 @@ EXTRA_PATCHES = {
         "freecad-p8-lwpolyline-ocs-2026-11-28.patch",
         "freecad-p8-lwpolyline-closed-ocs-control-2026-11-28.patch",
         "freecad-p8-classic-polyline-ocs-2026-11-28.patch",
+        "freecad-p8-nested-3dface-units-2026-11-28.patch",
     ),
 }
 

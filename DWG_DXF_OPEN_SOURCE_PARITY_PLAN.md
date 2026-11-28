@@ -130,9 +130,11 @@ below is still open, and its linked evidence defines the present boundary.
    AC1024 array partial handoff](docs/research/p8-freecad-ac1024-minsert-partial-handoff-2026-11-28.json)
    checks six lines in both FreeCAD modes; strict conversion remains blocked by
    the HEADER suffix and partial output is not whole-file proof. For the local
-   [47-patch FreeCAD draft](docs/research/p8-freecad-classic-polyline-ocs-2026-11-28.json),
+   [48-patch FreeCAD draft](docs/research/p8-freecad-nested-3dface-units-2026-11-28.json),
    preserve named child-layer visibility and color through block composition;
-   qualify additional geometry, polyline/arc OCS and unit profiles, malformed
+   the latest test-only patch checks nested tilted, reflected 3DFACE transforms
+   in millimetres and inches against independent ezdxf matrices in both import
+   modes. Qualify additional geometry, polyline/arc OCS and unit profiles, malformed
    numeric extremes, real producer drawings and actual Draft rendering. TEXT under
    nonuniform, sheared or reflected transforms is still approximate and reported;
    implement a lossless representation only with consumer evidence. Qualify the

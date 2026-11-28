@@ -1,0 +1,54 @@
+diff --git a/src/Mod/Import/importtests/TestImportDXF.py b/src/Mod/Import/importtests/TestImportDXF.py
+index 16f65a1..b8acbfe 100644
+--- a/src/Mod/Import/importtests/TestImportDXF.py
++++ b/src/Mod/Import/importtests/TestImportDXF.py
+@@ -1416,0 +1417,49 @@ class TestImportDXF(TestImportBase):
++    def test_nested_3dface_tilted_scaled_units(self):
++        """Preserve 3D vertices through two tilted, scaled inserts in either mode."""
++        # Independently calculated with ezdxf INSERT.matrix44(), then converted
++        # to millimetres. These are WCS vertices, not block-local coordinates.
++        expected = ((15.149892735097104, 6.400813184350863, 51.628440700337116),
++                    (13.417841927528226, 3.961655595595431, 50.60349667395479),
++                    (7.801423506747567, 9.367941017339081, 56.009782095698434))
++        options = FreeCAD.ParamGet(self.option_source)
++        for mode in (2, 3):
++            options.SetInt("DxfImportMode", mode)
++            for units, factor in ((4, 1.0), (1, 25.4)):
++                with self.subTest(mode=mode, units=units):
++                    tags = [(0, "SECTION"), (2, "HEADER"), (9, "$ACADVER"), (1, "AC1021"),
++                            (9, "$INSUNITS"), (70, units), (0, "ENDSEC"),
++                            (0, "SECTION"), (2, "BLOCKS"),
++                            (0, "BLOCK"), (8, "0"), (2, "INNER"), (70, 0),
++                            (10, 1), (20, 2), (30, 3), (0, "3DFACE"), (8, "0"),
++                            (10, 1), (20, 2), (30, 3), (11, 3), (21, 2), (31, 4),
++                            (12, 1), (22, 4), (32, 4), (13, 1), (23, 4), (33, 4),
++                            (0, "ENDBLK"), (8, "0"), (0, "BLOCK"), (8, "0"),
++                            (2, "OUTER"), (70, 0), (10, 4), (20, -1), (30, 2),
++                            (0, "INSERT"), (8, "0"), (2, "INNER"),
++                            (10, 10), (20, 5), (30, 7), (41, -2), (42, 3), (43, .5),
++                            (50, 90), (210, 0), (220, 1), (230, 0),
++                            (0, "ENDBLK"), (8, "0"), (0, "ENDSEC"),
++                            (0, "SECTION"), (2, "ENTITIES"), (0, "INSERT"), (8, "0"),
++                            (2, "OUTER"), (10, 20), (20, 30), (30, 40),
++                            (41, 1.5), (42, 2), (43, .75), (50, 30),
++                            (210, 1), (220, 1), (230, 1), (0, "ENDSEC"), (0, "EOF")]
++                    path = os.path.join(self.temp_dir, f"nested-face-{mode}-{units}.dxf")
++                    with open(path, "w", encoding="ascii", newline="\n") as stream:
++                        stream.write("".join(f"{code}\n{value}\n" for code, value in tags))
++                    previous = set(self.document.Objects)
++                    stats = Import.readDXF(path, self.document.Name, True, self.option_source)
++                    self.document.recompute()
++                    outer = [obj for obj in self.document.Objects if obj not in previous
++                             and obj.Name.startswith("Link_OUTER")]
++                    self.assertEqual(len(outer), 1)
++                    faces = outer[0].Shape.Faces
++                    self.assertEqual(len(faces), 1)
++                    vertices = [vertex.Point for vertex in faces[0].Vertexes]
++                    self.assertEqual(len(vertices), 3)
++                    for point in expected:
++                        wanted = FreeCAD.Vector(*(coordinate * factor for coordinate in point))
++                        self.assertTrue(any((actual - wanted).Length < 1e-6 for actual in vertices))
++                    self.assertEqual(stats["finalScalingFactor"], factor)
++                    self.assertEqual(stats["entityCounts"].get("3DFACE"), 1)
++                    self.assertFalse(stats["unsupportedFeatures"])
++
