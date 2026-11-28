@@ -95,10 +95,16 @@
   },
   "checks": [
     "Independent LibreDWG discovery and physical dictionary frame/CRC walkers observe the distinct ownership encodings. The prior no-EED/soft-owner observer refuses these source profiles.",
-    "Both ODA-resaved DWGs are refused by the production adapter without changing destination in ASCII and binary. ezdxf 1.4.5 verifies both children, values, ownership, reactor and geometry with zero audit errors/fixes in each ODA conversion."
+    "Both ODA-resaved DWGs are refused by the production adapter without changing destination in ASCII and binary. ezdxf 1.4.5 verifies both children, values, owner references, reactor and geometry with zero audit errors/fixes in each ODA conversion."
   ],
   "limits": [
     "ODA is an independent converter, not an AutoCAD/ObjectARX native cloning witness. The R13 marker and R14 hard-owner byte cannot by themselves qualify clone semantics or production export.",
-    "Source input is an ACadRust-generated diagnostic profile; the ODA outputs are derived from it, not source-distinct producer-authored CAD drawings. No DWG/DXF files are committed."
-  ]
+    "Source input is an ACadRust-generated diagnostic profile; the ODA outputs are derived from it, not source-distinct producer-authored CAD drawings. No DWG/DXF files are committed.",
+    "ODA changes the observed dictionary hard-owner flag, cloning flag and entry handle groups compared with the selected source projection; do not use these conversions as an ownership-equivalence witness."
+  ],
+  "ownershipProjection": {
+    "generatedSource": "The selected source dictionary has the observed soft-owner entry handle role and no hard-owner marker; the scratch libdxfrw R2000 projection emits physical group 280=0, group 281=0 and entry groups 350.",
+    "libreCadSave": "The tested native LibreCAD save preserves physical 280=0, 281=0 and both 350 entry roles.",
+    "odaInitialAndResavedOutputs": "Both initial ODA conversions and both reopen conversions physically emit 280=1, 281=1 and both 360 entry roles. ODA changes ownership/cloning representation; peer preservation of child names and values is not proof of equivalent ownership or cloning semantics."
+  }
 }
