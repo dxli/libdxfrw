@@ -37,6 +37,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             value.entries.push(XRecordEntry::string(1, "CHECK"));
             value.entries.push(XRecordEntry::int16(70, 37));
         }
+        if std::env::var_os("AC1012_WITNESS_LAYOUT_TWO_XRECORDS").is_some() {
+            let second = reopened.ensure_xrecord(owner, "SECOND");
+            if let Some(ObjectType::XRecord(value)) = reopened.objects.get_mut(&second) {
+                value.entries.push(XRecordEntry::string(1, "OTHER"));
+                value.entries.push(XRecordEntry::int16(70, 73));
+            }
+        }
         Some((owner, dictionary, record))
     } else { None };
     let paper_xdictionary = if std::env::var_os("AC1012_WITNESS_LAYOUT_XDICTIONARY").is_some() {
@@ -119,6 +126,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 assert_eq!(layout.xdictionary_handle, Some(dictionary));
                 assert_eq!(extension.owner, owner);
                 assert_eq!(extension.get("RESEARCH"), Some(record));
+                if std::env::var_os("AC1012_WITNESS_LAYOUT_TWO_XRECORDS").is_some() {
+                    let second = extension.get("SECOND").ok_or("missing second XRECORD")?;
+                    match readback.objects.get(&second) {
+                        Some(ObjectType::XRecord(value)) => {
+                            assert_eq!(value.owner, dictionary);
+                            assert_eq!(value.entries, vec![XRecordEntry::string(1, "OTHER"), XRecordEntry::int16(70, 73)]);
+                        }
+                        _ => return Err("missing second XRECORD body".into()),
+                    }
+                }
                 assert_eq!(value.owner, dictionary);
                 assert_eq!(value.entries.len(), 2);
                 assert_eq!(value.entries[0], XRecordEntry::string(1, "CHECK"));

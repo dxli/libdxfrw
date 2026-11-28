@@ -1,0 +1,426 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p6-legacy-layout-two-xrecord-graph-2026-11-28",
+  "supportClaimEffect": "none",
+  "implementation": "Allow up to two entries in a legacy LAYOUT extension dictionary when each entry independently satisfies the existing generation-bound dictionary membership, unique XRECORD identity, class/frame census, source wire and staged output checks. Production legacy layout export refusal is unchanged.",
+  "sourceAudits": [
+    {
+      "schema": 1,
+      "sourceSha256": "6c73f1df9b4419802263542b1362702685b3dac6a148006157a547faf14a7bf6",
+      "version": "r13",
+      "layout": 47,
+      "dictionary": {
+        "handle": 51,
+        "frameSha256": "705bd4af6be92c474842672dd941d829a6e360f98bced24bf39a4a04dd987731",
+        "frameOffset": 4855,
+        "frameSize": 33,
+        "bodyEndBit": 204,
+        "crcValid": true,
+        "nextFrame": {
+          "offset": 4892,
+          "size": 27,
+          "type": 521,
+          "crcValid": true
+        },
+        "r14Byte": null,
+        "owner": 47,
+        "reactors": [],
+        "extension": {
+          "role": 3,
+          "length": 0,
+          "value": 0
+        },
+        "eed": [],
+        "entryCount": 2
+      },
+      "records": [
+        {
+          "key": "RESEARCH",
+          "handle": 52,
+          "offset": 4892,
+          "size": 27,
+          "crcValid": true,
+          "following": {
+            "offset": 4923,
+            "size": 27,
+            "type": 521,
+            "crcValid": true
+          },
+          "bodyEndBit": 192,
+          "payloadStartBit": 80,
+          "lengthBit": 96,
+          "length": 5,
+          "codepage": 30,
+          "followingGroup70": 37,
+          "owner": {
+            "role": 4,
+            "length": 1,
+            "value": 51
+          },
+          "extension": {
+            "role": 3,
+            "length": 0,
+            "value": 0
+          },
+          "frameSha256": "d12e321c218f1ee55ffddd3b38e38e90b7f08be1c6b68fbe8dde9e602b1edbce"
+        },
+        {
+          "key": "SECOND",
+          "handle": 53,
+          "offset": 4923,
+          "size": 27,
+          "crcValid": true,
+          "following": {
+            "offset": 4954,
+            "size": 11,
+            "type": 42,
+            "crcValid": true
+          },
+          "bodyEndBit": 192,
+          "payloadStartBit": 80,
+          "lengthBit": 96,
+          "length": 5,
+          "codepage": 30,
+          "followingGroup70": 73,
+          "owner": {
+            "role": 4,
+            "length": 1,
+            "value": 51
+          },
+          "extension": {
+            "role": 3,
+            "length": 0,
+            "value": 0
+          },
+          "frameSha256": "4789630b86c5dd211389e78f4d8ed7174209eb7b6d1a89ee4a4933a24c35dea6"
+        }
+      ],
+      "supportClaimEffect": "none"
+    },
+    {
+      "schema": 1,
+      "sourceSha256": "3c8c1aab68a233dc70237b6d07da72dc6fa58e31b672a12b894a94e9cda5c685",
+      "version": "r14",
+      "layout": 47,
+      "dictionary": {
+        "handle": 51,
+        "frameSha256": "f715b56878200f4eaa80b4814d872ae4d572f9e5a2df99eaaf78708a3fd2d835",
+        "frameOffset": 4869,
+        "frameSize": 34,
+        "bodyEndBit": 212,
+        "crcValid": true,
+        "nextFrame": {
+          "offset": 4907,
+          "size": 27,
+          "type": 521,
+          "crcValid": true
+        },
+        "r14Byte": 0,
+        "owner": 47,
+        "reactors": [],
+        "extension": {
+          "role": 3,
+          "length": 0,
+          "value": 0
+        },
+        "eed": [],
+        "entryCount": 2
+      },
+      "records": [
+        {
+          "key": "RESEARCH",
+          "handle": 52,
+          "offset": 4907,
+          "size": 27,
+          "crcValid": true,
+          "following": {
+            "offset": 4938,
+            "size": 27,
+            "type": 521,
+            "crcValid": true
+          },
+          "bodyEndBit": 192,
+          "payloadStartBit": 80,
+          "lengthBit": 96,
+          "length": 5,
+          "codepage": 30,
+          "followingGroup70": 37,
+          "owner": {
+            "role": 4,
+            "length": 1,
+            "value": 51
+          },
+          "extension": {
+            "role": 3,
+            "length": 0,
+            "value": 0
+          },
+          "frameSha256": "d12e321c218f1ee55ffddd3b38e38e90b7f08be1c6b68fbe8dde9e602b1edbce"
+        },
+        {
+          "key": "SECOND",
+          "handle": 53,
+          "offset": 4938,
+          "size": 27,
+          "crcValid": true,
+          "following": {
+            "offset": 4969,
+            "size": 12,
+            "type": 42,
+            "crcValid": true
+          },
+          "bodyEndBit": 192,
+          "payloadStartBit": 80,
+          "lengthBit": 96,
+          "length": 5,
+          "codepage": 30,
+          "followingGroup70": 73,
+          "owner": {
+            "role": 4,
+            "length": 1,
+            "value": 51
+          },
+          "extension": {
+            "role": 3,
+            "length": 0,
+            "value": 0
+          },
+          "frameSha256": "4789630b86c5dd211389e78f4d8ed7174209eb7b6d1a89ee4a4933a24c35dea6"
+        }
+      ],
+      "supportClaimEffect": "none"
+    }
+  ],
+  "producerManifests": [
+    {
+      "profile": "ac1012-rooted-two-xrecords",
+      "schema": "libdxfrw.ac1012-acadrust-rooted-line.v1",
+      "ok": true,
+      "producerCommit": "d7c71f5032fc2d8844142ad7df7a6f0ee5ac535f",
+      "generatorSha256": "0b3fc64546a3ef845a4eb7fcb6504750541619ff69ec4b1ee31d5753d92bdd9c",
+      "cargoLockSha256": "76b17a86b44fb75aea3748ee119286139e17abc462554c19059610c83f01f959",
+      "cargoVersion": "cargo 1.100.0 (3acc79c0c 2026-11-05) (Homebrew)",
+      "rustVersion": "rustc 1.100.0 (0ef1bc386 2026-11-09) (Homebrew)",
+      "samples": {
+        "r13-line.dwg": {
+          "sha256": "426686ca5fd65169e6d4ed007c106b0a2271a47d9461a7f5fc0f2942c5a1b41a",
+          "bytes": 5083
+        },
+        "r13-line-rooted-resaved.dwg": {
+          "sha256": "6c73f1df9b4419802263542b1362702685b3dac6a148006157a547faf14a7bf6",
+          "bytes": 5227
+        }
+      },
+      "producerOutput": "",
+      "supportClaimEffect": "none"
+    },
+    {
+      "profile": "ac1014-rooted-two-xrecords",
+      "schema": "libdxfrw.ac1014-acadrust-rooted-line.v1",
+      "ok": true,
+      "producerCommit": "d7c71f5032fc2d8844142ad7df7a6f0ee5ac535f",
+      "generatorSha256": "0b3fc64546a3ef845a4eb7fcb6504750541619ff69ec4b1ee31d5753d92bdd9c",
+      "cargoLockSha256": "76b17a86b44fb75aea3748ee119286139e17abc462554c19059610c83f01f959",
+      "cargoVersion": "cargo 1.100.0 (3acc79c0c 2026-11-05) (Homebrew)",
+      "rustVersion": "rustc 1.100.0 (0ef1bc386 2026-11-09) (Homebrew)",
+      "samples": {
+        "r14-line.dwg": {
+          "sha256": "e164e012d5ea5e1a62d99e6038d2f514bdeba902fc3bbf453e44d22f72a855a1",
+          "bytes": 5101
+        },
+        "r14-line-rooted-resaved.dwg": {
+          "sha256": "3c8c1aab68a233dc70237b6d07da72dc6fa58e31b672a12b894a94e9cda5c685",
+          "bytes": 5246
+        }
+      },
+      "producerOutput": "",
+      "supportClaimEffect": "none"
+    }
+  ],
+  "checks": [
+    "Generated and producer-reopened R13 and R14 drawings with distinct RESEARCH/CHECK/37 and SECOND/OTHER/73 records. LibreDWG plus an independent bit/frame walker checked class, CRCs, handles, dictionary roles, values, following frames and changed-length rejection with original retry.",
+    "The actual adapter source-binding test mutates the parent, each child value and raw frame, each edge, class, duplicate name/target, and an extra third entry; it verifies refusal, unchanged destination and corrected retry. A prior one-entry R13 control also passes.",
+    "The scratch-only legacy guard bypass exercises staged dictionary, XRECORD and role failures followed by same-adapter retries in ASCII and binary for R13 and R14. Independent ezdxf 1.4.5 readback validates all sixteen resulting graphs, entity geometry, and zero audit errors/fixes.",
+    "A second scratch-only fault targets only the OTHER child, proving its staged body mismatch is detected independently of the first child; unchanged destinations and corrected retries pass for both releases and encodings.",
+    "Production adapter rejects both drawings in ASCII and binary without changing destination. Six focused CTests pass. A second pinned R13 generator run is byte-identical."
+  ],
+  "dxfAudit": {
+    "schema": 1,
+    "ezdxf": "1.4.5",
+    "outputs": [
+      {
+        "name": "ascii.dxf",
+        "sha256": "677382ec90bf12ddf384b16c24a9112f8b7dc920cfb35ee4bd06aec3d67b24cd",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      },
+      {
+        "name": "binary.dxf",
+        "sha256": "a979ca27388049785dc06958f9dd1a6048acf0eb87eee324a41e473c9c3fe2ab",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      },
+      {
+        "name": "ascii.dxf",
+        "sha256": "677382ec90bf12ddf384b16c24a9112f8b7dc920cfb35ee4bd06aec3d67b24cd",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      },
+      {
+        "name": "binary.dxf",
+        "sha256": "a979ca27388049785dc06958f9dd1a6048acf0eb87eee324a41e473c9c3fe2ab",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      },
+      {
+        "name": "ascii.dxf",
+        "sha256": "677382ec90bf12ddf384b16c24a9112f8b7dc920cfb35ee4bd06aec3d67b24cd",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      },
+      {
+        "name": "binary.dxf",
+        "sha256": "a979ca27388049785dc06958f9dd1a6048acf0eb87eee324a41e473c9c3fe2ab",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      },
+      {
+        "name": "ascii.dxf",
+        "sha256": "677382ec90bf12ddf384b16c24a9112f8b7dc920cfb35ee4bd06aec3d67b24cd",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      },
+      {
+        "name": "binary.dxf",
+        "sha256": "a979ca27388049785dc06958f9dd1a6048acf0eb87eee324a41e473c9c3fe2ab",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      },
+      {
+        "name": "ascii.dxf",
+        "sha256": "677382ec90bf12ddf384b16c24a9112f8b7dc920cfb35ee4bd06aec3d67b24cd",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      },
+      {
+        "name": "binary.dxf",
+        "sha256": "a979ca27388049785dc06958f9dd1a6048acf0eb87eee324a41e473c9c3fe2ab",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      },
+      {
+        "name": "ascii.dxf",
+        "sha256": "677382ec90bf12ddf384b16c24a9112f8b7dc920cfb35ee4bd06aec3d67b24cd",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      },
+      {
+        "name": "binary.dxf",
+        "sha256": "a979ca27388049785dc06958f9dd1a6048acf0eb87eee324a41e473c9c3fe2ab",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      }
+    ],
+    "supportClaimEffect": "none"
+  },
+  "limits": [
+    "Two selected ASCII group-1/short group-70 XRECORD children only; no child EED, reactors or other references. The third-entry profile remains refused.",
+    "Scratch bypass is diagnostic only; native cloning, changed native targets, whole-file closure and general export qualification remain open.",
+    "No drawing files are committed."
+  ],
+  "secondChildDxfAudit": {
+    "schema": 1,
+    "ezdxf": "1.4.5",
+    "outputs": [
+      {
+        "name": "ascii.dxf",
+        "sha256": "677382ec90bf12ddf384b16c24a9112f8b7dc920cfb35ee4bd06aec3d67b24cd",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      },
+      {
+        "name": "binary.dxf",
+        "sha256": "a979ca27388049785dc06958f9dd1a6048acf0eb87eee324a41e473c9c3fe2ab",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      },
+      {
+        "name": "ascii.dxf",
+        "sha256": "677382ec90bf12ddf384b16c24a9112f8b7dc920cfb35ee4bd06aec3d67b24cd",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      },
+      {
+        "name": "binary.dxf",
+        "sha256": "a979ca27388049785dc06958f9dd1a6048acf0eb87eee324a41e473c9c3fe2ab",
+        "layout": "2F",
+        "dictionary": "33",
+        "children": [
+          "34",
+          "35"
+        ]
+      }
+    ],
+    "supportClaimEffect": "none"
+  }
+}

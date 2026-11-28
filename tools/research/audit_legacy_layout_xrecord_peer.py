@@ -21,28 +21,28 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def read_record(frame, type_code, handle, parent):
+def read_record(frame, type_code, handle, parent, text=b'CHECK', short=37):
     bits = Bits(frame)
     require(bits.bs() == type_code and bits.handle(0, own=True)['value'] == handle,
             'XRECORD frame identity mismatch')
     require(bits.bs() == 0, 'unexpected XRECORD EED')
     end = bits.little(4)
     reactors, size = bits.bl(), bits.bl()
-    require(reactors == 0 and size == 14, 'unexpected reactor or payload size')
+    require(reactors == 0 and size == len(text) + 9, 'unexpected reactor or payload size')
     start = bits.position
     require(bits.little(2) == 1, 'unexpected first group')
     length_bit = bits.position
     length, page = bits.little(2), bits.take(8)
-    require(length == 5 and page == 30, 'unexpected counted-text header')
-    require(bytes(bits.take(8) for _ in range(length)) == b'CHECK', 'unexpected text')
-    require(bits.little(2) == 70 and bits.little(2) == 37, 'unexpected following short')
+    require(length == len(text) and page == 30, 'unexpected counted-text header')
+    require(bytes(bits.take(8) for _ in range(length)) == text, 'unexpected text')
+    require(bits.little(2) == 70 and bits.little(2) == short, 'unexpected following short')
     require(bits.position == end and bits.position - start == 8 * size, 'payload boundary mismatch')
     owner = bits.handle(4, handle)
     extension = bits.handle(3, handle)
     require(owner['value'] == parent and extension['value'] == 0
             and len(frame) * 8 - bits.position < 8, 'common handle tail mismatch')
     return {'bodyEndBit': end, 'payloadStartBit': start, 'lengthBit': length_bit,
-            'length': length, 'codepage': page, 'followingGroup70': 37,
+            'length': length, 'codepage': page, 'followingGroup70': short,
             'owner': owner, 'extension': extension,
             'frameSha256': hashlib.sha256(frame).hexdigest()}
 

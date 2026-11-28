@@ -1324,6 +1324,8 @@ EXTRA_DIST = \
     tools/research/audit_canonical_bulk_layers.py \
     tools/research/audit_dxf_dictionary_cloning.py \
     tools/research/audit_dxf_public_writer_test_mentions.py \
+    tools/research/audit_legacy_layout_two_xrecords.py \
+    tools/research/audit_legacy_layout_two_xrecords_dxf.py \
     tools/research/audit_legacy_layout_xrecord_peer.py \
     tools/research/audit_libredwg_sortents_spans.py \
     tools/research/audit_mlinestyle_source_profile.py \

@@ -32968,7 +32968,7 @@ bool dx_iface::hasBoundLegacyLayoutSources() const noexcept {
                 }
                 if (extension == nullptr || !extensions.insert(extension->handle).second
                     || extension->parentHandle != layout.handle
-                    || extension->m_entries.size() > 1u || !extension->extData.empty()
+                    || extension->m_entries.size() > 2u || !extension->extData.empty()
                     || !wire(*extension)) return false;
                 for (const auto& entry : extension->m_entries) {
                     const DRW_XRecord* record = nullptr;

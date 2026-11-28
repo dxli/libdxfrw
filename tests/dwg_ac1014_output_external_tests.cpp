@@ -1692,20 +1692,21 @@ bool checkLegacyLayoutGraph(const std::string& input) {
         if (!ok || layout.xDictHandle == 0u) continue;
         auto extension = std::find_if(data.dictionaries.begin(), data.dictionaries.end(),
             [&layout](const DRW_Dictionary& item) { return item.handle == layout.xDictHandle; });
-        if (extension == data.dictionaries.end() || extension->m_entries.size() > 1u) return false;
+        if (extension == data.dictionaries.end() || extension->m_entries.size() > 2u) return false;
         auto& extensionBytes = DxIfaceStandardDwgCaptureTestAccess::dictionaryBytes(data, extension->handle);
         if (extensionBytes.empty()) return false;
         ok = check([&]() { extension->parentHandle ^= 1u; })
             && check([&]() { extensionBytes.front() ^= 0x80u; });
-        if (ok && !extension->m_entries.empty()) {
-            const auto handle = extension->m_entries.front().m_handle;
+        for (auto& entry : extension->m_entries) {
+            if (!ok) break;
+            const auto handle = entry.m_handle;
             auto record = std::find_if(data.xRecords.begin(), data.xRecords.end(),
                 [handle](const DRW_XRecord& item) { return item.handle == handle; });
             const auto* raw = DxIfaceStandardDwgCaptureTestAccess::opaqueFrame(data, handle);
             if (record == data.xRecords.end() || raw == nullptr || raw->m_rawBytes.empty()) return false;
             auto& rawBytes = DxIfaceStandardDwgCaptureTestAccess::layoutBytes(data, handle);
             auto changed = DRW_Variant(70, std::int32_t{38});
-            if (record->m_values.size() != 2u) return false;
+            if (record->m_values.size() != 2u || record->m_dataEntries.size() != 2u) return false;
             auto xrecordClass = std::find_if(data.dwgClassCoverage.m_entries.begin(),
                 data.dwgClassCoverage.m_entries.end(), [](const DRW_DwgClassCoverageEntry& row) {
                     return row.m_recordName == "XRECORD";
@@ -1713,9 +1714,19 @@ bool checkLegacyLayoutGraph(const std::string& input) {
             if (xrecordClass == data.dwgClassCoverage.m_entries.end()) return false;
             ok = check([&]() { record->parentHandle ^= 1u; })
                 && check([&]() { std::swap(record->m_values[1], changed); })
+                && check([&]() { std::swap(record->m_dataEntries[1], changed); })
                 && check([&]() { rawBytes.front() ^= 0x80u; })
-                && check([&]() { extension->m_entries.front().m_handle ^= 1u; })
+                && check([&]() { entry.m_handle ^= 1u; })
                 && check([&]() { xrecordClass->m_classNumber ^= 1u; });
+        }
+        if (ok && extension->m_entries.size() == 2u) {
+            auto expanded = extension->m_entries;
+            expanded.push_back(expanded.front());
+            auto duplicateName = extension->m_entries.front().m_name;
+            auto duplicateTarget = extension->m_entries.front().m_handle;
+            ok = check([&]() { std::swap(extension->m_entries, expanded); })
+                && check([&]() { std::swap(extension->m_entries.back().m_name, duplicateName); })
+                && check([&]() { std::swap(extension->m_entries.back().m_handle, duplicateTarget); });
         }
     }
     if (ok) adapter.legacyBlockRecordSourceFailed();
