@@ -69,6 +69,9 @@ EXTRA_TESTS = {
         "test_lwpolyline_closed_bulge_ocs",
         "test_classic_polyline_2d_ocs_and_3d_wcs",
         "test_nested_3dface_tilted_scaled_units",
+        "test_insert_invalid_transform_then_valid",
+        "test_insert_unit_overflow_then_valid",
+        "test_nested_insert_invalid_transform_then_valid",
     ),
 }
 

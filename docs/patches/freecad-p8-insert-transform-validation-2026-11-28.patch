@@ -1,0 +1,149 @@
+diff --git a/src/Mod/Import/App/dxf/dxf.cpp b/src/Mod/Import/App/dxf/dxf.cpp
+index ac1accf..5510d6a 100644
+--- a/src/Mod/Import/App/dxf/dxf.cpp
++++ b/src/Mod/Import/App/dxf/dxf.cpp
+@@ -2849,5 +2848,0 @@ bool CDxfRead::ReadInsert()
+-    Setup3DVectorAttribute(ePrimaryPoint, center);
+-    SetupValueAttribute(eFloat2, scale.x);
+-    SetupValueAttribute(eFloat3, scale.y);
+-    SetupValueAttribute(eFloat4, scale.z);
+-    SetupValueAttribute(eAngleDegrees1, rotationDegrees);
+@@ -2854,0 +2850,4 @@ bool CDxfRead::ReadInsert()
++    // Process transform values strictly: accepting a numeric prefix, repeated
++    // field, or singular scale would silently place different geometry.
++    bool invalidTransform = false;
++    bool seenTransform[7] = {};
+@@ -2866,0 +2866,21 @@ bool CDxfRead::ReadInsert()
++        const int transformField = code == 10 ? 0 : code == 20 ? 1 : code == 30 ? 2
++                                 : code == 41 ? 3 : code == 42 ? 4 : code == 43 ? 5
++                                 : code == 50 ? 6 : -1;
++        if (transformField >= 0) {
++            double value = 0;
++            if (seenTransform[transformField] || !parseCompleteNumber(m_record_data, value)
++                || !std::isfinite(value)) {
++                invalidTransform = true;
++            }
++            else {
++                if (transformField < 3) value = mm(value);
++                if (!std::isfinite(value)) invalidTransform = true;
++                else {
++                    double* values[] = {&center.x, &center.y, &center.z,
++                                        &scale.x, &scale.y, &scale.z, &rotationDegrees};
++                    *values[transformField] = value;
++                }
++            }
++            seenTransform[transformField] = true;
++            continue;
++        }
+@@ -2910,0 +2931,5 @@ bool CDxfRead::ReadInsert()
++    if (invalidTransform || scale.x == 0.0 || scale.y == 0.0 || scale.z == 0.0
++        || !std::isfinite(Base::toRadians(rotationDegrees))) {
++        UnsupportedFeature("INSERT invalid transform");
++        return true;
++    }
+@@ -2925,5 +2949,0 @@ bool CDxfRead::ReadInsert()
+-    if (!std::isfinite(rotation) || !std::isfinite(scale.x) || !std::isfinite(scale.y)
+-        || !std::isfinite(scale.z)) {
+-        UnsupportedFeature("INSERT invalid array parameters");
+-        return true;
+-    }
+diff --git a/src/Mod/Import/importtests/TestImportDXF.py b/src/Mod/Import/importtests/TestImportDXF.py
+index b8acbfe..b6f6bf0 100644
+--- a/src/Mod/Import/importtests/TestImportDXF.py
++++ b/src/Mod/Import/importtests/TestImportDXF.py
+@@ -1416,0 +1417,95 @@ class TestImportDXF(TestImportBase):
++    def test_insert_invalid_transform_then_valid(self):
++        """Reject malformed INSERT transforms without losing the next valid INSERT."""
++        options = FreeCAD.ParamGet(self.option_source)
++        cases = ([(10, "2junk")], [(20, "oops")], [(30, "1e999")],
++                 [(41, "2junk")], [(42, "oops")], [(43, "1e999")],
++                 [(50, "45junk")], [(10, 1), (10, 2)], [(41, 1), (41, 2)],
++                 [(50, 0), (50, 90)], [(41, 0)], [(42, 0)], [(43, 0)])
++        for mode in (2, 3):
++            options.SetInt("DxfImportMode", mode)
++            for index, invalid_tags in enumerate(cases):
++                with self.subTest(mode=mode, index=index):
++                    tags = [(0, "SECTION"), (2, "HEADER"), (9, "$ACADVER"), (1, "AC1021"),
++                            (9, "$INSUNITS"), (70, 4), (0, "ENDSEC"),
++                            (0, "SECTION"), (2, "BLOCKS"), (0, "BLOCK"), (8, "0"),
++                            (2, "B"), (70, 0), (10, 0), (20, 0), (30, 0),
++                            (0, "LINE"), (8, "0"), (10, 0), (20, 0), (30, 0),
++                            (11, 2), (21, 0), (31, 0), (0, "ENDBLK"), (8, "0"),
++                            (0, "ENDSEC"), (0, "SECTION"), (2, "ENTITIES"),
++                            (0, "INSERT"), (8, "0"), (2, "B")]
++                    tags.extend(invalid_tags)
++                    tags.extend([(0, "INSERT"), (8, "0"), (2, "B"), (10, 10), (20, 0),
++                                 (30, 0), (41, 2), (0, "ENDSEC"), (0, "EOF")])
++                    path = os.path.join(self.temp_dir, f"invalid-transform-{mode}-{index}.dxf")
++                    with open(path, "w", encoding="ascii", newline="\n") as stream:
++                        stream.write("".join(f"{code}\n{value}\n" for code, value in tags))
++                    previous = set(self.document.Objects)
++                    stats = Import.readDXF(path, self.document.Name, True, self.option_source)
++                    self.document.recompute()
++                    links = [obj for obj in self.document.Objects if obj not in previous
++                             and obj.Name.startswith("Link_B")]
++                    self.assertIn("INSERT invalid transform", stats["unsupportedFeatures"])
++                    self.assertEqual(len(links), 1)
++                    self.assertEqual(len(links[0].Shape.Edges), 1)
++                    points = sorted(v.Point.x for v in links[0].Shape.Edges[0].Vertexes)
++                    self.assertAlmostEqual(points[0], 10)
++                    self.assertAlmostEqual(points[1], 14)
++
++    def test_insert_unit_overflow_then_valid(self):
++        """Reject finite inch coordinates that overflow after conversion to millimetres."""
++        tags = [(0, "SECTION"), (2, "HEADER"), (9, "$ACADVER"), (1, "AC1021"),
++                (9, "$INSUNITS"), (70, 1), (0, "ENDSEC"), (0, "SECTION"), (2, "BLOCKS"),
++                (0, "BLOCK"), (8, "0"), (2, "B"), (70, 0), (10, 0), (20, 0), (30, 0),
++                (0, "LINE"), (8, "0"), (10, 0), (20, 0), (30, 0), (11, 1), (21, 0), (31, 0),
++                (0, "ENDBLK"), (8, "0"), (0, "ENDSEC"), (0, "SECTION"), (2, "ENTITIES"),
++                (0, "INSERT"), (8, "0"), (2, "B"), (10, "1e308"),
++                (0, "INSERT"), (8, "0"), (2, "B"), (10, " +1e0 "), (41, " +2e0 "),
++                (0, "ENDSEC"), (0, "EOF")]
++        path = os.path.join(self.temp_dir, "insert-unit-overflow.dxf")
++        with open(path, "w", encoding="ascii", newline="\n") as stream:
++            stream.write("".join(f"{code}\n{value}\n" for code, value in tags))
++        options = FreeCAD.ParamGet(self.option_source)
++        for mode in (2, 3):
++            with self.subTest(mode=mode):
++                options.SetInt("DxfImportMode", mode)
++                previous = set(self.document.Objects)
++                stats = Import.readDXF(path, self.document.Name, True, self.option_source)
++                self.document.recompute()
++                links = [obj for obj in self.document.Objects if obj not in previous
++                         and obj.Name.startswith("Link_B")]
++                self.assertIn("INSERT invalid transform", stats["unsupportedFeatures"])
++                self.assertEqual(len(links), 1)
++                points = sorted(v.Point.x for v in links[0].Shape.Edges[0].Vertexes)
++                self.assertAlmostEqual(points[0], 25.4)
++                self.assertAlmostEqual(points[1], 76.2)
++
++    def test_nested_insert_invalid_transform_then_valid(self):
++        """A bad nested transform must not suppress the next child in the block."""
++        tags = [(0, "SECTION"), (2, "HEADER"), (9, "$ACADVER"), (1, "AC1021"),
++                (9, "$INSUNITS"), (70, 4), (0, "ENDSEC"), (0, "SECTION"), (2, "BLOCKS"),
++                (0, "BLOCK"), (8, "0"), (2, "INNER"), (70, 0), (10, 0), (20, 0), (30, 0),
++                (0, "LINE"), (8, "0"), (10, 0), (20, 0), (30, 0), (11, 2), (21, 0), (31, 0),
++                (0, "ENDBLK"), (8, "0"), (0, "BLOCK"), (8, "0"), (2, "OUTER"), (70, 0),
++                (10, 0), (20, 0), (30, 0), (0, "INSERT"), (8, "0"), (2, "INNER"),
++                (41, "2junk"), (0, "INSERT"), (8, "0"), (2, "INNER"), (10, 5), (41, 2),
++                (0, "ENDBLK"), (8, "0"), (0, "ENDSEC"), (0, "SECTION"), (2, "ENTITIES"),
++                (0, "INSERT"), (8, "0"), (2, "OUTER"), (10, 10), (0, "ENDSEC"), (0, "EOF")]
++        path = os.path.join(self.temp_dir, "nested-invalid-transform.dxf")
++        with open(path, "w", encoding="ascii", newline="\n") as stream:
++            stream.write("".join(f"{code}\n{value}\n" for code, value in tags))
++        options = FreeCAD.ParamGet(self.option_source)
++        for mode in (2, 3):
++            with self.subTest(mode=mode):
++                options.SetInt("DxfImportMode", mode)
++                previous = set(self.document.Objects)
++                stats = Import.readDXF(path, self.document.Name, True, self.option_source)
++                self.document.recompute()
++                outer = [obj for obj in self.document.Objects if obj not in previous
++                         and obj.Name.startswith("Link_OUTER")]
++                self.assertIn("INSERT invalid transform", stats["unsupportedFeatures"])
++                self.assertEqual(len(outer), 1)
++                self.assertEqual(len(outer[0].Shape.Edges), 1)
++                points = sorted(v.Point.x for v in outer[0].Shape.Edges[0].Vertexes)
++                self.assertAlmostEqual(points[0], 15)
++                self.assertAlmostEqual(points[1], 19)
++
