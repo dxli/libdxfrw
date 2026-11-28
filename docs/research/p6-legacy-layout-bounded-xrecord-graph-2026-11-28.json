@@ -185,5 +185,15 @@
   "limits": [
     "The selected XRECORD payload is ASCII group 1 followed by group 70, with no child EED, reactor, extension or object references. Hard-owner source profiles, larger graphs and other payloads remain refused.",
     "The scratch bypass is diagnostic only; whole-file closure and native AutoCAD clone behavior are not qualified. No DWG or DXF files are committed."
-  ]
+  ],
+  "nativeLibreCAD32": {
+    "consumerCommit": "3ae13642",
+    "codecCommit": "3d864de9b",
+    "applicationSha256": "6cfd9b484d17522057946bdfacda966e49420897a8fcd7113431aff56b11bb4e",
+    "sharedCodecSha256": "b8df75b0a8faa0449bf0e5ee937510867260af06801bdbd5d7ebc538f7d16b66",
+    "inputDxfSha256": "10dcdb7ab348e90b1e2ed7ab1a4cf38e71e5d0ef5970b2137be0fa5a9ea7122a",
+    "savedDxfSha256": "e503c4f63a6a0104d219f3169ebad12605d43646a81f2b5e0b99f700e6c8bc05",
+    "observation": "The settings-isolated macOS consumer opened and saved the R13-derived R2000 diagnostic DXF. Independent ezdxf readback confirms all 32 distinct entries, child ownership, values, layout reactor and line geometry with zero audit errors/fixes. The shared codec does not include later adapter-only commits.",
+    "limits": "The source is generated through a scratch-only production-guard bypass. No native cloning, general interoperability or release support is established."
+  }
 }
