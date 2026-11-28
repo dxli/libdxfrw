@@ -93,6 +93,7 @@ EXTRA_PATCHES = {
         "freecad-p8-classic-polyline-ocs-2026-11-28.patch",
         "freecad-p8-nested-3dface-units-2026-11-28.patch",
         "freecad-p8-insert-transform-validation-2026-11-28.patch",
+        "freecad-p8-direct-insert-overflow-preflight-2026-11-28.patch",
     ),
 }
 

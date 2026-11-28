@@ -130,17 +130,19 @@ below is still open, and its linked evidence defines the present boundary.
    AC1024 array partial handoff](docs/research/p8-freecad-ac1024-minsert-partial-handoff-2026-11-28.json)
    checks six lines in both FreeCAD modes; strict conversion remains blocked by
    the HEADER suffix and partial output is not whole-file proof. For the local
-   [49-patch FreeCAD draft](docs/research/p8-freecad-insert-transform-validation-2026-11-28.json),
+   [50-patch FreeCAD draft](docs/research/p8-freecad-direct-insert-overflow-preflight-2026-11-28.json),
    preserve named child-layer visibility and color through block composition;
    the [nested 3DFACE test](docs/research/p8-freecad-nested-3dface-units-2026-11-28.json) checks tilted, reflected transforms in
    millimetres and inches against independent ezdxf matrices in both import
    modes. The latest importer change rejects malformed, repeated, overflowed or
    singular INSERT transforms with same-file retry; requalify this changed
-   candidate on Linux and Windows. The [finite-scale overflow control](docs/research/p8-freecad-insert-scale-overflow-2026-11-28.json) exposes
-   infinite/NaN line geometry without a loss report in both modes. Implement
-   bounded, shape-aware preflight for transformed block geometry and valid-sibling
-   retry, including nested blocks and arrays; do not infer safety from a finite
-   scale or an arbitrary fixed scale cutoff. Qualify additional geometry,
+   candidate on Linux and Windows. The [finite-scale overflow control](docs/research/p8-freecad-insert-scale-overflow-2026-11-28.json) exposed
+   infinite/NaN line geometry in both modes. The latest direct-block guard caches
+   conservative source bounds and preflights each array before publishing;
+   the selected overflow and valid-sibling retry now pass. Extend shape-aware
+   preflight to nested blocks and annotations, qualify kernel extremes and
+   producer behavior, and account for conservative refusals. Do not infer safety
+   from a finite scale or a fixed scale cutoff. Qualify additional geometry,
    polyline/arc OCS and unit profiles, malformed numeric extremes, real producer
    drawings and actual Draft rendering. TEXT under
    nonuniform, sheared or reflected transforms is still approximate and reported;

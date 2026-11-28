@@ -1,0 +1,138 @@
+diff --git a/src/Mod/Import/App/dxf/ImpExpDxf.cpp b/src/Mod/Import/App/dxf/ImpExpDxf.cpp
+index d20ab0a..5834397 100644
+--- a/src/Mod/Import/App/dxf/ImpExpDxf.cpp
++++ b/src/Mod/Import/App/dxf/ImpExpDxf.cpp
+@@ -1535,0 +1536,53 @@ void ImpExpDxfRead::OnReadSolid(
++bool ImpExpDxfRead::CanReadInsert(
++    const Base::Vector3d& point,
++    const Base::Vector3d& scale,
++    const std::string& name,
++    double rotation
++)
++{
++    // Only direct drawing instances with no nested references are covered here.
++    // The bounds are checked before creating any member of an INSERT array.
++    if (dynamic_cast<DrawingEntityCollector*>(Collector) == nullptr) return true;
++    const auto block = Blocks.find(name);
++    if (block == Blocks.end() || !block->second.Inserts.empty()) return true;
++
++    Base::Matrix4D transform;
++    transform.scale(scale);
++    Base::Matrix4D rotate;
++    rotate.rotZ(rotation);
++    transform = OCSOrientationTransform * rotate * transform;
++    transform.move(OCSOrientationTransform * point);
++    auto cached = m_directBlockBounds.find(name);
++    if (cached == m_directBlockBounds.end()) {
++        Base::BoundBox3d bounds;
++        try {
++            for (const auto& entry : block->second.GeometryBuilders) {
++                for (const auto& builder : entry.second) {
++                    if (builder.shape.IsNull()) continue;
++                    const auto part = Part::TopoShape(builder.shape).getBoundBox();
++                    if (!part.IsValid() || !std::isfinite(part.MinX) || !std::isfinite(part.MinY)
++                        || !std::isfinite(part.MinZ) || !std::isfinite(part.MaxX)
++                        || !std::isfinite(part.MaxY) || !std::isfinite(part.MaxZ)) {
++                        m_invalidDirectBlockBounds.insert(name);
++                    }
++                    else bounds.Add(part);
++                }
++            }
++        }
++        catch (const Standard_Failure&) {
++            m_invalidDirectBlockBounds.insert(name);
++        }
++        cached = m_directBlockBounds.emplace(name, bounds).first;
++    }
++    if (m_invalidDirectBlockBounds.count(name)) return false;
++    // An annotation-only block has no geometric bounds to inspect.
++    if (!cached->second.IsValid()) return true;
++    for (unsigned short i = 0; i < 8; ++i) {
++        const auto corner = cached->second.CalcPoint(i) - block->second.BasePoint;
++        const auto result = transform * corner;
++        if (!std::isfinite(result.x) || !std::isfinite(result.y)
++            || !std::isfinite(result.z)) return false;
++    }
++    return true;
++}
++
+diff --git a/src/Mod/Import/App/dxf/ImpExpDxf.h b/src/Mod/Import/App/dxf/ImpExpDxf.h
+index dea1696..1bbdd56 100644
+--- a/src/Mod/Import/App/dxf/ImpExpDxf.h
++++ b/src/Mod/Import/App/dxf/ImpExpDxf.h
+@@ -28,0 +29 @@
++#include <Base/BoundBox.h>
+@@ -120,0 +122,6 @@ public:
++    bool CanReadInsert(
++        const Base::Vector3d& point,
++        const Base::Vector3d& scale,
++        const std::string& name,
++        double rotation
++    ) override;
+@@ -280,0 +288,3 @@ private:
++    // Direct block bounds are built lazily once and reused for array members.
++    std::map<std::string, Base::BoundBox3d> m_directBlockBounds;
++    std::set<std::string> m_invalidDirectBlockBounds;
+diff --git a/src/Mod/Import/App/dxf/dxf.cpp b/src/Mod/Import/App/dxf/dxf.cpp
+index 5510d6a..2b4a5b1 100644
+--- a/src/Mod/Import/App/dxf/dxf.cpp
++++ b/src/Mod/Import/App/dxf/dxf.cpp
+@@ -2968,0 +2969,4 @@ bool CDxfRead::ReadInsert()
++            if (!CanReadInsert(point, scale, blockName, rotation)) {
++                UnsupportedFeature("INSERT geometry transform overflow");
++                return true;
++            }
+diff --git a/src/Mod/Import/App/dxf/dxf.h b/src/Mod/Import/App/dxf/dxf.h
+index a9e43e0..19d7588 100644
+--- a/src/Mod/Import/App/dxf/dxf.h
++++ b/src/Mod/Import/App/dxf/dxf.h
+@@ -1009,0 +1010,8 @@ public:
++    // Called for every array position before any INSERT in that array is published.
++    virtual bool CanReadInsert(
++        const Base::Vector3d& /*point*/,
++        const Base::Vector3d& /*scale*/,
++        const std::string& /*name*/,
++        double /*rotation*/
++    )
++    { return true; }
+diff --git a/src/Mod/Import/importtests/TestImportDXF.py b/src/Mod/Import/importtests/TestImportDXF.py
+index b6f6bf0..b42c52c 100644
+--- a/src/Mod/Import/importtests/TestImportDXF.py
++++ b/src/Mod/Import/importtests/TestImportDXF.py
+@@ -1416,0 +1417,36 @@ class TestImportDXF(TestImportBase):
++    def test_direct_insert_geometry_overflow_and_array_retry(self):
++        """Do not publish a direct INSERT or partial array with overflowing geometry."""
++        options = FreeCAD.ParamGet(self.option_source)
++        for mode in (2, 3):
++            options.SetInt("DxfImportMode", mode)
++            for is_array in (False, True):
++                with self.subTest(mode=mode, array=is_array):
++                    tags = [(0, "SECTION"), (2, "HEADER"), (9, "$ACADVER"), (1, "AC1021"),
++                            (9, "$INSUNITS"), (70, 4), (0, "ENDSEC"), (0, "SECTION"),
++                            (2, "BLOCKS"), (0, "BLOCK"), (8, "0"), (2, "B"), (70, 0),
++                            (10, 1), (20, 0), (30, 0), (0, "LINE"), (8, "0"),
++                            (10, 1), (20, 0), (30, 0), (11, 3), (21, 0), (31, 0),
++                            (0, "ENDBLK"), (8, "0"), (0, "ENDSEC"),
++                            (0, "SECTION"), (2, "ENTITIES"), (0, "INSERT"), (8, "0"), (2, "B")]
++                    if is_array:
++                        # First instance is finite; the second overflows after translation.
++                        tags.extend([(41, "1e307"), (70, 2), (44, "1.7e308")])
++                    else:
++                        tags.append((41, "1e308"))
++                    tags.extend([(0, "INSERT"), (8, "0"), (2, "B"), (10, 10),
++                                 (0, "INSERT"), (8, "0"), (2, "B"), (41, "1e10"),
++                                 (0, "ENDSEC"), (0, "EOF")])
++                    path = os.path.join(self.temp_dir, f"overflow-geometry-{mode}-{is_array}.dxf")
++                    with open(path, "w", encoding="ascii", newline="\n") as stream:
++                        stream.write("".join(f"{code}\n{value}\n" for code, value in tags))
++                    previous = set(self.document.Objects)
++                    stats = Import.readDXF(path, self.document.Name, True, self.option_source)
++                    self.document.recompute()
++                    links = [obj for obj in self.document.Objects if obj not in previous
++                             and obj.Name.startswith("Link_B")]
++                    self.assertEqual(len(stats["unsupportedFeatures"]["INSERT geometry transform overflow"]), 1)
++                    self.assertEqual(len(links), 2)
++                    spans = sorted(tuple(sorted(v.Point.x for v in link.Shape.Edges[0].Vertexes))
++                                   for link in links)
++                    self.assertEqual(spans, [(0, 2e10), (10, 12)])
++

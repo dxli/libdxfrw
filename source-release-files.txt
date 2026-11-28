@@ -64,6 +64,7 @@ docs/patches/freecad-p8-default-planar-3dface-2026-11-15.patch
 docs/patches/freecad-p8-default-polyface-uniform-face-aci-2026-11-16.patch
 docs/patches/freecad-p8-default-shared-mesh-layer-2026-11-16.patch
 docs/patches/freecad-p8-default-solid-ocs-2026-11-15.patch
+docs/patches/freecad-p8-direct-insert-overflow-preflight-2026-11-28.patch
 docs/patches/freecad-p8-frozen-layer-initial-visibility-2026-11-16.patch
 docs/patches/freecad-p8-insert-normal-units-2026-11-28.patch
 docs/patches/freecad-p8-insert-normal-validation-2026-11-28.patch
