@@ -4550,13 +4550,16 @@ private:
     DRW::Version m_dwgLayoutOutputSourceVersion{DRW::UNKNOWNV};
     bool m_dwgLayoutsObjectsInspected{false};
     bool m_dwgLayoutBlocksInspected{false};
+    bool m_legacyLayoutBlocksInspected{false};
     bool prepareDwgLayouts(DRW::Version version, bool debug) noexcept;
     bool hasUnchangedDwgLayoutOutputSources(bool debug=false) const noexcept;
     bool inspectDwgLayouts(const dxfRW::DxfObjectsWriteView&,
                            bool debug) noexcept;
     bool inspectDwgLayoutBlockRecords(const dxfRW::DxfTablesWriteView&,
                                      bool debug) noexcept;
-    bool inspectLegacyLayoutBlockRecords(const dxfRW::DxfTablesWriteView&) const noexcept;
+    bool legacyLayoutOutputLinks(std::vector<dxfRW::DxfLayoutOutputLinks>&) const noexcept;
+    bool inspectLegacyLayoutBlockRecords(const dxfRW::DxfTablesWriteView&) noexcept;
+    bool inspectLegacyLayoutObjects(const dxfRW::DxfObjectsWriteView&) const noexcept;
     struct DwgLayerStateOutputSource {
         std::uint32_t layerControlHandle{0u};
         DRW_Dictionary extensionDictionary;

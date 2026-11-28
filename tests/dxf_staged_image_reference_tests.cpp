@@ -354,12 +354,14 @@ bool run(const std::filesystem::path& path, DRW::Version version, bool binary,
     return true;
 }
 
-bool runLayoutReferences(const std::filesystem::path& path, DRW::Version version, bool binary) {
+bool runLayoutReferences(const std::filesystem::path& path, DRW::Version version,
+                         bool binary, bool sourceProfile = false) {
     struct LayoutAdapter : LC3CompatCheck, DRW_DxfFixedPaperSpaceWriter {
         dxfRW& writer;
         bool ok = true;
         unsigned failure = 0;
-        explicit LayoutAdapter(dxfRW& writer) : writer(writer) {}
+        bool sourceProfile;
+        LayoutAdapter(dxfRW& writer, bool sourceProfile) : writer(writer), sourceProfile(sourceProfile) {}
         bool writeDxfFixedPaperSpaceContents() override {
             DRW_Line line; line.basePoint = {2, 3, 0}; line.secPoint = {7, 11, 0};
             if (!writer.writeLine(&line)) return false;
@@ -381,6 +383,7 @@ bool runLayoutReferences(const std::filesystem::path& path, DRW::Version version
                 layout.name = i == 0 ? "Model" : i == 1 ? "Layout1" : "Layout2";
                 layout.tabOrder = static_cast<int>(i);
                 layout.paperSpaceBlockRecordHandle.ref = 0xA01u + i;
+                if (sourceProfile) layout.reactorHandles.push_back(0x900u);
                 ok = writer.writeLayout(&layout) && ok;
             }
         }
@@ -394,13 +397,14 @@ bool runLayoutReferences(const std::filesystem::path& path, DRW::Version version
         }
     };
     dxfRW writer(path.string().c_str());
-    LayoutAdapter adapter(writer);
+    LayoutAdapter adapter(writer, sourceProfile);
     writer.setDxfWriteRecordInventoryEnabled(true);
     for (std::uint32_t handle = 0x900u; handle <= 0x903u; ++handle)
         if (!writer.reserveHandle(handle)) return false;
     DRW_Dictionary dictionary;
     dictionary.handle = 0x900u; dictionary.parentHandle = 0xCu;
-    dictionary.hardOwner = 1; dictionary.cloning = 1;
+    dictionary.hardOwner = sourceProfile ? 0 : 1;
+    dictionary.cloning = sourceProfile ? 0 : 1;
     dictionary.m_entries = {{"Model", 0x901u}, {"Layout1", 0x902u}, {"Layout2", 0x903u}};
     writer.setRootDictEntries({{"ACAD_LAYOUT", "900"}});
     writer.setNamedDictObjects({dictionary});
@@ -449,7 +453,21 @@ bool runLayoutReferences(const std::filesystem::path& path, DRW::Version version
         auto expected = links();
         if (mode == 4) ++expected.front().tabOrder;
         if (mode == 5) expected.front().name = "Other";
-        if (mode == 8) return writer.inspectDxfLayoutObjects(view, 0x999u, expected);
+        const auto inspect = [&](const auto& current, std::uint32_t handle) {
+            if (!sourceProfile) return writer.inspectDxfLayoutObjects(current, handle, expected);
+            dxfRW::DxfLayoutObjectProfile selected;
+            selected.dictionary = handle;
+            selected.owner = 0xCu;
+            selected.rootRole = mode == 17 ? 360 : 350;
+            selected.hardOwner = mode == 18 ? 1 : 0;
+            selected.cloning = mode == 19 ? 1 : 0;
+            selected.allowApplicationGroups = mode != 16;
+            for (const auto& link : expected)
+                selected.entries.push_back({link.name, link.layout, mode == 20 ? 360 : 350});
+            if (mode == 21) selected.entries.pop_back();
+            return writer.inspectDxfSourceLayoutObjects(current, selected, expected);
+        };
+        if (mode == 8) return inspect(view, 0x999u);
         if (mode == 9) {
             std::string changed(view.bytes);
             dx_raster_output::Cursor cursor(changed, binary, dx_raster_output::Profile::StandaloneSafe);
@@ -466,13 +484,13 @@ bool runLayoutReferences(const std::filesystem::path& path, DRW::Version version
             }
             if (!altered) return false;
             auto alteredView = view; alteredView.bytes = changed;
-            return writer.inspectDxfLayoutObjects(alteredView, 0x900u, expected);
+            return inspect(alteredView, 0x900u);
         }
-        return writer.inspectDxfLayoutObjects(view, 0x900u, expected);
+        return inspect(view, 0x900u);
     })) return false;
     if (!writer.write(&adapter, version, binary)) return false;
-    for (mode = 1; mode <= 15; ++mode) {
-        adapter.failure = mode > 10 ? mode - 10 : 0;
+    for (mode = 1; mode <= (sourceProfile ? 21u : 15u); ++mode) {
+        adapter.failure = mode > 10 && mode <= 15 ? mode - 10 : 0;
         { std::ofstream output(path, std::ios::binary | std::ios::trunc); output << "layout sentinel"; }
         if (writer.write(&adapter, version, binary) || read(path) != "layout sentinel") {
             std::cerr << "layout refusal failed, mode=" << mode << '\n'; return false;
@@ -606,4 +624,8 @@ int main() {
                 std::cerr << "staged layout references failed, version=" << static_cast<int>(version)
                           << " binary=" << binary << '\n'; return 1;
             }
+    for (const bool binary : {false, true})
+        if (!runLayoutReferences(directory / "source-layouts.dxf", DRW::AC1015, binary, true)) {
+            std::cerr << "staged source layout references failed, binary=" << binary << '\n'; return 1;
+        }
 }

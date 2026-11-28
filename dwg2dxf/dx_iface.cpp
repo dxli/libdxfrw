@@ -43307,10 +43307,9 @@ bool dx_iface::hasUnchangedDwgLayoutOutputSources(bool debug) const noexcept {
     }
 }
 
-bool dx_iface::inspectLegacyLayoutBlockRecords(
-        const dxfRW::DxfTablesWriteView& view) const noexcept {
-    if (dxfW == nullptr || cData == nullptr || view.version != DRW::AC1015
-        || !hasBoundLegacyLayoutSources())
+bool dx_iface::legacyLayoutOutputLinks(
+        std::vector<dxfRW::DxfLayoutOutputLinks>& result) const noexcept {
+    if (dxfW == nullptr || cData == nullptr || !hasBoundLegacyLayoutSources())
         return false;
     try {
         const DRW_WritingContext* context = dxfW->getWritingContext();
@@ -43336,7 +43335,58 @@ bool dx_iface::inspectLegacyLayoutBlockRecords(
             links.push_back({layout.name, blockName,
                              dxfW->remapHandle(layout.handle), block, layout.tabOrder});
         }
-        return dxfW->inspectDxfLayoutBlockRecords(view, links)
+        result.swap(links);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+bool dx_iface::inspectLegacyLayoutBlockRecords(
+        const dxfRW::DxfTablesWriteView& view) noexcept {
+    m_legacyLayoutBlocksInspected = false;
+    std::vector<dxfRW::DxfLayoutOutputLinks> links;
+    if (view.version != DRW::AC1015 || !legacyLayoutOutputLinks(links))
+        return false;
+    m_legacyLayoutBlocksInspected = dxfW->inspectDxfLayoutBlockRecords(view, links)
+        && hasBoundLegacyLayoutSources();
+    return m_legacyLayoutBlocksInspected;
+}
+
+bool dx_iface::inspectLegacyLayoutObjects(
+        const dxfRW::DxfObjectsWriteView& view) const noexcept {
+    if (view.version != DRW::AC1015 || !m_legacyLayoutBlocksInspected)
+        return false;
+    try {
+        std::vector<dxfRW::DxfLayoutOutputLinks> links;
+        if (!legacyLayoutOutputLinks(links))
+            return false;
+        const DRW_Dictionary& root = cData->namedObjectDictionary;
+        const auto entry = std::find_if(root.m_entries.begin(), root.m_entries.end(),
+            [](const DRW_Dictionary::Entry& row) { return row.m_name == "ACAD_LAYOUT"; });
+        if (entry == root.m_entries.end())
+            return false;
+        const auto dictionary = std::find_if(cData->dictionaries.begin(), cData->dictionaries.end(),
+            [&entry](const DRW_Dictionary& row) { return row.handle == entry->m_handle; });
+        if (dictionary == cData->dictionaries.end())
+            return false;
+        const auto role = [](const DRW_Dictionary::Entry& row, int hardOwner) {
+            using Code = DRW_Dictionary::Entry::DxfHandleCode;
+            return row.m_dxfHandleCode == Code::HardOwner ? 360
+                : row.m_dxfHandleCode == Code::SoftOwner ? 350
+                : hardOwner == 1 ? 360 : 350;
+        };
+        dxfRW::DxfLayoutObjectProfile profile;
+        profile.dictionary = dxfW->remapHandle(dictionary->handle);
+        profile.owner = dxfW->remapHandle(root.handle);
+        profile.rootRole = role(*entry, root.hardOwner);
+        profile.hardOwner = dictionary->hardOwner;
+        profile.cloning = dictionary->cloning;
+        profile.allowApplicationGroups = true;
+        for (const auto& member : dictionary->m_entries)
+            profile.entries.push_back({member.m_name, dxfW->remapHandle(member.m_handle),
+                                       role(member, dictionary->hardOwner)});
+        return dxfW->inspectDxfSourceLayoutObjects(view, profile, links)
             && hasBoundLegacyLayoutSources();
     } catch (...) {
         return false;
@@ -90157,6 +90207,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     m_dwgLayoutOutputSourceVersion = DRW::UNKNOWNV;
     m_dwgLayoutsObjectsInspected = false;
     m_dwgLayoutBlocksInspected = false;
+    m_legacyLayoutBlocksInspected = false;
     m_dwgLayerStateOutputSource = {};
     m_dwgLayerStateOutputOwner = nullptr;
     m_dwgLayerStateOutputGeneration = 0u;
@@ -95064,7 +95115,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             || !m_dxfMLineStyles.empty() || !m_dxfMLeaderStyles.empty()
             || needsDwgMLeaderStyleOutput
             || needsDwgMLineStyleOutput
-            || needsDwgLayoutsOutput
+            || needsDwgLayoutsOutput || needsLegacyLayoutOutput
             || needsDwgLayerStateOutput
             || needsVisualStyleOutput
             || needsDwgAssociativeVariableOutput
@@ -95082,7 +95133,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             || needsDxfDynamicReplay || needsDxfAssociativeReplay
             || m_dxfLayerMaterialState.legacyPlotCrossVersion
             || m_dxfLayerMaterialState.auditedDefaultPlotSource)
-        && !dxfW->setDxfObjectsWriteInspector([this, needsRasterOutput, needsGeneratedRoots, needsShadeOutput, needsVisualStyleOutput, needsDwgDictionaryVarOutput, needsDwgScaleOutput, needsDwgMLeaderStyleOutput, needsDwgMLineStyleOutput, needsDwgLayoutsOutput, needsDwgLayerStateOutput, needsDwgAssociativeVariableOutput, needsDwgAssociativeDimensionDependencyOutput, needsDwgBlockRepresentationDataOutput, needsDwgDynamicBlockOutput, needsDxfDynamicReplay, needsDxfAssociativeReplay, debug, requireResolvedOwners](const auto& view) {
+        && !dxfW->setDxfObjectsWriteInspector([this, needsRasterOutput, needsGeneratedRoots, needsShadeOutput, needsVisualStyleOutput, needsDwgDictionaryVarOutput, needsDwgScaleOutput, needsDwgMLeaderStyleOutput, needsDwgMLineStyleOutput, needsDwgLayoutsOutput, needsLegacyLayoutOutput, needsDwgLayerStateOutput, needsDwgAssociativeVariableOutput, needsDwgAssociativeDimensionDependencyOutput, needsDwgBlockRepresentationDataOutput, needsDwgDynamicBlockOutput, needsDxfDynamicReplay, needsDxfAssociativeReplay, debug, requireResolvedOwners](const auto& view) {
             const auto reject = [debug, requireResolvedOwners](
                     const char* stage) {
                 if (debug || requireResolvedOwners)
@@ -95157,6 +95208,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 && !inspectDwgLayouts(
                     view, debug || requireResolvedOwners))
                 return reject("LAYOUT DWG physical source/output binding");
+            if (needsLegacyLayoutOutput && !inspectLegacyLayoutObjects(view))
+                return reject("legacy LAYOUT OBJECTS output proof");
             if (needsDwgLayerStateOutput
                 && !inspectDwgLayerStateOutput(
                     view, debug || requireResolvedOwners))

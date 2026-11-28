@@ -22,6 +22,8 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--inject-table-proof-failure', action='store_true',
                         help='add an environment-controlled staged TABLES mismatch')
+    parser.add_argument('--inject-objects-proof-failure', action='store_true',
+                        help='add an environment-controlled staged OBJECTS mismatch')
     args = parser.parse_args()
     source = args.source.resolve(strict=True)
     output = args.output.resolve()
@@ -59,15 +61,26 @@ def main():
         if section.count(anchor) != 1:
             raise ValueError(name + ' CLASS guard changed or is ambiguous')
         text = text[:begin] + section.replace(anchor, inject + anchor) + text[end:]
-    if args.inject_table_proof_failure:
-        anchor = '        return dxfW->inspectDxfLayoutBlockRecords(view, links)\n'
-        if text.count(anchor) != 1 or text.count('#include <iostream>\n') != 1:
-            raise ValueError('legacy staged TABLES proof changed or is ambiguous')
+    if args.inject_table_proof_failure or args.inject_objects_proof_failure:
+        if text.count('#include <iostream>\n') != 1:
+            raise ValueError('adapter include anchor changed or is ambiguous')
         text = text.replace('#include <iostream>\n', '#include <iostream>\n#include <cstdlib>\n', 1)
+    if args.inject_table_proof_failure:
+        anchor = '    m_legacyLayoutBlocksInspected = dxfW->inspectDxfLayoutBlockRecords(view, links)\n'
+        if text.count(anchor) != 1:
+            raise ValueError('legacy staged TABLES proof changed or is ambiguous')
         text = text.replace(anchor,
-            '        // UNSAFE SCRATCH DIAGNOSTIC: force a staged proof mismatch.\n'
-            '        if (std::getenv("LIBDXFRW_DIAGNOSTIC_BAD_LAYOUT") && !links.empty())\n'
-            '            ++links.front().layout;\n' + anchor, 1)
+            '    // UNSAFE SCRATCH DIAGNOSTIC: force a staged TABLES mismatch.\n'
+            '    if (std::getenv("LIBDXFRW_DIAGNOSTIC_BAD_LAYOUT") && !links.empty())\n'
+            '        ++links.front().layout;\n' + anchor, 1)
+    if args.inject_objects_proof_failure:
+        anchor = '        return dxfW->inspectDxfSourceLayoutObjects(view, profile, links)\n'
+        if text.count(anchor) != 1:
+            raise ValueError('legacy staged OBJECTS proof changed or is ambiguous')
+        text = text.replace(anchor,
+            '        // UNSAFE SCRATCH DIAGNOSTIC: force a staged OBJECTS mismatch.\n'
+            '        if (std::getenv("LIBDXFRW_DIAGNOSTIC_BAD_OBJECT") && !links.empty())\n'
+            '            ++links.front().blockRecord;\n' + anchor, 1)
     result = text.encode('utf-8')
     with output.open('xb') as stream:
         stream.write(result)

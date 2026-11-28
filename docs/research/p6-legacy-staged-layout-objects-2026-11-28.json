@@ -1,0 +1,32 @@
+{
+  "checks": [
+    "A scratch-only guard-bypassed build injects a wrong expected OBJECTS block reference. Both encodings of two R13 and one R14 locally authored controls refuse during the intended OBJECTS inspector, preserve an existing destination and succeed on the same adapter after the fault is cleared. TABLES-stage fault/retry also still passes.",
+    "An independent physical observer and ezdxf verify reciprocal layout links and zero audit errors/fixes in all twelve corrected TABLES/OBJECTS-fault outputs.",
+    "The shared staged test covers the original authored entry point across six DXF versions, plus the new soft-owner dictionary profile with reactor groups in R2000 ASCII and binary. Wrong role, owner flags, cloning, missing entries, disabled application groups, altered physical backlink bytes, destination preservation and retry are refused or pass as appropriate.",
+    "The production adapter continues to refuse the R14 control in both encodings without changing the destination.",
+    "The original inspectDxfLayoutObjects call with a braced empty dictionary argument still compiles; the source-profile inspector has a distinct name and adds no virtual interface."
+  ],
+  "id": "p6-legacy-staged-layout-objects-2026-11-28",
+  "implementation": "The existing layout OBJECTS inspector gains an additive bounded source-dictionary profile with explicit emitted owner, root role, dictionary flags, ordered entries and optional balanced application groups. The original authored-profile entry point retains its existing plain hard-owner behavior. The legacy adapter requires its TABLES proof first, rechecks the bound source graph, and applies the shared OBJECTS link inspector before publication. The production legacy export refusal remains active.",
+  "limits": [
+    "Injected faults alter expected proof inputs; the shared staged test separately mutates physical staged bytes.",
+    "This checks identity, dictionary entries, tab order and reciprocal links only. Application-group contents, remaining LAYOUT fields, proxy CLASS semantics, complete drawing graph and native semantics require separate evidence.",
+    "Successful legacy output used an explicitly guard-bypassed scratch adapter; no production support was enabled and no generated drawing was committed."
+  ],
+  "outputs": {
+    "r13-destination": {
+      "ascii": "f8240c09e0ff960b7a10fd6fff5b44de41b86d12c98a7acd0638594ea56b8aab",
+      "binary": "669d5aacbef7e845bf80b81ac50169c61cad552020f4fd7e6af98a9f6fb1ed42"
+    },
+    "r13-source": {
+      "ascii": "16c5c506d668ca6616d2931e752ba970c26a7fb46a6708ded4790042b6c53cc7",
+      "binary": "1b74b86b87fa62a7223a815cf626fb40be25891446c47a7c0f2e395d1b7b1941"
+    },
+    "r14-line": {
+      "ascii": "5ac1bbcafea148a84b599b0aec6172f6814654b3325aedc48b2df0f1b1ba2854",
+      "binary": "6827d64ee476527cad067b81ffe92cce4d8eaf1cb3ed8ce8bbf353a81682e042"
+    }
+  },
+  "schema": "libdxfrw.research-receipt.v1",
+  "supportClaimEffect": "none"
+}

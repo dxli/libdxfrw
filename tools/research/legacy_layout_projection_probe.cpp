@@ -21,23 +21,26 @@ static bool write(dx_iface& adapter, dx_data& data, const std::string& output,
         dx_dxfSourceTextPolicy::Compatible, DRW::DxfTextWritePolicy::Compatible,
         dx_dxfProxyGraphicsPolicy::Compatible, dx_dwgReadCompletenessPolicy::AllowPartial);
 }
-static bool setTableFault(bool enabled) {
+static bool setFault(const char* name, bool enabled) {
 #ifdef _WIN32
-    return _putenv_s("LIBDXFRW_DIAGNOSTIC_BAD_LAYOUT", enabled ? "1" : "") == 0;
+    return _putenv_s(name, enabled ? "1" : "") == 0;
 #else
-    return enabled ? setenv("LIBDXFRW_DIAGNOSTIC_BAD_LAYOUT", "1", 1) == 0
-                   : unsetenv("LIBDXFRW_DIAGNOSTIC_BAD_LAYOUT") == 0;
+    return enabled ? setenv(name, "1", 1) == 0 : unsetenv(name) == 0;
 #endif
 }
 int main(int argc, char** argv) {
     if (argc != 4 || (std::string(argv[3]) != "production-refusal"
                       && std::string(argv[3]) != "diagnostic-only"
-                      && std::string(argv[3]) != "diagnostic-table-fault")) {
-        std::cerr << "usage: probe INPUT NEW_SCRATCH_DIRECTORY production-refusal|diagnostic-only|diagnostic-table-fault\n";
+                      && std::string(argv[3]) != "diagnostic-table-fault"
+                      && std::string(argv[3]) != "diagnostic-object-fault")) {
+        std::cerr << "usage: probe INPUT NEW_SCRATCH_DIRECTORY production-refusal|diagnostic-only|diagnostic-table-fault|diagnostic-object-fault\n";
         return 2;
     }
     const bool diagnostic = std::string(argv[3]) != "production-refusal";
     const bool tableFault = std::string(argv[3]) == "diagnostic-table-fault";
+    const bool objectFault = std::string(argv[3]) == "diagnostic-object-fault";
+    const char* faultName = tableFault ? "LIBDXFRW_DIAGNOSTIC_BAD_LAYOUT"
+                                      : "LIBDXFRW_DIAGNOSTIC_BAD_OBJECT";
     const auto outputDir = std::filesystem::absolute(argv[2]);
     if (std::filesystem::exists(outputDir) || !std::filesystem::create_directories(outputDir)) return 2;
     dx_iface adapter;
@@ -53,15 +56,15 @@ int main(int argc, char** argv) {
             if (write(adapter, source, out.string(), binary) || bytes(out) != sentinel) return 4;
             continue;
         }
-        if (tableFault) {
-            if (!setTableFault(true)) return 2;
+        if (tableFault || objectFault) {
+            if (!setFault(faultName, true)) return 2;
         } else {
             source.layouts.front().name += "_changed";
         }
-        const bool refused = !write(adapter, source, out.string(), binary, tableFault)
+        const bool refused = !write(adapter, source, out.string(), binary, tableFault || objectFault)
             && bytes(out) == sentinel;
-        if (tableFault) {
-            if (!setTableFault(false)) return 2;
+        if (tableFault || objectFault) {
+            if (!setFault(faultName, false)) return 2;
         } else {
             source.layouts.front().name = originalName;
         }

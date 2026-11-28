@@ -5715,18 +5715,41 @@ bool dxfRW::inspectDxfLayoutBlockRecords(
 bool dxfRW::inspectDxfLayoutObjects(
         const DxfObjectsWriteView& view, std::uint32_t dictionary,
         const std::vector<DxfLayoutOutputLinks>& expected) const noexcept {
+    if (expected.empty() || expected.size() > 128u)
+        return false;
+    try {
+        DxfLayoutObjectProfile profile;
+        profile.dictionary = dictionary;
+        profile.owner = 0xCu;
+        profile.hardOwner = 1;
+        profile.cloning = 1;
+        for (const auto& link : expected)
+            profile.entries.push_back({link.name, link.layout, 360});
+        return inspectDxfSourceLayoutObjects(view, profile, expected);
+    } catch (...) { return false; }
+}
+
+bool dxfRW::inspectDxfSourceLayoutObjects(
+        const DxfObjectsWriteView& view, const DxfLayoutObjectProfile& source,
+        const std::vector<DxfLayoutOutputLinks>& expected) const noexcept {
+    const std::uint32_t dictionary = source.dictionary;
     if (!m_dxfWriteAttemptActive || !m_dxfWriteInspecting || !writer ||
         m_writeError || writer->hasWriteError() || view.version != version ||
-        view.version < DRW::AC1015 || view.binary != binFile || !dictionary) return false;
+        view.version < DRW::AC1015 || view.binary != binFile || !dictionary
+        || source.owner != 0xCu) return false;
     try {
-        if (!validLayoutOutputLinks(expected) || remapHandle(dictionary) != dictionary) return false;
-        std::vector<DxfDictionaryOutputExpectation> entries;
+        if (!validLayoutOutputLinks(expected) || remapHandle(dictionary) != dictionary
+            || source.entries.size() != expected.size()) return false;
         for (const auto& link : expected) {
             if (link.layout == dictionary || link.blockRecord == dictionary) return false;
-            entries.push_back({link.name, link.layout, 360});
+            if (std::count_if(source.entries.begin(), source.entries.end(),
+                    [&link](const DxfDictionaryOutputExpectation& entry) {
+                        return entry.name == link.name && entry.target == link.layout;
+                    }) != 1) return false;
         }
-        if (!inspectDxfRootDictionaryEntry(view, "ACAD_LAYOUT", dictionary, 350) ||
-            !inspectDxfDictionaryOutput(view, dictionary, 0xCu, 1, 1, entries)) return false;
+        if (!inspectDxfRootDictionaryEntry(view, "ACAD_LAYOUT", dictionary, source.rootRole) ||
+            !inspectDxfDictionaryOutput(view, dictionary, source.owner,
+                                        source.hardOwner, source.cloning, source.entries)) return false;
         const auto profile = view.compatibilityProfile == DxfCompatibilityProfile::StandaloneSafe
             ? dx_raster_output::Profile::StandaloneSafe
             : view.compatibilityProfile == DxfCompatibilityProfile::LibreCadMasterLegacy
@@ -5743,11 +5766,19 @@ bool dxfRW::inspectDxfLayoutObjects(
                 if (found == expected.end() || !seen.insert(handle).second) return false;
                 dx_raster_output::Cursor cursor(body, view.binary, profile);
                 dx_raster_output::Token token;
-                unsigned owner = 0u, block = 0u, names = 0u, orders = 0u, subclasses = 0u;
+                unsigned owner = 0u, block = 0u, names = 0u, orders = 0u, subclasses = 0u, depth = 0u;
                 bool layoutSubclass = false, plotSubclass = false;
                 while (!cursor.done()) {
                     if (!cursor.next(token)) return false;
-                    if (token.code == 102) return false; // Authored plain profile.
+                    if (token.code == 102) {
+                        if (!source.allowApplicationGroups) return false;
+                        if (!token.text.empty() && token.text.front() == '{') {
+                            if (++depth > 64u) return false;
+                        } else if (token.text == "}" && depth) --depth;
+                        else return false;
+                        continue;
+                    }
+                    if (depth) continue;
                     if (token.code == 100) {
                         if (token.text == "AcDbPlotSettings" && subclasses++ == 0u) plotSubclass = true;
                         else if (token.text == "AcDbLayout" && subclasses++ == 1u) layoutSubclass = true;
@@ -5765,7 +5796,7 @@ bool dxfRW::inspectDxfLayoutObjects(
                             token.number != found->tabOrder) return false;
                     }
                 }
-                return owner == 1u && block == 1u && names == 1u && orders == 1u && subclasses == 2u &&
+                return depth == 0u && owner == 1u && block == 1u && names == 1u && orders == 1u && subclasses == 2u &&
                     decoder.decodeRecord<DRW_Layout>(body, [&](const auto& layout) {
                         return layout.handle == found->layout && layout.parentHandle == dictionary &&
                                layout.name == found->name && layout.tabOrder == found->tabOrder &&

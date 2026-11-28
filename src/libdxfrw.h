@@ -295,6 +295,21 @@ public:
     bool inspectDxfLayoutObjects(
         const DxfObjectsWriteView& view, std::uint32_t dictionary,
         const std::vector<DxfLayoutOutputLinks>& expected) const noexcept;
+    /** Bounded source-supplied dictionary and LAYOUT link profile. Entries
+     * and handles refer to emitted output. Application groups are skipped for
+     * link inspection only; their contents need separate source/output proof. */
+    struct DxfLayoutObjectProfile {
+        std::uint32_t dictionary{0u};
+        std::uint32_t owner{0u};
+        int rootRole{350};
+        int hardOwner{0};
+        int cloning{0};
+        bool allowApplicationGroups{false};
+        std::vector<DxfDictionaryOutputExpectation> entries;
+    };
+    bool inspectDxfSourceLayoutObjects(
+        const DxfObjectsWriteView& view, const DxfLayoutObjectProfile& profile,
+        const std::vector<DxfLayoutOutputLinks>& expected) const noexcept;
     /** Inspector setters retain an owned copy of the callback and its value
      * captures. Objects reached through reference captures remain the caller's
      * lifetime responsibility and must outlive every possible invocation. */
