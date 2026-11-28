@@ -106,5 +106,10 @@
     "generatedSource": "The selected source dictionary has the observed soft-owner entry handle role and no hard-owner marker; the scratch libdxfrw R2000 projection emits physical group 280=0, group 281=0 and entry groups 350.",
     "libreCadSave": "The tested native LibreCAD save preserves physical 280=0, 281=0 and both 350 entry roles.",
     "odaInitialAndResavedOutputs": "Both initial ODA conversions and both reopen conversions physically emit 280=1, 281=1 and both 360 entry roles. ODA changes ownership/cloning representation; peer preservation of child names and values is not proof of equivalent ownership or cloning semantics."
-  }
+  },
+  "physicalDxFChecks": [
+    "The independent DXF audit checks the actual 280 hard-owner and 281 cloning groups plus every physical 350/360 dictionary entry edge, for ASCII and binary outputs.",
+    "All twelve guarded scratch 32-child outputs and the native LibreCAD 32-child save pass the soft-owner profile. The ODA outputs pass only the explicit hard-owner/cloning-1/group-360 profile; they fail the soft-owner audit.",
+    "Generated ASCII and binary mutations independently change hard-owner, cloning and entry role; each is refused and each original passes again. The reusable mutation harness is tools/research/check_legacy_layout_dictionary_roles.py."
+  ]
 }

@@ -1337,6 +1337,7 @@ EXTRA_DIST = \
     tools/research/canonical_ltype_peer_generator.cpp \
     tools/research/check_lc3_binary_layout_pair.py \
     tools/research/check_legacy_empty_class_peer.py \
+    tools/research/check_legacy_layout_dictionary_roles.py \
     tools/research/check_legacy_layout_ucs_peer.py \
     tools/research/check_legacy_layout_viewport_peer.py \
     tools/research/check_legacy_layout_xdictionary_peer.py \
