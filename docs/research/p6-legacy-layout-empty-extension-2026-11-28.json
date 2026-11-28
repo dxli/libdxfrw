@@ -1,0 +1,45 @@
+{
+  "checks": [
+    "A pinned locally generated and producer-reopened R14 drawing has an empty extension dictionary owned by Layout1. The bound source and legacy graph controls pass; mutating the dictionary owner or captured physical frame is refused and the corrected source passes on retry.",
+    "A scratch-only guard-bypassed adapter rejects an altered expected dictionary cloning value, preserves the destination and succeeds on the same adapter after clearing the fault, in ASCII and binary. Body, layout identity, TABLES and OBJECTS mismatch controls also reject and retry. Production refuses the source in both encodings.",
+    "Independent physical tags and ezdxf 1.4.5 verify the layout extension group, dictionary identity/owner, empty contents, flags and zero audit errors/fixes across ten corrected outputs. Mutated physical extension references are rejected in both encodings and original outputs pass again.",
+    "Seven focused CTests and existing DWG viewport projection controls pass. The earlier paper-viewport generator reproduces its prior output hash.",
+    "AddressSanitizer passes the source-frame, owner mutation and retry controls on macOS ARM64; leak detection is unavailable on this platform."
+  ],
+  "diagnosticSourceSha256": "47aa4677f4ae16670ba0f3cfe439532f0c2b698bc45dfc8a627051b909e6d986",
+  "dictionaryFaultRetryOutputs": {
+    "ascii": "015dcde00c851e98152a7fc39391fbccb119a829dbe27eb688f91c0f8995deef",
+    "binary": "36d2d1bf8022272fd25f207d192728fd7781e8af4b32f3d871a0d30da1a26fea"
+  },
+  "id": "p6-legacy-layout-empty-extension-2026-11-28",
+  "implementation": "For a legacy layout extension dictionary, require one unique empty, no-EED dictionary with a matching owner and source-bound physical dictionary frame. Compare the complete staged dictionary body and common fields using the shared standard-object comparator; retain the legacy production export refusal.",
+  "limits": [
+    "The expected dictionary field is changed for diagnostic injection; mutations of physical output were checked by the independent observer.",
+    "Only an empty, no-EED extension dictionary is source-bound here. Nonempty child graphs, reactor semantics, native extension-dictionary cloning and whole-file output remain open.",
+    "Successful exports use explicit scratch-only guard bypasses. No DWG/DXF fixture is committed or production support enabled."
+  ],
+  "producerManifest": {
+    "cargoLockSha256": "76b17a86b44fb75aea3748ee119286139e17abc462554c19059610c83f01f959",
+    "cargoVersion": "cargo 1.100.0 (3acc79c0c 2026-11-05) (Homebrew)",
+    "generatorSha256": "7f958c2960ca343d11f53f1e3e632497c8698bea9ccb7c2fbe640a4d4ed6eeba",
+    "ok": true,
+    "producerCommit": "d7c71f5032fc2d8844142ad7df7a6f0ee5ac535f",
+    "producerOutput": "",
+    "profile": "ac1014-rooted-xdictionary",
+    "rustVersion": "rustc 1.100.0 (0ef1bc386 2026-11-09) (Homebrew)",
+    "samples": {
+      "r14-line-rooted-resaved.dwg": {
+        "bytes": 5158,
+        "sha256": "16fc69c314cd02b3f1495d9b80c9bfa4a8f745c9478b9ff6316972146d01e4aa"
+      },
+      "r14-line.dwg": {
+        "bytes": 5101,
+        "sha256": "e164e012d5ea5e1a62d99e6038d2f514bdeba902fc3bbf453e44d22f72a855a1"
+      }
+    },
+    "schema": "libdxfrw.ac1014-acadrust-rooted-line.v1",
+    "supportClaimEffect": "none"
+  },
+  "schema": "libdxfrw.research-receipt.v1",
+  "supportClaimEffect": "none"
+}

@@ -1563,7 +1563,7 @@ bool checkLegacyLayoutGraph(const std::string& input) {
     if (rawLayout.empty() || rawDictionary.empty()) return false;
     double changedBase = record->basePoint.x + 1.0;
     std::string changedName = record->name + "_changed";
-    const bool ok = check([&]() { capturedBlock.front() ^= 0x80u; })
+    bool ok = check([&]() { capturedBlock.front() ^= 0x80u; })
         && check([&]() { std::swap(DxIfaceStandardDwgCaptureTestAccess::legacyCensus(data), missingCensus); })
         && check([&]() { std::swap(DxIfaceStandardDwgCaptureTestAccess::legacyCensus(data), emptyCensus); })
         && check([&]() { capturedGeneration ^= 1u; })
@@ -1578,6 +1578,16 @@ bool checkLegacyLayoutGraph(const std::string& input) {
         && check([&]() { dictionary->m_entries.front().m_handle ^= 1u; })
         && check([&]() { data.layouts.front().paperSpaceBlockRecordHandle.ref ^= 1u; })
         && check([&]() { record->layoutHandle ^= 1u; });
+    for (const auto& layout : data.layouts) {
+        if (!ok || layout.xDictHandle == 0u) continue;
+        auto extension = std::find_if(data.dictionaries.begin(), data.dictionaries.end(),
+            [&layout](const DRW_Dictionary& item) { return item.handle == layout.xDictHandle; });
+        if (extension == data.dictionaries.end() || !extension->m_entries.empty()) return false;
+        auto& extensionBytes = DxIfaceStandardDwgCaptureTestAccess::dictionaryBytes(data, extension->handle);
+        if (extensionBytes.empty()) return false;
+        ok = check([&]() { extension->parentHandle ^= 1u; })
+            && check([&]() { extensionBytes.front() ^= 0x80u; });
+    }
     if (ok) adapter.legacyBlockRecordSourceFailed();
     const bool stopped = ok && DxIfaceStandardDwgCaptureTestAccess::noLegacyBlockFrames(data)
         && !adapter.wantsLegacyBlockRecordSource(data.sourceVersion);

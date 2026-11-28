@@ -19,6 +19,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut reopened = DwgReader::from_file(&original)?.read()?;
     reopened.named_objects_dictionary_mut().ok_or("missing root")?
         .insert("ACAD_PLOTSTYLENAME", plotstyle);
+    let paper_xdictionary = if std::env::var_os("AC1012_WITNESS_LAYOUT_XDICTIONARY").is_some() {
+        let owner = reopened.objects.iter().find_map(|(handle, object)| {
+            if let ObjectType::Layout(layout) = object {
+                if layout.name == "Layout1" { Some(*handle) } else { None }
+            } else { None }
+        }).ok_or("missing paper layout")?;
+        let dictionary = reopened.ensure_extension_dictionary(owner);
+        if let Some(ObjectType::Layout(layout)) = reopened.objects.get_mut(&owner) {
+            layout.xdictionary_handle = Some(dictionary);
+        }
+        Some((owner, dictionary))
+    } else { None };
     let paper_viewport = if std::env::var_os("AC1012_WITNESS_PAPER_VIEWPORT").is_some() {
         let mut viewport = Viewport::new();
         viewport.id = 1;
@@ -68,6 +80,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else { None }
         }).ok_or("missing paper layout")?;
         assert_eq!(layout.viewport, handle);
+    }
+    if let Some((owner, dictionary)) = paper_xdictionary {
+        let readback = DwgReader::from_file(&result)?.read()?;
+        match (readback.objects.get(&owner), readback.objects.get(&dictionary)) {
+            (Some(ObjectType::Layout(layout)), Some(ObjectType::Dictionary(extension))) => {
+                assert_eq!(layout.xdictionary_handle, Some(dictionary));
+                assert_eq!(extension.owner, owner);
+                assert!(extension.entries.is_empty());
+            }
+            _ => return Err("missing layout extension graph".into()),
+        }
     }
     Ok(())
 }

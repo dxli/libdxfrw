@@ -32,6 +32,8 @@ def main():
                         help='add an environment-controlled UCS role mismatch')
     parser.add_argument('--inject-viewport-role-failure', action='store_true',
                         help='add an environment-controlled paper viewport role mismatch')
+    parser.add_argument('--inject-xdictionary-body-failure', action='store_true',
+                        help='add an environment-controlled extension dictionary field mismatch')
     args = parser.parse_args()
     source = args.source.resolve(strict=True)
     output = args.output.resolve()
@@ -71,7 +73,8 @@ def main():
         text = text[:begin] + section.replace(anchor, inject + anchor) + text[end:]
     if (args.inject_table_proof_failure or args.inject_objects_proof_failure
             or args.inject_body_proof_failure or args.inject_role_proof_failure
-            or args.inject_ucs_role_failure or args.inject_viewport_role_failure):
+            or args.inject_ucs_role_failure or args.inject_viewport_role_failure
+            or args.inject_xdictionary_body_failure):
         if text.count('#include <iostream>\n') != 1:
             raise ValueError('adapter include anchor changed or is ambiguous')
         text = text.replace('#include <iostream>\n', '#include <iostream>\n#include <cstdlib>\n', 1)
@@ -126,6 +129,15 @@ def main():
             section = section.replace(anchor,
                 'viewport, std::getenv("LIBDXFRW_DIAGNOSTIC_BAD_VIEWPORT") ? "VPORT" : "VIEWPORT", "' + place + '"', 1)
         text = text[:begin] + section + text[end:]
+    if args.inject_xdictionary_body_failure:
+        anchor = '                        return dx_standard_output::equal(*extension->second, actual, mapHandle, references);\n'
+        if text.count(anchor) != 1:
+            raise ValueError('legacy extension dictionary body proof changed or is ambiguous')
+        text = text.replace(anchor,
+            '                        // UNSAFE SCRATCH DIAGNOSTIC: force an extension body mismatch.\n'
+            '                        DRW_Dictionary expected = *extension->second;\n'
+            '                        if (std::getenv("LIBDXFRW_DIAGNOSTIC_BAD_XDICTIONARY")) expected.cloning ^= 1;\n'
+            '                        return dx_standard_output::equal(expected, actual, mapHandle, references);\n', 1)
     result = text.encode('utf-8')
     with output.open('xb') as stream:
         stream.write(result)

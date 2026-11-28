@@ -32933,6 +32933,7 @@ bool dx_iface::hasBoundLegacyLayoutSources() const noexcept {
         std::set<std::uint32_t> offsets;
         std::set<std::uint64_t> ordinals;
         std::set<std::string> names;
+        std::set<std::uint32_t> extensions;
         for (const auto& record : cData->blockRecords) {
             const auto source = cData->m_legacyBlockRecordSources.find(record.handle);
             if (!records.emplace(record.handle, &record).second
@@ -32957,6 +32958,18 @@ bool dx_iface::hasBoundLegacyLayoutSources() const noexcept {
                 || frame->second.m_version != cData->sourceVersion
                 || !dx_legacy_layout_wire::layout(frame->second, layout, &proof)) return false;
             if (proof.sourceClass != layoutClass) return false;
+            if (layout.xDictHandle != 0u) {
+                const DRW_Dictionary* extension = nullptr;
+                for (const auto& candidate : cData->dictionaries) {
+                    if (candidate.handle != layout.xDictHandle) continue;
+                    if (extension != nullptr) return false;
+                    extension = &candidate;
+                }
+                if (extension == nullptr || !extensions.insert(extension->handle).second
+                    || extension->parentHandle != layout.handle
+                    || !extension->m_entries.empty() || !extension->extData.empty()
+                    || !wire(*extension)) return false;
+            }
         }
         std::set<std::uint32_t> members;
         std::set<std::string> memberNames;
@@ -43425,6 +43438,7 @@ bool dx_iface::inspectLegacyLayoutBodies(
         };
         std::map<std::uint32_t, const DRW_Layout*> expectedByHandle;
         std::map<std::uint32_t, std::uint32_t> blocksByLayout;
+        std::map<std::uint32_t, const DRW_Dictionary*> expectedExtensions;
         for (std::size_t i = 0u; i < links.size(); ++i) {
             std::uint32_t mapped = 0u;
             const DRW_Layout& source = cData->layouts[i];
@@ -43435,15 +43449,32 @@ bool dx_iface::inspectLegacyLayoutBodies(
                 || !blocksByLayout.emplace(mapped, links[i].blockRecord).second
                 || !expectedByHandle.emplace(mapped, &source).second)
                 return false;
+            if (source.xDictHandle != 0u) {
+                const auto extension = std::find_if(cData->dictionaries.begin(), cData->dictionaries.end(),
+                    [&source](const DRW_Dictionary& row) { return row.handle == source.xDictHandle; });
+                std::uint32_t emitted = 0u;
+                if (extension == cData->dictionaries.end() || !mapHandle(source.xDictHandle, emitted)
+                    || !expectedExtensions.emplace(emitted, &*extension).second)
+                    return false;
+            }
         }
-        std::set<std::uint32_t> seen;
+        std::set<std::uint32_t> seen, seenExtensions;
         std::string_view selectedName;
         dx_standard_output::Decoder decoder(view);
         const bool inspected = decoder.good() && dx_standard_output::inspectSelected(view,
-            [&expectedByHandle, &selectedName](std::string_view name, std::uint32_t handle) {
+            [&expectedByHandle, &expectedExtensions, &selectedName](std::string_view name, std::uint32_t handle) {
                 selectedName = name;
-                return expectedByHandle.count(handle) != 0u;
+                return expectedByHandle.count(handle) != 0u || expectedExtensions.count(handle) != 0u;
             }, [&](const auto& shape, std::string_view body) {
+                const auto extension = expectedExtensions.find(shape.handle);
+                if (extension != expectedExtensions.end()) {
+                    if (selectedName != "DICTIONARY" || !seenExtensions.insert(shape.handle).second)
+                        return false;
+                    return decoder.decodeRecord<DRW_Dictionary>(body, [&](const DRW_Dictionary& actual) {
+                        std::vector<std::uint32_t> references;
+                        return dx_standard_output::equal(*extension->second, actual, mapHandle, references);
+                    });
+                }
                 const auto found = expectedByHandle.find(shape.handle);
                 if (selectedName != "LAYOUT" || found == expectedByHandle.end()
                     || !seen.insert(shape.handle).second)
@@ -43521,7 +43552,8 @@ bool dx_iface::inspectLegacyLayoutBodies(
                         [](const DRW_TableEntry&, const DRW_TableEntry&) { return true; });
                 });
             });
-        const bool complete = inspected && seen.size() == expectedByHandle.size();
+        const bool complete = inspected && seen.size() == expectedByHandle.size()
+            && seenExtensions.size() == expectedExtensions.size();
         if (!complete && debug)
             std::cerr << "legacy LAYOUT body output proof failed\n";
         return complete;
