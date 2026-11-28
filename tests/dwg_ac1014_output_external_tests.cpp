@@ -1696,7 +1696,7 @@ bool checkLegacyViewportProjection(const std::string& input) {
 bool checkLegacyXRecordWire(const std::string& input) {
     dx_iface adapter;
     dx_data data;
-    if (!adapter.fileImport(input, &data, false) || data.sourceVersion != DRW::AC1014
+    if (!adapter.fileImport(input, &data, false) || (data.sourceVersion != DRW::AC1012 && data.sourceVersion != DRW::AC1014)
         || data.xRecords.size() != 1u) return false;
     const DRW_XRecord& record = data.xRecords.front();
     const auto* source = DxIfaceStandardDwgCaptureTestAccess::opaqueFrame(data, record.handle);

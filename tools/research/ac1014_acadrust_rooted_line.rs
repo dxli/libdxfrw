@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Scratch-only generated R14 LINE and rooted plot-style control. The producer
+// Scratch-only generated R13/R14 LINE and rooted plot-style control. The producer
 // reconstructs LAYOUT on reopen; this is not native AutoCAD evidence.
 use acadrust::{CadDocument, DwgReader, DwgWriter};
 use acadrust::entities::{EntityType, Line, Viewport};
@@ -11,10 +11,13 @@ use std::path::PathBuf;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output = PathBuf::from(std::env::var_os("AC1012_WITNESS_OUTPUT")
         .ok_or("AC1012_WITNESS_OUTPUT is required")?);
-    let mut doc = CadDocument::with_version(DxfVersion::AC1014);
+    let r13 = std::env::var_os("AC1012_WITNESS_R13").is_some();
+    let version = if r13 { DxfVersion::AC1012 } else { DxfVersion::AC1014 };
+    let prefix = if r13 { "r13" } else { "r14" };
+    let mut doc = CadDocument::with_version(version);
     doc.add_entity(EntityType::Line(Line::from_coords(1., 2., 0., 4., 5., 0.)))?;
     let plotstyle = doc.header.acad_plotstylename_dict_handle;
-    let original = output.join("r14-line.dwg");
+    let original = output.join(format!("{prefix}-line.dwg"));
     DwgWriter::write_to_file(&original, &doc)?;
     let mut reopened = DwgReader::from_file(&original)?.read()?;
     reopened.named_objects_dictionary_mut().ok_or("missing root")?
@@ -73,7 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         assert!(count > 0, "reopened drawing must contain layouts");
         reopened.header.handle_seed = 0x9002;
     }
-    let result = output.join("r14-line-rooted-resaved.dwg");
+    let result = output.join(format!("{prefix}-line-rooted-resaved.dwg"));
     DwgWriter::write_to_file(&result, &reopened)?;
     if std::env::var_os("AC1012_WITNESS_NAMED_UCS").is_some() {
         let readback = DwgReader::from_file(&result)?.read()?;

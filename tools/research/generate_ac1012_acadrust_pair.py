@@ -28,7 +28,7 @@ def run(args, **kwargs):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile", choices=("ac1012-pair", "ac1014-rooted-line", "ac1014-rooted-ucs", "ac1014-rooted-viewport", "ac1014-rooted-xdictionary", "ac1014-rooted-xrecord"),
+    parser.add_argument("--profile", choices=("ac1012-pair", "ac1014-rooted-line", "ac1014-rooted-ucs", "ac1014-rooted-viewport", "ac1014-rooted-xdictionary", "ac1014-rooted-xrecord", "ac1012-rooted-xrecord"),
                         default="ac1012-pair")
     parser.add_argument("--acadrust-root", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -49,9 +49,10 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     if any(output.iterdir()):
         raise ValueError("output directory must be empty")
-    r14 = args.profile in ("ac1014-rooted-line", "ac1014-rooted-ucs", "ac1014-rooted-viewport", "ac1014-rooted-xdictionary", "ac1014-rooted-xrecord")
+    rooted = args.profile != "ac1012-pair"
+    r13 = args.profile == "ac1012-rooted-xrecord"
     generator = Path(__file__).with_name(
-        "ac1014_acadrust_rooted_line.rs" if r14 else "ac1012_acadrust_pair.rs")
+        "ac1014_acadrust_rooted_line.rs" if rooted else "ac1012_acadrust_pair.rs")
     with tempfile.TemporaryDirectory(prefix="ac1012-acadrust-build-") as directory:
         project = Path(directory)
         (project / "src").mkdir()
@@ -64,22 +65,18 @@ def main():
             (project / "Cargo.lock").write_bytes(args.cargo_lock.resolve(strict=True).read_bytes())
         environment = os.environ.copy()
         environment["AC1012_WITNESS_OUTPUT"] = str(output)
-        if args.profile == "ac1014-rooted-ucs":
-            environment["AC1012_WITNESS_NAMED_UCS"] = "1"
-        else:
-            environment.pop("AC1012_WITNESS_NAMED_UCS", None)
-        if args.profile == "ac1014-rooted-viewport":
-            environment["AC1012_WITNESS_PAPER_VIEWPORT"] = "1"
-        else:
-            environment.pop("AC1012_WITNESS_PAPER_VIEWPORT", None)
-        if args.profile == "ac1014-rooted-xdictionary":
-            environment["AC1012_WITNESS_LAYOUT_XDICTIONARY"] = "1"
-        else:
-            environment.pop("AC1012_WITNESS_LAYOUT_XDICTIONARY", None)
-        if args.profile == "ac1014-rooted-xrecord":
-            environment["AC1012_WITNESS_LAYOUT_XRECORD"] = "1"
-        else:
-            environment.pop("AC1012_WITNESS_LAYOUT_XRECORD", None)
+        switches = {
+            "AC1012_WITNESS_R13": r13,
+            "AC1012_WITNESS_NAMED_UCS": args.profile == "ac1014-rooted-ucs",
+            "AC1012_WITNESS_PAPER_VIEWPORT": args.profile == "ac1014-rooted-viewport",
+            "AC1012_WITNESS_LAYOUT_XDICTIONARY": args.profile == "ac1014-rooted-xdictionary",
+            "AC1012_WITNESS_LAYOUT_XRECORD": args.profile in ("ac1012-rooted-xrecord", "ac1014-rooted-xrecord"),
+        }
+        for name, enabled in switches.items():
+            if enabled:
+                environment[name] = "1"
+            else:
+                environment.pop(name, None)
         if args.cargo_target_dir:
             environment["CARGO_TARGET_DIR"] = str(args.cargo_target_dir.resolve())
         command = ["cargo", "run", "--manifest-path", str(project / "Cargo.toml")]
@@ -91,14 +88,16 @@ def main():
         lock_hash = sha(project / "Cargo.lock")
         (output / "Cargo.lock").write_bytes((project / "Cargo.lock").read_bytes())
     samples = {}
-    files = ("r14-line.dwg", "r14-line-rooted-resaved.dwg") if r14 else FILES
-    magic = b"AC1014" if r14 else b"AC1012"
+    prefix = "r13" if r13 else "r14"
+    files = (f"{prefix}-line.dwg", f"{prefix}-line-rooted-resaved.dwg") if rooted else FILES
+    magic = b"AC1012" if r13 or not rooted else b"AC1014"
     for name in files:
         path = output / name
         if not path.is_file() or path.read_bytes()[:6] != magic:
             raise ValueError("writer did not produce the expected " + magic.decode() + " sample: " + name)
         samples[name] = {"sha256": sha(path), "bytes": path.stat().st_size}
-    receipt = {"profile": args.profile, "schema": ("libdxfrw.ac1014-acadrust-rooted-line.v1" if r14
+    receipt = {"profile": args.profile, "schema": ("libdxfrw.ac1012-acadrust-rooted-line.v1" if r13
+                          else "libdxfrw.ac1014-acadrust-rooted-line.v1" if rooted
                           else "libdxfrw.ac1012-acadrust-pair.v1"), "ok": True,
                "producerCommit": PINNED, "generatorSha256": sha(generator),
                "cargoLockSha256": lock_hash, "cargoVersion": run(["cargo", "--version"]).stdout.strip(),

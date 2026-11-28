@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit a locally generated R14 layout/dictionary/XRECORD wire control.
+"""Audit a locally generated R13/R14 layout/dictionary/XRECORD wire control.
 
 Uses LibreDWG for object discovery, then independently walks the selected
 frames, CRCs, class and following-frame envelopes. Does not qualify output or
@@ -53,7 +53,9 @@ def main():
     parser.add_argument('--dwgread', required=True)
     args = parser.parse_args()
     source = args.source.resolve(strict=True)
-    require(source.read_bytes().startswith(b'AC1014'), 'source is not R14')
+    magic = source.read_bytes()[:6]
+    require(magic in (b'AC1012', b'AC1014'), 'source is not R13/R14')
+    version = 'r13' if magic == b'AC1012' else 'r14'
     with tempfile.TemporaryDirectory(prefix='layout-xrecord-peer-') as directory:
         peer = Path(directory) / 'peer.json'
         process = subprocess.run([args.dwgread, '-O', 'JSON', '-o', str(peer), str(source)],
@@ -74,9 +76,10 @@ def main():
     require(len(xrecords) == 1 and xrecords[0]['ownerhandle'][-1] == ext
             and xrecords[0]['xdata'] == [[1, 'CHECK'], [70, 37]], 'peer XRECORD mismatch')
     xrecord = xrecords[0]
-    dictionary_proof = dictionary_frame(args.dwgread, source, 'r14', dictionary, None, None)
+    dictionary_proof = dictionary_frame(args.dwgread, source, version, dictionary, None, None)
     require(not dictionary_proof['eed'] and dictionary_proof['entryCount'] == 1
-            and dictionary_proof['r14Byte'] == 0, 'unsupported dictionary profile')
+            and dictionary_proof['r14Byte'] == (None if version == 'r13' else 0),
+            'unsupported dictionary profile')
     selected_class = class_frame(source, model['CLASSES'], xrecord['type'])
     require(selected_class['selected']['dxf'] == 'XRECORD'
             and selected_class['selected']['cpp'] == 'AcDbXrecord', 'XRECORD class mismatch')
@@ -93,7 +96,7 @@ def main():
         raise ValueError('corrupted physical XRECORD was accepted')
     require(read_record(frame, xrecord['type'], child, ext) == proof, 'original retry failed')
     print(json.dumps({'schema': 1, 'sourceSha256': hashlib.sha256(source.read_bytes()).hexdigest(),
-                      'layout': layout['handle'][-1], 'dictionary': dictionary_proof,
+                      'version': version, 'layout': layout['handle'][-1], 'dictionary': dictionary_proof,
                       'class': selected_class, 'xrecord': {'handle': child, 'offset': offset,
                       'size': len(frame), 'crcValid': True, 'following': following, **proof},
                       'negativeLengthRefusedAndOriginalRetryPassed': True,

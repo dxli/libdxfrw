@@ -1,0 +1,125 @@
+{
+  "checks": [
+    "The independent source observer and LibreDWG verify the R13 layout extension dictionary, XRECORD class, string and integer values, source roles, physical CRCs and following frames; altered physical length is rejected and the original passes again.",
+    "The shared C++ wire observer and bound source graph pass the generated R13 control; changed source class, typed value, parent, dictionary edge and raw frame reject and corrected retries pass.",
+    "The scratch-only guard-bypassed adapter rejects injected XRECORD, extension dictionary, TABLES, OBJECTS, layout identity and layout body mismatches with destination preservation and same-adapter retry in ASCII and binary. Independent physical tags and ezdxf 1.4.5 verify the graph and values, with zero audit errors or fixes, in all twelve corrected outputs.",
+    "Mutating physical output group-70 values is rejected by the independent observer in both encodings; original outputs pass again. The production adapter refuses the sample without changing the destination.",
+    "The R13 sample reproduces exactly on a second pinned offline run; the pre-existing R14 XRECORD generator profile also reproduces its earlier hash.",
+    "AddressSanitizer passes the R13 wire and source graph/mutation/retry controls on macOS ARM64; leak detection is unavailable on this platform."
+  ],
+  "id": "p6-ac1012-layout-xrecord-binding-2026-11-28",
+  "implementation": "Extend the pinned local producer generator, independent source-frame audit, and owning fast test to the selected R13 layout extension/XRECORD graph. The existing R13/R14 shared observer and staged source/output guards are unchanged; production legacy export remains refused.",
+  "independentWireObservation": {
+    "class": {
+      "classCount": 38,
+      "crcValid": true,
+      "sectionOffset": 497,
+      "sectionSha256": "ee017d293ad45daf8fd11607d0444e05143eeb1950c282681604267ce1fdd74a",
+      "sectionSize": 2134,
+      "selected": {
+        "app": "ObjectDBX Classes",
+        "cpp": "AcDbXrecord",
+        "dxf": "XRECORD",
+        "flags": 0,
+        "itemClassId": 499,
+        "number": 521,
+        "physicalDxfValueStartBit": 13251,
+        "physicalEndBit": 13326,
+        "physicalStartBit": 12977,
+        "zombie": 0
+      }
+    },
+    "dictionary": {
+      "bodyEndBit": 146,
+      "crcValid": true,
+      "eed": [],
+      "entryCount": 1,
+      "extension": {
+        "length": 0,
+        "role": 3,
+        "value": 0
+      },
+      "frameOffset": 4855,
+      "frameSha256": "526e10958041731b35e2472f297784e00700a1c4fa01b0f0cc43d71200a02c4b",
+      "frameSize": 24,
+      "handle": 51,
+      "nextFrame": {
+        "crcValid": true,
+        "offset": 4883,
+        "size": 27,
+        "type": 521
+      },
+      "owner": 47,
+      "r14Byte": null,
+      "reactors": []
+    },
+    "layout": 47,
+    "negativeLengthRefusedAndOriginalRetryPassed": true,
+    "schema": 1,
+    "scope": "source-only local producer control; no native semantics or output admission",
+    "sourceSha256": "bcc4ca8d5bba2a841cec70946aee3f4a330b45bb0a21e2869af477435e91e79b",
+    "version": "r13",
+    "xrecord": {
+      "bodyEndBit": 192,
+      "codepage": 30,
+      "crcValid": true,
+      "extension": {
+        "length": 0,
+        "role": 3,
+        "value": 0
+      },
+      "following": {
+        "crcValid": true,
+        "offset": 4914,
+        "size": 11,
+        "type": 42
+      },
+      "followingGroup70": 37,
+      "frameSha256": "d12e321c218f1ee55ffddd3b38e38e90b7f08be1c6b68fbe8dde9e602b1edbce",
+      "handle": 52,
+      "length": 5,
+      "lengthBit": 96,
+      "offset": 4883,
+      "owner": {
+        "length": 1,
+        "role": 4,
+        "value": 51
+      },
+      "payloadStartBit": 80,
+      "size": 27
+    }
+  },
+  "limits": [
+    "R13 CLASS instance counts are not physically encoded; the existing complete source frame census supplies the selected count.",
+    "The scratch output does not establish native AutoCAD cloning, application behavior, whole-file closure, or legacy release support. Only this one-entry ASCII/short no-EED/no-reactor profile was examined.",
+    "No generated DWG or DXF fixture was committed."
+  ],
+  "outputs": {
+    "ascii": "a89722733072cc6d6b300bc1bbb32eb3229825a812921ae4095a6525b260e225",
+    "binary": "66e119be7e6a06c61508c82fe61fad6c5f7177877d3952d0a2477bd2efcd4bfb"
+  },
+  "producerManifest": {
+    "cargoLockSha256": "76b17a86b44fb75aea3748ee119286139e17abc462554c19059610c83f01f959",
+    "cargoVersion": "cargo 1.100.0 (3acc79c0c 2026-11-05) (Homebrew)",
+    "generatorSha256": "3739dd1081f4503f9fab985d2344b2f114ba26b91922203ed8c03c2cfa031b84",
+    "ok": true,
+    "producerCommit": "d7c71f5032fc2d8844142ad7df7a6f0ee5ac535f",
+    "producerOutput": "",
+    "profile": "ac1012-rooted-xrecord",
+    "rustVersion": "rustc 1.100.0 (0ef1bc386 2026-11-09) (Homebrew)",
+    "samples": {
+      "r13-line-rooted-resaved.dwg": {
+        "bytes": 5185,
+        "sha256": "bcc4ca8d5bba2a841cec70946aee3f4a330b45bb0a21e2869af477435e91e79b"
+      },
+      "r13-line.dwg": {
+        "bytes": 5083,
+        "sha256": "426686ca5fd65169e6d4ed007c106b0a2271a47d9461a7f5fc0f2942c5a1b41a"
+      }
+    },
+    "schema": "libdxfrw.ac1012-acadrust-rooted-line.v1",
+    "supportClaimEffect": "none"
+  },
+  "schema": "libdxfrw.research-receipt.v1",
+  "supportClaimEffect": "none"
+}
