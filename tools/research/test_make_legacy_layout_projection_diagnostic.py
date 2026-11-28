@@ -64,10 +64,12 @@ class DiagnosticControls(unittest.TestCase):
                                  '--inject-table-proof-failure',
                                  '--inject-objects-proof-failure',
                                  '--inject-body-proof-failure',
-                                 '--inject-role-proof-failure').returncode, 0)
+                                 '--inject-role-proof-failure',
+                                 '--inject-ucs-role-failure').returncode, 0)
             self.assertIn(b'LIBDXFRW_DIAGNOSTIC_BAD_BODY', all_faults.read_bytes())
             self.assertIn(b'LIBDXFRW_DIAGNOSTIC_BAD_ROLE', all_faults.read_bytes())
-            self.assertEqual(all_faults.read_bytes().count(b'UNSAFE SCRATCH DIAGNOSTIC'), 8)
+            self.assertIn(b'LIBDXFRW_DIAGNOSTIC_BAD_UCS', all_faults.read_bytes())
+            self.assertEqual(all_faults.read_bytes().count(b'UNSAFE SCRATCH DIAGNOSTIC'), 9)
             self.assertEqual(SOURCE.read_bytes(), original)
 
 

@@ -1,0 +1,44 @@
+{
+  "checks": [
+    "The producer reopens its R14 DWG and confirms both UCS identities, both layout references and orthographic mode. The bound libdxfrw source/frame check accepts this locally generated profile.",
+    "A scratch-only guard-bypassed adapter rejects an injected expectation that a UCS target is a LAYER, preserves the destination, and succeeds on the same adapter after clearing the fault in ASCII and binary. Layout identity, body, object and table injected mismatches also refuse and retry.",
+    "Physical tag inspection and ezdxf 1.4.5 agree on both distinct UCS target identities, layout graph and class, with zero audit errors/fixes and expected LINE endpoints across ten corrected outputs. Altering an actual group 345 target is rejected in both ASCII and binary; unchanged originals pass again.",
+    "The original R14 line generator profile reproduces its earlier rooted drawing SHA-256 a7eb5336d6ae0e0081ec40a89162d0abc4b87cd520e2643af081151c99a73c53. Diagnostic-generator unit test and build inventory checks pass."
+  ],
+  "diagnosticSourceSha256": "c373e2172075a7181a584cc0417b36a3b5abf7f6d170de7283f6c0d757052fe5",
+  "id": "p6-legacy-layout-distinct-ucs-controls-2026-11-28",
+  "implementation": "Extend the pinned local ACadRust R14 generator with a reproducible profile assigning distinct named and base UCS records to both layouts and an orthographic mode; independently inspect staged ASCII/binary UCS target tags, links and readback. This is a test/evidence slice and does not enable legacy export.",
+  "limits": [
+    "UCS wrong-role fault changes the inspector expectation, while physical target mutation tests the independent observer; this does not mutate staged output inside production.",
+    "One generated AC1014 producer profile and independent DXF readback do not establish native UCS activation or AutoCAD cloning behavior. Paper viewport, extension dictionary, reactor semantics and complete drawing closure remain open.",
+    "The adapter is scratch-only with explicit legacy and selected empty-class guard bypasses; no DWG/DXF fixtures are committed and production export remains refused."
+  ],
+  "producerManifest": {
+    "cargoLockSha256": "76b17a86b44fb75aea3748ee119286139e17abc462554c19059610c83f01f959",
+    "cargoVersion": "cargo 1.100.0 (3acc79c0c 2026-11-05) (Homebrew)",
+    "generatorSha256": "440bcc38ce44c182ac132e394d74d0d3eb98894811f73b097de3a8f7940374ce",
+    "ok": true,
+    "producerCommit": "d7c71f5032fc2d8844142ad7df7a6f0ee5ac535f",
+    "producerOutput": "",
+    "profile": "ac1014-rooted-ucs",
+    "rustVersion": "rustc 1.100.0 (0ef1bc386 2026-11-09) (Homebrew)",
+    "samples": {
+      "r14-line-rooted-resaved.dwg": {
+        "bytes": 5234,
+        "sha256": "327e1af1ef734a4cda2719c92a9a5b79b19ef4fe343f7a4f68eec1f9bb81b307"
+      },
+      "r14-line.dwg": {
+        "bytes": 5101,
+        "sha256": "e164e012d5ea5e1a62d99e6038d2f514bdeba902fc3bbf453e44d22f72a855a1"
+      }
+    },
+    "schema": "libdxfrw.ac1014-acadrust-rooted-line.v1",
+    "supportClaimEffect": "none"
+  },
+  "roleFaultRetryOutputs": {
+    "ascii": "bc31418d18e7678976961b0eed0edd0e341076d57e486c95c279e6aa39efd919",
+    "binary": "8cadf69c9d9993b68a6b8593ec69ce98d5284bce84eadf7b47f55302ceda3480"
+  },
+  "schema": "libdxfrw.research-receipt.v1",
+  "supportClaimEffect": "none"
+}

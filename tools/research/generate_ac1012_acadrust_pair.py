@@ -28,7 +28,7 @@ def run(args, **kwargs):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile", choices=("ac1012-pair", "ac1014-rooted-line"),
+    parser.add_argument("--profile", choices=("ac1012-pair", "ac1014-rooted-line", "ac1014-rooted-ucs"),
                         default="ac1012-pair")
     parser.add_argument("--acadrust-root", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -49,7 +49,7 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     if any(output.iterdir()):
         raise ValueError("output directory must be empty")
-    r14 = args.profile == "ac1014-rooted-line"
+    r14 = args.profile in ("ac1014-rooted-line", "ac1014-rooted-ucs")
     generator = Path(__file__).with_name(
         "ac1014_acadrust_rooted_line.rs" if r14 else "ac1012_acadrust_pair.rs")
     with tempfile.TemporaryDirectory(prefix="ac1012-acadrust-build-") as directory:
@@ -64,6 +64,10 @@ def main():
             (project / "Cargo.lock").write_bytes(args.cargo_lock.resolve(strict=True).read_bytes())
         environment = os.environ.copy()
         environment["AC1012_WITNESS_OUTPUT"] = str(output)
+        if args.profile == "ac1014-rooted-ucs":
+            environment["AC1012_WITNESS_NAMED_UCS"] = "1"
+        else:
+            environment.pop("AC1012_WITNESS_NAMED_UCS", None)
         if args.cargo_target_dir:
             environment["CARGO_TARGET_DIR"] = str(args.cargo_target_dir.resolve())
         command = ["cargo", "run", "--manifest-path", str(project / "Cargo.toml")]
@@ -82,7 +86,7 @@ def main():
         if not path.is_file() or path.read_bytes()[:6] != magic:
             raise ValueError("writer did not produce the expected " + magic.decode() + " sample: " + name)
         samples[name] = {"sha256": sha(path), "bytes": path.stat().st_size}
-    receipt = {"schema": ("libdxfrw.ac1014-acadrust-rooted-line.v1" if r14
+    receipt = {"profile": args.profile, "schema": ("libdxfrw.ac1014-acadrust-rooted-line.v1" if r14
                           else "libdxfrw.ac1012-acadrust-pair.v1"), "ok": True,
                "producerCommit": PINNED, "generatorSha256": sha(generator),
                "cargoLockSha256": lock_hash, "cargoVersion": run(["cargo", "--version"]).stdout.strip(),
