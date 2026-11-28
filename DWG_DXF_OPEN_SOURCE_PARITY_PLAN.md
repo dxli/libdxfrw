@@ -136,8 +136,13 @@ below is still open, and its linked evidence defines the present boundary.
    millimetres and inches against independent ezdxf matrices in both import
    modes. The latest importer change rejects malformed, repeated, overflowed or
    singular INSERT transforms with same-file retry; requalify this changed
-   candidate on Linux and Windows. Qualify additional geometry, polyline/arc OCS and unit profiles, malformed
-   numeric extremes, real producer drawings and actual Draft rendering. TEXT under
+   candidate on Linux and Windows. The [finite-scale overflow control](docs/research/p8-freecad-insert-scale-overflow-2026-11-28.json) exposes
+   infinite/NaN line geometry without a loss report in both modes. Implement
+   bounded, shape-aware preflight for transformed block geometry and valid-sibling
+   retry, including nested blocks and arrays; do not infer safety from a finite
+   scale or an arbitrary fixed scale cutoff. Qualify additional geometry,
+   polyline/arc OCS and unit profiles, malformed numeric extremes, real producer
+   drawings and actual Draft rendering. TEXT under
    nonuniform, sheared or reflected transforms is still approximate and reported;
    implement a lossless representation only with consumer evidence. Qualify the
    block annotation depth and per-source-INSERT visit limits, and aggregate

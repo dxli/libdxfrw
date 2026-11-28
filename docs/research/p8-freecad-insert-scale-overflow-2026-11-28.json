@@ -1,0 +1,90 @@
+{
+  "candidate": "49-patch FreeCAD draft",
+  "finding": "A finite INSERT scale of 1e308 applied to a two-unit line creates an infinite endpoint and NaN coordinates without an unsupported-feature report. Both import modes also retain the following valid insert. The prior numeric syntax validation does not prove transformed geometry is representable.",
+  "freecadBase": "477a7041803823a1fcae528133cb07ee5533b1b2",
+  "freecadcmdSha256": "a03b6f9fec9123e47895687462c81808f99b52bf84bdaefa3e82672be5f85e2d",
+  "id": "p8-freecad-insert-scale-overflow-2026-11-28",
+  "importModuleSha256": "cc329b1445e1b6c22ea048e24607756298d73d2ed5de7cb2abd65627790c577f",
+  "limitations": [
+    "This generated DXF is a numeric stress control, not producer qualification.",
+    "The result is a confirmed candidate defect, not a support claim."
+  ],
+  "next": "Design a bounded shape-aware transform preflight that accounts for block base points, OCS, nested transforms and array instances before publication; diagnose and skip only affected instances, preserve valid siblings, and cover both import modes. Avoid treating a finite scale alone as proof of safe output or using a fixed scale cutoff as a universal geometry bound.",
+  "observed": {
+    "cases": [
+      {
+        "endpoints": [
+          [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              "inf",
+              "nan",
+              "nan"
+            ]
+          ],
+          [
+            [
+              10.0,
+              0.0,
+              0.0
+            ],
+            [
+              12.0,
+              0.0,
+              0.0
+            ]
+          ]
+        ],
+        "finite": false,
+        "links": 2,
+        "mode": 2,
+        "pass": false,
+        "unsupportedFeatures": {},
+        "validRetry": false
+      },
+      {
+        "endpoints": [
+          [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              "inf",
+              "nan",
+              "nan"
+            ]
+          ],
+          [
+            [
+              10.0,
+              0.0,
+              0.0
+            ],
+            [
+              12.0,
+              0.0,
+              0.0
+            ]
+          ]
+        ],
+        "finite": false,
+        "links": 2,
+        "mode": 3,
+        "pass": false,
+        "unsupportedFeatures": {},
+        "validRetry": false
+      }
+    ],
+    "ok": false
+  },
+  "probe": "tools/research/freecad_insert_scale_overflow_probe.py",
+  "probeSha256": "95bd5d380731d32d3d6eb79a390f9986447e59f4b71c5db9e0ef0368e0825e0d",
+  "schema": "libdxfrw.research-receipt.v1",
+  "supportClaimEffect": "none"
+}
