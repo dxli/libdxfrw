@@ -1,0 +1,24 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p8d-librecad-native-two-xrecord-2026-11-28",
+  "supportClaimEffect": "selected diagnostic only",
+  "scope": "A macOS ARM64 LibreCAD PR #3289 candidate rebuilt from source with the shared current codec opened, saved at AC1015 and reopened a locally generated two-XRECORD layout witness. The source DXF came from a scratch-only legacy guard-bypassed adapter.",
+  "consumerCommit": "7d175ccf5c611bbaa07e5e45b1b5303bcbbf582d",
+  "codecCommit": "3d864de9b",
+  "buildMethod": "Clean consumer build against the shared codec, then a single test-only organization-name substitution to isolate settings and avoid recursively scanning the user Documents library. The test source was restored after the build. The path-selected process was checked to map the listed codec. The later libdxfrw commit fcec62f8a changes only the dwg2dxf adapter, test/research and qualification metadata for this profile; the shared-codec implementation is the same.",
+  "sha256": {
+    "consumerBinary": "692742f002605099fe24149615d1180b3fd067a07019277cdeedad4c525531f0",
+    "sharedCodec": "b8df75b0a8faa0449bf0e5ee937510867260af06801bdbd5d7ebc538f7d16b66",
+    "inputDxf": "677382ec90bf12ddf384b16c24a9112f8b7dc920cfb35ee4bd06aec3d67b24cd",
+    "savedDxf": "8ff429320e94c4592abc966f409457a9f80ed4041213e863833701f95f24f286"
+  },
+  "observations": [
+    "Native same-version save completed without an omission dialog; the saved drawing was reopened and its line rendered.",
+    "Independent ezdxf 1.4.5 checks AC1015, original line, Model and Layout1, layout reactor, extension dictionary ownership and its distinct RESEARCH/CHECK/37 and SECOND/OTHER/73 XRECORD children; audit reports zero errors and fixes.",
+    "The reopened application displayed duplicate Model tabs: its UI adds a synthetic Model tab and separately displays the imported model layout. This is a consumer UI issue; retained object metadata remains necessary."
+  ],
+  "limits": [
+    "Test-only settings isolation changes application organization identity; this is not a byte-identical release build.",
+    "One generated, guard-bypassed profile and one platform; no native AutoCAD clone semantics, cross-platform or general release qualification. No drawing file is committed."
+  ]
+}
